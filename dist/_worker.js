@@ -10239,6 +10239,25 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
       <body class="bg-gray-50">
+        <script>
+          // Auto-redirect with tenant_id if not present in URL
+          (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (!urlParams.has('tenant_id')) {
+              const userData = localStorage.getItem('userData');
+              if (userData) {
+                try {
+                  const user = JSON.parse(userData);
+                  if (user.tenant_id) {
+                    window.location.replace('/admin/customers?tenant_id=' + user.tenant_id);
+                  }
+                } catch (e) {
+                  console.error('Error parsing userData:', e);
+                }
+              }
+            }
+          })();
+        <\/script>
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
             <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
@@ -11178,6 +11197,25 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
       <body class="bg-gray-50">
+        <script>
+          // Auto-redirect with tenant_id if not present in URL
+          (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (!urlParams.has('tenant_id')) {
+              const userData = localStorage.getItem('userData');
+              if (userData) {
+                try {
+                  const user = JSON.parse(userData);
+                  if (user.tenant_id) {
+                    window.location.replace('/admin/requests?tenant_id=' + user.tenant_id);
+                  }
+                } catch (e) {
+                  console.error('Error parsing userData:', e);
+                }
+              }
+            }
+          })();
+        <\/script>
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
             <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
