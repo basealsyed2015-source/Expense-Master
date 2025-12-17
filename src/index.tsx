@@ -433,29 +433,9 @@ app.post('/api/auth/reset-password', async (c) => {
 // Get all banks (global banks + tenant-specific banks)
 app.get('/api/banks', async (c) => {
   try {
-    // Get tenant_id from authenticated user
-    const authHeader = c.req.header('Authorization')
-    let tenant_id = null
-    
-    if (authHeader) {
-      try {
-        const token = authHeader.replace('Bearer ', '')
-        const payload = await verifyToken(token, c.env.JWT_SECRET || 'your-secret-key')
-        tenant_id = payload.tenant_id
-      } catch (e) {
-        // If token invalid, only show global banks
-      }
-    }
-    
-    // Get global banks (tenant_id IS NULL) + tenant-specific banks
-    let results
-    if (tenant_id) {
-      const query = `SELECT * FROM banks WHERE tenant_id IS NULL OR tenant_id = ? ORDER BY tenant_id DESC, bank_name`
-      results = (await c.env.DB.prepare(query).bind(tenant_id).all()).results
-    } else {
-      const query = `SELECT * FROM banks WHERE tenant_id IS NULL ORDER BY bank_name`
-      results = (await c.env.DB.prepare(query).all()).results
-    }
+    // Get all banks - simplified without tenant_id for now
+    const query = `SELECT * FROM banks ORDER BY bank_name`
+    const results = (await c.env.DB.prepare(query).all()).results
     
     return c.json({ success: true, data: results })
   } catch (error: any) {
@@ -463,26 +443,16 @@ app.get('/api/banks', async (c) => {
   }
 })
 
-// Add bank (with tenant_id)
+// Add bank
 app.post('/api/banks', async (c) => {
   try {
-    // Get tenant_id from authenticated user
-    const authHeader = c.req.header('Authorization')
-    let tenant_id = null
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const payload = await verifyToken(token, c.env.JWT_SECRET || 'your-secret-key')
-      tenant_id = payload.tenant_id
-    }
-    
     const data = await c.req.json()
     const { bank_name, bank_code, logo_url, is_active } = data
     
     const result = await c.env.DB.prepare(`
-      INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(bank_name, bank_code, logo_url, is_active, tenant_id).run()
+      INSERT INTO banks (bank_name, bank_code, logo_url, is_active) 
+      VALUES (?, ?, ?, ?)
+    `).bind(bank_name, bank_code, logo_url, is_active).run()
     
     return c.json({ success: true, id: result.meta.last_row_id })
   } catch (error: any) {
@@ -494,25 +464,6 @@ app.post('/api/banks', async (c) => {
 app.put('/api/banks/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    
-    // Get tenant_id from authenticated user
-    const authHeader = c.req.header('Authorization')
-    let tenant_id = null
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const payload = await verifyToken(token, c.env.JWT_SECRET || 'your-secret-key')
-      tenant_id = payload.tenant_id
-    }
-    
-    // Check if bank belongs to tenant
-    const bank = await c.env.DB.prepare(`
-      SELECT tenant_id FROM banks WHERE id = ?
-    `).bind(id).first()
-    
-    if (!bank || (bank.tenant_id && bank.tenant_id !== tenant_id)) {
-      return c.json({ success: false, error: 'غير مصرح لك بتعديل هذا البنك' }, 403)
-    }
     
     const data = await c.req.json()
     const { bank_name, bank_code, logo_url, is_active } = data
@@ -551,27 +502,13 @@ app.delete('/api/banks/:id', async (c) => {
   try {
     const id = c.req.param('id')
     
-    // Get tenant_id from authenticated user
-    const authHeader = c.req.header('Authorization')
-    let tenant_id = null
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const payload = await verifyToken(token, c.env.JWT_SECRET || 'your-secret-key')
-      tenant_id = payload.tenant_id
-    }
-    
-    // Check if bank belongs to tenant
+    // Check if bank exists
     const bank = await c.env.DB.prepare(`
-      SELECT tenant_id FROM banks WHERE id = ?
+      SELECT id FROM banks WHERE id = ?
     `).bind(id).first()
     
     if (!bank) {
       return c.json({ success: false, error: 'البنك غير موجود' }, 404)
-    }
-    
-    if (!bank.tenant_id || bank.tenant_id !== tenant_id) {
-      return c.json({ success: false, error: 'غير مصرح لك بحذف هذا البنك' }, 403)
     }
     
     // Delete bank (will also delete related rates due to foreign key)
@@ -1675,6 +1612,12 @@ app.post('/api/calculator/save-customer', async (c) => {
             financing_amount = ?,
             monthly_obligations = ?,
             financing_type_id = ?,
+            financing_duration_months = ?,
+            best_bank_id = ?,
+            best_rate = ?,
+            monthly_payment = ?,
+            total_payment = ?,
+            calculation_date = CURRENT_TIMESTAMP,
             tenant_id = COALESCE(?, tenant_id)
         WHERE id = ?
       `).bind(
@@ -1684,6 +1627,11 @@ app.post('/api/calculator/save-customer', async (c) => {
         data.amount,
         data.obligations || 0,
         data.financing_type_id,
+        data.duration_months || null,
+        data.best_bank_id || null,
+        data.best_rate || null,
+        data.monthly_payment || null,
+        data.total_payment || null,
         tenant_id,
         customer_id
       ).run()
@@ -1696,8 +1644,10 @@ app.post('/api/calculator/save-customer', async (c) => {
         INSERT INTO customers (
           full_name, phone, birthdate, monthly_salary,
           financing_amount, monthly_obligations, financing_type_id,
+          financing_duration_months, best_bank_id, best_rate,
+          monthly_payment, total_payment, calculation_date,
           national_id, tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
       `).bind(
         data.name,
         data.phone,
@@ -1706,6 +1656,11 @@ app.post('/api/calculator/save-customer', async (c) => {
         data.amount,
         data.obligations || 0,
         data.financing_type_id,
+        data.duration_months || null,
+        data.best_bank_id || null,
+        data.best_rate || null,
+        data.monthly_payment || null,
+        data.total_payment || null,
         tempNationalId, // temporary unique national_id
         tenant_id
       ).run()

@@ -921,6 +921,42 @@ export const smartCalculator = `<!DOCTYPE html>
             
             // Display results
             displayOffers(offers);
+            
+            // Update customer record with calculation results
+            if (offers.length > 0 && customerData && customerData.phone) {
+                const bestOffer = offers[0];
+                try {
+                    const pathParts = window.location.pathname.split('/');
+                    const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
+                    
+                    console.log('💾 Updating customer with calculation results:', {
+                        phone: customerData.phone,
+                        best_bank: bestOffer.bank.bank_name,
+                        duration: bestOffer.bestCalculation.duration,
+                        monthly_payment: bestOffer.bestCalculation.monthlyPayment
+                    });
+                    
+                    await axios.post('/api/calculator/save-customer', {
+                        name: customerData.name,
+                        phone: customerData.phone,
+                        birthdate: customerData.birthdate,
+                        salary: calculationData.salary,
+                        amount: calculationData.amount,
+                        obligations: calculationData.obligations,
+                        financing_type_id: calculationData.financing_type_id,
+                        duration_months: bestOffer.bestCalculation.duration,
+                        best_bank_id: bestOffer.bank.id,
+                        best_rate: bestOffer.rate,
+                        monthly_payment: bestOffer.bestCalculation.monthlyPayment,
+                        total_payment: bestOffer.bestCalculation.totalPayment,
+                        tenant_slug: tenantSlug
+                    });
+                    
+                    console.log('✅ تم تحديث بيانات العميل بنتائج الحساب');
+                } catch (error) {
+                    console.error('❌ خطأ في تحديث بيانات العميل:', error);
+                }
+            }
         }
         
         function displayOffers(offers) {
