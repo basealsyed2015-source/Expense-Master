@@ -13,6 +13,8 @@ import { tenantsPage } from './tenants-page'
 import { tenantCalculatorsPage } from './tenant-calculators-page'
 import { saasSettingsPage } from './saas-settings-page'
 import { reportsPage } from './reports-page'
+import { customersReportPage, requestsReportPage, financialReportPage } from './advanced-reports'
+import { paymentsPage } from './payments-page'
 import { banksManagementPage } from './banks-management-page'
 
 type Bindings = {
@@ -1886,6 +1888,136 @@ app.post('/api/requests', async (c) => {
   } catch (error: any) {
     console.error('Error creating request:', error)
     return c.json({ success: false, error: error.message, message: 'حدث خطأ أثناء حفظ الطلب' }, 500)
+  }
+})
+
+// ============= PAYMENTS APIs =============
+
+// Get all payments (with tenant filtering)
+app.get('/api/payments', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    
+    if (token) {
+      try {
+        const payload = await verify(token, c.env.JWT_SECRET)
+        tenant_id = payload.tenant_id
+      } catch (e) {
+        // Token invalid or expired
+      }
+    }
+    
+    let query = `
+      SELECT 
+        p.*,
+        c.full_name as customer_name,
+        u.full_name as employee_name
+      FROM payments p
+      LEFT JOIN customers c ON p.customer_id = c.id
+      LEFT JOIN users u ON p.employee_id = u.id
+    `
+    
+    const bindings: any[] = []
+    
+    if (tenant_id) {
+      query += ' WHERE p.tenant_id = ?'
+      bindings.push(tenant_id)
+    }
+    
+    query += ' ORDER BY p.created_at DESC'
+    
+    const { results } = await c.env.DB.prepare(query).bind(...bindings).all()
+    
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    console.error('Payments API error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Create new payment
+app.post('/api/payments', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    
+    if (!token) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    
+    const payload = await verify(token, c.env.JWT_SECRET)
+    const tenant_id = payload.tenant_id
+    const created_by = payload.userId
+    
+    if (!tenant_id) {
+      return c.json({ success: false, error: 'يجب أن تكون مرتبطاً بشركة' }, 403)
+    }
+    
+    const data = await c.req.json()
+    
+    // Validate required fields
+    if (!data.financing_request_id || !data.customer_id || !data.amount || !data.payment_date) {
+      return c.json({ success: false, error: 'البيانات المطلوبة ناقصة' }, 400)
+    }
+    
+    await c.env.DB.prepare(`
+      INSERT INTO payments (
+        financing_request_id, customer_id, tenant_id, employee_id,
+        amount, payment_date, payment_method, receipt_number, notes, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.financing_request_id,
+      data.customer_id,
+      tenant_id,
+      data.employee_id || null,
+      data.amount,
+      data.payment_date,
+      data.payment_method || 'cash',
+      data.receipt_number || null,
+      data.notes || null,
+      created_by
+    ).run()
+    
+    return c.json({ success: true, message: 'تم حفظ سند القبض بنجاح' })
+  } catch (error: any) {
+    console.error('Error creating payment:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Delete payment
+app.delete('/api/payments/:id', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    
+    if (!token) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    
+    const payload = await verify(token, c.env.JWT_SECRET)
+    const tenant_id = payload.tenant_id
+    const id = c.req.param('id')
+    
+    // Verify payment belongs to this tenant
+    if (tenant_id) {
+      const payment = await c.env.DB.prepare(
+        'SELECT tenant_id FROM payments WHERE id = ?'
+      ).bind(id).first()
+      
+      if (payment && payment.tenant_id !== tenant_id) {
+        return c.json({ success: false, error: 'غير مصرح بحذف هذا السند' }, 403)
+      }
+    }
+    
+    await c.env.DB.prepare('DELETE FROM payments WHERE id = ?').bind(id).run()
+    
+    return c.json({ success: true, message: 'تم حذف السند بنجاح' })
+  } catch (error: any) {
+    console.error('Error deleting payment:', error)
+    return c.json({ success: false, error: error.message }, 500)
   }
 })
 
@@ -4288,6 +4420,10 @@ app.get('/admin/tenants', (c) => c.html(tenantsPage))
 app.get('/admin/tenant-calculators', (c) => c.html(tenantCalculatorsPage))
 app.get('/admin/saas-settings', (c) => c.html(saasSettingsPage))
 app.get('/admin/reports', (c) => c.html(reportsPage))
+app.get('/admin/reports/customers', (c) => c.html(customersReportPage))
+app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
+app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
+app.get('/admin/payments', (c) => c.html(paymentsPage))
 app.get('/admin/banks', (c) => c.html(banksManagementPage))
 
 // Tenant-specific admin panel

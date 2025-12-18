@@ -94,10 +94,10 @@ export const reportsPage = `<!DOCTYPE html>
                     <p class="text-sm text-blue-100 mt-2">تقرير شامل لجميع العملاء وإحصائياتهم</p>
                 </div>
                 <div class="p-6">
-                    <button onclick="showComingSoon('تقرير العملاء')" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-all">
+                    <a href="/admin/reports/customers" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
                         <i class="fas fa-file-alt ml-2"></i>
                         عرض التقرير
-                    </button>
+                    </a>
                 </div>
             </div>
 
@@ -109,10 +109,10 @@ export const reportsPage = `<!DOCTYPE html>
                     <p class="text-sm text-green-100 mt-2">تحليل الطلبات حسب الحالة والفترة</p>
                 </div>
                 <div class="p-6">
-                    <button onclick="showComingSoon('تقرير طلبات التمويل')" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition-all">
+                    <a href="/admin/reports/requests" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
                         <i class="fas fa-file-alt ml-2"></i>
                         عرض التقرير
-                    </button>
+                    </a>
                 </div>
             </div>
 
@@ -139,10 +139,10 @@ export const reportsPage = `<!DOCTYPE html>
                     <p class="text-sm text-yellow-100 mt-2">ملخص المبالغ والتمويلات</p>
                 </div>
                 <div class="p-6">
-                    <button onclick="showComingSoon('التقرير المالي')" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg font-bold transition-all">
+                    <a href="/admin/reports/financial" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
                         <i class="fas fa-file-alt ml-2"></i>
                         عرض التقرير
-                    </button>
+                    </a>
                 </div>
             </div>
 

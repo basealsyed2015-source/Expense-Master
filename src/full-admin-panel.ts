@@ -154,6 +154,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <div class="text-sm font-bold">التقارير</div>
                     </a>
                     
+                    <!-- زر سندات القبض -->
+                    <a href="/admin/payments" class="quick-access-btn bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-receipt text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">سندات القبض</div>
+                    </a>
+                    
                     <!-- زر البنوك -->
                     <a href="/admin/banks" class="quick-access-btn bg-gradient-to-br from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-university text-3xl mb-2"></i>
@@ -1505,7 +1511,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/tenants',
                         '/admin/tenant-calculators',
                         '/admin/saas-settings',
-                        '/admin/reports'
+                        '/admin/reports',
+                        '/admin/payments'
                     ],
                     'admin': [
                         '/admin/dashboard',
@@ -1520,7 +1527,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/calculator',
                         '/',
                         '/admin/tenants',
-                        '/admin/reports'
+                        '/admin/reports',
+                        '/admin/payments'
                     ],
                     'manager': [
                         '/admin/dashboard',
@@ -1530,6 +1538,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/rates',
                         '/admin/users',
                         '/admin/reports',
+                        '/admin/payments',
                         '/calculator',
                         '/'
                     ],
