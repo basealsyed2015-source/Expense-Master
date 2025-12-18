@@ -836,12 +836,24 @@ app.get('/admin/requests/:id/timeline', async (c) => {
 app.post('/api/banks', async (c) => {
   try {
     const data = await c.req.json()
-    const { bank_name, bank_code, logo_url, is_active } = data
+    const { bank_name, bank_code, logo_url, is_active, tenant_id } = data
+    
+    // Get tenant_id from Authorization header if not provided
+    let finalTenantId = tenant_id
+    if (!finalTenantId) {
+      const authHeader = c.req.header('Authorization')
+      const token = authHeader?.replace('Bearer ', '')
+      if (token) {
+        const decoded = atob(token)
+        const parts = decoded.split(':')
+        finalTenantId = parts[1] !== 'null' ? parseInt(parts[1]) : null
+      }
+    }
     
     const result = await c.env.DB.prepare(`
-      INSERT INTO banks (bank_name, bank_code, logo_url, is_active) 
-      VALUES (?, ?, ?, ?)
-    `).bind(bank_name, bank_code, logo_url, is_active).run()
+      INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(bank_name, bank_code, logo_url, is_active, finalTenantId).run()
     
     return c.json({ success: true, id: result.meta.last_row_id })
   } catch (error: any) {
@@ -857,9 +869,24 @@ app.put('/api/banks/:id', async (c) => {
     const data = await c.req.json()
     const { bank_name, bank_code, logo_url, is_active } = data
     
-    await c.env.DB.prepare(`
-      UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(bank_name, bank_code, logo_url, is_active, id).run()
+    // Verify bank belongs to user's tenant
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    if (token) {
+      const decoded = atob(token)
+      const parts = decoded.split(':')
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+    
+    // Add tenant_id check to WHERE clause for security
+    let query = `UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?`
+    if (tenant_id) {
+      query += ' AND tenant_id = ?'
+      await c.env.DB.prepare(query).bind(bank_name, bank_code, logo_url, is_active, id, tenant_id).run()
+    } else {
+      await c.env.DB.prepare(query).bind(bank_name, bank_code, logo_url, is_active, id).run()
+    }
     
     return c.json({ success: true })
   } catch (error: any) {
@@ -891,13 +918,27 @@ app.delete('/api/banks/:id', async (c) => {
   try {
     const id = c.req.param('id')
     
-    // Check if bank exists
-    const bank = await c.env.DB.prepare(`
-      SELECT id FROM banks WHERE id = ?
-    `).bind(id).first()
+    // Get tenant_id from Authorization header
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    if (token) {
+      const decoded = atob(token)
+      const parts = decoded.split(':')
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+    
+    // Check if bank exists and belongs to user's tenant
+    let checkQuery = 'SELECT id FROM banks WHERE id = ?'
+    if (tenant_id) {
+      checkQuery += ' AND tenant_id = ?'
+    }
+    const bank = tenant_id
+      ? await c.env.DB.prepare(checkQuery).bind(id, tenant_id).first()
+      : await c.env.DB.prepare(checkQuery).bind(id).first()
     
     if (!bank) {
-      return c.json({ success: false, error: 'البنك غير موجود' }, 404)
+      return c.json({ success: false, error: 'البنك غير موجود أو لا يمكنك حذفه' }, 404)
     }
     
     // Delete bank (will also delete related rates due to foreign key)
@@ -1021,17 +1062,40 @@ app.put('/api/rates/:id', async (c) => {
   try {
     const id = c.req.param('id')
     const data = await c.req.json()
-    await c.env.DB.prepare(`
+    
+    // Get tenant_id from Authorization header
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    if (token) {
+      const decoded = atob(token)
+      const parts = decoded.split(':')
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+    
+    // Add tenant_id check for security
+    let query = `
       UPDATE bank_financing_rates 
       SET bank_id = ?, financing_type_id = ?, rate = ?, 
           min_amount = ?, max_amount = ?, min_salary = ?, max_salary = ?,
           min_duration = ?, max_duration = ?, is_active = ?
       WHERE id = ?
-    `).bind(
-      data.bank_id, data.financing_type_id, data.rate,
-      data.min_amount, data.max_amount, data.min_salary, data.max_salary,
-      data.min_duration, data.max_duration, data.is_active, id
-    ).run()
+    `
+    if (tenant_id) {
+      query += ' AND tenant_id = ?'
+      await c.env.DB.prepare(query).bind(
+        data.bank_id, data.financing_type_id, data.rate,
+        data.min_amount, data.max_amount, data.min_salary, data.max_salary,
+        data.min_duration, data.max_duration, data.is_active, id, tenant_id
+      ).run()
+    } else {
+      await c.env.DB.prepare(query).bind(
+        data.bank_id, data.financing_type_id, data.rate,
+        data.min_amount, data.max_amount, data.min_salary, data.max_salary,
+        data.min_duration, data.max_duration, data.is_active, id
+      ).run()
+    }
+    
     return c.json({ success: true })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -1042,7 +1106,26 @@ app.put('/api/rates/:id', async (c) => {
 app.delete('/api/rates/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    await c.env.DB.prepare('DELETE FROM bank_financing_rates WHERE id = ?').bind(id).run()
+    
+    // Get tenant_id from Authorization header
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    if (token) {
+      const decoded = atob(token)
+      const parts = decoded.split(':')
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+    
+    // Add tenant_id check for security
+    let query = 'DELETE FROM bank_financing_rates WHERE id = ?'
+    if (tenant_id) {
+      query += ' AND tenant_id = ?'
+      await c.env.DB.prepare(query).bind(id, tenant_id).run()
+    } else {
+      await c.env.DB.prepare(query).bind(id).run()
+    }
+    
     return c.json({ success: true })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -5223,7 +5306,7 @@ app.get('/admin/rates', async (c) => {
       SELECT 
         r.*,
         b.bank_name,
-        f.name as financing_type_name
+        f.type_name as financing_type_name
       FROM bank_financing_rates r
       LEFT JOIN banks b ON r.bank_id = b.id
       LEFT JOIN financing_types f ON r.financing_type_id = f.id
@@ -5233,7 +5316,7 @@ app.get('/admin/rates', async (c) => {
       query += ' WHERE r.tenant_id = ?';
     }
     
-    query += ' ORDER BY b.bank_name, f.name';
+    query += ' ORDER BY b.bank_name, f.type_name';
     
     const rates = tenantId
       ? await c.env.DB.prepare(query).bind(tenantId).all()
