@@ -18,6 +18,32 @@ export const fullAdminPanel = `<!DOCTYPE html>
         .quick-access-btn { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .quick-access-btn:active { transform: scale(0.95) !important; }
         
+        /* Enhanced Scrollbar Styles */
+        .overflow-x-auto {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 #f7fafc;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 10px;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+        
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
             /* Make tables horizontally scrollable */
@@ -277,8 +303,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <!-- Additional Stats - Hidden for employees -->
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 admin-only-stats">
+                <!-- Additional Stats - Superadmin Only -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 superadmin-only-stats" style="display: none;">
                     <div class="bg-white rounded-xl shadow-lg p-6">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-gray-600">البنوك النشطة</span>
@@ -1493,6 +1519,18 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 console.log('👤 دور المستخدم:', userRole);
                 console.log('📋 user_type:', user.user_type);
                 console.log('📋 role:', user.role);
+                
+                // Show superadmin-only stats only for superadmin
+                const superadminStats = document.querySelector('.superadmin-only-stats');
+                if (superadminStats) {
+                    if (user.user_type === 'superadmin') {
+                        console.log('✅ إظهار إحصائيات السوبر أدمن');
+                        superadminStats.style.display = 'grid';
+                    } else {
+                        console.log('❌ إخفاء إحصائيات السوبر أدمن');
+                        superadminStats.style.display = 'none';
+                    }
+                }
                 
                 // تعريف الروابط المسموحة لكل دور
                 const allowedLinks = {

@@ -2887,6 +2887,32 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
         .quick-access-btn { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .quick-access-btn:active { transform: scale(0.95) !important; }
         
+        /* Enhanced Scrollbar Styles */
+        .overflow-x-auto {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 #f7fafc;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 10px;
+        }
+        
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+        
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
             /* Make tables horizontally scrollable */
@@ -3146,8 +3172,8 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
                     </div>
                 </div>
                 
-                <!-- Additional Stats - Hidden for employees -->
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 admin-only-stats">
+                <!-- Additional Stats - Superadmin Only -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 superadmin-only-stats" style="display: none;">
                     <div class="bg-white rounded-xl shadow-lg p-6">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-gray-600">البنوك النشطة</span>
@@ -4362,6 +4388,18 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
                 console.log('👤 دور المستخدم:', userRole);
                 console.log('📋 user_type:', user.user_type);
                 console.log('📋 role:', user.role);
+                
+                // Show superadmin-only stats only for superadmin
+                const superadminStats = document.querySelector('.superadmin-only-stats');
+                if (superadminStats) {
+                    if (user.user_type === 'superadmin') {
+                        console.log('✅ إظهار إحصائيات السوبر أدمن');
+                        superadminStats.style.display = 'grid';
+                    } else {
+                        console.log('❌ إخفاء إحصائيات السوبر أدمن');
+                        superadminStats.style.display = 'none';
+                    }
+                }
                 
                 // تعريف الروابط المسموحة لكل دور
                 const allowedLinks = {
@@ -11474,8 +11512,20 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
                 <i class="fas fa-percent text-green-600 ml-2"></i>
                 النسب والأسعار ${s?"- "+s.company_name:"(جميع الشركات)"}
               </h1>
-              <div class="flex items-center gap-4">
+              <div class="flex flex-wrap items-center gap-4">
                 <span class="text-2xl font-bold text-green-600">${r.results.length} نسبة</span>
+                <div class="flex-1"></div>
+                <!-- Search Box -->
+                <div class="relative">
+                  <input 
+                    type="text" 
+                    id="searchRates" 
+                    placeholder="بحث عن بنك أو نوع تمويل..." 
+                    class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onkeyup="searchInRatesTable()"
+                  />
+                  <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                </div>
                 ${t?`
                   <a href="/admin/rates/add?tenant_id=${t}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg">
                     <i class="fas fa-plus ml-2"></i>

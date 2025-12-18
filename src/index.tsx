@@ -5971,8 +5971,20 @@ app.get('/admin/rates', async (c) => {
                 <i class="fas fa-percent text-green-600 ml-2"></i>
                 النسب والأسعار ${tenantInfo ? '- ' + tenantInfo.company_name : '(جميع الشركات)'}
               </h1>
-              <div class="flex items-center gap-4">
+              <div class="flex flex-wrap items-center gap-4">
                 <span class="text-2xl font-bold text-green-600">${rates.results.length} نسبة</span>
+                <div class="flex-1"></div>
+                <!-- Search Box -->
+                <div class="relative">
+                  <input 
+                    type="text" 
+                    id="searchRates" 
+                    placeholder="بحث عن بنك أو نوع تمويل..." 
+                    class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onkeyup="searchInRatesTable()"
+                  />
+                  <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                </div>
                 ${tenantId ? `
                   <a href="/admin/rates/add?tenant_id=${tenantId}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg">
                     <i class="fas fa-plus ml-2"></i>
