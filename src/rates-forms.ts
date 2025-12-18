@@ -1,5 +1,24 @@
 // Rates Add/Edit Forms
 
+// Helper: Mobile-Responsive CSS Styles
+const getMobileResponsiveCSS = () => `
+  @media (max-width: 768px) {
+    .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    .bg-white.rounded-xl { padding: 1rem !important; }
+    .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
+    button { font-size: 0.875rem !important; padding: 0.5rem 1rem !important; }
+    input, select, textarea { font-size: 1rem !important; }
+    .p-6 { padding: 1rem !important; }
+    .p-8 { padding: 1.5rem !important; }
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: 1.25rem !important; }
+    button { font-size: 0.75rem !important; }
+  }
+`
+
 export function generateAddRatePage(tenantId: string, banks: any[], financingTypes: any[]) {
   return `
     <!DOCTYPE html>
@@ -10,6 +29,9 @@ export function generateAddRatePage(tenantId: string, banks: any[], financingTyp
       <title>إضافة نسبة جديدة</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <style>
+        ${getMobileResponsiveCSS()}
+      </style>
     </head>
     <body class="bg-gray-50">
       <div class="max-w-3xl mx-auto p-6">
@@ -169,6 +191,9 @@ export function generateEditRatePage(tenantId: string, rate: any, banks: any[], 
       <title>تعديل النسبة</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <style>
+        ${getMobileResponsiveCSS()}
+      </style>
     </head>
     <body class="bg-gray-50">
       <div class="max-w-3xl mx-auto p-6">

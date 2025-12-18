@@ -32,6 +32,27 @@ export const loginPage = `<!DOCTYPE html>
         .animate-slide-in {
             animation: slideIn 0.5s ease-out;
         }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            .glass-effect {
+                padding: 1.5rem !important;
+            }
+            h1 {
+                font-size: 1.75rem !important;
+            }
+            button {
+                font-size: 1rem !important;
+            }
+        }
+        @media (max-width: 480px) {
+            .glass-effect {
+                padding: 1rem !important;
+            }
+            h1 {
+                font-size: 1.5rem !important;
+            }
+        }
     </style>
 </head>
 <body class="gradient-bg min-h-screen flex items-center justify-center p-4">

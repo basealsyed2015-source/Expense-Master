@@ -1,5 +1,26 @@
 // Payments Page - Receipt Vouchers for Approved Requests
 
+// Helper: Mobile-Responsive CSS Styles
+const getMobileResponsiveCSS = () => `
+  @media (max-width: 768px) {
+    .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
+    h1 { font-size: 1.5rem !important; }
+    table { font-size: 0.875rem !important; }
+    table th, table td { padding: 0.5rem !important; }
+    .hide-on-mobile { display: none !important; }
+    button { font-size: 0.875rem !important; padding: 0.5rem 1rem !important; }
+    .bg-white.rounded-xl { padding: 1rem !important; }
+    .flex.justify-between { flex-wrap: wrap; gap: 1rem; }
+    input[type="text"] { width: 100% !important; }
+    .grid { grid-template-columns: 1fr !important; }
+    .p-6 { padding: 1rem !important; }
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: 1.25rem !important; }
+    table { font-size: 0.75rem !important; }
+  }
+`
+
 export const paymentsPage = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -50,6 +71,8 @@ export const paymentsPage = `<!DOCTYPE html>
             min-width: 1200px; /* Force table to be wide enough for scrollbar */
             width: max-content;
         }
+        
+        ${getMobileResponsiveCSS()}
     </style>
 </head>
 <body class="bg-gray-50">

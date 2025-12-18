@@ -30,6 +30,141 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
+// Helper: Mobile-Responsive CSS Styles
+const getMobileResponsiveCSS = () => `
+  /* Mobile Responsive Styles */
+  @media (max-width: 768px) {
+    /* Container adjustments */
+    .max-w-7xl, .max-w-6xl, .max-w-5xl {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    
+    /* Headings */
+    h1 {
+      font-size: 1.5rem !important;
+    }
+    h2 {
+      font-size: 1.25rem !important;
+    }
+    
+    /* Tables */
+    table {
+      font-size: 0.875rem !important;
+    }
+    
+    table th, table td {
+      padding: 0.5rem !important;
+    }
+    
+    /* Hide less important columns on mobile */
+    .hide-on-mobile {
+      display: none !important;
+    }
+    
+    /* Buttons */
+    button, .btn {
+      font-size: 0.875rem !important;
+      padding: 0.5rem 1rem !important;
+    }
+    
+    /* Forms */
+    input, select, textarea {
+      font-size: 1rem !important;
+    }
+    
+    /* Cards */
+    .bg-white.rounded-xl, .bg-white.rounded-lg {
+      padding: 1rem !important;
+    }
+    
+    /* Flex wrap for header actions */
+    .flex.justify-between {
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    
+    /* Stack items vertically on mobile */
+    .flex-wrap > * {
+      width: 100%;
+    }
+    
+    /* Search input full width */
+    input[type="text"], input[type="search"] {
+      width: 100% !important;
+    }
+    
+    /* Modal adjustments */
+    .fixed.inset-0 > div {
+      margin: 1rem !important;
+      max-height: 90vh !important;
+      overflow-y: auto !important;
+    }
+    
+    /* Sidebar adjustments */
+    aside, .sidebar {
+      width: 100% !important;
+      position: fixed !important;
+      z-index: 50 !important;
+    }
+    
+    /* Grid adjustments */
+    .grid {
+      grid-template-columns: 1fr !important;
+    }
+    
+    /* Reduce spacing */
+    .p-6 {
+      padding: 1rem !important;
+    }
+    
+    .p-8 {
+      padding: 1.5rem !important;
+    }
+    
+    /* Table container */
+    .overflow-x-auto {
+      margin-left: -1rem !important;
+      margin-right: -1rem !important;
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    
+    /* Action buttons in table */
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    
+    /* Status badges */
+    .badge, .status-badge {
+      font-size: 0.75rem !important;
+      padding: 0.25rem 0.5rem !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    /* Extra small screens */
+    body {
+      font-size: 14px !important;
+    }
+    
+    h1 {
+      font-size: 1.25rem !important;
+    }
+    
+    table {
+      font-size: 0.75rem !important;
+    }
+    
+    button, .btn {
+      font-size: 0.75rem !important;
+      padding: 0.375rem 0.75rem !important;
+    }
+  }
+`
+
 // Enable CORS
 app.use('*', cors())
 
@@ -3690,6 +3825,8 @@ app.get('/admin/reports/requests-followup', async (c) => {
             min-width: 1200px; /* Force table to be wide enough for scrollbar */
             width: max-content;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -4837,6 +4974,8 @@ app.get('/admin/dashboard', async (c) => {
             button, nav, .no-print { display: none; }
             .print-full-width { width: 100%; }
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -5444,6 +5583,8 @@ app.get('/admin/customer-assignment', async (c) => {
         }
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
+        
+        ${getMobileResponsiveCSS()}
       </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
@@ -6067,6 +6208,8 @@ app.get('/admin/rates', async (c) => {
             min-width: 1200px; /* Force table to be wide enough for scrollbar */
             width: max-content;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -6311,6 +6454,8 @@ app.get('/admin/customers', async (c) => {
             min-width: 1200px;
             width: max-content;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -6555,6 +6700,8 @@ app.get('/admin/notifications', async (c) => {
             0%, 100% { opacity: 1; }
             50% { opacity: .5; }
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -7359,6 +7506,8 @@ app.get('/admin/requests', async (c) => {
             min-width: 1200px;
             width: max-content;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -8351,6 +8500,8 @@ app.get('/admin/customers/:id/report', async (c) => {
           .report-section {
             page-break-inside: avoid;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -8707,6 +8858,8 @@ app.get('/admin/requests/:id/report', async (c) => {
           .report-section {
             page-break-inside: avoid;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -9146,6 +9299,8 @@ app.get('/admin/requests/:id/timeline', async (c) => {
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             z-index: 10;
           }
+          
+          ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">

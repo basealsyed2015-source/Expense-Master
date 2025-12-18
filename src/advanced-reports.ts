@@ -1,5 +1,37 @@
 // Advanced Reports - Customer, Requests, Performance, Financial, Banks Reports
 
+// Helper: Mobile-Responsive CSS Styles
+const getMobileResponsiveCSS = () => `
+  /* Mobile Responsive Styles */
+  @media (max-width: 768px) {
+    .max-w-7xl, .max-w-6xl, .max-w-5xl {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    table { font-size: 0.875rem !important; }
+    table th, table td { padding: 0.5rem !important; }
+    .hide-on-mobile { display: none !important; }
+    button, .btn { font-size: 0.875rem !important; padding: 0.5rem 1rem !important; }
+    input, select, textarea { font-size: 1rem !important; }
+    .bg-white.rounded-xl, .bg-white.rounded-lg { padding: 1rem !important; }
+    .flex.justify-between { flex-wrap: wrap; gap: 1rem; }
+    .flex-wrap > * { width: 100%; }
+    input[type="text"], input[type="search"] { width: 100% !important; }
+    .grid { grid-template-columns: 1fr !important; }
+    .p-6 { padding: 1rem !important; }
+    .p-8 { padding: 1.5rem !important; }
+    .overflow-x-auto { margin-left: -1rem !important; margin-right: -1rem !important; }
+  }
+  @media (max-width: 480px) {
+    body { font-size: 14px !important; }
+    h1 { font-size: 1.25rem !important; }
+    table { font-size: 0.75rem !important; }
+    button { font-size: 0.75rem !important; padding: 0.375rem 0.75rem !important; }
+  }
+`
+
 export const customersReportPage = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -50,6 +82,8 @@ export const customersReportPage = `<!DOCTYPE html>
             min-width: 1200px; /* Force table to be wide enough for scrollbar */
             width: max-content;
         }
+        
+        ${getMobileResponsiveCSS()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -242,6 +276,8 @@ export const requestsReportPage = `<!DOCTYPE html>
             min-width: 1200px; /* Force table to be wide enough for scrollbar */
             width: max-content;
         }
+        
+        ${getMobileResponsiveCSS()}
     </style>
 </head>
 <body class="bg-gray-50">
