@@ -270,8 +270,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <!-- Additional Stats -->
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+                <!-- Additional Stats - Hidden for employees -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 admin-only-stats">
                     <div class="bg-white rounded-xl shadow-lg p-6">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-gray-600">البنوك النشطة</span>
@@ -383,6 +383,81 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <p class="text-xs text-gray-500 mt-2 text-center">
                                 <i class="fas fa-mobile-alt ml-1"></i>
                                 يمكن للعملاء مسح الرمز للوصول إلى الحاسبة مباشرة
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Employee Calculator Link & QR Code Section -->
+                <div class="bg-white rounded-xl shadow-lg p-6 mt-6" id="employeeCalculatorSection" style="display: none;">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-calculator text-green-600 text-2xl ml-3"></i>
+                        <h2 class="text-xl font-bold text-gray-800">رابط حاسبة الشركة</h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Left Side: Link -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-link ml-1"></i>
+                                رابط حاسبة التمويل الخاصة بشركتك
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    id="employeeCalculatorLinkInput" 
+                                    value="جاري التحميل..." 
+                                    readonly 
+                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-green-500"
+                                >
+                                <button 
+                                    onclick="copyEmployeeCalculatorLink()" 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
+                                    title="نسخ الرابط"
+                                >
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                <i class="fas fa-info-circle ml-1"></i>
+                                يمكنك مشاركة هذا الرابط مع عملائك لاستخدام حاسبة التمويل
+                            </p>
+                            
+                            <!-- Success Message -->
+                            <div id="employeeCopySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
+                                <i class="fas fa-check-circle ml-1"></i>
+                                تم نسخ الرابط بنجاح!
+                            </div>
+                            
+                            <!-- Open Link Button -->
+                            <button 
+                                onclick="openEmployeeCalculatorLink()" 
+                                class="w-full mt-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+                            >
+                                <i class="fas fa-external-link-alt ml-2"></i>
+                                فتح الحاسبة في نافذة جديدة
+                            </button>
+                        </div>
+                        
+                        <!-- Right Side: QR Code -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-qrcode ml-1"></i>
+                                باركود الحاسبة
+                            </label>
+                            <div class="flex flex-col items-center justify-center bg-gray-50 border border-gray-300 rounded-lg p-4">
+                                <div id="employeeQRCodeContainer" class="mb-3"></div>
+                                <button 
+                                    onclick="downloadEmployeeQRCode()" 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                >
+                                    <i class="fas fa-download ml-1"></i>
+                                    تحميل الباركود
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2 text-center">
+                                <i class="fas fa-mobile-alt ml-1"></i>
+                                يمكن للعملاء مسح الباركود للوصول إلى الحاسبة مباشرة
                             </p>
                         </div>
                     </div>
@@ -1504,16 +1579,48 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 console.log(\`✅ تم تطبيق الصلاحيات: \${visibleCount} أزرار ظاهرة، \${hiddenCount} أزرار مخفية\`);
                 
+                // إخفاء الكروت الإضافية للموظفين
+                const adminOnlyStats = document.querySelector('.admin-only-stats');
+                if (adminOnlyStats) {
+                    if (userRole === 'employee') {
+                        adminOnlyStats.style.display = 'none';
+                        console.log('🚫 إخفاء الكروت الإضافية للموظف');
+                    } else {
+                        adminOnlyStats.style.display = 'grid';
+                        console.log('✅ عرض الكروت الإضافية');
+                    }
+                }
+                
                 // إخفاء قسم رابط الحاسبة للموظفين والمستخدمين العاديين
                 const calculatorLinkSection = document.getElementById('calculatorLinkSection');
+                const employeeCalculatorSection = document.getElementById('employeeCalculatorSection');
+                
                 if (calculatorLinkSection) {
                     if (userRole === 'user' || userRole === 'employee') {
                         calculatorLinkSection.style.display = 'none';
                         console.log('🚫 إخفاء قسم رابط الحاسبة (موظف أو مستخدم عادي)');
+                        
+                        // عرض قسم الباركود للموظفين فقط
+                        if (userRole === 'employee' && employeeCalculatorSection) {
+                            employeeCalculatorSection.style.display = 'block';
+                            console.log('✅ عرض قسم الباركود للموظف');
+                            
+                            // تحميل رابط الحاسبة للموظف
+                            setTimeout(() => {
+                                if (typeof loadEmployeeCalculatorLink === 'function') {
+                                    loadEmployeeCalculatorLink();
+                                }
+                            }, 500);
+                        }
                     } else {
                         // عرض القسم لـ superadmin، admin، manager، company
                         calculatorLinkSection.style.display = 'block';
                         console.log('✅ عرض قسم رابط الحاسبة لـ:', userRole);
+                        
+                        // إخفاء قسم الموظف
+                        if (employeeCalculatorSection) {
+                            employeeCalculatorSection.style.display = 'none';
+                        }
                         
                         // تحميل رابط الحاسبة و QR Code
                         setTimeout(() => {
@@ -3285,6 +3392,123 @@ export const fullAdminPanel = `<!DOCTYPE html>
             document.body.removeChild(link);
             
             console.log('✅ تم بدء التحميل');
+        };
+        
+        // Employee Calculator Link Functions
+        window.copyEmployeeCalculatorLink = function() {
+            console.log('📋 نسخ رابط الحاسبة (موظف)...');
+            
+            const linkInput = document.getElementById('employeeCalculatorLinkInput');
+            if (!linkInput) {
+                console.error('❌ لم يتم العثور على حقل الرابط');
+                return;
+            }
+            
+            linkInput.select();
+            linkInput.setSelectionRange(0, 99999);
+            
+            try {
+                document.execCommand('copy');
+                console.log('✅ تم النسخ بنجاح');
+                
+                const successMessage = document.getElementById('employeeCopySuccessMessage');
+                if (successMessage) {
+                    successMessage.classList.remove('hidden');
+                    setTimeout(() => {
+                        successMessage.classList.add('hidden');
+                    }, 3000);
+                }
+            } catch (err) {
+                console.error('❌ فشل النسخ:', err);
+                alert('❌ فشل نسخ الرابط');
+            }
+        };
+        
+        window.openEmployeeCalculatorLink = function() {
+            console.log('🌐 فتح رابط الحاسبة (موظف)...');
+            
+            const linkInput = document.getElementById('employeeCalculatorLinkInput');
+            if (!linkInput || !linkInput.value || linkInput.value === 'جاري التحميل...') {
+                console.error('❌ الرابط غير جاهز');
+                alert('❌ الرجاء الانتظار حتى يتم تحميل الرابط');
+                return;
+            }
+            
+            window.open(linkInput.value, '_blank');
+        };
+        
+        window.downloadEmployeeQRCode = function() {
+            console.log('💾 تحميل باركود الحاسبة (موظف)...');
+            
+            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+            const tenantName = userData.tenant_name || 'الشركة';
+            
+            const qrImg = document.getElementById('employeeQRCodeImage');
+            if (!qrImg) {
+                console.error('❌ لم يتم العثور على الباركود');
+                alert('❌ لم يتم إنشاء الباركود بعد');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.href = qrImg.src;
+            link.download = \`calculator-qr-\${tenantName.replace(/\\s+/g, '-')}.png\`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log('✅ تم بدء التحميل');
+        };
+        
+        window.loadEmployeeCalculatorLink = async function() {
+            console.log('🔗 تحميل رابط الحاسبة للموظف...');
+            
+            try {
+                const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+                const tenantSlug = userData.tenant_slug;
+                
+                if (!tenantSlug) {
+                    console.error('❌ لا يوجد tenant_slug');
+                    return;
+                }
+                
+                const baseUrl = window.location.origin;
+                const calculatorUrl = \`\${baseUrl}/c/\${tenantSlug}/calculator\`;
+                
+                console.log('✅ رابط الحاسبة:', calculatorUrl);
+                
+                // Update input field
+                const linkInput = document.getElementById('employeeCalculatorLinkInput');
+                if (linkInput) {
+                    linkInput.value = calculatorUrl;
+                }
+                
+                // Generate QR Code
+                const qrContainer = document.getElementById('employeeQRCodeContainer');
+                if (qrContainer && typeof QRCode !== 'undefined') {
+                    qrContainer.innerHTML = '';
+                    new QRCode(qrContainer, {
+                        text: calculatorUrl,
+                        width: 200,
+                        height: 200,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    
+                    setTimeout(() => {
+                        const qrImg = qrContainer.querySelector('img');
+                        if (qrImg) {
+                            qrImg.id = 'employeeQRCodeImage';
+                            qrImg.style.border = '10px solid white';
+                            qrImg.style.borderRadius = '10px';
+                            console.log('✅ تم إنشاء الباركود');
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                console.error('❌ خطأ في تحميل رابط الحاسبة:', error);
+            }
         };
         
         // Initialize on load
