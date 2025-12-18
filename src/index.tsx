@@ -2540,10 +2540,28 @@ app.put('/api/financing-requests/:id/status', async (c) => {
       SELECT status FROM financing_requests WHERE id = ?
     `).bind(id).first()
     
-    // Update status
-    await c.env.DB.prepare(`
-      UPDATE financing_requests SET status = ?, notes = ? WHERE id = ?
-    `).bind(status, notes, id).run()
+    // Update status and timestamp based on new status
+    const timestampFields = {
+      'pending': 'pending_at',
+      'under_review': 'under_review_at',
+      'processing': 'processing_at',
+      'approved': 'approved_at',
+      'rejected': 'rejected_at'
+    }
+    
+    const timestampField = timestampFields[status as keyof typeof timestampFields]
+    
+    if (timestampField) {
+      await c.env.DB.prepare(`
+        UPDATE financing_requests 
+        SET status = ?, notes = ?, ${timestampField} = datetime('now'), reviewed_at = datetime('now')
+        WHERE id = ?
+      `).bind(status, notes, id).run()
+    } else {
+      await c.env.DB.prepare(`
+        UPDATE financing_requests SET status = ?, notes = ? WHERE id = ?
+      `).bind(status, notes, id).run()
+    }
     
     // Record status change in history
     if (oldRequest && oldRequest.status !== status) {
@@ -3564,6 +3582,9 @@ app.get('/api/reports/requests-followup', async (c) => {
       SELECT 
         fr.id,
         fr.created_at,
+        fr.pending_at,
+        fr.under_review_at,
+        fr.processing_at,
         fr.approved_at,
         fr.rejected_at,
         fr.reviewed_at,
@@ -3576,6 +3597,8 @@ app.get('/api/reports/requests-followup', async (c) => {
         CASE 
           WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
           WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN fr.rejected_at
+          WHEN fr.status = 'processing' AND fr.processing_at IS NOT NULL THEN fr.processing_at
+          WHEN fr.status = 'under_review' AND fr.under_review_at IS NOT NULL THEN fr.under_review_at
           WHEN fr.reviewed_at IS NOT NULL THEN fr.reviewed_at
           ELSE NULL
         END as last_update,
@@ -3684,6 +3707,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
                     <th class="px-4 py-3 text-right text-sm font-bold">رقم الهاتف</th>
                     <th class="px-4 py-3 text-right text-sm font-bold">الموظف المخصص</th>
                     <th class="px-4 py-3 text-right text-sm font-bold">تاريخ تقديم الطلب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">مراحل الطلب</th>
                     <th class="px-4 py-3 text-right text-sm font-bold">آخر تحديث</th>
                     <th class="px-4 py-3 text-right text-sm font-bold">إجمالي الوقت</th>
                     <th class="px-4 py-3 text-right text-sm font-bold">المبلغ المطلوب</th>
@@ -3770,6 +3794,71 @@ app.get('/admin/reports/requests-followup', async (c) => {
               const createdDate = new Date(row.created_at);
               const formattedDate = createdDate.toLocaleDateString('ar-SA') + ' ' + createdDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'});
               
+              // Build timeline/stages
+              const stages = [];
+              
+              // Stage 1: قيد الانتظار
+              if (row.pending_at) {
+                const pendingDate = new Date(row.pending_at);
+                stages.push(\`
+                  <div class="flex items-center text-xs mb-1">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500 ml-2"></span>
+                    <span class="font-bold">قيد الانتظار:</span>
+                    <span class="text-gray-600 mr-1">\${pendingDate.toLocaleDateString('ar-SA')} \${pendingDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})}</span>
+                  </div>
+                \`);
+              }
+              
+              // Stage 2: تحت المراجعة
+              if (row.under_review_at) {
+                const reviewDate = new Date(row.under_review_at);
+                stages.push(\`
+                  <div class="flex items-center text-xs mb-1">
+                    <span class="w-2 h-2 rounded-full bg-blue-500 ml-2"></span>
+                    <span class="font-bold">تحت المراجعة:</span>
+                    <span class="text-gray-600 mr-1">\${reviewDate.toLocaleDateString('ar-SA')} \${reviewDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})}</span>
+                  </div>
+                \`);
+              }
+              
+              // Stage 3: قيد المعالجة
+              if (row.processing_at) {
+                const processingDate = new Date(row.processing_at);
+                stages.push(\`
+                  <div class="flex items-center text-xs mb-1">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500 ml-2"></span>
+                    <span class="font-bold">قيد المعالجة:</span>
+                    <span class="text-gray-600 mr-1">\${processingDate.toLocaleDateString('ar-SA')} \${processingDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})}</span>
+                  </div>
+                \`);
+              }
+              
+              // Stage 4: مقبول
+              if (row.approved_at) {
+                const approvedDate = new Date(row.approved_at);
+                stages.push(\`
+                  <div class="flex items-center text-xs mb-1">
+                    <span class="w-2 h-2 rounded-full bg-green-500 ml-2"></span>
+                    <span class="font-bold text-green-700">✓ مقبول:</span>
+                    <span class="text-gray-600 mr-1">\${approvedDate.toLocaleDateString('ar-SA')} \${approvedDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})}</span>
+                  </div>
+                \`);
+              }
+              
+              // Stage 5: مرفوض
+              if (row.rejected_at) {
+                const rejectedDate = new Date(row.rejected_at);
+                stages.push(\`
+                  <div class="flex items-center text-xs mb-1">
+                    <span class="w-2 h-2 rounded-full bg-red-500 ml-2"></span>
+                    <span class="font-bold text-red-700">✗ مرفوض:</span>
+                    <span class="text-gray-600 mr-1">\${rejectedDate.toLocaleDateString('ar-SA')} \${rejectedDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})}</span>
+                  </div>
+                \`);
+              }
+              
+              const stagesHTML = stages.length > 0 ? stages.join('') : '<span class="text-gray-400 text-xs">لا توجد مراحل مسجلة</span>';
+              
               // Format last_update
               const lastUpdateDate = row.last_update ? new Date(row.last_update) : null;
               const formattedLastUpdate = lastUpdateDate ? 
@@ -3812,6 +3901,11 @@ app.get('/admin/reports/requests-followup', async (c) => {
                     \` : '<span class="text-gray-400">غير مخصص</span>'}
                   </td>
                   <td class="px-4 py-4 text-sm text-gray-600">\${formattedDate}</td>
+                  <td class="px-4 py-4">
+                    <div class="space-y-1">
+                      \${stagesHTML}
+                    </div>
+                  </td>
                   <td class="px-4 py-4 text-sm text-gray-600">
                     \${formattedLastUpdate}
                   </td>
