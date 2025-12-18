@@ -3649,6 +3649,26 @@ app.get('/admin/reports/requests-followup', async (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <style>
+          /* Custom Scrollbar */
+          .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+          }
+          .overflow-x-auto::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 10px;
+          }
+          .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 10px;
+          }
+          .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+            background: #2563eb;
+          }
+          .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+          }
+        </style>
       </head>
       <body class="bg-gray-50">
         <script>
@@ -3680,15 +3700,27 @@ app.get('/admin/reports/requests-followup', async (c) => {
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-file-alt text-blue-600 ml-2"></i>
                 تقرير متابعة طلبات التمويل
               </h1>
-              <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
-                <i class="fas fa-file-excel ml-2"></i>
-                تصدير Excel
-              </button>
+              <div class="flex items-center gap-3">
+                <div class="relative">
+                  <input 
+                    type="text" 
+                    id="searchFollowup" 
+                    placeholder="بحث في الطلبات..." 
+                    class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onkeyup="searchFollowupTable()"
+                  />
+                  <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                </div>
+                <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md whitespace-nowrap">
+                  <i class="fas fa-file-excel ml-2"></i>
+                  تصدير Excel
+                </button>
+              </div>
             </div>
             
             <!-- Loading Indicator -->
@@ -3970,6 +4002,21 @@ app.get('/admin/reports/requests-followup', async (c) => {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+          }
+          
+          function searchFollowupTable() {
+            const searchValue = document.getElementById('searchFollowup').value.toLowerCase();
+            const tbody = document.getElementById('reportTable');
+            const rows = tbody.querySelectorAll('tr');
+            
+            rows.forEach(row => {
+              const text = row.textContent.toLowerCase();
+              if (text.includes(searchValue)) {
+                row.style.display = '';
+              } else {
+                row.style.display = 'none';
+              }
+            });
           }
           
           // Load report on page load

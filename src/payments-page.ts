@@ -10,6 +10,26 @@ export const paymentsPage = `<!DOCTYPE html>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* Custom Scrollbar */
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #10b981;
+            border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+            background: #059669;
+        }
+        .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
 </head>
 <body class="bg-gray-50">
     <div class="max-w-7xl mx-auto p-6">
@@ -58,7 +78,19 @@ export const paymentsPage = `<!DOCTYPE html>
 
         <!-- Payments Table -->
         <div class="bg-white rounded-xl shadow-lg p-6">
-            <h2 class="text-xl font-bold mb-4">سجل المدفوعات</h2>
+            <div class="flex justify-between items-center mb-4 gap-4 flex-wrap">
+                <h2 class="text-xl font-bold">سجل المدفوعات</h2>
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        id="searchPayments" 
+                        placeholder="بحث في المدفوعات..." 
+                        class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        onkeyup="searchPaymentsTable()"
+                    />
+                    <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                </div>
+            </div>
             
             <div id="loading" class="text-center py-12">
                 <i class="fas fa-spinner fa-spin text-4xl text-green-600 mb-4"></i>
@@ -421,6 +453,21 @@ export const paymentsPage = `<!DOCTYPE html>
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'المدفوعات');
             XLSX.writeFile(wb, 'سندات_القبض_' + new Date().toISOString().split('T')[0] + '.xlsx');
+        }
+
+        function searchPaymentsTable() {
+            const searchValue = document.getElementById('searchPayments').value.toLowerCase();
+            const tbody = document.getElementById('paymentsTable');
+            const rows = tbody.querySelectorAll('tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                if (text.includes(searchValue)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', loadData);
