@@ -4312,6 +4312,23 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
                         '/admin/tenants',
                         '/admin/reports'
                     ],
+                    'manager': [
+                        '/admin/dashboard',
+                        '/admin/customers',
+                        '/admin/requests',
+                        '/admin/banks',
+                        '/admin/rates',
+                        '/admin/users',
+                        '/admin/reports',
+                        '/calculator',
+                        '/'
+                    ],
+                    'employee': [
+                        '/admin/customers',
+                        '/admin/requests',
+                        '/calculator',
+                        '/'
+                    ],
                     'company': [
                         '/admin/dashboard',
                         '/admin/customers',
@@ -4322,7 +4339,6 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
                         '/'
                     ],
                     'user': [
-                        '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
                         '/calculator',
@@ -4357,14 +4373,14 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
                 
                 console.log(\`✅ تم تطبيق الصلاحيات: \${visibleCount} أزرار ظاهرة، \${hiddenCount} أزرار مخفية\`);
                 
-                // إخفاء قسم رابط الحاسبة للمستخدمين العاديين فقط
+                // إخفاء قسم رابط الحاسبة للموظفين والمستخدمين العاديين
                 const calculatorLinkSection = document.getElementById('calculatorLinkSection');
                 if (calculatorLinkSection) {
-                    if (userRole === 'user') {
+                    if (userRole === 'user' || userRole === 'employee') {
                         calculatorLinkSection.style.display = 'none';
-                        console.log('🚫 إخفاء قسم رابط الحاسبة (مستخدم عادي)');
+                        console.log('🚫 إخفاء قسم رابط الحاسبة (موظف أو مستخدم عادي)');
                     } else {
-                        // عرض القسم لـ superadmin، admin، company
+                        // عرض القسم لـ superadmin، admin، manager، company
                         calculatorLinkSection.style.display = 'block';
                         console.log('✅ عرض قسم رابط الحاسبة لـ:', userRole);
                         
@@ -7707,7 +7723,7 @@ var ht=Object.defineProperty;var Ae=e=>{throw TypeError(e)};var yt=(e,t,s)=>t in
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(t,s).first();if(!a)return e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(a.id).run();const r=`${a.id}:${a.tenant_id||"null"}:${Date.now()}:${Math.random()}`,l=btoa(r);let i="/admin";return a.tenant_id&&a.tenant_slug?i=`/c/${a.tenant_slug}/admin`:a.user_type==="superadmin"&&(i="/admin/tenants"),e.json({success:!0,token:l,redirect:i,user:{id:a.id,username:a.username,full_name:a.full_name,email:a.email,role:a.role_name,user_type:a.user_type,company_name:a.company_name,subscription_id:a.subscription_id,tenant_id:a.tenant_id,tenant_name:a.tenant_name,tenant_slug:a.tenant_slug}})}catch(t){return e.json({success:!1,message:t.message},500)}});p.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(t,s).first();if(!a)return e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(a.id).run();const r=`${a.id}:${a.tenant_id||"null"}:${Date.now()}:${Math.random()}`,l=btoa(r);let i="/admin";return a.tenant_id&&a.tenant_slug?i=`/c/${a.tenant_slug}/admin`:a.user_type==="superadmin"&&(i="/admin/tenants"),e.json({success:!0,token:l,redirect:i,user:{id:a.id,username:a.username,full_name:a.full_name,email:a.email,role:a.role,role_name:a.role_name,user_type:a.user_type,company_name:a.company_name,subscription_id:a.subscription_id,tenant_id:a.tenant_id,tenant_name:a.tenant_name,tenant_slug:a.tenant_slug}})}catch(t){return e.json({success:!1,message:t.message},500)}});p.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!s)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const a=Math.floor(1e5+Math.random()*9e5).toString(),r=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)

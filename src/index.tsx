@@ -267,7 +267,7 @@ app.post('/api/auth/login', async (c) => {
     const tokenData = `${user.id}:${user.tenant_id || 'null'}:${Date.now()}:${Math.random()}`
     const token = btoa(tokenData)
     
-    // Determine redirect URL based on tenant
+    // Determine redirect URL based on tenant and role
     let redirect = '/admin'
     if (user.tenant_id && user.tenant_slug) {
       redirect = `/c/${user.tenant_slug}/admin`
@@ -284,7 +284,8 @@ app.post('/api/auth/login', async (c) => {
         username: user.username,
         full_name: user.full_name,
         email: user.email,
-        role: user.role_name,
+        role: user.role,  // Use role column from users table (manager/employee)
+        role_name: user.role_name,  // Role name from roles table for display
         user_type: user.user_type,
         company_name: user.company_name,
         subscription_id: user.subscription_id,

@@ -1443,6 +1443,23 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/tenants',
                         '/admin/reports'
                     ],
+                    'manager': [
+                        '/admin/dashboard',
+                        '/admin/customers',
+                        '/admin/requests',
+                        '/admin/banks',
+                        '/admin/rates',
+                        '/admin/users',
+                        '/admin/reports',
+                        '/calculator',
+                        '/'
+                    ],
+                    'employee': [
+                        '/admin/customers',
+                        '/admin/requests',
+                        '/calculator',
+                        '/'
+                    ],
                     'company': [
                         '/admin/dashboard',
                         '/admin/customers',
@@ -1453,7 +1470,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/'
                     ],
                     'user': [
-                        '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
                         '/calculator',
@@ -1488,14 +1504,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 console.log(\`✅ تم تطبيق الصلاحيات: \${visibleCount} أزرار ظاهرة، \${hiddenCount} أزرار مخفية\`);
                 
-                // إخفاء قسم رابط الحاسبة للمستخدمين العاديين فقط
+                // إخفاء قسم رابط الحاسبة للموظفين والمستخدمين العاديين
                 const calculatorLinkSection = document.getElementById('calculatorLinkSection');
                 if (calculatorLinkSection) {
-                    if (userRole === 'user') {
+                    if (userRole === 'user' || userRole === 'employee') {
                         calculatorLinkSection.style.display = 'none';
-                        console.log('🚫 إخفاء قسم رابط الحاسبة (مستخدم عادي)');
+                        console.log('🚫 إخفاء قسم رابط الحاسبة (موظف أو مستخدم عادي)');
                     } else {
-                        // عرض القسم لـ superadmin، admin، company
+                        // عرض القسم لـ superadmin، admin، manager، company
                         calculatorLinkSection.style.display = 'block';
                         console.log('✅ عرض قسم رابط الحاسبة لـ:', userRole);
                         
