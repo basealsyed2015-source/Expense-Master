@@ -161,6 +161,21 @@ export const reportsPage = `<!DOCTYPE html>
                     </button>
                 </div>
             </div>
+
+            <!-- Requests Followup Report (Manager Only) -->
+            <div id="requestsFollowupReport" class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all">
+                <div class="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6">
+                    <i class="fas fa-tasks text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير متابعة الطلبات</h3>
+                    <p class="text-sm text-orange-100 mt-2">متابعة حالة طلبات التمويل والموظفين (للشركات فقط)</p>
+                </div>
+                <div class="p-6">
+                    <button onclick="goToRequestsFollowupReport()" class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg font-bold">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Report Display Area -->
@@ -490,16 +505,43 @@ export const reportsPage = `<!DOCTYPE html>
             \`);
         }
 
+        // Navigate to Requests Followup Report
+        window.goToRequestsFollowupReport = function() {
+            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+            if (userData.tenant_id) {
+                window.location.href = '/admin/reports/requests-followup?tenant_id=' + userData.tenant_id;
+            } else {
+                window.location.href = '/admin/reports/requests-followup';
+            }
+        }
+
+        // Hide Requests Followup Report for employees
+        function applyReportPermissions() {
+            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+            const userRole = userData.role || userData.user_type;
+            
+            // Show only for superadmin, admin, manager, company
+            // Hide for employee/user
+            if (userRole === 'employee' || userRole === 'user') {
+                const requestsFollowupCard = document.getElementById('requestsFollowupReport');
+                if (requestsFollowupCard) {
+                    requestsFollowupCard.style.display = 'none';
+                }
+            }
+        }
+
         // Load stats on page load
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Page loaded, starting to load stats...');
             loadStats();
+            applyReportPermissions();
         });
         
         // Also try to load immediately
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             console.log('🚀 Document ready, loading stats immediately...');
             loadStats();
+            applyReportPermissions();
         }
     </script>
 </body>

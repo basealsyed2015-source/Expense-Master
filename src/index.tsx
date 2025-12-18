@@ -3363,7 +3363,304 @@ app.get('/api/reports/statistics', async (c) => {
   }
 })
 
+// Requests Follow-up Report API (Manager only)
+app.get('/api/reports/requests-followup', async (c) => {
+  try {
+    // Get tenant_id from auth token
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    
+    if (token) {
+      const decoded = atob(token)
+      const parts = decoded.split(':')
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+    
+    if (!tenant_id) {
+      return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+    }
+    
+    // Get requests with customer and employee info
+    const query = `
+      SELECT 
+        fr.id,
+        fr.created_at,
+        fr.status,
+        fr.requested_amount,
+        c.full_name as customer_name,
+        c.phone as customer_phone,
+        u.full_name as employee_name,
+        u.username as employee_username,
+        CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER) as days_elapsed
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id
+      WHERE fr.tenant_id = ?
+      ORDER BY fr.created_at DESC
+    `
+    
+    const { results } = await c.env.DB.prepare(query).bind(tenant_id).all()
+    
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    console.error('Requests follow-up report error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 app.get('/admin/panel', (c) => c.html(fullAdminPanel))
+
+// Requests Follow-up Report Page (Manager only)
+app.get('/admin/reports/requests-followup', async (c) => {
+  try {
+    // Get tenant_id from query
+    const tenantId = c.req.query('tenant_id')
+    
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>تقرير متابعة طلبات التمويل</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+      </head>
+      <body class="bg-gray-50">
+        <script>
+          // Auto-redirect with tenant_id if not present
+          (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (!urlParams.has('tenant_id')) {
+              const userData = localStorage.getItem('userData');
+              if (userData) {
+                try {
+                  const user = JSON.parse(userData);
+                  if (user.tenant_id) {
+                    window.location.replace('/admin/reports/requests-followup?tenant_id=' + user.tenant_id);
+                  }
+                } catch (e) {
+                  console.error('Error parsing userData:', e);
+                }
+              }
+            }
+          })();
+        </script>
+        
+        <div class="max-w-7xl mx-auto p-6">
+          <div class="mb-6">
+            <a href="/admin" class="text-blue-600 hover:text-blue-800">
+              <i class="fas fa-arrow-right ml-2"></i>
+              العودة للوحة التحكم
+            </a>
+          </div>
+          
+          <div class="bg-white rounded-xl shadow-lg p-6">
+            <div class="flex justify-between items-center mb-6">
+              <h1 class="text-3xl font-bold text-gray-800">
+                <i class="fas fa-file-alt text-blue-600 ml-2"></i>
+                تقرير متابعة طلبات التمويل
+              </h1>
+              <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
+                <i class="fas fa-file-excel ml-2"></i>
+                تصدير Excel
+              </button>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div id="loading" class="text-center py-12">
+              <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+              <p class="text-gray-600">جاري تحميل البيانات...</p>
+            </div>
+            
+            <!-- Table Container -->
+            <div id="tableContainer" class="hidden overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                  <tr>
+                    <th class="px-4 py-3 text-right text-sm font-bold">#</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">اسم العميل</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">رقم الهاتف</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">الموظف المخصص</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">تاريخ تقديم الطلب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">المدة المنقضية</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">المبلغ المطلوب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold">حالة الطلب</th>
+                  </tr>
+                </thead>
+                <tbody id="reportTable" class="divide-y divide-gray-200">
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden text-center py-12">
+              <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+              <p class="text-gray-500 text-xl">لا توجد طلبات لعرضها</p>
+            </div>
+          </div>
+        </div>
+        
+        <script>
+          let reportData = [];
+          
+          async function loadReport() {
+            try {
+              const urlParams = new URLSearchParams(window.location.search);
+              const tenantId = urlParams.get('tenant_id');
+              
+              if (!tenantId) {
+                alert('خطأ: لم يتم تحديد الشركة');
+                return;
+              }
+              
+              const authToken = localStorage.getItem('authToken');
+              const response = await axios.get('/api/reports/requests-followup', {
+                headers: {
+                  'Authorization': 'Bearer ' + authToken
+                }
+              });
+              
+              if (response.data.success) {
+                reportData = response.data.data;
+                displayReport(reportData);
+              } else {
+                alert('خطأ: ' + response.data.error);
+              }
+            } catch (error) {
+              console.error('Error loading report:', error);
+              alert('حدث خطأ أثناء تحميل التقرير');
+            } finally {
+              document.getElementById('loading').classList.add('hidden');
+            }
+          }
+          
+          function displayReport(data) {
+            const tbody = document.getElementById('reportTable');
+            const tableContainer = document.getElementById('tableContainer');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (data.length === 0) {
+              emptyState.classList.remove('hidden');
+              return;
+            }
+            
+            tableContainer.classList.remove('hidden');
+            
+            tbody.innerHTML = data.map((row, index) => {
+              const statusColors = {
+                'pending': 'bg-yellow-100 text-yellow-800',
+                'approved': 'bg-green-100 text-green-800',
+                'rejected': 'bg-red-100 text-red-800',
+                'processing': 'bg-blue-100 text-blue-800'
+              };
+              
+              const statusNames = {
+                'pending': 'قيد الانتظار',
+                'approved': 'مقبول',
+                'rejected': 'مرفوض',
+                'processing': 'قيد المعالجة'
+              };
+              
+              const statusClass = statusColors[row.status] || 'bg-gray-100 text-gray-800';
+              const statusName = statusNames[row.status] || row.status;
+              
+              const createdDate = new Date(row.created_at);
+              const formattedDate = createdDate.toLocaleDateString('ar-SA') + ' ' + createdDate.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'});
+              
+              const daysElapsed = row.days_elapsed || 0;
+              const timeElapsed = daysElapsed === 0 ? 'اليوم' : daysElapsed === 1 ? 'أمس' : daysElapsed + ' يوم';
+              
+              return \`
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-4 text-sm">\${index + 1}</td>
+                  <td class="px-4 py-4 font-bold">\${row.customer_name || '-'}</td>
+                  <td class="px-4 py-4 text-sm text-gray-600">\${row.customer_phone || '-'}</td>
+                  <td class="px-4 py-4 text-sm">
+                    \${row.employee_name ? \`
+                      <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">
+                        <i class="fas fa-user ml-1"></i>
+                        \${row.employee_name}
+                      </span>
+                    \` : '<span class="text-gray-400">غير مخصص</span>'}
+                  </td>
+                  <td class="px-4 py-4 text-sm text-gray-600">\${formattedDate}</td>
+                  <td class="px-4 py-4">
+                    <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-bold">
+                      <i class="fas fa-clock ml-1"></i>
+                      \${timeElapsed}
+                    </span>
+                  </td>
+                  <td class="px-4 py-4 font-bold text-green-600">
+                    \${row.requested_amount ? row.requested_amount.toLocaleString('ar-SA') + ' ريال' : '-'}
+                  </td>
+                  <td class="px-4 py-4">
+                    <span class="px-3 py-1 rounded-full text-xs font-bold \${statusClass}">
+                      \${statusName}
+                    </span>
+                  </td>
+                </tr>
+              \`;
+            }).join('');
+          }
+          
+          function exportToExcel() {
+            if (reportData.length === 0) {
+              alert('لا توجد بيانات لتصديرها');
+              return;
+            }
+            
+            // Create CSV content
+            let csv = 'رقم,اسم العميل,رقم الهاتف,الموظف المخصص,تاريخ تقديم الطلب,المدة المنقضية (أيام),المبلغ المطلوب,حالة الطلب\\n';
+            
+            reportData.forEach((row, index) => {
+              const statusNames = {
+                'pending': 'قيد الانتظار',
+                'approved': 'مقبول',
+                'rejected': 'مرفوض',
+                'processing': 'قيد المعالجة'
+              };
+              
+              const createdDate = new Date(row.created_at).toLocaleDateString('ar-SA');
+              
+              csv += \`\${index + 1},\`;
+              csv += \`"\${row.customer_name || '-'}",\`;
+              csv += \`"\${row.customer_phone || '-'}",\`;
+              csv += \`"\${row.employee_name || 'غير مخصص'}",\`;
+              csv += \`"\${createdDate}",\`;
+              csv += \`\${row.days_elapsed || 0},\`;
+              csv += \`\${row.requested_amount || 0},\`;
+              csv += \`"\${statusNames[row.status] || row.status}"\\n\`;
+            });
+            
+            // Create download link
+            const BOM = "\\uFEFF";
+            const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'تقرير_متابعة_الطلبات_' + new Date().toISOString().split('T')[0] + '.csv');
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+          
+          // Load report on page load
+          loadReport();
+        </script>
+      </body>
+      </html>
+    `)
+  } catch (error: any) {
+    return c.html('<h1>Error: ' + error.message + '</h1>', 500)
+  }
+})
 
 // Add new tenant page
 app.get('/admin/tenants/add', (c) => {
