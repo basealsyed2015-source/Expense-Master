@@ -3896,6 +3896,62 @@ app.get('/admin/reports/requests-followup', async (c) => {
           }
           
           ${getMobileResponsiveCSS()}
+          
+          /* Scroll Buttons for Tables */
+          .scroll-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            transition: all 0.3s ease;
+            font-size: 18px;
+          }
+          
+          .scroll-btn:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.6);
+          }
+          
+          .scroll-btn:active {
+            transform: translateY(-50%) scale(0.95);
+          }
+          
+          .scroll-btn-right {
+            right: -20px;
+          }
+          
+          .scroll-btn-left {
+            left: -20px;
+          }
+          
+          @media (max-width: 768px) {
+            .scroll-btn {
+              width: 44px;
+              height: 44px;
+              font-size: 16px;
+              border-width: 2px;
+            }
+            
+            .scroll-btn-right {
+              right: 8px;
+            }
+            
+            .scroll-btn-left {
+              left: 8px;
+            }
+          }
         </style>
       </head>
       <body class="bg-gray-50">
@@ -3957,9 +4013,31 @@ app.get('/admin/reports/requests-followup', async (c) => {
               <p class="text-gray-600">جاري تحميل البيانات...</p>
             </div>
             
-            <!-- Table Container -->
-            <div id="tableContainer" class="hidden overflow-x-auto">
-              <table class="w-full">
+            <!-- Table Container with Scroll Buttons -->
+            <div class="hidden" id="tableWrapper">
+              <div class="relative">
+                <!-- Right Scroll Button -->
+                <button 
+                  id="scrollLeftBtn" 
+                  onclick="scrollTable('left')"
+                  class="scroll-btn scroll-btn-left hidden"
+                  aria-label="تمرير لليسار"
+                >
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <!-- Left Scroll Button -->
+                <button 
+                  id="scrollRightBtn" 
+                  onclick="scrollTable('right')"
+                  class="scroll-btn scroll-btn-right hidden"
+                  aria-label="تمرير لليمين"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                
+                <div id="tableContainer" class="overflow-x-auto">
+                  <table class="w-full">
                 <thead class="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
                   <tr>
                     <th class="px-4 py-3 text-right text-sm font-bold">#</th>
@@ -3977,6 +4055,8 @@ app.get('/admin/reports/requests-followup', async (c) => {
                 <tbody id="reportTable" class="divide-y divide-gray-200">
                 </tbody>
               </table>
+            </div>
+              </div>
             </div>
             
             <!-- Empty State -->
@@ -4032,6 +4112,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
             }
             
             tableContainer.classList.remove('hidden');
+            document.getElementById('tableWrapper')?.classList.remove('hidden');
             
             tbody.innerHTML = data.map((row, index) => {
               const statusColors = {
@@ -4247,8 +4328,70 @@ app.get('/admin/reports/requests-followup', async (c) => {
             });
           }
           
+          // Scroll table function
+          function scrollTable(direction) {
+            const container = document.getElementById('tableContainer');
+            const scrollAmount = 300; // pixels to scroll
+            
+            if (direction === 'right') {
+              container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+            } else {
+              container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+            }
+            
+            // Update button visibility after scroll
+            setTimeout(checkScrollButtons, 300);
+          }
+          
+          // Check if scroll buttons should be visible
+          function checkScrollButtons() {
+            const container = document.getElementById('tableContainer');
+            const leftBtn = document.getElementById('scrollLeftBtn');
+            const rightBtn = document.getElementById('scrollRightBtn');
+            
+            if (!container || !leftBtn || !rightBtn) return;
+            
+            const canScrollLeft = container.scrollLeft > 0;
+            const canScrollRight = container.scrollLeft < (container.scrollWidth - container.clientWidth - 10);
+            
+            // Show/hide buttons based on scroll position
+            if (canScrollLeft) {
+              leftBtn.classList.remove('hidden');
+            } else {
+              leftBtn.classList.add('hidden');
+            }
+            
+            if (canScrollRight) {
+              rightBtn.classList.remove('hidden');
+            } else {
+              rightBtn.classList.add('hidden');
+            }
+          }
+          
+          // Initialize scroll buttons after table loads
+          function initScrollButtons() {
+            const container = document.getElementById('tableContainer');
+            const wrapper = document.getElementById('tableWrapper');
+            
+            if (container && wrapper) {
+              wrapper.classList.remove('hidden');
+              
+              // Check initially
+              checkScrollButtons();
+              
+              // Check on scroll
+              container.addEventListener('scroll', checkScrollButtons);
+              
+              // Check on window resize
+              window.addEventListener('resize', checkScrollButtons);
+            }
+          }
+          
           // Load report on page load
-          loadReport();
+          loadReport().then(() => {
+            // Initialize scroll buttons after data is loaded
+            setTimeout(initScrollButtons, 500);
+          });
         </script>
       </body>
       </html>
