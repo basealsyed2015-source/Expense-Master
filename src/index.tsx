@@ -6962,7 +6962,7 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
-                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
@@ -8011,7 +8011,7 @@ app.get('/admin/requests', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المدة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
-                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
@@ -8033,7 +8033,7 @@ app.get('/admin/requests', async (c) => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex gap-2 justify-center">
+                      <div class="flex gap-2 justify-end">
                         <a href="/admin/requests/${req.id}/timeline" class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-2 rounded text-xs transition-all shadow-md" title="الجدول الزمني التفصيلي">
                           <i class="fas fa-clock"></i> ⏱️ Timeline
                         </a>
@@ -10438,7 +10438,7 @@ app.get('/admin/rates', async (c) => {
                     <td class="px-6 py-4 text-sm text-gray-600">${rate.min_amount ? rate.min_amount.toLocaleString() : '0'} ريال</td>
                     <td class="px-6 py-4 text-sm text-gray-600">${rate.max_amount ? rate.max_amount.toLocaleString() : '0'} ريال</td>
                     <td class="px-6 py-4">
-                      <div class="flex gap-2 justify-center">
+                      <div class="flex gap-2 justify-end">
                         <a href="/admin/rates/${rate.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-eye"></i> عرض
                         </a>
@@ -10904,7 +10904,7 @@ app.get('/admin/subscriptions', async (c) => {
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-600">${sub.calculations_used || 0}</td>
                     <td class="px-6 py-4">
-                      <div class="flex gap-2 justify-center">
+                      <div class="flex gap-2 justify-end">
                         <a href="/admin/subscriptions/${sub.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-eye"></i> عرض
                         </a>
@@ -11386,7 +11386,7 @@ app.get('/admin/packages', async (c) => {
                   </div>
                 </div>
                 
-                <div class="pt-4 border-t border-gray-200 flex gap-2 justify-center">
+                <div class="pt-4 border-t border-gray-200 flex gap-2 justify-end">
                   <a href="/admin/packages/${pkg.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm transition-all">
                     <i class="fas fa-eye"></i> عرض
                   </a>
@@ -11921,7 +11921,7 @@ app.get('/admin/users', async (c) => {
                     </span>
                   </td>
                   <td class="px-6 py-4">
-                    <div class="flex gap-2 justify-center">
+                    <div class="flex gap-2 justify-end">
                       <a href="/admin/users/\${user.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
                         <i class="fas fa-eye"></i> عرض
                       </a>
