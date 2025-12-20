@@ -10229,7 +10229,7 @@ app.get('/admin/banks', async (c) => {
                       </span>
                     </td>
                     <td class="px-6 py-4">
-                      <div class="flex justify-center gap-2">
+                      <div class="flex justify-end gap-2">
                         <a href="/admin/banks/${bank.id}" 
                            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">
                           <i class="fas fa-eye"></i> عرض
@@ -12549,7 +12549,7 @@ app.get('/admin/users/:id/permissions', async (c) => {
             
             <!-- أزرار الحفظ -->
             <div class="bg-white rounded-lg shadow-md p-6">
-              <div class="flex gap-4 justify-center">
+              <div class="flex gap-4 justify-end">
                 <button type="button" onclick="selectAll()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-check-double ml-2"></i>
                   تحديد الكل
