@@ -1605,7 +1605,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     }
                 });
                 
-                console.log(`✅ تم تطبيق الصلاحيات: ${visibleCount} أزرار ظاهرة، ${hiddenCount} أزرار مخفية`);
+                console.log('تم تطبيق الصلاحيات: ' + visibleCount + ' أزرار ظاهرة، ' + hiddenCount + ' أزرار مخفية');
                 
                 // إخفاء الكروت الإضافية للموظفين والمشرفين
                 const adminOnlyStats = document.querySelector('.admin-only-stats');
