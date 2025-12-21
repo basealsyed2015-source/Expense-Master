@@ -282,46 +282,76 @@ async function getTenant(c: any): Promise<any> {
 }
 
 // Get tenant_id for current user (for multi-tenancy filtering)
-async function getUserTenantId(c: any): Promise<number | null> {
+async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: number | null; roleId: number | null }> {
   try {
-    // Get from Authorization token
     const authHeader = c.req.header('Authorization')
     const token = authHeader?.replace('Bearer ', '')
     
     if (!token) {
-      // Try from query parameter as fallback
       const queryTenantId = c.req.query('tenant_id')
-      return queryTenantId ? parseInt(queryTenantId) : null
+      return { userId: null, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: null }
     }
     
-    // Decode token: format is "user_id:tenant_id:timestamp:random"
     const decoded = atob(token)
     const parts = decoded.split(':')
     const userId = parseInt(parts[0])
     const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
     
-    // If we have tenant_id in token, return it
-    if (tenantIdFromToken) {
-      return tenantIdFromToken
-    }
-    
-    // Otherwise, fetch user's tenant_id from database
     const user = await c.env.DB.prepare(`
-      SELECT tenant_id, role_id FROM users WHERE id = ?
+      SELECT id, tenant_id, role_id FROM users WHERE id = ?
     `).bind(userId).first()
     
-    // Super Admin (role_id = 1) can see all data (return null means no filtering)
-    if (user && user.role_id === 1) {
-      // Check if tenant_id is explicitly requested in query
+    if (!user) {
+      return { userId: null, tenantId: null, roleId: null }
+    }
+    
+    // Super Admin (role_id = 1) can see all data
+    if (user.role_id === 1) {
       const queryTenantId = c.req.query('tenant_id')
-      return queryTenantId ? parseInt(queryTenantId) : null
+      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1 }
     }
     
     // For other roles, return their tenant_id
-    return user?.tenant_id || null
+    return { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id }
   } catch (error) {
-    console.error('Error getting user tenant:', error)
-    return null
+    console.error('Error getting user info:', error)
+    return { userId: null, tenantId: null, roleId: null }
+  }
+}
+
+async function getUserTenantId(c: any): Promise<number | null> {
+  const info = await getUserInfo(c)
+  return info.tenantId
+  }
+}
+
+// Get user ID and role for employee-specific filtering
+async function getUserInfo(c: any): Promise<{ userId: number | null, roleId: number | null, tenantId: number | null }> {
+  try {
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    
+    if (!token) {
+      return { userId: null, roleId: null, tenantId: null }
+    }
+    
+    const decoded = atob(token)
+    const parts = decoded.split(':')
+    const userId = parseInt(parts[0])
+    
+    // Fetch user info from database
+    const user = await c.env.DB.prepare(`
+      SELECT id, role_id, tenant_id FROM users WHERE id = ?
+    `).bind(userId).first()
+    
+    return {
+      userId: user?.id || null,
+      roleId: user?.role_id || null,
+      tenantId: user?.tenant_id || null
+    }
+  } catch (error) {
+    console.error('Error getting user info:', error)
+    return { userId: null, roleId: null, tenantId: null }
   }
 }
 
@@ -5356,42 +5386,76 @@ app.get('/test', (c) => {
 // صفحات منفصلة لكل قسم
 app.get('/admin/dashboard', async (c) => {
   try {
-    // Get user's tenant_id for filtering
-    const tenantId = await getUserTenantId(c)
+    // Get user info for role-based filtering
+    const userInfo = await getUserInfo(c)
     
-    // Build WHERE clause for tenant filtering
-    const whereClause = tenantId ? `WHERE tenant_id = ${tenantId}` : ''
-    const frWhereClause = tenantId ? `WHERE fr.tenant_id = ${tenantId}` : ''
+    // Build WHERE clauses based on role
+    let customersWhere = '';
+    let requestsWhere = '';
+    let requestsJoinWhere = '';
+    let queryParams: any[] = [];
     
-    // Comprehensive statistics query with tenant filtering
+    if (userInfo.roleId === 1) {
+      // Super Admin - sees ALL data
+      customersWhere = '';
+      requestsWhere = '';
+      requestsJoinWhere = '';
+    } else if (userInfo.roleId === 4 || userInfo.roleId === 5) {
+      // Company Admin & Supervisor - see company data only
+      if (userInfo.tenantId) {
+        customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
+        requestsWhere = customersWhere;
+        requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
+        queryParams.push(userInfo.tenantId);
+      }
+    } else if (userInfo.roleId === 3) {
+      // Employee - sees only assigned customers/requests
+      if (userInfo.userId) {
+        customersWhere = `WHERE assigned_to = ${userInfo.userId}`;
+        requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${userInfo.userId})`;
+        requestsJoinWhere = `AND c.assigned_to = ${userInfo.userId}`;
+        queryParams.push(userInfo.userId);
+      } else {
+        customersWhere = 'WHERE 1 = 0';
+        requestsWhere = 'WHERE 1 = 0';
+        requestsJoinWhere = 'AND 1 = 0';
+      }
+    } else {
+      // Unknown role - no data
+      customersWhere = 'WHERE 1 = 0';
+      requestsWhere = 'WHERE 1 = 0';
+      requestsJoinWhere = 'AND 1 = 0';
+    }
+    
+    // Comprehensive statistics query with role-based filtering
     const stats = await c.env.DB.prepare(`
       SELECT 
-        (SELECT COUNT(*) FROM customers ${whereClause}) as total_customers,
-        (SELECT COUNT(*) FROM financing_requests ${whereClause}) as total_requests,
-        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'pending') as pending_requests,
-        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'approved') as approved_requests,
-        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'rejected') as rejected_requests,
-        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'under_review') as under_review_requests,
-        (SELECT SUM(requested_amount) FROM financing_requests ${whereClause}) as total_requested_amount,
-        (SELECT SUM(requested_amount) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'approved') as total_approved_amount,
+        (SELECT COUNT(*) FROM customers ${customersWhere}) as total_customers,
+        (SELECT COUNT(*) FROM financing_requests ${requestsWhere}) as total_requests,
+        (SELECT COUNT(*) FROM financing_requests ${requestsWhere} ${requestsWhere ? 'AND' : 'WHERE'} status = 'pending') as pending_requests,
+        (SELECT COUNT(*) FROM financing_requests ${requestsWhere} ${requestsWhere ? 'AND' : 'WHERE'} status = 'approved') as approved_requests,
+        (SELECT COUNT(*) FROM financing_requests ${requestsWhere} ${requestsWhere ? 'AND' : 'WHERE'} status = 'rejected') as rejected_requests,
+        (SELECT COUNT(*) FROM financing_requests ${requestsWhere} ${requestsWhere ? 'AND' : 'WHERE'} status = 'under_review') as under_review_requests,
+        (SELECT SUM(requested_amount) FROM financing_requests ${requestsWhere}) as total_requested_amount,
+        (SELECT SUM(requested_amount) FROM financing_requests ${requestsWhere} ${requestsWhere ? 'AND' : 'WHERE'} status = 'approved') as total_approved_amount,
         (SELECT COUNT(*) FROM banks WHERE is_active = 1) as active_banks,
         (SELECT COUNT(*) FROM financing_types) as financing_types_count
     `).first()
     
-    // Monthly requests trend (last 6 months) with tenant filtering
+    // Monthly requests trend (last 6 months) with role-based filtering
     const monthlyTrend = await c.env.DB.prepare(`
       SELECT 
         strftime('%Y-%m', created_at) as month,
         COUNT(*) as count,
         SUM(requested_amount) as total_amount
       FROM financing_requests
-      ${whereClause}
-      ${tenantId ? 'AND' : 'WHERE'} created_at >= date('now', '-6 months')
+      ${requestsWhere}
+      ${requestsWhere ? 'AND' : 'WHERE'} created_at >= date('now', '-6 months')
       GROUP BY strftime('%Y-%m', created_at)
       ORDER BY month
     `).all()
     
-    // Top banks by requests with tenant filtering
+    // Top banks by requests with role-based filtering
     const topBanks = await c.env.DB.prepare(`
       SELECT 
         b.bank_name,
@@ -5399,7 +5463,8 @@ app.get('/admin/dashboard', async (c) => {
         SUM(fr.requested_amount) as total_amount
       FROM banks b
       LEFT JOIN financing_requests fr ON b.id = fr.selected_bank_id
-      WHERE fr.id IS NOT NULL ${tenantId ? `AND fr.tenant_id = ${tenantId}` : ''}
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      WHERE fr.id IS NOT NULL ${requestsJoinWhere}
       GROUP BY b.id, b.bank_name
       ORDER BY request_count DESC
       LIMIT 5
@@ -6857,19 +6922,45 @@ app.get('/admin/rates/edit/:id', async (c) => {
 
 app.get('/admin/customers', async (c) => {
   try {
-    // Get user's tenant_id for filtering
-    const tenantId = await getUserTenantId(c);
+    // Get user info (userId, tenantId, roleId)
+    const userInfo = await getUserInfo(c);
     
-    // Filter customers by tenant_id
+    // Build query based on role
     let query = 'SELECT * FROM customers';
-    if (tenantId) {
-      query += ' WHERE tenant_id = ?';
+    let queryParams: any[] = [];
+    
+    if (userInfo.roleId === 1) {
+      // Role 1: Super Admin - sees ALL customers
+      // No filtering
+    } else if (userInfo.roleId === 4 || userInfo.roleId === 5) {
+      // Role 4: Company Admin - sees all company customers
+      // Role 5: Supervisor - sees all company customers (read-only)
+      if (userInfo.tenantId) {
+        query += ' WHERE tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
+      }
+    } else if (userInfo.roleId === 3) {
+      // Role 3: Employee - sees ONLY assigned customers
+      if (userInfo.userId) {
+        query += ' WHERE assigned_to = ?';
+        queryParams.push(userInfo.userId);
+      } else {
+        // No assigned customers if user ID not found
+        query += ' WHERE 1 = 0';
+      }
+    } else {
+      // Unknown role - no data
+      query += ' WHERE 1 = 0';
     }
+    
     query += ' ORDER BY created_at DESC';
     
-    const customers = tenantId 
-      ? await c.env.DB.prepare(query).bind(tenantId).all()
-      : await c.env.DB.prepare(query).all()
+    const customers = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all();
+    
+    // Determine if user can edit/delete (not for Role 5 - Supervisor)
+    const canEdit = userInfo.roleId !== 5;
     
     return c.html(`
       <!DOCTYPE html>
@@ -6951,20 +7042,24 @@ app.get('/admin/customers', async (c) => {
               </h1>
               
               <div class="flex gap-3">
-                <a href="/admin/customer-assignment${tenantId ? '?tenant_id=' + tenantId : ''}" 
+                ${userInfo.roleId !== 5 ? `
+                <a href="/admin/customer-assignment${userInfo.tenantId ? '?tenant_id=' + userInfo.tenantId : ''}" 
                    class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
                   <i class="fas fa-users-cog ml-2"></i>
                   توزيع العملاء
                 </a>
+                ` : ''}
                 <button onclick="exportToCSV()" 
                         class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
+                ${canEdit ? `
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة عميل جديد
                 </a>
+                ` : ''}
               </div>
             </div>
             
@@ -7034,12 +7129,14 @@ app.get('/admin/customers', async (c) => {
                         <a href="/admin/customers/${customer.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-eye"></i> عرض
                         </a>
+                        ${canEdit ? `
                         <a href="/admin/customers/${customer.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-edit"></i> تعديل
                         </a>
                         <a href="/admin/customers/${customer.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-trash"></i> حذف
                         </a>
+                        ` : ''}
                       </div>
                     </td>
                   </tr>
@@ -7893,10 +7990,10 @@ app.get('/admin/requests/:id/edit', async (c) => {
 
 app.get('/admin/requests', async (c) => {
   try {
-    // Get user's tenant_id for filtering
-    const tenantId = await getUserTenantId(c);
+    // Get user info (userId, tenantId, roleId)
+    const userInfo = await getUserInfo(c);
     
-    // Build query with optional tenant filter
+    // Build query with role-based filtering
     let query = `
       SELECT 
         fr.id,
@@ -7907,21 +8004,46 @@ app.get('/admin/requests', async (c) => {
         fr.status,
         fr.created_at,
         c.full_name as customer_name,
+        c.assigned_to as customer_assigned_to,
         b.bank_name as bank_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
     `;
     
-    if (tenantId) {
-      query += ' WHERE fr.tenant_id = ?';
+    let queryParams: any[] = [];
+    
+    if (userInfo.roleId === 1) {
+      // Role 1: Super Admin - sees ALL requests
+      // No WHERE clause
+    } else if (userInfo.roleId === 4 || userInfo.roleId === 5) {
+      // Role 4: Company Admin - sees all company requests
+      // Role 5: Supervisor - sees all company requests (read-only)
+      if (userInfo.tenantId) {
+        query += ' WHERE c.tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
+      }
+    } else if (userInfo.roleId === 3) {
+      // Role 3: Employee - sees ONLY requests for assigned customers
+      if (userInfo.userId) {
+        query += ' WHERE c.assigned_to = ?';
+        queryParams.push(userInfo.userId);
+      } else {
+        query += ' WHERE 1 = 0'; // No data if user ID not found
+      }
+    } else {
+      // Unknown role - no data
+      query += ' WHERE 1 = 0';
     }
     
     query += ' ORDER BY fr.created_at DESC';
     
-    const requests = tenantId
-      ? await c.env.DB.prepare(query).bind(tenantId).all()
-      : await c.env.DB.prepare(query).all()
+    const requests = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all();
+    
+    // Determine if user can edit/delete (not for Role 5 - Supervisor)
+    const canEdit = userInfo.roleId !== 5;
     
     return c.html(`
       <!DOCTYPE html>
@@ -8004,10 +8126,12 @@ app.get('/admin/requests', async (c) => {
               </h1>
               
               <div class="flex gap-3">
+                ${canEdit ? `
                 <a href="/admin/requests/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
                 </a>
+                ` : ''}
                 <button onclick="exportToCSV()" 
                         class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
@@ -8097,12 +8221,14 @@ app.get('/admin/requests', async (c) => {
                         <a href="/admin/requests/${req.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-eye"></i> عرض
                         </a>
+                        ${canEdit ? `
                         <a href="/admin/requests/${req.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-edit"></i> تعديل
                         </a>
                         <a href="/admin/requests/${req.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-trash"></i> حذف
                         </a>
+                        ` : ''}
                       </div>
                     </td>
                   </tr>
@@ -12215,8 +12341,8 @@ app.get('/admin/users/new', async (c) => {
                     <option value="">-- اختر نوع المستخدم --</option>
                     <option value="admin">مدير النظام (Super Admin)</option>
                     <option value="company_admin">مدير شركة (Company Admin)</option>
-                    <option value="company">حساب شركة عادي</option>
-                    <option value="employee">موظف</option>
+                    <option value="supervisor">مشرف موظفين (Supervisor)</option>
+                    <option value="employee">موظف (Employee)</option>
                   </select>
                 </div>
                 
@@ -12334,21 +12460,21 @@ app.get('/admin/users/new', async (c) => {
             
             // تحديث تلميح الدور
             if (userType === 'admin') {
-              roleHint.textContent = '(Role ID: 1)';
+              roleHint.textContent = '(Role ID: 1) - كل الصلاحيات + بيانات SaaS';
               roleSelect.value = '1'; // مدير النظام
               subscriptionDiv.style.display = 'none';
             } else if (userType === 'company_admin') {
-              roleHint.textContent = '(Role ID: 4) - صلاحيات كاملة لإدارة الشركة';
+              roleHint.textContent = '(Role ID: 4) - كل صلاحيات الشركة (عدا SaaS)';
               roleSelect.value = '4'; // مدير شركة
               subscriptionDiv.style.display = 'block';
-            } else if (userType === 'company') {
-              roleHint.textContent = '(Role ID: 2) - صلاحيات محدودة';
-              roleSelect.value = '2'; // حساب شركة
+            } else if (userType === 'supervisor') {
+              roleHint.textContent = '(Role ID: 5) - يرى جميع العملاء والطلبات (قراءة فقط)';
+              roleSelect.value = '5'; // مشرف موظفين
               subscriptionDiv.style.display = 'block';
             } else if (userType === 'employee') {
-              roleHint.textContent = '(Role ID: 3) - صلاحيات أساسية';
+              roleHint.textContent = '(Role ID: 3) - يرى العملاء والطلبات المخصصة له فقط';
               roleSelect.value = '3'; // موظف
-              subscriptionDiv.style.display = 'none';
+              subscriptionDiv.style.display = 'block';
             } else {
               roleHint.textContent = '';
               subscriptionDiv.style.display = 'none';
