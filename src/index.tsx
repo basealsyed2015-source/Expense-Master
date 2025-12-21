@@ -281,6 +281,50 @@ async function getTenant(c: any): Promise<any> {
   return tenant
 }
 
+// Get tenant_id for current user (for multi-tenancy filtering)
+async function getUserTenantId(c: any): Promise<number | null> {
+  try {
+    // Get from Authorization token
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    
+    if (!token) {
+      // Try from query parameter as fallback
+      const queryTenantId = c.req.query('tenant_id')
+      return queryTenantId ? parseInt(queryTenantId) : null
+    }
+    
+    // Decode token: format is "user_id:tenant_id:timestamp:random"
+    const decoded = atob(token)
+    const parts = decoded.split(':')
+    const userId = parseInt(parts[0])
+    const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
+    
+    // If we have tenant_id in token, return it
+    if (tenantIdFromToken) {
+      return tenantIdFromToken
+    }
+    
+    // Otherwise, fetch user's tenant_id from database
+    const user = await c.env.DB.prepare(`
+      SELECT tenant_id, role_id FROM users WHERE id = ?
+    `).bind(userId).first()
+    
+    // Super Admin (role_id = 1) can see all data (return null means no filtering)
+    if (user && user.role_id === 1) {
+      // Check if tenant_id is explicitly requested in query
+      const queryTenantId = c.req.query('tenant_id')
+      return queryTenantId ? parseInt(queryTenantId) : null
+    }
+    
+    // For other roles, return their tenant_id
+    return user?.tenant_id || null
+  } catch (error) {
+    console.error('Error getting user tenant:', error)
+    return null
+  }
+}
+
 // Middleware: Verify and set tenant
 app.use('/c/:tenant/*', async (c, next) => {
   const tenant = await getTenant(c)
@@ -5312,34 +5356,42 @@ app.get('/test', (c) => {
 // صفحات منفصلة لكل قسم
 app.get('/admin/dashboard', async (c) => {
   try {
-    // Comprehensive statistics query
+    // Get user's tenant_id for filtering
+    const tenantId = await getUserTenantId(c)
+    
+    // Build WHERE clause for tenant filtering
+    const whereClause = tenantId ? `WHERE tenant_id = ${tenantId}` : ''
+    const frWhereClause = tenantId ? `WHERE fr.tenant_id = ${tenantId}` : ''
+    
+    // Comprehensive statistics query with tenant filtering
     const stats = await c.env.DB.prepare(`
       SELECT 
-        (SELECT COUNT(*) FROM customers) as total_customers,
-        (SELECT COUNT(*) FROM financing_requests) as total_requests,
-        (SELECT COUNT(*) FROM financing_requests WHERE status = 'pending') as pending_requests,
-        (SELECT COUNT(*) FROM financing_requests WHERE status = 'approved') as approved_requests,
-        (SELECT COUNT(*) FROM financing_requests WHERE status = 'rejected') as rejected_requests,
-        (SELECT COUNT(*) FROM financing_requests WHERE status = 'under_review') as under_review_requests,
-        (SELECT SUM(requested_amount) FROM financing_requests) as total_requested_amount,
-        (SELECT SUM(requested_amount) FROM financing_requests WHERE status = 'approved') as total_approved_amount,
+        (SELECT COUNT(*) FROM customers ${whereClause}) as total_customers,
+        (SELECT COUNT(*) FROM financing_requests ${whereClause}) as total_requests,
+        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'pending') as pending_requests,
+        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'approved') as approved_requests,
+        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'rejected') as rejected_requests,
+        (SELECT COUNT(*) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'under_review') as under_review_requests,
+        (SELECT SUM(requested_amount) FROM financing_requests ${whereClause}) as total_requested_amount,
+        (SELECT SUM(requested_amount) FROM financing_requests ${whereClause} ${tenantId ? 'AND' : 'WHERE'} status = 'approved') as total_approved_amount,
         (SELECT COUNT(*) FROM banks WHERE is_active = 1) as active_banks,
         (SELECT COUNT(*) FROM financing_types) as financing_types_count
     `).first()
     
-    // Monthly requests trend (last 6 months)
+    // Monthly requests trend (last 6 months) with tenant filtering
     const monthlyTrend = await c.env.DB.prepare(`
       SELECT 
         strftime('%Y-%m', created_at) as month,
         COUNT(*) as count,
         SUM(requested_amount) as total_amount
       FROM financing_requests
-      WHERE created_at >= date('now', '-6 months')
+      ${whereClause}
+      ${tenantId ? 'AND' : 'WHERE'} created_at >= date('now', '-6 months')
       GROUP BY strftime('%Y-%m', created_at)
       ORDER BY month
     `).all()
     
-    // Top banks by requests
+    // Top banks by requests with tenant filtering
     const topBanks = await c.env.DB.prepare(`
       SELECT 
         b.bank_name,
@@ -5347,19 +5399,20 @@ app.get('/admin/dashboard', async (c) => {
         SUM(fr.requested_amount) as total_amount
       FROM banks b
       LEFT JOIN financing_requests fr ON b.id = fr.selected_bank_id
-      WHERE fr.id IS NOT NULL
+      WHERE fr.id IS NOT NULL ${tenantId ? `AND fr.tenant_id = ${tenantId}` : ''}
       GROUP BY b.id, b.bank_name
       ORDER BY request_count DESC
       LIMIT 5
     `).all()
     
-    // Status distribution
+    // Status distribution with tenant filtering
     const statusDistribution = await c.env.DB.prepare(`
       SELECT 
         status,
         COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests), 2) as percentage
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${whereClause}), 2) as percentage
       FROM financing_requests
+      ${whereClause}
       GROUP BY status
     `).all()
     
@@ -6804,10 +6857,10 @@ app.get('/admin/rates/edit/:id', async (c) => {
 
 app.get('/admin/customers', async (c) => {
   try {
-    // Temporary: Get tenant_id from query parameter
-    const tenantId = c.req.query('tenant_id');
+    // Get user's tenant_id for filtering
+    const tenantId = await getUserTenantId(c);
     
-    // Filter customers by tenant_id if provided
+    // Filter customers by tenant_id
     let query = 'SELECT * FROM customers';
     if (tenantId) {
       query += ' WHERE tenant_id = ?';
@@ -7840,8 +7893,8 @@ app.get('/admin/requests/:id/edit', async (c) => {
 
 app.get('/admin/requests', async (c) => {
   try {
-    // Temporary: Get tenant_id from query parameter
-    const tenantId = c.req.query('tenant_id');
+    // Get user's tenant_id for filtering
+    const tenantId = await getUserTenantId(c);
     
     // Build query with optional tenant filter
     let query = `
