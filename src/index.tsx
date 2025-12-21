@@ -9915,11 +9915,30 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       ORDER BY stage_order ASC
     `).all()
     
-    // Get workflow timeline (transitions, actions, tasks)
-    const timelineResponse = await fetch(new URL(`/api/workflow/timeline/${id}`, c.req.url).toString(), {
-      headers: c.req.headers
-    })
-    const timelineData = await timelineResponse.json()
+    // Get workflow timeline (transitions, actions, tasks) - Direct DB query instead of internal API call
+    const { results: transitions } = await c.env.DB.prepare(`
+      SELECT 
+        wst.*,
+        ws_from.stage_name_ar as from_stage_name,
+        ws_to.stage_name_ar as to_stage_name,
+        u.full_name as changed_by_name
+      FROM workflow_stage_transitions wst
+      LEFT JOIN workflow_stages ws_from ON wst.from_stage_id = ws_from.id
+      LEFT JOIN workflow_stages ws_to ON wst.to_stage_id = ws_to.id
+      LEFT JOIN users u ON wst.changed_by = u.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.changed_at DESC
+    `).bind(id).all()
+    
+    const { results: actions } = await c.env.DB.prepare(`
+      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(id).all()
+    
+    const { results: tasks } = await c.env.DB.prepare(`
+      SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(id).all()
+    
+    const timelineData = { data: { transitions, actions, tasks } }
     
     const html = generateWorkflowTimelinePage(
       parseInt(id),
