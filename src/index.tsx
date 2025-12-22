@@ -4191,29 +4191,31 @@ app.get('/api/reports/statistics', async (c) => {
 // Requests Follow-up Report API (Manager only)
 app.get('/api/reports/requests-followup', async (c) => {
   try {
-    // Get tenant_id from auth token
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
+    // Get user info using getUserInfo (supports both Cookie and Authorization header)
+    const userInfo = await getUserInfo(c)
     
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    // Check authentication
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح بالوصول' }, 401)
     }
     
-    if (!tenant_id) {
-      return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+    // Get tenant_id from query parameter (for Super Admin) or user info
+    const queryTenantId = c.req.query('tenant_id')
+    let tenant_id = queryTenantId ? parseInt(queryTenantId) : userInfo.tenantId
+    
+    // Super Admin (role_id = 1) can access all tenants if no specific tenant_id provided
+    if (userInfo.roleId === 1 && !tenant_id) {
+      // If no tenant_id specified, show all requests
+      tenant_id = null
     }
+    
+    console.log('📊 Requests followup report - User:', userInfo.userId, 'Role:', userInfo.roleId, 'Tenant:', tenant_id)
     
     // Get requests with customer and employee info
-    const query = `
+    let query = `
       SELECT 
         fr.id,
         fr.created_at,
-        fr.pending_at,
-        fr.under_review_at,
-        fr.processing_at,
         fr.approved_at,
         fr.rejected_at,
         fr.reviewed_at,
@@ -4223,11 +4225,10 @@ app.get('/api/reports/requests-followup', async (c) => {
         c.phone as customer_phone,
         u.full_name as employee_name,
         u.username as employee_username,
+        t.company_name as tenant_name,
         CASE 
           WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
           WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN fr.rejected_at
-          WHEN fr.status = 'processing' AND fr.processing_at IS NOT NULL THEN fr.processing_at
-          WHEN fr.status = 'under_review' AND fr.under_review_at IS NOT NULL THEN fr.under_review_at
           WHEN fr.reviewed_at IS NOT NULL THEN fr.reviewed_at
           ELSE NULL
         END as last_update,
@@ -4247,11 +4248,19 @@ app.get('/api/reports/requests-followup', async (c) => {
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id
-      WHERE fr.tenant_id = ?
-      ORDER BY fr.created_at DESC
+      LEFT JOIN tenants t ON c.tenant_id = t.id
     `
     
-    const { results } = await c.env.DB.prepare(query).bind(tenant_id).all()
+    // Add WHERE clause if tenant_id is specified
+    if (tenant_id) {
+      query += ' WHERE c.tenant_id = ?'
+    }
+    
+    query += ' ORDER BY fr.created_at DESC'
+    
+    const { results } = tenant_id 
+      ? await c.env.DB.prepare(query).bind(tenant_id).all()
+      : await c.env.DB.prepare(query).all()
     
     return c.json({ success: true, data: results })
   } catch (error: any) {
