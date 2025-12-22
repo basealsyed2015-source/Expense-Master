@@ -11928,7 +11928,7 @@ app.get('/admin/users', async (c) => {
               </h1>
               
               <div class="flex gap-3">
-                <a href="/admin/users/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/users-new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
                 </a>
@@ -12209,6 +12209,12 @@ app.get('/admin/users', async (c) => {
 app.get('/admin/users/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    
+    // إذا كان :id هو "new"، إعادة توجيه لصفحة الإضافة
+    if (id === 'new') {
+      return c.redirect('/admin/users-new')
+    }
+    
     const query = `
       SELECT u.*, r.role_name, r.description as role_description,
              t.company_name as tenant_name
@@ -12749,11 +12755,11 @@ app.get('/admin/users/:id/delete', async (c) => {
   }
 })
 
-// ==================== صفحة إضافة مستخدم جديد ====================
-app.get('/admin/users/new', async (c) => {
+// ==================== صفحة إضافة مستخدم جديد - بدون تعارض ====================
+app.get('/admin/users-new', async (c) => {
   try {
-    const roles = await c.env.DB.prepare('SELECT id, role_name FROM roles ORDER BY id').all()
-    const subscriptions = await c.env.DB.prepare('SELECT id, company_name FROM subscriptions WHERE status = "active" ORDER BY company_name').all()
+    const roles = await c.env.DB.prepare('SELECT id, role_name, description FROM roles ORDER BY id').all()
+    const tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants ORDER BY company_name').all()
     
     return c.html(`
       <!DOCTYPE html>
@@ -12885,16 +12891,16 @@ app.get('/admin/users/new', async (c) => {
                   </select>
                 </div>
                 
-                <!-- الاشتراك -->
+                <!-- الشركة -->
                 <div id="subscriptionDiv" class="md:col-span-2" style="display: none;">
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-building text-teal-600 ml-1"></i>
-                    الاشتراك (للشركات فقط)
+                    الشركة
                   </label>
-                  <select name="subscription_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="">-- اختر الاشتراك --</option>
-                    ${subscriptions.results.map((sub: any) => `
-                      <option value="${sub.id}">${sub.company_name}</option>
+                  <select name="tenant_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">-- اختر الشركة --</option>
+                    ${tenants.results.map((tenant: any) => `
+                      <option value="${tenant.id}">${tenant.company_name}</option>
                     `).join('')}
                   </select>
                 </div>
@@ -13053,8 +13059,9 @@ app.get('/admin/users/new', async (c) => {
       </body>
       </html>
     `)
-  } catch (error) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1>')
+  } catch (error: any) {
+    console.error('Error loading add user page:', error)
+    return c.html(`<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">${error.message}</p><pre style="direction:ltr;">${error.stack}</pre>`)
   }
 })
 app.get('/admin/users/:id', async (c) => {
