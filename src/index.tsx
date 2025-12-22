@@ -12799,6 +12799,10 @@ app.get('/admin/users/:id/edit', async (c) => {
   try {
     const id = c.req.param('id')
     
+    // Get current user info to check permissions
+    const userInfo = await getUserInfo(c)
+    const currentUserRoleId = userInfo.roleId
+    
     // Get user data
     const userQuery = `
       SELECT u.*, r.role_name
@@ -12814,9 +12818,14 @@ app.get('/admin/users/:id/edit', async (c) => {
     
     const user = userResults[0]
     
-    // Get roles and tenants
+    // Get roles
     const roles = await c.env.DB.prepare('SELECT id, role_name, description FROM roles ORDER BY id').all()
-    const tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()
+    
+    // Get tenants only if current user is superadmin (role_id = 1)
+    let tenants = { results: [] }
+    if (currentUserRoleId === 1) {
+      tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()
+    }
     
     return c.html(`
       <!DOCTYPE html>
@@ -12911,6 +12920,7 @@ app.get('/admin/users/:id/edit', async (c) => {
                   </select>
                 </div>
                 
+                ${currentUserRoleId === 1 ? `
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     الشركة
@@ -12925,6 +12935,9 @@ app.get('/admin/users/:id/edit', async (c) => {
                     `).join('') || ''}
                   </select>
                 </div>
+                ` : `
+                <input type="hidden" name="tenant_id" value="${user.tenant_id || ''}">
+                `}
                 
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
