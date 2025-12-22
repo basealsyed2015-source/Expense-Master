@@ -3796,6 +3796,77 @@ app.get('/api/roles', async (c) => {
   }
 })
 
+// Create new role
+app.post('/api/roles', async (c) => {
+  try {
+    const { role_name, description } = await c.req.json()
+    
+    const result = await c.env.DB.prepare(`
+      INSERT INTO roles (role_name, description, created_at)
+      VALUES (?, ?, datetime('now'))
+    `).bind(role_name, description).run()
+    
+    return c.json({ 
+      success: true, 
+      message: 'تم إضافة الدور بنجاح',
+      role_id: result.meta.last_row_id 
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Update role
+app.put('/api/roles/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const { role_name, description } = await c.req.json()
+    
+    await c.env.DB.prepare(`
+      UPDATE roles 
+      SET role_name = ?, description = ?
+      WHERE id = ?
+    `).bind(role_name, description, id).run()
+    
+    return c.json({ success: true, message: 'تم تحديث الدور بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Delete role
+app.delete('/api/roles/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    
+    // Check if role is in use
+    const usersCount = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM users WHERE role_id = ?
+    `).bind(id).first()
+    
+    if (usersCount && usersCount.count > 0) {
+      return c.json({ 
+        success: false, 
+        error: 'لا يمكن حذف هذا الدور لأنه مرتبط بمستخدمين' 
+      }, 400)
+    }
+    
+    // Delete role permissions first
+    await c.env.DB.prepare(`
+      DELETE FROM role_permissions WHERE role_id = ?
+    `).bind(id).run()
+    
+    // Delete role
+    await c.env.DB.prepare(`
+      DELETE FROM roles WHERE id = ?
+    `).bind(id).run()
+    
+    return c.json({ success: true, message: 'تم حذف الدور بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 // Update user (including role change)
 app.put('/api/users/:id', async (c) => {
   try {
@@ -7200,6 +7271,372 @@ app.get('/admin/customers', async (c) => {
 })
 
 // ==================== صفحة مركز الإشعارات ====================
+// Roles Management Page
+app.get('/admin/roles', async (c) => {
+  try {
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>إدارة الأدوار</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+      </head>
+      <body class="bg-gray-50">
+        <div class="min-h-screen">
+          <!-- Header -->
+          <div class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-6 py-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h1 class="text-2xl font-bold">
+                    <i class="fas fa-user-shield ml-2"></i>
+                    إدارة الأدوار والصلاحيات
+                  </h1>
+                  <p class="text-sm text-indigo-100 mt-1">إدارة الأدوار وتحديد صلاحيات المستخدمين</p>
+                </div>
+                <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">
+                  <i class="fas fa-arrow-right ml-2"></i>
+                  العودة للوحة التحكم
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Content -->
+          <div class="max-w-7xl mx-auto p-6">
+            <!-- Add Role Button -->
+            <div class="mb-6 flex justify-between items-center">
+              <div>
+                <p class="text-gray-600">إدارة الأدوار المتاحة في النظام</p>
+              </div>
+              <button onclick="openAddRoleModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg">
+                <i class="fas fa-plus ml-2"></i>
+                إضافة دور جديد
+              </button>
+            </div>
+
+            <!-- Roles Table -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+                    <tr>
+                      <th class="px-6 py-4 text-right text-sm font-bold">#</th>
+                      <th class="px-6 py-4 text-right text-sm font-bold">اسم الدور</th>
+                      <th class="px-6 py-4 text-right text-sm font-bold">الوصف</th>
+                      <th class="px-6 py-4 text-right text-sm font-bold">عدد الصلاحيات</th>
+                      <th class="px-6 py-4 text-right text-sm font-bold">عدد المستخدمين</th>
+                      <th class="px-6 py-4 text-right text-sm font-bold">تاريخ الإنشاء</th>
+                      <th class="px-6 py-4 text-center text-sm font-bold">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rolesTable" class="divide-y divide-gray-200">
+                    <tr>
+                      <td colspan="7" class="text-center py-8 text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                        <p>جاري تحميل البيانات...</p>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Role Modal -->
+        <div id="addRoleModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
+          <div class="bg-white rounded-xl p-6 max-w-xl w-full mx-4">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">
+              <i class="fas fa-plus-circle text-indigo-600 ml-2"></i>
+              إضافة دور جديد
+            </h2>
+            <form id="addRoleForm">
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">اسم الدور (بالإنجليزية) *</label>
+                  <input type="text" name="role_name" required 
+                         placeholder="مثال: manager"
+                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                  <p class="text-xs text-gray-500 mt-1">يُستخدم في قاعدة البيانات والبرمجة</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">الوصف (بالعربية) *</label>
+                  <textarea name="description" required rows="3"
+                            placeholder="مثال: مدير - صلاحيات متوسطة"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+                  <p class="text-xs text-gray-500 mt-1">يظهر للمستخدمين في الواجهة</p>
+                </div>
+              </div>
+              <div class="flex gap-3 mt-6">
+                <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg font-bold">
+                  <i class="fas fa-save ml-2"></i>
+                  حفظ
+                </button>
+                <button type="button" onclick="closeAddRoleModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-bold">
+                  <i class="fas fa-times ml-2"></i>
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Edit Role Modal -->
+        <div id="editRoleModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
+          <div class="bg-white rounded-xl p-6 max-w-xl w-full mx-4">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">
+              <i class="fas fa-edit text-purple-600 ml-2"></i>
+              تعديل دور
+            </h2>
+            <form id="editRoleForm">
+              <input type="hidden" name="role_id" id="editRoleId">
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">اسم الدور (بالإنجليزية) *</label>
+                  <input type="text" name="role_name" id="editRoleName" required 
+                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">الوصف (بالعربية) *</label>
+                  <textarea name="description" id="editRoleDescription" required rows="3"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"></textarea>
+                </div>
+              </div>
+              <div class="flex gap-3 mt-6">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg font-bold">
+                  <i class="fas fa-save ml-2"></i>
+                  حفظ التعديلات
+                </button>
+                <button type="button" onclick="closeEditRoleModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-bold">
+                  <i class="fas fa-times ml-2"></i>
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <script>
+          let rolesData = [];
+
+          // Load roles
+          async function loadRoles() {
+            try {
+              const authToken = localStorage.getItem('authToken');
+              const response = await axios.get('/api/roles', {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+              });
+
+              if (response.data.success) {
+                rolesData = response.data.data;
+                displayRoles(rolesData);
+              }
+            } catch (error) {
+              console.error('Error loading roles:', error);
+              alert('خطأ في تحميل الأدوار');
+            }
+          }
+
+          // Display roles
+          function displayRoles(roles) {
+            const tbody = document.getElementById('rolesTable');
+            
+            if (roles.length === 0) {
+              tbody.innerHTML = \`
+                <tr>
+                  <td colspan="7" class="text-center py-8 text-gray-500">لا توجد أدوار</td>
+                </tr>
+              \`;
+              return;
+            }
+
+            tbody.innerHTML = roles.map((role, index) => {
+              const createdDate = new Date(role.created_at);
+              const formattedDate = createdDate.toLocaleDateString('ar-SA');
+              
+              return \`
+                <tr class="hover:bg-gray-50">
+                  <td class="px-6 py-4 font-medium">\${index + 1}</td>
+                  <td class="px-6 py-4">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
+                      \${role.role_name}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-gray-600">\${role.description}</td>
+                  <td class="px-6 py-4">
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <i class="fas fa-shield-alt ml-1"></i>
+                      \${role.permissions_count || 0}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4">
+                    <button onclick="viewRoleUsers(\${role.id})" class="text-blue-600 hover:text-blue-800">
+                      <i class="fas fa-users ml-1"></i>
+                      عرض المستخدمين
+                    </button>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
+                  <td class="px-6 py-4">
+                    <div class="flex items-center justify-center gap-2">
+                      <button onclick="openEditRoleModal(\${role.id}, '\${role.role_name}', '\${role.description}')" 
+                              class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
+                              title="تعديل">
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button onclick="managePermissions(\${role.id}, '\${role.role_name}')" 
+                              class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm"
+                              title="إدارة الصلاحيات">
+                        <i class="fas fa-shield-alt"></i>
+                      </button>
+                      <button onclick="deleteRole(\${role.id}, '\${role.role_name}')" 
+                              class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm"
+                              title="حذف">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              \`;
+            }).join('');
+          }
+
+          // Open add role modal
+          function openAddRoleModal() {
+            document.getElementById('addRoleModal').style.display = 'flex';
+            document.getElementById('addRoleForm').reset();
+          }
+
+          // Close add role modal
+          function closeAddRoleModal() {
+            document.getElementById('addRoleModal').style.display = 'none';
+          }
+
+          // Open edit role modal
+          function openEditRoleModal(id, name, description) {
+            document.getElementById('editRoleId').value = id;
+            document.getElementById('editRoleName').value = name;
+            document.getElementById('editRoleDescription').value = description;
+            document.getElementById('editRoleModal').style.display = 'flex';
+          }
+
+          // Close edit role modal
+          function closeEditRoleModal() {
+            document.getElementById('editRoleModal').style.display = 'none';
+          }
+
+          // Add role form submission
+          document.getElementById('addRoleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = {
+              role_name: formData.get('role_name'),
+              description: formData.get('description')
+            };
+
+            try {
+              const authToken = localStorage.getItem('authToken');
+              const response = await axios.post('/api/roles', data, {
+                headers: { 
+                  'Authorization': 'Bearer ' + authToken,
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (response.data.success) {
+                alert('✅ ' + response.data.message);
+                closeAddRoleModal();
+                loadRoles();
+              } else {
+                alert('❌ ' + response.data.error);
+              }
+            } catch (error) {
+              console.error('Error adding role:', error);
+              alert('❌ حدث خطأ أثناء إضافة الدور');
+            }
+          });
+
+          // Edit role form submission
+          document.getElementById('editRoleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const roleId = formData.get('role_id');
+            const data = {
+              role_name: formData.get('role_name'),
+              description: formData.get('description')
+            };
+
+            try {
+              const authToken = localStorage.getItem('authToken');
+              const response = await axios.put('/api/roles/' + roleId, data, {
+                headers: { 
+                  'Authorization': 'Bearer ' + authToken,
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (response.data.success) {
+                alert('✅ ' + response.data.message);
+                closeEditRoleModal();
+                loadRoles();
+              } else {
+                alert('❌ ' + response.data.error);
+              }
+            } catch (error) {
+              console.error('Error updating role:', error);
+              alert('❌ حدث خطأ أثناء تحديث الدور');
+            }
+          });
+
+          // Delete role
+          async function deleteRole(id, name) {
+            if (!confirm('هل أنت متأكد من حذف الدور: ' + name + '؟\\n\\nسيتم حذف جميع الصلاحيات المرتبطة بهذا الدور.')) {
+              return;
+            }
+
+            try {
+              const authToken = localStorage.getItem('authToken');
+              const response = await axios.delete('/api/roles/' + id, {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+              });
+
+              if (response.data.success) {
+                alert('✅ ' + response.data.message);
+                loadRoles();
+              } else {
+                alert('❌ ' + response.data.error);
+              }
+            } catch (error) {
+              console.error('Error deleting role:', error);
+              alert('❌ حدث خطأ أثناء حذف الدور');
+            }
+          }
+
+          // Manage permissions
+          function managePermissions(roleId, roleName) {
+            window.location.href = '/admin/roles/' + roleId + '/permissions';
+          }
+
+          // View role users
+          function viewRoleUsers(roleId) {
+            window.location.href = '/admin/users?role_id=' + roleId;
+          }
+
+          // Load data on page load
+          loadRoles();
+        </script>
+      </body>
+      </html>
+    `)
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
 app.get('/admin/notifications', async (c) => {
   try {
     return c.html(`

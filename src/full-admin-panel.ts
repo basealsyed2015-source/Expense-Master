@@ -216,6 +216,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <div class="text-sm font-bold">المستخدمين</div>
                     </a>
                     
+                    <!-- زر الأدوار (Super Admin فقط) -->
+                    <a href="/admin/roles" class="quick-access-btn bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-user-shield text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">الأدوار والصلاحيات</div>
+                    </a>
+                    
                     <!-- زر الإشعارات -->
                     <a href="/admin/notifications" class="quick-access-btn bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-bell text-3xl mb-2"></i>
@@ -1529,6 +1535,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/subscriptions',
                         '/admin/packages',
                         '/admin/users',
+                        '/admin/roles',
                         '/admin/notifications',
                         '/calculator',
                         '/',
@@ -2847,6 +2854,17 @@ export const fullAdminPanel = `<!DOCTYPE html>
         // Edit User
         window.editUser = async function(id) {
             try {
+                // Load roles first
+                const rolesResponse = await axios.get('/api/roles');
+                if (rolesResponse.data.success) {
+                    const roles = rolesResponse.data.data;
+                    const roleSelect = document.getElementById('editUserRole');
+                    roleSelect.innerHTML = roles.map(role => 
+                        \`<option value="\${role.id}">\${role.description}</option>\`
+                    ).join('');
+                }
+                
+                // Load user data
                 const response = await axios.get('/api/users');
                 if (response.data.success) {
                     const user = response.data.data.find(u => u.id === id);
