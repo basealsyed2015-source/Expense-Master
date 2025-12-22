@@ -3457,18 +3457,10 @@ app.post('/api/admin/init-payments-table', async (c) => {
 // Get dashboard statistics
 app.get('/api/dashboard/stats', async (c) => {
   try {
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
+    // Get user info (userId, tenantId, roleId)
+    const userInfo = await getUserInfo(c);
     
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
-    }
-    
-    // Build queries with tenant_id filter
+    // Build queries with role-based filtering
     let customers_query = 'SELECT COUNT(*) as count FROM customers'
     let requests_query = 'SELECT COUNT(*) as count FROM financing_requests'
     let pending_query = 'SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"'
@@ -3476,40 +3468,71 @@ app.get('/api/dashboard/stats', async (c) => {
     let subscriptions_query = 'SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"'
     let users_query = 'SELECT COUNT(*) as count FROM users WHERE is_active = 1'
     
-    // If tenant_id exists, add WHERE clause to filter by tenant
-    if (tenant_id !== null) {
-      customers_query += ' WHERE tenant_id = ?'
-      requests_query += ' WHERE tenant_id = ?'
-      pending_query += ' AND tenant_id = ?'
-      approved_query += ' AND tenant_id = ?'
-      subscriptions_query += ' AND tenant_id = ?'
-      users_query += ' AND tenant_id = ?'
+    // Apply role-based filtering
+    let tenant_id = null;
+    
+    if (userInfo.roleId === 1) {
+      // Role 1: Super Admin - sees ALL data (no filter)
+      tenant_id = null;
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin & Role 3: Supervisor - see company data only
+      tenant_id = userInfo.tenantId;
+      if (tenant_id !== null) {
+        customers_query += ' WHERE tenant_id = ?'
+        requests_query += ' WHERE tenant_id = ?'
+        pending_query += ' AND tenant_id = ?'
+        approved_query += ' AND tenant_id = ?'
+        subscriptions_query += ' AND tenant_id = ?'
+        users_query += ' AND tenant_id = ?'
+      }
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees only assigned customers/requests
+      if (userInfo.userId) {
+        customers_query += ' WHERE assigned_to = ?'
+        requests_query += ' WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)'
+        pending_query += ' AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)'
+        approved_query += ' AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)'
+        // For employee, we use userId instead of tenant_id
+        tenant_id = userInfo.userId;
+      } else {
+        // No data for employee without userId
+        customers_query += ' WHERE 1 = 0'
+        requests_query += ' WHERE 1 = 0'
+        pending_query += ' AND 1 = 0'
+        approved_query += ' AND 1 = 0'
+      }
+    } else {
+      // Unknown role - no data
+      customers_query += ' WHERE 1 = 0'
+      requests_query += ' WHERE 1 = 0'
+      pending_query += ' AND 1 = 0'
+      approved_query += ' AND 1 = 0'
     }
     
-    // Execute queries
-    const customers_count = tenant_id !== null 
+    // Execute queries based on role
+    const customers_count = tenant_id !== null && userInfo.roleId !== 1
       ? await c.env.DB.prepare(customers_query).bind(tenant_id).first()
       : await c.env.DB.prepare(customers_query).first()
       
-    const requests_count = tenant_id !== null
+    const requests_count = tenant_id !== null && userInfo.roleId !== 1
       ? await c.env.DB.prepare(requests_query).bind(tenant_id).first()
       : await c.env.DB.prepare(requests_query).first()
       
-    const pending_count = tenant_id !== null
+    const pending_count = tenant_id !== null && userInfo.roleId !== 1
       ? await c.env.DB.prepare(pending_query).bind(tenant_id).first()
       : await c.env.DB.prepare(pending_query).first()
       
-    const approved_count = tenant_id !== null
+    const approved_count = tenant_id !== null && userInfo.roleId !== 1
       ? await c.env.DB.prepare(approved_query).bind(tenant_id).first()
       : await c.env.DB.prepare(approved_query).first()
       
-    const subscriptions_count = tenant_id !== null
-      ? await c.env.DB.prepare(subscriptions_query).bind(tenant_id).first()
-      : await c.env.DB.prepare(subscriptions_query).first()
+    const subscriptions_count = tenant_id !== null && userInfo.roleId !== 1 && userInfo.roleId !== 4
+      ? await c.env.DB.prepare(subscriptions_query).bind(userInfo.tenantId).first()
+      : (userInfo.roleId === 1 ? await c.env.DB.prepare(subscriptions_query).first() : { count: 0 })
       
-    const users_count = tenant_id !== null
-      ? await c.env.DB.prepare(users_query).bind(tenant_id).first()
-      : await c.env.DB.prepare(users_query).first()
+    const users_count = tenant_id !== null && userInfo.roleId !== 1 && userInfo.roleId !== 4
+      ? await c.env.DB.prepare(users_query).bind(userInfo.tenantId).first()
+      : (userInfo.roleId === 1 ? await c.env.DB.prepare(users_query).first() : { count: 0 })
     
     // Banks - no tenant_id column, count all active banks
     // Banks are shared across all tenants
