@@ -1810,18 +1810,10 @@ app.put('/api/users/:id', async (c) => {
 // Get all customers
 app.get('/api/customers', async (c) => {
   try {
-    // Get tenant_id from logged-in user token or query param
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
+    // Get user info (userId, tenantId, roleId)
+    const userInfo = await getUserInfo(c);
     
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
-    }
-    
-    // Build query with tenant_id filter
+    // Build query with role-based filtering
     let query = `
       SELECT 
         c.*,
@@ -1831,8 +1823,24 @@ app.get('/api/customers', async (c) => {
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id`
     
-    if (tenant_id) {
-      query += ` WHERE c.tenant_id = ${tenant_id}`
+    // Apply filtering based on role
+    if (userInfo.roleId === 1) {
+      // Role 1: Super Admin - sees ALL customers (no filter)
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin & Role 3: Supervisor - see company customers only
+      if (userInfo.tenantId) {
+        query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
+      }
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees only assigned customers
+      if (userInfo.userId) {
+        query += ` WHERE c.assigned_to = ${userInfo.userId}`
+      } else {
+        query += ` WHERE 1 = 0` // No data if user ID not found
+      }
+    } else {
+      // Unknown role - no data
+      query += ` WHERE 1 = 0`
     }
     
     query += `
@@ -5444,16 +5452,16 @@ app.get('/admin/dashboard', async (c) => {
       customersWhere = '';
       requestsWhere = '';
       requestsJoinWhere = '';
-    } else if (userInfo.roleId === 4 || userInfo.roleId === 5) {
-      // Company Admin & Supervisor - see company data only
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin & Role 3: Supervisor - see company data only
       if (userInfo.tenantId) {
         customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
         requestsWhere = customersWhere;
         requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 3) {
-      // Employee - sees only assigned customers/requests
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees only assigned customers/requests
       if (userInfo.userId) {
         customersWhere = `WHERE assigned_to = ${userInfo.userId}`;
         requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${userInfo.userId})`;
@@ -6976,15 +6984,15 @@ app.get('/admin/customers', async (c) => {
     if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL customers
       // No filtering
-    } else if (userInfo.roleId === 4 || userInfo.roleId === 5) {
-      // Role 4: Company Admin - sees all company customers
-      // Role 5: Supervisor - sees all company customers (read-only)
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin - sees all company customers
+      // Role 3: Supervisor - sees all company customers (read-only)
       if (userInfo.tenantId) {
         query += ' WHERE tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 3) {
-      // Role 3: Employee - sees ONLY assigned customers
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees ONLY assigned customers
       if (userInfo.userId) {
         query += ' WHERE assigned_to = ?';
         queryParams.push(userInfo.userId);
@@ -7003,8 +7011,8 @@ app.get('/admin/customers', async (c) => {
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
     
-    // Determine if user can edit/delete (not for Role 5 - Supervisor)
-    const canEdit = userInfo.roleId !== 5;
+    // Determine if user can edit/delete (not for Role 3 - Supervisor)
+    const canEdit = userInfo.roleId !== 3;
     
     return c.html(`
       <!DOCTYPE html>
@@ -7086,7 +7094,7 @@ app.get('/admin/customers', async (c) => {
               </h1>
               
               <div class="flex gap-3">
-                ${userInfo.roleId !== 5 ? `
+                ${userInfo.roleId !== 3 ? `
                 <a href="/admin/customer-assignment${userInfo.tenantId ? '?tenant_id=' + userInfo.tenantId : ''}" 
                    class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
                   <i class="fas fa-users-cog ml-2"></i>
@@ -8426,15 +8434,15 @@ app.get('/admin/requests', async (c) => {
     if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL requests
       // No WHERE clause
-    } else if (userInfo.roleId === 4 || userInfo.roleId === 5) {
-      // Role 4: Company Admin - sees all company requests
-      // Role 5: Supervisor - sees all company requests (read-only)
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin - sees all company requests
+      // Role 3: Supervisor - sees all company requests (read-only)
       if (userInfo.tenantId) {
         query += ' WHERE c.tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 3) {
-      // Role 3: Employee - sees ONLY requests for assigned customers
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees ONLY requests for assigned customers
       if (userInfo.userId) {
         query += ' WHERE c.assigned_to = ?';
         queryParams.push(userInfo.userId);
@@ -8452,8 +8460,8 @@ app.get('/admin/requests', async (c) => {
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
     
-    // Determine if user can edit/delete (not for Role 5 - Supervisor)
-    const canEdit = userInfo.roleId !== 5;
+    // Determine if user can edit/delete (not for Role 3 - Supervisor)
+    const canEdit = userInfo.roleId !== 3;
     
     return c.html(`
       <!DOCTYPE html>
