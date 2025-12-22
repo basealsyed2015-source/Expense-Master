@@ -1688,26 +1688,24 @@ app.delete('/api/subscription-requests/:id', async (c) => {
 // Get all users
 app.get('/api/users', async (c) => {
   try {
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
-    }
+    // Get user info including role_id
+    const userInfo = await getUserInfo(c)
+    const roleId = userInfo.roleId
+    const tenantId = userInfo.tenantId
     
     let query = `
       SELECT u.*, r.role_name, r.description as role_description,
+             t.company_name as tenant_name,
              COUNT(DISTINCT rp.permission_id) as permissions_count
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN role_permissions rp ON r.id = rp.role_id`
+      LEFT JOIN role_permissions rp ON r.id = rp.role_id
+      LEFT JOIN tenants t ON u.tenant_id = t.id`
     
-    if (tenant_id) {
-      query += ` WHERE u.tenant_id = ${tenant_id}`
+    // Superadmin (role_id = 1) can see all users
+    // Other roles see only their tenant's users
+    if (roleId !== 1 && tenantId) {
+      query += ` WHERE u.tenant_id = ${tenantId}`
     }
     
     query += `
