@@ -547,10 +547,15 @@ app.post('/api/auth/login', async (c) => {
     const tokenData = `${user.id}:${user.tenant_id || 'null'}:${user.role_id}:${Date.now()}`
     const token = btoa(tokenData)
     
+    // Set cookie for 7 days
+    const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
+    c.header('Set-Cookie', `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; HttpOnly; SameSite=Lax`)
+    
     // Determine redirect URL - always go to /admin/panel
     const redirect = '/admin/panel'
     
     console.log(`🎯 Redirect to: ${redirect}`)
+    console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
     
     return c.json({ 
       success: true,
