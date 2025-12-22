@@ -471,6 +471,11 @@ export function generateWorkflowTimelinePage(requestId: number, request: any, st
     }
     
     function addAction() {
+      if (!currentStageId) {
+        alert('الرجاء تحديث المرحلة أولاً قبل إضافة إجراءات');
+        return;
+      }
+      
       const modal = document.createElement('div');
       modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
       modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">' +
@@ -496,9 +501,13 @@ export function generateWorkflowTimelinePage(requestId: number, request: any, st
         '</div></div>';
       document.body.appendChild(modal);
     }
-    }
     
     function createTask() {
+      if (!currentStageId) {
+        alert('الرجاء تحديث المرحلة أولاً قبل إنشاء مهام');
+        return;
+      }
+      
       const modal = document.createElement('div');
       modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
       modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">' +
