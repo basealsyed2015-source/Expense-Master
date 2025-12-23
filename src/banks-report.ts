@@ -156,37 +156,45 @@ export const banksReportPage = `
                     title: 'إجمالي البنوك',
                     value: summary.total_banks,
                     icon: 'fa-university',
-                    color: 'blue'
+                    bgColor: 'bg-blue-100',
+                    textColor: 'text-blue-600',
+                    borderColor: 'border-blue-500'
                 },
                 {
                     title: 'إجمالي الطلبات',
                     value: summary.total_requests,
                     icon: 'fa-file-alt',
-                    color: 'green'
+                    bgColor: 'bg-green-100',
+                    textColor: 'text-green-600',
+                    borderColor: 'border-green-500'
                 },
                 {
                     title: 'معدل القبول الإجمالي',
                     value: summary.overall_approval_rate + '%',
                     icon: 'fa-check-circle',
-                    color: 'purple'
+                    bgColor: 'bg-purple-100',
+                    textColor: 'text-purple-600',
+                    borderColor: 'border-purple-500'
                 },
                 {
                     title: 'متوسط مبلغ التمويل',
                     value: formatCurrency(summary.average_amount),
                     icon: 'fa-money-bill-wave',
-                    color: 'yellow'
+                    bgColor: 'bg-yellow-100',
+                    textColor: 'text-yellow-600',
+                    borderColor: 'border-yellow-500'
                 }
             ];
 
             const html = cards.map(card => \`
-                <div class="stat-card bg-white rounded-xl shadow-lg p-6 border-r-4 border-\${card.color}-500">
+                <div class="stat-card bg-white rounded-xl shadow-lg p-6 border-r-4 \${card.borderColor}">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-500 text-sm font-medium">\${card.title}</p>
                             <p class="text-3xl font-bold text-gray-800 mt-2">\${card.value}</p>
                         </div>
-                        <div class="bg-\${card.color}-100 rounded-full p-4">
-                            <i class="fas \${card.icon} text-3xl text-\${card.color}-600"></i>
+                        <div class="\${card.bgColor} rounded-full p-4">
+                            <i class="fas \${card.icon} text-3xl \${card.textColor}"></i>
                         </div>
                     </div>
                 </div>
