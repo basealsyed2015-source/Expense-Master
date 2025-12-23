@@ -1560,7 +1560,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/requests',
                         '/admin/users',
                         '/admin/reports',
-                        '/admin/rates', // Read-only
+                        '/admin/banks',
+                        '/admin/rates',
                         '/calculator',
                         '/'
                     ],
