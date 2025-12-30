@@ -222,6 +222,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <div class="text-sm font-bold">الأدوار والصلاحيات</div>
                     </a>
                     
+                    <!-- زر نظام الموارد البشرية HR -->
+                    <a href="/admin/hr" class="quick-access-btn bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center border-2 border-white/30">
+                        <i class="fas fa-users-cog text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">الموارد البشرية HR</div>
+                        <div class="text-xs mt-1 opacity-90">إدارة الموظفين</div>
+                    </a>
+                    
                     <!-- زر الإشعارات -->
                     <a href="/admin/notifications" class="quick-access-btn bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-bell text-3xl mb-2"></i>
