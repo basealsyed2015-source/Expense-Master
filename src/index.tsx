@@ -20,6 +20,8 @@ import { generateAddRatePage, generateEditRatePage } from './rates-forms'
 import { generateWorkflowTimelinePage } from './workflow-page'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
+import { hrMainPage } from './hr-main-page'
+import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
 
 type Bindings = {
   DB: D1Database;
@@ -240,12 +242,27 @@ const getMobileResponsiveCSS = () => `
 // Enable CORS
 app.use('*', cors())
 
+// Middleware: Log binding availability for debugging
+app.use('*', async (c, next) => {
+  // Log binding status for API routes (helps debug production issues)
+  if (c.req.path.startsWith('/api/')) {
+    console.log(`🔍 [${c.req.method}] ${c.req.path} - DB binding: ${!!c.env?.DB}`)
+  }
+  await next()
+})
+
 // ===================================
 // MULTI-TENANT MIDDLEWARE & HELPERS
 // ===================================
 
 // Helper: Get tenant from subdomain or slug
 async function getTenant(c: any): Promise<any> {
+  // Safety check for DB binding
+  if (!c.env?.DB) {
+    console.error('❌ getTenant: DB binding not available')
+    return null
+  }
+  
   // Try to get from subdomain first (e.g., tamweel1.tamweel.app)
   const host = c.req.header('host') || ''
   const subdomain = host.split('.')[0]
@@ -315,6 +332,12 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     const parts = decoded.split(':')
     const userId = parseInt(parts[0])
     const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
+    
+    // Safety check for DB binding
+    if (!c.env?.DB) {
+      console.error('❌ getUserInfo: DB binding not available')
+      return { userId: null, tenantId: null, roleId: null }
+    }
     
     const user = await c.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
@@ -515,11 +538,30 @@ app.delete('/api/tenants/:id', async (c) => {
 // Login API
 app.post('/api/auth/login', async (c) => {
   try {
+    // Check if DB binding is available
+    if (!c.env.DB) {
+      console.error('❌ DB binding is not available')
+      return c.json({ 
+        success: false, 
+        error: 'Database connection not available. Please check bindings configuration.' 
+      }, 500)
+    }
+    
     const { username, password } = await c.req.json()
     
     console.log(`🔐 Login attempt: ${username}`)
+    console.log(`🔍 DB binding check: ${!!c.env.DB}`)
     
     // Get user with tenant information
+    // Double-check DB is available before using it
+    if (!c.env?.DB) {
+      console.error('❌ DB binding check failed in login query')
+      return c.json({ 
+        success: false, 
+        error: 'Database connection not available. Please check bindings configuration.' 
+      }, 500)
+    }
+    
     const user = await c.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.user_type, u.subscription_id, u.is_active, 
@@ -541,17 +583,22 @@ app.post('/api/auth/login', async (c) => {
     
     console.log(`✅ User found: ${user.full_name} (Role ID: ${user.role_id})`)
     
-    // Update last login
-    await c.env.DB.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(user.id).run()
+    // Update last login - check DB again before update
+    if (!c.env?.DB) {
+      console.error('❌ DB binding lost after user query')
+      // Continue anyway - user is authenticated, just can't update last_login
+    } else {
+      await c.env.DB.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
+        .bind(user.id).run()
+    }
     
     // Create token with tenant_id (user_id:tenant_id:role_id:timestamp)
     const tokenData = `${user.id}:${user.tenant_id || 'null'}:${user.role_id}:${Date.now()}`
     const token = btoa(tokenData)
     
-    // Set cookie for 7 days (without HttpOnly for now to allow JavaScript access for debugging)
+    // Set cookie for 7 days - use Response headers directly for Cloudflare Pages compatibility
     const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
-    c.header('Set-Cookie', `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax`)
+    const cookieValue = `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
     
     // Determine redirect URL - always go to /admin/panel
     const redirect = '/admin/panel'
@@ -559,7 +606,8 @@ app.post('/api/auth/login', async (c) => {
     console.log(`🎯 Redirect to: ${redirect}`)
     console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
     
-    return c.json({ 
+    // Create response with cookie header set directly (avoids getSetCookie compatibility issue)
+    const response = c.json({ 
       success: true,
       token: token,
       redirect: redirect,
@@ -581,9 +629,30 @@ app.post('/api/auth/login', async (c) => {
         tenant_slug: user.tenant_slug
       }
     })
+    
+    // Set cookie header directly on the response to avoid getSetCookie compatibility issue
+    response.headers.set('Set-Cookie', cookieValue)
+    return response
   } catch (error: any) {
     console.error('❌ Login error:', error)
-    return c.json({ success: false, error: 'حدث خطأ في تسجيل الدخول: ' + error.message }, 500)
+    console.error('❌ Error stack:', error.stack)
+    console.error('❌ Error details:', {
+      message: error.message,
+      name: error.name,
+      cause: error.cause,
+      DB_available: !!c.env?.DB
+    })
+    
+    // Return detailed error for debugging
+    return c.json({ 
+      success: false, 
+      error: 'حدث خطأ في تسجيل الدخول: ' + error.message,
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack,
+        DB_available: !!c.env?.DB
+      } : undefined
+    }, 500)
   }
 })
 
@@ -3625,7 +3694,17 @@ app.put('/api/users/:id', async (c) => {
 // ============================================
 
 // Public pages (no authentication required)
-app.get('/', (c) => c.html(homePage))
+// Test bindings at root with ?test=bindings
+app.get('/', async (c) => {
+  if (c.req.query('test') === 'bindings') {
+    return c.json({
+      DB: !!c.env.DB,
+      ATTACHMENTS: !!c.env.ATTACHMENTS,
+      timestamp: new Date().toISOString()
+    })
+  }
+  return c.html(homePage)
+})
 app.get('/calculator', (c) => c.html(smartCalculator))
 app.get('/calculator-old', (c) => c.html(calculatorPage))
 
@@ -13521,6 +13600,470 @@ app.post('/api/users/:id/permissions', async (c) => {
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
+})
+
+// HR SYSTEM ROUTES & APIs
+// ===============================================
+
+// HR Main Dashboard
+app.get('/admin/hr', (c) => {
+  return c.html(hrMainPage)
+})
+
+// HR Employees Page
+app.get('/admin/hr/employees', (c) => {
+  return c.html(hrEmployeesPage)
+})
+
+// HR Attendance Page
+app.get('/admin/hr/attendance', (c) => {
+  return c.html(hrAttendancePage)
+})
+
+// HR Leaves Page (قيد التطوير)
+app.get('/admin/hr/leaves', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Salaries Page (قيد التطوير)
+app.get('/admin/hr/salaries', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Performance Page (قيد التطوير)
+app.get('/admin/hr/performance', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Promotions Page (قيد التطوير)
+app.get('/admin/hr/promotions', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Documents Page (قيد التطوير)
+app.get('/admin/hr/documents', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Reports Page (قيد التطوير)
+app.get('/admin/hr/reports', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Dashboard Statistics API
+app.get('/api/hr/dashboard/stats', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    // Total & Active Employees
+    const employeesQuery = tenantId 
+      ? `SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees`
+    
+    const employees = await c.env.DB.prepare(employeesQuery).first()
+    
+    // Attendance Today
+    const today = new Date().toISOString().split('T')[0]
+    const attendanceQuery = tenantId
+      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'`
+    
+    const attendance = await c.env.DB.prepare(attendanceQuery).bind(today).first()
+    
+    // Pending Leaves
+    const leavesQuery = tenantId
+      ? `SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'`
+    
+    const leaves = await c.env.DB.prepare(leavesQuery).first()
+    
+    // Pending Salaries
+    const salariesQuery = tenantId
+      ? `SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'`
+    
+    const salaries = await c.env.DB.prepare(salariesQuery).first()
+    
+    // Department Distribution
+    const deptQuery = tenantId
+      ? `SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${tenantId} GROUP BY department`
+      : `SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department`
+    
+    const { results: departments } = await c.env.DB.prepare(deptQuery).all()
+    
+    // Attendance Trend (last 7 days)
+    const trendQuery = tenantId
+      ? `SELECT DATE(date) as date, 
+         SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
+         SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
+         FROM hr_attendance 
+         WHERE DATE(date) >= DATE('now', '-7 days') AND tenant_id = ${tenantId}
+         GROUP BY DATE(date) ORDER BY date`
+      : `SELECT DATE(date) as date, 
+         SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
+         SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
+         FROM hr_attendance 
+         WHERE DATE(date) >= DATE('now', '-7 days')
+         GROUP BY DATE(date) ORDER BY date`
+    
+    const { results: trend } = await c.env.DB.prepare(trendQuery).all()
+    
+    return c.json({
+      success: true,
+      data: {
+        totalEmployees: employees?.total || 0,
+        activeEmployees: employees?.active || 0,
+        presentToday: attendance?.present || 0,
+        pendingLeaves: leaves?.pending || 0,
+        pendingSalaries: salaries?.count || 0,
+        pendingSalariesAmount: salaries?.total || 0,
+        departmentDistribution: departments || [],
+        attendanceTrend: trend || []
+      }
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get All Employees
+app.get('/api/hr/employees', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const query = tenantId
+      ? `SELECT * FROM hr_employees WHERE tenant_id = ${tenantId} ORDER BY hire_date DESC`
+      : `SELECT * FROM hr_employees ORDER BY hire_date DESC`
+    
+    const { results } = await c.env.DB.prepare(query).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get Single Employee
+app.get('/api/hr/employees/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const employee = await c.env.DB.prepare(`SELECT * FROM hr_employees WHERE id = ?`).bind(id).first()
+    
+    if (!employee) {
+      return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
+    }
+    
+    return c.json({ success: true, data: employee })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Add New Employee
+app.post('/api/hr/employees', async (c) => {
+  try {
+    const data = await c.req.json()
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const result = await c.env.DB.prepare(`
+      INSERT INTO hr_employees (
+        employee_number, full_name, national_id, gender, date_of_birth, nationality,
+        marital_status, number_of_dependents, phone, personal_email, work_email,
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+        address, city, postal_code, country, hire_date, job_title, department,
+        employment_type, work_schedule, direct_manager, basic_salary, housing_allowance,
+        transportation_allowance, status, contract_start_date, contract_end_date, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.employee_number, data.full_name, data.national_id, data.gender, data.date_of_birth,
+      data.nationality, data.marital_status, data.number_of_dependents, data.phone,
+      data.personal_email, data.work_email, data.emergency_contact_name,
+      data.emergency_contact_phone, data.emergency_contact_relationship, data.address,
+      data.city, data.postal_code, data.country, data.hire_date, data.job_title,
+      data.department, data.employment_type, data.work_schedule, data.direct_manager,
+      data.basic_salary, data.housing_allowance, data.transportation_allowance,
+      data.status || 'active', data.contract_start_date, data.contract_end_date, tenantId
+    ).run()
+    
+    return c.json({ success: true, id: result.meta.last_row_id, message: 'تم إضافة الموظف بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Update Employee
+app.put('/api/hr/employees/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const data = await c.req.json()
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_employees SET
+        full_name = ?, national_id = ?, gender = ?, date_of_birth = ?, nationality = ?,
+        marital_status = ?, number_of_dependents = ?, phone = ?, personal_email = ?, work_email = ?,
+        emergency_contact_name = ?, emergency_contact_phone = ?, emergency_contact_relationship = ?,
+        address = ?, city = ?, postal_code = ?, country = ?, hire_date = ?, job_title = ?,
+        department = ?, employment_type = ?, work_schedule = ?, direct_manager = ?, basic_salary = ?,
+        housing_allowance = ?, transportation_allowance = ?, status = ?, contract_start_date = ?,
+        contract_end_date = ?
+      WHERE id = ?
+    `).bind(
+      data.full_name, data.national_id, data.gender, data.date_of_birth, data.nationality,
+      data.marital_status, data.number_of_dependents, data.phone, data.personal_email,
+      data.work_email, data.emergency_contact_name, data.emergency_contact_phone,
+      data.emergency_contact_relationship, data.address, data.city, data.postal_code,
+      data.country, data.hire_date, data.job_title, data.department, data.employment_type,
+      data.work_schedule, data.direct_manager, data.basic_salary, data.housing_allowance,
+      data.transportation_allowance, data.status, data.contract_start_date,
+      data.contract_end_date, id
+    ).run()
+    
+    return c.json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Delete Employee
+app.delete('/api/hr/employees/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    await c.env.DB.prepare(`DELETE FROM hr_employees WHERE id = ?`).bind(id).run()
+    return c.json({ success: true, message: 'تم حذف الموظف بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get All Attendance Records
+app.get('/api/hr/attendance', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const query = tenantId
+      ? `SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
+         LEFT JOIN hr_employees e ON a.employee_id = e.id 
+         WHERE a.tenant_id = ${tenantId} ORDER BY a.date DESC, a.check_in DESC`
+      : `SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
+         LEFT JOIN hr_employees e ON a.employee_id = e.id 
+         ORDER BY a.date DESC, a.check_in DESC`
+    
+    const { results } = await c.env.DB.prepare(query).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Add Attendance Record
+app.post('/api/hr/attendance', async (c) => {
+  try {
+    const data = await c.req.json()
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const result = await c.env.DB.prepare(`
+      INSERT INTO hr_attendance (
+        employee_id, date, check_in, check_out, status, late_minutes, 
+        overtime_minutes, notes, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.employee_id, data.date, data.check_in, data.check_out, data.status,
+      data.late_minutes || 0, data.overtime_minutes || 0, data.notes, tenantId
+    ).run()
+    
+    return c.json({ success: true, id: result.meta.last_row_id, message: 'تم تسجيل الحضور بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get All Leaves
+app.get('/api/hr/leaves', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const query = tenantId
+      ? `SELECT l.*, e.full_name, e.employee_number, lt.type_name 
+         FROM hr_leaves l 
+         LEFT JOIN hr_employees e ON l.employee_id = e.id 
+         LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
+         WHERE l.tenant_id = ${tenantId} ORDER BY l.request_date DESC`
+      : `SELECT l.*, e.full_name, e.employee_number, lt.type_name 
+         FROM hr_leaves l 
+         LEFT JOIN hr_employees e ON l.employee_id = e.id 
+         LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
+         ORDER BY l.request_date DESC`
+    
+    const { results } = await c.env.DB.prepare(query).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Add Leave Request
+app.post('/api/hr/leaves', async (c) => {
+  try {
+    const data = await c.req.json()
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const result = await c.env.DB.prepare(`
+      INSERT INTO hr_leaves (
+        employee_id, leave_type_id, start_date, end_date, days_count,
+        reason, status, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.employee_id, data.leave_type_id, data.start_date, data.end_date,
+      data.days_count, data.reason, data.status || 'pending', tenantId
+    ).run()
+    
+    return c.json({ success: true, id: result.meta.last_row_id, message: 'تم إضافة طلب الإجازة بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Update Leave Status
+app.put('/api/hr/leaves/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const { status, rejection_reason, approved_by } = await c.req.json()
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_leaves SET status = ?, rejection_reason = ?, approved_by = ?, approval_date = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(status, rejection_reason, approved_by, id).run()
+    
+    return c.json({ success: true, message: 'تم تحديث حالة الإجازة بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get All Salaries
+app.get('/api/hr/salaries', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const query = tenantId
+      ? `SELECT s.*, e.full_name, e.employee_number FROM hr_salaries s 
+         LEFT JOIN hr_employees e ON s.employee_id = e.id 
+         WHERE s.tenant_id = ${tenantId} ORDER BY s.month DESC`
+      : `SELECT s.*, e.full_name, e.employee_number FROM hr_salaries s 
+         LEFT JOIN hr_employees e ON s.employee_id = e.id 
+         ORDER BY s.month DESC`
+    
+    const { results } = await c.env.DB.prepare(query).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Add Salary Record
+app.post('/api/hr/salaries', async (c) => {
+  try {
+    const data = await c.req.json()
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+    
+    const result = await c.env.DB.prepare(`
+      INSERT INTO hr_salaries (
+        employee_id, month, basic_salary, housing_allowance, transportation_allowance,
+        other_allowances, deductions, net_salary, payment_status, payment_date,
+        notes, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.employee_id, data.month, data.basic_salary, data.housing_allowance,
+      data.transportation_allowance, data.other_allowances, data.deductions,
+      data.net_salary, data.payment_status || 'pending', data.payment_date,
+      data.notes, tenantId
+    ).run()
+    
+    return c.json({ success: true, id: result.meta.last_row_id, message: 'تم إضافة سجل الراتب بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Update Salary Payment Status
+app.put('/api/hr/salaries/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const { payment_status, payment_date } = await c.req.json()
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_salaries SET payment_status = ?, payment_date = ?
+      WHERE id = ?
+    `).bind(payment_status, payment_date, id).run()
+    
+    return c.json({ success: true, message: 'تم تحديث حالة الدفع بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Test login endpoint (simplified)
+app.post('/api/test/login', async (c) => {
+  try {
+    if (!c.env?.DB) {
+      return c.json({ 
+        success: false, 
+        error: 'DB binding not available',
+        DB_exists: false
+      }, 500)
+    }
+    
+    // Try a simple query
+    const testQuery = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first()
+    
+    return c.json({
+      success: true,
+      DB_exists: true,
+      DB_usable: true,
+      user_count: testQuery
+    })
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+      DB_exists: !!c.env?.DB,
+      stack: error.stack
+    }, 500)
+  }
+})
+
+// Runtime check for deployed bindings
+app.get('/api/test/bindings', async (c) => {
+  const result: any = {
+    DB_exists: !!c.env.DB,
+    ATTACHMENTS_exists: !!c.env.ATTACHMENTS,
+    timestamp: new Date().toISOString()
+  }
+  
+  // Try to actually use the DB binding
+  if (c.env.DB) {
+    try {
+      const testQuery = await c.env.DB.prepare('SELECT 1 as test').first()
+      result.DB_usable = true
+      result.DB_test_result = testQuery
+    } catch (error: any) {
+      result.DB_usable = false
+      result.DB_error = error.message
+    }
+  } else {
+    result.DB_usable = false
+    result.DB_error = 'DB binding is undefined'
+  }
+  
+  return c.json(result)
 })
 
 export default app
