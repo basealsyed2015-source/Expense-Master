@@ -119,6 +119,20 @@ export const fullAdminPanel = `<!DOCTYPE html>
     <!-- Top Header -->
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
         <div class="flex items-center justify-between px-6 py-4">
+            <!-- Right Side: Menu Toggle (Always Visible) -->
+            <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
+            
+            <!-- Center: User Info -->
+            <div class="flex items-center space-x-reverse space-x-3">
+                <div class="text-right">
+                    <div class="font-bold" id="userDisplayName">جاري التحميل...</div>
+                    <div class="text-xs text-blue-200" id="userEmail">-</div>
+                </div>
+                <i class="fas fa-user-circle text-3xl"></i>
+            </div>
+            
             <!-- Left Side: Buttons -->
             <div class="flex items-center space-x-reverse space-x-4">
                 <button onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
@@ -131,20 +145,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>
-            
-            <!-- Center: User Info -->
-            <div class="flex items-center space-x-reverse space-x-3">
-                <div class="text-right">
-                    <div class="font-bold" id="userDisplayName">جاري التحميل...</div>
-                    <div class="text-xs text-blue-200" id="userEmail">-</div>
-                </div>
-                <i class="fas fa-user-circle text-3xl"></i>
-            </div>
-            
-            <!-- Right Side: Menu Toggle (Always Visible) -->
-            <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
-                <i class="fas fa-bars text-2xl"></i>
-            </button>
         </div>
     </div>
 
