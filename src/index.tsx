@@ -21,6 +21,7 @@ import { generateWorkflowTimelinePage } from './workflow-page'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
 import { hrMainPage } from './hr-main-page'
+import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
 
 type Bindings = {
   DB: D1Database;
@@ -13702,6 +13703,46 @@ export default app
 // HR Main Dashboard
 app.get('/admin/hr', (c) => {
   return c.html(hrMainPage)
+})
+
+// HR Employees Page
+app.get('/admin/hr/employees', (c) => {
+  return c.html(hrEmployeesPage)
+})
+
+// HR Attendance Page
+app.get('/admin/hr/attendance', (c) => {
+  return c.html(hrAttendancePage)
+})
+
+// HR Leaves Page (قيد التطوير)
+app.get('/admin/hr/leaves', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Salaries Page (قيد التطوير)
+app.get('/admin/hr/salaries', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Performance Page (قيد التطوير)
+app.get('/admin/hr/performance', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Promotions Page (قيد التطوير)
+app.get('/admin/hr/promotions', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Documents Page (قيد التطوير)
+app.get('/admin/hr/documents', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+})
+
+// HR Reports Page (قيد التطوير)
+app.get('/admin/hr/reports', (c) => {
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
 // HR Dashboard Statistics API
