@@ -14,26 +14,118 @@ export const hrMainPage = `<!DOCTYPE html>
     <nav class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-4 space-x-reverse">
-                    <i class="fas fa-users-cog text-3xl"></i>
-                    <div>
-                        <h1 class="text-xl font-bold">نظام إدارة الموارد البشرية</h1>
-                        <p class="text-xs text-blue-100">إدارة الموظفين والحضور والإجازات والرواتب</p>
-                    </div>
-                </div>
+                <!-- Left: User Info (Desktop) & Buttons -->
                 <div class="flex items-center space-x-3 space-x-reverse">
-                    <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-all">
+                    <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-all hidden md:flex items-center">
                         <i class="fas fa-home ml-2"></i>
                         لوحة التحكم الرئيسية
                     </a>
-                    <button onclick="logout()" class="bg-red-500/80 hover:bg-red-600 px-4 py-2 rounded-lg transition-all">
+                    <button onclick="logout()" class="bg-red-500/80 hover:bg-red-600 px-4 py-2 rounded-lg transition-all hidden md:flex items-center">
                         <i class="fas fa-sign-out-alt ml-2"></i>
                         تسجيل خروج
                     </button>
                 </div>
+                
+                <!-- Center: Title -->
+                <div class="flex items-center space-x-4 space-x-reverse">
+                    <i class="fas fa-users-cog text-3xl hidden md:block"></i>
+                    <div class="text-center md:text-right">
+                        <h1 class="text-xl font-bold">نظام إدارة الموارد البشرية</h1>
+                        <p class="text-xs text-blue-100 hidden md:block">إدارة الموظفين والحضور والإجازات والرواتب</p>
+                    </div>
+                </div>
+                
+                <!-- Right: Burger Menu -->
+                <button onclick="toggleSidebar()" class="p-2 hover:bg-white/10 rounded-lg transition-all" title="القائمة">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
             </div>
         </div>
     </nav>
+
+    <!-- Sidebar Menu -->
+    <div id="sidebar" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
+        <div class="p-6">
+            <!-- Close Button -->
+            <button onclick="toggleSidebar()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
+                <i class="fas fa-times text-2xl text-gray-600"></i>
+            </button>
+            
+            <!-- Header -->
+            <div class="mb-8 pt-4">
+                <div class="flex items-center space-x-3 space-x-reverse mb-4">
+                    <i class="fas fa-users-cog text-4xl text-blue-600"></i>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">نظام HR</h2>
+                        <p class="text-sm text-gray-500">الموارد البشرية</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Items -->
+            <div class="space-y-2">
+                <a href="/admin/panel" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-home text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">لوحة التحكم الرئيسية</span>
+                </a>
+                
+                <a href="/admin/hr" class="flex items-center space-x-3 space-x-reverse p-4 bg-blue-50 rounded-lg">
+                    <i class="fas fa-chart-line text-xl text-blue-600"></i>
+                    <span class="font-medium text-blue-600">لوحة المعلومات</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-users text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">إدارة الموظفين</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-user-check text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">الحضور والغياب</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-calendar-alt text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">إدارة الإجازات</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-money-bill-wave text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">الرواتب</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-star text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">تقييم الأداء</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-level-up-alt text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">الترقيات والنقل</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-bell text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">تنبيهات المستندات</span>
+                </a>
+
+                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-file-alt text-xl text-gray-600 group-hover:text-blue-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-600">التقارير</span>
+                </a>
+
+                <hr class="my-4">
+
+                <button onclick="logout()" class="w-full flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
+                    <i class="fas fa-sign-out-alt text-xl text-gray-600 group-hover:text-red-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-red-600">تسجيل خروج</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay -->
+    <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleSidebar()"></div>
 
     <!-- Main Container -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -331,6 +423,24 @@ export const hrMainPage = `<!DOCTYPE html>
             const value = \`; \${document.cookie}\`;
             const parts = value.split(\`; \${name}=\`);
             if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        // Toggle Sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            
+            if (sidebar.classList.contains('translate-x-full')) {
+                // فتح القائمة
+                sidebar.classList.remove('translate-x-full');
+                sidebar.classList.add('translate-x-0');
+                overlay.classList.remove('hidden');
+            } else {
+                // إغلاق القائمة
+                sidebar.classList.add('translate-x-full');
+                sidebar.classList.remove('translate-x-0');
+                overlay.classList.add('hidden');
+            }
         }
 
         // Logout
