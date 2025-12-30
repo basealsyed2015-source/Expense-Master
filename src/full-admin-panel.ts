@@ -117,23 +117,22 @@ export const fullAdminPanel = `<!DOCTYPE html>
 </head>
 <body class="bg-gray-50">
     <!-- Top Header -->
-    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
+    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
         <div class="flex items-center justify-between px-6 py-4">
+            <!-- Left Side: Buttons -->
             <div class="flex items-center space-x-reverse space-x-4">
-                <!-- Mobile Menu Toggle -->
-                <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg md:hidden" title="القائمة">
-                    <i class="fas fa-bars text-xl"></i>
-                </button>
                 <button onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
                     <i class="fas fa-moon"></i>
                 </button>
                 <button class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الإشعارات">
                     <i class="fas fa-bell"></i>
                 </button>
-                <button onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors" title="تسجيل الخروج">
+                <button onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors hidden md:inline-block" title="تسجيل الخروج">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>
+            
+            <!-- Center: User Info -->
             <div class="flex items-center space-x-reverse space-x-3">
                 <div class="text-right">
                     <div class="font-bold" id="userDisplayName">جاري التحميل...</div>
@@ -141,8 +140,134 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
                 <i class="fas fa-user-circle text-3xl"></i>
             </div>
+            
+            <!-- Right Side: Menu Toggle (Always Visible) -->
+            <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
         </div>
     </div>
+
+    <!-- Sidebar Menu -->
+    <div id="mobile-menu" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
+        <div class="p-6">
+            <!-- Close Button -->
+            <button onclick="toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
+                <i class="fas fa-times text-2xl text-gray-600"></i>
+            </button>
+            
+            <!-- Logo & Title -->
+            <div class="mb-8 pt-4">
+                <div class="flex items-center space-x-3 space-x-reverse mb-4">
+                    <i class="fas fa-calculator text-4xl text-blue-600"></i>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">منصة التمويل</h2>
+                        <p class="text-sm text-gray-500">لوحة التحكم</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Items -->
+            <div class="space-y-2">
+                <!-- Dashboard -->
+                <a href="/admin/dashboard" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-tachometer-alt text-xl text-blue-600 group-hover:text-blue-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">لوحة المعلومات</span>
+                </a>
+
+                <!-- Customers -->
+                <a href="/admin/customers" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-green-50 rounded-lg transition-all group">
+                    <i class="fas fa-users text-xl text-green-600 group-hover:text-green-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-green-700">العملاء</span>
+                </a>
+
+                <!-- Financing Requests -->
+                <a href="/admin/requests" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-purple-50 rounded-lg transition-all group">
+                    <i class="fas fa-file-invoice-dollar text-xl text-purple-600 group-hover:text-purple-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-purple-700">طلبات التمويل</span>
+                </a>
+
+                <!-- Reports -->
+                <a href="/admin/reports" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-teal-50 rounded-lg transition-all group">
+                    <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
+                </a>
+
+                <!-- Rates -->
+                <a href="/admin/rates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-indigo-50 rounded-lg transition-all group">
+                    <i class="fas fa-percentage text-xl text-indigo-600 group-hover:text-indigo-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-indigo-700">نسب التمويل</span>
+                </a>
+
+                <!-- Payments -->
+                <a href="/admin/payments" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-emerald-50 rounded-lg transition-all group">
+                    <i class="fas fa-receipt text-xl text-emerald-600 group-hover:text-emerald-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-emerald-700">سندات القبض</span>
+                </a>
+
+                <!-- Banks -->
+                <a href="/admin/banks" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-orange-50 rounded-lg transition-all group">
+                    <i class="fas fa-university text-xl text-orange-600 group-hover:text-orange-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-orange-700">البنوك</span>
+                </a>
+
+                <!-- Subscriptions -->
+                <a href="/admin/subscriptions" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-pink-50 rounded-lg transition-all group">
+                    <i class="fas fa-calendar-check text-xl text-pink-600 group-hover:text-pink-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-pink-700">الاشتراكات</span>
+                </a>
+
+                <!-- Packages -->
+                <a href="/admin/packages" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-yellow-50 rounded-lg transition-all group">
+                    <i class="fas fa-box text-xl text-yellow-600 group-hover:text-yellow-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-yellow-700">الباقات</span>
+                </a>
+
+                <!-- Company Rates -->
+                <a href="/admin/company-rates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
+                    <i class="fas fa-building text-xl text-cyan-600 group-hover:text-cyan-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-cyan-700">إدارة الشركات</span>
+                </a>
+
+                <!-- Settings -->
+                <a href="/admin/settings" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                    <i class="fas fa-cog text-xl text-gray-600 group-hover:text-gray-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-gray-700">إعدادات النظام</span>
+                </a>
+
+                <!-- HR System -->
+                <a href="/admin/hr" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-users-cog text-xl text-blue-600 group-hover:text-blue-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
+                </a>
+
+                <hr class="my-4">
+
+                <!-- Users (Admin Only) -->
+                <a href="/admin/users" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
+                    <i class="fas fa-user-shield text-xl text-slate-600 group-hover:text-slate-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-slate-700">المستخدمين</span>
+                </a>
+
+                <!-- Roles (Admin Only) -->
+                <a href="/admin/roles" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
+                    <i class="fas fa-user-tag text-xl text-violet-600 group-hover:text-violet-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-violet-700">الأدوار والصلاحيات</span>
+                </a>
+
+                <hr class="my-4">
+
+                <!-- Logout -->
+                <button onclick="doLogout()" class="w-full flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
+                    <i class="fas fa-sign-out-alt text-xl text-gray-600 group-hover:text-red-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-red-600">تسجيل الخروج</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Overlay -->
+    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleMobileMenu()"></div>
 
     <!-- Main Content بدون Sidebar -->
     <div class="min-h-screen bg-gray-50">
@@ -3682,30 +3807,28 @@ export const fullAdminPanel = `<!DOCTYPE html>
         
         // Mobile Menu Toggle
         window.toggleMobileMenu = function() {
-            const sidebar = document.querySelector('.min-h-screen.bg-white.shadow-lg');
-            const overlay = document.getElementById('sidebar-overlay');
+            const sidebar = document.getElementById('mobile-menu');
+            const overlay = document.getElementById('menu-overlay');
             
-            if (sidebar) {
-                sidebar.classList.toggle('active');
-            }
-            if (overlay) {
-                overlay.classList.toggle('active');
+            if (sidebar && overlay) {
+                if (sidebar.classList.contains('translate-x-full')) {
+                    // فتح القائمة
+                    sidebar.classList.remove('translate-x-full');
+                    sidebar.classList.add('translate-x-0');
+                    overlay.classList.remove('hidden');
+                } else {
+                    // إغلاق القائمة
+                    sidebar.classList.add('translate-x-full');
+                    sidebar.classList.remove('translate-x-0');
+                    overlay.classList.add('hidden');
+                }
             }
         };
         
-        // Close mobile menu when clicking overlay
-        document.addEventListener('click', function(e) {
-            if (e.target.id === 'sidebar-overlay') {
-                toggleMobileMenu();
-            }
-        });
-        
-        // Close mobile menu when clicking a menu item on mobile
-        document.querySelectorAll('[onclick^="showSection"]').forEach(item => {
-            item.addEventListener('click', function() {
-                if (window.innerWidth < 768) {
-                    setTimeout(() => toggleMobileMenu(), 300);
-                }
+        // Close mobile menu when clicking a menu link
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', function() {
+                setTimeout(() => toggleMobileMenu(), 100);
             });
         });
     </script>
