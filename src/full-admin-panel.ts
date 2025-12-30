@@ -659,9 +659,19 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
                 
                 <div class="bg-white rounded-xl shadow-lg p-6">
-                    <div class="mb-4">
+                    <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                         <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                               class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
+                            <input type="date" id="filterDateFrom" onchange="loadCustomers()" 
+                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
+                            <input type="date" id="filterDateTo" onchange="loadCustomers()" 
+                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                        </div>
                     </div>
                     
                     <div class="overflow-x-auto">
@@ -698,7 +708,17 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                         طلبات التمويل من العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3">
+                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
+                            <input type="date" id="filterRequestDateFrom" onchange="loadFinancingRequests()" 
+                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
+                            <input type="date" id="filterRequestDateTo" onchange="loadFinancingRequests()" 
+                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
                         <select id="filterStatus" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg">
                             <option value="">جميع الحالات</option>
                             <option value="pending">قيد الانتظار</option>
@@ -1918,8 +1938,24 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 const response = await axios.get('/api/customers');
                 if (response.data.success) {
-                    const customers = response.data.data;
+                    let customers = response.data.data;
                     const tbody = document.getElementById('customersTable');
+                    
+                    // Apply date filter
+                    const filterDateFrom = document.getElementById('filterDateFrom')?.value;
+                    const filterDateTo = document.getElementById('filterDateTo')?.value;
+                    
+                    if (filterDateFrom || filterDateTo) {
+                        customers = customers.filter(customer => {
+                            if (!customer.created_at) return false;
+                            const customerDate = new Date(customer.created_at);
+                            
+                            if (filterDateFrom && customerDate < new Date(filterDateFrom)) return false;
+                            if (filterDateTo && customerDate > new Date(filterDateTo + 'T23:59:59')) return false;
+                            
+                            return true;
+                        });
+                    }
                     
                     if (customers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
@@ -1969,8 +2005,24 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 const response = await axios.get('/api/financing-requests');
                 if (response.data.success) {
-                    const requests = response.data.data;
+                    let requests = response.data.data;
                     const tbody = document.getElementById('requestsTable');
+                    
+                    // Apply date filter
+                    const filterDateFrom = document.getElementById('filterRequestDateFrom')?.value;
+                    const filterDateTo = document.getElementById('filterRequestDateTo')?.value;
+                    
+                    if (filterDateFrom || filterDateTo) {
+                        requests = requests.filter(req => {
+                            if (!req.created_at) return false;
+                            const requestDate = new Date(req.created_at);
+                            
+                            if (filterDateFrom && requestDate < new Date(filterDateFrom)) return false;
+                            if (filterDateTo && requestDate > new Date(filterDateTo + 'T23:59:59')) return false;
+                            
+                            return true;
+                        });
+                    }
                     
                     if (requests.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';

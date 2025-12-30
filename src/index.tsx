@@ -6124,24 +6124,172 @@ app.get('/admin/customer-assignment', async (c) => {
         ${getMobileResponsiveCSS()}
       </style>
     </head>
-    <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
-      <div class="max-w-7xl mx-auto">
-        <!-- Header -->
-        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <h1 class="text-3xl font-bold text-gray-800 mb-2">
-                <i class="fas fa-users-cog text-indigo-600"></i>
-                توزيع العملاء على الموظفين
-              </h1>
-              <p class="text-gray-600">قم بتوزيع العملاء على الموظفين لتنظيم العمل</p>
-            </div>
-            <a href="/admin/customers" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all">
+    <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+      <!-- Top Header with Burger Menu -->
+      <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
+        <div class="flex items-center justify-between px-6 py-4">
+          <!-- Right: Burger Menu Toggle -->
+          <div>
+            <button onclick="toggleSidebar()" class="text-white hover:bg-blue-700 p-2 rounded-lg transition-all">
+              <i class="fas fa-bars text-2xl"></i>
+            </button>
+          </div>
+          
+          <!-- Center: Page Title -->
+          <div class="flex-1 text-center">
+            <h1 class="text-xl font-bold flex items-center justify-center gap-2">
+              <i class="fas fa-users-cog"></i>
+              <span>توزيع العملاء على الموظفين</span>
+            </h1>
+          </div>
+          
+          <!-- Left: Back Button -->
+          <div>
+            <a href="/admin/customers" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm">
               <i class="fas fa-arrow-right ml-2"></i>
-              العودة للعملاء
+              العودة
             </a>
           </div>
         </div>
+      </div>
+
+      <!-- Sidebar Menu -->
+      <div id="sidebar" class="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
+        <!-- Sidebar Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold flex items-center gap-2">
+              <i class="fas fa-bars"></i>
+              <span>القائمة الرئيسية</span>
+            </h2>
+            <button onclick="toggleSidebar()" class="hover:bg-white/20 p-2 rounded-lg transition-all">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Menu Items -->
+        <div class="p-4">
+          <!-- الإدارة والتقارير -->
+          <div class="mb-2">
+            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الإدارة والتقارير</div>
+            <a href="/admin/panel" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-home text-blue-600 group-hover:scale-110 transition-transform"></i>
+              <span>لوحة الوصول السريع</span>
+            </a>
+            <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-chart-line text-green-600 group-hover:scale-110 transition-transform"></i>
+              <span>لوحة المعلومات</span>
+            </a>
+            <a href="/admin/reports" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-file-alt text-purple-600 group-hover:scale-110 transition-transform"></i>
+              <span>التقارير</span>
+            </a>
+          </div>
+
+          <div class="border-t border-gray-200 my-2"></div>
+
+          <!-- إدارة العملاء والطلبات -->
+          <div class="mb-2">
+            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">العملاء والطلبات</div>
+            <a href="/admin/customers" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-users text-blue-600 group-hover:scale-110 transition-transform"></i>
+              <span>العملاء</span>
+            </a>
+            <a href="/admin/customer-assignment?tenant_id=${tenantId}" class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg">
+              <i class="fas fa-users-cog text-blue-600"></i>
+              <span class="font-semibold">توزيع العملاء</span>
+            </a>
+            <a href="/admin/requests" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-file-invoice text-orange-600 group-hover:scale-110 transition-transform"></i>
+              <span>طلبات التمويل</span>
+            </a>
+            <a href="/admin/payments" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-receipt text-green-600 group-hover:scale-110 transition-transform"></i>
+              <span>سندات القبض</span>
+            </a>
+          </div>
+
+          <div class="border-t border-gray-200 my-2"></div>
+
+          <!-- الإعدادات المالية -->
+          <div class="mb-2">
+            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الإعدادات المالية</div>
+            <a href="/admin/rates" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-percentage text-indigo-600 group-hover:scale-110 transition-transform"></i>
+              <span>نسب التمويل</span>
+            </a>
+            <a href="/admin/banks" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-university text-cyan-600 group-hover:scale-110 transition-transform"></i>
+              <span>البنوك</span>
+            </a>
+            <a href="/admin/company-rates" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-building text-purple-600 group-hover:scale-110 transition-transform"></i>
+              <span>نسب الشركة</span>
+            </a>
+          </div>
+
+          <div class="border-t border-gray-200 my-2"></div>
+
+          <!-- الاشتراكات -->
+          <div class="mb-2">
+            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الاشتراكات</div>
+            <a href="/admin/subscriptions" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-calendar-check text-teal-600 group-hover:scale-110 transition-transform"></i>
+              <span>الاشتراكات</span>
+            </a>
+            <a href="/admin/packages" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-box text-pink-600 group-hover:scale-110 transition-transform"></i>
+              <span>الباقات</span>
+            </a>
+          </div>
+
+          <div class="border-t border-gray-200 my-2"></div>
+
+          <!-- الموارد البشرية -->
+          <div class="mb-2">
+            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الموارد البشرية</div>
+            <a href="/admin/hr" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-users-cog text-indigo-600 group-hover:scale-110 transition-transform"></i>
+              <span>نظام HR</span>
+            </a>
+          </div>
+
+          <div class="border-t border-gray-200 my-2"></div>
+
+          <!-- إدارة النظام (Super Admin) -->
+          <div class="mb-2">
+            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">إدارة النظام</div>
+            <a href="/admin/users" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-user-shield text-red-600 group-hover:scale-110 transition-transform"></i>
+              <span>المستخدمون</span>
+            </a>
+            <a href="/admin/roles" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-user-tag text-orange-600 group-hover:scale-110 transition-transform"></i>
+              <span>الصلاحيات</span>
+            </a>
+            <a href="/admin/settings" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-cog text-gray-600 group-hover:scale-110 transition-transform"></i>
+              <span>إعدادات النظام</span>
+            </a>
+          </div>
+
+          <div class="border-t border-gray-200 my-2"></div>
+
+          <!-- تسجيل الخروج -->
+          <div class="mb-2">
+            <a href="/login" onclick="logout(); return false;" class="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-all group font-semibold">
+              <i class="fas fa-sign-out-alt group-hover:scale-110 transition-transform"></i>
+              <span>تسجيل الخروج</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlay -->
+      <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 hidden z-40" onclick="toggleSidebar()"></div>
+
+      <div class="max-w-7xl mx-auto p-6">
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -6397,6 +6545,29 @@ app.get('/admin/customer-assignment', async (c) => {
             
             row.style.display = (matchSearch && matchEmployee) ? '' : 'none';
           });
+        }
+
+        // Toggle sidebar
+        function toggleSidebar() {
+          const sidebar = document.getElementById('sidebar');
+          const overlay = document.getElementById('sidebar-overlay');
+          
+          if (sidebar.classList.contains('translate-x-full')) {
+            sidebar.classList.remove('translate-x-full');
+            sidebar.classList.add('translate-x-0');
+            overlay.classList.remove('hidden');
+          } else {
+            sidebar.classList.add('translate-x-full');
+            sidebar.classList.remove('translate-x-0');
+            overlay.classList.add('hidden');
+          }
+        }
+
+        // Logout function
+        function logout() {
+          localStorage.removeItem('authToken');
+          document.cookie = 'authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+          window.location.href = '/login';
         }
       </script>
     </body>

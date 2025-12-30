@@ -576,15 +576,43 @@ export const smartCalculator = `<!DOCTYPE html>
         // Load initial data
         async function loadData() {
             try {
+                // Extract tenant from URL (for /c/tenant/calculator)
+                const pathParts = window.location.pathname.split('/');
+                const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
+                
+                // Get tenant_id if we have a tenant slug
+                let tenantId = null;
+                if (tenantSlug) {
+                    try {
+                        const tenantRes = await axios.get(\`/api/tenants\`);
+                        const tenant = tenantRes.data.data.find(t => t.slug === tenantSlug);
+                        if (tenant) {
+                            tenantId = tenant.id;
+                            console.log('🏢 Tenant ID:', tenantId);
+                        }
+                    } catch (error) {
+                        console.error('Error getting tenant:', error);
+                    }
+                }
+                
+                // Build API URLs with tenant_id if available
+                const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}\` : '/api/banks';
+                const ratesUrl = tenantId ? \`/api/rates?tenant_id=\${tenantId}\` : '/api/rates';
+                
                 const [banksRes, typesRes, ratesRes] = await Promise.all([
-                    axios.get('/api/banks'),
+                    axios.get(banksUrl),
                     axios.get('/api/financing-types'),
-                    axios.get('/api/rates')
+                    axios.get(ratesUrl)
                 ]);
                 
                 allBanks = banksRes.data.data;
                 financingTypes = typesRes.data.data;
                 allRates = ratesRes.data.data;
+                
+                console.log(\`✅ تم تحميل \${allBanks.length} بنك و \${allRates.length} نسبة\`);
+                if (tenantId) {
+                    console.log('✅ تم تحميل البيانات الخاصة بالشركة فقط');
+                }
                 
                 // Populate financing types
                 const typeSelect = document.getElementById('financingType');
