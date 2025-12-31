@@ -7070,7 +7070,9 @@ app.get('/admin/rates/add', async (c) => {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400);
   }
   
-  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name').all();
+  // جلب بنوك الشركة فقط
+  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name')
+    .bind(tenantId).all();
   const financingTypes = await c.env.DB.prepare('SELECT * FROM financing_types ORDER BY type_name').all();
   
   return c.html(generateAddRatePage(tenantId, banks.results, financingTypes.results));
@@ -7097,7 +7099,9 @@ app.get('/admin/rates/edit/:id', async (c) => {
     return c.html('<h1>خطأ: النسبة غير موجودة</h1>', 404);
   }
   
-  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name').all();
+  // جلب بنوك الشركة فقط
+  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name')
+    .bind(tenantId).all();
   const financingTypes = await c.env.DB.prepare('SELECT * FROM financing_types ORDER BY type_name').all();
   
   return c.html(generateEditRatePage(tenantId, rate, banks.results, financingTypes.results));
@@ -13761,8 +13765,8 @@ app.get('/api/hr/dashboard/stats', async (c) => {
     // Attendance Today
     const today = new Date().toISOString().split('T')[0]
     const attendanceQuery = tenantId
-      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${tenantId}`
-      : `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'`
+      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'`
     
     const attendance = await c.env.DB.prepare(attendanceQuery).bind(today).first()
     
@@ -13789,18 +13793,18 @@ app.get('/api/hr/dashboard/stats', async (c) => {
     
     // Attendance Trend (last 7 days)
     const trendQuery = tenantId
-      ? `SELECT DATE(date) as date, 
+      ? `SELECT attendance_date as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
-         WHERE DATE(date) >= DATE('now', '-7 days') AND tenant_id = ${tenantId}
-         GROUP BY DATE(date) ORDER BY date`
-      : `SELECT DATE(date) as date, 
+         WHERE attendance_date >= DATE('now', '-7 days') AND tenant_id = ${tenantId}
+         GROUP BY attendance_date ORDER BY attendance_date`
+      : `SELECT attendance_date as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
-         WHERE DATE(date) >= DATE('now', '-7 days')
-         GROUP BY DATE(date) ORDER BY date`
+         WHERE attendance_date >= DATE('now', '-7 days')
+         GROUP BY attendance_date ORDER BY attendance_date`
     
     const { results: trend } = await c.env.DB.prepare(trendQuery).all()
     
