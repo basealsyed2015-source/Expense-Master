@@ -106,7 +106,9 @@ export const clicksReportPage = `
                     <i class="fas fa-chart-line ml-2 text-blue-600"></i>
                     النقرات اليومية
                 </h3>
-                <canvas id="dailyClicksChart" height="250"></canvas>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="dailyClicksChart"></canvas>
+                </div>
             </div>
 
             <div class="bg-white rounded-xl shadow-lg p-6">
@@ -114,7 +116,9 @@ export const clicksReportPage = `
                     <i class="fas fa-chart-pie ml-2 text-green-600"></i>
                     توزيع المنصات
                 </h3>
-                <canvas id="platformsChart" height="250"></canvas>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="platformsChart"></canvas>
+                </div>
             </div>
 
             <div class="bg-white rounded-xl shadow-lg p-6">
@@ -122,7 +126,9 @@ export const clicksReportPage = `
                     <i class="fas fa-mobile-alt ml-2 text-purple-600"></i>
                     توزيع الأجهزة
                 </h3>
-                <canvas id="devicesChart" height="250"></canvas>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="devicesChart"></canvas>
+                </div>
             </div>
 
             <div class="bg-white rounded-xl shadow-lg p-6">
@@ -130,7 +136,9 @@ export const clicksReportPage = `
                     <i class="fas fa-globe ml-2 text-orange-600"></i>
                     مصادر الزيارات
                 </h3>
-                <canvas id="sourcesChart" height="250"></canvas>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="sourcesChart"></canvas>
+                </div>
             </div>
         </div>
 
@@ -312,7 +320,7 @@ export const clicksReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
                     plugins: { legend: { display: false } }
                 }
             });
@@ -333,7 +341,7 @@ export const clicksReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: true
                 }
             });
         }
@@ -353,7 +361,7 @@ export const clicksReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: true
                 }
             });
         }
@@ -374,7 +382,7 @@ export const clicksReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
                     plugins: { legend: { display: false } }
                 }
             });
@@ -594,7 +602,7 @@ export const workflowReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: true
                 }
             });
         }
@@ -615,7 +623,7 @@ export const workflowReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
                     plugins: { legend: { display: false } }
                 }
             });
@@ -797,7 +805,7 @@ export const employeePerformanceReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
                     plugins: { legend: { display: false } },
                     scales: { y: { beginAtZero: true, max: 100 } }
                 }
@@ -820,7 +828,7 @@ export const employeePerformanceReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
                     plugins: { legend: { display: false } },
                     scales: { y: { beginAtZero: true, max: 100 } }
                 }
@@ -843,7 +851,7 @@ export const employeePerformanceReportPage = `
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
                     plugins: { legend: { display: false } }
                 }
             });
