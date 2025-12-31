@@ -561,30 +561,37 @@ export const workflowReportPage = `
 
         let charts = {};
 
-        function loadWorkflowReport() {
-            const data = {
-                stages: [
-                    { name: 'جديد', count: 45 },
-                    { name: 'قيد المراجعة', count: 32 },
-                    { name: 'مقبول', count: 28 },
-                    { name: 'مرفوض', count: 15 },
-                    { name: 'مكتمل', count: 25 }
-                ],
-                durations: [
-                    { stage: 'جديد → مراجعة', duration: 120 },
-                    { stage: 'مراجعة → قبول', duration: 240 },
-                    { stage: 'قبول → مكتمل', duration: 360 }
-                ],
-                details: [
-                    { customerId: '1001', customerName: 'محمد أحمد', requestId: '5001', amount: 50000, stage: 'قيد المراجعة', transitions: 2, duration: '3 ساعات', status: 'نشط' },
-                    { customerId: '1002', customerName: 'فاطمة علي', requestId: '5002', amount: 75000, stage: 'مقبول', transitions: 3, duration: '5 ساعات', status: 'نشط' },
-                    { customerId: '1003', customerName: 'خالد سعيد', requestId: '5003', amount: 100000, stage: 'مكتمل', transitions: 4, duration: '8 ساعات', status: 'مكتمل' }
-                ]
-            };
+        async function loadWorkflowReport() {
+            try {
+                // Get filter values
+                const customerId = document.getElementById('customerIdFilter').value;
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
 
-            drawStagesChart(data.stages);
-            drawDurationChart(data.durations);
-            updateWorkflowTable(data.details);
+                // Build API URL with filters
+                const params = new URLSearchParams();
+                if (customerId) params.append('customer_id', customerId);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+
+                // Fetch data from API
+                const response = await fetch('/api/reports/workflow?' + params.toString());
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || 'فشل تحميل البيانات');
+                }
+
+                const data = result.data;
+
+                // Draw charts and update table
+                drawStagesChart(data.stages);
+                drawDurationChart(data.durations);
+                updateWorkflowTable(data.details);
+            } catch (error) {
+                console.error('Error loading workflow report:', error);
+                alert('حدث خطأ في تحميل التقرير. يرجى المحاولة مرة أخرى.');
+            }
         }
 
         function drawStagesChart(data) {
@@ -652,6 +659,20 @@ export const workflowReportPage = `
             \`).join('');
             document.getElementById('workflowTable').innerHTML = html;
         }
+        
+        // Load report on page load
+        window.addEventListener('load', () => {
+            // Set default dates (last 30 days)
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+            
+            // Load report automatically
+            loadWorkflowReport();
+        });
     </script>
 </body>
 </html>
@@ -881,6 +902,20 @@ export const employeePerformanceReportPage = `
             \`).join('');
             document.getElementById('performanceTable').innerHTML = html;
         }
+        
+        // Load report on page load
+        window.addEventListener('load', () => {
+            // Set default dates (last 30 days)
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+            
+            // Load report automatically
+            loadPerformanceReport();
+        });
     </script>
 </body>
 </html>
