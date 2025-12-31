@@ -320,19 +320,25 @@ export const hrMainPage = `<!DOCTYPE html>
     <script>
         // تهيئة التوكن
         const token = localStorage.getItem('authToken') || getCookie('authToken');
+        console.log('🔑 Token found:', token ? 'YES' : 'NO');
         if (!token) {
+            console.log('❌ No token, redirecting to login');
             window.location.href = '/login';
         }
 
         // تحميل البيانات الإحصائية
         async function loadDashboardStats() {
+            console.log('📊 Loading dashboard stats...');
             try {
                 const response = await axios.get('/api/hr/dashboard/stats', {
                     headers: { 'Authorization': \`Bearer \${token}\` }
                 });
                 
+                console.log('✅ Response received:', response.data);
+                
                 if (response.data.success) {
                     const stats = response.data.data;
+                    console.log('📈 Stats:', stats);
                     
                     // إحصائيات الموظفين
                     document.getElementById('totalEmployees').textContent = stats.totalEmployees || 0;
@@ -351,11 +357,14 @@ export const hrMainPage = `<!DOCTYPE html>
                         (stats.pendingSalariesAmount || 0).toLocaleString('ar-SA') + ' ريال';
                     
                     // رسم البيانات
+                    console.log('🎨 Drawing charts...');
                     drawDepartmentChart(stats.departmentDistribution);
                     drawAttendanceChart(stats.attendanceTrend);
+                    console.log('✅ Dashboard loaded successfully!');
                 }
             } catch (error) {
-                console.error('Error loading dashboard stats:', error);
+                console.error('❌ Error loading dashboard stats:', error);
+                console.error('Error details:', error.response?.data || error.message);
             }
         }
 
