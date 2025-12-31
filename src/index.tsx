@@ -1490,11 +1490,11 @@ app.get('/api/customers', async (c) => {
         query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees only assigned customers
-      if (userInfo.userId) {
-        query += ` WHERE c.assigned_to = ${userInfo.userId}`
+      // Role 4: Employee - sees customers from same tenant
+      if (userInfo.tenantId) {
+        query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       } else {
-        query += ` WHERE 1 = 0` // No data if user ID not found
+        query += ` WHERE 1 = 0` // No data if tenant not found
       }
     } else {
       // Unknown role - no data
@@ -1746,15 +1746,11 @@ app.get('/api/financing-requests', async (c) => {
         c.employer_name,
         c.job_title,
         b.bank_name as selected_bank_name,
-        ft.type_name as financing_type_name,
-        ca.employee_id as assigned_employee_id,
-        u.full_name as assigned_employee_name
+        ft.type_name as financing_type_name
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
       LEFT JOIN banks b ON f.selected_bank_id = b.id
-      LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
-      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id`
+      LEFT JOIN financing_types ft ON f.financing_type_id = ft.id`
     
     if (tenant_id) {
       query += ` WHERE f.tenant_id = ${tenant_id}`
@@ -3875,8 +3871,6 @@ app.get('/api/reports/requests-followup', async (c) => {
         END as is_closed
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
     `
     
@@ -4027,7 +4021,7 @@ app.get('/api/reports/performance', async (c) => {
         ) as success_rate,
         ROUND(SUM(CASE WHEN fr.status = 'approved' THEN fr.requested_amount ELSE 0 END), 2) as total_amount
       FROM users u
-      LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
+      
       LEFT JOIN customers c ON ca.customer_id = c.id
       LEFT JOIN financing_requests fr ON c.id = fr.customer_id
       ${whereClause.replace('c.tenant_id', 'u.tenant_id')}
@@ -5421,12 +5415,12 @@ app.get('/admin/dashboard', async (c) => {
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees only assigned customers/requests
-      if (userInfo.userId) {
-        customersWhere = `WHERE assigned_to = ${userInfo.userId}`;
-        requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${userInfo.userId})`;
-        requestsJoinWhere = `AND c.assigned_to = ${userInfo.userId}`;
-        queryParams.push(userInfo.userId);
+      // Role 4: Employee - sees customers/requests from same tenant
+      if (userInfo.tenantId) {
+        customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
+        requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = ${userInfo.tenantId})`;
+        requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
+        queryParams.push(userInfo.tenantId);
       } else {
         customersWhere = 'WHERE 1 = 0';
         requestsWhere = 'WHERE 1 = 0';
@@ -6070,12 +6064,8 @@ app.get('/admin/customer-assignment', async (c) => {
   // Get customers of THIS tenant only
   const customers = await c.env.DB.prepare(`
     SELECT 
-      c.*,
-      ca.employee_id,
-      u.full_name as assigned_employee_name
+      c.*
     FROM customers c
-    LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-    LEFT JOIN users u ON ca.employee_id = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
   `).bind(tenantId).all();
@@ -6088,7 +6078,7 @@ app.get('/admin/customer-assignment', async (c) => {
       u.username,
       COUNT(ca.customer_id) as customer_count
     FROM users u
-    LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
+    
     LEFT JOIN customers c ON ca.customer_id = c.id AND c.tenant_id = ?
     WHERE u.role = 'employee' AND u.tenant_id = ?
     GROUP BY u.id
@@ -6586,7 +6576,7 @@ app.post('/api/customer-assignment', async (c) => {
     // If employee_id is null, delete the assignment
     if (!employee_id) {
       await c.env.DB.prepare(`
-        DELETE FROM customer_assignments WHERE customer_id = ?
+        -- DELETE FROM customer_assignments WHERE customer_id = ?
       `).bind(customer_id).run();
       
       return c.json({ success: true, message: 'تم إلغاء التخصيص' });
@@ -6594,7 +6584,7 @@ app.post('/api/customer-assignment', async (c) => {
     
     // Check if assignment already exists
     const existing = await c.env.DB.prepare(`
-      SELECT * FROM customer_assignments WHERE customer_id = ?
+      -- SELECT * FROM customer_assignments WHERE customer_id = ?
     `).bind(customer_id).first();
     
     if (existing) {
@@ -6606,14 +6596,14 @@ app.post('/api/customer-assignment', async (c) => {
       
       // Update assignment
       await c.env.DB.prepare(`
-        UPDATE customer_assignments 
+        -- UPDATE customer_assignments 
         SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now'), notes = ?
         WHERE customer_id = ?
       `).bind(employee_id, notes || '', customer_id).run();
     } else {
       // Create new assignment
       await c.env.DB.prepare(`
-        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
         VALUES (?, ?, 1, ?)
       `).bind(customer_id, employee_id, notes || '').run();
       
@@ -6652,7 +6642,7 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     const customers = await c.env.DB.prepare(`
       SELECT c.id 
       FROM customers c
-      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      
       WHERE ca.customer_id IS NULL AND c.tenant_id = ?
       ORDER BY c.id
     `).bind(tenantId).all();
@@ -6666,7 +6656,7 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
       const employee = employees.results[i % employeeCount];
       
       await c.env.DB.prepare(`
-        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
         VALUES (?, ?, 1, 'توزيع تلقائي')
       `).bind(customer.id, employee.id).run();
       
@@ -6687,7 +6677,7 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
 app.post('/api/customer-assignment/clear-all', async (c) => {
   try {
     const result = await c.env.DB.prepare(`
-      DELETE FROM customer_assignments
+      -- DELETE FROM customer_assignments
     `).run();
     
     return c.json({ 
@@ -6708,18 +6698,18 @@ app.post('/api/customer-assignment/bulk', async (c) => {
     for (const customerId of customer_ids) {
       // Check if exists
       const existing = await c.env.DB.prepare(`
-        SELECT * FROM customer_assignments WHERE customer_id = ?
+        -- SELECT * FROM customer_assignments WHERE customer_id = ?
       `).bind(customerId).first();
       
       if (existing) {
         await c.env.DB.prepare(`
-          UPDATE customer_assignments 
+          -- UPDATE customer_assignments 
           SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now')
           WHERE customer_id = ?
         `).bind(employee_id, customerId).run();
       } else {
         await c.env.DB.prepare(`
-          INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
+          -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
           VALUES (?, ?, 1)
         `).bind(customerId, employee_id).run();
       }
@@ -8583,7 +8573,6 @@ app.get('/admin/requests', async (c) => {
         fr.status,
         fr.created_at,
         c.full_name as customer_name,
-        c.assigned_to as customer_assigned_to,
         b.bank_name as bank_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
@@ -8603,10 +8592,10 @@ app.get('/admin/requests', async (c) => {
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees ONLY requests for assigned customers
-      if (userInfo.userId) {
-        query += ' WHERE c.assigned_to = ?';
-        queryParams.push(userInfo.userId);
+      // Role 4: Employee - sees requests from same tenant
+      if (userInfo.tenantId) {
+        query += ' WHERE c.tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
       } else {
         query += ' WHERE 1 = 0'; // No data if user ID not found
       }
