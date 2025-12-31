@@ -7582,6 +7582,51 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </a>
                 </div>
             </div>
+
+            <!-- Clicks Report -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-pink-500 to-pink-600 text-white p-6">
+                    <i class="fas fa-mouse-pointer text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير النقرات</h3>
+                    <p class="text-sm text-pink-100 mt-2">تتبع النقرات على روابط الحاسبات والمنصات</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/clicks" class="w-full bg-pink-600 hover:bg-pink-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
+
+            <!-- Workflow Report -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white p-6">
+                    <i class="fas fa-project-diagram text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير سير العمل</h3>
+                    <p class="text-sm text-cyan-100 mt-2">تتبع رحلة العملاء من التسجيل حتى الإكمال</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/workflow" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
+
+            <!-- Employee Performance Report -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-red-500 to-red-600 text-white p-6">
+                    <i class="fas fa-user-tie text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير أداء الموظفين</h3>
+                    <p class="text-sm text-red-100 mt-2">تحليل أداء الموظفين والعمولات</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/employee-performance" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
