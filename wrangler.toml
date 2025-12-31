@@ -9,8 +9,6 @@ command = ""
 [[d1_databases]]
 binding = "DB"
 database_name = "tamweel-production"
-database_id = "placeholder-for-production-db-id"
+database_id = "d625e465-db29-42a0-ace5-5264e6f527f0"
 
-[[r2_buckets]]
-binding = "ATTACHMENTS"
-bucket_name = "tamweel-attachments-preview"
+
