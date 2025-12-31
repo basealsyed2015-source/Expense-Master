@@ -525,7 +525,7 @@ app.post('/api/auth/login', async (c) => {
     const user = await c.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.user_type, u.subscription_id, u.is_active, 
-             u.tenant_id, u.role as user_role,
+             u.tenant_id,
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
              t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
