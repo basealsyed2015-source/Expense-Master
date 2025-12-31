@@ -20,6 +20,7 @@ import { generateAddRatePage, generateEditRatePage } from './rates-forms'
 import { generateWorkflowTimelinePage } from './workflow-page'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
+import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
 
@@ -5306,6 +5307,9 @@ app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
 app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
 app.get('/admin/reports/banks', (c) => c.html(banksReportPage))
 app.get('/admin/reports/performance', (c) => c.html(performanceReportPage))
+app.get('/admin/reports/clicks', (c) => c.html(clicksReportPage))
+app.get('/admin/reports/workflow', (c) => c.html(workflowReportPage))
+app.get('/admin/reports/employee-performance', (c) => c.html(employeePerformanceReportPage))
 app.get('/admin/payments', (c) => c.html(paymentsPage))
 app.get('/admin/banks', (c) => c.html(banksManagementPage))
 
