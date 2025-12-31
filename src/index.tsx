@@ -7272,7 +7272,7 @@ app.get('/admin/customers', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -7297,6 +7297,19 @@ app.get('/admin/customers', async (c) => {
                   </select>
                 </div>
                 
+                <div>
+                  <select 
+                    id="dateFilter" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="handleDateFilterChange()"
+                  >
+                    <option value="all">الفترة: الجميع</option>
+                    <option value="30">آخر 30 يوم</option>
+                    <option value="60">آخر 60 يوم</option>
+                    <option value="custom">مدة محددة</option>
+                  </select>
+                </div>
+                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -7304,6 +7317,37 @@ app.get('/admin/customers', async (c) => {
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
+              </div>
+              
+              <!-- Custom Date Range (Hidden by default) -->
+              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="startDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="endDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div class="flex items-end">
+                  <button 
+                    onclick="applyCustomDateFilter()" 
+                    class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                  >
+                    <i class="fas fa-filter ml-2"></i>
+                    تطبيق الفلتر
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -7322,7 +7366,7 @@ app.get('/admin/customers', async (c) => {
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${customers.results.map((customer: any) => `
-                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}">
+                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}" data-created-at="${customer.created_at}">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.phone || '-'}</td>
@@ -7354,6 +7398,69 @@ app.get('/admin/customers', async (c) => {
         </div>
         
         <script>
+          // Date filter state
+          let currentDateFilter = 'all';
+          let customStartDate = null;
+          let customEndDate = null;
+          
+          // Handle date filter dropdown change
+          function handleDateFilterChange() {
+            const dateFilter = document.getElementById('dateFilter').value;
+            const customDateRange = document.getElementById('customDateRange');
+            
+            if (dateFilter === 'custom') {
+              customDateRange.style.display = 'grid';
+            } else {
+              customDateRange.style.display = 'none';
+              currentDateFilter = dateFilter;
+              filterTable();
+            }
+          }
+          
+          // Apply custom date filter
+          function applyCustomDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (startDate && endDate) {
+              customStartDate = new Date(startDate);
+              customEndDate = new Date(endDate);
+              currentDateFilter = 'custom';
+              filterTable();
+            } else {
+              alert('الرجاء إدخال تاريخ البداية والنهاية');
+            }
+          }
+          
+          // Check if date is within filter range
+          function isDateInRange(dateString) {
+            if (currentDateFilter === 'all') return true;
+            
+            const rowDate = new Date(dateString);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            
+            if (currentDateFilter === '30') {
+              const thirtyDaysAgo = new Date(today);
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              return rowDate >= thirtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === '60') {
+              const sixtyDaysAgo = new Date(today);
+              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+              return rowDate >= sixtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === 'custom') {
+              if (customStartDate && customEndDate) {
+                const start = new Date(customStartDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(customEndDate);
+                end.setHours(23, 59, 59, 999);
+                return rowDate >= start && rowDate <= end;
+              }
+            }
+            
+            return true;
+          }
+          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -7367,7 +7474,9 @@ app.get('/admin/customers', async (c) => {
               const name = row.getAttribute('data-name') || ''
               const phone = row.getAttribute('data-phone') || ''
               const email = row.getAttribute('data-email') || ''
+              const createdAt = row.getAttribute('data-created-at') || ''
               
+              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -7390,6 +7499,11 @@ app.get('/admin/customers', async (c) => {
                 }
               }
               
+              // Apply date filter
+              if (shouldShow && createdAt) {
+                shouldShow = isDateInRange(createdAt);
+              }
+              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -7401,6 +7515,13 @@ app.get('/admin/customers', async (c) => {
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('dateFilter').value = 'all'
+            document.getElementById('customDateRange').style.display = 'none'
+            document.getElementById('startDate').value = ''
+            document.getElementById('endDate').value = ''
+            currentDateFilter = 'all'
+            customStartDate = null
+            customEndDate = null
             filterTable()
           }
           
@@ -8719,7 +8840,7 @@ app.get('/admin/requests', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -8744,6 +8865,19 @@ app.get('/admin/requests', async (c) => {
                   </select>
                 </div>
                 
+                <div>
+                  <select 
+                    id="dateFilter" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="handleDateFilterChange()"
+                  >
+                    <option value="all">الفترة: الجميع</option>
+                    <option value="30">آخر 30 يوم</option>
+                    <option value="60">آخر 60 يوم</option>
+                    <option value="custom">مدة محددة</option>
+                  </select>
+                </div>
+                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -8751,6 +8885,37 @@ app.get('/admin/requests', async (c) => {
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
+              </div>
+              
+              <!-- Custom Date Range (Hidden by default) -->
+              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="startDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="endDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div class="flex items-end">
+                  <button 
+                    onclick="applyCustomDateFilter()" 
+                    class="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                  >
+                    <i class="fas fa-filter ml-2"></i>
+                    تطبيق الفلتر
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -8799,7 +8964,8 @@ app.get('/admin/requests', async (c) => {
                   <tr class="hover:bg-gray-50" 
                       data-customer="${req.customer_name || ''}" 
                       data-bank="${req.bank_name || ''}" 
-                      data-status="${statusAr}">
+                      data-status="${statusAr}"
+                      data-created-at="${req.created_at}">
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${req.customer_name || 'عميل #' + req.customer_id}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${req.bank_name || 'بنك #' + (req.selected_bank_id || '-')}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${req.requested_amount?.toLocaleString('ar-SA')} ريال</td>
@@ -8840,6 +9006,69 @@ app.get('/admin/requests', async (c) => {
         </div>
         
         <script>
+          // Date filter state
+          let currentDateFilter = 'all';
+          let customStartDate = null;
+          let customEndDate = null;
+          
+          // Handle date filter dropdown change
+          function handleDateFilterChange() {
+            const dateFilter = document.getElementById('dateFilter').value;
+            const customDateRange = document.getElementById('customDateRange');
+            
+            if (dateFilter === 'custom') {
+              customDateRange.style.display = 'grid';
+            } else {
+              customDateRange.style.display = 'none';
+              currentDateFilter = dateFilter;
+              filterTable();
+            }
+          }
+          
+          // Apply custom date filter
+          function applyCustomDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (startDate && endDate) {
+              customStartDate = new Date(startDate);
+              customEndDate = new Date(endDate);
+              currentDateFilter = 'custom';
+              filterTable();
+            } else {
+              alert('الرجاء إدخال تاريخ البداية والنهاية');
+            }
+          }
+          
+          // Check if date is within filter range
+          function isDateInRange(dateString) {
+            if (currentDateFilter === 'all') return true;
+            
+            const rowDate = new Date(dateString);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            
+            if (currentDateFilter === '30') {
+              const thirtyDaysAgo = new Date(today);
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              return rowDate >= thirtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === '60') {
+              const sixtyDaysAgo = new Date(today);
+              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+              return rowDate >= sixtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === 'custom') {
+              if (customStartDate && customEndDate) {
+                const start = new Date(customStartDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(customEndDate);
+                end.setHours(23, 59, 59, 999);
+                return rowDate >= start && rowDate <= end;
+              }
+            }
+            
+            return true;
+          }
+          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -8853,7 +9082,9 @@ app.get('/admin/requests', async (c) => {
               const customer = row.getAttribute('data-customer') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
+              const createdAt = row.getAttribute('data-created-at') || ''
               
+              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -8876,6 +9107,11 @@ app.get('/admin/requests', async (c) => {
                 }
               }
               
+              // Apply date filter
+              if (shouldShow && createdAt) {
+                shouldShow = isDateInRange(createdAt);
+              }
+              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -8886,6 +9122,13 @@ app.get('/admin/requests', async (c) => {
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('dateFilter').value = 'all'
+            document.getElementById('customDateRange').style.display = 'none'
+            document.getElementById('startDate').value = ''
+            document.getElementById('endDate').value = ''
+            currentDateFilter = 'all'
+            customStartDate = null
+            customEndDate = null
             filterTable()
           }
           

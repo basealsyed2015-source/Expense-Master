@@ -1,4 +1,4 @@
-var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ye=Symbol(),ve=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof K?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?we(e,{all:a,dot:s}):{}};async function we(e,t){const a=await e.formData();return a?_e(a,t):{}}function _e(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Ee(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(ke(a,s,r),delete a[s])}),a}var Ee=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},ke=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},J=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Se=e=>{const{groups:t,path:a}=Ie(e),s=J(a);return Te(s,t)},Ie=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Te=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},O={},De=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return O[s]||(a[2]?O[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:O[s]=[e,a[1],!0]),O[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Ce=e=>P(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Ce(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Re=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),G=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,X):e):e,Q=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=M(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},$e=Q,Be=(e,t)=>Q(e,t,!0),X=decodeURIComponent,W=e=>P(e,X),K=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?W(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?W(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return $e(this.url,e)}queries(e){return Be(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ve(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ye](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Le={Stringify:1},Z=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>Z(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},qe="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),je=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new K(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(qe,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?Z(e,Le.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},y="ALL",Oe="all",Fe=["get","post","put","delete","options","patch"],ee="Can not add a route since the matcher is already built.",te=class extends Error{},Me="__COMPOSED_HANDLER",Ae=e=>e.text("404 Not Found",404),Y=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ne=class ae{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Fe,Oe].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(y,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Re}#e(){const t=new ae({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ae;errorHandler=Y;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===Y?o=r.handler:(o=async(l,i)=>(await U([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Me]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(y,R(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new je(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=U(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},se=[];function Pe(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[y],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],se];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var F="[^/]+",q=".*",j="(?:|/.*)",$=Symbol(),He=new Set(".\\+*[^]$()");function Ue(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===q||e===j?1:t===q||t===j?-1:e===F?1:t===F?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var We=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw $;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",q]:["","",F]:l==="/*"?["","",j]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||F;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw $;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==q&&m!==j))throw $;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==q&&p!==j))throw $;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ue).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:He.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new We;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ze=[/^$/,[],Object.create(null)],re=Object.create(null);function le(e){return re[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Je(){re=Object.create(null)}function Ve(e){const t=new Ye,a=[];if(e.length===0)return ze;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([x])=>[x,Object.create(null)]),se]:p++;let b;try{b=t.insert(f,p,m)}catch(x){throw x===$?new te(f):x}m||(a[p]=g.map(([x,v])=>{const S=Object.create(null);for(v-=1;v>=0;v--){const[_,w]=b[v];S[_]=w}return[x,S]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,x=g.length;b<x;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function C(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Ge=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[y]:Object.create(null)},this.#e={[y]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(ee);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[y]).forEach(n=>{i[e][n]=[...i[y][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===y?Object.keys(s).forEach(n=>{s[n][t]||=C(s[n],t)||C(s[y],t)||[]}):s[e][t]||=C(s[e],t)||C(s[y],t)||[],Object.keys(s).forEach(n=>{(e===y||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===y||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=G(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===y||e===p)&&(r[p][c]||=[...C(s[p],c)||C(s[y],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Pe;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Je(),e}#a(e){const t=[];let a=e===y;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==y&&t.push(...Object.keys(s[y]).map(o=>[o,s[y][o]]))}),a?Ve(t):null}},Qe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(ee);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof te)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},L=Object.create(null),Xe=class oe{#t;#e;#a;#l=0;#r=L;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=Se(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=De(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new oe,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[y],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==L||r&&r!==L))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=L;let o=[this];const l=J(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],x=b.#e[p];x&&(x.#r=b.#r,u?(x.#e["*"]&&s.push(...this.#s(x.#e["*"],t,b.#r)),s.push(...this.#s(x,t,b.#r))):m.push(x));for(let v=0,S=b.#a.length;v<S;v++){const _=b.#a[v],w=b.#r===L?{}:{...b.#r};if(_==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#r)),I.#r=w,m.push(I));continue}const[D,H,B]=_;if(!p&&!(B instanceof RegExp))continue;const E=b.#e[D],xe=l.slice(n).join("/");if(B instanceof RegExp){const I=B.exec(xe);if(I){if(w[H]=I[0],s.push(...this.#s(E,t,b.#r,w)),Object.keys(E.#e).length){E.#r=w;const he=I[0].match(/\//)?.length??0;(i[he]||=[]).push(E)}continue}}(B===!0||B.test(p))&&(w[H]=p,u?(s.push(...this.#s(E,t,w,b.#r)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,w,b.#r))):(E.#r=w,m.push(E)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ke=class{name="TrieRouter";#t;constructor(){this.#t=new Xe}add(e,t,a){const s=G(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ne=class extends Ne{constructor(e={}){super(e),this.router=e.router??new Qe({routers:[new Ge,new Ke]})}},Ze=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const et=`<!DOCTYPE html>
+var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ye=Symbol(),ve=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof K?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?we(e,{all:a,dot:s}):{}};async function we(e,t){const a=await e.formData();return a?_e(a,t):{}}function _e(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Ee(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(ke(a,s,r),delete a[s])}),a}var Ee=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},ke=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},J=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Se=e=>{const{groups:t,path:a}=Ie(e),s=J(a);return De(s,t)},Ie=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},De=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},O={},Te=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return O[s]||(a[2]?O[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:O[s]=[e,a[1],!0]),O[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Ce=e=>P(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Ce(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Re=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),G=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},A=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,X):e):e,Q=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return A(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=A(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=A(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},$e=Q,Be=(e,t)=>Q(e,t,!0),X=decodeURIComponent,W=e=>P(e,X),K=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?W(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?W(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return $e(this.url,e)}queries(e){return Be(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ve(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ye](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Le={Stringify:1},Z=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>Z(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},qe="text/plain; charset=UTF-8",M=(e,t)=>({"Content-Type":e,...t}),je=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new K(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,M(qe,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,M("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,M("text/html; charset=UTF-8",a));return typeof e=="object"?Z(e,Le.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},y="ALL",Oe="all",Fe=["get","post","put","delete","options","patch"],ee="Can not add a route since the matcher is already built.",te=class extends Error{},Ae="__COMPOSED_HANDLER",Me=e=>e.text("404 Not Found",404),Y=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ne=class ae{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Fe,Oe].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(y,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Re}#e(){const t=new ae({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Me;errorHandler=Y;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===Y?o=r.handler:(o=async(l,i)=>(await U([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Ae]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(y,R(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new je(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=U(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},se=[];function Pe(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[y],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],se];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var F="[^/]+",q=".*",j="(?:|/.*)",$=Symbol(),He=new Set(".\\+*[^]$()");function Ue(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===q||e===j?1:t===q||t===j?-1:e===F?1:t===F?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var We=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw $;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",q]:["","",F]:l==="/*"?["","",j]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||F;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw $;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==q&&m!==j))throw $;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==q&&p!==j))throw $;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ue).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:He.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new We;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ze=[/^$/,[],Object.create(null)],re=Object.create(null);function le(e){return re[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Je(){re=Object.create(null)}function Ve(e){const t=new Ye,a=[];if(e.length===0)return ze;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([x])=>[x,Object.create(null)]),se]:p++;let b;try{b=t.insert(f,p,m)}catch(x){throw x===$?new te(f):x}m||(a[p]=g.map(([x,v])=>{const S=Object.create(null);for(v-=1;v>=0;v--){const[_,w]=b[v];S[_]=w}return[x,S]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,x=g.length;b<x;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function C(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Ge=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[y]:Object.create(null)},this.#e={[y]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(ee);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[y]).forEach(n=>{i[e][n]=[...i[y][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===y?Object.keys(s).forEach(n=>{s[n][t]||=C(s[n],t)||C(s[y],t)||[]}):s[e][t]||=C(s[e],t)||C(s[y],t)||[],Object.keys(s).forEach(n=>{(e===y||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===y||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=G(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===y||e===p)&&(r[p][c]||=[...C(s[p],c)||C(s[y],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Pe;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Je(),e}#a(e){const t=[];let a=e===y;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==y&&t.push(...Object.keys(s[y]).map(o=>[o,s[y][o]]))}),a?Ve(t):null}},Qe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(ee);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof te)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},L=Object.create(null),Xe=class oe{#t;#e;#a;#l=0;#r=L;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=Se(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=Te(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new oe,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[y],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==L||r&&r!==L))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=L;let o=[this];const l=J(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],x=b.#e[p];x&&(x.#r=b.#r,u?(x.#e["*"]&&s.push(...this.#s(x.#e["*"],t,b.#r)),s.push(...this.#s(x,t,b.#r))):m.push(x));for(let v=0,S=b.#a.length;v<S;v++){const _=b.#a[v],w=b.#r===L?{}:{...b.#r};if(_==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#r)),I.#r=w,m.push(I));continue}const[T,H,B]=_;if(!p&&!(B instanceof RegExp))continue;const E=b.#e[T],xe=l.slice(n).join("/");if(B instanceof RegExp){const I=B.exec(xe);if(I){if(w[H]=I[0],s.push(...this.#s(E,t,b.#r,w)),Object.keys(E.#e).length){E.#r=w;const he=I[0].match(/\//)?.length??0;(i[he]||=[]).push(E)}continue}}(B===!0||B.test(p))&&(w[H]=p,u?(s.push(...this.#s(E,t,w,b.#r)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,w,b.#r))):(E.#r=w,m.push(E)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ke=class{name="TrieRouter";#t;constructor(){this.#t=new Xe}add(e,t,a){const s=G(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ne=class extends Ne{constructor(e={}){super(e),this.router=e.router??new Qe({routers:[new Ge,new Ke]})}},Ze=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const et=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -11697,7 +11697,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,T=`<!DOCTYPE html>
+`,D=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13414,7 +13414,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4&&t.tenantId?a+=` WHERE c.tenant_id = ${t.tenantId}`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,o=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),f=e.req.header("Authorization")?.replace("Bearer ","");let g=null;if(f){const w=atob(f).split(":");g=w[1]!=="null"?parseInt(w[1]):null}if(o){let _="SELECT id, full_name FROM customers WHERE national_id = ?",w=[o];g&&(_+=" AND tenant_id = ?",w.push(g));const D=await e.env.DB.prepare(_).bind(...w).first();if(D)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,o=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),f=e.req.header("Authorization")?.replace("Bearer ","");let g=null;if(f){const w=atob(f).split(":");g=w[1]!=="null"?parseInt(w[1]):null}if(o){let _="SELECT id, full_name FROM customers WHERE national_id = ?",w=[o];g&&(_+=" AND tenant_id = ?",w.push(g));const T=await e.env.DB.prepare(_).bind(...w).first();if(T)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -13436,15 +13436,15 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div class="bg-white rounded-lg p-4 mb-4">
                   <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${o}</p>
-                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${D.full_name}</p>
-                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${D.id}</p>
+                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${T.full_name}</p>
+                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${T.id}</p>
                 </div>
                 <div class="flex gap-3">
                   <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-arrow-right ml-2"></i>
                     العودة للنموذج
                   </a>
-                  <a href="/admin/customers/${D.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <a href="/admin/customers/${T.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-eye ml-2"></i>
                     عرض العميل الموجود
                   </a>
@@ -16781,7 +16781,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -16806,6 +16806,19 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </select>
                 </div>
                 
+                <div>
+                  <select 
+                    id="dateFilter" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="handleDateFilterChange()"
+                  >
+                    <option value="all">الفترة: الجميع</option>
+                    <option value="30">آخر 30 يوم</option>
+                    <option value="60">آخر 60 يوم</option>
+                    <option value="custom">مدة محددة</option>
+                  </select>
+                </div>
+                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -16813,6 +16826,37 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
+              </div>
+              
+              <!-- Custom Date Range (Hidden by default) -->
+              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="startDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="endDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div class="flex items-end">
+                  <button 
+                    onclick="applyCustomDateFilter()" 
+                    class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                  >
+                    <i class="fas fa-filter ml-2"></i>
+                    تطبيق الفلتر
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -16831,7 +16875,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${r.results.map(l=>`
-                  <tr class="hover:bg-gray-50" data-name="${l.full_name||""}" data-phone="${l.phone||""}" data-email="${l.email||""}">
+                  <tr class="hover:bg-gray-50" data-name="${l.full_name||""}" data-phone="${l.phone||""}" data-email="${l.email||""}" data-created-at="${l.created_at}">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${l.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${l.full_name||"-"}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${l.phone||"-"}</td>
@@ -16863,6 +16907,69 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
         
         <script>
+          // Date filter state
+          let currentDateFilter = 'all';
+          let customStartDate = null;
+          let customEndDate = null;
+          
+          // Handle date filter dropdown change
+          function handleDateFilterChange() {
+            const dateFilter = document.getElementById('dateFilter').value;
+            const customDateRange = document.getElementById('customDateRange');
+            
+            if (dateFilter === 'custom') {
+              customDateRange.style.display = 'grid';
+            } else {
+              customDateRange.style.display = 'none';
+              currentDateFilter = dateFilter;
+              filterTable();
+            }
+          }
+          
+          // Apply custom date filter
+          function applyCustomDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (startDate && endDate) {
+              customStartDate = new Date(startDate);
+              customEndDate = new Date(endDate);
+              currentDateFilter = 'custom';
+              filterTable();
+            } else {
+              alert('الرجاء إدخال تاريخ البداية والنهاية');
+            }
+          }
+          
+          // Check if date is within filter range
+          function isDateInRange(dateString) {
+            if (currentDateFilter === 'all') return true;
+            
+            const rowDate = new Date(dateString);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            
+            if (currentDateFilter === '30') {
+              const thirtyDaysAgo = new Date(today);
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              return rowDate >= thirtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === '60') {
+              const sixtyDaysAgo = new Date(today);
+              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+              return rowDate >= sixtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === 'custom') {
+              if (customStartDate && customEndDate) {
+                const start = new Date(customStartDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(customEndDate);
+                end.setHours(23, 59, 59, 999);
+                return rowDate >= start && rowDate <= end;
+              }
+            }
+            
+            return true;
+          }
+          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -16876,7 +16983,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               const name = row.getAttribute('data-name') || ''
               const phone = row.getAttribute('data-phone') || ''
               const email = row.getAttribute('data-email') || ''
+              const createdAt = row.getAttribute('data-created-at') || ''
               
+              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -16899,6 +17008,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 }
               }
               
+              // Apply date filter
+              if (shouldShow && createdAt) {
+                shouldShow = isDateInRange(createdAt);
+              }
+              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -16910,6 +17024,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('dateFilter').value = 'all'
+            document.getElementById('customDateRange').style.display = 'none'
+            document.getElementById('startDate').value = ''
+            document.getElementById('endDate').value = ''
+            currentDateFilter = 'all'
+            customStartDate = null
+            customEndDate = null
             filterTable()
           }
           
@@ -18141,7 +18262,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -18166,6 +18287,19 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </select>
                 </div>
                 
+                <div>
+                  <select 
+                    id="dateFilter" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="handleDateFilterChange()"
+                  >
+                    <option value="all">الفترة: الجميع</option>
+                    <option value="30">آخر 30 يوم</option>
+                    <option value="60">آخر 60 يوم</option>
+                    <option value="custom">مدة محددة</option>
+                  </select>
+                </div>
+                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -18173,6 +18307,37 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
+              </div>
+              
+              <!-- Custom Date Range (Hidden by default) -->
+              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="startDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
+                  <input 
+                    type="date" 
+                    id="endDate" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="applyCustomDateFilter()"
+                  >
+                </div>
+                <div class="flex items-end">
+                  <button 
+                    onclick="applyCustomDateFilter()" 
+                    class="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                  >
+                    <i class="fas fa-filter ml-2"></i>
+                    تطبيق الفلتر
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -18196,7 +18361,8 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <tr class="hover:bg-gray-50" 
                       data-customer="${l.customer_name||""}" 
                       data-bank="${l.bank_name||""}" 
-                      data-status="${n}">
+                      data-status="${n}"
+                      data-created-at="${l.created_at}">
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${l.customer_name||"عميل #"+l.customer_id}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${l.bank_name||"بنك #"+(l.selected_bank_id||"-")}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${l.requested_amount?.toLocaleString("ar-SA")} ريال</td>
@@ -18237,6 +18403,69 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
         
         <script>
+          // Date filter state
+          let currentDateFilter = 'all';
+          let customStartDate = null;
+          let customEndDate = null;
+          
+          // Handle date filter dropdown change
+          function handleDateFilterChange() {
+            const dateFilter = document.getElementById('dateFilter').value;
+            const customDateRange = document.getElementById('customDateRange');
+            
+            if (dateFilter === 'custom') {
+              customDateRange.style.display = 'grid';
+            } else {
+              customDateRange.style.display = 'none';
+              currentDateFilter = dateFilter;
+              filterTable();
+            }
+          }
+          
+          // Apply custom date filter
+          function applyCustomDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (startDate && endDate) {
+              customStartDate = new Date(startDate);
+              customEndDate = new Date(endDate);
+              currentDateFilter = 'custom';
+              filterTable();
+            } else {
+              alert('الرجاء إدخال تاريخ البداية والنهاية');
+            }
+          }
+          
+          // Check if date is within filter range
+          function isDateInRange(dateString) {
+            if (currentDateFilter === 'all') return true;
+            
+            const rowDate = new Date(dateString);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            
+            if (currentDateFilter === '30') {
+              const thirtyDaysAgo = new Date(today);
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              return rowDate >= thirtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === '60') {
+              const sixtyDaysAgo = new Date(today);
+              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+              return rowDate >= sixtyDaysAgo && rowDate <= today;
+            } else if (currentDateFilter === 'custom') {
+              if (customStartDate && customEndDate) {
+                const start = new Date(customStartDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(customEndDate);
+                end.setHours(23, 59, 59, 999);
+                return rowDate >= start && rowDate <= end;
+              }
+            }
+            
+            return true;
+          }
+          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -18250,7 +18479,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               const customer = row.getAttribute('data-customer') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
+              const createdAt = row.getAttribute('data-created-at') || ''
               
+              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -18273,6 +18504,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 }
               }
               
+              // Apply date filter
+              if (shouldShow && createdAt) {
+                shouldShow = isDateInRange(createdAt);
+              }
+              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -18283,6 +18519,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('dateFilter').value = 'all'
+            document.getElementById('customDateRange').style.display = 'none'
+            document.getElementById('startDate').value = ''
+            document.getElementById('endDate').value = ''
+            currentDateFilter = 'all'
+            customStartDate = null
+            customEndDate = null
             filterTable()
           }
           
@@ -22216,7 +22459,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(a).run(),s&&s.length>0)for(const r of s)await e.env.DB.prepare(`
           INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
           VALUES (?, ?)
-        `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(T));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(St));d.get("/admin/hr/leaves",e=>e.html(T));d.get("/admin/hr/salaries",e=>e.html(T));d.get("/admin/hr/performance",e=>e.html(T));d.get("/admin/hr/promotions",e=>e.html(T));d.get("/admin/hr/documents",e=>e.html(T));d.get("/admin/hr/reports",e=>e.html(T));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
+        `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(D));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(St));d.get("/admin/hr/leaves",e=>e.html(D));d.get("/admin/hr/salaries",e=>e.html(D));d.get("/admin/hr/performance",e=>e.html(D));d.get("/admin/hr/promotions",e=>e.html(D));d.get("/admin/hr/documents",e=>e.html(D));d.get("/admin/hr/reports",e=>e.html(D));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -22283,4 +22526,4 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(t.employee_id,t.month,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.other_allowances,t.deductions,t.net_salary,t.payment_status||"pending",t.payment_date,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة سجل الراتب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id"),{payment_status:a,payment_date:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = ?, payment_date = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const z=new ne,Tt=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(Tt))e&&(z.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),z.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{z as default};
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const z=new ne,Dt=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(Dt))e&&(z.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),z.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{z as default};
