@@ -23,6 +23,7 @@ import { performanceReportPage } from './performance-report'
 import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
+import { hrLeavesPage, hrSalariesPage, hrDepartmentsPage, hrPerformancePage, hrPromotionsPage } from './hr-pages'
 
 type Bindings = {
   DB: D1Database;
@@ -13888,6 +13889,560 @@ app.post('/api/users/:id/permissions', async (c) => {
   }
 })
 
+// ===============================================
+// HR LEAVES APIs
+// ===============================================
+
+// Get all leaves
+app.get('/api/hr/leaves', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const status = c.req.query('status') || '';
+    const type = c.req.query('type') || '';
+    const employee_id = c.req.query('employee_id') || '';
+
+    let query = `
+      SELECT 
+        l.*,
+        e.full_name as employee_name,
+        e.department,
+        e.job_title
+      FROM hr_leaves l
+      LEFT JOIN hr_employees e ON l.employee_id = e.id
+      WHERE 1=1
+    `;
+
+    const params: any[] = [];
+
+    if (userInfo.tenantId) {
+      query += ' AND l.tenant_id = ?';
+      params.push(userInfo.tenantId);
+    }
+
+    if (status) {
+      query += ' AND l.status = ?';
+      params.push(status);
+    }
+
+    if (type) {
+      query += ' AND l.leave_type = ?';
+      params.push(type);
+    }
+
+    if (employee_id) {
+      query += ' AND l.employee_id = ?';
+      params.push(employee_id);
+    }
+
+    query += ' ORDER BY l.created_at DESC';
+
+    const result = params.length > 0
+      ? await c.env.DB.prepare(query).bind(...params).all()
+      : await c.env.DB.prepare(query).all();
+
+    return c.json({ success: true, data: result.results || [] });
+  } catch (error: any) {
+    console.error('Error fetching leaves:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Create leave request
+app.post('/api/hr/leaves', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const { employee_id, leave_type, start_date, end_date, reason } = await c.req.json();
+
+    const result = await c.env.DB.prepare(`
+      INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, reason, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+    `).bind(userInfo.tenantId || 1, employee_id, leave_type, start_date, end_date, reason).run();
+
+    return c.json({ success: true, id: result.meta.last_row_id });
+  } catch (error: any) {
+    console.error('Error creating leave:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Approve leave
+app.put('/api/hr/leaves/:id/approve', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const userInfo = await getUserInfo(c);
+
+    await c.env.DB.prepare(`
+      UPDATE hr_leaves 
+      SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(userInfo.userId, id).run();
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error approving leave:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Reject leave
+app.put('/api/hr/leaves/:id/reject', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const userInfo = await getUserInfo(c);
+    const { reason } = await c.req.json();
+
+    await c.env.DB.prepare(`
+      UPDATE hr_leaves 
+      SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
+      WHERE id = ?
+    `).bind(userInfo.userId, reason, id).run();
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error rejecting leave:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Delete leave
+app.delete('/api/hr/leaves/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+
+    await c.env.DB.prepare('DELETE FROM hr_leaves WHERE id = ?').bind(id).run();
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting leave:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// HR SALARIES APIs
+// ===============================================
+
+// Get all salaries
+app.get('/api/hr/salaries', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId;
+    
+    const { employee_id, month, status } = c.req.query();
+    
+    let whereClause = tenantId ? `s.tenant_id = ${tenantId}` : '1=1';
+    if (employee_id) whereClause += ` AND s.employee_id = ${employee_id}`;
+    if (month) whereClause += ` AND s.salary_month = '${month}'`;
+    if (status) whereClause += ` AND s.status = '${status}'`;
+    
+    const result = await c.env.DB.prepare(`
+      SELECT s.*, e.full_name as employee_name
+      FROM hr_salaries s
+      LEFT JOIN hr_employees e ON s.employee_id = e.id
+      WHERE ${whereClause}
+      ORDER BY s.salary_month DESC, s.created_at DESC
+    `).all();
+    
+    return c.json({ success: true, data: result.results });
+  } catch (error: any) {
+    console.error('Error fetching salaries:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Add salary
+app.post('/api/hr/salaries', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId || 1;
+    
+    const data = await c.req.json();
+    
+    const basicSalary = parseFloat(data.basic_salary) || 0;
+    const housingAllowance = parseFloat(data.housing_allowance) || 0;
+    const transportAllowance = parseFloat(data.transportation_allowance) || 0;
+    const otherAllowances = parseFloat(data.other_allowances) || 0;
+    const bonuses = parseFloat(data.bonuses) || 0;
+    const overtimeAmount = parseFloat(data.overtime_amount) || 0;
+    
+    const lateDeductions = parseFloat(data.late_deductions) || 0;
+    const absenceDeductions = parseFloat(data.absence_deductions) || 0;
+    const otherDeductions = parseFloat(data.other_deductions) || 0;
+    
+    const grossSalary = basicSalary + housingAllowance + transportAllowance + otherAllowances + bonuses + overtimeAmount;
+    const totalDeductions = lateDeductions + absenceDeductions + otherDeductions;
+    const netSalary = grossSalary - totalDeductions;
+    
+    await c.env.DB.prepare(`
+      INSERT INTO hr_salaries (
+        tenant_id, employee_id, salary_month, basic_salary,
+        housing_allowance, transportation_allowance, other_allowances,
+        bonuses, overtime_amount, late_deductions, absence_deductions,
+        other_deductions, gross_salary, total_deductions, net_salary,
+        payment_status, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).bind(
+      tenantId,
+      data.employee_id,
+      data.salary_month,
+      basicSalary,
+      housingAllowance,
+      transportAllowance,
+      otherAllowances,
+      bonuses,
+      overtimeAmount,
+      lateDeductions,
+      absenceDeductions,
+      otherDeductions,
+      grossSalary,
+      totalDeductions,
+      netSalary,
+      data.notes || null
+    ).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error adding salary:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Approve salary
+app.put('/api/hr/salaries/:id/approve', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_salaries 
+      SET payment_status = 'approved'
+      WHERE id = ?
+    `).bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error approving salary:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Pay salary
+app.put('/api/hr/salaries/:id/pay', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_salaries 
+      SET payment_status = 'paid', payment_date = date('now')
+      WHERE id = ?
+    `).bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error paying salary:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Delete salary
+app.delete('/api/hr/salaries/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare('DELETE FROM hr_salaries WHERE id = ?').bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting salary:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// HR DEPARTMENTS APIs
+// ===============================================
+
+// Get all departments
+app.get('/api/hr/departments', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId;
+    
+    const whereClause = tenantId ? `WHERE d.tenant_id = ${tenantId}` : '';
+    
+    const result = await c.env.DB.prepare(`
+      SELECT d.*, 
+             m.full_name as manager_name,
+             (SELECT COUNT(*) FROM hr_employees e WHERE e.department = d.department_code AND e.tenant_id = d.tenant_id) as employee_count
+      FROM hr_departments d
+      LEFT JOIN hr_employees m ON d.manager_id = m.id
+      ${whereClause}
+      ORDER BY d.department_name
+    `).all();
+    
+    return c.json({ success: true, data: result.results });
+  } catch (error: any) {
+    console.error('Error fetching departments:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Add department
+app.post('/api/hr/departments', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId || 1;
+    
+    const data = await c.req.json();
+    
+    await c.env.DB.prepare(`
+      INSERT INTO hr_departments (
+        tenant_id, department_name, department_code, 
+        manager_id, description, budget
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      tenantId,
+      data.department_name,
+      data.department_code,
+      data.manager_id || null,
+      data.description || null,
+      data.budget || 0
+    ).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error adding department:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Delete department
+app.delete('/api/hr/departments/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare('DELETE FROM hr_departments WHERE id = ?').bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting department:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// HR PERFORMANCE APIs
+// ===============================================
+
+// Get all performance reviews
+app.get('/api/hr/performance', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId;
+    
+    const whereClause = tenantId ? `WHERE p.tenant_id = ${tenantId}` : '';
+    
+    const result = await c.env.DB.prepare(`
+      SELECT p.*, 
+             e.full_name as employee_name,
+             r.full_name as reviewer_name
+      FROM hr_performance_reviews p
+      LEFT JOIN hr_employees e ON p.employee_id = e.id
+      LEFT JOIN hr_employees r ON p.reviewer_id = r.id
+      ${whereClause}
+      ORDER BY p.review_date DESC
+    `).all();
+    
+    return c.json({ success: true, data: result.results });
+  } catch (error: any) {
+    console.error('Error fetching reviews:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Add performance review
+app.post('/api/hr/performance', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId || 1;
+    
+    const data = await c.req.json();
+    
+    await c.env.DB.prepare(`
+      INSERT INTO hr_performance_reviews (
+        tenant_id, employee_id, reviewer_id, review_period, review_date,
+        overall_rating, attendance_rating, quality_rating, 
+        teamwork_rating, punctuality_rating, strengths, weaknesses,
+        goals, comments, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    `).bind(
+      tenantId,
+      data.employee_id,
+      userInfo.userId,
+      data.review_period,
+      data.review_date,
+      data.overall_rating,
+      data.attendance_rating || 3,
+      data.quality_rating || 3,
+      data.teamwork_rating || 3,
+      data.punctuality_rating || 3,
+      data.strengths || null,
+      data.weaknesses || null,
+      data.goals || null,
+      data.comments || null
+    ).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error adding review:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Delete performance review
+app.delete('/api/hr/performance/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare('DELETE FROM hr_performance_reviews WHERE id = ?').bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting review:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// HR PROMOTIONS APIs
+// ===============================================
+
+// Get all promotions
+app.get('/api/hr/promotions', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId;
+    
+    const whereClause = tenantId ? `WHERE p.tenant_id = ${tenantId}` : '';
+    
+    const result = await c.env.DB.prepare(`
+      SELECT p.*, 
+             e.full_name as employee_name,
+             e.job_title as current_position
+      FROM hr_promotions p
+      LEFT JOIN hr_employees e ON p.employee_id = e.id
+      ${whereClause}
+      ORDER BY p.promotion_date DESC
+    `).all();
+    
+    return c.json({ success: true, data: result.results });
+  } catch (error: any) {
+    console.error('Error fetching promotions:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Add promotion
+app.post('/api/hr/promotions', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId || 1;
+    
+    const data = await c.req.json();
+    
+    // Get employee current data
+    const employee = await c.env.DB.prepare(`
+      SELECT job_title, basic_salary FROM hr_employees WHERE id = ?
+    `).bind(data.employee_id).first();
+    
+    await c.env.DB.prepare(`
+      INSERT INTO hr_promotions (
+        tenant_id, employee_id, old_position, new_position,
+        old_salary, new_salary, promotion_date, effective_date,
+        reason, approved_by, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).bind(
+      tenantId,
+      data.employee_id,
+      employee?.job_title || '',
+      data.new_position,
+      employee?.basic_salary || 0,
+      data.new_salary,
+      data.promotion_date,
+      data.effective_date || data.promotion_date,
+      data.reason || null,
+      userInfo.userId
+    ).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error adding promotion:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Approve promotion
+app.put('/api/hr/promotions/:id/approve', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    // Get promotion data
+    const promotion = await c.env.DB.prepare(`
+      SELECT * FROM hr_promotions WHERE id = ?
+    `).bind(id).first();
+    
+    if (!promotion) {
+      return c.json({ success: false, error: 'Promotion not found' }, 404);
+    }
+    
+    // Update promotion status
+    await c.env.DB.prepare(`
+      UPDATE hr_promotions SET status = 'approved' WHERE id = ?
+    `).bind(id).run();
+    
+    // Update employee position and salary
+    await c.env.DB.prepare(`
+      UPDATE hr_employees 
+      SET job_title = ?, basic_salary = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(promotion.new_position, promotion.new_salary, promotion.employee_id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error approving promotion:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Reject promotion
+app.put('/api/hr/promotions/:id/reject', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_promotions SET status = 'rejected' WHERE id = ?
+    `).bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error rejecting promotion:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Delete promotion
+app.delete('/api/hr/promotions/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    
+    await c.env.DB.prepare('DELETE FROM hr_promotions WHERE id = ?').bind(id).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting promotion:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 export default app
 // HR SYSTEM ROUTES & APIs
 // ===============================================
@@ -13907,24 +14462,29 @@ app.get('/admin/hr/attendance', (c) => {
   return c.html(hrAttendancePage)
 })
 
-// HR Leaves Page (قيد التطوير)
+// HR Leaves Page
 app.get('/admin/hr/leaves', (c) => {
-  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+  return c.html(hrLeavesPage)
 })
 
-// HR Salaries Page (قيد التطوير)
+// HR Salaries Page
 app.get('/admin/hr/salaries', (c) => {
-  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+  return c.html(hrSalariesPage)
 })
 
-// HR Performance Page (قيد التطوير)
+// HR Departments Page
+app.get('/admin/hr/departments', (c) => {
+  return c.html(hrDepartmentsPage)
+})
+
+// HR Performance Page
 app.get('/admin/hr/performance', (c) => {
-  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+  return c.html(hrPerformancePage)
 })
 
-// HR Promotions Page (قيد التطوير)
+// HR Promotions Page
 app.get('/admin/hr/promotions', (c) => {
-  return c.html(hrMainPage) // سيتم استبداله لاحقاً
+  return c.html(hrPromotionsPage)
 })
 
 // HR Documents Page (قيد التطوير)
