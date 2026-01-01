@@ -1838,64 +1838,99 @@ app.get('/api/workflow/timeline/:requestId', async (c) => {
   try {
     const requestId = c.req.param('requestId')
     
-    // Get all stage transitions
-    const { results: transitions } = await c.env.DB.prepare(`
+    // Get request details with customer info
+    const request = await c.env.DB.prepare(`
       SELECT 
-        wst.*,
-        from_stage.stage_name_ar as from_stage_name,
-        from_stage.stage_color as from_stage_color,
-        from_stage.stage_icon as from_stage_icon,
-        to_stage.stage_name_ar as to_stage_name,
-        to_stage.stage_color as to_stage_color,
-        to_stage.stage_icon as to_stage_icon,
-        u.full_name as transitioned_by_name
-      FROM workflow_stage_transitions wst
-      LEFT JOIN workflow_stages from_stage ON wst.from_stage_id = from_stage.id
-      LEFT JOIN workflow_stages to_stage ON wst.to_stage_id = to_stage.id
-      LEFT JOIN users u ON wst.transitioned_by = u.id
-      WHERE wst.request_id = ?
-      ORDER BY wst.created_at ASC
-    `).bind(requestId).all()
+        fr.*,
+        c.full_name as customer_name,
+        c.phone as customer_phone,
+        b.bank_name as bank_name,
+        u.full_name as employee_name
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN banks b ON fr.selected_bank_id = b.id
+      LEFT JOIN users u ON c.assigned_to = u.id
+      WHERE fr.id = ?
+    `).bind(requestId).first()
     
-    // Get all actions for this request
-    const { results: actions } = await c.env.DB.prepare(`
-      SELECT 
-        wsa.*,
-        ws.stage_name_ar,
-        ws.stage_color,
-        ws.stage_icon,
-        u.full_name as performed_by_name
-      FROM workflow_stage_actions wsa
-      LEFT JOIN workflow_stages ws ON wsa.stage_id = ws.id
-      LEFT JOIN users u ON wsa.performed_by = u.id
-      WHERE wsa.request_id = ?
-      ORDER BY wsa.created_at ASC
-    `).bind(requestId).all()
+    if (!request) {
+      return c.json({ success: false, error: 'الطلب غير موجود' }, 404)
+    }
     
-    // Get all tasks for this request
-    const { results: tasks } = await c.env.DB.prepare(`
-      SELECT 
-        wst.*,
-        ws.stage_name_ar,
-        assigned_user.full_name as assigned_to_name,
-        completed_user.full_name as completed_by_name
-      FROM workflow_stage_tasks wst
-      LEFT JOIN workflow_stages ws ON wst.stage_id = ws.id
-      LEFT JOIN users assigned_user ON wst.assigned_to = assigned_user.id
-      LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
-      WHERE wst.request_id = ?
-      ORDER BY wst.due_date ASC
-    `).bind(requestId).all()
+    // Create simple timeline based on status
+    const statusMap: Record<string, any> = {
+      'pending': { 
+        name: 'جديد', 
+        color: '#3B82F6', 
+        icon: 'fa-file-alt',
+        description: 'تم إنشاء الطلب وفي انتظار المراجعة'
+      },
+      'under_review': { 
+        name: 'قيد المراجعة', 
+        color: '#F59E0B', 
+        icon: 'fa-search',
+        description: 'الطلب قيد المراجعة من قبل الفريق'
+      },
+      'approved': { 
+        name: 'مقبول', 
+        color: '#10B981', 
+        icon: 'fa-check-circle',
+        description: 'تم قبول الطلب'
+      },
+      'rejected': { 
+        name: 'مرفوض', 
+        color: '#EF4444', 
+        icon: 'fa-times-circle',
+        description: 'تم رفض الطلب'
+      },
+      'completed': { 
+        name: 'مكتمل', 
+        color: '#8B5CF6', 
+        icon: 'fa-check-double',
+        description: 'تم إكمال الطلب بنجاح'
+      },
+      'processing': { 
+        name: 'قيد المعالجة', 
+        color: '#06B6D4', 
+        icon: 'fa-cog',
+        description: 'الطلب قيد المعالجة'
+      },
+      'cancelled': { 
+        name: 'ملغي', 
+        color: '#6B7280', 
+        icon: 'fa-ban',
+        description: 'تم إلغاء الطلب'
+      }
+    }
+    
+    // Build timeline events
+    const transitions = [
+      {
+        id: 1,
+        from_stage_name: null,
+        to_stage_name: statusMap[request.status]?.name || request.status,
+        to_stage_color: statusMap[request.status]?.color || '#3B82F6',
+        to_stage_icon: statusMap[request.status]?.icon || 'fa-circle',
+        transitioned_by_name: request.employee_name || 'النظام',
+        created_at: request.created_at,
+        notes: statusMap[request.status]?.description || ''
+      }
+    ]
+    
+    const actions = []
+    const tasks = []
     
     return c.json({ 
       success: true, 
       data: {
+        request,
         transitions,
         actions,
         tasks
       }
     })
   } catch (error: any) {
+    console.error('Timeline error:', error);
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -6705,49 +6740,27 @@ app.post('/api/customer-assignment', async (c) => {
   try {
     const { customer_id, employee_id, notes } = await c.req.json();
     
-    // If employee_id is null, delete the assignment
+    // If employee_id is empty or null, remove assignment
     if (!employee_id) {
       await c.env.DB.prepare(`
-        -- DELETE FROM customer_assignments WHERE customer_id = ?
+        UPDATE customers 
+        SET assigned_to = NULL 
+        WHERE id = ?
       `).bind(customer_id).run();
       
       return c.json({ success: true, message: 'تم إلغاء التخصيص' });
     }
     
-    // Check if assignment already exists
-    const existing = await c.env.DB.prepare(`
-      -- SELECT * FROM customer_assignments WHERE customer_id = ?
-    `).bind(customer_id).first();
-    
-    if (existing) {
-      // Record in history
-      await c.env.DB.prepare(`
-        INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
-        VALUES (?, ?, ?, 1, ?)
-      `).bind(customer_id, existing.employee_id, employee_id, notes || '').run();
-      
-      // Update assignment
-      await c.env.DB.prepare(`
-        -- UPDATE customer_assignments 
-        SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now'), notes = ?
-        WHERE customer_id = ?
-      `).bind(employee_id, notes || '', customer_id).run();
-    } else {
-      // Create new assignment
-      await c.env.DB.prepare(`
-        -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-        VALUES (?, ?, 1, ?)
-      `).bind(customer_id, employee_id, notes || '').run();
-      
-      // Record in history
-      await c.env.DB.prepare(`
-        INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
-        VALUES (?, NULL, ?, 1, ?)
-      `).bind(customer_id, employee_id, notes || '').run();
-    }
+    // Assign customer to employee
+    await c.env.DB.prepare(`
+      UPDATE customers 
+      SET assigned_to = ? 
+      WHERE id = ?
+    `).bind(employee_id, customer_id).run();
     
     return c.json({ success: true, message: 'تم التخصيص بنجاح' });
   } catch (error: any) {
+    console.error('Customer assignment error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -6812,15 +6825,21 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
 // API: Clear all assignments
 app.post('/api/customer-assignment/clear-all', async (c) => {
   try {
+    const body = await c.req.json().catch(() => ({}));
+    const tenantId = body.tenant_id || c.req.query('tenant_id') || 1;
+    
     const result = await c.env.DB.prepare(`
-      -- DELETE FROM customer_assignments
-    `).run();
+      UPDATE customers 
+      SET assigned_to = NULL 
+      WHERE tenant_id = ?
+    `).bind(tenantId).run();
     
     return c.json({ 
       success: true, 
       cleared_count: result.meta.changes 
     });
   } catch (error: any) {
+    console.error('Clear assignments error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -6830,34 +6849,25 @@ app.post('/api/customer-assignment/bulk', async (c) => {
   try {
     const { customer_ids, employee_id } = await c.req.json();
     
-    let assignedCount = 0;
-    for (const customerId of customer_ids) {
-      // Check if exists
-      const existing = await c.env.DB.prepare(`
-        -- SELECT * FROM customer_assignments WHERE customer_id = ?
-      `).bind(customerId).first();
-      
-      if (existing) {
-        await c.env.DB.prepare(`
-          -- UPDATE customer_assignments 
-          SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now')
-          WHERE customer_id = ?
-        `).bind(employee_id, customerId).run();
-      } else {
-        await c.env.DB.prepare(`
-          -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
-          VALUES (?, ?, 1)
-        `).bind(customerId, employee_id).run();
-      }
-      
-      assignedCount++;
+    if (!customer_ids || customer_ids.length === 0) {
+      return c.json({ success: false, error: 'لم يتم تحديد عملاء' });
     }
+    
+    // Build placeholders for IN clause
+    const placeholders = customer_ids.map(() => '?').join(',');
+    
+    const result = await c.env.DB.prepare(`
+      UPDATE customers 
+      SET assigned_to = ? 
+      WHERE id IN (${placeholders})
+    `).bind(employee_id, ...customer_ids).run();
     
     return c.json({ 
       success: true, 
-      assigned_count: assignedCount
+      assigned_count: result.meta.changes
     });
   } catch (error: any) {
+    console.error('Bulk assignment error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -10692,17 +10702,18 @@ app.get('/admin/requests/:id/workflow', async (c) => {
   try {
     const id = c.req.param('id')
     
-    // Get request data with current stage
+    // Get request data with customer info
     const request = await c.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
-        ws.stage_name_ar,
-        ws.stage_color,
-        ws.stage_icon
+        c.phone as customer_phone,
+        b.bank_name,
+        u.full_name as employee_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      LEFT JOIN banks b ON fr.selected_bank_id = b.id
+      LEFT JOIN users u ON c.assigned_to = u.id
       WHERE fr.id = ?
     `).bind(id).first()
     
@@ -10710,37 +10721,51 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       return c.html('<h1>الطلب غير موجود</h1>')
     }
     
-    // Get all stages
-    const { results: stages } = await c.env.DB.prepare(`
-      SELECT * FROM workflow_stages 
-      WHERE is_active = 1 
-      ORDER BY stage_order ASC
-    `).all()
+    // Map status to Arabic
+    const statusMap: Record<string, any> = {
+      'pending': { name: 'جديد', color: '#3B82F6', icon: 'fa-file-alt', order: 1 },
+      'under_review': { name: 'قيد المراجعة', color: '#F59E0B', icon: 'fa-search', order: 2 },
+      'approved': { name: 'مقبول', color: '#10B981', icon: 'fa-check-circle', order: 3 },
+      'rejected': { name: 'مرفوض', color: '#EF4444', icon: 'fa-times-circle', order: 3 },
+      'processing': { name: 'قيد المعالجة', color: '#06B6D4', icon: 'fa-cog', order: 4 },
+      'completed': { name: 'مكتمل', color: '#8B5CF6', icon: 'fa-check-double', order: 5 },
+      'cancelled': { name: 'ملغي', color: '#6B7280', icon: 'fa-ban', order: 5 }
+    }
     
-    // Get workflow timeline (transitions, actions, tasks) - Direct DB query instead of internal API call
-    const { results: transitions } = await c.env.DB.prepare(`
-      SELECT 
-        wst.*,
-        ws_from.stage_name_ar as from_stage_name,
-        ws_to.stage_name_ar as to_stage_name,
-        u.full_name as changed_by_name
-      FROM workflow_stage_transitions wst
-      LEFT JOIN workflow_stages ws_from ON wst.from_stage_id = ws_from.id
-      LEFT JOIN workflow_stages ws_to ON wst.to_stage_id = ws_to.id
-      LEFT JOIN users u ON wst.transitioned_by = u.id
-      WHERE wst.request_id = ?
-      ORDER BY wst.created_at DESC
-    `).bind(id).all()
+    // Create simple stages list
+    const stages = [
+      { id: 1, stage_name_ar: 'جديد', stage_color: '#3B82F6', stage_icon: 'fa-file-alt', stage_order: 1, is_active: 1 },
+      { id: 2, stage_name_ar: 'قيد المراجعة', stage_color: '#F59E0B', stage_icon: 'fa-search', stage_order: 2, is_active: 1 },
+      { id: 3, stage_name_ar: 'مقبول', stage_color: '#10B981', stage_icon: 'fa-check-circle', stage_order: 3, is_active: 1 },
+      { id: 4, stage_name_ar: 'قيد المعالجة', stage_color: '#06B6D4', stage_icon: 'fa-cog', stage_order: 4, is_active: 1 },
+      { id: 5, stage_name_ar: 'مكتمل', stage_color: '#8B5CF6', stage_icon: 'fa-check-double', stage_order: 5, is_active: 1 }
+    ]
     
-    const { results: actions } = await c.env.DB.prepare(`
-      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(id).all()
+    // Add current stage info to request
+    const currentStageInfo = statusMap[request.status] || statusMap['pending']
+    request.stage_name_ar = currentStageInfo.name
+    request.stage_color = currentStageInfo.color
+    request.stage_icon = currentStageInfo.icon
     
-    const { results: tasks } = await c.env.DB.prepare(`
-      SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(id).all()
+    // Create simple timeline
+    const transitions = [
+      {
+        id: 1,
+        from_stage_name: null,
+        to_stage_name: currentStageInfo.name,
+        changed_by_name: request.employee_name || 'النظام',
+        created_at: request.created_at,
+        notes: 'تم إنشاء الطلب'
+      }
+    ]
     
-    const timelineData = { data: { transitions, actions, tasks } }
+    const timelineData = { 
+      data: { 
+        transitions, 
+        actions: [], 
+        tasks: [] 
+      } 
+    }
     
     const html = generateWorkflowTimelinePage(
       parseInt(id),
