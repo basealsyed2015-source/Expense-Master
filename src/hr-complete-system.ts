@@ -826,7 +826,7 @@ export const hrAttendancePage = `<!DOCTYPE html>
                         return \`
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 text-sm text-gray-900">\${index + 1}</td>
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900">\${record.employee_name}</td>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">\${record.full_name || record.employee_name || 'غير محدد'}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">\${record.department || '-'}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">\${record.attendance_date}</td>
                             <td class="px-4 py-3 text-sm text-gray-900">\${record.check_in_time || '-'}</td>

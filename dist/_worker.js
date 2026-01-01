@@ -12037,7 +12037,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     <i class="fas fa-chart-pie ml-2 text-blue-600"></i>
                     توزيع الموظفين حسب القسم
                 </h3>
-                <canvas id="departmentChart" height="200"></canvas>
+                <div style="position: relative; height: 300px; max-height: 300px;">
+                    <canvas id="departmentChart"></canvas>
+                </div>
             </div>
 
             <!-- Attendance Statistics -->
@@ -12046,7 +12048,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     <i class="fas fa-chart-line ml-2 text-green-600"></i>
                     إحصائيات الحضور (آخر 7 أيام)
                 </h3>
-                <canvas id="attendanceChart" height="200"></canvas>
+                <div style="position: relative; height: 300px; max-height: 300px;">
+                    <canvas id="attendanceChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -12974,7 +12978,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                         return \`
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 text-sm text-gray-900">\${index + 1}</td>
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900">\${record.employee_name}</td>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">\${record.full_name || record.employee_name || 'غير محدد'}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">\${record.department || '-'}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">\${record.attendance_date}</td>
                             <td class="px-4 py-3 text-sm text-gray-900">\${record.check_in_time || '-'}</td>

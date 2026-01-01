@@ -303,7 +303,9 @@ export const hrMainPage = `<!DOCTYPE html>
                     <i class="fas fa-chart-pie ml-2 text-blue-600"></i>
                     توزيع الموظفين حسب القسم
                 </h3>
-                <canvas id="departmentChart" height="200"></canvas>
+                <div style="position: relative; height: 300px; max-height: 300px;">
+                    <canvas id="departmentChart"></canvas>
+                </div>
             </div>
 
             <!-- Attendance Statistics -->
@@ -312,7 +314,9 @@ export const hrMainPage = `<!DOCTYPE html>
                     <i class="fas fa-chart-line ml-2 text-green-600"></i>
                     إحصائيات الحضور (آخر 7 أيام)
                 </h3>
-                <canvas id="attendanceChart" height="200"></canvas>
+                <div style="position: relative; height: 300px; max-height: 300px;">
+                    <canvas id="attendanceChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
