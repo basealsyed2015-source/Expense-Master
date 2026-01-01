@@ -1387,3 +1387,874 @@ export const hrPromotionsPage = `
 </body>
 </html>
 `;
+
+// 8. صفحة المستندات
+export const hrDocumentsPage = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المستندات - نظام الموارد البشرية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100">
+  <div class="min-h-screen">
+    <!-- رأس الصفحة -->
+    <div class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <div>
+            <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
+              <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
+            </a>
+            <h1 class="text-3xl font-bold text-gray-800">
+              <i class="fas fa-file-alt ml-2"></i>
+              إدارة المستندات
+            </h1>
+            <p class="text-gray-600 mt-1">تتبع مستندات الموظفين وتنبيهات انتهاء الصلاحيات</p>
+          </div>
+          <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة مستند
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- تنبيهات انتهاء الصلاحيات -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div id="expiryAlerts" class="space-y-3">
+        <!-- سيتم ملؤها ديناميكياً -->
+      </div>
+    </div>
+
+    <!-- الإحصائيات -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي المستندات</p>
+              <p class="text-2xl font-bold text-gray-800" id="totalDocuments">0</p>
+            </div>
+            <i class="fas fa-file-alt text-blue-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">منتهية الصلاحية</p>
+              <p class="text-2xl font-bold text-red-600" id="expiredDocuments">0</p>
+            </div>
+            <i class="fas fa-exclamation-circle text-red-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">تنتهي خلال 30 يوم</p>
+              <p class="text-2xl font-bold text-yellow-600" id="expiringDocuments">0</p>
+            </div>
+            <i class="fas fa-clock text-yellow-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">سارية</p>
+              <p class="text-2xl font-bold text-green-600" id="validDocuments">0</p>
+            </div>
+            <i class="fas fa-check-circle text-green-500 text-3xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- جدول المستندات -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+          <h2 class="text-xl font-bold text-gray-800">قائمة المستندات</h2>
+          
+          <!-- الفلاتر -->
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="text" id="searchInput" placeholder="بحث بالموظف أو المستند..." class="border rounded-lg px-4 py-2">
+            
+            <select id="typeFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
+              <option value="">جميع الأنواع</option>
+              <option value="passport">جواز السفر</option>
+              <option value="id_card">بطاقة الهوية</option>
+              <option value="license">رخصة القيادة</option>
+              <option value="contract">عقد العمل</option>
+              <option value="insurance">التأمين</option>
+              <option value="other">أخرى</option>
+            </select>
+            
+            <select id="statusFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
+              <option value="">جميع الحالات</option>
+              <option value="valid">سارية</option>
+              <option value="expiring">تنتهي قريباً</option>
+              <option value="expired">منتهية</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">م</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع المستند</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">رقم المستند</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الإصدار</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الانتهاء</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الأيام المتبقية</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="documentsTableBody" class="bg-white divide-y divide-gray-200">
+              <!-- سيتم ملؤها ديناميكياً -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal إضافة مستند -->
+  <div id="addDocumentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6">إضافة مستند جديد</h2>
+      
+      <form id="addDocumentForm" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">الموظف *</label>
+            <select id="employee_id" required class="w-full border rounded-lg px-4 py-2">
+              <option value="">اختر الموظف</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">نوع المستند *</label>
+            <select id="document_type" required class="w-full border rounded-lg px-4 py-2">
+              <option value="">اختر النوع</option>
+              <option value="passport">جواز السفر</option>
+              <option value="id_card">بطاقة الهوية</option>
+              <option value="license">رخصة القيادة</option>
+              <option value="contract">عقد العمل</option>
+              <option value="insurance">التأمين</option>
+              <option value="other">أخرى</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">رقم المستند *</label>
+            <input type="text" id="document_number" required class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">جهة الإصدار</label>
+            <input type="text" id="issuing_authority" class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">تاريخ الإصدار *</label>
+            <input type="date" id="issue_date" required class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">تاريخ الانتهاء *</label>
+            <input type="date" id="expiry_date" required class="w-full border rounded-lg px-4 py-2">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-gray-700 font-bold mb-2">ملاحظات</label>
+          <textarea id="notes" rows="3" class="w-full border rounded-lg px-4 py-2"></textarea>
+        </div>
+        
+        <div class="flex gap-3 mt-6">
+          <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold">
+            <i class="fas fa-save ml-2"></i>
+            حفظ
+          </button>
+          <button type="button" onclick="closeAddDocumentModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold">
+            <i class="fas fa-times ml-2"></i>
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // تحميل قائمة المستندات
+    async function loadDocuments() {
+      try {
+        const searchTerm = document.getElementById('searchInput').value;
+        const typeFilter = document.getElementById('typeFilter').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+        
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        if (typeFilter) params.append('type', typeFilter);
+        if (statusFilter) params.append('status', statusFilter);
+        
+        const response = await axios.get('/api/hr/documents?' + params.toString());
+        const documents = response.data.data || [];
+        
+        const tbody = document.getElementById('documentsTableBody');
+        
+        if (documents.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد مستندات</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = documents.map((doc, index) => {
+          const daysRemaining = calculateDaysRemaining(doc.expiry_date);
+          const statusBadge = getDocumentStatusBadge(daysRemaining);
+          const documentTypeName = getDocumentTypeName(doc.document_type);
+          
+          const daysClass = daysRemaining < 0 ? 'text-red-600' : daysRemaining < 30 ? 'text-yellow-600' : 'text-green-600';
+          const daysText = daysRemaining < 0 ? 'منتهي' : daysRemaining === 0 ? 'اليوم' : daysRemaining + ' يوم';
+          
+          return \`
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm text-gray-900">\${index + 1}</td>
+              <td class="px-6 py-4">
+                <div class="text-sm font-medium text-gray-900">\${doc.employee_name || 'غير محدد'}</div>
+                <div class="text-sm text-gray-500">\${doc.employee_number || '-'}</div>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-900">\${documentTypeName}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">\${doc.document_number || '-'}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">\${doc.issue_date || '-'}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">\${doc.expiry_date || '-'}</td>
+              <td class="px-6 py-4 text-sm \${daysClass}">
+                \${daysText}
+              </td>
+              <td class="px-6 py-4">\${statusBadge}</td>
+              <td class="px-6 py-4 text-sm">
+                <button onclick="deleteDocument(\${doc.id})" class="text-red-600 hover:text-red-800" title="حذف">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          \`;
+        }).join('');
+        
+        updateStats(documents);
+        updateExpiryAlerts(documents);
+        
+      } catch (error) {
+        console.error('Error loading documents:', error);
+        alert('حدث خطأ في تحميل المستندات');
+      }
+    }
+    
+    // حساب الأيام المتبقية
+    function calculateDaysRemaining(expiryDate) {
+      if (!expiryDate) return 999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiry = new Date(expiryDate);
+      expiry.setHours(0, 0, 0, 0);
+      const diffTime = expiry - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    }
+    
+    // الحصول على badge الحالة
+    function getDocumentStatusBadge(daysRemaining) {
+      if (daysRemaining < 0) {
+        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">منتهية</span>';
+      } else if (daysRemaining <= 30) {
+        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">تنتهي قريباً</span>';
+      } else {
+        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">سارية</span>';
+      }
+    }
+    
+    // الحصول على اسم نوع المستند
+    function getDocumentTypeName(type) {
+      const types = {
+        'passport': 'جواز السفر',
+        'id_card': 'بطاقة الهوية',
+        'license': 'رخصة القيادة',
+        'contract': 'عقد العمل',
+        'insurance': 'التأمين',
+        'other': 'أخرى'
+      };
+      return types[type] || type;
+    }
+    
+    // تحديث الإحصائيات
+    function updateStats(documents) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const stats = {
+        total: documents.length,
+        expired: 0,
+        expiring: 0,
+        valid: 0
+      };
+      
+      documents.forEach(doc => {
+        const daysRemaining = calculateDaysRemaining(doc.expiry_date);
+        if (daysRemaining < 0) {
+          stats.expired++;
+        } else if (daysRemaining <= 30) {
+          stats.expiring++;
+        } else {
+          stats.valid++;
+        }
+      });
+      
+      document.getElementById('totalDocuments').textContent = stats.total;
+      document.getElementById('expiredDocuments').textContent = stats.expired;
+      document.getElementById('expiringDocuments').textContent = stats.expiring;
+      document.getElementById('validDocuments').textContent = stats.valid;
+    }
+    
+    // تحديث تنبيهات انتهاء الصلاحيات
+    function updateExpiryAlerts(documents) {
+      const alertsContainer = document.getElementById('expiryAlerts');
+      const expiredDocs = documents.filter(doc => calculateDaysRemaining(doc.expiry_date) < 0);
+      const expiringDocs = documents.filter(doc => {
+        const days = calculateDaysRemaining(doc.expiry_date);
+        return days >= 0 && days <= 30;
+      });
+      
+      let alertsHTML = '';
+      
+      if (expiredDocs.length > 0) {
+        const expiredList = expiredDocs.slice(0, 5).map(doc => 
+          \`<li class="text-red-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (\${doc.document_number})</li>\`
+        ).join('');
+        const moreExpired = expiredDocs.length > 5 ? \`<li class="text-red-600">• و \${expiredDocs.length - 5} مستندات أخرى...</li>\` : '';
+        
+        alertsHTML += \`
+          <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
+            <div class="flex items-center">
+              <i class="fas fa-exclamation-circle text-red-500 text-2xl ml-3"></i>
+              <div class="flex-1">
+                <h3 class="text-lg font-bold text-red-800">مستندات منتهية الصلاحية (\${expiredDocs.length})</h3>
+                <p class="text-red-700 mt-1">يرجى تجديد المستندات التالية:</p>
+                <ul class="mt-2 space-y-1">
+                  \${expiredList}
+                  \${moreExpired}
+                </ul>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      if (expiringDocs.length > 0) {
+        const expiringList = expiringDocs.slice(0, 5).map(doc => {
+          const days = calculateDaysRemaining(doc.expiry_date);
+          return \`<li class="text-yellow-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (بعد \${days} يوم)</li>\`;
+        }).join('');
+        const moreExpiring = expiringDocs.length > 5 ? \`<li class="text-yellow-600">• و \${expiringDocs.length - 5} مستندات أخرى...</li>\` : '';
+        
+        alertsHTML += \`
+          <div class="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg p-4">
+            <div class="flex items-center">
+              <i class="fas fa-clock text-yellow-500 text-2xl ml-3"></i>
+              <div class="flex-1">
+                <h3 class="text-lg font-bold text-yellow-800">مستندات تنتهي خلال 30 يوم (\${expiringDocs.length})</h3>
+                <p class="text-yellow-700 mt-1">يرجى التجهيز لتجديد المستندات التالية:</p>
+                <ul class="mt-2 space-y-1">
+                  \${expiringList}
+                  \${moreExpiring}
+                </ul>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      if (alertsHTML === '') {
+        alertsHTML = \`
+          <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4">
+            <div class="flex items-center">
+              <i class="fas fa-check-circle text-green-500 text-2xl ml-3"></i>
+              <div>
+                <h3 class="text-lg font-bold text-green-800">جميع المستندات سارية</h3>
+                <p class="text-green-700 mt-1">لا توجد مستندات منتهية أو تحتاج لتجديد قريب</p>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      alertsContainer.innerHTML = alertsHTML;
+    }
+    
+    // فتح modal إضافة مستند
+    async function openAddDocumentModal() {
+      // تحميل قائمة الموظفين
+      try {
+        const response = await axios.get('/api/hr/employees');
+        const employees = response.data.data || [];
+        
+        const select = document.getElementById('employee_id');
+        const employeeOptions = employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name} (\${emp.employee_number})</option>\`).join('');
+        select.innerHTML = '<option value="">اختر الموظف</option>' + employeeOptions;
+        
+      } catch (error) {
+        console.error('Error loading employees:', error);
+      }
+      
+      document.getElementById('addDocumentModal').classList.remove('hidden');
+      document.getElementById('addDocumentModal').classList.add('flex');
+    }
+    
+    // إغلاق modal
+    function closeAddDocumentModal() {
+      document.getElementById('addDocumentModal').classList.add('hidden');
+      document.getElementById('addDocumentModal').classList.remove('flex');
+      document.getElementById('addDocumentForm').reset();
+    }
+    
+    // إضافة مستند
+    document.getElementById('addDocumentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = {
+        employee_id: parseInt(document.getElementById('employee_id').value),
+        document_type: document.getElementById('document_type').value,
+        document_number: document.getElementById('document_number').value,
+        issuing_authority: document.getElementById('issuing_authority').value,
+        issue_date: document.getElementById('issue_date').value,
+        expiry_date: document.getElementById('expiry_date').value,
+        notes: document.getElementById('notes').value
+      };
+      
+      try {
+        await axios.post('/api/hr/documents', formData);
+        alert('تم إضافة المستند بنجاح');
+        closeAddDocumentModal();
+        loadDocuments();
+      } catch (error) {
+        console.error('Error adding document:', error);
+        alert('حدث خطأ في إضافة المستند');
+      }
+    });
+    
+    // حذف مستند
+    async function deleteDocument(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا المستند؟')) return;
+      
+      try {
+        await axios.delete(\`/api/hr/documents/\${id}\`);
+        alert('تم الحذف بنجاح');
+        loadDocuments();
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('حدث خطأ في الحذف');
+      }
+    }
+    
+    // البحث التلقائي
+    document.getElementById('searchInput').addEventListener('input', () => {
+      setTimeout(loadDocuments, 300);
+    });
+    
+    // تحميل البيانات عند فتح الصفحة
+    window.addEventListener('load', loadDocuments);
+  </script>
+</body>
+</html>
+`;
+
+// 9. صفحة التقارير
+export const hrReportsPage = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التقارير والإحصاءات - نظام الموارد البشرية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+  <div class="min-h-screen">
+    <!-- رأس الصفحة -->
+    <div class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <div>
+            <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
+              <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
+            </a>
+            <h1 class="text-3xl font-bold text-gray-800">
+              <i class="fas fa-chart-bar ml-2"></i>
+              التقارير والإحصاءات
+            </h1>
+            <p class="text-gray-600 mt-1">تقارير شاملة ومفصلة عن الموارد البشرية</p>
+          </div>
+          <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+            <i class="fas fa-file-export ml-2"></i>
+            تصدير التقرير
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- الفلاتر -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">خيارات التقرير</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">نوع التقرير</label>
+            <select id="reportType" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
+              <option value="overview">نظرة عامة</option>
+              <option value="attendance">الحضور والغياب</option>
+              <option value="leaves">الإجازات</option>
+              <option value="salaries">الرواتب</option>
+              <option value="performance">الأداء</option>
+              <option value="turnover">معدل دوران الموظفين</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">من تاريخ</label>
+            <input type="date" id="startDate" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">إلى تاريخ</label>
+            <input type="date" id="endDate" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الإحصائيات الرئيسية -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي الموظفين</p>
+              <p class="text-2xl font-bold text-gray-800" id="totalEmployees">0</p>
+            </div>
+            <i class="fas fa-users text-blue-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">نسبة الحضور</p>
+              <p class="text-2xl font-bold text-green-600" id="attendanceRate">0%</p>
+            </div>
+            <i class="fas fa-chart-line text-green-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي الرواتب</p>
+              <p class="text-2xl font-bold text-purple-600" id="totalSalaries">0</p>
+            </div>
+            <i class="fas fa-money-bill-wave text-purple-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">متوسط التقييم</p>
+              <p class="text-2xl font-bold text-yellow-600" id="avgPerformance">0</p>
+            </div>
+            <i class="fas fa-star text-yellow-500 text-3xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الرسوم البيانية -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- رسم بياني الحضور -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">معدل الحضور الشهري</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="attendanceChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- رسم بياني الإجازات -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع أنواع الإجازات</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="leavesChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- رسم بياني الرواتب -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع الرواتب حسب القسم</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="salariesChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- رسم بياني الأداء -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع تقييمات الأداء</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="performanceChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- جداول تفصيلية -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+          <h2 class="text-xl font-bold text-gray-800">البيانات التفصيلية</h2>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <div id="reportDetails" class="p-6">
+            <!-- سيتم ملؤها ديناميكياً -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let charts = {};
+    
+    // تحميل التقرير
+    async function loadReport() {
+      try {
+        const reportType = document.getElementById('reportType').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const response = await axios.get(\`/api/hr/reports/\${reportType}?\` + params.toString());
+        const data = response.data.data || {};
+        
+        // تحديث الإحصائيات
+        updateMainStats(data);
+        
+        // تحديث الرسوم البيانية
+        updateCharts(data);
+        
+        // تحديث التفاصيل
+        updateReportDetails(reportType, data);
+        
+      } catch (error) {
+        console.error('Error loading report:', error);
+        alert('حدث خطأ في تحميل التقرير');
+      }
+    }
+    
+    // تحديث الإحصائيات الرئيسية
+    function updateMainStats(data) {
+      document.getElementById('totalEmployees').textContent = data.totalEmployees || 0;
+      document.getElementById('attendanceRate').textContent = (data.attendanceRate || 0) + '%';
+      document.getElementById('totalSalaries').textContent = (data.totalSalaries || 0).toLocaleString() + ' ر.س';
+      document.getElementById('avgPerformance').textContent = (data.avgPerformance || 0).toFixed(1);
+    }
+    
+    // تحديث الرسوم البيانية
+    function updateCharts(data) {
+      // رسم بياني الحضور
+      if (charts.attendance) charts.attendance.destroy();
+      const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
+      charts.attendance = new Chart(attendanceCtx, {
+        type: 'line',
+        data: {
+          labels: data.attendanceLabels || [],
+          datasets: [{
+            label: 'نسبة الحضور',
+            data: data.attendanceData || [],
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100
+            }
+          }
+        }
+      });
+      
+      // رسم بياني الإجازات
+      if (charts.leaves) charts.leaves.destroy();
+      const leavesCtx = document.getElementById('leavesChart').getContext('2d');
+      charts.leaves = new Chart(leavesCtx, {
+        type: 'doughnut',
+        data: {
+          labels: data.leavesLabels || [],
+          datasets: [{
+            data: data.leavesData || [],
+            backgroundColor: [
+              'rgb(59, 130, 246)',
+              'rgb(234, 179, 8)',
+              'rgb(239, 68, 68)',
+              'rgb(168, 85, 247)',
+              'rgb(34, 197, 94)'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+      
+      // رسم بياني الرواتب
+      if (charts.salaries) charts.salaries.destroy();
+      const salariesCtx = document.getElementById('salariesChart').getContext('2d');
+      charts.salaries = new Chart(salariesCtx, {
+        type: 'bar',
+        data: {
+          labels: data.salariesLabels || [],
+          datasets: [{
+            label: 'إجمالي الرواتب (ر.س)',
+            data: data.salariesData || [],
+            backgroundColor: 'rgba(168, 85, 247, 0.5)',
+            borderColor: 'rgb(168, 85, 247)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+      
+      // رسم بياني الأداء
+      if (charts.performance) charts.performance.destroy();
+      const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+      charts.performance = new Chart(performanceCtx, {
+        type: 'pie',
+        data: {
+          labels: data.performanceLabels || [],
+          datasets: [{
+            data: data.performanceData || [],
+            backgroundColor: [
+              'rgb(34, 197, 94)',
+              'rgb(234, 179, 8)',
+              'rgb(239, 68, 68)'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+    
+    // تحديث التفاصيل
+    function updateReportDetails(reportType, data) {
+      const detailsContainer = document.getElementById('reportDetails');
+      
+      let detailsHTML = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
+      
+      switch(reportType) {
+        case 'overview':
+          detailsHTML += \`
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">القسم</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">عدد الموظفين</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نسبة الحضور</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجمالي الرواتب</th>
+          \`;
+          break;
+        case 'attendance':
+          detailsHTML += \`
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحاضرون</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الغائبون</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المتأخرون</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">النسبة</th>
+          \`;
+          break;
+      }
+      
+      detailsHTML += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+      
+      if (data.details && data.details.length > 0) {
+        detailsHTML += data.details.map(row => {
+          let rowHTML = '<tr>';
+          Object.values(row).forEach(value => {
+            rowHTML += '<td class="px-6 py-4 text-sm text-gray-900">' + value + '</td>';
+          });
+          rowHTML += '</tr>';
+          return rowHTML;
+        }).join('');
+      } else {
+        detailsHTML += '<tr><td colspan="10" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
+      }
+      
+      detailsHTML += '</tbody></table></div>';
+      
+      detailsContainer.innerHTML = detailsHTML;
+    }
+    
+    // تصدير التقرير
+    function exportReport() {
+      alert('سيتم تصدير التقرير قريباً');
+    }
+    
+    // تعيين التواريخ الافتراضية
+    function setDefaultDates() {
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      
+      document.getElementById('startDate').valueAsDate = firstDayOfMonth;
+      document.getElementById('endDate').valueAsDate = today;
+    }
+    
+    // تحميل البيانات عند فتح الصفحة
+    window.addEventListener('load', () => {
+      setDefaultDates();
+      loadReport();
+    });
+  </script>
+</body>
+</html>
+`;

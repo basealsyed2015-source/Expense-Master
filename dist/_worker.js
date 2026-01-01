@@ -1,4 +1,4 @@
-var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ye=Symbol(),ve=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof K?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?we(e,{all:a,dot:s}):{}};async function we(e,t){const a=await e.formData();return a?_e(a,t):{}}function _e(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Ee(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(ke(a,s,r),delete a[s])}),a}var Ee=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},ke=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},J=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},De=e=>{const{groups:t,path:a}=Se(e),s=J(a);return Ie(s,t)},Se=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Ie=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Te=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},$e=e=>P(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return $e(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Ce=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},$=(e,t,...a)=>(a.length&&(t=$(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),G=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,X):e):e,Q=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=M(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},Re=Q,Be=(e,t)=>Q(e,t,!0),X=decodeURIComponent,W=e=>P(e,X),K=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?W(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?W(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Re(this.url,e)}queries(e){return Be(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ve(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ye](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Le={Stringify:1},Z=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>Z(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},qe="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),je=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new K(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(qe,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?Z(e,Le.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},v="ALL",Oe="all",Fe=["get","post","put","delete","options","patch"],ee="Can not add a route since the matcher is already built.",te=class extends Error{},Me="__COMPOSED_HANDLER",Ae=e=>e.text("404 Not Found",404),Y=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ne=class ae{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Fe,Oe].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(v,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Ce}#e(){const t=new ae({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ae;errorHandler=Y;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===Y?o=r.handler:(o=async(l,i)=>(await U([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Me]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=$(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=$(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(v,$(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=$(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new je(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=U(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${$("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},se=[];function Pe(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[v],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],se];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",C=Symbol(),He=new Set(".\\+*[^]$()");function Ue(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var We=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw C;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",L]:["","",O]:l==="/*"?["","",q]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw C;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw C;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw C;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ue).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:He.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new We;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ze=[/^$/,[],Object.create(null)],re=Object.create(null);function le(e){return re[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Je(){re=Object.create(null)}function Ve(e){const t=new Ye,a=[];if(e.length===0)return ze;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([h])=>[h,Object.create(null)]),se]:p++;let b;try{b=t.insert(f,p,m)}catch(h){throw h===C?new te(f):h}m||(a[p]=g.map(([h,w])=>{const E=Object.create(null);for(w-=1;w>=0;w--){const[_,y]=b[w];E[_]=y}return[h,E]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,h=g.length;b<h;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function T(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Ge=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[v]:Object.create(null)},this.#e={[v]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(ee);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[v]).forEach(n=>{i[e][n]=[...i[v][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===v?Object.keys(s).forEach(n=>{s[n][t]||=T(s[n],t)||T(s[v],t)||[]}):s[e][t]||=T(s[e],t)||T(s[v],t)||[],Object.keys(s).forEach(n=>{(e===v||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===v||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=G(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===v||e===p)&&(r[p][c]||=[...T(s[p],c)||T(s[v],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Pe;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Je(),e}#a(e){const t=[];let a=e===v;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==v&&t.push(...Object.keys(s[v]).map(o=>[o,s[v][o]]))}),a?Ve(t):null}},Qe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(ee);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof te)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},B=Object.create(null),Xe=class oe{#t;#e;#a;#l=0;#r=B;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=De(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=Te(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new oe,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[v],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==B||r&&r!==B))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=B;let o=[this];const l=J(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let w=0,E=b.#a.length;w<E;w++){const _=b.#a[w],y=b.#r===B?{}:{...b.#r};if(_==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#r)),I.#r=y,m.push(I));continue}const[k,F,R]=_;if(!p&&!(R instanceof RegExp))continue;const D=b.#e[k],xe=l.slice(n).join("/");if(R instanceof RegExp){const I=R.exec(xe);if(I){if(y[F]=I[0],s.push(...this.#s(D,t,b.#r,y)),Object.keys(D.#e).length){D.#r=y;const he=I[0].match(/\//)?.length??0;(i[he]||=[]).push(D)}continue}}(R===!0||R.test(p))&&(y[F]=p,u?(s.push(...this.#s(D,t,y,b.#r)),D.#e["*"]&&s.push(...this.#s(D.#e["*"],t,y,b.#r))):(D.#r=y,m.push(D)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ke=class{name="TrieRouter";#t;constructor(){this.#t=new Xe}add(e,t,a){const s=G(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ne=class extends Ne{constructor(e={}){super(e),this.router=e.router??new Qe({routers:[new Ge,new Ke]})}},Ze=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const et=`<!DOCTYPE html>
+var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},he=Symbol(),ye=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof X?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?ve(e,{all:a,dot:s}):{}};async function ve(e,t){const a=await e.formData();return a?we(a,t):{}}function we(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?_e(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Ee(a,s,r),delete a[s])}),a}var _e=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Ee=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},z=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},ke=e=>{const{groups:t,path:a}=De(e),s=z(a);return Ie(s,t)},De=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Ie=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Se=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Te=e=>P(e,decodeURI),J=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Te(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Re=e=>{const t=J(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),V=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,Q):e):e,G=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=M(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},Ce=G,$e=(e,t)=>G(e,t,!0),Q=decodeURIComponent,U=e=>P(e,Q),X=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?U(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?U(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Ce(this.url,e)}queries(e){return $e(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ye(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[he](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Be={Stringify:1},K=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>K(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},Le="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),qe=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new X(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(Le,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?K(e,Be.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},v="ALL",je="all",Oe=["get","post","put","delete","options","patch"],Z="Can not add a route since the matcher is already built.",ee=class extends Error{},Fe="__COMPOSED_HANDLER",Me=e=>e.text("404 Not Found",404),W=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ae=class te{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Oe,je].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(v,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??J:Re}#e(){const t=new te({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Me;errorHandler=W;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===W?o=r.handler:(o=async(l,i)=>(await H([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Fe]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(v,R(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new qe(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=H(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},ae=[];function Ne(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[v],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],ae];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",C=Symbol(),Pe=new Set(".\\+*[^]$()");function He(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Ue=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw C;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",L]:["","",O]:l==="/*"?["","",q]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw C;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw C;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw C;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(He).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Pe.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},We=class{#t={varIndex:0};#e=new Ue;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Ye=[/^$/,[],Object.create(null)],se=Object.create(null);function re(e){return se[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function ze(){se=Object.create(null)}function Je(e){const t=new We,a=[];if(e.length===0)return Ye;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([h])=>[h,Object.create(null)]),ae]:p++;let b;try{b=t.insert(f,p,m)}catch(h){throw h===C?new ee(f):h}m||(a[p]=g.map(([h,w])=>{const E=Object.create(null);for(w-=1;w>=0;w--){const[_,y]=b[w];E[_]=y}return[h,E]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,h=g.length;b<h;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function T(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(re(a).test(t))return[...e[a]]}}var Ve=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[v]:Object.create(null)},this.#e={[v]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(Z);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[v]).forEach(n=>{i[e][n]=[...i[v][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=re(t);e===v?Object.keys(s).forEach(n=>{s[n][t]||=T(s[n],t)||T(s[v],t)||[]}):s[e][t]||=T(s[e],t)||T(s[v],t)||[],Object.keys(s).forEach(n=>{(e===v||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===v||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=V(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===v||e===p)&&(r[p][c]||=[...T(s[p],c)||T(s[v],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Ne;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,ze(),e}#a(e){const t=[];let a=e===v;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==v&&t.push(...Object.keys(s[v]).map(o=>[o,s[v][o]]))}),a?Je(t):null}},Ge=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Z);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof ee)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},B=Object.create(null),Qe=class le{#t;#e;#a;#l=0;#r=B;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=ke(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=Se(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new le,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[v],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==B||r&&r!==B))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=B;let o=[this];const l=z(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let w=0,E=b.#a.length;w<E;w++){const _=b.#a[w],y=b.#r===B?{}:{...b.#r};if(_==="*"){const S=b.#e["*"];S&&(s.push(...this.#s(S,t,b.#r)),S.#r=y,m.push(S));continue}const[k,F,$]=_;if(!p&&!($ instanceof RegExp))continue;const D=b.#e[k],be=l.slice(n).join("/");if($ instanceof RegExp){const S=$.exec(be);if(S){if(y[F]=S[0],s.push(...this.#s(D,t,b.#r,y)),Object.keys(D.#e).length){D.#r=y;const xe=S[0].match(/\//)?.length??0;(i[xe]||=[]).push(D)}continue}}($===!0||$.test(p))&&(y[F]=p,u?(s.push(...this.#s(D,t,y,b.#r)),D.#e["*"]&&s.push(...this.#s(D.#e["*"],t,y,b.#r))):(D.#r=y,m.push(D)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Xe=class{name="TrieRouter";#t;constructor(){this.#t=new Qe}add(e,t,a){const s=V(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},oe=class extends Ae{constructor(e={}){super(e),this.router=e.router??new Ge({routers:[new Ve,new Xe]})}},Ke=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const Ze=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,tt=`<!DOCTYPE html>
+`,et=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ie=`<!DOCTYPE html>
+`,ne=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -1652,7 +1652,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,at=`<!DOCTYPE html>
+`,tt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -1888,7 +1888,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,st=`<!DOCTYPE html>
+`,at=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2224,7 +2224,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,rt=`<!DOCTYPE html>
+`,st=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2523,7 +2523,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,lt=`<!DOCTYPE html>
+`,rt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3012,7 +3012,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,de=`<!DOCTYPE html>
+`,ie=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -6903,7 +6903,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <div id="sidebar-overlay"></div>
 </body>
 </html>
-`,ot=`<!DOCTYPE html>
+`,lt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7115,7 +7115,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,nt=`<!DOCTYPE html>
+`,ot=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7183,7 +7183,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,it=`<!DOCTYPE html>
+`,nt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7420,7 +7420,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,dt=`<!DOCTYPE html>
+`,it=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7704,7 +7704,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ce=()=>`
+`,de=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -7763,7 +7763,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,ct=`<!DOCTYPE html>
+`,dt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7814,7 +7814,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${ce()}
+        ${de()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -7954,7 +7954,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,pt=`<!DOCTYPE html>
+</html>`,ct=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8006,7 +8006,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${ce()}
+        ${de()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -8220,7 +8220,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ut=`<!DOCTYPE html>
+</html>`,pt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8348,7 +8348,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,mt=()=>`
+</html>`,ut=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -8395,7 +8395,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,gt=`<!DOCTYPE html>
+`,mt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8446,7 +8446,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${mt()}
+        ${ut()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -8891,7 +8891,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,ft=`<!DOCTYPE html>
+</html>`,gt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9256,7 +9256,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,pe=()=>`
+`,ce=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -9287,7 +9287,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function bt(e,t,a){return`
+`;function ft(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -9297,7 +9297,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${pe()}
+        ${ce()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -9445,7 +9445,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <\/script>
     </body>
     </html>
-  `}function xt(e,t,a,s){return`
+  `}function bt(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -9455,7 +9455,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${pe()}
+        ${ce()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -9598,7 +9598,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <\/script>
     </body>
     </html>
-  `}function ht(e,t,a,s){const{transitions:r=[],actions:o=[],tasks:l=[]}=s,i=(n,c)=>{const p=new Date(n),m=new Date(c).getTime()-p.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
+  `}function xt(e,t,a,s){const{transitions:r=[],actions:o=[],tasks:l=[]}=s,i=(n,c)=>{const p=new Date(n),m=new Date(c).getTime()-p.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10098,7 +10098,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   
 </body>
 </html>
-  `}const yt=`
+  `}const ht=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10408,7 +10408,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,vt=`
+`,yt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10822,7 +10822,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,wt=`
+`,vt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11266,7 +11266,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,_t=`
+`,wt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11492,7 +11492,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,Et=`
+`,_t=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11732,7 +11732,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,H=`<!DOCTYPE html>
+`,Et=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12202,7 +12202,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ue=`
+`,pe=`
 <style>
     .stat-card {
         transition: all 0.3s ease;
@@ -12261,7 +12261,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         overflow-y: auto;
     }
 </style>
-`;function me(e,t,a){return`
+`;function ue(e,t,a){return`
     <nav class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -12290,7 +12290,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             </div>
         </div>
     </nav>
-    `}function ge(e){return`
+    `}function me(e){return`
     <div id="sidebar" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
         <div class="p-6">
             <button onclick="toggleSidebar()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
@@ -12330,7 +12330,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </div>
     <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleSidebar()"></div>
-    `}const fe=`
+    `}const ge=`
 <script>
     const token = localStorage.getItem('authToken') || getCookie('authToken');
     if (!token) {
@@ -12389,11 +12389,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${pe}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
-    ${ge("employees")}
+    ${ue("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
+    ${me("employees")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics Cards -->
@@ -12609,7 +12609,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </div>
 
-    ${fe}
+    ${ge}
     <script>
         async function loadEmployees() {
             try {
@@ -12749,11 +12749,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${pe}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
-    ${ge("attendance")}
+    ${ue("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
+    ${me("attendance")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics -->
@@ -12941,7 +12941,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </div>
 
-    ${fe}
+    ${ge}
     <script>
         // Set today's date as default
         document.getElementById('dateFilter').valueAsDate = new Date();
@@ -13071,7 +13071,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,St=`
+`,It=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -13457,7 +13457,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   <\/script>
 </body>
 </html>
-`,It=`
+`,St=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -13941,7 +13941,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   <\/script>
 </body>
 </html>
-`,$t=`
+`,Rt=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14442,7 +14442,872 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   <\/script>
 </body>
 </html>
-`,d=new ne,S=()=>`
+`,$t=`
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المستندات - نظام الموارد البشرية</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+</head>
+<body class="bg-gray-100">
+  <div class="min-h-screen">
+    <!-- رأس الصفحة -->
+    <div class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <div>
+            <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
+              <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
+            </a>
+            <h1 class="text-3xl font-bold text-gray-800">
+              <i class="fas fa-file-alt ml-2"></i>
+              إدارة المستندات
+            </h1>
+            <p class="text-gray-600 mt-1">تتبع مستندات الموظفين وتنبيهات انتهاء الصلاحيات</p>
+          </div>
+          <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة مستند
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- تنبيهات انتهاء الصلاحيات -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div id="expiryAlerts" class="space-y-3">
+        <!-- سيتم ملؤها ديناميكياً -->
+      </div>
+    </div>
+
+    <!-- الإحصائيات -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي المستندات</p>
+              <p class="text-2xl font-bold text-gray-800" id="totalDocuments">0</p>
+            </div>
+            <i class="fas fa-file-alt text-blue-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">منتهية الصلاحية</p>
+              <p class="text-2xl font-bold text-red-600" id="expiredDocuments">0</p>
+            </div>
+            <i class="fas fa-exclamation-circle text-red-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">تنتهي خلال 30 يوم</p>
+              <p class="text-2xl font-bold text-yellow-600" id="expiringDocuments">0</p>
+            </div>
+            <i class="fas fa-clock text-yellow-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">سارية</p>
+              <p class="text-2xl font-bold text-green-600" id="validDocuments">0</p>
+            </div>
+            <i class="fas fa-check-circle text-green-500 text-3xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- جدول المستندات -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+          <h2 class="text-xl font-bold text-gray-800">قائمة المستندات</h2>
+          
+          <!-- الفلاتر -->
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="text" id="searchInput" placeholder="بحث بالموظف أو المستند..." class="border rounded-lg px-4 py-2">
+            
+            <select id="typeFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
+              <option value="">جميع الأنواع</option>
+              <option value="passport">جواز السفر</option>
+              <option value="id_card">بطاقة الهوية</option>
+              <option value="license">رخصة القيادة</option>
+              <option value="contract">عقد العمل</option>
+              <option value="insurance">التأمين</option>
+              <option value="other">أخرى</option>
+            </select>
+            
+            <select id="statusFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
+              <option value="">جميع الحالات</option>
+              <option value="valid">سارية</option>
+              <option value="expiring">تنتهي قريباً</option>
+              <option value="expired">منتهية</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">م</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع المستند</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">رقم المستند</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الإصدار</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الانتهاء</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الأيام المتبقية</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="documentsTableBody" class="bg-white divide-y divide-gray-200">
+              <!-- سيتم ملؤها ديناميكياً -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal إضافة مستند -->
+  <div id="addDocumentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6">إضافة مستند جديد</h2>
+      
+      <form id="addDocumentForm" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">الموظف *</label>
+            <select id="employee_id" required class="w-full border rounded-lg px-4 py-2">
+              <option value="">اختر الموظف</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">نوع المستند *</label>
+            <select id="document_type" required class="w-full border rounded-lg px-4 py-2">
+              <option value="">اختر النوع</option>
+              <option value="passport">جواز السفر</option>
+              <option value="id_card">بطاقة الهوية</option>
+              <option value="license">رخصة القيادة</option>
+              <option value="contract">عقد العمل</option>
+              <option value="insurance">التأمين</option>
+              <option value="other">أخرى</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">رقم المستند *</label>
+            <input type="text" id="document_number" required class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">جهة الإصدار</label>
+            <input type="text" id="issuing_authority" class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">تاريخ الإصدار *</label>
+            <input type="date" id="issue_date" required class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">تاريخ الانتهاء *</label>
+            <input type="date" id="expiry_date" required class="w-full border rounded-lg px-4 py-2">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-gray-700 font-bold mb-2">ملاحظات</label>
+          <textarea id="notes" rows="3" class="w-full border rounded-lg px-4 py-2"></textarea>
+        </div>
+        
+        <div class="flex gap-3 mt-6">
+          <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold">
+            <i class="fas fa-save ml-2"></i>
+            حفظ
+          </button>
+          <button type="button" onclick="closeAddDocumentModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold">
+            <i class="fas fa-times ml-2"></i>
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // تحميل قائمة المستندات
+    async function loadDocuments() {
+      try {
+        const searchTerm = document.getElementById('searchInput').value;
+        const typeFilter = document.getElementById('typeFilter').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+        
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        if (typeFilter) params.append('type', typeFilter);
+        if (statusFilter) params.append('status', statusFilter);
+        
+        const response = await axios.get('/api/hr/documents?' + params.toString());
+        const documents = response.data.data || [];
+        
+        const tbody = document.getElementById('documentsTableBody');
+        
+        if (documents.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد مستندات</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = documents.map((doc, index) => {
+          const daysRemaining = calculateDaysRemaining(doc.expiry_date);
+          const statusBadge = getDocumentStatusBadge(daysRemaining);
+          const documentTypeName = getDocumentTypeName(doc.document_type);
+          
+          const daysClass = daysRemaining < 0 ? 'text-red-600' : daysRemaining < 30 ? 'text-yellow-600' : 'text-green-600';
+          const daysText = daysRemaining < 0 ? 'منتهي' : daysRemaining === 0 ? 'اليوم' : daysRemaining + ' يوم';
+          
+          return \`
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm text-gray-900">\${index + 1}</td>
+              <td class="px-6 py-4">
+                <div class="text-sm font-medium text-gray-900">\${doc.employee_name || 'غير محدد'}</div>
+                <div class="text-sm text-gray-500">\${doc.employee_number || '-'}</div>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-900">\${documentTypeName}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">\${doc.document_number || '-'}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">\${doc.issue_date || '-'}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">\${doc.expiry_date || '-'}</td>
+              <td class="px-6 py-4 text-sm \${daysClass}">
+                \${daysText}
+              </td>
+              <td class="px-6 py-4">\${statusBadge}</td>
+              <td class="px-6 py-4 text-sm">
+                <button onclick="deleteDocument(\${doc.id})" class="text-red-600 hover:text-red-800" title="حذف">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          \`;
+        }).join('');
+        
+        updateStats(documents);
+        updateExpiryAlerts(documents);
+        
+      } catch (error) {
+        console.error('Error loading documents:', error);
+        alert('حدث خطأ في تحميل المستندات');
+      }
+    }
+    
+    // حساب الأيام المتبقية
+    function calculateDaysRemaining(expiryDate) {
+      if (!expiryDate) return 999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiry = new Date(expiryDate);
+      expiry.setHours(0, 0, 0, 0);
+      const diffTime = expiry - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    }
+    
+    // الحصول على badge الحالة
+    function getDocumentStatusBadge(daysRemaining) {
+      if (daysRemaining < 0) {
+        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">منتهية</span>';
+      } else if (daysRemaining <= 30) {
+        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">تنتهي قريباً</span>';
+      } else {
+        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">سارية</span>';
+      }
+    }
+    
+    // الحصول على اسم نوع المستند
+    function getDocumentTypeName(type) {
+      const types = {
+        'passport': 'جواز السفر',
+        'id_card': 'بطاقة الهوية',
+        'license': 'رخصة القيادة',
+        'contract': 'عقد العمل',
+        'insurance': 'التأمين',
+        'other': 'أخرى'
+      };
+      return types[type] || type;
+    }
+    
+    // تحديث الإحصائيات
+    function updateStats(documents) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const stats = {
+        total: documents.length,
+        expired: 0,
+        expiring: 0,
+        valid: 0
+      };
+      
+      documents.forEach(doc => {
+        const daysRemaining = calculateDaysRemaining(doc.expiry_date);
+        if (daysRemaining < 0) {
+          stats.expired++;
+        } else if (daysRemaining <= 30) {
+          stats.expiring++;
+        } else {
+          stats.valid++;
+        }
+      });
+      
+      document.getElementById('totalDocuments').textContent = stats.total;
+      document.getElementById('expiredDocuments').textContent = stats.expired;
+      document.getElementById('expiringDocuments').textContent = stats.expiring;
+      document.getElementById('validDocuments').textContent = stats.valid;
+    }
+    
+    // تحديث تنبيهات انتهاء الصلاحيات
+    function updateExpiryAlerts(documents) {
+      const alertsContainer = document.getElementById('expiryAlerts');
+      const expiredDocs = documents.filter(doc => calculateDaysRemaining(doc.expiry_date) < 0);
+      const expiringDocs = documents.filter(doc => {
+        const days = calculateDaysRemaining(doc.expiry_date);
+        return days >= 0 && days <= 30;
+      });
+      
+      let alertsHTML = '';
+      
+      if (expiredDocs.length > 0) {
+        const expiredList = expiredDocs.slice(0, 5).map(doc => 
+          \`<li class="text-red-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (\${doc.document_number})</li>\`
+        ).join('');
+        const moreExpired = expiredDocs.length > 5 ? \`<li class="text-red-600">• و \${expiredDocs.length - 5} مستندات أخرى...</li>\` : '';
+        
+        alertsHTML += \`
+          <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
+            <div class="flex items-center">
+              <i class="fas fa-exclamation-circle text-red-500 text-2xl ml-3"></i>
+              <div class="flex-1">
+                <h3 class="text-lg font-bold text-red-800">مستندات منتهية الصلاحية (\${expiredDocs.length})</h3>
+                <p class="text-red-700 mt-1">يرجى تجديد المستندات التالية:</p>
+                <ul class="mt-2 space-y-1">
+                  \${expiredList}
+                  \${moreExpired}
+                </ul>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      if (expiringDocs.length > 0) {
+        const expiringList = expiringDocs.slice(0, 5).map(doc => {
+          const days = calculateDaysRemaining(doc.expiry_date);
+          return \`<li class="text-yellow-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (بعد \${days} يوم)</li>\`;
+        }).join('');
+        const moreExpiring = expiringDocs.length > 5 ? \`<li class="text-yellow-600">• و \${expiringDocs.length - 5} مستندات أخرى...</li>\` : '';
+        
+        alertsHTML += \`
+          <div class="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg p-4">
+            <div class="flex items-center">
+              <i class="fas fa-clock text-yellow-500 text-2xl ml-3"></i>
+              <div class="flex-1">
+                <h3 class="text-lg font-bold text-yellow-800">مستندات تنتهي خلال 30 يوم (\${expiringDocs.length})</h3>
+                <p class="text-yellow-700 mt-1">يرجى التجهيز لتجديد المستندات التالية:</p>
+                <ul class="mt-2 space-y-1">
+                  \${expiringList}
+                  \${moreExpiring}
+                </ul>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      if (alertsHTML === '') {
+        alertsHTML = \`
+          <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4">
+            <div class="flex items-center">
+              <i class="fas fa-check-circle text-green-500 text-2xl ml-3"></i>
+              <div>
+                <h3 class="text-lg font-bold text-green-800">جميع المستندات سارية</h3>
+                <p class="text-green-700 mt-1">لا توجد مستندات منتهية أو تحتاج لتجديد قريب</p>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      alertsContainer.innerHTML = alertsHTML;
+    }
+    
+    // فتح modal إضافة مستند
+    async function openAddDocumentModal() {
+      // تحميل قائمة الموظفين
+      try {
+        const response = await axios.get('/api/hr/employees');
+        const employees = response.data.data || [];
+        
+        const select = document.getElementById('employee_id');
+        const employeeOptions = employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name} (\${emp.employee_number})</option>\`).join('');
+        select.innerHTML = '<option value="">اختر الموظف</option>' + employeeOptions;
+        
+      } catch (error) {
+        console.error('Error loading employees:', error);
+      }
+      
+      document.getElementById('addDocumentModal').classList.remove('hidden');
+      document.getElementById('addDocumentModal').classList.add('flex');
+    }
+    
+    // إغلاق modal
+    function closeAddDocumentModal() {
+      document.getElementById('addDocumentModal').classList.add('hidden');
+      document.getElementById('addDocumentModal').classList.remove('flex');
+      document.getElementById('addDocumentForm').reset();
+    }
+    
+    // إضافة مستند
+    document.getElementById('addDocumentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = {
+        employee_id: parseInt(document.getElementById('employee_id').value),
+        document_type: document.getElementById('document_type').value,
+        document_number: document.getElementById('document_number').value,
+        issuing_authority: document.getElementById('issuing_authority').value,
+        issue_date: document.getElementById('issue_date').value,
+        expiry_date: document.getElementById('expiry_date').value,
+        notes: document.getElementById('notes').value
+      };
+      
+      try {
+        await axios.post('/api/hr/documents', formData);
+        alert('تم إضافة المستند بنجاح');
+        closeAddDocumentModal();
+        loadDocuments();
+      } catch (error) {
+        console.error('Error adding document:', error);
+        alert('حدث خطأ في إضافة المستند');
+      }
+    });
+    
+    // حذف مستند
+    async function deleteDocument(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا المستند؟')) return;
+      
+      try {
+        await axios.delete(\`/api/hr/documents/\${id}\`);
+        alert('تم الحذف بنجاح');
+        loadDocuments();
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('حدث خطأ في الحذف');
+      }
+    }
+    
+    // البحث التلقائي
+    document.getElementById('searchInput').addEventListener('input', () => {
+      setTimeout(loadDocuments, 300);
+    });
+    
+    // تحميل البيانات عند فتح الصفحة
+    window.addEventListener('load', loadDocuments);
+  <\/script>
+</body>
+</html>
+`,Bt=`
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التقارير والإحصاءات - نظام الموارد البشرية</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+</head>
+<body class="bg-gray-100">
+  <div class="min-h-screen">
+    <!-- رأس الصفحة -->
+    <div class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center py-4">
+          <div>
+            <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
+              <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
+            </a>
+            <h1 class="text-3xl font-bold text-gray-800">
+              <i class="fas fa-chart-bar ml-2"></i>
+              التقارير والإحصاءات
+            </h1>
+            <p class="text-gray-600 mt-1">تقارير شاملة ومفصلة عن الموارد البشرية</p>
+          </div>
+          <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+            <i class="fas fa-file-export ml-2"></i>
+            تصدير التقرير
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- الفلاتر -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">خيارات التقرير</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">نوع التقرير</label>
+            <select id="reportType" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
+              <option value="overview">نظرة عامة</option>
+              <option value="attendance">الحضور والغياب</option>
+              <option value="leaves">الإجازات</option>
+              <option value="salaries">الرواتب</option>
+              <option value="performance">الأداء</option>
+              <option value="turnover">معدل دوران الموظفين</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">من تاريخ</label>
+            <input type="date" id="startDate" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
+          </div>
+          
+          <div>
+            <label class="block text-gray-700 font-bold mb-2">إلى تاريخ</label>
+            <input type="date" id="endDate" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الإحصائيات الرئيسية -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي الموظفين</p>
+              <p class="text-2xl font-bold text-gray-800" id="totalEmployees">0</p>
+            </div>
+            <i class="fas fa-users text-blue-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">نسبة الحضور</p>
+              <p class="text-2xl font-bold text-green-600" id="attendanceRate">0%</p>
+            </div>
+            <i class="fas fa-chart-line text-green-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي الرواتب</p>
+              <p class="text-2xl font-bold text-purple-600" id="totalSalaries">0</p>
+            </div>
+            <i class="fas fa-money-bill-wave text-purple-500 text-3xl"></i>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">متوسط التقييم</p>
+              <p class="text-2xl font-bold text-yellow-600" id="avgPerformance">0</p>
+            </div>
+            <i class="fas fa-star text-yellow-500 text-3xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- الرسوم البيانية -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- رسم بياني الحضور -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">معدل الحضور الشهري</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="attendanceChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- رسم بياني الإجازات -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع أنواع الإجازات</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="leavesChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- رسم بياني الرواتب -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع الرواتب حسب القسم</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="salariesChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- رسم بياني الأداء -->
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع تقييمات الأداء</h3>
+          <div style="position: relative; height: 300px;">
+            <canvas id="performanceChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- جداول تفصيلية -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
+      <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+          <h2 class="text-xl font-bold text-gray-800">البيانات التفصيلية</h2>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <div id="reportDetails" class="p-6">
+            <!-- سيتم ملؤها ديناميكياً -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let charts = {};
+    
+    // تحميل التقرير
+    async function loadReport() {
+      try {
+        const reportType = document.getElementById('reportType').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const response = await axios.get(\`/api/hr/reports/\${reportType}?\` + params.toString());
+        const data = response.data.data || {};
+        
+        // تحديث الإحصائيات
+        updateMainStats(data);
+        
+        // تحديث الرسوم البيانية
+        updateCharts(data);
+        
+        // تحديث التفاصيل
+        updateReportDetails(reportType, data);
+        
+      } catch (error) {
+        console.error('Error loading report:', error);
+        alert('حدث خطأ في تحميل التقرير');
+      }
+    }
+    
+    // تحديث الإحصائيات الرئيسية
+    function updateMainStats(data) {
+      document.getElementById('totalEmployees').textContent = data.totalEmployees || 0;
+      document.getElementById('attendanceRate').textContent = (data.attendanceRate || 0) + '%';
+      document.getElementById('totalSalaries').textContent = (data.totalSalaries || 0).toLocaleString() + ' ر.س';
+      document.getElementById('avgPerformance').textContent = (data.avgPerformance || 0).toFixed(1);
+    }
+    
+    // تحديث الرسوم البيانية
+    function updateCharts(data) {
+      // رسم بياني الحضور
+      if (charts.attendance) charts.attendance.destroy();
+      const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
+      charts.attendance = new Chart(attendanceCtx, {
+        type: 'line',
+        data: {
+          labels: data.attendanceLabels || [],
+          datasets: [{
+            label: 'نسبة الحضور',
+            data: data.attendanceData || [],
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100
+            }
+          }
+        }
+      });
+      
+      // رسم بياني الإجازات
+      if (charts.leaves) charts.leaves.destroy();
+      const leavesCtx = document.getElementById('leavesChart').getContext('2d');
+      charts.leaves = new Chart(leavesCtx, {
+        type: 'doughnut',
+        data: {
+          labels: data.leavesLabels || [],
+          datasets: [{
+            data: data.leavesData || [],
+            backgroundColor: [
+              'rgb(59, 130, 246)',
+              'rgb(234, 179, 8)',
+              'rgb(239, 68, 68)',
+              'rgb(168, 85, 247)',
+              'rgb(34, 197, 94)'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+      
+      // رسم بياني الرواتب
+      if (charts.salaries) charts.salaries.destroy();
+      const salariesCtx = document.getElementById('salariesChart').getContext('2d');
+      charts.salaries = new Chart(salariesCtx, {
+        type: 'bar',
+        data: {
+          labels: data.salariesLabels || [],
+          datasets: [{
+            label: 'إجمالي الرواتب (ر.س)',
+            data: data.salariesData || [],
+            backgroundColor: 'rgba(168, 85, 247, 0.5)',
+            borderColor: 'rgb(168, 85, 247)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+      
+      // رسم بياني الأداء
+      if (charts.performance) charts.performance.destroy();
+      const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+      charts.performance = new Chart(performanceCtx, {
+        type: 'pie',
+        data: {
+          labels: data.performanceLabels || [],
+          datasets: [{
+            data: data.performanceData || [],
+            backgroundColor: [
+              'rgb(34, 197, 94)',
+              'rgb(234, 179, 8)',
+              'rgb(239, 68, 68)'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+    
+    // تحديث التفاصيل
+    function updateReportDetails(reportType, data) {
+      const detailsContainer = document.getElementById('reportDetails');
+      
+      let detailsHTML = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
+      
+      switch(reportType) {
+        case 'overview':
+          detailsHTML += \`
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">القسم</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">عدد الموظفين</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نسبة الحضور</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجمالي الرواتب</th>
+          \`;
+          break;
+        case 'attendance':
+          detailsHTML += \`
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحاضرون</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الغائبون</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المتأخرون</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">النسبة</th>
+          \`;
+          break;
+      }
+      
+      detailsHTML += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+      
+      if (data.details && data.details.length > 0) {
+        detailsHTML += data.details.map(row => {
+          let rowHTML = '<tr>';
+          Object.values(row).forEach(value => {
+            rowHTML += '<td class="px-6 py-4 text-sm text-gray-900">' + value + '</td>';
+          });
+          rowHTML += '</tr>';
+          return rowHTML;
+        }).join('');
+      } else {
+        detailsHTML += '<tr><td colspan="10" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
+      }
+      
+      detailsHTML += '</tbody></table></div>';
+      
+      detailsContainer.innerHTML = detailsHTML;
+    }
+    
+    // تصدير التقرير
+    function exportReport() {
+      alert('سيتم تصدير التقرير قريباً');
+    }
+    
+    // تعيين التواريخ الافتراضية
+    function setDefaultDates() {
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      
+      document.getElementById('startDate').valueAsDate = firstDayOfMonth;
+      document.getElementById('endDate').valueAsDate = today;
+    }
+    
+    // تحميل البيانات عند فتح الصفحة
+    window.addEventListener('load', () => {
+      setDefaultDates();
+      loadReport();
+    });
+  <\/script>
+</body>
+</html>
+`,d=new oe,I=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -14643,7 +15508,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       min-width: 60px !important;
     }
   }
-`;d.use("*",Ze());async function Rt(e){const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
+`;d.use("*",Ke());async function Lt(e){const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -14655,7 +15520,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
     `).bind().first()),o}async function x(e){try{let t=e.req.header("Authorization")?.replace("Bearer ","");if(!t){const i=e.req.header("Cookie");if(i){const c=i.split(";").map(p=>p.trim()).find(p=>p.startsWith("authToken="));c&&(t=c.split("=")[1],console.log("✅ Token found in cookie"))}}if(!t){console.log("❌ No token found in header or cookie");const i=e.req.query("tenant_id");return{userId:null,tenantId:i?parseInt(i):null,roleId:null}}console.log("🔍 Token:",t.substring(0,20)+"...");const s=atob(t).split(":"),r=parseInt(s[0]),o=s[1]!=="null"&&s[1]!=="undefined"?parseInt(s[1]):null,l=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
-    `).bind(r).first();if(!l)return{userId:null,tenantId:null,roleId:null};if(l.role_id===1){const i=e.req.query("tenant_id");return{userId:l.id,tenantId:i?parseInt(i):null,roleId:1}}return{userId:l.id,tenantId:o||l.tenant_id,roleId:l.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}d.use("/c/:tenant/*",async(e,t)=>{const a=await Rt(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(r).first();if(!l)return{userId:null,tenantId:null,roleId:null};if(l.role_id===1){const i=e.req.query("tenant_id");return{userId:l.id,tenantId:i?parseInt(i):null,roleId:1}}return{userId:l.id,tenantId:o||l.tenant_id,roleId:l.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}d.use("/c/:tenant/*",async(e,t)=>{const a=await Lt(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
@@ -15289,9 +16154,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/",e=>e.html(et));d.get("/calculator",e=>e.html(ie));d.get("/calculator-old",e=>e.html(tt));d.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/",e=>e.html(Ze));d.get("/calculator",e=>e.html(ne));d.get("/calculator-old",e=>e.html(et));d.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(ie.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+  `).bind(t).first();return a?e.html(ne.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
         // Tenant information for company-specific calculator
         window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
     `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
@@ -15316,7 +16181,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)});d.get("/login",e=>e.html(at));d.get("/forgot-password",e=>e.html(st));d.get("/packages",e=>e.html(rt));d.get("/subscribe",e=>e.html(lt));d.get("/admin",e=>e.html(`
+    `)});d.get("/login",e=>e.html(tt));d.get("/forgot-password",e=>e.html(at));d.get("/packages",e=>e.html(st));d.get("/subscribe",e=>e.html(rt));d.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -15501,7 +16366,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
       </body>
       </html>
-    `):e.html(de)});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
+    `):e.html(ie)});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -15552,7 +16417,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${S()}
+          ${I()}
           
           /* Scroll Buttons for Tables */
           .scroll-btn {
@@ -16630,9 +17495,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/tenants",e=>e.html(ot));d.get("/admin/tenant-calculators",e=>e.html(nt));d.get("/admin/saas-settings",e=>e.html(it));d.get("/admin/reports",e=>e.html(dt));d.get("/admin/reports/customers",e=>e.html(ct));d.get("/admin/reports/requests",e=>e.html(pt));d.get("/admin/reports/financial",e=>e.html(ut));d.get("/admin/reports/banks",e=>e.html(yt));d.get("/admin/reports/performance",e=>e.html(vt));d.get("/admin/reports/clicks",e=>e.html(wt));d.get("/admin/reports/workflow",e=>e.html(_t));d.get("/admin/reports/employee-performance",e=>e.html(Et));d.get("/admin/payments",e=>e.html(gt));d.get("/admin/banks",e=>e.html(ft));d.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/tenants",e=>e.html(lt));d.get("/admin/tenant-calculators",e=>e.html(ot));d.get("/admin/saas-settings",e=>e.html(nt));d.get("/admin/reports",e=>e.html(it));d.get("/admin/reports/customers",e=>e.html(dt));d.get("/admin/reports/requests",e=>e.html(ct));d.get("/admin/reports/financial",e=>e.html(pt));d.get("/admin/reports/banks",e=>e.html(ht));d.get("/admin/reports/performance",e=>e.html(yt));d.get("/admin/reports/clicks",e=>e.html(vt));d.get("/admin/reports/workflow",e=>e.html(wt));d.get("/admin/reports/employee-performance",e=>e.html(_t));d.get("/admin/payments",e=>e.html(mt));d.get("/admin/banks",e=>e.html(gt));d.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(de.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(ie.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -16746,7 +17611,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             .print-full-width { width: 100%; }
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -17310,7 +18175,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
         
-        ${S()}
+        ${I()}
       </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
@@ -17898,7 +18763,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -18036,13 +18901,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});d.get("/admin/rates/add",async e=>{const t=e.req.query("tenant_id");if(!t)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const a=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name").bind(t).all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(bt(t,a.results,s.results))});d.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});d.get("/admin/rates/add",async e=>{const t=e.req.query("tenant_id");if(!t)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const a=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name").bind(t).all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ft(t,a.results,s.results))});d.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name").bind(a).all(),o=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(xt(a,s,r.results,o.results))});d.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name").bind(a).all(),o=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(bt(a,s,r.results,o.results))});d.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -18121,7 +18986,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -18824,7 +19689,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             50% { opacity: .5; }
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -19584,7 +20449,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -20585,7 +21450,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             page-break-inside: avoid;
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -20898,7 +21763,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             page-break-inside: avoid;
           }
           
-          ${S()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -21157,7 +22022,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN users u ON c.assigned_to = u.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s={pending:{name:"جديد",color:"#3B82F6",icon:"fa-file-alt",order:1},under_review:{name:"قيد المراجعة",color:"#F59E0B",icon:"fa-search",order:2},approved:{name:"مقبول",color:"#10B981",icon:"fa-check-circle",order:3},rejected:{name:"مرفوض",color:"#EF4444",icon:"fa-times-circle",order:3},processing:{name:"قيد المعالجة",color:"#06B6D4",icon:"fa-cog",order:4},completed:{name:"مكتمل",color:"#8B5CF6",icon:"fa-check-double",order:5},cancelled:{name:"ملغي",color:"#6B7280",icon:"fa-ban",order:5}},r=[{id:1,stage_name_ar:"جديد",stage_color:"#3B82F6",stage_icon:"fa-file-alt",stage_order:1,is_active:1},{id:2,stage_name_ar:"قيد المراجعة",stage_color:"#F59E0B",stage_icon:"fa-search",stage_order:2,is_active:1},{id:3,stage_name_ar:"مقبول",stage_color:"#10B981",stage_icon:"fa-check-circle",stage_order:3,is_active:1},{id:4,stage_name_ar:"قيد المعالجة",stage_color:"#06B6D4",stage_icon:"fa-cog",stage_order:4,is_active:1},{id:5,stage_name_ar:"مكتمل",stage_color:"#8B5CF6",stage_icon:"fa-check-double",stage_order:5,is_active:1}],o=s[a.status]||s.pending;a.stage_name_ar=o.name,a.stage_color=o.color,a.stage_icon=o.icon;const i={data:{transitions:[{id:1,from_stage_name:null,to_stage_name:o.name,changed_by_name:a.employee_name||"النظام",created_at:a.created_at,notes:"تم إنشاء الطلب"}],actions:[],tasks:[]}},n=ht(parseInt(t),a,r,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s={pending:{name:"جديد",color:"#3B82F6",icon:"fa-file-alt",order:1},under_review:{name:"قيد المراجعة",color:"#F59E0B",icon:"fa-search",order:2},approved:{name:"مقبول",color:"#10B981",icon:"fa-check-circle",order:3},rejected:{name:"مرفوض",color:"#EF4444",icon:"fa-times-circle",order:3},processing:{name:"قيد المعالجة",color:"#06B6D4",icon:"fa-cog",order:4},completed:{name:"مكتمل",color:"#8B5CF6",icon:"fa-check-double",order:5},cancelled:{name:"ملغي",color:"#6B7280",icon:"fa-ban",order:5}},r=[{id:1,stage_name_ar:"جديد",stage_color:"#3B82F6",stage_icon:"fa-file-alt",stage_order:1,is_active:1},{id:2,stage_name_ar:"قيد المراجعة",stage_color:"#F59E0B",stage_icon:"fa-search",stage_order:2,is_active:1},{id:3,stage_name_ar:"مقبول",stage_color:"#10B981",stage_icon:"fa-check-circle",stage_order:3,is_active:1},{id:4,stage_name_ar:"قيد المعالجة",stage_color:"#06B6D4",stage_icon:"fa-cog",stage_order:4,is_active:1},{id:5,stage_name_ar:"مكتمل",stage_color:"#8B5CF6",stage_icon:"fa-check-double",stage_order:5,is_active:1}],o=s[a.status]||s.pending;a.stage_name_ar=o.name,a.stage_color=o.color,a.stage_icon=o.icon;const i={data:{transitions:[{id:1,from_stage_name:null,to_stage_name:o.name,changed_by_name:a.employee_name||"النظام",created_at:a.created_at,notes:"تم إنشاء الطلب"}],actions:[],tasks:[]}},n=xt(parseInt(t),a,r,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
     `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});d.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
@@ -23916,7 +24781,47 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       WHERE id = ?
     `).bind(a.new_position,a.new_salary,a.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_promotions SET status = 'rejected' WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(H));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(Dt));d.get("/admin/hr/leaves",e=>e.html(St));d.get("/admin/hr/salaries",e=>e.html(It));d.get("/admin/hr/departments",e=>e.html(Tt));d.get("/admin/hr/performance",e=>e.html($t));d.get("/admin/hr/promotions",e=>e.html(Ct));d.get("/admin/hr/documents",e=>e.html(H));d.get("/admin/hr/reports",e=>e.html(H));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.query("search")||"",r=e.req.query("type")||"",o=e.req.query("status")||"";let l=`
+      SELECT d.*, e.full_name as employee_name, e.employee_number
+      FROM hr_documents d
+      LEFT JOIN hr_employees e ON d.employee_id = e.id
+      WHERE d.tenant_id = ?
+    `;const i=[a];s&&(l+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),r&&(l+=" AND d.document_type = ?",i.push(r)),l+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const n=await e.env.DB.prepare(l).bind(...i).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=await e.req.json(),{employee_id:r,document_type:o,document_number:l,issue_date:i,expiry_date:n,notes:c}=s,p=await e.env.DB.prepare(`
+      INSERT INTO hr_documents (tenant_id, employee_id, document_type, document_number, issue_date, expiry_date, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(a,r,o,l||null,i||null,n||null,c||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.param("type"),r=e.req.query("start_date")||"",o=e.req.query("end_date")||"";let l={};const i=await e.env.DB.prepare(`
+      SELECT COUNT(*) as total, 
+             COUNT(CASE WHEN status = 'active' THEN 1 END) as active
+      FROM hr_employees 
+      WHERE tenant_id = ?
+    `).bind(a).first();if(l.totalEmployees=i?.total||0,s==="overview"||s==="attendance"){const u=await e.env.DB.prepare(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN status = 'present' THEN 1 END) as present
+        FROM hr_attendance
+        WHERE tenant_id = ?
+        ${r?"AND attendance_date >= ?":""}
+        ${o?"AND attendance_date <= ?":""}
+      `).bind(a,...r?[r]:[],...o?[o]:[]).first(),m=u?.total||0,f=u?.present||0;l.attendanceRate=m>0?Math.round(f/m*100):0,l.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],l.attendanceData=[95,92,88,94,90,85]}const n=await e.env.DB.prepare(`
+      SELECT SUM(net_salary) as total
+      FROM hr_salaries
+      WHERE tenant_id = ?
+      ${r?"AND salary_month >= ?":""}
+      ${o?"AND salary_month <= ?":""}
+    `).bind(a,...r?[r]:[],...o?[o]:[]).first();l.totalSalaries=n?.total||0;const c=await e.env.DB.prepare(`
+      SELECT AVG(overall_rating) as avg
+      FROM hr_performance_reviews
+      WHERE tenant_id = ?
+    `).bind(a).first();l.avgPerformance=c?.avg||0,(s==="overview"||s==="leaves")&&(l.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],l.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
+      SELECT d.department_name as department, SUM(s.net_salary) as total
+      FROM hr_salaries s
+      LEFT JOIN hr_employees e ON s.employee_id = e.id
+      LEFT JOIN hr_departments d ON e.department = d.department_code
+      WHERE s.tenant_id = ?
+      GROUP BY d.department_name
+      ORDER BY total DESC
+      LIMIT 5
+    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(Et));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(Dt));d.get("/admin/hr/leaves",e=>e.html(It));d.get("/admin/hr/salaries",e=>e.html(St));d.get("/admin/hr/departments",e=>e.html(Tt));d.get("/admin/hr/performance",e=>e.html(Rt));d.get("/admin/hr/promotions",e=>e.html(Ct));d.get("/admin/hr/documents",e=>e.html($t));d.get("/admin/hr/reports",e=>e.html(Bt));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -23986,4 +24891,4 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(t.employee_id,t.month,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.other_allowances,t.deductions,t.net_salary,t.payment_status||"pending",t.payment_date,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة سجل الراتب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id"),{payment_status:a,payment_date:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = ?, payment_date = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const z=new ne,Bt=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(Bt))e&&(z.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),z.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{z as default};
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const Y=new oe,qt=Object.assign({"/src/index.tsx":d});let fe=!1;for(const[,e]of Object.entries(qt))e&&(Y.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Y.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),fe=!0);if(!fe)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Y as default};
