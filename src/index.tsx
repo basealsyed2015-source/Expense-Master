@@ -14693,10 +14693,10 @@ app.get('/api/hr/attendance', async (c) => {
     const query = tenantId
       ? `SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
          LEFT JOIN hr_employees e ON a.employee_id = e.id 
-         WHERE a.tenant_id = ${tenantId} ORDER BY a.date DESC, a.check_in DESC`
+         WHERE a.tenant_id = ${tenantId} ORDER BY a.attendance_date DESC, a.check_in_time DESC`
       : `SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
          LEFT JOIN hr_employees e ON a.employee_id = e.id 
-         ORDER BY a.date DESC, a.check_in DESC`
+         ORDER BY a.attendance_date DESC, a.check_in_time DESC`
     
     const { results } = await c.env.DB.prepare(query).all()
     return c.json({ success: true, data: results })
@@ -14710,19 +14710,59 @@ app.post('/api/hr/attendance', async (c) => {
   try {
     const data = await c.req.json()
     const userInfo = await getUserInfo(c)
-    const tenantId = userInfo.tenantId
+    const tenantId = userInfo.tenantId || 1
     
     const result = await c.env.DB.prepare(`
       INSERT INTO hr_attendance (
-        employee_id, date, check_in, check_out, status, late_minutes, 
-        overtime_minutes, notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        employee_id, attendance_date, check_in_time, check_out_time, status, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?)
     `).bind(
-      data.employee_id, data.date, data.check_in, data.check_out, data.status,
-      data.late_minutes || 0, data.overtime_minutes || 0, data.notes, tenantId
+      data.employee_id, 
+      data.attendance_date || data.date, 
+      data.check_in_time || data.check_in, 
+      data.check_out_time || data.check_out, 
+      data.status,
+      tenantId
     ).run()
     
     return c.json({ success: true, id: result.meta.last_row_id, message: 'تم تسجيل الحضور بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Update Attendance Record
+app.put('/api/hr/attendance/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const data = await c.req.json()
+    
+    await c.env.DB.prepare(`
+      UPDATE hr_attendance 
+      SET attendance_date = ?, check_in_time = ?, check_out_time = ?, status = ?
+      WHERE id = ?
+    `).bind(
+      data.attendance_date || data.date, 
+      data.check_in_time || data.check_in, 
+      data.check_out_time || data.check_out, 
+      data.status,
+      id
+    ).run()
+    
+    return c.json({ success: true, message: 'تم تحديث سجل الحضور بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Delete Attendance Record
+app.delete('/api/hr/attendance/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    
+    await c.env.DB.prepare('DELETE FROM hr_attendance WHERE id = ?').bind(id).run()
+    
+    return c.json({ success: true, message: 'تم حذف سجل الحضور بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }

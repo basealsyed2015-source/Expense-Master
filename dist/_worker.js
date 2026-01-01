@@ -23943,14 +23943,17 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       WHERE id = ?
     `).bind(a.full_name,a.national_id,a.gender,a.date_of_birth,a.nationality,a.marital_status,a.number_of_dependents,a.phone,a.personal_email,a.work_email,a.emergency_contact_name,a.emergency_contact_phone,a.emergency_contact_relationship,a.address,a.city,a.postal_code,a.country,a.hire_date,a.job_title,a.department,a.employment_type,a.work_schedule,a.direct_manager,a.basic_salary,a.housing_allowance,a.transportation_allowance,a.status,a.contract_start_date,a.contract_end_date,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/attendance",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
          LEFT JOIN hr_employees e ON a.employee_id = e.id 
-         WHERE a.tenant_id = ${a} ORDER BY a.date DESC, a.check_in DESC`:`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
+         WHERE a.tenant_id = ${a} ORDER BY a.attendance_date DESC, a.check_in_time DESC`:`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
          LEFT JOIN hr_employees e ON a.employee_id = e.id 
-         ORDER BY a.date DESC, a.check_in DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,r=await e.env.DB.prepare(`
+         ORDER BY a.attendance_date DESC, a.check_in_time DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
-        employee_id, date, check_in, check_out, status, late_minutes, 
-        overtime_minutes, notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.date,t.check_in,t.check_out,t.status,t.late_minutes||0,t.overtime_minutes||0,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT l.*, e.full_name, e.employee_number, lt.type_name 
+        employee_id, attendance_date, check_in_time, check_out_time, status, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(t.employee_id,t.attendance_date||t.date,t.check_in_time||t.check_in,t.check_out_time||t.check_out,t.status,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
+      UPDATE hr_attendance 
+      SET attendance_date = ?, check_in_time = ?, check_out_time = ?, status = ?
+      WHERE id = ?
+    `).bind(a.attendance_date||a.date,a.check_in_time||a.check_in,a.check_out_time||a.check_out,a.status,t).run(),e.json({success:!0,message:"تم تحديث سجل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_attendance WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف سجل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT l.*, e.full_name, e.employee_number, lt.type_name 
          FROM hr_leaves l 
          LEFT JOIN hr_employees e ON l.employee_id = e.id 
          LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
