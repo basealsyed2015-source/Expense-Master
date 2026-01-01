@@ -14044,9 +14044,6 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SELECT 
         fr.id,
         fr.created_at,
-        fr.approved_at,
-        fr.rejected_at,
-        fr.reviewed_at,
         fr.status,
         fr.requested_amount,
         c.full_name as customer_name,
@@ -14054,26 +14051,15 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         u.full_name as employee_name,
         u.username as employee_username,
         t.company_name as tenant_name,
+        fr.created_at as last_update,
+        CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER) as days_elapsed,
         CASE 
-          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
-          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN fr.rejected_at
-          WHEN fr.reviewed_at IS NOT NULL THEN fr.reviewed_at
-          ELSE NULL
-        END as last_update,
-        CASE 
-          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN 
-            CAST((julianday(fr.approved_at) - julianday(fr.created_at)) AS INTEGER)
-          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN 
-            CAST((julianday(fr.rejected_at) - julianday(fr.created_at)) AS INTEGER)
-          ELSE 
-            CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER)
-        END as days_elapsed,
-        CASE 
-          WHEN fr.status IN ('approved', 'rejected') THEN 1
+          WHEN fr.status IN ('approved', 'rejected', 'completed', 'cancelled') THEN 1
           ELSE 0
         END as is_closed
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN users u ON c.assigned_to = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
     `;s&&(r+=" WHERE c.tenant_id = ?"),r+=" ORDER BY fr.created_at DESC";const{results:o}=s?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/banks",async e=>{try{const t=await h(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const r=`
       SELECT 
@@ -15932,8 +15918,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     ORDER BY full_name
   `).bind(t).all(),s=await e.env.DB.prepare(`
     SELECT 
-      c.*
+      c.*,
+      u.full_name as assigned_employee_name,
+      c.assigned_to as employee_id
     FROM customers c
+    LEFT JOIN users u ON c.assigned_to = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
   `).bind(t).all(),r=await e.env.DB.prepare(`
@@ -16432,18 +16421,18 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         VALUES (?, NULL, ?, 1, ?)
       `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/auto-distribute",async e=>{try{const a=(await e.req.json().catch(()=>({}))).tenant_id||e.req.query("tenant_id")||1,s=await e.env.DB.prepare(`
       SELECT id FROM users 
-      WHERE role = 'employee' AND tenant_id = ?
+      WHERE role_id = 4 AND tenant_id = ?
       ORDER BY id
     `).bind(a).all();if(s.results.length===0)return e.json({success:!1,error:"لا يوجد موظفين في هذه الشركة"});const r=await e.env.DB.prepare(`
-      SELECT c.id 
-      FROM customers c
-      
-      WHERE ca.customer_id IS NULL AND c.tenant_id = ?
-      ORDER BY c.id
-    `).bind(a).all();let o=0;const l=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],c=s.results[i%l];await e.env.DB.prepare(`
-        -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-        VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(n.id,c.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
+      SELECT id 
+      FROM customers
+      WHERE assigned_to IS NULL AND tenant_id = ?
+      ORDER BY id
+    `).bind(a).all();if(r.results.length===0)return e.json({success:!1,error:"لا يوجد عملاء غير موزعين"});let o=0;const l=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],c=s.results[i%l];await e.env.DB.prepare(`
+        UPDATE customers 
+        SET assigned_to = ? 
+        WHERE id = ?
+      `).bind(c.id,n.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
       -- DELETE FROM customer_assignments
     `).run();return e.json({success:!0,cleared_count:t.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json();let s=0;for(const r of t)await e.env.DB.prepare(`
         -- SELECT * FROM customer_assignments WHERE customer_id = ?

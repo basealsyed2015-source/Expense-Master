@@ -3982,9 +3982,6 @@ app.get('/api/reports/requests-followup', async (c) => {
       SELECT 
         fr.id,
         fr.created_at,
-        fr.approved_at,
-        fr.rejected_at,
-        fr.reviewed_at,
         fr.status,
         fr.requested_amount,
         c.full_name as customer_name,
@@ -3992,26 +3989,15 @@ app.get('/api/reports/requests-followup', async (c) => {
         u.full_name as employee_name,
         u.username as employee_username,
         t.company_name as tenant_name,
+        fr.created_at as last_update,
+        CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER) as days_elapsed,
         CASE 
-          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
-          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN fr.rejected_at
-          WHEN fr.reviewed_at IS NOT NULL THEN fr.reviewed_at
-          ELSE NULL
-        END as last_update,
-        CASE 
-          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN 
-            CAST((julianday(fr.approved_at) - julianday(fr.created_at)) AS INTEGER)
-          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN 
-            CAST((julianday(fr.rejected_at) - julianday(fr.created_at)) AS INTEGER)
-          ELSE 
-            CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER)
-        END as days_elapsed,
-        CASE 
-          WHEN fr.status IN ('approved', 'rejected') THEN 1
+          WHEN fr.status IN ('approved', 'rejected', 'completed', 'cancelled') THEN 1
           ELSE 0
         END as is_closed
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN users u ON c.assigned_to = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
     `
     
@@ -6205,11 +6191,14 @@ app.get('/admin/customer-assignment', async (c) => {
     ORDER BY full_name
   `).bind(tenantId).all();
 
-  // Get customers of THIS tenant only
+  // Get customers of THIS tenant only with assigned employee name
   const customers = await c.env.DB.prepare(`
     SELECT 
-      c.*
+      c.*,
+      u.full_name as assigned_employee_name,
+      c.assigned_to as employee_id
     FROM customers c
+    LEFT JOIN users u ON c.assigned_to = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
   `).bind(tenantId).all();
@@ -6773,7 +6762,7 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     // Get employees of THIS tenant only
     const employees = await c.env.DB.prepare(`
       SELECT id FROM users 
-      WHERE role = 'employee' AND tenant_id = ?
+      WHERE role_id = 4 AND tenant_id = ?
       ORDER BY id
     `).bind(tenantId).all();
     
@@ -6783,12 +6772,15 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     
     // Get unassigned customers of THIS tenant only
     const customers = await c.env.DB.prepare(`
-      SELECT c.id 
-      FROM customers c
-      
-      WHERE ca.customer_id IS NULL AND c.tenant_id = ?
-      ORDER BY c.id
+      SELECT id 
+      FROM customers
+      WHERE assigned_to IS NULL AND tenant_id = ?
+      ORDER BY id
     `).bind(tenantId).all();
+    
+    if (customers.results.length === 0) {
+      return c.json({ success: false, error: 'لا يوجد عملاء غير موزعين' });
+    }
     
     let assignedCount = 0;
     const employeeCount = employees.results.length;
@@ -6799,9 +6791,10 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
       const employee = employees.results[i % employeeCount];
       
       await c.env.DB.prepare(`
-        -- INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-        VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(customer.id, employee.id).run();
+        UPDATE customers 
+        SET assigned_to = ? 
+        WHERE id = ?
+      `).bind(employee.id, customer.id).run();
       
       assignedCount++;
     }
