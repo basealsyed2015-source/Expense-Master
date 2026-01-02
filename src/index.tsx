@@ -4340,6 +4340,15 @@ app.get('/admin/panel', async (c) => {
   // Check authentication
   const userInfo = await getUserInfo(c);
   
+  // تشخيص للكوكيز والتوكن
+  const cookieHeader = c.req.header('Cookie') || 'لا توجد كوكيز';
+  const authHeader = c.req.header('Authorization') || 'لا يوجد Authorization Header';
+  
+  console.log('🔍 /admin/panel - تشخيص المصادقة:');
+  console.log('  Cookie Header:', cookieHeader);
+  console.log('  Authorization Header:', authHeader);
+  console.log('  UserInfo:', JSON.stringify(userInfo, null, 2));
+  
   if (!userInfo.userId || !userInfo.roleId) {
     return c.html(`
       <!DOCTYPE html>
@@ -4351,22 +4360,42 @@ app.get('/admin/panel', async (c) => {
           <script src="https://cdn.tailwindcss.com"></script>
           <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
-      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center">
-          <div class="max-w-md w-full mx-4">
-              <div class="bg-white rounded-2xl shadow-2xl p-8 text-center">
-                  <div class="mb-6">
+      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+          <div class="max-w-2xl w-full mx-4">
+              <div class="bg-white rounded-2xl shadow-2xl p-8">
+                  <div class="mb-6 text-center">
                       <i class="fas fa-lock text-6xl text-blue-600"></i>
                   </div>
-                  <h1 class="text-3xl font-bold text-gray-800 mb-4">تسجيل الدخول مطلوب</h1>
-                  <p class="text-gray-600 mb-6">
+                  <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">تسجيل الدخول مطلوب</h1>
+                  <p class="text-gray-600 mb-6 text-center">
                       يجب تسجيل الدخول للوصول إلى لوحة التحكم
                   </p>
+                  
+                  <!-- معلومات التشخيص -->
+                  <div class="bg-gray-100 rounded-lg p-4 mb-6 text-sm">
+                      <h3 class="font-bold text-gray-700 mb-2">🔍 معلومات التشخيص:</h3>
+                      <div class="space-y-2">
+                          <div><strong>Cookie Header:</strong> <code class="bg-white px-2 py-1 rounded">${cookieHeader.substring(0, 100)}...</code></div>
+                          <div><strong>User ID:</strong> ${userInfo.userId || 'غير موجود'}</div>
+                          <div><strong>Role ID:</strong> ${userInfo.roleId || 'غير موجود'}</div>
+                          <div><strong>Tenant ID:</strong> ${userInfo.tenantId || 'غير موجود'}</div>
+                      </div>
+                  </div>
+                  
                   <div class="space-y-3">
-                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
+                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
                           <i class="fas fa-sign-in-alt ml-2"></i>
                           تسجيل الدخول
                       </a>
-                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors">
+                      <a href="/test-login.html" class="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                          <i class="fas fa-vial ml-2"></i>
+                          صفحة اختبار تسجيل الدخول
+                      </a>
+                      <a href="/test-auth" class="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                          <i class="fas fa-bug ml-2"></i>
+                          صفحة تشخيص المصادقة
+                      </a>
+                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors text-center">
                           <i class="fas fa-home ml-2"></i>
                           العودة للرئيسية
                       </a>

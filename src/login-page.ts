@@ -196,10 +196,13 @@ export const loginPage = `<!DOCTYPE html>
             loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التحقق...';
             
             try {
+                // استخدام withCredentials لضمان إرسال الكوكيز
                 const response = await axios.post('/api/auth/login', {
                     username,
                     password,
                     rememberMe
+                }, {
+                    withCredentials: true
                 });
                 
                 if (response.data.success) {
@@ -207,17 +210,24 @@ export const loginPage = `<!DOCTYPE html>
                     
                     // Save token in cookie and localStorage
                     const token = response.data.token;
-                    const maxAge = 7 * 24 * 60 * 60;
-                    document.cookie = 'authToken=' + token + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+                    
+                    // حفظ في LocalStorage أولاً
                     localStorage.setItem('authToken', token);
                     localStorage.setItem('userData', JSON.stringify(response.data.user));
+                    
+                    // ثم حفظ في Cookie يدوياً كنسخة احتياطية
+                    const maxAge = 7 * 24 * 60 * 60;
+                    document.cookie = \`authToken=\${token}; path=/; max-age=\${maxAge}; SameSite=Lax\`;
+                    
                     console.log('✅ تم حفظ بيانات المستخدم:', response.data.user);
                     console.log('🍪 Cookie saved:', document.cookie.includes('authToken') ? 'YES' : 'NO');
+                    console.log('💾 LocalStorage saved:', localStorage.getItem('authToken') ? 'YES' : 'NO');
                     
-                    // Redirect based on user type
-                    setTimeout(() => {
-                        window.location.href = response.data.redirect || '/admin';
-                    }, 1000);
+                    // انتظر قليلاً للتأكد من حفظ البيانات
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    // التحويل مباشرة باستخدام window.location.href
+                    window.location.href = response.data.redirect || '/admin/panel';
                 } else {
                     showAlert(response.data.error || response.data.message || 'فشل تسجيل الدخول');
                     loginBtn.disabled = false;

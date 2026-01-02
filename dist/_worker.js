@@ -1850,10 +1850,13 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التحقق...';
             
             try {
+                // استخدام withCredentials لضمان إرسال الكوكيز
                 const response = await axios.post('/api/auth/login', {
                     username,
                     password,
                     rememberMe
+                }, {
+                    withCredentials: true
                 });
                 
                 if (response.data.success) {
@@ -1861,17 +1864,24 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     
                     // Save token in cookie and localStorage
                     const token = response.data.token;
-                    const maxAge = 7 * 24 * 60 * 60;
-                    document.cookie = 'authToken=' + token + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+                    
+                    // حفظ في LocalStorage أولاً
                     localStorage.setItem('authToken', token);
                     localStorage.setItem('userData', JSON.stringify(response.data.user));
+                    
+                    // ثم حفظ في Cookie يدوياً كنسخة احتياطية
+                    const maxAge = 7 * 24 * 60 * 60;
+                    document.cookie = \`authToken=\${token}; path=/; max-age=\${maxAge}; SameSite=Lax\`;
+                    
                     console.log('✅ تم حفظ بيانات المستخدم:', response.data.user);
                     console.log('🍪 Cookie saved:', document.cookie.includes('authToken') ? 'YES' : 'NO');
+                    console.log('💾 LocalStorage saved:', localStorage.getItem('authToken') ? 'YES' : 'NO');
                     
-                    // Redirect based on user type
-                    setTimeout(() => {
-                        window.location.href = response.data.redirect || '/admin';
-                    }, 1000);
+                    // انتظر قليلاً للتأكد من حفظ البيانات
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    // التحويل مباشرة باستخدام window.location.href
+                    window.location.href = response.data.redirect || '/admin/panel';
                 } else {
                     showAlert(response.data.error || response.data.message || 'فشل تسجيل الدخول');
                     loginBtn.disabled = false;
@@ -18903,7 +18913,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
     </body>
     </html>
-  `)});d.get("/admin/panel",async e=>{const t=await x(e);return!t.userId||!t.roleId?e.html(`
+  `)});d.get("/admin/panel",async e=>{const t=await x(e),a=e.req.header("Cookie")||"لا توجد كوكيز",s=e.req.header("Authorization")||"لا يوجد Authorization Header";return console.log("🔍 /admin/panel - تشخيص المصادقة:"),console.log("  Cookie Header:",a),console.log("  Authorization Header:",s),console.log("  UserInfo:",JSON.stringify(t,null,2)),!t.userId||!t.roleId?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18913,22 +18923,42 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           <script src="https://cdn.tailwindcss.com"><\/script>
           <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
-      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center">
-          <div class="max-w-md w-full mx-4">
-              <div class="bg-white rounded-2xl shadow-2xl p-8 text-center">
-                  <div class="mb-6">
+      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+          <div class="max-w-2xl w-full mx-4">
+              <div class="bg-white rounded-2xl shadow-2xl p-8">
+                  <div class="mb-6 text-center">
                       <i class="fas fa-lock text-6xl text-blue-600"></i>
                   </div>
-                  <h1 class="text-3xl font-bold text-gray-800 mb-4">تسجيل الدخول مطلوب</h1>
-                  <p class="text-gray-600 mb-6">
+                  <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">تسجيل الدخول مطلوب</h1>
+                  <p class="text-gray-600 mb-6 text-center">
                       يجب تسجيل الدخول للوصول إلى لوحة التحكم
                   </p>
+                  
+                  <!-- معلومات التشخيص -->
+                  <div class="bg-gray-100 rounded-lg p-4 mb-6 text-sm">
+                      <h3 class="font-bold text-gray-700 mb-2">🔍 معلومات التشخيص:</h3>
+                      <div class="space-y-2">
+                          <div><strong>Cookie Header:</strong> <code class="bg-white px-2 py-1 rounded">${a.substring(0,100)}...</code></div>
+                          <div><strong>User ID:</strong> ${t.userId||"غير موجود"}</div>
+                          <div><strong>Role ID:</strong> ${t.roleId||"غير موجود"}</div>
+                          <div><strong>Tenant ID:</strong> ${t.tenantId||"غير موجود"}</div>
+                      </div>
+                  </div>
+                  
                   <div class="space-y-3">
-                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
+                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
                           <i class="fas fa-sign-in-alt ml-2"></i>
                           تسجيل الدخول
                       </a>
-                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors">
+                      <a href="/test-login.html" class="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                          <i class="fas fa-vial ml-2"></i>
+                          صفحة اختبار تسجيل الدخول
+                      </a>
+                      <a href="/test-auth" class="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                          <i class="fas fa-bug ml-2"></i>
+                          صفحة تشخيص المصادقة
+                      </a>
+                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors text-center">
                           <i class="fas fa-home ml-2"></i>
                           العودة للرئيسية
                       </a>
