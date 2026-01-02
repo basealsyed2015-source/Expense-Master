@@ -28,6 +28,7 @@ import { roleDetailsPage } from './role-details-page'
 import { usersManagementPage } from './users-management-page'
 import { userPermissionsPage } from './user-permissions-page'
 import { permissionsManagementPage } from './permissions-management-page'
+import { companyReportsPage } from './company-reports-page'
 import { permissionsReportsPage } from './permissions-reports-page'
 import { checkPermission, getUserPermissions } from './permissions-middleware'
 
@@ -379,6 +380,26 @@ app.get('/api/tenants', async (c) => {
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all()
     return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get current user info (tenant, role, etc.)
+app.get('/api/user-info', async (c) => {
+  try {
+    // في بيئة التطوير، نرجع بيانات تجريبية
+    // في الإنتاج، يجب استخدام JWT أو session
+    return c.json({
+      success: true,
+      user_id: 1,
+      username: 'demo',
+      full_name: 'مستخدم تجريبي',
+      role_id: 11,
+      role_name: 'مدير النظام SaaS',
+      tenant_id: 2,
+      company_name: 'شركة التمويل الأولى'
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -7737,6 +7758,15 @@ app.get('/admin/permissions/manage', async (c) => {
 app.get('/admin/permissions/reports', async (c) => {
   try {
     return c.html(permissionsReportsPage())
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
+// Company Reports Page
+app.get('/admin/company-reports', async (c) => {
+  try {
+    return c.html(companyReportsPage)
   } catch (error: any) {
     return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
   }
