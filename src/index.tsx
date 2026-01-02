@@ -3830,7 +3830,7 @@ app.get('/c/:tenant/calculator', async (c) => {
   
   // Get tenant information from database
   const tenant = await c.env.DB.prepare(`
-    SELECT * FROM tenants WHERE slug = ? AND status = 'active'
+    SELECT * FROM tenants WHERE slug = ? AND is_active = 1
   `).bind(tenantSlug).first()
   
   if (!tenant) {
@@ -3860,13 +3860,21 @@ app.get('/c/:tenant/calculator', async (c) => {
   }
   
   // Return calculator page with tenant context
-  // Add tenant info as JavaScript variable and update messages
-  return c.html(smartCalculator
-    .replace(/حاسبة التمويل الذكية/g, `حاسبة تمويل ${tenant.company_name}`)
+  const companyName = (tenant as any).company_name || 'الشركة'
+  const tenantId = (tenant as any).id
+  
+  // Create modified calculator HTML with tenant branding
+  let calculatorHTML = smartCalculator
+    .replace(/حاسبة التمويل الذكية/g, `حاسبة تمويل ${companyName}`)
     .replace('/api/calculator/submit-request', `/api/c/${tenantSlug}/calculator/submit-request`)
-    .replace('<script>', `<script>\n        // Tenant information for company-specific calculator\n        window.TENANT_NAME = '${tenant.company_name.replace(/'/g, "\\'")}';\n    `)
-    .replace('سيتم التواصل معك قريباً من \' + selectedBestOffer.bank.bank_name', `سيتم المراجعة من شركة ${tenant.company_name.replace(/'/g, "\\'")} وسوف يتم التواصل معك قريباً'`)
+  
+  // Add tenant context to page
+  calculatorHTML = calculatorHTML.replace(
+    '<script>',
+    `<script>\n        window.TENANT_ID = ${tenantId};\n        window.TENANT_NAME = '${companyName.replace(/'/g, "\\'")}';\n        window.TENANT_SLUG = '${tenantSlug}';\n        `
   )
+  
+  return c.html(calculatorHTML)
 })
 
 app.get('/login', (c) => c.html(loginPage))

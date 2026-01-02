@@ -18279,11 +18279,8 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
     `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/",e=>e.html(Ze));d.get("/calculator",e=>e.html(ne));d.get("/calculator-old",e=>e.html(et));d.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
-    SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(ne.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
-        // Tenant information for company-specific calculator
-        window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
-    `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
+    SELECT * FROM tenants WHERE slug = ? AND is_active = 1
+  `).bind(t).first();if(!a)return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18305,7 +18302,11 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)});d.get("/login",e=>e.html(tt));d.get("/forgot-password",e=>e.html(at));d.get("/packages",e=>e.html(st));d.get("/subscribe",e=>e.html(rt));d.get("/admin",e=>e.html(`
+    `);const s=a.company_name||"الشركة",r=a.id;let o=ne.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${s}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`);return o=o.replace("<script>",`<script>
+        window.TENANT_ID = ${r};
+        window.TENANT_NAME = '${s.replace(/'/g,"\\'")}';
+        window.TENANT_SLUG = '${t}';
+        `),e.html(o)});d.get("/login",e=>e.html(tt));d.get("/forgot-password",e=>e.html(at));d.get("/packages",e=>e.html(st));d.get("/subscribe",e=>e.html(rt));d.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
