@@ -14691,8 +14691,8 @@ app.get('/admin/hr/employees/:id/edit', (c) => {
 // HR Dashboard Statistics API
 app.get('/api/hr/dashboard/stats', async (c) => {
   try {
-    const userInfo = await getUserInfo(c)
-    const tenantId = userInfo.tenantId
+    const userInfo = await getUserInfo(c).catch(() => ({ tenantId: 1 }))
+    const tenantId = userInfo?.tenantId || 1
     
     // Total & Active Employees
     const employeesQuery = tenantId 

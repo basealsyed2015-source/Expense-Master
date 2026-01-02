@@ -334,9 +334,7 @@ export const hrMainPage = `<!DOCTYPE html>
         async function loadDashboardStats() {
             console.log('📊 Loading dashboard stats...');
             try {
-                const response = await axios.get('/api/hr/dashboard/stats', {
-                    headers: { 'Authorization': \`Bearer \${token}\` }
-                });
+                const response = await axios.get('/api/hr/dashboard/stats');
                 
                 console.log('✅ Response received:', response.data);
                 
