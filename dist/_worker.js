@@ -18854,7 +18854,56 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       HAVING requests_count > 0
       ORDER BY approved_count DESC
       LIMIT 10
-    `,{results:c}=o.length>0?await e.env.DB.prepare(n).bind(...o).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:c})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/panel",async e=>{const t=await x(e);return!t.userId||!t.roleId?e.html(`
+    `,{results:c}=o.length>0?await e.env.DB.prepare(n).bind(...o).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:c})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/test-auth",async e=>{const t=e.req.header("Cookie"),a=await x(e);return e.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>اختبار المصادقة</title>
+        <script src="https://cdn.tailwindcss.com"><\/script>
+    </head>
+    <body class="p-8 bg-gray-100">
+        <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
+            <h1 class="text-2xl font-bold mb-4">اختبار المصادقة</h1>
+            
+            <div class="space-y-4">
+                <div class="bg-blue-50 p-4 rounded">
+                    <h3 class="font-bold mb-2">Cookie Header من الخادم:</h3>
+                    <pre class="text-sm">${t||"لا توجد كوكيز"}</pre>
+                </div>
+                
+                <div class="bg-green-50 p-4 rounded">
+                    <h3 class="font-bold mb-2">معلومات المستخدم:</h3>
+                    <pre class="text-sm">${JSON.stringify(a,null,2)}</pre>
+                </div>
+                
+                <div class="bg-yellow-50 p-4 rounded">
+                    <h3 class="font-bold mb-2">Cookies من JavaScript:</h3>
+                    <pre id="jsCookies" class="text-sm"></pre>
+                </div>
+                
+                <div class="bg-purple-50 p-4 rounded">
+                    <h3 class="font-bold mb-2">LocalStorage:</h3>
+                    <pre id="localStorage" class="text-sm"></pre>
+                </div>
+            </div>
+            
+            <div class="mt-6 space-x-3">
+                <a href="/login" class="bg-blue-600 text-white px-4 py-2 rounded">تسجيل الدخول</a>
+                <a href="/admin/panel" class="bg-green-600 text-white px-4 py-2 rounded">لوحة التحكم</a>
+            </div>
+        </div>
+        
+        <script>
+            document.getElementById('jsCookies').textContent = document.cookie || 'لا توجد كوكيز';
+            document.getElementById('localStorage').textContent = JSON.stringify({
+                authToken: localStorage.getItem('authToken'),
+                userData: localStorage.getItem('userData')
+            }, null, 2);
+        <\/script>
+    </body>
+    </html>
+  `)});d.get("/admin/panel",async e=>{const t=await x(e);return!t.userId||!t.roleId?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
