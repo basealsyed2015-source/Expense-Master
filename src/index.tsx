@@ -25,6 +25,9 @@ import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
 import { hrLeavesPage, hrSalariesPage, hrDepartmentsPage, hrPerformancePage, hrPromotionsPage, hrDocumentsPage, hrReportsPage } from './hr-pages'
 import { roleDetailsPage } from './role-details-page'
+import { usersManagementPage } from './users-management-page'
+import { userPermissionsPage } from './user-permissions-page'
+import { checkPermission, getUserPermissions } from './permissions-middleware'
 
 type Bindings = {
   DB: D1Database;
@@ -7697,6 +7700,25 @@ app.get('/admin/customers', async (c) => {
 })
 
 // ==================== صفحة مركز الإشعارات ====================
+// Users Management Page
+app.get('/admin/users', async (c) => {
+  try {
+    return c.html(usersManagementPage())
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
+// User Permissions Page
+app.get('/admin/users/:id/permissions', async (c) => {
+  try {
+    const userId = c.req.param('id')
+    return c.html(userPermissionsPage(userId))
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
 // Role Details Page
 app.get('/admin/roles/:id', async (c) => {
   try {
