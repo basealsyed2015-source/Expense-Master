@@ -24,6 +24,7 @@ import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } f
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
 import { hrLeavesPage, hrSalariesPage, hrDepartmentsPage, hrPerformancePage, hrPromotionsPage, hrDocumentsPage, hrReportsPage } from './hr-pages'
+import { roleDetailsPage } from './role-details-page'
 
 type Bindings = {
   DB: D1Database;
@@ -7696,6 +7697,16 @@ app.get('/admin/customers', async (c) => {
 })
 
 // ==================== صفحة مركز الإشعارات ====================
+// Role Details Page
+app.get('/admin/roles/:id', async (c) => {
+  try {
+    const roleId = c.req.param('id')
+    return c.html(roleDetailsPage(roleId))
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
 // Roles Management Page
 app.get('/admin/roles', async (c) => {
   try {
@@ -7908,6 +7919,11 @@ app.get('/admin/roles', async (c) => {
                   <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
                   <td class="px-6 py-4">
                     <div class="flex items-center justify-center gap-2">
+                      <button onclick="viewRoleDetails(\${role.id})" 
+                              class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
+                              title="عرض التفاصيل">
+                        <i class="fas fa-eye"></i>
+                      </button>
                       <button onclick="openEditRoleModal(\${role.id}, '\${role.role_name}', '\${role.description}')" 
                               class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
                               title="تعديل">
@@ -8039,6 +8055,11 @@ app.get('/admin/roles', async (c) => {
               console.error('Error deleting role:', error);
               alert('❌ حدث خطأ أثناء حذف الدور');
             }
+          }
+
+          // View role details
+          function viewRoleDetails(roleId) {
+            window.location.href = '/admin/roles/' + roleId;
           }
 
           // Manage permissions

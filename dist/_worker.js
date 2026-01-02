@@ -1,4 +1,4 @@
-var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},he=Symbol(),ye=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof X?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?ve(e,{all:a,dot:s}):{}};async function ve(e,t){const a=await e.formData();return a?we(a,t):{}}function we(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?_e(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Ee(a,s,r),delete a[s])}),a}var _e=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Ee=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},z=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},ke=e=>{const{groups:t,path:a}=De(e),s=z(a);return Ie(s,t)},De=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Ie=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Se=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Te=e=>P(e,decodeURI),J=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Te(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Re=e=>{const t=J(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),V=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,Q):e):e,G=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=M(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},Ce=G,$e=(e,t)=>G(e,t,!0),Q=decodeURIComponent,U=e=>P(e,Q),X=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?U(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?U(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Ce(this.url,e)}queries(e){return $e(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ye(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[he](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Be={Stringify:1},K=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>K(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},Le="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),qe=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new X(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(Le,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?K(e,Be.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},v="ALL",je="all",Oe=["get","post","put","delete","options","patch"],Z="Can not add a route since the matcher is already built.",ee=class extends Error{},Fe="__COMPOSED_HANDLER",Me=e=>e.text("404 Not Found",404),W=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ae=class te{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Oe,je].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(v,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??J:Re}#e(){const t=new te({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Me;errorHandler=W;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===W?o=r.handler:(o=async(l,i)=>(await H([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Fe]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(v,R(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new qe(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=H(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},ae=[];function Ne(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[v],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],ae];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",C=Symbol(),Pe=new Set(".\\+*[^]$()");function He(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Ue=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw C;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",L]:["","",O]:l==="/*"?["","",q]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw C;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw C;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw C;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(He).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Pe.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},We=class{#t={varIndex:0};#e=new Ue;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Ye=[/^$/,[],Object.create(null)],se=Object.create(null);function re(e){return se[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function ze(){se=Object.create(null)}function Je(e){const t=new We,a=[];if(e.length===0)return Ye;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([h])=>[h,Object.create(null)]),ae]:p++;let b;try{b=t.insert(f,p,m)}catch(h){throw h===C?new ee(f):h}m||(a[p]=g.map(([h,w])=>{const E=Object.create(null);for(w-=1;w>=0;w--){const[_,y]=b[w];E[_]=y}return[h,E]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,h=g.length;b<h;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function T(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(re(a).test(t))return[...e[a]]}}var Ve=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[v]:Object.create(null)},this.#e={[v]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(Z);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[v]).forEach(n=>{i[e][n]=[...i[v][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=re(t);e===v?Object.keys(s).forEach(n=>{s[n][t]||=T(s[n],t)||T(s[v],t)||[]}):s[e][t]||=T(s[e],t)||T(s[v],t)||[],Object.keys(s).forEach(n=>{(e===v||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===v||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=V(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===v||e===p)&&(r[p][c]||=[...T(s[p],c)||T(s[v],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Ne;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,ze(),e}#a(e){const t=[];let a=e===v;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==v&&t.push(...Object.keys(s[v]).map(o=>[o,s[v][o]]))}),a?Je(t):null}},Ge=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Z);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof ee)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},B=Object.create(null),Qe=class le{#t;#e;#a;#l=0;#r=B;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=ke(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=Se(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new le,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[v],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==B||r&&r!==B))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=B;let o=[this];const l=z(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let w=0,E=b.#a.length;w<E;w++){const _=b.#a[w],y=b.#r===B?{}:{...b.#r};if(_==="*"){const S=b.#e["*"];S&&(s.push(...this.#s(S,t,b.#r)),S.#r=y,m.push(S));continue}const[k,F,$]=_;if(!p&&!($ instanceof RegExp))continue;const D=b.#e[k],be=l.slice(n).join("/");if($ instanceof RegExp){const S=$.exec(be);if(S){if(y[F]=S[0],s.push(...this.#s(D,t,b.#r,y)),Object.keys(D.#e).length){D.#r=y;const xe=S[0].match(/\//)?.length??0;(i[xe]||=[]).push(D)}continue}}($===!0||$.test(p))&&(y[F]=p,u?(s.push(...this.#s(D,t,y,b.#r)),D.#e["*"]&&s.push(...this.#s(D.#e["*"],t,y,b.#r))):(D.#r=y,m.push(D)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Xe=class{name="TrieRouter";#t;constructor(){this.#t=new Qe}add(e,t,a){const s=V(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},oe=class extends Ae{constructor(e={}){super(e),this.router=e.router??new Ge({routers:[new Ve,new Xe]})}},Ke=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const Ze=`<!DOCTYPE html>
+var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},he=Symbol(),ye=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof X?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?ve(e,{all:a,dot:s}):{}};async function ve(e,t){const a=await e.formData();return a?we(a,t):{}}function we(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?_e(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Ee(a,s,r),delete a[s])}),a}var _e=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Ee=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},z=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},ke=e=>{const{groups:t,path:a}=De(e),s=z(a);return Ie(s,t)},De=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Ie=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Se=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Te=e=>P(e,decodeURI),J=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Te(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Ce=e=>{const t=J(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},C=(e,t,...a)=>(a.length&&(t=C(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),V=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,Q):e):e,G=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=M(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},Re=G,$e=(e,t)=>G(e,t,!0),Q=decodeURIComponent,U=e=>P(e,Q),X=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?U(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?U(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Re(this.url,e)}queries(e){return $e(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ye(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[he](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Be={Stringify:1},K=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>K(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},Le="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),qe=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new X(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(Le,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?K(e,Be.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},v="ALL",je="all",Oe=["get","post","put","delete","options","patch"],Z="Can not add a route since the matcher is already built.",ee=class extends Error{},Fe="__COMPOSED_HANDLER",Me=e=>e.text("404 Not Found",404),W=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ae=class te{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Oe,je].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(v,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??J:Ce}#e(){const t=new te({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Me;errorHandler=W;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===W?o=r.handler:(o=async(l,i)=>(await H([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Fe]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=C(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=C(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(v,C(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=C(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new qe(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=H(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${C("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},ae=[];function Ne(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[v],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],ae];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",R=Symbol(),Pe=new Set(".\\+*[^]$()");function He(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Ue=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw R;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",L]:["","",O]:l==="/*"?["","",q]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw R;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw R;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw R;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(He).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Pe.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},We=class{#t={varIndex:0};#e=new Ue;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Ye=[/^$/,[],Object.create(null)],se=Object.create(null);function re(e){return se[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function ze(){se=Object.create(null)}function Je(e){const t=new We,a=[];if(e.length===0)return Ye;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([h])=>[h,Object.create(null)]),ae]:p++;let b;try{b=t.insert(f,p,m)}catch(h){throw h===R?new ee(f):h}m||(a[p]=g.map(([h,w])=>{const E=Object.create(null);for(w-=1;w>=0;w--){const[_,y]=b[w];E[_]=y}return[h,E]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,h=g.length;b<h;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function T(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(re(a).test(t))return[...e[a]]}}var Ve=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[v]:Object.create(null)},this.#e={[v]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(Z);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[v]).forEach(n=>{i[e][n]=[...i[v][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=re(t);e===v?Object.keys(s).forEach(n=>{s[n][t]||=T(s[n],t)||T(s[v],t)||[]}):s[e][t]||=T(s[e],t)||T(s[v],t)||[],Object.keys(s).forEach(n=>{(e===v||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===v||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=V(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===v||e===p)&&(r[p][c]||=[...T(s[p],c)||T(s[v],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Ne;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,ze(),e}#a(e){const t=[];let a=e===v;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==v&&t.push(...Object.keys(s[v]).map(o=>[o,s[v][o]]))}),a?Je(t):null}},Ge=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Z);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof ee)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},B=Object.create(null),Qe=class le{#t;#e;#a;#l=0;#r=B;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=ke(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=Se(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new le,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[v],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==B||r&&r!==B))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=B;let o=[this];const l=z(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let w=0,E=b.#a.length;w<E;w++){const _=b.#a[w],y=b.#r===B?{}:{...b.#r};if(_==="*"){const S=b.#e["*"];S&&(s.push(...this.#s(S,t,b.#r)),S.#r=y,m.push(S));continue}const[k,F,$]=_;if(!p&&!($ instanceof RegExp))continue;const D=b.#e[k],be=l.slice(n).join("/");if($ instanceof RegExp){const S=$.exec(be);if(S){if(y[F]=S[0],s.push(...this.#s(D,t,b.#r,y)),Object.keys(D.#e).length){D.#r=y;const xe=S[0].match(/\//)?.length??0;(i[xe]||=[]).push(D)}continue}}($===!0||$.test(p))&&(y[F]=p,u?(s.push(...this.#s(D,t,y,b.#r)),D.#e["*"]&&s.push(...this.#s(D.#e["*"],t,y,b.#r))):(D.#r=y,m.push(D)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Xe=class{name="TrieRouter";#t;constructor(){this.#t=new Qe}add(e,t,a){const s=V(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},oe=class extends Ae{constructor(e={}){super(e),this.router=e.router??new Ge({routers:[new Ve,new Xe]})}},Ke=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const Ze=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13939,7 +13939,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   <\/script>
 </body>
 </html>
-`,Rt=`
+`,Ct=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14185,7 +14185,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   <\/script>
 </body>
 </html>
-`,Ct=`
+`,Rt=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15305,6 +15305,322 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   <\/script>
 </body>
 </html>
+`,Lt=e=>`
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تفاصيل الدور</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+  <style>
+    .permission-card {
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+    }
+    .permission-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      border-color: #6366f1;
+    }
+    .category-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .role-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 2rem;
+      border-radius: 1rem;
+      color: white;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .stat-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 400px;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    
+    <!-- Header -->
+    <div class="role-header">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-4">
+          <div class="bg-white/20 p-4 rounded-xl">
+            <i class="fas fa-user-shield text-4xl"></i>
+          </div>
+          <div>
+            <h1 id="roleName" class="text-3xl font-bold">جاري التحميل...</h1>
+            <p id="roleDescription" class="text-lg text-white/90 mt-1">جاري تحميل الوصف...</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <a href="/admin/roles" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
+            <i class="fas fa-arrow-right"></i>
+            <span>العودة للأدوار</span>
+          </a>
+          <button onclick="editRole()" class="bg-white text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
+            <i class="fas fa-edit"></i>
+            <span>تعديل الدور</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- إحصاءات سريعة -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-600 font-medium">إجمالي الصلاحيات</p>
+              <p id="totalPermissions" class="text-3xl font-bold text-indigo-600 mt-1">0</p>
+            </div>
+            <div class="bg-indigo-100 p-3 rounded-xl">
+              <i class="fas fa-key text-2xl text-indigo-600"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-600 font-medium">الفئات</p>
+              <p id="totalCategories" class="text-3xl font-bold text-purple-600 mt-1">0</p>
+            </div>
+            <div class="bg-purple-100 p-3 rounded-xl">
+              <i class="fas fa-folder text-2xl text-purple-600"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-600 font-medium">المستخدمون</p>
+              <p id="totalUsers" class="text-3xl font-bold text-blue-600 mt-1">0</p>
+            </div>
+            <div class="bg-blue-100 p-3 rounded-xl">
+              <i class="fas fa-users text-2xl text-blue-600"></i>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-600 font-medium">تاريخ الإنشاء</p>
+              <p id="createdDate" class="text-sm font-bold text-gray-700 mt-1">---</p>
+            </div>
+            <div class="bg-gray-100 p-3 rounded-xl">
+              <i class="fas fa-calendar text-2xl text-gray-600"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading">
+      <div class="text-center">
+        <i class="fas fa-spinner fa-spin text-6xl text-indigo-600 mb-4"></i>
+        <p class="text-xl text-gray-600 font-bold">جاري تحميل الصلاحيات...</p>
+      </div>
+    </div>
+
+    <!-- Permissions by Category -->
+    <div id="permissionsContainer" class="hidden">
+      <!-- سيتم ملؤها ديناميكياً -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden bg-white rounded-2xl shadow-lg p-12 text-center">
+      <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+      <h3 class="text-2xl font-bold text-gray-700 mb-2">لا توجد صلاحيات</h3>
+      <p class="text-gray-500">لم يتم تعيين أي صلاحيات لهذا الدور بعد</p>
+      <button onclick="managePermissions()" class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold transition-all">
+        <i class="fas fa-plus ml-2"></i>
+        إضافة صلاحيات
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    const roleId = ${e};
+    let roleData = null;
+    let permissionsData = [];
+
+    // تحميل بيانات الدور
+    async function loadRoleData() {
+      try {
+        // تحميل معلومات الدور
+        const roleResponse = await axios.get('/api/roles');
+        roleData = roleResponse.data.data.find(r => r.id === roleId);
+        
+        if (roleData) {
+          document.getElementById('roleName').textContent = roleData.role_name;
+          document.getElementById('roleDescription').textContent = roleData.description;
+          document.getElementById('totalPermissions').textContent = roleData.permissions_count;
+          
+          // تنسيق التاريخ
+          const date = new Date(roleData.created_at);
+          document.getElementById('createdDate').textContent = date.toLocaleDateString('ar-EG');
+        }
+        
+        // تحميل الصلاحيات
+        const permResponse = await axios.get(\`/api/roles/\${roleId}/permissions\`);
+        permissionsData = permResponse.data.data || [];
+        
+        // تحميل عدد المستخدمين
+        // TODO: إضافة API لعدد المستخدمين
+        document.getElementById('totalUsers').textContent = '-';
+        
+        displayPermissions();
+        
+      } catch (error) {
+        console.error('Error loading role:', error);
+        alert('❌ حدث خطأ في تحميل بيانات الدور');
+      }
+    }
+
+    // عرض الصلاحيات حسب الفئات
+    function displayPermissions() {
+      const container = document.getElementById('permissionsContainer');
+      const loadingState = document.getElementById('loadingState');
+      const emptyState = document.getElementById('emptyState');
+      
+      loadingState.classList.add('hidden');
+      
+      if (permissionsData.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      
+      container.classList.remove('hidden');
+      
+      // تجميع الصلاحيات حسب الفئة
+      const categorized = {};
+      permissionsData.forEach(perm => {
+        const category = perm.category || 'other';
+        if (!categorized[category]) {
+          categorized[category] = [];
+        }
+        categorized[category].push(perm);
+      });
+      
+      // عرض عدد الفئات
+      document.getElementById('totalCategories').textContent = Object.keys(categorized).length;
+      
+      // أيقونات الفئات
+      const categoryIcons = {
+        'dashboard': 'fa-tachometer-alt',
+        'customers': 'fa-users',
+        'requests': 'fa-file-invoice',
+        'hr': 'fa-user-tie',
+        'reports': 'fa-chart-bar',
+        'admin': 'fa-cog',
+        'system': 'fa-server',
+        'other': 'fa-folder'
+      };
+      
+      // أسماء الفئات بالعربية
+      const categoryNames = {
+        'dashboard': 'لوحة التحكم',
+        'customers': 'إدارة العملاء',
+        'requests': 'طلبات التمويل',
+        'hr': 'الموارد البشرية',
+        'reports': 'التقارير',
+        'admin': 'إدارة النظام',
+        'system': 'إعدادات النظام',
+        'other': 'أخرى'
+      };
+      
+      // بناء HTML
+      let html = '';
+      
+      for (const [category, permissions] of Object.entries(categorized)) {
+        const icon = categoryIcons[category] || categoryIcons['other'];
+        const categoryName = categoryNames[category] || category;
+        
+        html += \`
+          <div class="mb-8">
+            <div class="category-header flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <i class="fas \${icon} text-2xl"></i>
+                <div>
+                  <h2 class="text-xl font-bold">\${categoryName}</h2>
+                  <p class="text-sm text-white/80">\${permissions.length} صلاحية</p>
+                </div>
+              </div>
+              <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-bold">
+                \${permissions.length}
+              </span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        \`;
+        
+        permissions.forEach(perm => {
+          html += \`
+            <div class="permission-card bg-white rounded-xl p-5 shadow-md">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                  <h3 class="text-lg font-bold text-gray-800 mb-1">\${perm.display_name}</h3>
+                  <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">\${perm.name}</code>
+                </div>
+                <i class="fas fa-check-circle text-green-500 text-xl"></i>
+              </div>
+              \${perm.description ? \`
+                <p class="text-sm text-gray-600 mt-2">\${perm.description}</p>
+              \` : ''}
+            </div>
+          \`;
+        });
+        
+        html += \`
+            </div>
+          </div>
+        \`;
+      }
+      
+      container.innerHTML = html;
+    }
+
+    // تعديل الدور
+    function editRole() {
+      window.location.href = '/admin/roles';
+    }
+
+    // إدارة الصلاحيات
+    function managePermissions() {
+      window.location.href = \`/admin/roles/\${roleId}/permissions\`;
+    }
+
+    // تحميل البيانات عند تحميل الصفحة
+    loadRoleData();
+  <\/script>
+</body>
+</html>
 `,d=new oe,I=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
@@ -15506,7 +15822,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       min-width: 60px !important;
     }
   }
-`;d.use("*",Ke());async function Lt(e){const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
+`;d.use("*",Ke());async function qt(e){const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -15518,7 +15834,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
     `).bind().first()),o}async function x(e){try{let t=e.req.header("Authorization")?.replace("Bearer ","");if(!t){const i=e.req.header("Cookie");if(i){const c=i.split(";").map(p=>p.trim()).find(p=>p.startsWith("authToken="));c&&(t=c.split("=")[1],console.log("✅ Token found in cookie"))}}if(!t){console.log("❌ No token found in header or cookie");const i=e.req.query("tenant_id");return{userId:null,tenantId:i?parseInt(i):null,roleId:null}}console.log("🔍 Token:",t.substring(0,20)+"...");const s=atob(t).split(":"),r=parseInt(s[0]),o=s[1]!=="null"&&s[1]!=="undefined"?parseInt(s[1]):null,l=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
-    `).bind(r).first();if(!l)return{userId:null,tenantId:null,roleId:null};if(l.role_id===1){const i=e.req.query("tenant_id");return{userId:l.id,tenantId:i?parseInt(i):null,roleId:1}}return{userId:l.id,tenantId:o||l.tenant_id,roleId:l.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}d.use("/c/:tenant/*",async(e,t)=>{const a=await Lt(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(r).first();if(!l)return{userId:null,tenantId:null,roleId:null};if(l.role_id===1){const i=e.req.query("tenant_id");return{userId:l.id,tenantId:i?parseInt(i):null,roleId:1}}return{userId:l.id,tenantId:o||l.tenant_id,roleId:l.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}d.use("/c/:tenant/*",async(e,t)=>{const a=await qt(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
@@ -19298,7 +19614,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/roles",async e=>{try{return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/roles/:id",async e=>{try{const t=e.req.param("id");return e.html(Lt(t))}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/roles",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -19507,6 +19823,11 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
                   <td class="px-6 py-4">
                     <div class="flex items-center justify-center gap-2">
+                      <button onclick="viewRoleDetails(\${role.id})" 
+                              class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
+                              title="عرض التفاصيل">
+                        <i class="fas fa-eye"></i>
+                      </button>
                       <button onclick="openEditRoleModal(\${role.id}, '\${role.role_name}', '\${role.description}')" 
                               class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
                               title="تعديل">
@@ -19638,6 +19959,11 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               console.error('Error deleting role:', error);
               alert('❌ حدث خطأ أثناء حذف الدور');
             }
+          }
+
+          // View role details
+          function viewRoleDetails(roleId) {
+            window.location.href = '/admin/roles/' + roleId;
           }
 
           // Manage permissions
@@ -24819,7 +25145,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(Et));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(Dt));d.get("/admin/hr/leaves",e=>e.html(It));d.get("/admin/hr/salaries",e=>e.html(St));d.get("/admin/hr/departments",e=>e.html(Tt));d.get("/admin/hr/performance",e=>e.html(Rt));d.get("/admin/hr/promotions",e=>e.html(Ct));d.get("/admin/hr/documents",e=>e.html($t));d.get("/admin/hr/reports",e=>e.html(Bt));d.get("/admin/hr/employees/:id",e=>e.redirect("/admin/hr/employees"));d.get("/admin/hr/employees/:id/edit",e=>e.redirect("/admin/hr/employees"));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e).catch(()=>({tenantId:1})))?.tenantId||1,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
+    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(Et));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(Dt));d.get("/admin/hr/leaves",e=>e.html(It));d.get("/admin/hr/salaries",e=>e.html(St));d.get("/admin/hr/departments",e=>e.html(Tt));d.get("/admin/hr/performance",e=>e.html(Ct));d.get("/admin/hr/promotions",e=>e.html(Rt));d.get("/admin/hr/documents",e=>e.html($t));d.get("/admin/hr/reports",e=>e.html(Bt));d.get("/admin/hr/employees/:id",e=>e.redirect("/admin/hr/employees"));d.get("/admin/hr/employees/:id/edit",e=>e.redirect("/admin/hr/employees"));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e).catch(()=>({tenantId:1})))?.tenantId||1,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -24889,4 +25215,4 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(t.employee_id,t.month,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.other_allowances,t.deductions,t.net_salary,t.payment_status||"pending",t.payment_date,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة سجل الراتب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id"),{payment_status:a,payment_date:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = ?, payment_date = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const Y=new oe,qt=Object.assign({"/src/index.tsx":d});let fe=!1;for(const[,e]of Object.entries(qt))e&&(Y.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Y.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),fe=!0);if(!fe)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Y as default};
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const Y=new oe,jt=Object.assign({"/src/index.tsx":d});let fe=!1;for(const[,e]of Object.entries(jt))e&&(Y.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Y.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),fe=!0);if(!fe)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Y as default};
