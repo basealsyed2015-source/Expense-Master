@@ -321,19 +321,25 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     
     console.log('🔍 Token:', token.substring(0, 20) + '...')
     
-    
+    // Decode token: format is "userId:tenantId:roleId:timestamp" (base64 encoded)
     const decoded = atob(token)
     const parts = decoded.split(':')
+    console.log('🔍 Decoded token parts:', parts)
+    
     const userId = parseInt(parts[0])
     const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
+    const roleIdFromToken = parts[2] !== 'null' && parts[2] !== 'undefined' ? parseInt(parts[2]) : null
     
     const user = await c.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
     `).bind(userId).first()
     
     if (!user) {
+      console.log('❌ User not found in DB')
       return { userId: null, tenantId: null, roleId: null }
     }
+    
+    console.log('✅ User found:', { userId: user.id, tenantId: user.tenant_id, roleId: user.role_id })
     
     // Super Admin (role_id = 1) can see all data
     if (user.role_id === 1) {
@@ -341,8 +347,13 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
       return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1 }
     }
     
-    // For other roles, return their tenant_id
-    return { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id }
+    // For other roles, return their tenant_id and role_id
+    // Prefer token values if available, fallback to DB values
+    return { 
+      userId: user.id, 
+      tenantId: tenantIdFromToken || user.tenant_id, 
+      roleId: roleIdFromToken || user.role_id 
+    }
   } catch (error) {
     console.error('Error getting user info:', error)
     return { userId: null, tenantId: null, roleId: null }
