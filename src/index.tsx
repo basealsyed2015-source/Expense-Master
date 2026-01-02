@@ -27,6 +27,8 @@ import { hrLeavesPage, hrSalariesPage, hrDepartmentsPage, hrPerformancePage, hrP
 import { roleDetailsPage } from './role-details-page'
 import { usersManagementPage } from './users-management-page'
 import { userPermissionsPage } from './user-permissions-page'
+import { permissionsManagementPage } from './permissions-management-page'
+import { permissionsReportsPage } from './permissions-reports-page'
 import { checkPermission, getUserPermissions } from './permissions-middleware'
 
 type Bindings = {
@@ -3687,6 +3689,20 @@ app.post('/api/users/check-permission', async (c) => {
       success: true, 
       has_permission: (result as any)?.has_permission > 0 
     })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get all permissions
+app.get('/api/permissions', async (c) => {
+  try {
+    const result = await c.env.DB.prepare(`
+      SELECT * FROM permissions
+      ORDER BY category, id
+    `).all()
+    
+    return c.json({ success: true, data: result.results })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -7700,6 +7716,24 @@ app.get('/admin/customers', async (c) => {
 })
 
 // ==================== صفحة مركز الإشعارات ====================
+// Permissions Management Page
+app.get('/admin/permissions/manage', async (c) => {
+  try {
+    return c.html(permissionsManagementPage())
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
+// Permissions Reports Page
+app.get('/admin/permissions/reports', async (c) => {
+  try {
+    return c.html(permissionsReportsPage())
+  } catch (error: any) {
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
+  }
+})
+
 // Users Management Page
 app.get('/admin/users', async (c) => {
   try {
