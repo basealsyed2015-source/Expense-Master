@@ -18050,7 +18050,19 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
     `).bind(r).first();if(!i)return console.log("❌ User not found in DB"),{userId:null,tenantId:null,roleId:null};if(console.log("✅ User found:",{userId:i.id,tenantId:i.tenant_id,roleId:i.role_id}),i.role_id===11){const n=e.req.query("tenant_id");return{userId:i.id,tenantId:n?parseInt(n):null,roleId:11}}return{userId:i.id,tenantId:o||i.tenant_id,roleId:l||i.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}d.use("/c/:tenant/*",async(e,t)=>{const a=await At(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/user-info",async e=>{try{return e.json({success:!0,user_id:1,username:"demo",full_name:"مستخدم تجريبي",role_id:11,role_name:"مدير النظام SaaS",tenant_id:2,company_name:"شركة التمويل الأولى"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);const a=await e.env.DB.prepare(`
+      SELECT u.*, r.role_name, r.description as role_description, t.company_name
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN tenants t ON u.tenant_id = t.id
+      WHERE u.id = ?
+    `).bind(t.userId).first();return e.json({success:!0,user:{id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:a.role_name,role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name,user_type:a.user_type}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/my-permissions",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);const a=await e.env.DB.prepare(`
+      SELECT p.name as permission_key, p.display_name as permission_name, p.category, p.description
+      FROM role_permissions rp
+      JOIN permissions p ON rp.permission_id = p.id
+      WHERE rp.role_id = ?
+      ORDER BY p.category, p.display_name
+    `).bind(t.roleId).all();return e.json({success:!0,role_id:t.roleId,permissions_count:a.results.length,permissions:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
     `).bind(t.slug).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const s=await e.env.DB.prepare(`
       INSERT INTO tenants (
@@ -18913,7 +18925,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
     </body>
     </html>
-  `)});d.get("/admin/panel",async e=>{const t=await x(e),a=e.req.header("Cookie")||"لا توجد كوكيز",s=e.req.header("Authorization")||"لا يوجد Authorization Header";return console.log("🔍 /admin/panel - تشخيص المصادقة:"),console.log("  Cookie Header:",a),console.log("  Authorization Header:",s),console.log("  UserInfo:",JSON.stringify(t,null,2)),!t.userId||!t.roleId?e.html(`
+  `)});d.get("/admin/panel",async e=>{const t=await x(e),a=e.req.header("Cookie")||"لا توجد كوكيز",s=e.req.header("Authorization")||"لا يوجد Authorization Header";if(console.log("🔍 /admin/panel - تشخيص المصادقة:"),console.log("  Cookie Header:",a),console.log("  Authorization Header:",s),console.log("  UserInfo:",JSON.stringify(t,null,2)),!t.userId||!t.roleId)return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18967,7 +18979,25 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
       </body>
       </html>
-    `):e.html(ie)});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
+    `);const r=await e.env.DB.prepare(`
+    SELECT u.*, r.role_name, r.description as role_description, t.company_name
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN tenants t ON u.tenant_id = t.id
+    WHERE u.id = ?
+  `).bind(t.userId).first(),o=await e.env.DB.prepare(`
+    SELECT p.name as permission_key, p.display_name as permission_name, p.category
+    FROM role_permissions rp
+    JOIN permissions p ON rp.permission_id = p.id
+    WHERE rp.role_id = ?
+  `).bind(t.roleId).all();let l=ie;return l=l.replace("<script>",`<script>
+      window.USER_DATA = ${JSON.stringify({id:r.id,username:r.username,full_name:r.full_name,email:r.email,role_id:r.role_id,role_name:r.role_name,role_description:r.role_description,tenant_id:r.tenant_id,company_name:r.company_name,user_type:r.user_type})};
+      window.USER_PERMISSIONS = ${JSON.stringify(o.results.map(i=>i.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${JSON.stringify(o.results)};
+      console.log('✅ User data loaded:', window.USER_DATA);
+      console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
+    <\/script>
+    <script>`),e.html(l)});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>

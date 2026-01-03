@@ -399,20 +399,67 @@ app.get('/api/tenants', async (c) => {
 // Get current user info (tenant, role, etc.)
 app.get('/api/user-info', async (c) => {
   try {
-    // في بيئة التطوير، نرجع بيانات تجريبية
-    // في الإنتاج، يجب استخدام JWT أو session
+    const userInfo = await getUserInfo(c);
+    
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401);
+    }
+    
+    // Get user details
+    const user = await c.env.DB.prepare(`
+      SELECT u.*, r.role_name, r.description as role_description, t.company_name
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN tenants t ON u.tenant_id = t.id
+      WHERE u.id = ?
+    `).bind(userInfo.userId).first();
+    
     return c.json({
       success: true,
-      user_id: 1,
-      username: 'demo',
-      full_name: 'مستخدم تجريبي',
-      role_id: 11,
-      role_name: 'مدير النظام SaaS',
-      tenant_id: 2,
-      company_name: 'شركة التمويل الأولى'
-    })
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        email: user.email,
+        role_id: user.role_id,
+        role_name: user.role_name,
+        role_description: user.role_description,
+        tenant_id: user.tenant_id,
+        company_name: user.company_name,
+        user_type: user.user_type
+      }
+    });
   } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
+    return c.json({ success: false, error: error.message }, 500);
+  }
+})
+
+// Get my permissions
+app.get('/api/my-permissions', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401);
+    }
+    
+    // Get permissions for this role
+    const permissions = await c.env.DB.prepare(`
+      SELECT p.name as permission_key, p.display_name as permission_name, p.category, p.description
+      FROM role_permissions rp
+      JOIN permissions p ON rp.permission_id = p.id
+      WHERE rp.role_id = ?
+      ORDER BY p.category, p.display_name
+    `).bind(userInfo.roleId).all();
+    
+    return c.json({
+      success: true,
+      role_id: userInfo.roleId,
+      permissions_count: permissions.results.length,
+      permissions: permissions.results
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
   }
 })
 
@@ -4418,7 +4465,51 @@ app.get('/admin/panel', async (c) => {
     `);
   }
   
-  return c.html(fullAdminPanel);
+  // Get user details from database
+  const user = await c.env.DB.prepare(`
+    SELECT u.*, r.role_name, r.description as role_description, t.company_name
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN tenants t ON u.tenant_id = t.id
+    WHERE u.id = ?
+  `).bind(userInfo.userId).first();
+  
+  // Get user permissions
+  const permissions = await c.env.DB.prepare(`
+    SELECT p.name as permission_key, p.display_name as permission_name, p.category
+    FROM role_permissions rp
+    JOIN permissions p ON rp.permission_id = p.id
+    WHERE rp.role_id = ?
+  `).bind(userInfo.roleId).all();
+  
+  // Inject user data and permissions into the page
+  let adminPanel = fullAdminPanel;
+  
+  // Replace placeholder with actual user data
+  adminPanel = adminPanel.replace(
+    '<script>',
+    `<script>
+      window.USER_DATA = ${JSON.stringify({
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        email: user.email,
+        role_id: user.role_id,
+        role_name: user.role_name,
+        role_description: user.role_description,
+        tenant_id: user.tenant_id,
+        company_name: user.company_name,
+        user_type: user.user_type
+      })};
+      window.USER_PERMISSIONS = ${JSON.stringify(permissions.results.map((p: any) => p.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${JSON.stringify(permissions.results)};
+      console.log('✅ User data loaded:', window.USER_DATA);
+      console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
+    </script>
+    <script>`
+  );
+  
+  return c.html(adminPanel);
 })
 
 // Requests Follow-up Report Page (Manager only)

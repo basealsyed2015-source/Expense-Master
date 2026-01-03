@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>عرض الصلاحيات - نظام حاسبة التمويل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg p-6 mb-6 shadow-lg">
+            <h1 class="text-3xl font-bold mb-2">
+                <i class="fas fa-shield-alt ml-2"></i>
+                عرض صلاحياتي
+            </h1>
+            <p class="text-blue-100">عرض جميع الصلاحيات المتاحة لحسابك</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="bg-white rounded-lg p-8 text-center">
+            <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+            <p class="text-gray-600">جاري تحميل البيانات...</p>
+        </div>
+
+        <!-- User Info Card -->
+        <div id="userInfo" class="hidden bg-white rounded-lg p-6 mb-6 shadow-lg">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-user text-blue-600 ml-2"></i>
+                معلومات المستخدم
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="userDetails"></div>
+        </div>
+
+        <!-- Permissions Grid -->
+        <div id="permissions" class="hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-list-check text-green-600 ml-2"></i>
+                الصلاحيات (<span id="permCount">0</span> صلاحية)
+            </h2>
+            
+            <!-- Categories -->
+            <div id="categories" class="space-y-4"></div>
+        </div>
+
+        <!-- No Permissions -->
+        <div id="noPermissions" class="hidden bg-yellow-50 border-2 border-yellow-500 rounded-lg p-6 text-center">
+            <i class="fas fa-exclamation-triangle text-4xl text-yellow-600 mb-4"></i>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">لا توجد صلاحيات</h3>
+            <p class="text-gray-600">لا يوجد لديك أي صلاحيات حالياً. يرجى الاتصال بالمسؤول.</p>
+        </div>
+
+        <!-- Back Button -->
+        <div class="mt-6">
+            <a href="/admin/panel" class="inline-block bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-bold">
+                <i class="fas fa-arrow-right ml-2"></i>
+                العودة إلى لوحة التحكم
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    <script>
+        // Category names in Arabic
+        const categoryNames = {
+            'dashboard': 'لوحة التحكم',
+            'customers': 'العملاء',
+            'requests': 'الطلبات',
+            'hr': 'الموارد البشرية',
+            'reports': 'التقارير',
+            'system': 'النظام',
+            'admin': 'الإدارة',
+            'finance': 'المالية',
+            'tools': 'الأدوات'
+        };
+
+        // Category icons
+        const categoryIcons = {
+            'dashboard': 'fa-chart-line',
+            'customers': 'fa-users',
+            'requests': 'fa-file-invoice',
+            'hr': 'fa-user-tie',
+            'reports': 'fa-chart-bar',
+            'system': 'fa-cog',
+            'admin': 'fa-shield-alt',
+            'finance': 'fa-money-bill-wave',
+            'tools': 'fa-tools'
+        };
+
+        // Category colors
+        const categoryColors = {
+            'dashboard': 'blue',
+            'customers': 'green',
+            'requests': 'purple',
+            'hr': 'indigo',
+            'reports': 'pink',
+            'system': 'gray',
+            'admin': 'red',
+            'finance': 'yellow',
+            'tools': 'teal'
+        };
+
+        async function loadPermissions() {
+            try {
+                // Fetch user info from API
+                const response = await axios.get('/api/user-info');
+                const userData = response.data.user;
+
+                // Display user info
+                const userDetails = document.getElementById('userDetails');
+                userDetails.innerHTML = `
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600 mb-1">الاسم الكامل</p>
+                        <p class="text-lg font-bold text-gray-800">${userData.full_name}</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600 mb-1">اسم المستخدم</p>
+                        <p class="text-lg font-bold text-gray-800">${userData.username}</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600 mb-1">البريد الإلكتروني</p>
+                        <p class="text-lg font-bold text-gray-800">${userData.email || 'غير متوفر'}</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600 mb-1">الدور</p>
+                        <p class="text-lg font-bold text-gray-800">${userData.role_name}</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600 mb-1">الشركة</p>
+                        <p class="text-lg font-bold text-gray-800">${userData.company_name || 'جميع الشركات'}</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600 mb-1">نوع المستخدم</p>
+                        <p class="text-lg font-bold text-gray-800">${userData.user_type}</p>
+                    </div>
+                `;
+
+                // Fetch permissions
+                const permResponse = await axios.get('/api/my-permissions');
+                const permissions = permResponse.data.permissions;
+
+                if (permissions.length === 0) {
+                    document.getElementById('noPermissions').classList.remove('hidden');
+                } else {
+                    // Group permissions by category
+                    const grouped = {};
+                    permissions.forEach(perm => {
+                        if (!grouped[perm.category]) {
+                            grouped[perm.category] = [];
+                        }
+                        grouped[perm.category].push(perm);
+                    });
+
+                    // Display permissions by category
+                    const categoriesDiv = document.getElementById('categories');
+                    Object.keys(grouped).sort().forEach(category => {
+                        const categoryPerms = grouped[category];
+                        const color = categoryColors[category] || 'gray';
+                        const icon = categoryIcons[category] || 'fa-star';
+                        const categoryName = categoryNames[category] || category;
+
+                        const categoryCard = document.createElement('div');
+                        categoryCard.className = 'bg-white rounded-lg shadow-lg overflow-hidden';
+                        categoryCard.innerHTML = `
+                            <div class="bg-${color}-600 text-white p-4 flex items-center justify-between">
+                                <h3 class="text-xl font-bold flex items-center">
+                                    <i class="fas ${icon} ml-2"></i>
+                                    ${categoryName}
+                                </h3>
+                                <span class="bg-white text-${color}-600 px-3 py-1 rounded-full font-bold">
+                                    ${categoryPerms.length}
+                                </span>
+                            </div>
+                            <div class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                ${categoryPerms.map(perm => `
+                                    <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                        <i class="fas fa-check-circle text-green-500 ml-2"></i>
+                                        <span class="text-gray-700">${perm.permission_name}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                        categoriesDiv.appendChild(categoryCard);
+                    });
+
+                    document.getElementById('permCount').textContent = permissions.length;
+                    document.getElementById('permissions').classList.remove('hidden');
+                }
+
+                document.getElementById('userInfo').classList.remove('hidden');
+                document.getElementById('loading').classList.add('hidden');
+
+            } catch (error) {
+                console.error('Error loading permissions:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="bg-red-50 border-2 border-red-500 rounded-lg p-6 text-center">
+                        <i class="fas fa-exclamation-circle text-4xl text-red-600 mb-4"></i>
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">خطأ في تحميل البيانات</h3>
+                        <p class="text-gray-600 mb-4">${error.response?.data?.error || error.message}</p>
+                        <a href="/login" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold">
+                            <i class="fas fa-sign-in-alt ml-2"></i>
+                            تسجيل الدخول
+                        </a>
+                    </div>
+                `;
+            }
+        }
+
+        // Load on page load
+        window.addEventListener('load', loadPermissions);
+    </script>
+</body>
+</html>
