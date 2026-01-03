@@ -223,8 +223,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <span class="font-medium text-gray-700 group-hover:text-yellow-700">الباقات</span>
                 </a>
 
-                <!-- Company Rates -->
-                <a href="/admin/company-rates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
+                <!-- Tenants Management -->
+                <a href="/admin/tenants" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
                     <i class="fas fa-building text-xl text-cyan-600 group-hover:text-cyan-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-cyan-700">إدارة الشركات</span>
                 </a>
@@ -3913,8 +3913,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         '/admin/tenants',
         '/admin/tenant-calculators',
         '/admin/saas-settings',
-        '/admin/settings',
-        '/admin/company-rates'
+        '/admin/settings'
       ],
       
       // مدير شركة (Role ID: 12) - إدارة شركته فقط
@@ -3932,8 +3931,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         '/admin/hr',
         '/admin/notifications',
         '/calculator',
-        '/admin/settings',
-        '/admin/company-rates'
+        '/admin/settings'
       ],
       
       // مشرف موظفين (Role ID: 13) - الموارد البشرية
