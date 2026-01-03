@@ -12024,42 +12024,42 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     <span class="font-medium text-blue-600">لوحة المعلومات</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/employees" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-users text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">إدارة الموظفين</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/attendance" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-user-check text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">الحضور والغياب</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/leaves" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-calendar-alt text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">إدارة الإجازات</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/salaries" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-money-bill-wave text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">الرواتب</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/performance" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-star text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">تقييم الأداء</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/promotions" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-level-up-alt text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">الترقيات والنقل</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/documents" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-bell text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">تنبيهات المستندات</span>
                 </a>
 
-                <a href="#" onclick="alert('قيد التطوير'); return false;" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr/reports" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-file-alt text-xl text-gray-600 group-hover:text-blue-600"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">التقارير</span>
                 </a>
