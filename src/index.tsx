@@ -341,13 +341,13 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     
     console.log('✅ User found:', { userId: user.id, tenantId: user.tenant_id, roleId: user.role_id })
     
-    // Super Admin (role_id = 1) can see all data
-    if (user.role_id === 1) {
+    // SaaS Admin (role_id = 11) can see all companies and data
+    if (user.role_id === 11) {
       const queryTenantId = c.req.query('tenant_id')
-      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1 }
+      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 11 }
     }
     
-    // For other roles, return their tenant_id and role_id
+    // For other roles (Company Admin, Supervisor, Employee), return their tenant_id and role_id
     // Prefer token values if available, fallback to DB values
     return { 
       userId: user.id, 
@@ -1434,7 +1434,7 @@ app.post('/api/users', async (c) => {
     if (tenant_id && tenant_id !== '') {
       // Convert to integer if provided as string
       tenant_id = parseInt(tenant_id as string);
-    } else if (userInfo.roleId === 1) {
+    } else if (userInfo.roleId === 11) {
       // Super admin creating user without tenant - allow null
       tenant_id = null;
     } else {
@@ -1522,14 +1522,14 @@ app.get('/api/customers', async (c) => {
       LEFT JOIN financing_requests f ON c.id = f.customer_id`
     
     // Apply filtering based on role
-    if (userInfo.roleId === 1) {
+    if (userInfo.roleId === 11) {
       // Role 1: Super Admin - sees ALL customers (no filter)
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
       // Role 2: Company Admin & Role 3: Supervisor - see company customers only
       if (userInfo.tenantId) {
         query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 14) {
       // Role 4: Employee - sees customers from same tenant
       if (userInfo.tenantId) {
         query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
@@ -3250,10 +3250,10 @@ app.get('/api/dashboard/stats', async (c) => {
     // Apply role-based filtering
     let tenant_id = null;
     
-    if (userInfo.roleId === 1) {
+    if (userInfo.roleId === 11) {
       // Role 1: Super Admin - sees ALL data (no filter)
       tenant_id = null;
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
       // Role 2: Company Admin & Role 3: Supervisor - see company data only
       tenant_id = userInfo.tenantId;
       if (tenant_id !== null) {
@@ -3264,7 +3264,7 @@ app.get('/api/dashboard/stats', async (c) => {
         subscriptions_query += ' AND tenant_id = ?'
         users_query += ' AND tenant_id = ?'
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 14) {
       // Role 4: Employee - sees only assigned customers/requests
       if (userInfo.userId) {
         customers_query += ' WHERE assigned_to = ?'
@@ -3307,11 +3307,11 @@ app.get('/api/dashboard/stats', async (c) => {
       
     const subscriptions_count = tenant_id !== null && userInfo.roleId !== 1 && userInfo.roleId !== 4
       ? await c.env.DB.prepare(subscriptions_query).bind(userInfo.tenantId).first()
-      : (userInfo.roleId === 1 ? await c.env.DB.prepare(subscriptions_query).first() : { count: 0 })
+      : (userInfo.roleId === 11 ? await c.env.DB.prepare(subscriptions_query).first() : { count: 0 })
       
     const users_count = tenant_id !== null && userInfo.roleId !== 1 && userInfo.roleId !== 4
       ? await c.env.DB.prepare(users_query).bind(userInfo.tenantId).first()
-      : (userInfo.roleId === 1 ? await c.env.DB.prepare(users_query).first() : { count: 0 })
+      : (userInfo.roleId === 11 ? await c.env.DB.prepare(users_query).first() : { count: 0 })
     
     // Banks - no tenant_id column, count all active banks
     // Banks are shared across all tenants
@@ -3404,13 +3404,13 @@ app.get('/api/reports/workflow', async (c) => {
     const params: any[] = [];
 
     // Apply role-based filtering
-    if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    if (userInfo.roleId === 12 || userInfo.roleId === 13) {
       // Company Admin/Supervisor - see company data
       if (userInfo.tenantId) {
         whereClause += ' AND fr.tenant_id = ?';
         params.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 14) {
       // Employee - see only assigned customers
       if (userInfo.userId) {
         whereClause += ' AND c.assigned_to = ?';
@@ -4066,7 +4066,7 @@ app.get('/api/reports/requests-followup', async (c) => {
     let tenant_id = queryTenantId ? parseInt(queryTenantId) : userInfo.tenantId
     
     // Super Admin (role_id = 1) can access all tenants if no specific tenant_id provided
-    if (userInfo.roleId === 1 && !tenant_id) {
+    if (userInfo.roleId === 11 && !tenant_id) {
       // If no tenant_id specified, show all requests
       tenant_id = null
     }
@@ -5713,12 +5713,12 @@ app.get('/admin/dashboard', async (c) => {
     let requestsJoinWhere = '';
     let queryParams: any[] = [];
     
-    if (userInfo.roleId === 1) {
+    if (userInfo.roleId === 11) {
       // Super Admin - sees ALL data
       customersWhere = '';
       requestsWhere = '';
       requestsJoinWhere = '';
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
       // Role 2: Company Admin & Role 3: Supervisor - see company data only
       if (userInfo.tenantId) {
         customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
@@ -5726,7 +5726,7 @@ app.get('/admin/dashboard', async (c) => {
         requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 14) {
       // Role 4: Employee - sees customers/requests from same tenant
       if (userInfo.tenantId) {
         customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
@@ -7444,17 +7444,17 @@ app.get('/admin/customers', async (c) => {
     let query = 'SELECT * FROM customers';
     let queryParams: any[] = [];
     
-    if (userInfo.roleId === 1) {
+    if (userInfo.roleId === 11) {
       // Role 1: Super Admin - sees ALL customers
       // No filtering
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
       // Role 2: Company Admin - sees all company customers
       // Role 3: Supervisor - sees all company customers (read-only)
       if (userInfo.tenantId) {
         query += ' WHERE tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 14) {
       // Role 4: Employee - sees ONLY assigned customers
       if (userInfo.userId) {
         query += ' WHERE assigned_to = ?';
@@ -9061,17 +9061,17 @@ app.get('/admin/requests', async (c) => {
     
     let queryParams: any[] = [];
     
-    if (userInfo.roleId === 1) {
+    if (userInfo.roleId === 11) {
       // Role 1: Super Admin - sees ALL requests
       // No WHERE clause
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
       // Role 2: Company Admin - sees all company requests
       // Role 3: Supervisor - sees all company requests (read-only)
       if (userInfo.tenantId) {
         query += ' WHERE c.tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 14) {
       // Role 4: Employee - sees requests from same tenant
       if (userInfo.tenantId) {
         query += ' WHERE c.tenant_id = ?';
