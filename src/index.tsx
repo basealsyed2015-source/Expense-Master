@@ -5747,10 +5747,16 @@ app.get('/c/:tenant/admin', async (c) => {
     `)
   }
   
-  // Return admin panel with tenant branding
-  // Note: User name and email are loaded dynamically from localStorage by JavaScript
+  // Return admin panel with tenant branding and user role
+  // Inject role_id directly into HTML for menu filtering
   return c.html(fullAdminPanel
     .replace('لوحة التحكم - نظام حاسبة التمويل', `لوحة التحكم - ${tenant.company_name}`)
+    .replace('window.initMenuPermissions();', `
+      // تعيين role_id من Backend مباشرة
+      window.USER_ROLE_ID = ${userInfo.roleId};
+      console.log('🎯 Role ID من Backend:', window.USER_ROLE_ID);
+      window.initMenuPermissions();
+    `)
   )
 })
 

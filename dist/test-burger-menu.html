@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار قائمة البرجر - SaaS Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
+            <h1 class="text-3xl font-bold text-center mb-6">
+                <i class="fas fa-vial ml-2"></i>
+                اختبار قائمة البرجر - SaaS Admin
+            </h1>
+
+            <!-- خطوة 1: تسجيل الدخول -->
+            <div class="mb-6">
+                <h2 class="text-xl font-bold mb-4">1️⃣ تسجيل الدخول</h2>
+                <div class="space-y-3">
+                    <input type="text" id="username" value="saas_admin" class="w-full p-3 border rounded-lg" placeholder="اسم المستخدم">
+                    <input type="password" id="password" value="SaaS@Admin2025" class="w-full p-3 border rounded-lg" placeholder="كلمة السر">
+                    <button onclick="doLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold">
+                        <i class="fas fa-sign-in-alt ml-2"></i>
+                        تسجيل الدخول
+                    </button>
+                </div>
+                <div id="login-result" class="mt-4"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- خطوة 2: استدعاء API user-info -->
+            <div class="mb-6">
+                <h2 class="text-xl font-bold mb-4">2️⃣ جلب معلومات المستخدم</h2>
+                <button onclick="fetchUserInfo()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold">
+                    <i class="fas fa-user ml-2"></i>
+                    جلب البيانات من /api/user-info
+                </button>
+                <div id="user-info-result" class="mt-4"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- خطوة 3: اختبار تصفية القوائم -->
+            <div class="mb-6">
+                <h2 class="text-xl font-bold mb-4">3️⃣ اختبار تصفية القوائم يدوياً</h2>
+                <div class="space-y-3">
+                    <button onclick="testFilter(11)" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold">
+                        اختبار الدور 11 (مدير النظام SaaS) - 18 صفحة
+                    </button>
+                    <button onclick="testFilter(12)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold">
+                        اختبار الدور 12 (مدير شركة) - 15 صفحة
+                    </button>
+                    <button onclick="testFilter(13)" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-lg font-bold">
+                        اختبار الدور 13 (مشرف موظفين) - 5 صفحات
+                    </button>
+                    <button onclick="testFilter(14)" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-3 rounded-lg font-bold">
+                        اختبار الدور 14 (موظف) - 5 صفحات
+                    </button>
+                </div>
+                <div id="filter-result" class="mt-4"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- روابط سريعة -->
+            <div class="space-y-3">
+                <a href="/admin/panel" target="_blank" class="block w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-center font-bold">
+                    <i class="fas fa-tachometer-alt ml-2"></i>
+                    فتح لوحة التحكم (نافذة جديدة)
+                </a>
+                <button onclick="checkConsole()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 rounded-lg font-bold">
+                    <i class="fas fa-terminal ml-2"></i>
+                    عرض Console Logs
+                </button>
+            </div>
+
+            <!-- عرض Console Logs -->
+            <div id="console-logs" class="mt-6 bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm max-h-96 overflow-auto hidden">
+                <div class="flex justify-between mb-2">
+                    <strong class="text-white">Console Output:</strong>
+                    <button onclick="document.getElementById('console-logs').classList.add('hidden')" class="text-white hover:text-red-400">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="console-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // تخزين console logs
+        const consoleLogs = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        console.log = function(...args) {
+            consoleLogs.push({ type: 'log', message: args.join(' ') });
+            originalLog.apply(console, args);
+        };
+
+        console.error = function(...args) {
+            consoleLogs.push({ type: 'error', message: args.join(' ') });
+            originalError.apply(console, args);
+        };
+
+        console.warn = function(...args) {
+            consoleLogs.push({ type: 'warn', message: args.join(' ') });
+            originalWarn.apply(console, args);
+        };
+
+        // تسجيل الدخول
+        async function doLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('login-result');
+
+            try {
+                const response = await axios.post('/api/auth/login', { username, password }, { withCredentials: true });
+                
+                resultDiv.innerHTML = `
+                    <div class="bg-green-50 border-r-4 border-green-600 p-4 rounded">
+                        <p class="font-bold text-green-800">✅ تم تسجيل الدخول بنجاح!</p>
+                        <p class="text-sm mt-2">الاسم: ${response.data.user.full_name}</p>
+                        <p class="text-sm">Role ID: ${response.data.user.role_id}</p>
+                        <p class="text-sm">Token: ${response.data.token.substring(0, 20)}...</p>
+                    </div>
+                `;
+
+                // حفظ في localStorage
+                localStorage.setItem('authToken', response.data.token);
+                localStorage.setItem('user_role_id', response.data.user.role_id);
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-50 border-r-4 border-red-600 p-4 rounded">
+                        <p class="font-bold text-red-800">❌ فشل تسجيل الدخول</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // جلب معلومات المستخدم
+        async function fetchUserInfo() {
+            const resultDiv = document.getElementById('user-info-result');
+
+            try {
+                const response = await axios.get('/api/user-info');
+                
+                resultDiv.innerHTML = `
+                    <div class="bg-blue-50 border-r-4 border-blue-600 p-4 rounded">
+                        <p class="font-bold text-blue-800">✅ تم جلب البيانات بنجاح!</p>
+                        <pre class="text-xs mt-2 bg-white p-2 rounded overflow-auto">${JSON.stringify(response.data, null, 2)}</pre>
+                    </div>
+                `;
+
+                console.log('✅ استجابة API:', response.data);
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-50 border-r-4 border-red-600 p-4 rounded">
+                        <p class="font-bold text-red-800">❌ فشل جلب البيانات</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // اختبار التصفية
+        function testFilter(roleId) {
+            console.log('='.repeat(50));
+            console.log('🧪 بدء اختبار تصفية القوائم للدور:', roleId);
+            
+            // محاكاة ROLE_PAGES
+            const ROLE_PAGES = {
+                11: ['/admin/dashboard', '/admin/customers', '/admin/requests', '/admin/reports', '/admin/rates', '/admin/payments', '/admin/banks', '/admin/subscriptions', '/admin/packages', '/admin/users', '/admin/roles', '/admin/hr', '/admin/notifications', '/calculator', '/admin/tenants', '/admin/tenant-calculators', '/admin/saas-settings', '/admin/settings', '/admin/company-rates'],
+                12: ['/admin/dashboard', '/admin/customers', '/admin/requests', '/admin/reports', '/admin/rates', '/admin/payments', '/admin/banks', '/admin/subscriptions', '/admin/packages', '/admin/users', '/admin/hr', '/admin/notifications', '/calculator', '/admin/settings', '/admin/company-rates'],
+                13: ['/admin/dashboard', '/admin/hr', '/admin/notifications', '/calculator', '/admin/reports'],
+                14: ['/admin/dashboard', '/admin/customers', '/admin/requests', '/calculator', '/admin/notifications']
+            };
+
+            const allowedPages = ROLE_PAGES[roleId] || [];
+            console.log('📋 الصفحات المسموحة:', allowedPages);
+            console.log('📊 العدد:', allowedPages.length);
+
+            const resultDiv = document.getElementById('filter-result');
+            resultDiv.innerHTML = `
+                <div class="bg-purple-50 border-r-4 border-purple-600 p-4 rounded">
+                    <p class="font-bold text-purple-800">✅ اختبار الدور ${roleId}</p>
+                    <p class="text-sm mt-2">عدد الصفحات المتاحة: ${allowedPages.length}</p>
+                    <p class="text-sm">الصفحات: ${allowedPages.slice(0, 5).join(', ')}...</p>
+                    <p class="text-sm mt-2 font-bold">تحقق من Console للتفاصيل الكاملة!</p>
+                </div>
+            `;
+        }
+
+        // عرض Console Logs
+        function checkConsole() {
+            const consoleDiv = document.getElementById('console-logs');
+            const contentDiv = document.getElementById('console-content');
+
+            let html = '';
+            consoleLogs.forEach(log => {
+                let color = 'text-green-400';
+                if (log.type === 'error') color = 'text-red-400';
+                if (log.type === 'warn') color = 'text-yellow-400';
+
+                html += `<div class="${color}">${log.message}</div>`;
+            });
+
+            contentDiv.innerHTML = html || '<div class="text-gray-400">لا توجد logs حتى الآن</div>';
+            consoleDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

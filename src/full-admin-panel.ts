@@ -4022,35 +4022,46 @@ export const fullAdminPanel = `<!DOCTYPE html>
      */
     async function initMenuPermissions() {
       try {
-        console.log('🔄 تحميل معلومات المستخدم من API...');
+        console.log('🔄 تحميل معلومات المستخدم...');
         
         let roleId = null;
         
-        // جلب البيانات من API أولاً (دائماً)
-        try {
-          const response = await fetch('/api/user-info');
-          if (response.ok) {
-            const result = await response.json();
-            console.log('✅ استجابة API:', result);
-            
-            if (result.success && result.user) {
-              roleId = result.user.role_id;
+        // 1. محاولة قراءة من window.USER_ROLE_ID (مُمرر من Backend)
+        if (typeof window.USER_ROLE_ID !== 'undefined') {
+          roleId = window.USER_ROLE_ID;
+          console.log('✅ Role ID من Backend:', roleId);
+        }
+        
+        // 2. إذا لم يكن موجوداً، جلب من API
+        if (!roleId) {
+          console.log('🔄 جلب من API...');
+          try {
+            const response = await fetch('/api/user-info');
+            if (response.ok) {
+              const result = await response.json();
+              console.log('✅ استجابة API:', result);
               
-              // حفظ في localStorage
-              if (roleId) {
-                localStorage.setItem('user_role_id', roleId);
-                localStorage.setItem('user_name', result.user.full_name);
-                localStorage.setItem('user_email', result.user.email);
-                console.log('💾 تم حفظ البيانات في localStorage:', { roleId });
+              if (result.success && result.user) {
+                roleId = result.user.role_id;
+                
+                // حفظ في localStorage
+                if (roleId) {
+                  localStorage.setItem('user_role_id', roleId);
+                  localStorage.setItem('user_name', result.user.full_name);
+                  localStorage.setItem('user_email', result.user.email);
+                  console.log('💾 تم حفظ البيانات في localStorage:', { roleId });
+                }
               }
+            } else {
+              console.error('❌ فشل API:', response.status);
             }
-          } else {
-            console.error('❌ فشل API:', response.status);
+          } catch (apiError) {
+            console.error('❌ خطأ في استدعاء API:', apiError);
           }
-        } catch (apiError) {
-          console.error('❌ خطأ في استدعاء API:', apiError);
-          
-          // Fallback: محاولة قراءة من localStorage
+        }
+        
+        // 3. Fallback: محاولة قراءة من localStorage
+        if (!roleId) {
           roleId = localStorage.getItem('user_role_id');
           console.log('⚠️ استخدام localStorage كـ fallback:', roleId);
         }
