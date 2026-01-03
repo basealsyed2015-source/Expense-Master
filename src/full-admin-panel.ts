@@ -3960,6 +3960,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
      */
     function filterMenuByRole(roleId) {
       console.log('🔐 تصفية القائمة للدور:', roleId);
+      console.log('📋 نوع البيانات:', typeof roleId);
       
       // إذا لم يُحدد الدور، إخفاء جميع الروابط الإدارية
       if (!roleId) {
@@ -3971,9 +3972,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
       // الحصول على الصفحات المتاحة للدور
       const allowedPages = ROLE_PAGES[roleId] || [];
       console.log('✅ الصفحات المتاحة:', allowedPages.length);
+      console.log('📄 قائمة الصفحات:', allowedPages);
       
       // إخفاء جميع الروابط أولاً
       const allLinks = document.querySelectorAll('#mobile-menu a[href^="/admin"]');
+      console.log('🔗 إجمالي الروابط الإدارية:', allLinks.length);
+      
+      let visibleCount = 0;
       allLinks.forEach(link => {
         const href = link.getAttribute('href');
         
@@ -3981,9 +3986,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
         if (allowedPages.includes(href)) {
           link.style.display = 'flex';
           link.classList.remove('hidden');
+          visibleCount++;
+          console.log('✅ إظهار:', href);
         } else {
           link.style.display = 'none';
           link.classList.add('hidden');
+          console.log('❌ إخفاء:', href);
         }
       });
       
@@ -3995,8 +4003,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
       });
       
       // عرض الإحصائيات
-      const visibleLinks = document.querySelectorAll('#mobile-menu a[href^="/admin"]:not(.hidden)');
-      console.log(\`📊 عدد الروابط المرئية: \${visibleLinks.length}/\${allLinks.length}\`);
+      console.log(\`📊 النتيجة النهائية: \${visibleCount} روابط مرئية من أصل \${allLinks.length}\`);
     }
 
     /**
@@ -4015,29 +4022,42 @@ export const fullAdminPanel = `<!DOCTYPE html>
      */
     async function initMenuPermissions() {
       try {
-        console.log('🔄 تحميل معلومات المستخدم...');
+        console.log('🔄 تحميل معلومات المستخدم من API...');
         
-        // محاولة الحصول على role_id من localStorage
-        let roleId = localStorage.getItem('user_role_id');
+        let roleId = null;
         
-        // إذا لم يكن موجوداً، جلبه من API
-        if (!roleId) {
+        // جلب البيانات من API أولاً (دائماً)
+        try {
           const response = await fetch('/api/user-info');
           if (response.ok) {
-            const userData = await response.json();
-            roleId = userData.role_id;
+            const result = await response.json();
+            console.log('✅ استجابة API:', result);
             
-            // حفظ في localStorage
-            if (roleId) {
-              localStorage.setItem('user_role_id', roleId);
-              localStorage.setItem('user_name', userData.full_name);
-              localStorage.setItem('user_email', userData.email);
+            if (result.success && result.user) {
+              roleId = result.user.role_id;
+              
+              // حفظ في localStorage
+              if (roleId) {
+                localStorage.setItem('user_role_id', roleId);
+                localStorage.setItem('user_name', result.user.full_name);
+                localStorage.setItem('user_email', result.user.email);
+                console.log('💾 تم حفظ البيانات في localStorage:', { roleId });
+              }
             }
+          } else {
+            console.error('❌ فشل API:', response.status);
           }
+        } catch (apiError) {
+          console.error('❌ خطأ في استدعاء API:', apiError);
+          
+          // Fallback: محاولة قراءة من localStorage
+          roleId = localStorage.getItem('user_role_id');
+          console.log('⚠️ استخدام localStorage كـ fallback:', roleId);
         }
         
         // تطبيق التصفية
         if (roleId) {
+          console.log('🎯 تطبيق تصفية القوائم للدور:', roleId);
           filterMenuByRole(parseInt(roleId));
         } else {
           console.warn('⚠️ لم يتم العثور على معلومات المستخدم');
