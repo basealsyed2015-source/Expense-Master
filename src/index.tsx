@@ -5700,6 +5700,7 @@ app.get('/admin/tenants/:id', async (c) => {
 app.get('/admin/tenants', (c) => c.html(tenantsPage))
 app.get('/admin/tenant-calculators', (c) => c.html(tenantCalculatorsPage))
 app.get('/admin/saas-settings', (c) => c.html(saasSettingsPage))
+app.get('/admin/settings', (c) => c.html(saasSettingsPage)) // Alias for saas-settings
 app.get('/admin/reports', (c) => c.html(reportsPage))
 app.get('/admin/reports/customers', (c) => c.html(customersReportPage))
 app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
@@ -5890,9 +5891,9 @@ app.get('/admin/dashboard', async (c) => {
       SELECT 
         status,
         COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${whereClause}), 2) as percentage
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${requestsWhere}), 2) as percentage
       FROM financing_requests
-      ${whereClause}
+      ${requestsWhere}
       GROUP BY status
     `).all()
     
