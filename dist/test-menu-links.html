@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار روابط قائمة البرجر</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
+            <h1 class="text-3xl font-bold text-center mb-6">
+                <i class="fas fa-vial ml-2"></i>
+                اختبار روابط قائمة البرجر
+            </h1>
+
+            <!-- خطوة 1: تسجيل الدخول -->
+            <div class="mb-6 bg-blue-50 p-4 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">1️⃣ تسجيل الدخول</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block mb-2">اسم المستخدم:</label>
+                        <input type="text" id="username" value="saas_admin" class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block mb-2">كلمة السر:</label>
+                        <input type="password" id="password" value="SaaS@Admin2025" class="w-full p-3 border rounded-lg">
+                    </div>
+                </div>
+                <button onclick="doLogin()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold">
+                    <i class="fas fa-sign-in-alt ml-2"></i>
+                    تسجيل الدخول
+                </button>
+                <div id="login-result" class="mt-4"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- خطوة 2: اختبار الروابط -->
+            <div class="mb-6 bg-green-50 p-4 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">2️⃣ اختبار الروابط</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button onclick="testLink('/admin/dashboard')" class="bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600">
+                        <i class="fas fa-tachometer-alt ml-2"></i>
+                        لوحة المعلومات
+                    </button>
+                    <button onclick="testLink('/admin/subscriptions')" class="bg-pink-500 text-white p-3 rounded-lg hover:bg-pink-600">
+                        <i class="fas fa-calendar-check ml-2"></i>
+                        الاشتراكات
+                    </button>
+                    <button onclick="testLink('/admin/settings')" class="bg-purple-500 text-white p-3 rounded-lg hover:bg-purple-600">
+                        <i class="fas fa-cog ml-2"></i>
+                        الإعدادات
+                    </button>
+                    <button onclick="testLink('/admin/customers')" class="bg-green-500 text-white p-3 rounded-lg hover:bg-green-600">
+                        <i class="fas fa-users ml-2"></i>
+                        العملاء
+                    </button>
+                </div>
+                <div id="test-results" class="mt-4"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- خطوة 3: فحص الصلاحيات -->
+            <div class="mb-6 bg-yellow-50 p-4 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">3️⃣ فحص الصلاحيات</h2>
+                <button onclick="checkPermissions()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 rounded-lg font-bold">
+                    <i class="fas fa-shield-alt ml-2"></i>
+                    فحص صلاحيات المستخدم
+                </button>
+                <div id="permissions-result" class="mt-4"></div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- خطوة 4: محاكاة قائمة البرجر -->
+            <div class="bg-purple-50 p-4 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">4️⃣ محاكاة قائمة البرجر</h2>
+                <div id="menu-simulation" class="space-y-2">
+                    <!-- سيتم ملؤها ديناميكياً -->
+                </div>
+            </div>
+
+            <!-- روابط مفيدة -->
+            <div class="mt-6 flex gap-3">
+                <a href="/admin/panel" target="_blank" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-center font-bold">
+                    <i class="fas fa-tachometer-alt ml-2"></i>
+                    لوحة التحكم
+                </a>
+                <a href="/login" target="_blank" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg text-center font-bold">
+                    <i class="fas fa-sign-in-alt ml-2"></i>
+                    تسجيل الدخول
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRoleId = null;
+
+        // تسجيل الدخول
+        async function doLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('login-result');
+
+            try {
+                const response = await axios.post('/api/auth/login', { username, password }, { withCredentials: true });
+                
+                currentRoleId = response.data.user.role_id;
+                localStorage.setItem('user_role_id', currentRoleId);
+                
+                resultDiv.innerHTML = `
+                    <div class="bg-green-100 border-r-4 border-green-600 p-4 rounded">
+                        <p class="font-bold text-green-800">✅ تم تسجيل الدخول بنجاح!</p>
+                        <p class="text-sm mt-2">الاسم: ${response.data.user.full_name}</p>
+                        <p class="text-sm">Role ID: <strong>${response.data.user.role_id}</strong></p>
+                        <p class="text-sm">الدور: ${response.data.user.role_name}</p>
+                    </div>
+                `;
+
+                // تحديث المحاكاة
+                simulateMenu(currentRoleId);
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-100 border-r-4 border-red-600 p-4 rounded">
+                        <p class="font-bold text-red-800">❌ فشل تسجيل الدخول</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // اختبار رابط
+        async function testLink(url) {
+            const resultDiv = document.getElementById('test-results');
+            
+            try {
+                const response = await axios.get(url);
+                const status = response.status;
+                const title = response.data.match(/<title>(.*?)<\/title>/)?.[1] || 'غير معروف';
+                
+                resultDiv.innerHTML = `
+                    <div class="bg-green-100 border-r-4 border-green-600 p-4 rounded">
+                        <p class="font-bold text-green-800">✅ الرابط يعمل: ${url}</p>
+                        <p class="text-sm mt-2">Status: ${status}</p>
+                        <p class="text-sm">Title: ${title}</p>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-100 border-r-4 border-red-600 p-4 rounded">
+                        <p class="font-bold text-red-800">❌ الرابط لا يعمل: ${url}</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // فحص الصلاحيات
+        async function checkPermissions() {
+            const resultDiv = document.getElementById('permissions-result');
+            
+            try {
+                const response = await axios.get('/api/user-info');
+                const user = response.data.user;
+                
+                resultDiv.innerHTML = `
+                    <div class="bg-blue-100 border-r-4 border-blue-600 p-4 rounded">
+                        <p class="font-bold text-blue-800">✅ معلومات المستخدم</p>
+                        <pre class="text-xs mt-2 bg-white p-2 rounded overflow-auto">${JSON.stringify(user, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-100 border-r-4 border-red-600 p-4 rounded">
+                        <p class="font-bold text-red-800">❌ فشل جلب البيانات</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // محاكاة قائمة البرجر
+        function simulateMenu(roleId) {
+            const ROLE_PAGES = {
+                11: ['/admin/dashboard', '/admin/customers', '/admin/requests', '/admin/reports', '/admin/rates', '/admin/payments', '/admin/banks', '/admin/subscriptions', '/admin/packages', '/admin/users', '/admin/roles', '/admin/hr', '/admin/notifications', '/calculator', '/admin/tenants', '/admin/tenant-calculators', '/admin/saas-settings', '/admin/settings', '/admin/company-rates'],
+                12: ['/admin/dashboard', '/admin/customers', '/admin/requests', '/admin/reports', '/admin/rates', '/admin/payments', '/admin/banks', '/admin/subscriptions', '/admin/packages', '/admin/users', '/admin/hr', '/admin/notifications', '/calculator', '/admin/settings', '/admin/company-rates'],
+                13: ['/admin/dashboard', '/admin/hr', '/admin/notifications', '/calculator', '/admin/reports'],
+                14: ['/admin/dashboard', '/admin/customers', '/admin/requests', '/calculator', '/admin/notifications']
+            };
+
+            const allowedPages = ROLE_PAGES[roleId] || [];
+            const menuDiv = document.getElementById('menu-simulation');
+            
+            let html = `<p class="font-bold mb-2">الصفحات المتاحة للدور ${roleId}: ${allowedPages.length} صفحة</p>`;
+            
+            allowedPages.forEach(page => {
+                const isSubscriptions = page === '/admin/subscriptions';
+                const bgColor = isSubscriptions ? 'bg-pink-100 border-pink-500' : 'bg-gray-100 border-gray-300';
+                html += `
+                    <a href="${page}" target="_blank" class="block p-3 ${bgColor} border-r-4 rounded hover:bg-opacity-75">
+                        ${isSubscriptions ? '⭐ ' : ''}${page}
+                        ${isSubscriptions ? ' <strong>(الاشتراكات)</strong>' : ''}
+                    </a>
+                `;
+            });
+            
+            menuDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

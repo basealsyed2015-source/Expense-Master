@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار تسجيل الدخول</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold mb-4">🧪 اختبار تسجيل الدخول</h1>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block font-bold mb-2">اسم المستخدم:</label>
+                    <input type="text" id="username" value="admin_tamweel1" 
+                           class="w-full p-2 border rounded">
+                </div>
+                
+                <div>
+                    <label class="block font-bold mb-2">كلمة المرور:</label>
+                    <input type="password" id="password" value="demo123"
+                           class="w-full p-2 border rounded">
+                </div>
+                
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                    تسجيل الدخول
+                </button>
+            </form>
+            
+            <div id="result" class="mt-4 p-4 rounded hidden"></div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">معلومات الجلسة:</h2>
+            
+            <div class="space-y-3">
+                <div class="bg-blue-50 p-3 rounded">
+                    <strong>Cookies:</strong>
+                    <pre id="cookies" class="text-sm mt-2"></pre>
+                </div>
+                
+                <div class="bg-green-50 p-3 rounded">
+                    <strong>LocalStorage:</strong>
+                    <pre id="localStorage" class="text-sm mt-2"></pre>
+                </div>
+                
+                <div class="bg-yellow-50 p-3 rounded">
+                    <strong>Response:</strong>
+                    <pre id="response" class="text-sm mt-2"></pre>
+                </div>
+            </div>
+            
+            <div class="mt-4 space-x-3">
+                <button onclick="checkAuth()" class="bg-purple-600 text-white px-4 py-2 rounded">
+                    فحص المصادقة
+                </button>
+                <button onclick="goToAdmin()" class="bg-green-600 text-white px-4 py-2 rounded">
+                    الذهاب للوحة التحكم
+                </button>
+                <button onclick="updateInfo()" class="bg-gray-600 text-white px-4 py-2 rounded">
+                    تحديث المعلومات
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function updateInfo() {
+            document.getElementById('cookies').textContent = document.cookie || 'لا توجد cookies';
+            document.getElementById('localStorage').textContent = JSON.stringify({
+                authToken: localStorage.getItem('authToken'),
+                userData: localStorage.getItem('userData')
+            }, null, 2);
+        }
+        
+        async function checkAuth() {
+            try {
+                const response = await axios.get('/test-auth');
+                alert('تم فتح صفحة الاختبار');
+                window.open('/test-auth', '_blank');
+            } catch (error) {
+                alert('خطأ: ' + error.message);
+            }
+        }
+        
+        function goToAdmin() {
+            window.location.href = '/admin/panel';
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                resultDiv.className = 'mt-4 p-4 rounded bg-yellow-100';
+                resultDiv.classList.remove('hidden');
+                resultDiv.textContent = 'جاري التسجيل...';
+                
+                const response = await axios.post('/api/auth/login', {
+                    username,
+                    password,
+                    rememberMe: true
+                });
+                
+                console.log('✅ Response:', response.data);
+                
+                if (response.data.success) {
+                    // حفظ التوكن
+                    const token = response.data.token;
+                    
+                    // حفظ في Cookie
+                    const maxAge = 7 * 24 * 60 * 60;
+                    document.cookie = `authToken=${token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+                    
+                    // حفظ في LocalStorage
+                    localStorage.setItem('authToken', token);
+                    localStorage.setItem('userData', JSON.stringify(response.data.user));
+                    
+                    resultDiv.className = 'mt-4 p-4 rounded bg-green-100 text-green-800';
+                    resultDiv.textContent = '✅ تم تسجيل الدخول بنجاح!';
+                    
+                    document.getElementById('response').textContent = JSON.stringify(response.data, null, 2);
+                    updateInfo();
+                    
+                    // التحويل بعد 2 ثانية
+                    setTimeout(() => {
+                        window.location.href = response.data.redirect || '/admin/panel';
+                    }, 2000);
+                } else {
+                    resultDiv.className = 'mt-4 p-4 rounded bg-red-100 text-red-800';
+                    resultDiv.textContent = '❌ ' + (response.data.error || 'فشل تسجيل الدخول');
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                resultDiv.className = 'mt-4 p-4 rounded bg-red-100 text-red-800';
+                resultDiv.textContent = '❌ خطأ: ' + (error.response?.data?.error || error.message);
+                document.getElementById('response').textContent = JSON.stringify(error.response?.data || error.message, null, 2);
+            }
+        });
+        
+        // تحديث المعلومات عند تحميل الصفحة
+        updateInfo();
+    </script>
+</body>
+</html>

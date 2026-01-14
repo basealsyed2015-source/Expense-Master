@@ -117,23 +117,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
 </head>
 <body class="bg-gray-50">
     <!-- Top Header -->
-    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
+    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
         <div class="flex items-center justify-between px-6 py-4">
-            <div class="flex items-center space-x-reverse space-x-4">
-                <!-- Mobile Menu Toggle -->
-                <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg md:hidden" title="القائمة">
-                    <i class="fas fa-bars text-xl"></i>
-                </button>
-                <button onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <button class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الإشعارات">
-                    <i class="fas fa-bell"></i>
-                </button>
-                <button onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors" title="تسجيل الخروج">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
-            </div>
+            <!-- Right Side: Menu Toggle (Always Visible) -->
+            <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
+            
+            <!-- Center: User Info -->
             <div class="flex items-center space-x-reverse space-x-3">
                 <div class="text-right">
                     <div class="font-bold" id="userDisplayName">جاري التحميل...</div>
@@ -141,8 +132,142 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
                 <i class="fas fa-user-circle text-3xl"></i>
             </div>
+            
+            <!-- Left Side: Buttons -->
+            <div class="flex items-center space-x-reverse space-x-4">
+                <button onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الإشعارات">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors hidden md:inline-block" title="تسجيل الخروج">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
         </div>
     </div>
+
+    <!-- Sidebar Menu -->
+    <div id="mobile-menu" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
+        <div class="p-6">
+            <!-- Close Button -->
+            <button onclick="toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
+                <i class="fas fa-times text-2xl text-gray-600"></i>
+            </button>
+            
+            <!-- Logo & Title -->
+            <div class="mb-8 pt-4">
+                <div class="flex items-center space-x-3 space-x-reverse mb-4">
+                    <i class="fas fa-calculator text-4xl text-blue-600"></i>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">منصة التمويل</h2>
+                        <p class="text-sm text-gray-500">لوحة التحكم</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Items -->
+            <div class="space-y-2">
+                <!-- Dashboard -->
+                <a href="/admin/dashboard" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-tachometer-alt text-xl text-blue-600 group-hover:text-blue-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">لوحة المعلومات</span>
+                </a>
+
+                <!-- Customers -->
+                <a href="/admin/customers" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-green-50 rounded-lg transition-all group">
+                    <i class="fas fa-users text-xl text-green-600 group-hover:text-green-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-green-700">العملاء</span>
+                </a>
+
+                <!-- Financing Requests -->
+                <a href="/admin/requests" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-purple-50 rounded-lg transition-all group">
+                    <i class="fas fa-file-invoice-dollar text-xl text-purple-600 group-hover:text-purple-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-purple-700">طلبات التمويل</span>
+                </a>
+
+                <!-- Reports -->
+                <a href="/admin/reports" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-teal-50 rounded-lg transition-all group">
+                    <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
+                </a>
+
+                <!-- Rates -->
+                <a href="/admin/rates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-indigo-50 rounded-lg transition-all group">
+                    <i class="fas fa-percentage text-xl text-indigo-600 group-hover:text-indigo-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-indigo-700">نسب التمويل</span>
+                </a>
+
+                <!-- Payments -->
+                <a href="/admin/payments" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-emerald-50 rounded-lg transition-all group">
+                    <i class="fas fa-receipt text-xl text-emerald-600 group-hover:text-emerald-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-emerald-700">سندات القبض</span>
+                </a>
+
+                <!-- Banks -->
+                <a href="/admin/banks" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-orange-50 rounded-lg transition-all group">
+                    <i class="fas fa-university text-xl text-orange-600 group-hover:text-orange-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-orange-700">البنوك</span>
+                </a>
+
+                <!-- Subscriptions -->
+                <a href="/admin/subscriptions" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-pink-50 rounded-lg transition-all group">
+                    <i class="fas fa-calendar-check text-xl text-pink-600 group-hover:text-pink-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-pink-700">الاشتراكات</span>
+                </a>
+
+                <!-- Packages -->
+                <a href="/admin/packages" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-yellow-50 rounded-lg transition-all group">
+                    <i class="fas fa-box text-xl text-yellow-600 group-hover:text-yellow-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-yellow-700">الباقات</span>
+                </a>
+
+                <!-- Tenants Management -->
+                <a href="/admin/tenants" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
+                    <i class="fas fa-building text-xl text-cyan-600 group-hover:text-cyan-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-cyan-700">إدارة الشركات</span>
+                </a>
+
+                <!-- Settings -->
+                <a href="/admin/settings" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                    <i class="fas fa-cog text-xl text-gray-600 group-hover:text-gray-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-gray-700">إعدادات النظام</span>
+                </a>
+
+                <!-- HR System -->
+                <a href="/admin/hr" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                    <i class="fas fa-users-cog text-xl text-blue-600 group-hover:text-blue-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
+                </a>
+
+                <hr class="my-4">
+
+                <!-- Users (Admin Only) -->
+                <a href="/admin/users" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
+                    <i class="fas fa-user-shield text-xl text-slate-600 group-hover:text-slate-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-slate-700">المستخدمين</span>
+                </a>
+
+                <!-- Roles (Admin Only) -->
+                <a href="/admin/roles" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
+                    <i class="fas fa-user-tag text-xl text-violet-600 group-hover:text-violet-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-violet-700">الأدوار والصلاحيات</span>
+                </a>
+
+                <hr class="my-4">
+
+                <!-- Logout -->
+                <button onclick="doLogout()" class="w-full flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
+                    <i class="fas fa-sign-out-alt text-xl text-gray-600 group-hover:text-red-600"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-red-600">تسجيل الخروج</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Overlay -->
+    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleMobileMenu()"></div>
 
     <!-- Main Content بدون Sidebar -->
     <div class="min-h-screen bg-gray-50">
@@ -220,6 +345,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <a href="/admin/roles" class="quick-access-btn bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-user-shield text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الأدوار والصلاحيات</div>
+                    </a>
+                    
+                    <!-- زر نظام الموارد البشرية HR -->
+                    <a href="/admin/hr" class="quick-access-btn bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center border-2 border-white/30">
+                        <i class="fas fa-users-cog text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">الموارد البشرية HR</div>
+                        <div class="text-xs mt-1 opacity-90">إدارة الموظفين</div>
                     </a>
                     
                     <!-- زر الإشعارات -->
@@ -527,9 +659,19 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
                 
                 <div class="bg-white rounded-xl shadow-lg p-6">
-                    <div class="mb-4">
+                    <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                         <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                               class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
+                            <input type="date" id="filterDateFrom" onchange="loadCustomers()" 
+                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
+                            <input type="date" id="filterDateTo" onchange="loadCustomers()" 
+                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                        </div>
                     </div>
                     
                     <div class="overflow-x-auto">
@@ -566,7 +708,17 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                         طلبات التمويل من العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3">
+                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
+                            <input type="date" id="filterRequestDateFrom" onchange="loadFinancingRequests()" 
+                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
+                            <input type="date" id="filterRequestDateTo" onchange="loadFinancingRequests()" 
+                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
                         <select id="filterStatus" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg">
                             <option value="">جميع الحالات</option>
                             <option value="pending">قيد الانتظار</option>
@@ -1786,8 +1938,24 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 const response = await axios.get('/api/customers');
                 if (response.data.success) {
-                    const customers = response.data.data;
+                    let customers = response.data.data;
                     const tbody = document.getElementById('customersTable');
+                    
+                    // Apply date filter
+                    const filterDateFrom = document.getElementById('filterDateFrom')?.value;
+                    const filterDateTo = document.getElementById('filterDateTo')?.value;
+                    
+                    if (filterDateFrom || filterDateTo) {
+                        customers = customers.filter(customer => {
+                            if (!customer.created_at) return false;
+                            const customerDate = new Date(customer.created_at);
+                            
+                            if (filterDateFrom && customerDate < new Date(filterDateFrom)) return false;
+                            if (filterDateTo && customerDate > new Date(filterDateTo + 'T23:59:59')) return false;
+                            
+                            return true;
+                        });
+                    }
                     
                     if (customers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
@@ -1837,8 +2005,24 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 const response = await axios.get('/api/financing-requests');
                 if (response.data.success) {
-                    const requests = response.data.data;
+                    let requests = response.data.data;
                     const tbody = document.getElementById('requestsTable');
+                    
+                    // Apply date filter
+                    const filterDateFrom = document.getElementById('filterRequestDateFrom')?.value;
+                    const filterDateTo = document.getElementById('filterRequestDateTo')?.value;
+                    
+                    if (filterDateFrom || filterDateTo) {
+                        requests = requests.filter(req => {
+                            if (!req.created_at) return false;
+                            const requestDate = new Date(req.created_at);
+                            
+                            if (filterDateFrom && requestDate < new Date(filterDateFrom)) return false;
+                            if (filterDateTo && requestDate > new Date(filterDateTo + 'T23:59:59')) return false;
+                            
+                            return true;
+                        });
+                    }
                     
                     if (requests.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';
@@ -3675,32 +3859,236 @@ export const fullAdminPanel = `<!DOCTYPE html>
         
         // Mobile Menu Toggle
         window.toggleMobileMenu = function() {
-            const sidebar = document.querySelector('.min-h-screen.bg-white.shadow-lg');
-            const overlay = document.getElementById('sidebar-overlay');
+            const sidebar = document.getElementById('mobile-menu');
+            const overlay = document.getElementById('menu-overlay');
             
-            if (sidebar) {
-                sidebar.classList.toggle('active');
-            }
-            if (overlay) {
-                overlay.classList.toggle('active');
+            if (sidebar && overlay) {
+                if (sidebar.classList.contains('translate-x-full')) {
+                    // فتح القائمة
+                    sidebar.classList.remove('translate-x-full');
+                    sidebar.classList.add('translate-x-0');
+                    overlay.classList.remove('hidden');
+                } else {
+                    // إغلاق القائمة
+                    sidebar.classList.add('translate-x-full');
+                    sidebar.classList.remove('translate-x-0');
+                    overlay.classList.add('hidden');
+                }
             }
         };
         
-        // Close mobile menu when clicking overlay
-        document.addEventListener('click', function(e) {
-            if (e.target.id === 'sidebar-overlay') {
-                toggleMobileMenu();
-            }
-        });
-        
-        // Close mobile menu when clicking a menu item on mobile
-        document.querySelectorAll('[onclick^="showSection"]').forEach(item => {
-            item.addEventListener('click', function() {
-                if (window.innerWidth < 768) {
-                    setTimeout(() => toggleMobileMenu(), 300);
-                }
+        // Close mobile menu when clicking a menu link
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', function() {
+                setTimeout(() => toggleMobileMenu(), 100);
             });
         });
+    </script>
+    
+    <!-- نظام التحكم بالقوائم حسب الصلاحيات -->
+    <script>
+    /**
+     * نظام التحكم بعرض القوائم حسب الصلاحيات
+     * يُستخدم لإخفاء/إظهار عناصر القائمة بناءً على دور المستخدم
+     */
+
+    // الصفحات المتاحة حسب الدور
+    const ROLE_PAGES = {
+      // مدير النظام SaaS (Role ID: 11) - جميع الصفحات
+      11: [
+        '/admin/dashboard',
+        '/admin/customers',
+        '/admin/requests',
+        '/admin/reports',
+        '/admin/rates',
+        '/admin/payments',
+        '/admin/banks',
+        '/admin/subscriptions',
+        '/admin/packages',
+        '/admin/users',
+        '/admin/roles',
+        '/admin/hr',
+        '/admin/notifications',
+        '/calculator',
+        '/admin/tenants',
+        '/admin/tenant-calculators',
+        '/admin/saas-settings',
+        '/admin/settings'
+      ],
+      
+      // مدير شركة (Role ID: 12) - إدارة شركته فقط
+      12: [
+        '/admin/dashboard',
+        '/admin/customers',
+        '/admin/requests',
+        '/admin/reports',
+        '/admin/rates',
+        '/admin/payments',
+        '/admin/banks',
+        '/admin/subscriptions',
+        '/admin/packages',
+        '/admin/users',
+        '/admin/hr',
+        '/admin/notifications',
+        '/calculator',
+        '/admin/settings'
+      ],
+      
+      // مشرف موظفين (Role ID: 13) - الموارد البشرية
+      13: [
+        '/admin/dashboard',
+        '/admin/hr',
+        '/admin/notifications',
+        '/calculator',
+        '/admin/reports'
+      ],
+      
+      // موظف (Role ID: 14) - محدود
+      14: [
+        '/admin/dashboard',
+        '/admin/customers',
+        '/admin/requests',
+        '/calculator',
+        '/admin/notifications'
+      ]
+    };
+
+    /**
+     * تصفية القوائم حسب صلاحيات المستخدم
+     */
+    function filterMenuByRole(roleId) {
+      console.log('🔐 تصفية القائمة للدور:', roleId);
+      console.log('📋 نوع البيانات:', typeof roleId);
+      
+      // إذا لم يُحدد الدور، إخفاء جميع الروابط الإدارية
+      if (!roleId) {
+        console.warn('⚠️ لا يوجد دور محدد، إخفاء القوائم الإدارية');
+        hideAllAdminLinks();
+        return;
+      }
+      
+      // الحصول على الصفحات المتاحة للدور
+      const allowedPages = ROLE_PAGES[roleId] || [];
+      console.log('✅ الصفحات المتاحة:', allowedPages.length);
+      console.log('📄 قائمة الصفحات:', allowedPages);
+      
+      // إخفاء جميع الروابط أولاً
+      const allLinks = document.querySelectorAll('#mobile-menu a[href^="/admin"]');
+      console.log('🔗 إجمالي الروابط الإدارية:', allLinks.length);
+      
+      let visibleCount = 0;
+      allLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        
+        // إذا كانت الصفحة مسموحة، إظهارها
+        if (allowedPages.includes(href)) {
+          link.style.display = 'flex';
+          link.classList.remove('hidden');
+          visibleCount++;
+          console.log('✅ إظهار:', href);
+        } else {
+          link.style.display = 'none';
+          link.classList.add('hidden');
+          console.log('❌ إخفاء:', href);
+        }
+      });
+      
+      // إظهار روابط الحاسبة دائماً
+      const calculatorLinks = document.querySelectorAll('a[href="/calculator"], a[href^="/c/"]');
+      calculatorLinks.forEach(link => {
+        link.style.display = 'flex';
+        link.classList.remove('hidden');
+      });
+      
+      // عرض الإحصائيات
+      console.log(\`📊 النتيجة النهائية: \${visibleCount} روابط مرئية من أصل \${allLinks.length}\`);
+    }
+
+    /**
+     * إخفاء جميع الروابط الإدارية
+     */
+    function hideAllAdminLinks() {
+      const allLinks = document.querySelectorAll('#mobile-menu a[href^="/admin"]');
+      allLinks.forEach(link => {
+        link.style.display = 'none';
+        link.classList.add('hidden');
+      });
+    }
+
+    /**
+     * تحميل معلومات المستخدم وتطبيق الصلاحيات
+     */
+    async function initMenuPermissions() {
+      try {
+        console.log('🔄 تحميل معلومات المستخدم...');
+        
+        let roleId = null;
+        
+        // 1. محاولة قراءة من window.USER_ROLE_ID (مُمرر من Backend)
+        if (typeof window.USER_ROLE_ID !== 'undefined') {
+          roleId = window.USER_ROLE_ID;
+          console.log('✅ Role ID من Backend:', roleId);
+        }
+        
+        // 2. إذا لم يكن موجوداً، جلب من API
+        if (!roleId) {
+          console.log('🔄 جلب من API...');
+          try {
+            const response = await fetch('/api/user-info');
+            if (response.ok) {
+              const result = await response.json();
+              console.log('✅ استجابة API:', result);
+              
+              if (result.success && result.user) {
+                roleId = result.user.role_id;
+                
+                // حفظ في localStorage
+                if (roleId) {
+                  localStorage.setItem('user_role_id', roleId);
+                  localStorage.setItem('user_name', result.user.full_name);
+                  localStorage.setItem('user_email', result.user.email);
+                  console.log('💾 تم حفظ البيانات في localStorage:', { roleId });
+                }
+              }
+            } else {
+              console.error('❌ فشل API:', response.status);
+            }
+          } catch (apiError) {
+            console.error('❌ خطأ في استدعاء API:', apiError);
+          }
+        }
+        
+        // 3. Fallback: محاولة قراءة من localStorage
+        if (!roleId) {
+          roleId = localStorage.getItem('user_role_id');
+          console.log('⚠️ استخدام localStorage كـ fallback:', roleId);
+        }
+        
+        // تطبيق التصفية
+        if (roleId) {
+          console.log('🎯 تطبيق تصفية القوائم للدور:', roleId);
+          filterMenuByRole(parseInt(roleId));
+        } else {
+          console.warn('⚠️ لم يتم العثور على معلومات المستخدم');
+          hideAllAdminLinks();
+        }
+        
+      } catch (error) {
+        console.error('❌ خطأ في تحميل الصلاحيات:', error);
+        hideAllAdminLinks();
+      }
+    }
+
+    // تشغيل عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initMenuPermissions);
+    } else {
+      initMenuPermissions();
+    }
+
+    // إضافة إلى window للاستخدام العالمي
+    window.filterMenuByRole = filterMenuByRole;
+    window.initMenuPermissions = initMenuPermissions;
     </script>
     
     <!-- Mobile Sidebar Overlay -->
