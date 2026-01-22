@@ -1,4 +1,4 @@
-var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ye=Symbol(),ve=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof X?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?we(e,{all:a,dot:s}):{}};async function we(e,t){const a=await e.formData();return a?_e(a,t):{}}function _e(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Ee(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(ke(a,s,r),delete a[s])}),a}var Ee=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},ke=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},z=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Ie=e=>{const{groups:t,path:a}=De(e),s=z(a);return Se(s,t)},De=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Se=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Te=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Re=e=>P(e,decodeURI),J=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Re(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Ce=e=>{const t=J(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),G=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},F=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,Q):e):e,V=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return F(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=F(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=F(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},$e=V,Be=(e,t)=>V(e,t,!0),Q=decodeURIComponent,U=e=>P(e,Q),X=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?U(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?U(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return $e(this.url,e)}queries(e){return Be(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ve(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ye](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Le={Stringify:1},K=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>K(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},qe="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),je=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new X(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(qe,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?K(e,Le.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},v="ALL",Oe="all",Me=["get","post","put","delete","options","patch"],Z="Can not add a route since the matcher is already built.",ee=class extends Error{},Fe="__COMPOSED_HANDLER",Ae=e=>e.text("404 Not Found",404),W=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ne=class te{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Me,Oe].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(v,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??J:Ce}#e(){const t=new te({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ae;errorHandler=W;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===W?o=r.handler:(o=async(l,i)=>(await H([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Fe]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(v,R(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new je(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=H(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},ae=[];function Pe(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[v],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],ae];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",C=Symbol(),He=new Set(".\\+*[^]$()");function Ue(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var We=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw C;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",L]:["","",O]:l==="/*"?["","",q]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw C;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw C;if(o)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw C;if(o)return;c=this.#a[l]=new N}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ue).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:He.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new We;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ze=[/^$/,[],Object.create(null)],se=Object.create(null);function re(e){return se[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Je(){se=Object.create(null)}function Ge(e){const t=new Ye,a=[];if(e.length===0)return ze;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([h])=>[h,Object.create(null)]),ae]:p++;let b;try{b=t.insert(f,p,m)}catch(h){throw h===C?new ee(f):h}m||(a[p]=g.map(([h,w])=>{const E=Object.create(null);for(w-=1;w>=0;w--){const[_,y]=b[w];E[_]=y}return[h,E]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,h=g.length;b<h;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function T(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(re(a).test(t))return[...e[a]]}}var Ve=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[v]:Object.create(null)},this.#e={[v]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(Z);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[v]).forEach(n=>{i[e][n]=[...i[v][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=re(t);e===v?Object.keys(s).forEach(n=>{s[n][t]||=T(s[n],t)||T(s[v],t)||[]}):s[e][t]||=T(s[e],t)||T(s[v],t)||[],Object.keys(s).forEach(n=>{(e===v||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===v||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=G(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===v||e===p)&&(r[p][c]||=[...T(s[p],c)||T(s[v],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Pe;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Je(),e}#a(e){const t=[];let a=e===v;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==v&&t.push(...Object.keys(s[v]).map(o=>[o,s[v][o]]))}),a?Ge(t):null}},Qe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Z);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof ee)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},B=Object.create(null),Xe=class le{#t;#e;#a;#l=0;#r=B;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=Ie(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=Te(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new le,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[v],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==B||r&&r!==B))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=B;let o=[this];const l=z(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let w=0,E=b.#a.length;w<E;w++){const _=b.#a[w],y=b.#r===B?{}:{...b.#r};if(_==="*"){const S=b.#e["*"];S&&(s.push(...this.#s(S,t,b.#r)),S.#r=y,m.push(S));continue}const[k,M,$]=_;if(!p&&!($ instanceof RegExp))continue;const I=b.#e[k],xe=l.slice(n).join("/");if($ instanceof RegExp){const S=$.exec(xe);if(S){if(y[M]=S[0],s.push(...this.#s(I,t,b.#r,y)),Object.keys(I.#e).length){I.#r=y;const he=S[0].match(/\//)?.length??0;(i[he]||=[]).push(I)}continue}}($===!0||$.test(p))&&(y[M]=p,u?(s.push(...this.#s(I,t,y,b.#r)),I.#e["*"]&&s.push(...this.#s(I.#e["*"],t,y,b.#r))):(I.#r=y,m.push(I)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ke=class{name="TrieRouter";#t;constructor(){this.#t=new Xe}add(e,t,a){const s=G(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},oe=class extends Ne{constructor(e={}){super(e),this.router=e.router??new Qe({routers:[new Ve,new Ke]})}},Ze=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const et=`<!DOCTYPE html>
+var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,d=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||d)&&(s.res=n),s}},ye=Symbol(),ve=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof K?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?we(e,{all:a,dot:s}):{}};async function we(e,t){const a=await e.formData();return a?_e(a,t):{}}function _e(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Ee(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(ke(a,s,r),delete a[s])}),a}var Ee=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},ke=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},J=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Se=e=>{const{groups:t,path:a}=Ie(e),s=J(a);return Te(s,t)},Ie=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Te=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},De=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Re=e=>P(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Re(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},$e=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},$=(e,t,...a)=>(a.length&&(t=$(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),G=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,X):e):e,Q=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,d=e.indexOf("&",n);return M(e.slice(n,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=M(n)),o=l,n==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=M(d))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(d)):r[n]??=d}return t?r[t]:r},Ce=Q,Be=(e,t)=>Q(e,t,!0),X=decodeURIComponent,W=e=>P(e,X),K=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?W(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?W(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Ce(this.url,e)}queries(e){return Be(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ve(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ye](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Le={Stringify:1},Z=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>Z(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},qe="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),Oe=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new K(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,A(qe,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?Z(e,Le.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},y="ALL",je="all",Fe=["get","post","put","delete","options","patch"],ee="Can not add a route since the matcher is already built.",te=class extends Error{},Me="__COMPOSED_HANDLER",Ae=e=>e.text("404 Not Found",404),Y=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ne=class ae{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Fe,je].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const d of[o].flat())i.map(p=>{this.#l(d.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(y,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:$e}#e(){const t=new ae({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ae;errorHandler=Y;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===Y?o=r.handler:(o=async(l,i)=>(await U([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Me]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=$(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const d=o(n);return Array.isArray(d)?d:[d]}:n=>{let d;try{d=n.executionCtx}catch{}return[n.env,d]};r||=(()=>{const n=$(this._basePath,t),d=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,p)}})();const i=async(n,d)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await d()};return this.#l(y,$(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=$(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new Oe(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return d instanceof Promise?d.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):d??this.#a(i)}const n=U(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await n(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#r(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${$("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},se=[];function Pe(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[y],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],se];const d=n.indexOf("",1);return[l[1][d],n]});return this.match=s,s(e,t)}var F="[^/]+",q=".*",O="(?:|/.*)",C=Symbol(),He=new Set(".\\+*[^]$()");function Ue(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===q||e===O?1:t===q||t===O?-1:e===F?1:t===F?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var We=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw C;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",q]:["","",F]:l==="/*"?["","",O]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(n){const p=n[1];let u=n[2]||F;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw C;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==q&&m!==O))throw C;if(o)return;d=this.#a[u]=new N,p!==""&&(d.#e=r.varIndex++)}!o&&p!==""&&s.push([p,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(p=>p.length>1&&p!==q&&p!==O))throw C;if(o)return;d=this.#a[l]=new N}d.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ue).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:He.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new We;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const d=`@\\${l}`;return r[l]=[d,n],l++,i=!0,d}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ze=[/^$/,[],Object.create(null)],re=Object.create(null);function le(e){return re[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Je(){re=Object.create(null)}function Ve(e){const t=new Ye,a=[];if(e.length===0)return ze;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,p],[u,m])=>d?1:u?-1:p.length-m.length),r=Object.create(null);for(let d=0,p=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?r[f]=[g.map(([x])=>[x,Object.create(null)]),se]:p++;let b;try{b=t.insert(f,p,m)}catch(x){throw x===C?new te(f):x}m||(a[p]=g.map(([x,v])=>{const S=Object.create(null);for(v-=1;v>=0;v--){const[_,w]=b[v];S[_]=w}return[x,S]}))}const[o,l,i]=t.buildRegExp();for(let d=0,p=a.length;d<p;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,x=g.length;b<x;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const d in l)n[d]=a[l[d]];return[o,n,r]}function R(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Ge=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[y]:Object.create(null)},this.#e={[y]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(ee);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[y]).forEach(n=>{i[e][n]=[...i[y][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===y?Object.keys(s).forEach(n=>{s[n][t]||=R(s[n],t)||R(s[y],t)||[]}):s[e][t]||=R(s[e],t)||R(s[y],t)||[],Object.keys(s).forEach(n=>{(e===y||e===n)&&Object.keys(s[n]).forEach(d=>{i.test(d)&&s[n][d].push([a,o])})}),Object.keys(r).forEach(n=>{(e===y||e===n)&&Object.keys(r[n]).forEach(d=>i.test(d)&&r[n][d].push([a,o]))});return}const l=G(t)||[t];for(let i=0,n=l.length;i<n;i++){const d=l[i];Object.keys(r).forEach(p=>{(e===y||e===p)&&(r[p][d]||=[...R(s[p],d)||R(s[y],d)||[]],r[p][d].push([a,o-n+i+1]))})}}match=Pe;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Je(),e}#a(e){const t=[];let a=e===y;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==y&&t.push(...Object.keys(s[y]).map(o=>[o,s[y][o]]))}),a?Ve(t):null}},Qe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(ee);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,d=s.length;n<d;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof te)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},L=Object.create(null),Xe=class oe{#t;#e;#a;#l=0;#r=L;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=Se(a),l=[];for(let i=0,n=o.length;i<n;i++){const d=o[i],p=o[i+1],u=De(d,p),m=Array.isArray(u)?u[0]:d;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new oe,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,d)=>d.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],d=n[a]||n[y],p={};if(d!==void 0&&(d.params=Object.create(null),o.push(d),s!==L||r&&r!==L))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=p[d.score];d.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[d.score]=!0}}return o}search(t,a){const s=[];this.#r=L;let o=[this];const l=J(a),i=[];for(let n=0,d=l.length;n<d;n++){const p=l[n],u=n===d-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],x=b.#e[p];x&&(x.#r=b.#r,u?(x.#e["*"]&&s.push(...this.#s(x.#e["*"],t,b.#r)),s.push(...this.#s(x,t,b.#r))):m.push(x));for(let v=0,S=b.#a.length;v<S;v++){const _=b.#a[v],w=b.#r===L?{}:{...b.#r};if(_==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#r)),I.#r=w,m.push(I));continue}const[D,H,B]=_;if(!p&&!(B instanceof RegExp))continue;const E=b.#e[D],xe=l.slice(n).join("/");if(B instanceof RegExp){const I=B.exec(xe);if(I){if(w[H]=I[0],s.push(...this.#s(E,t,b.#r,w)),Object.keys(E.#e).length){E.#r=w;const he=I[0].match(/\//)?.length??0;(i[he]||=[]).push(E)}continue}}(B===!0||B.test(p))&&(w[H]=p,u?(s.push(...this.#s(E,t,w,b.#r)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,w,b.#r))):(E.#r=w,m.push(E)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,d)=>n.score-d.score),[s.map(({handler:n,params:d})=>[n,d])]}},Ke=class{name="TrieRouter";#t;constructor(){this.#t=new Xe}add(e,t,a){const s=G(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ne=class extends Ne{constructor(e={}){super(e),this.router=e.router??new Qe({routers:[new Ge,new Ke]})}},Ze=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const d=await s(l.req.header("origin")||"",l);if(d&&n("Access-Control-Allow-Origin",d),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const et=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ne=`<!DOCTYPE html>
+`,ie=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3022,7 +3022,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ie=`<!DOCTYPE html>
+`,de=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7399,7 +7399,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,de=`<!DOCTYPE html>
+`,it=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7636,7 +7636,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,it=`<!DOCTYPE html>
+`,dt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7979,7 +7979,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,dt=`<!DOCTYPE html>
+`,ct=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8170,7 +8170,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ct=`<!DOCTYPE html>
+</html>`,pt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8436,7 +8436,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,pt=`<!DOCTYPE html>
+</html>`,ut=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8564,7 +8564,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ut=()=>`
+</html>`,mt=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -8611,7 +8611,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,mt=`<!DOCTYPE html>
+`,gt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8662,7 +8662,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${ut()}
+        ${mt()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9107,7 +9107,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,gt=`<!DOCTYPE html>
+</html>`,ft=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9503,7 +9503,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function ft(e,t,a){return`
+`;function bt(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -9661,7 +9661,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <\/script>
     </body>
     </html>
-  `}function bt(e,t,a,s){return`
+  `}function xt(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -9814,7 +9814,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <\/script>
     </body>
     </html>
-  `}function xt(e,t,a,s){const{transitions:r=[],actions:o=[],tasks:l=[]}=s,i=(n,c)=>{const p=new Date(n),m=new Date(c).getTime()-p.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
+  `}function ht(e,t,a,s){const{transitions:r=[],actions:o=[],tasks:l=[]}=s,i=(n,d)=>{const p=new Date(n),m=new Date(d).getTime()-p.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -9994,7 +9994,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
         `:""}
         
-        ${r.map((n,c)=>{const p=c===r.length-1,u=c>0?i(r[c-1].created_at,n.created_at):null,m=o.filter(g=>g.stage_id===n.to_stage_id),f=l.filter(g=>g.stage_id===n.to_stage_id);return`
+        ${r.map((n,d)=>{const p=d===r.length-1,u=d>0?i(r[d-1].created_at,n.created_at):null,m=o.filter(g=>g.stage_id===n.to_stage_id),f=l.filter(g=>g.stage_id===n.to_stage_id);return`
             <div class="timeline-item">
               <div class="timeline-dot ${p?"current":""}" style="background-color: ${n.to_stage_color}">
                 <i class="fas ${n.to_stage_icon}"></i>
@@ -10004,7 +10004,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 <div class="flex justify-between items-start mb-4">
                   <div>
                     <h3 class="text-xl font-bold text-gray-800 mb-1">
-                      ${c+1}. ${n.to_stage_name}
+                      ${d+1}. ${n.to_stage_name}
                     </h3>
                     <p class="text-sm text-gray-500">
                       <i class="fas fa-clock ml-1"></i>
@@ -10314,7 +10314,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   
 </body>
 </html>
-  `}const ht=`
+  `}const yt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10624,7 +10624,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,yt=`
+`,vt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11038,917 +11038,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,vt=`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تقرير النقرات على روابط الحاسبات</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-</head>
-<body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-xl">
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-mouse-pointer ml-3"></i>
-                        تقرير النقرات على روابط الحاسبات
-                    </h1>
-                    <p class="text-blue-100 mt-2">تتبع وتحليل زيارات الحاسبات حسب نوع الجهاز والمنصة</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة إلى التقارير
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Filters -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                <i class="fas fa-filter ml-2 text-blue-600"></i>
-                تصفية البيانات
-            </h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
-                    <input type="date" id="startDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
-                    <input type="date" id="endDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                </div>
-                <div class="flex items-end">
-                    <button onclick="loadReport()" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:from-blue-700 hover:to-purple-700 transition-all">
-                        <i class="fas fa-chart-bar ml-2"></i>
-                        عرض التقرير
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-blue-100 text-sm font-semibold mb-1">إجمالي النقرات</p>
-                        <p class="text-3xl font-bold" id="totalClicks">-</p>
-                    </div>
-                    <div class="bg-white/20 p-4 rounded-full">
-                        <i class="fas fa-mouse-pointer text-3xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-green-100 text-sm font-semibold mb-1">زوار فريدون</p>
-                        <p class="text-3xl font-bold" id="uniqueVisitors">-</p>
-                    </div>
-                    <div class="bg-white/20 p-4 rounded-full">
-                        <i class="fas fa-users text-3xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-xl p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-purple-100 text-sm font-semibold mb-1">أيام نشطة</p>
-                        <p class="text-3xl font-bold" id="activeDays">-</p>
-                    </div>
-                    <div class="bg-white/20 p-4 rounded-full">
-                        <i class="fas fa-calendar-check text-3xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-chart-line ml-2 text-blue-600"></i>
-                    النقرات اليومية
-                </h3>
-                <div style="height: 300px; position: relative;">
-                    <canvas id="dailyClicksChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-chart-pie ml-2 text-green-600"></i>
-                    توزيع المنصات
-                </h3>
-                <div style="height: 300px; position: relative;">
-                    <canvas id="platformsChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-mobile-alt ml-2 text-purple-600"></i>
-                    توزيع الأجهزة
-                </h3>
-                <div style="height: 300px; position: relative;">
-                    <canvas id="devicesChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-globe ml-2 text-orange-600"></i>
-                    مصادر الزيارات
-                </h3>
-                <div style="height: 300px; position: relative;">
-                    <canvas id="sourcesChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tables -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">إحصائيات المنصات</h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">المنصة</th>
-                                <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">عدد النقرات</th>
-                                <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">النسبة المئوية</th>
-                            </tr>
-                        </thead>
-                        <tbody id="platformsTable">
-                            <tr>
-                                <td colspan="3" class="px-4 py-8 text-center text-gray-500">
-                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                    <p>جاري التحميل...</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">إحصائيات الأجهزة</h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">نوع الجهاز</th>
-                                <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">عدد النقرات</th>
-                                <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">النسبة المئوية</th>
-                            </tr>
-                        </thead>
-                        <tbody id="devicesTable">
-                            <tr>
-                                <td colspan="3" class="px-4 py-8 text-center text-gray-500">
-                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                    <p>جاري التحميل...</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Details Table -->
-        <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">تفاصيل النقرات</h3>
-                <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold transition-all">
-                    <i class="fas fa-file-excel ml-2"></i>
-                    تصدير Excel
-                </button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">التاريخ</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">رابط الحاسبة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">النقرات</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">زوار فريدون</th>
-                        </tr>
-                    </thead>
-                    <tbody id="detailsTable">
-                        <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-gray-500">
-                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>جاري التحميل...</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Set default dates
-        const today = new Date();
-        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        document.getElementById('startDate').value = weekAgo.toISOString().split('T')[0];
-        document.getElementById('endDate').value = today.toISOString().split('T')[0];
-
-        let charts = {};
-
-        async function loadReport() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-
-            // Generate sample data
-            const data = generateSampleData(startDate, endDate);
-
-            // Update summary
-            document.getElementById('totalClicks').textContent = data.totalClicks.toLocaleString('ar-SA');
-            document.getElementById('uniqueVisitors').textContent = data.uniqueVisitors.toLocaleString('ar-SA');
-            document.getElementById('activeDays').textContent = data.activeDays;
-
-            // Draw charts
-            drawDailyChart(data.dailyClicks);
-            drawPlatformsChart(data.platforms);
-            drawDevicesChart(data.devices);
-            drawSourcesChart(data.sources);
-
-            // Update tables
-            updatePlatformsTable(data.platforms);
-            updateDevicesTable(data.devices);
-            updateDetailsTable(data.details);
-        }
-
-        function generateSampleData(startDate, endDate) {
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-
-            const dailyClicks = [];
-            for (let i = 0; i < days; i++) {
-                const date = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
-                dailyClicks.push({
-                    date: date.toISOString().split('T')[0],
-                    clicks: Math.floor(Math.random() * 200) + 50
-                });
-            }
-
-            return {
-                totalClicks: dailyClicks.reduce((sum, d) => sum + d.clicks, 0),
-                uniqueVisitors: Math.floor(dailyClicks.reduce((sum, d) => sum + d.clicks, 0) * 0.7),
-                activeDays: days,
-                dailyClicks,
-                platforms: [
-                    { name: 'iOS', clicks: Math.floor(Math.random() * 500) + 200 },
-                    { name: 'Android', clicks: Math.floor(Math.random() * 500) + 200 },
-                    { name: 'Windows', clicks: Math.floor(Math.random() * 300) + 100 },
-                    { name: 'macOS', clicks: Math.floor(Math.random() * 200) + 50 }
-                ],
-                devices: [
-                    { name: 'موبايل', clicks: Math.floor(Math.random() * 800) + 400 },
-                    { name: 'كمبيوتر', clicks: Math.floor(Math.random() * 500) + 200 },
-                    { name: 'تابلت', clicks: Math.floor(Math.random() * 200) + 50 }
-                ],
-                sources: [
-                    { name: 'مباشر', clicks: Math.floor(Math.random() * 600) + 300 },
-                    { name: 'جوجل', clicks: Math.floor(Math.random() * 400) + 200 },
-                    { name: 'فيسبوك', clicks: Math.floor(Math.random() * 300) + 100 },
-                    { name: 'تويتر', clicks: Math.floor(Math.random() * 200) + 50 }
-                ],
-                details: dailyClicks.map(d => ({
-                    date: d.date,
-                    url: 'https://example.com/calculator',
-                    clicks: d.clicks,
-                    unique: Math.floor(d.clicks * 0.7)
-                }))
-            };
-        }
-
-        function drawDailyChart(data) {
-            const ctx = document.getElementById('dailyClicksChart');
-            if (charts.daily) charts.daily.destroy();
-            
-            charts.daily = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => d.date),
-                    datasets: [{
-                        label: 'النقرات',
-                        data: data.map(d => d.clicks),
-                        borderColor: '#3B82F6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function drawPlatformsChart(data) {
-            const ctx = document.getElementById('platformsChart');
-            if (charts.platforms) charts.platforms.destroy();
-            
-            charts.platforms = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        data: data.map(d => d.clicks),
-                        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true
-                }
-            });
-        }
-
-        function drawDevicesChart(data) {
-            const ctx = document.getElementById('devicesChart');
-            if (charts.devices) charts.devices.destroy();
-            
-            charts.devices = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        data: data.map(d => d.clicks),
-                        backgroundColor: ['#8B5CF6', '#EC4899', '#06B6D4']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true
-                }
-            });
-        }
-
-        function drawSourcesChart(data) {
-            const ctx = document.getElementById('sourcesChart');
-            if (charts.sources) charts.sources.destroy();
-            
-            charts.sources = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'الزيارات',
-                        data: data.map(d => d.clicks),
-                        backgroundColor: '#F59E0B'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function updatePlatformsTable(data) {
-            const total = data.reduce((sum, d) => sum + d.clicks, 0);
-            const html = data.map(d => \`
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3">\${d.name}</td>
-                    <td class="px-4 py-3 font-bold">\${d.clicks.toLocaleString('ar-SA')}</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center">
-                            <div class="w-full bg-gray-200 rounded-full h-2 ml-2">
-                                <div class="bg-blue-600 h-2 rounded-full" style="width: \${(d.clicks / total * 100).toFixed(1)}%"></div>
-                            </div>
-                            <span class="text-sm font-bold">\${(d.clicks / total * 100).toFixed(1)}%</span>
-                        </div>
-                    </td>
-                </tr>
-            \`).join('');
-            document.getElementById('platformsTable').innerHTML = html;
-        }
-
-        function updateDevicesTable(data) {
-            const total = data.reduce((sum, d) => sum + d.clicks, 0);
-            const html = data.map(d => \`
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3">\${d.name}</td>
-                    <td class="px-4 py-3 font-bold">\${d.clicks.toLocaleString('ar-SA')}</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center">
-                            <div class="w-full bg-gray-200 rounded-full h-2 ml-2">
-                                <div class="bg-purple-600 h-2 rounded-full" style="width: \${(d.clicks / total * 100).toFixed(1)}%"></div>
-                            </div>
-                            <span class="text-sm font-bold">\${(d.clicks / total * 100).toFixed(1)}%</span>
-                        </div>
-                    </td>
-                </tr>
-            \`).join('');
-            document.getElementById('devicesTable').innerHTML = html;
-        }
-
-        function updateDetailsTable(data) {
-            const html = data.map(d => \`
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3">\${d.date}</td>
-                    <td class="px-4 py-3 text-blue-600">\${d.url}</td>
-                    <td class="px-4 py-3 font-bold">\${d.clicks.toLocaleString('ar-SA')}</td>
-                    <td class="px-4 py-3 font-bold">\${d.unique.toLocaleString('ar-SA')}</td>
-                </tr>
-            \`).join('');
-            document.getElementById('detailsTable').innerHTML = html;
-        }
-
-        function exportToExcel() {
-            alert('جاري تصدير التقرير إلى Excel...');
-        }
-
-        // Load on page load
-        window.addEventListener('load', loadReport);
-    <\/script>
-</body>
-</html>
-`,wt=`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تقرير سير العمل للعملاء</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-</head>
-<body class="bg-gradient-to-br from-gray-50 via-green-50 to-blue-50">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-xl">
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-route ml-3"></i>
-                        تقرير سير العمل للعملاء
-                    </h1>
-                    <p class="text-green-100 mt-2">تتبع رحلة العملاء من التسجيل حتى اكتمال الطلب</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للتقارير
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Filters -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">رقم العميل (اختياري)</label>
-                    <input type="text" id="customerId" placeholder="اترك فارغاً لجميع العملاء" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ البداية</label>
-                    <input type="date" id="startDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ النهاية</label>
-                    <input type="date" id="endDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                </div>
-                <div class="flex items-end">
-                    <button onclick="loadWorkflowReport()" class="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:from-green-700 hover:to-blue-700 transition-all">
-                        <i class="fas fa-search ml-2"></i>
-                        عرض التقرير
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-chart-pie ml-2 text-green-600"></i>
-                    توزيع الطلبات حسب المراحل
-                </h3>
-                <canvas id="stagesChart" height="250"></canvas>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-clock ml-2 text-blue-600"></i>
-                    متوسط مدة كل مرحلة (بالدقائق)
-                </h3>
-                <canvas id="durationChart" height="250"></canvas>
-            </div>
-        </div>
-
-        <!-- Details Table -->
-        <div class="bg-white rounded-xl shadow-lg p-6">
-            <h3 class="text-xl font-bold text-gray-800 mb-4">تفاصيل العملاء وسير العمل</h3>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">رقم العميل</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">اسم العميل</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">رقم الطلب</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">المبلغ المطلوب</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">المرحلة الحالية</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">عدد الانتقالات</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">المدة الإجمالية</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">حالة الطلب</th>
-                        </tr>
-                    </thead>
-                    <tbody id="workflowTable">
-                        <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">اضغط على "عرض التقرير" لتحميل البيانات</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Set default dates
-        const today = new Date();
-        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        document.getElementById('startDate').value = monthAgo.toISOString().split('T')[0];
-        document.getElementById('endDate').value = today.toISOString().split('T')[0];
-
-        let charts = {};
-
-        async function loadWorkflowReport() {
-            try {
-                // Get filter values
-                const customerId = document.getElementById('customerIdFilter').value;
-                const startDate = document.getElementById('startDate').value;
-                const endDate = document.getElementById('endDate').value;
-
-                // Build API URL with filters
-                const params = new URLSearchParams();
-                if (customerId) params.append('customer_id', customerId);
-                if (startDate) params.append('start_date', startDate);
-                if (endDate) params.append('end_date', endDate);
-
-                // Fetch data from API
-                const response = await fetch('/api/reports/workflow?' + params.toString());
-                const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || 'فشل تحميل البيانات');
-                }
-
-                const data = result.data;
-
-                // Draw charts and update table
-                drawStagesChart(data.stages);
-                drawDurationChart(data.durations);
-                updateWorkflowTable(data.details);
-            } catch (error) {
-                console.error('Error loading workflow report:', error);
-                alert('حدث خطأ في تحميل التقرير. يرجى المحاولة مرة أخرى.');
-            }
-        }
-
-        function drawStagesChart(data) {
-            const ctx = document.getElementById('stagesChart');
-            if (charts.stages) charts.stages.destroy();
-            
-            charts.stages = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        data: data.map(d => d.count),
-                        backgroundColor: ['#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true
-                }
-            });
-        }
-
-        function drawDurationChart(data) {
-            const ctx = document.getElementById('durationChart');
-            if (charts.duration) charts.duration.destroy();
-            
-            charts.duration = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.stage),
-                    datasets: [{
-                        label: 'الدقائق',
-                        data: data.map(d => d.duration),
-                        backgroundColor: '#10B981'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function updateWorkflowTable(data) {
-            const html = data.map(d => \`
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3 font-bold">\${d.customerId}</td>
-                    <td class="px-4 py-3">\${d.customerName}</td>
-                    <td class="px-4 py-3 text-blue-600">\${d.requestId}</td>
-                    <td class="px-4 py-3 font-bold">\${d.amount.toLocaleString('ar-SA')} ريال</td>
-                    <td class="px-4 py-3">
-                        <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-bold">
-                            \${d.stage}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-center">\${d.transitions}</td>
-                    <td class="px-4 py-3">\${d.duration}</td>
-                    <td class="px-4 py-3">
-                        <span class="px-3 py-1 \${d.status === 'مكتمل' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'} rounded-full text-sm font-bold">
-                            \${d.status}
-                        </span>
-                    </td>
-                </tr>
-            \`).join('');
-            document.getElementById('workflowTable').innerHTML = html;
-        }
-        
-        // Load report on page load
-        window.addEventListener('load', () => {
-            // Set default dates (last 30 days)
-            const today = new Date();
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            
-            document.getElementById('endDate').value = today.toISOString().split('T')[0];
-            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-            
-            // Load report automatically
-            loadWorkflowReport();
-        });
-    <\/script>
-</body>
-</html>
-`,_t=`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تقرير أداء الموظفين</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-</head>
-<body class="bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl">
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-chart-line ml-3"></i>
-                        تقرير أداء الموظفين
-                    </h1>
-                    <p class="text-purple-100 mt-2">تحليل شامل لأداء الموظفين والعملاء والطلبات والعمولات</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للتقارير
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Filters -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ البداية</label>
-                    <input type="date" id="startDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ النهاية</label>
-                    <input type="date" id="endDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div class="flex items-end">
-                    <button onclick="loadPerformanceReport()" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-bold hover:from-purple-700 hover:to-pink-700 transition-all">
-                        <i class="fas fa-chart-bar ml-2"></i>
-                        عرض التقرير
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-exchange-alt ml-2 text-blue-600"></i>
-                    معدل التحويل (عملاء → طلبات)
-                </h3>
-                <canvas id="conversionChart" height="200"></canvas>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-check-circle ml-2 text-green-600"></i>
-                    معدل القبول للطلبات
-                </h3>
-                <canvas id="approvalChart" height="200"></canvas>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-dollar-sign ml-2 text-purple-600"></i>
-                    إجمالي العمولات لكل موظف
-                </h3>
-                <canvas id="commissionsChart" height="200"></canvas>
-            </div>
-        </div>
-
-        <!-- Details Table -->
-        <div class="bg-white rounded-xl shadow-lg p-6">
-            <h3 class="text-xl font-bold text-gray-800 mb-4">مقارنة تفصيلية بين الموظفين</h3>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">الموظف</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجمالي العملاء</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">تحول إلى طلب</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">معدل التحويل</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">طلبات مقبولة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">طلبات مرفوضة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">طلبات قيد المعالجة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">معدل القبول</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجمالي العمولات</th>
-                        </tr>
-                    </thead>
-                    <tbody id="performanceTable">
-                        <tr>
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-500">اضغط على "عرض التقرير" لتحميل البيانات</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Set default dates
-        const today = new Date();
-        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        document.getElementById('startDate').value = monthAgo.toISOString().split('T')[0];
-        document.getElementById('endDate').value = today.toISOString().split('T')[0];
-
-        let charts = {};
-
-        function loadPerformanceReport() {
-            const data = {
-                employees: [
-                    { name: 'أحمد محمد', totalCustomers: 50, converted: 35, conversionRate: 70, approved: 28, rejected: 5, pending: 2, approvalRate: 80, commission: 15000 },
-                    { name: 'فاطمة علي', totalCustomers: 45, converted: 32, conversionRate: 71, approved: 25, rejected: 4, pending: 3, approvalRate: 78, commission: 13500 },
-                    { name: 'خالد سعيد', totalCustomers: 40, converted: 28, conversionRate: 70, approved: 22, rejected: 3, pending: 3, approvalRate: 79, commission: 12000 }
-                ]
-            };
-
-            drawConversionChart(data.employees);
-            drawApprovalChart(data.employees);
-            drawCommissionsChart(data.employees);
-            updatePerformanceTable(data.employees);
-        }
-
-        function drawConversionChart(data) {
-            const ctx = document.getElementById('conversionChart');
-            if (charts.conversion) charts.conversion.destroy();
-            
-            charts.conversion = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'معدل التحويل %',
-                        data: data.map(d => d.conversionRate),
-                        backgroundColor: '#3B82F6'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, max: 100 } }
-                }
-            });
-        }
-
-        function drawApprovalChart(data) {
-            const ctx = document.getElementById('approvalChart');
-            if (charts.approval) charts.approval.destroy();
-            
-            charts.approval = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'معدل القبول %',
-                        data: data.map(d => d.approvalRate),
-                        backgroundColor: '#10B981'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, max: 100 } }
-                }
-            });
-        }
-
-        function drawCommissionsChart(data) {
-            const ctx = document.getElementById('commissionsChart');
-            if (charts.commissions) charts.commissions.destroy();
-            
-            charts.commissions = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'العمولات (ريال)',
-                        data: data.map(d => d.commission),
-                        backgroundColor: '#8B5CF6'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function updatePerformanceTable(data) {
-            const html = data.map(d => \`
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3 font-bold">\${d.name}</td>
-                    <td class="px-4 py-3 text-center">\${d.totalCustomers}</td>
-                    <td class="px-4 py-3 text-center font-bold text-blue-600">\${d.converted}</td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-bold">
-                            \${d.conversionRate}%
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-center font-bold text-green-600">\${d.approved}</td>
-                    <td class="px-4 py-3 text-center font-bold text-red-600">\${d.rejected}</td>
-                    <td class="px-4 py-3 text-center font-bold text-yellow-600">\${d.pending}</td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-bold">
-                            \${d.approvalRate}%
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 font-bold text-purple-600">\${d.commission.toLocaleString('ar-SA')} ريال</td>
-                </tr>
-            \`).join('');
-            document.getElementById('performanceTable').innerHTML = html;
-        }
-        
-        // Load report on page load
-        window.addEventListener('load', () => {
-            // Set default dates (last 30 days)
-            const today = new Date();
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            
-            document.getElementById('endDate').value = today.toISOString().split('T')[0];
-            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-            
-            // Load report automatically
-            loadPerformanceReport();
-        });
-    <\/script>
-</body>
-</html>
-`,Et=`<!DOCTYPE html>
+`,T=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12594,7 +11684,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         alert('❌ ' + message);
     }
 <\/script>
-`,kt=`<!DOCTYPE html>
+`,wt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12954,7 +12044,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,It=`<!DOCTYPE html>
+`,_t=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13285,4765 +12375,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,Dt=`
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة الإجازات - نظام الموارد البشرية</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-</head>
-<body class="bg-gray-50">
-  <div class="min-h-screen">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الإجازات</h1>
-            <p class="text-blue-100 text-sm">طلبات الإجازات والموافقات</p>
-          </div>
-        </div>
-        <button onclick="showAddLeaveModal()" class="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          طلب إجازة جديد
-        </button>
-      </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="p-8">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white rounded-xl shadow-md p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">إجمالي الطلبات</p>
-              <p class="text-3xl font-bold text-gray-800" id="totalLeaves">0</p>
-            </div>
-            <div class="bg-blue-100 p-4 rounded-full">
-              <i class="fas fa-calendar-alt text-blue-600 text-2xl"></i>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-md p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">قيد الانتظار</p>
-              <p class="text-3xl font-bold text-yellow-600" id="pendingLeaves">0</p>
-            </div>
-            <div class="bg-yellow-100 p-4 rounded-full">
-              <i class="fas fa-clock text-yellow-600 text-2xl"></i>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-md p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">مقبولة</p>
-              <p class="text-3xl font-bold text-green-600" id="approvedLeaves">0</p>
-            </div>
-            <div class="bg-green-100 p-4 rounded-full">
-              <i class="fas fa-check-circle text-green-600 text-2xl"></i>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-md p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">مرفوضة</p>
-              <p class="text-3xl font-bold text-red-600" id="rejectedLeaves">0</p>
-            </div>
-            <div class="bg-red-100 p-4 rounded-full">
-              <i class="fas fa-times-circle text-red-600 text-2xl"></i>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filters -->
-      <div class="bg-white rounded-xl shadow-md p-6 mb-8">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <select id="statusFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="loadLeaves()">
-            <option value="">جميع الحالات</option>
-            <option value="pending">قيد الانتظار</option>
-            <option value="approved">مقبولة</option>
-            <option value="rejected">مرفوضة</option>
-          </select>
-
-          <select id="typeFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="loadLeaves()">
-            <option value="">جميع الأنواع</option>
-            <option value="annual">إجازة سنوية</option>
-            <option value="sick">إجازة مرضية</option>
-            <option value="emergency">إجازة طارئة</option>
-            <option value="unpaid">إجازة بدون راتب</option>
-          </select>
-
-          <select id="employeeFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="loadLeaves()">
-            <option value="">جميع الموظفين</option>
-          </select>
-
-          <button onclick="loadLeaves()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-            <i class="fas fa-search ml-2"></i>
-            بحث
-          </button>
-        </div>
-      </div>
-
-      <!-- Leaves Table -->
-      <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <table class="w-full">
-          <thead class="bg-gray-100">
-            <tr>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الموظف</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نوع الإجازة</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">من</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">إلى</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">المدة</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحالة</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="leavesTableBody">
-            <tr>
-              <td colspan="7" class="px-6 py-8 text-center text-gray-500">
-                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                <p>جاري تحميل البيانات...</p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- Add Leave Modal -->
-  <div id="addLeaveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-bold text-gray-800">طلب إجازة جديد</h2>
-        <button onclick="closeAddLeaveModal()" class="text-gray-500 hover:text-gray-700">
-          <i class="fas fa-times text-xl"></i>
-        </button>
-      </div>
-
-      <form id="leaveForm" onsubmit="submitLeave(event)">
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">الموظف *</label>
-            <select name="employee_id" required class="w-full border border-gray-300 rounded-lg px-4 py-2">
-              <option value="">اختر الموظف</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">نوع الإجازة *</label>
-            <select name="leave_type" required class="w-full border border-gray-300 rounded-lg px-4 py-2">
-              <option value="annual">إجازة سنوية</option>
-              <option value="sick">إجازة مرضية</option>
-              <option value="emergency">إجازة طارئة</option>
-              <option value="unpaid">إجازة بدون راتب</option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ *</label>
-              <input type="date" name="start_date" required class="w-full border border-gray-300 rounded-lg px-4 py-2">
-            </div>
-            <div>
-              <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ *</label>
-              <input type="date" name="end_date" required class="w-full border border-gray-300 rounded-lg px-4 py-2">
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">السبب *</label>
-            <textarea name="reason" required rows="3" class="w-full border border-gray-300 rounded-lg px-4 py-2"></textarea>
-          </div>
-
-          <div class="flex gap-4 pt-4">
-            <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
-              <i class="fas fa-check ml-2"></i>
-              تقديم الطلب
-            </button>
-            <button type="button" onclick="closeAddLeaveModal()" class="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-400 transition">
-              إلغاء
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script>
-    let leaves = [];
-    let employees = [];
-
-    async function loadLeaves() {
-      try {
-        const statusFilter = document.getElementById('statusFilter').value;
-        const typeFilter = document.getElementById('typeFilter').value;
-        const employeeFilter = document.getElementById('employeeFilter').value;
-
-        const params = new URLSearchParams();
-        if (statusFilter) params.append('status', statusFilter);
-        if (typeFilter) params.append('type', typeFilter);
-        if (employeeFilter) params.append('employee_id', employeeFilter);
-
-        const response = await axios.get('/api/hr/leaves?' + params.toString());
-        leaves = response.data.data || [];
-
-        updateStatistics();
-        renderLeavesTable();
-      } catch (error) {
-        console.error('Error loading leaves:', error);
-        alert('حدث خطأ في تحميل البيانات');
-      }
-    }
-
-    function updateStatistics() {
-      document.getElementById('totalLeaves').textContent = leaves.length;
-      document.getElementById('pendingLeaves').textContent = leaves.filter(l => l.status === 'pending').length;
-      document.getElementById('approvedLeaves').textContent = leaves.filter(l => l.status === 'approved').length;
-      document.getElementById('rejectedLeaves').textContent = leaves.filter(l => l.status === 'rejected').length;
-    }
-
-    function renderLeavesTable() {
-      const tbody = document.getElementById('leavesTableBody');
-      
-      if (leaves.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">لا توجد بيانات</td></tr>';
-        return;
-      }
-
-      const typeMap = {
-        'annual': 'إجازة سنوية',
-        'sick': 'إجازة مرضية',
-        'emergency': 'إجازة طارئة',
-        'unpaid': 'إجازة بدون راتب'
-      };
-
-      tbody.innerHTML = leaves.map(leave => {
-        const statusColors = {
-          'pending': 'bg-yellow-100 text-yellow-800',
-          'approved': 'bg-green-100 text-green-800',
-          'rejected': 'bg-red-100 text-red-800'
-        };
-
-        const statusLabels = {
-          'pending': 'قيد الانتظار',
-          'approved': 'مقبولة',
-          'rejected': 'مرفوضة'
-        };
-
-        const days = Math.ceil((new Date(leave.end_date) - new Date(leave.start_date)) / (1000 * 60 * 60 * 24)) + 1;
-
-        return \`
-          <tr class="border-t hover:bg-gray-50">
-            <td class="px-6 py-4">\${leave.employee_name || 'غير محدد'}</td>
-            <td class="px-6 py-4">\${typeMap[leave.leave_type] || leave.leave_type}</td>
-            <td class="px-6 py-4">\${new Date(leave.start_date).toLocaleDateString('ar-SA')}</td>
-            <td class="px-6 py-4">\${new Date(leave.end_date).toLocaleDateString('ar-SA')}</td>
-            <td class="px-6 py-4">\${days} يوم</td>
-            <td class="px-6 py-4">
-              <span class="px-3 py-1 rounded-full text-xs font-bold \${statusColors[leave.status]}">
-                \${statusLabels[leave.status]}
-              </span>
-            </td>
-            <td class="px-6 py-4">
-              <div class="flex gap-2">
-                \${leave.status === 'pending' ? \`
-                  <button onclick="approveLeave(\${leave.id})" class="text-green-600 hover:text-green-800" title="قبول">
-                    <i class="fas fa-check-circle"></i>
-                  </button>
-                  <button onclick="rejectLeave(\${leave.id})" class="text-red-600 hover:text-red-800" title="رفض">
-                    <i class="fas fa-times-circle"></i>
-                  </button>
-                \` : ''}
-                <button onclick="deleteLeave(\${leave.id})" class="text-gray-600 hover:text-gray-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        \`;
-      }).join('');
-    }
-
-    async function loadEmployees() {
-      try {
-        const response = await axios.get('/api/hr/employees');
-        employees = response.data.data || [];
-
-        // Fill employee filter
-        const employeeFilter = document.getElementById('employeeFilter');
-        employeeFilter.innerHTML = '<option value="">جميع الموظفين</option>' +
-          employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name}</option>\`).join('');
-
-        // Fill employee select in form
-        const employeeSelect = document.querySelector('select[name="employee_id"]');
-        employeeSelect.innerHTML = '<option value="">اختر الموظف</option>' +
-          employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name}</option>\`).join('');
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-    }
-
-    function showAddLeaveModal() {
-      document.getElementById('addLeaveModal').classList.remove('hidden');
-    }
-
-    function closeAddLeaveModal() {
-      document.getElementById('addLeaveModal').classList.add('hidden');
-      document.getElementById('leaveForm').reset();
-    }
-
-    async function submitLeave(event) {
-      event.preventDefault();
-      const formData = new FormData(event.target);
-      const data = Object.fromEntries(formData);
-
-      try {
-        await axios.post('/api/hr/leaves', data);
-        alert('تم تقديم الطلب بنجاح');
-        closeAddLeaveModal();
-        loadLeaves();
-      } catch (error) {
-        console.error('Error submitting leave:', error);
-        alert('حدث خطأ في تقديم الطلب');
-      }
-    }
-
-    async function approveLeave(id) {
-      if (!confirm('هل أنت متأكد من قبول هذا الطلب؟')) return;
-
-      try {
-        await axios.put(\`/api/hr/leaves/\${id}/approve\`);
-        alert('تم قبول الطلب بنجاح');
-        loadLeaves();
-      } catch (error) {
-        console.error('Error approving leave:', error);
-        alert('حدث خطأ في قبول الطلب');
-      }
-    }
-
-    async function rejectLeave(id) {
-      const reason = prompt('سبب الرفض:');
-      if (!reason) return;
-
-      try {
-        await axios.put(\`/api/hr/leaves/\${id}/reject\`, { reason });
-        alert('تم رفض الطلب');
-        loadLeaves();
-      } catch (error) {
-        console.error('Error rejecting leave:', error);
-        alert('حدث خطأ في رفض الطلب');
-      }
-    }
-
-    async function deleteLeave(id) {
-      if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
-
-      try {
-        await axios.delete(\`/api/hr/leaves/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadLeaves();
-      } catch (error) {
-        console.error('Error deleting leave:', error);
-        alert('حدث خطأ في الحذف');
-      }
-    }
-
-    // Load data on page load
-    window.addEventListener('load', () => {
-      loadEmployees();
-      loadLeaves();
-    });
-  <\/script>
-</body>
-</html>
-`,St=`
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة الرواتب - نظام الموارد البشرية</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-</head>
-<body class="bg-gray-50">
-  <div class="min-h-screen">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الرواتب</h1>
-            <p class="text-green-100 text-sm">رواتب الموظفين والاستحقاقات</p>
-          </div>
-        </div>
-        <button onclick="showAddSalaryModal()" class="bg-white text-green-600 px-6 py-2 rounded-lg font-bold hover:bg-green-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة راتب جديد
-        </button>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="p-8">
-      <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">الموظف</label>
-            <select id="filterEmployee" onchange="loadSalaries()" class="w-full border-gray-300 rounded-lg">
-              <option value="">الكل</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">الشهر</label>
-            <input type="month" id="filterMonth" onchange="loadSalaries()" class="w-full border-gray-300 rounded-lg">
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">الحالة</label>
-            <select id="filterStatus" onchange="loadSalaries()" class="w-full border-gray-300 rounded-lg">
-              <option value="">الكل</option>
-              <option value="pending">معلق</option>
-              <option value="approved">مُعتمد</option>
-              <option value="paid">مدفوع</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <!-- Salaries Table -->
-      <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الشهر</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الراتب الأساسي</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البدلات</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الخصومات</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الصافي</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="salariesTableBody" class="bg-white divide-y divide-gray-200">
-            <tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">جارٍ التحميل...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Add Salary Modal -->
-    <div id="addSalaryModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
-        <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-4 rounded-t-xl">
-          <h3 class="text-xl font-bold">إضافة راتب جديد</h3>
-        </div>
-        <form id="addSalaryForm" class="p-6 space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الموظف *</label>
-              <select name="employee_id" required class="w-full border-gray-300 rounded-lg">
-                <option value="">اختر الموظف</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الشهر *</label>
-              <input type="month" name="salary_month" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الراتب الأساسي *</label>
-              <input type="number" name="basic_salary" step="0.01" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">بدل السكن</label>
-              <input type="number" name="housing_allowance" step="0.01" value="0" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">بدل النقل</label>
-              <input type="number" name="transportation_allowance" step="0.01" value="0" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">بدلات أخرى</label>
-              <input type="number" name="other_allowances" step="0.01" value="0" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">التأمينات</label>
-              <input type="number" name="insurance_deduction" step="0.01" value="0" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">خصومات أخرى</label>
-              <input type="number" name="other_deductions" step="0.01" value="0" class="w-full border-gray-300 rounded-lg">
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">ملاحظات</label>
-            <textarea name="notes" rows="3" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div class="flex justify-end gap-3 pt-4">
-            <button type="button" onclick="hideAddSalaryModal()" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">إلغاء</button>
-            <button type="submit" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">حفظ الراتب</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let employees = [];
-    
-    function showAddSalaryModal() {
-      document.getElementById('addSalaryModal').classList.remove('hidden');
-    }
-    
-    function hideAddSalaryModal() {
-      document.getElementById('addSalaryModal').classList.add('hidden');
-      document.getElementById('addSalaryForm').reset();
-    }
-    
-    async function loadEmployees() {
-      try {
-        const res = await axios.get('/api/hr/employees');
-        employees = res.data.data || [];
-        
-        const selects = document.querySelectorAll('select[name="employee_id"], #filterEmployee');
-        selects.forEach(select => {
-          if (select.id !== 'filterEmployee') {
-            select.innerHTML = '<option value="">اختر الموظف</option>';
-          } else {
-            select.innerHTML = '<option value="">الكل</option>';
-          }
-          employees.forEach(emp => {
-            select.innerHTML += \`<option value="\${emp.id}">\${emp.full_name}</option>\`;
-          });
-        });
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-    }
-    
-    async function loadSalaries() {
-      try {
-        const employeeId = document.getElementById('filterEmployee').value;
-        const month = document.getElementById('filterMonth').value;
-        const status = document.getElementById('filterStatus').value;
-        
-        let url = '/api/hr/salaries?';
-        if (employeeId) url += \`employee_id=\${employeeId}&\`;
-        if (month) url += \`month=\${month}&\`;
-        if (status) url += \`status=\${status}&\`;
-        
-        const res = await axios.get(url);
-        const salaries = res.data.data || [];
-        
-        const tbody = document.getElementById('salariesTableBody');
-        if (salaries.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">لا توجد رواتب</td></tr>';
-          return;
-        }
-        
-        tbody.innerHTML = salaries.map(salary => {
-          const statusColors = {
-            pending: 'bg-yellow-100 text-yellow-800',
-            approved: 'bg-blue-100 text-blue-800',
-            paid: 'bg-green-100 text-green-800'
-          };
-          const statusLabels = {
-            pending: 'معلق',
-            approved: 'مُعتمد',
-            paid: 'مدفوع'
-          };
-          
-          return \`
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.employee_name || 'غير محدد'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.salary_month}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.basic_salary.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.gross_salary - basic_salary.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.total_deductions.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap font-bold">\${salary.net_salary.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 py-1 rounded-full text-xs \${statusColors[salary.payment_status] || 'bg-gray-100 text-gray-800'}">
-                  \${statusLabels[salary.payment_status] || salary.payment_status}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                \${salary.payment_status === 'pending' ? \`
-                  <button onclick="approveSalary(\${salary.id})" class="text-blue-600 hover:text-blue-800 ml-3" title="اعتماد">
-                    <i class="fas fa-check"></i>
-                  </button>
-                \` : ''}
-                \${salary.payment_status === 'approved' ? \`
-                  <button onclick="paySalary(\${salary.id})" class="text-green-600 hover:text-green-800 ml-3" title="دفع">
-                    <i class="fas fa-money-bill"></i>
-                  </button>
-                \` : ''}
-                <button onclick="deleteSalary(\${salary.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          \`;
-        }).join('');
-      } catch (error) {
-        console.error('Error loading salaries:', error);
-      }
-    }
-    
-    document.getElementById('addSalaryForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-      
-      try {
-        await axios.post('/api/hr/salaries', data);
-        alert('تم إضافة الراتب بنجاح');
-        hideAddSalaryModal();
-        loadSalaries();
-      } catch (error) {
-        console.error('Error adding salary:', error);
-        alert('حدث خطأ في الإضافة');
-      }
-    });
-    
-    async function approveSalary(id) {
-      if (!confirm('هل أنت متأكد من اعتماد هذا الراتب؟')) return;
-      try {
-        await axios.put(\`/api/hr/salaries/\${id}/approve\`);
-        alert('تم الاعتماد بنجاح');
-        loadSalaries();
-      } catch (error) {
-        console.error('Error approving:', error);
-        alert('حدث خطأ');
-      }
-    }
-    
-    async function paySalary(id) {
-      if (!confirm('هل أنت متأكد من دفع هذا الراتب؟')) return;
-      try {
-        await axios.put(\`/api/hr/salaries/\${id}/pay\`);
-        alert('تم الدفع بنجاح');
-        loadSalaries();
-      } catch (error) {
-        console.error('Error paying:', error);
-        alert('حدث خطأ');
-      }
-    }
-    
-    async function deleteSalary(id) {
-      if (!confirm('هل أنت متأكد من حذف هذا الراتب؟')) return;
-      try {
-        await axios.delete(\`/api/hr/salaries/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadSalaries();
-      } catch (error) {
-        console.error('Error deleting:', error);
-        alert('حدث خطأ');
-      }
-    }
-    
-    window.addEventListener('load', () => {
-      loadEmployees();
-      loadSalaries();
-    });
-  <\/script>
-</body>
-</html>
-`,Tt=`
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة الأقسام - نظام الموارد البشرية</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-</head>
-<body class="bg-gray-50">
-  <div class="min-h-screen">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الأقسام</h1>
-            <p class="text-purple-100 text-sm">أقسام الشركة والموظفين</p>
-          </div>
-        </div>
-        <button onclick="showAddDepartmentModal()" class="bg-white text-purple-600 px-6 py-2 rounded-lg font-bold hover:bg-purple-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة قسم جديد
-        </button>
-      </div>
-    </div>
-
-    <!-- Departments Grid -->
-    <div class="p-8">
-      <div id="departmentsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="bg-white rounded-xl shadow-md p-6 text-center">جارٍ التحميل...</div>
-      </div>
-    </div>
-
-    <!-- Add Department Modal -->
-    <div id="addDepartmentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
-        <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-4 rounded-t-xl">
-          <h3 class="text-xl font-bold">إضافة قسم جديد</h3>
-        </div>
-        <form id="addDepartmentForm" class="p-6 space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">اسم القسم *</label>
-            <input type="text" name="department_name" required class="w-full border-gray-300 rounded-lg">
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">رمز القسم *</label>
-            <input type="text" name="department_code" required class="w-full border-gray-300 rounded-lg">
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">مدير القسم</label>
-            <select name="manager_id" class="w-full border-gray-300 rounded-lg">
-              <option value="">بدون مدير</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">الميزانية</label>
-            <input type="number" name="budget" step="0.01" value="0" class="w-full border-gray-300 rounded-lg">
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">الوصف</label>
-            <textarea name="description" rows="3" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div class="flex justify-end gap-3 pt-4">
-            <button type="button" onclick="hideAddDepartmentModal()" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">إلغاء</button>
-            <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">حفظ القسم</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let employees = [];
-    
-    function showAddDepartmentModal() {
-      document.getElementById('addDepartmentModal').classList.remove('hidden');
-    }
-    
-    function hideAddDepartmentModal() {
-      document.getElementById('addDepartmentModal').classList.add('hidden');
-      document.getElementById('addDepartmentForm').reset();
-    }
-    
-    async function loadEmployees() {
-      try {
-        const res = await axios.get('/api/hr/employees');
-        employees = res.data.data || [];
-        
-        const select = document.querySelector('select[name="manager_id"]');
-        select.innerHTML = '<option value="">بدون مدير</option>';
-        employees.forEach(emp => {
-          select.innerHTML += \`<option value="\${emp.id}">\${emp.full_name}</option>\`;
-        });
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-    }
-    
-    async function loadDepartments() {
-      try {
-        const res = await axios.get('/api/hr/departments');
-        const departments = res.data.data || [];
-        
-        const grid = document.getElementById('departmentsGrid');
-        if (departments.length === 0) {
-          grid.innerHTML = '<div class="col-span-full text-center text-gray-500 p-8">لا توجد أقسام</div>';
-          return;
-        }
-        
-        grid.innerHTML = departments.map(dept => \`
-          <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
-            <div class="flex items-start justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <div class="bg-purple-100 p-3 rounded-full">
-                  <i class="fas fa-building text-purple-600 text-xl"></i>
-                </div>
-                <div>
-                  <h3 class="text-lg font-bold text-gray-800">\${dept.department_name}</h3>
-                  <p class="text-sm text-gray-500">\${dept.department_code}</p>
-                </div>
-              </div>
-              <button onclick="deleteDepartment(\${dept.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                <i class="fas fa-trash"></i>
-              </button>
-            </div>
-            <div class="space-y-2 text-sm">
-              <div class="flex items-center justify-between">
-                <span class="text-gray-600">المدير:</span>
-                <span class="font-medium">\${dept.manager_name || 'غير محدد'}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-gray-600">عدد الموظفين:</span>
-                <span class="font-bold text-purple-600">\${dept.employee_count || 0}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-gray-600">الميزانية:</span>
-                <span class="font-medium">\${dept.budget ? dept.budget.toLocaleString() + ' ر.س' : '0 ر.س'}</span>
-              </div>
-            </div>
-            \${dept.description ? \`<p class="mt-3 text-sm text-gray-600 border-t pt-3">\${dept.description}</p>\` : ''}
-          </div>
-        \`).join('');
-      } catch (error) {
-        console.error('Error loading departments:', error);
-      }
-    }
-    
-    document.getElementById('addDepartmentForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-      
-      try {
-        await axios.post('/api/hr/departments', data);
-        alert('تم إضافة القسم بنجاح');
-        hideAddDepartmentModal();
-        loadDepartments();
-      } catch (error) {
-        console.error('Error adding department:', error);
-        alert('حدث خطأ في الإضافة');
-      }
-    });
-    
-    async function deleteDepartment(id) {
-      if (!confirm('هل أنت متأكد من حذف هذا القسم؟')) return;
-      try {
-        await axios.delete(\`/api/hr/departments/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadDepartments();
-      } catch (error) {
-        console.error('Error deleting:', error);
-        alert('حدث خطأ في الحذف');
-      }
-    }
-    
-    window.addEventListener('load', () => {
-      loadEmployees();
-      loadDepartments();
-    });
-  <\/script>
-</body>
-</html>
-`,Rt=`
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تقييم الأداء - نظام الموارد البشرية</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-</head>
-<body class="bg-gray-50">
-  <div class="min-h-screen">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">تقييم الأداء</h1>
-            <p class="text-indigo-100 text-sm">تقييمات أداء الموظفين</p>
-          </div>
-        </div>
-        <button onclick="showAddReviewModal()" class="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة تقييم جديد
-        </button>
-      </div>
-    </div>
-
-    <!-- Reviews Table -->
-    <div class="p-8">
-      <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المُقيّم</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الفترة</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التقييم الكلي</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحضور</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الجودة</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">العمل الجماعي</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الدقة</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="reviewsTableBody" class="bg-white divide-y divide-gray-200">
-            <tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">جارٍ التحميل...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Add Review Modal -->
-    <div id="addReviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-      <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 my-8">
-        <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-6 py-4 rounded-t-xl">
-          <h3 class="text-xl font-bold">إضافة تقييم أداء جديد</h3>
-        </div>
-        <form id="addReviewForm" class="p-6 space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الموظف *</label>
-              <select name="employee_id" required class="w-full border-gray-300 rounded-lg">
-                <option value="">اختر الموظف</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">فترة التقييم *</label>
-              <input type="text" name="review_period" required placeholder="مثال: Q1 2026" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ التقييم *</label>
-              <input type="date" name="review_date" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">التقييم الكلي (1-5) *</label>
-              <input type="number" name="overall_rating" min="1" max="5" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">تقييم الحضور (1-5)</label>
-              <input type="number" name="attendance_rating" min="1" max="5" value="3" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">تقييم الجودة (1-5)</label>
-              <input type="number" name="quality_rating" min="1" max="5" value="3" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">العمل الجماعي (1-5)</label>
-              <input type="number" name="teamwork_rating" min="1" max="5" value="3" class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الدقة (1-5)</label>
-              <input type="number" name="punctuality_rating" min="1" max="5" value="3" class="w-full border-gray-300 rounded-lg">
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">نقاط القوة</label>
-            <textarea name="strengths" rows="2" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">نقاط الضعف</label>
-            <textarea name="weaknesses" rows="2" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">الأهداف المستقبلية</label>
-            <textarea name="goals" rows="2" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">ملاحظات إضافية</label>
-            <textarea name="comments" rows="2" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div class="flex justify-end gap-3 pt-4">
-            <button type="button" onclick="hideAddReviewModal()" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">إلغاء</button>
-            <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">حفظ التقييم</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    function showAddReviewModal() {
-      document.getElementById('addReviewModal').classList.remove('hidden');
-    }
-    
-    function hideAddReviewModal() {
-      document.getElementById('addReviewModal').classList.add('hidden');
-      document.getElementById('addReviewForm').reset();
-    }
-    
-    async function loadEmployees() {
-      try {
-        const res = await axios.get('/api/hr/employees');
-        const employees = res.data.data || [];
-        
-        const select = document.querySelector('select[name="employee_id"]');
-        select.innerHTML = '<option value="">اختر الموظف</option>';
-        employees.forEach(emp => {
-          select.innerHTML += \`<option value="\${emp.id}">\${emp.full_name}</option>\`;
-        });
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-    }
-    
-    async function loadReviews() {
-      try {
-        const res = await axios.get('/api/hr/performance');
-        const reviews = res.data.data || [];
-        
-        const tbody = document.getElementById('reviewsTableBody');
-        if (reviews.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">لا توجد تقييمات</td></tr>';
-          return;
-        }
-        
-        tbody.innerHTML = reviews.map(review => {
-          const statusColors = {
-            draft: 'bg-gray-100 text-gray-800',
-            submitted: 'bg-blue-100 text-blue-800',
-            approved: 'bg-green-100 text-green-800'
-          };
-          const statusLabels = {
-            draft: 'مسودة',
-            submitted: 'مُقدم',
-            approved: 'مُعتمد'
-          };
-          
-          const ratingColor = (rating) => {
-            if (rating >= 4) return 'text-green-600';
-            if (rating >= 3) return 'text-blue-600';
-            if (rating >= 2) return 'text-yellow-600';
-            return 'text-red-600';
-          };
-          
-          return \`
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.employee_name || 'غير محدد'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.reviewer_name || 'غير محدد'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.review_period}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-bold \${ratingColor(Math.round(review.overall_rating || 0))}">
-                \${'★'.repeat(Math.round(review.overall_rating || 0))}\${'☆'.repeat(5 - Math.round(review.overall_rating || 0))}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.attendance_rating || review.attendance_punctuality || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.quality_rating || review.quality_of_work || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.teamwork_rating || review.teamwork || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.punctuality_rating || review.attendance_punctuality || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 py-1 rounded-full text-xs \${statusColors[review.status] || 'bg-gray-100 text-gray-800'}">
-                  \${statusLabels[review.status] || review.status}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <button onclick="deleteReview(\${review.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          \`;
-        }).join('');
-      } catch (error) {
-        console.error('Error loading reviews:', error);
-      }
-    }
-    
-    document.getElementById('addReviewForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-      
-      try {
-        await axios.post('/api/hr/performance', data);
-        alert('تم إضافة التقييم بنجاح');
-        hideAddReviewModal();
-        loadReviews();
-      } catch (error) {
-        console.error('Error adding review:', error);
-        alert('حدث خطأ في الإضافة');
-      }
-    });
-    
-    async function deleteReview(id) {
-      if (!confirm('هل أنت متأكد من حذف هذا التقييم؟')) return;
-      try {
-        await axios.delete(\`/api/hr/performance/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadReviews();
-      } catch (error) {
-        console.error('Error deleting:', error);
-        alert('حدث خطأ في الحذف');
-      }
-    }
-    
-    window.addEventListener('load', () => {
-      loadEmployees();
-      loadReviews();
-    });
-  <\/script>
-</body>
-</html>
-`,Ct=`
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>الترقيات - نظام الموارد البشرية</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-</head>
-<body class="bg-gray-50">
-  <div class="min-h-screen">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-orange-600 to-red-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">الترقيات</h1>
-            <p class="text-orange-100 text-sm">ترقيات وتطورات الموظفين</p>
-          </div>
-        </div>
-        <button onclick="showAddPromotionModal()" class="bg-white text-orange-600 px-6 py-2 rounded-lg font-bold hover:bg-orange-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة ترقية جديدة
-        </button>
-      </div>
-    </div>
-
-    <!-- Promotions Table -->
-    <div class="p-8">
-      <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المنصب السابق</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المنصب الجديد</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الراتب السابق</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الراتب الجديد</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الترقية</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="promotionsTableBody" class="bg-white divide-y divide-gray-200">
-            <tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">جارٍ التحميل...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Add Promotion Modal -->
-    <div id="addPromotionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
-        <div class="bg-gradient-to-r from-orange-600 to-red-600 text-white px-6 py-4 rounded-t-xl">
-          <h3 class="text-xl font-bold">إضافة ترقية جديدة</h3>
-        </div>
-        <form id="addPromotionForm" class="p-6 space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الموظف *</label>
-              <select name="employee_id" required onchange="loadEmployeeInfo(this.value)" class="w-full border-gray-300 rounded-lg">
-                <option value="">اختر الموظف</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">المنصب الجديد *</label>
-              <input type="text" name="new_position" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">الراتب الجديد *</label>
-              <input type="number" name="new_salary" step="0.01" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ الترقية *</label>
-              <input type="date" name="promotion_date" required class="w-full border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ السريان</label>
-              <input type="date" name="effective_date" class="w-full border-gray-300 rounded-lg">
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">سبب الترقية</label>
-            <textarea name="reason" rows="3" class="w-full border-gray-300 rounded-lg"></textarea>
-          </div>
-          <div class="flex justify-end gap-3 pt-4">
-            <button type="button" onclick="hideAddPromotionModal()" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">إلغاء</button>
-            <button type="submit" class="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition">حفظ الترقية</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let employees = [];
-    
-    function showAddPromotionModal() {
-      document.getElementById('addPromotionModal').classList.remove('hidden');
-    }
-    
-    function hideAddPromotionModal() {
-      document.getElementById('addPromotionModal').classList.add('hidden');
-      document.getElementById('addPromotionForm').reset();
-    }
-    
-    async function loadEmployees() {
-      try {
-        const res = await axios.get('/api/hr/employees');
-        employees = res.data.data || [];
-        
-        const select = document.querySelector('select[name="employee_id"]');
-        select.innerHTML = '<option value="">اختر الموظف</option>';
-        employees.forEach(emp => {
-          select.innerHTML += \`<option value="\${emp.id}" data-position="\${emp.job_title}" data-salary="\${emp.basic_salary}">\${emp.full_name}</option>\`;
-        });
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-    }
-    
-    function loadEmployeeInfo(employeeId) {
-      const emp = employees.find(e => e.id == employeeId);
-      if (emp) {
-        document.querySelector('input[name="new_salary"]').value = emp.basic_salary;
-      }
-    }
-    
-    async function loadPromotions() {
-      try {
-        const res = await axios.get('/api/hr/promotions');
-        const promotions = res.data.data || [];
-        
-        const tbody = document.getElementById('promotionsTableBody');
-        if (promotions.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">لا توجد ترقيات</td></tr>';
-          return;
-        }
-        
-        tbody.innerHTML = promotions.map(promo => {
-          const statusColors = {
-            pending: 'bg-yellow-100 text-yellow-800',
-            approved: 'bg-green-100 text-green-800',
-            rejected: 'bg-red-100 text-red-800'
-          };
-          const statusLabels = {
-            pending: 'معلق',
-            approved: 'مُعتمد',
-            rejected: 'مرفوض'
-          };
-          
-          const oldSalary = parseFloat(promo.old_salary) || 0;
-          const newSalary = parseFloat(promo.new_salary) || 0;
-          const salaryIncrease = newSalary - oldSalary;
-          const increasePercent = oldSalary > 0 ? ((salaryIncrease / oldSalary) * 100).toFixed(1) : '0';
-          
-          return \`
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.employee_name || 'غير محدد'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_position || promo.old_job_title || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-medium text-blue-600">\${promo.new_position || promo.new_job_title || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${oldSalary.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="font-bold text-green-600">\${newSalary.toLocaleString()} ر.س</span>
-                \${oldSalary > 0 ? \`<span class="text-xs text-gray-500 block">+\${increasePercent}%</span>\` : ''}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.promotion_date || promo.effective_date || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 py-1 rounded-full text-xs \${statusColors[promo.status] || 'bg-gray-100 text-gray-800'}">
-                  \${statusLabels[promo.status] || promo.status}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                \${promo.status === 'pending' ? \`
-                  <button onclick="approvePromotion(\${promo.id})" class="text-green-600 hover:text-green-800 ml-3" title="اعتماد">
-                    <i class="fas fa-check"></i>
-                  </button>
-                  <button onclick="rejectPromotion(\${promo.id})" class="text-red-600 hover:text-red-800 ml-3" title="رفض">
-                    <i class="fas fa-times"></i>
-                  </button>
-                \` : ''}
-                <button onclick="deletePromotion(\${promo.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          \`;
-        }).join('');
-      } catch (error) {
-        console.error('Error loading promotions:', error);
-      }
-    }
-    
-    document.getElementById('addPromotionForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-      
-      try {
-        await axios.post('/api/hr/promotions', data);
-        alert('تم إضافة الترقية بنجاح');
-        hideAddPromotionModal();
-        loadPromotions();
-      } catch (error) {
-        console.error('Error adding promotion:', error);
-        alert('حدث خطأ في الإضافة');
-      }
-    });
-    
-    async function approvePromotion(id) {
-      if (!confirm('هل أنت متأكد من اعتماد هذه الترقية؟')) return;
-      try {
-        await axios.put(\`/api/hr/promotions/\${id}/approve\`);
-        alert('تم الاعتماد بنجاح');
-        loadPromotions();
-      } catch (error) {
-        console.error('Error approving:', error);
-        alert('حدث خطأ');
-      }
-    }
-    
-    async function rejectPromotion(id) {
-      if (!confirm('هل أنت متأكد من رفض هذه الترقية؟')) return;
-      try {
-        await axios.put(\`/api/hr/promotions/\${id}/reject\`);
-        alert('تم الرفض');
-        loadPromotions();
-      } catch (error) {
-        console.error('Error rejecting:', error);
-        alert('حدث خطأ');
-      }
-    }
-    
-    async function deletePromotion(id) {
-      if (!confirm('هل أنت متأكد من حذف هذه الترقية؟')) return;
-      try {
-        await axios.delete(\`/api/hr/promotions/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadPromotions();
-      } catch (error) {
-        console.error('Error deleting:', error);
-        alert('حدث خطأ في الحذف');
-      }
-    }
-    
-    window.addEventListener('load', () => {
-      loadEmployees();
-      loadPromotions();
-    });
-  <\/script>
-</body>
-</html>
-`,$t=`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>المستندات - نظام الموارد البشرية</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-</head>
-<body class="bg-gray-100">
-  <div class="min-h-screen">
-    <!-- رأس الصفحة -->
-    <div class="bg-white shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div>
-            <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
-              <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
-              <i class="fas fa-file-alt ml-2"></i>
-              إدارة المستندات
-            </h1>
-            <p class="text-gray-600 mt-1">تتبع مستندات الموظفين وتنبيهات انتهاء الصلاحيات</p>
-          </div>
-          <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-            <i class="fas fa-plus ml-2"></i>
-            إضافة مستند
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- تنبيهات انتهاء الصلاحيات -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div id="expiryAlerts" class="space-y-3">
-        <!-- سيتم ملؤها ديناميكياً -->
-      </div>
-    </div>
-
-    <!-- الإحصائيات -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">إجمالي المستندات</p>
-              <p class="text-2xl font-bold text-gray-800" id="totalDocuments">0</p>
-            </div>
-            <i class="fas fa-file-alt text-blue-500 text-3xl"></i>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">منتهية الصلاحية</p>
-              <p class="text-2xl font-bold text-red-600" id="expiredDocuments">0</p>
-            </div>
-            <i class="fas fa-exclamation-circle text-red-500 text-3xl"></i>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">تنتهي خلال 30 يوم</p>
-              <p class="text-2xl font-bold text-yellow-600" id="expiringDocuments">0</p>
-            </div>
-            <i class="fas fa-clock text-yellow-500 text-3xl"></i>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">سارية</p>
-              <p class="text-2xl font-bold text-green-600" id="validDocuments">0</p>
-            </div>
-            <i class="fas fa-check-circle text-green-500 text-3xl"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- جدول المستندات -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
-      <div class="bg-white rounded-lg shadow">
-        <div class="p-6 border-b">
-          <h2 class="text-xl font-bold text-gray-800">قائمة المستندات</h2>
-          
-          <!-- الفلاتر -->
-          <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input type="text" id="searchInput" placeholder="بحث بالموظف أو المستند..." class="border rounded-lg px-4 py-2">
-            
-            <select id="typeFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
-              <option value="">جميع الأنواع</option>
-              <option value="passport">جواز السفر</option>
-              <option value="id_card">بطاقة الهوية</option>
-              <option value="license">رخصة القيادة</option>
-              <option value="contract">عقد العمل</option>
-              <option value="insurance">التأمين</option>
-              <option value="other">أخرى</option>
-            </select>
-            
-            <select id="statusFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
-              <option value="">جميع الحالات</option>
-              <option value="valid">سارية</option>
-              <option value="expiring">تنتهي قريباً</option>
-              <option value="expired">منتهية</option>
-            </select>
-          </div>
-        </div>
-        
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">م</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع المستند</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">رقم المستند</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الإصدار</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الانتهاء</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الأيام المتبقية</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody id="documentsTableBody" class="bg-white divide-y divide-gray-200">
-              <!-- سيتم ملؤها ديناميكياً -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal إضافة مستند -->
-  <div id="addDocumentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">إضافة مستند جديد</h2>
-      
-      <form id="addDocumentForm" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">الموظف *</label>
-            <select id="employee_id" required class="w-full border rounded-lg px-4 py-2">
-              <option value="">اختر الموظف</option>
-            </select>
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">نوع المستند *</label>
-            <select id="document_type" required class="w-full border rounded-lg px-4 py-2">
-              <option value="">اختر النوع</option>
-              <option value="passport">جواز السفر</option>
-              <option value="id_card">بطاقة الهوية</option>
-              <option value="license">رخصة القيادة</option>
-              <option value="contract">عقد العمل</option>
-              <option value="insurance">التأمين</option>
-              <option value="other">أخرى</option>
-            </select>
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">رقم المستند *</label>
-            <input type="text" id="document_number" required class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">جهة الإصدار</label>
-            <input type="text" id="issuing_authority" class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">تاريخ الإصدار *</label>
-            <input type="date" id="issue_date" required class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">تاريخ الانتهاء *</label>
-            <input type="date" id="expiry_date" required class="w-full border rounded-lg px-4 py-2">
-          </div>
-        </div>
-        
-        <div>
-          <label class="block text-gray-700 font-bold mb-2">ملاحظات</label>
-          <textarea id="notes" rows="3" class="w-full border rounded-lg px-4 py-2"></textarea>
-        </div>
-        
-        <div class="flex gap-3 mt-6">
-          <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold">
-            <i class="fas fa-save ml-2"></i>
-            حفظ
-          </button>
-          <button type="button" onclick="closeAddDocumentModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold">
-            <i class="fas fa-times ml-2"></i>
-            إلغاء
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script>
-    // تحميل قائمة المستندات
-    async function loadDocuments() {
-      try {
-        const searchTerm = document.getElementById('searchInput').value;
-        const typeFilter = document.getElementById('typeFilter').value;
-        const statusFilter = document.getElementById('statusFilter').value;
-        
-        const params = new URLSearchParams();
-        if (searchTerm) params.append('search', searchTerm);
-        if (typeFilter) params.append('type', typeFilter);
-        if (statusFilter) params.append('status', statusFilter);
-        
-        const response = await axios.get('/api/hr/documents?' + params.toString());
-        const documents = response.data.data || [];
-        
-        const tbody = document.getElementById('documentsTableBody');
-        
-        if (documents.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد مستندات</td></tr>';
-          return;
-        }
-        
-        tbody.innerHTML = documents.map((doc, index) => {
-          const daysRemaining = calculateDaysRemaining(doc.expiry_date);
-          const statusBadge = getDocumentStatusBadge(daysRemaining);
-          const documentTypeName = getDocumentTypeName(doc.document_type);
-          
-          const daysClass = daysRemaining < 0 ? 'text-red-600' : daysRemaining < 30 ? 'text-yellow-600' : 'text-green-600';
-          const daysText = daysRemaining < 0 ? 'منتهي' : daysRemaining === 0 ? 'اليوم' : daysRemaining + ' يوم';
-          
-          return \`
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm text-gray-900">\${index + 1}</td>
-              <td class="px-6 py-4">
-                <div class="text-sm font-medium text-gray-900">\${doc.employee_name || 'غير محدد'}</div>
-                <div class="text-sm text-gray-500">\${doc.employee_number || '-'}</div>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-900">\${documentTypeName}</td>
-              <td class="px-6 py-4 text-sm text-gray-900">\${doc.document_number || '-'}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">\${doc.issue_date || '-'}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">\${doc.expiry_date || '-'}</td>
-              <td class="px-6 py-4 text-sm \${daysClass}">
-                \${daysText}
-              </td>
-              <td class="px-6 py-4">\${statusBadge}</td>
-              <td class="px-6 py-4 text-sm">
-                <button onclick="deleteDocument(\${doc.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          \`;
-        }).join('');
-        
-        updateStats(documents);
-        updateExpiryAlerts(documents);
-        
-      } catch (error) {
-        console.error('Error loading documents:', error);
-        alert('حدث خطأ في تحميل المستندات');
-      }
-    }
-    
-    // حساب الأيام المتبقية
-    function calculateDaysRemaining(expiryDate) {
-      if (!expiryDate) return 999;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const expiry = new Date(expiryDate);
-      expiry.setHours(0, 0, 0, 0);
-      const diffTime = expiry - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
-    }
-    
-    // الحصول على badge الحالة
-    function getDocumentStatusBadge(daysRemaining) {
-      if (daysRemaining < 0) {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">منتهية</span>';
-      } else if (daysRemaining <= 30) {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">تنتهي قريباً</span>';
-      } else {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">سارية</span>';
-      }
-    }
-    
-    // الحصول على اسم نوع المستند
-    function getDocumentTypeName(type) {
-      const types = {
-        'passport': 'جواز السفر',
-        'id_card': 'بطاقة الهوية',
-        'license': 'رخصة القيادة',
-        'contract': 'عقد العمل',
-        'insurance': 'التأمين',
-        'other': 'أخرى'
-      };
-      return types[type] || type;
-    }
-    
-    // تحديث الإحصائيات
-    function updateStats(documents) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const stats = {
-        total: documents.length,
-        expired: 0,
-        expiring: 0,
-        valid: 0
-      };
-      
-      documents.forEach(doc => {
-        const daysRemaining = calculateDaysRemaining(doc.expiry_date);
-        if (daysRemaining < 0) {
-          stats.expired++;
-        } else if (daysRemaining <= 30) {
-          stats.expiring++;
-        } else {
-          stats.valid++;
-        }
-      });
-      
-      document.getElementById('totalDocuments').textContent = stats.total;
-      document.getElementById('expiredDocuments').textContent = stats.expired;
-      document.getElementById('expiringDocuments').textContent = stats.expiring;
-      document.getElementById('validDocuments').textContent = stats.valid;
-    }
-    
-    // تحديث تنبيهات انتهاء الصلاحيات
-    function updateExpiryAlerts(documents) {
-      const alertsContainer = document.getElementById('expiryAlerts');
-      const expiredDocs = documents.filter(doc => calculateDaysRemaining(doc.expiry_date) < 0);
-      const expiringDocs = documents.filter(doc => {
-        const days = calculateDaysRemaining(doc.expiry_date);
-        return days >= 0 && days <= 30;
-      });
-      
-      let alertsHTML = '';
-      
-      if (expiredDocs.length > 0) {
-        const expiredList = expiredDocs.slice(0, 5).map(doc => 
-          \`<li class="text-red-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (\${doc.document_number})</li>\`
-        ).join('');
-        const moreExpired = expiredDocs.length > 5 ? \`<li class="text-red-600">• و \${expiredDocs.length - 5} مستندات أخرى...</li>\` : '';
-        
-        alertsHTML += \`
-          <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
-            <div class="flex items-center">
-              <i class="fas fa-exclamation-circle text-red-500 text-2xl ml-3"></i>
-              <div class="flex-1">
-                <h3 class="text-lg font-bold text-red-800">مستندات منتهية الصلاحية (\${expiredDocs.length})</h3>
-                <p class="text-red-700 mt-1">يرجى تجديد المستندات التالية:</p>
-                <ul class="mt-2 space-y-1">
-                  \${expiredList}
-                  \${moreExpired}
-                </ul>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-      
-      if (expiringDocs.length > 0) {
-        const expiringList = expiringDocs.slice(0, 5).map(doc => {
-          const days = calculateDaysRemaining(doc.expiry_date);
-          return \`<li class="text-yellow-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (بعد \${days} يوم)</li>\`;
-        }).join('');
-        const moreExpiring = expiringDocs.length > 5 ? \`<li class="text-yellow-600">• و \${expiringDocs.length - 5} مستندات أخرى...</li>\` : '';
-        
-        alertsHTML += \`
-          <div class="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg p-4">
-            <div class="flex items-center">
-              <i class="fas fa-clock text-yellow-500 text-2xl ml-3"></i>
-              <div class="flex-1">
-                <h3 class="text-lg font-bold text-yellow-800">مستندات تنتهي خلال 30 يوم (\${expiringDocs.length})</h3>
-                <p class="text-yellow-700 mt-1">يرجى التجهيز لتجديد المستندات التالية:</p>
-                <ul class="mt-2 space-y-1">
-                  \${expiringList}
-                  \${moreExpiring}
-                </ul>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-      
-      if (alertsHTML === '') {
-        alertsHTML = \`
-          <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4">
-            <div class="flex items-center">
-              <i class="fas fa-check-circle text-green-500 text-2xl ml-3"></i>
-              <div>
-                <h3 class="text-lg font-bold text-green-800">جميع المستندات سارية</h3>
-                <p class="text-green-700 mt-1">لا توجد مستندات منتهية أو تحتاج لتجديد قريب</p>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-      
-      alertsContainer.innerHTML = alertsHTML;
-    }
-    
-    // فتح modal إضافة مستند
-    async function openAddDocumentModal() {
-      // تحميل قائمة الموظفين
-      try {
-        const response = await axios.get('/api/hr/employees');
-        const employees = response.data.data || [];
-        
-        const select = document.getElementById('employee_id');
-        const employeeOptions = employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name} (\${emp.employee_number})</option>\`).join('');
-        select.innerHTML = '<option value="">اختر الموظف</option>' + employeeOptions;
-        
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-      
-      document.getElementById('addDocumentModal').classList.remove('hidden');
-      document.getElementById('addDocumentModal').classList.add('flex');
-    }
-    
-    // إغلاق modal
-    function closeAddDocumentModal() {
-      document.getElementById('addDocumentModal').classList.add('hidden');
-      document.getElementById('addDocumentModal').classList.remove('flex');
-      document.getElementById('addDocumentForm').reset();
-    }
-    
-    // إضافة مستند
-    document.getElementById('addDocumentForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const formData = {
-        employee_id: parseInt(document.getElementById('employee_id').value),
-        document_type: document.getElementById('document_type').value,
-        document_number: document.getElementById('document_number').value,
-        issuing_authority: document.getElementById('issuing_authority').value,
-        issue_date: document.getElementById('issue_date').value,
-        expiry_date: document.getElementById('expiry_date').value,
-        notes: document.getElementById('notes').value
-      };
-      
-      try {
-        await axios.post('/api/hr/documents', formData);
-        alert('تم إضافة المستند بنجاح');
-        closeAddDocumentModal();
-        loadDocuments();
-      } catch (error) {
-        console.error('Error adding document:', error);
-        alert('حدث خطأ في إضافة المستند');
-      }
-    });
-    
-    // حذف مستند
-    async function deleteDocument(id) {
-      if (!confirm('هل أنت متأكد من حذف هذا المستند؟')) return;
-      
-      try {
-        await axios.delete(\`/api/hr/documents/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadDocuments();
-      } catch (error) {
-        console.error('Error deleting document:', error);
-        alert('حدث خطأ في الحذف');
-      }
-    }
-    
-    // البحث التلقائي
-    document.getElementById('searchInput').addEventListener('input', () => {
-      setTimeout(loadDocuments, 300);
-    });
-    
-    // تحميل البيانات عند فتح الصفحة
-    window.addEventListener('load', loadDocuments);
-  <\/script>
-</body>
-</html>
-`,Bt=`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>التقارير والإحصاءات - نظام الموارد البشرية</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-</head>
-<body class="bg-gray-100">
-  <div class="min-h-screen">
-    <!-- رأس الصفحة -->
-    <div class="bg-white shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div>
-            <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
-              <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
-              <i class="fas fa-chart-bar ml-2"></i>
-              التقارير والإحصاءات
-            </h1>
-            <p class="text-gray-600 mt-1">تقارير شاملة ومفصلة عن الموارد البشرية</p>
-          </div>
-          <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-            <i class="fas fa-file-export ml-2"></i>
-            تصدير التقرير
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- الفلاتر -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">خيارات التقرير</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">نوع التقرير</label>
-            <select id="reportType" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
-              <option value="overview">نظرة عامة</option>
-              <option value="attendance">الحضور والغياب</option>
-              <option value="leaves">الإجازات</option>
-              <option value="salaries">الرواتب</option>
-              <option value="performance">الأداء</option>
-              <option value="turnover">معدل دوران الموظفين</option>
-            </select>
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">من تاريخ</label>
-            <input type="date" id="startDate" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">إلى تاريخ</label>
-            <input type="date" id="endDate" onchange="loadReport()" class="w-full border rounded-lg px-4 py-2">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- الإحصائيات الرئيسية -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">إجمالي الموظفين</p>
-              <p class="text-2xl font-bold text-gray-800" id="totalEmployees">0</p>
-            </div>
-            <i class="fas fa-users text-blue-500 text-3xl"></i>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">نسبة الحضور</p>
-              <p class="text-2xl font-bold text-green-600" id="attendanceRate">0%</p>
-            </div>
-            <i class="fas fa-chart-line text-green-500 text-3xl"></i>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">إجمالي الرواتب</p>
-              <p class="text-2xl font-bold text-purple-600" id="totalSalaries">0</p>
-            </div>
-            <i class="fas fa-money-bill-wave text-purple-500 text-3xl"></i>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">متوسط التقييم</p>
-              <p class="text-2xl font-bold text-yellow-600" id="avgPerformance">0</p>
-            </div>
-            <i class="fas fa-star text-yellow-500 text-3xl"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- الرسوم البيانية -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- رسم بياني الحضور -->
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-4">معدل الحضور الشهري</h3>
-          <div style="position: relative; height: 300px;">
-            <canvas id="attendanceChart"></canvas>
-          </div>
-        </div>
-        
-        <!-- رسم بياني الإجازات -->
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع أنواع الإجازات</h3>
-          <div style="position: relative; height: 300px;">
-            <canvas id="leavesChart"></canvas>
-          </div>
-        </div>
-        
-        <!-- رسم بياني الرواتب -->
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع الرواتب حسب القسم</h3>
-          <div style="position: relative; height: 300px;">
-            <canvas id="salariesChart"></canvas>
-          </div>
-        </div>
-        
-        <!-- رسم بياني الأداء -->
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-4">توزيع تقييمات الأداء</h3>
-          <div style="position: relative; height: 300px;">
-            <canvas id="performanceChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- جداول تفصيلية -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
-      <div class="bg-white rounded-lg shadow">
-        <div class="p-6 border-b">
-          <h2 class="text-xl font-bold text-gray-800">البيانات التفصيلية</h2>
-        </div>
-        
-        <div class="overflow-x-auto">
-          <div id="reportDetails" class="p-6">
-            <!-- سيتم ملؤها ديناميكياً -->
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let charts = {};
-    
-    // تحميل التقرير
-    async function loadReport() {
-      try {
-        const reportType = document.getElementById('reportType').value;
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        
-        const params = new URLSearchParams();
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
-        
-        const response = await axios.get(\`/api/hr/reports/\${reportType}?\` + params.toString());
-        const data = response.data.data || {};
-        
-        // تحديث الإحصائيات
-        updateMainStats(data);
-        
-        // تحديث الرسوم البيانية
-        updateCharts(data);
-        
-        // تحديث التفاصيل
-        updateReportDetails(reportType, data);
-        
-      } catch (error) {
-        console.error('Error loading report:', error);
-        alert('حدث خطأ في تحميل التقرير');
-      }
-    }
-    
-    // تحديث الإحصائيات الرئيسية
-    function updateMainStats(data) {
-      document.getElementById('totalEmployees').textContent = data.totalEmployees || 0;
-      document.getElementById('attendanceRate').textContent = (data.attendanceRate || 0) + '%';
-      document.getElementById('totalSalaries').textContent = (data.totalSalaries || 0).toLocaleString() + ' ر.س';
-      document.getElementById('avgPerformance').textContent = (data.avgPerformance || 0).toFixed(1);
-    }
-    
-    // تحديث الرسوم البيانية
-    function updateCharts(data) {
-      // رسم بياني الحضور
-      if (charts.attendance) charts.attendance.destroy();
-      const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
-      charts.attendance = new Chart(attendanceCtx, {
-        type: 'line',
-        data: {
-          labels: data.attendanceLabels || [],
-          datasets: [{
-            label: 'نسبة الحضور',
-            data: data.attendanceData || [],
-            borderColor: 'rgb(34, 197, 94)',
-            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              max: 100
-            }
-          }
-        }
-      });
-      
-      // رسم بياني الإجازات
-      if (charts.leaves) charts.leaves.destroy();
-      const leavesCtx = document.getElementById('leavesChart').getContext('2d');
-      charts.leaves = new Chart(leavesCtx, {
-        type: 'doughnut',
-        data: {
-          labels: data.leavesLabels || [],
-          datasets: [{
-            data: data.leavesData || [],
-            backgroundColor: [
-              'rgb(59, 130, 246)',
-              'rgb(234, 179, 8)',
-              'rgb(239, 68, 68)',
-              'rgb(168, 85, 247)',
-              'rgb(34, 197, 94)'
-            ]
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false
-        }
-      });
-      
-      // رسم بياني الرواتب
-      if (charts.salaries) charts.salaries.destroy();
-      const salariesCtx = document.getElementById('salariesChart').getContext('2d');
-      charts.salaries = new Chart(salariesCtx, {
-        type: 'bar',
-        data: {
-          labels: data.salariesLabels || [],
-          datasets: [{
-            label: 'إجمالي الرواتب (ر.س)',
-            data: data.salariesData || [],
-            backgroundColor: 'rgba(168, 85, 247, 0.5)',
-            borderColor: 'rgb(168, 85, 247)',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true
-            }
-          }
-        }
-      });
-      
-      // رسم بياني الأداء
-      if (charts.performance) charts.performance.destroy();
-      const performanceCtx = document.getElementById('performanceChart').getContext('2d');
-      charts.performance = new Chart(performanceCtx, {
-        type: 'pie',
-        data: {
-          labels: data.performanceLabels || [],
-          datasets: [{
-            data: data.performanceData || [],
-            backgroundColor: [
-              'rgb(34, 197, 94)',
-              'rgb(234, 179, 8)',
-              'rgb(239, 68, 68)'
-            ]
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false
-        }
-      });
-    }
-    
-    // تحديث التفاصيل
-    function updateReportDetails(reportType, data) {
-      const detailsContainer = document.getElementById('reportDetails');
-      
-      let detailsHTML = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>';
-      
-      switch(reportType) {
-        case 'overview':
-          detailsHTML += \`
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">القسم</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">عدد الموظفين</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نسبة الحضور</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجمالي الرواتب</th>
-          \`;
-          break;
-        case 'attendance':
-          detailsHTML += \`
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحاضرون</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الغائبون</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المتأخرون</th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">النسبة</th>
-          \`;
-          break;
-      }
-      
-      detailsHTML += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-      
-      if (data.details && data.details.length > 0) {
-        detailsHTML += data.details.map(row => {
-          let rowHTML = '<tr>';
-          Object.values(row).forEach(value => {
-            rowHTML += '<td class="px-6 py-4 text-sm text-gray-900">' + value + '</td>';
-          });
-          rowHTML += '</tr>';
-          return rowHTML;
-        }).join('');
-      } else {
-        detailsHTML += '<tr><td colspan="10" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
-      }
-      
-      detailsHTML += '</tbody></table></div>';
-      
-      detailsContainer.innerHTML = detailsHTML;
-    }
-    
-    // تصدير التقرير
-    function exportReport() {
-      alert('سيتم تصدير التقرير قريباً');
-    }
-    
-    // تعيين التواريخ الافتراضية
-    function setDefaultDates() {
-      const today = new Date();
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      
-      document.getElementById('startDate').valueAsDate = firstDayOfMonth;
-      document.getElementById('endDate').valueAsDate = today;
-    }
-    
-    // تحميل البيانات عند فتح الصفحة
-    window.addEventListener('load', () => {
-      setDefaultDates();
-      loadReport();
-    });
-  <\/script>
-</body>
-</html>
-`,Lt=e=>`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تفاصيل الدور</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-  <style>
-    .permission-card {
-      transition: all 0.3s ease;
-      border: 2px solid transparent;
-    }
-    .permission-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-      border-color: #6366f1;
-    }
-    .category-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 1rem;
-      border-radius: 0.75rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .role-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 2rem;
-      border-radius: 1rem;
-      color: white;
-      margin-bottom: 2rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-    .stat-card {
-      background: white;
-      border-radius: 1rem;
-      padding: 1.5rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      transition: all 0.3s ease;
-    }
-    .stat-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-    }
-    .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 400px;
-    }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-  <div class="max-w-7xl mx-auto px-4 py-6">
-    
-    <!-- Header -->
-    <div class="role-header">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-4">
-          <div class="bg-white/20 p-4 rounded-xl">
-            <i class="fas fa-user-shield text-4xl"></i>
-          </div>
-          <div>
-            <h1 id="roleName" class="text-3xl font-bold">جاري التحميل...</h1>
-            <p id="roleDescription" class="text-lg text-white/90 mt-1">جاري تحميل الوصف...</p>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <a href="/admin/roles" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-            <i class="fas fa-arrow-right"></i>
-            <span>العودة للأدوار</span>
-          </a>
-          <button onclick="editRole()" class="bg-white text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-            <i class="fas fa-edit"></i>
-            <span>تعديل الدور</span>
-          </button>
-        </div>
-      </div>
-      
-      <!-- إحصاءات سريعة -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-        <div class="stat-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">إجمالي الصلاحيات</p>
-              <p id="totalPermissions" class="text-3xl font-bold text-indigo-600 mt-1">0</p>
-            </div>
-            <div class="bg-indigo-100 p-3 rounded-xl">
-              <i class="fas fa-key text-2xl text-indigo-600"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">الفئات</p>
-              <p id="totalCategories" class="text-3xl font-bold text-purple-600 mt-1">0</p>
-            </div>
-            <div class="bg-purple-100 p-3 rounded-xl">
-              <i class="fas fa-folder text-2xl text-purple-600"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">المستخدمون</p>
-              <p id="totalUsers" class="text-3xl font-bold text-blue-600 mt-1">0</p>
-            </div>
-            <div class="bg-blue-100 p-3 rounded-xl">
-              <i class="fas fa-users text-2xl text-blue-600"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">تاريخ الإنشاء</p>
-              <p id="createdDate" class="text-sm font-bold text-gray-700 mt-1">---</p>
-            </div>
-            <div class="bg-gray-100 p-3 rounded-xl">
-              <i class="fas fa-calendar text-2xl text-gray-600"></i>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Loading State -->
-    <div id="loadingState" class="loading">
-      <div class="text-center">
-        <i class="fas fa-spinner fa-spin text-6xl text-indigo-600 mb-4"></i>
-        <p class="text-xl text-gray-600 font-bold">جاري تحميل الصلاحيات...</p>
-      </div>
-    </div>
-
-    <!-- Permissions by Category -->
-    <div id="permissionsContainer" class="hidden">
-      <!-- سيتم ملؤها ديناميكياً -->
-    </div>
-
-    <!-- Empty State -->
-    <div id="emptyState" class="hidden bg-white rounded-2xl shadow-lg p-12 text-center">
-      <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
-      <h3 class="text-2xl font-bold text-gray-700 mb-2">لا توجد صلاحيات</h3>
-      <p class="text-gray-500">لم يتم تعيين أي صلاحيات لهذا الدور بعد</p>
-      <button onclick="managePermissions()" class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold transition-all">
-        <i class="fas fa-plus ml-2"></i>
-        إضافة صلاحيات
-      </button>
-    </div>
-
-  </div>
-
-  <script>
-    const roleId = ${e};
-    let roleData = null;
-    let permissionsData = [];
-
-    // تحميل بيانات الدور
-    async function loadRoleData() {
-      try {
-        // تحميل معلومات الدور
-        const roleResponse = await axios.get('/api/roles');
-        roleData = roleResponse.data.data.find(r => r.id === roleId);
-        
-        if (roleData) {
-          document.getElementById('roleName').textContent = roleData.role_name;
-          document.getElementById('roleDescription').textContent = roleData.description;
-          document.getElementById('totalPermissions').textContent = roleData.permissions_count;
-          
-          // تنسيق التاريخ
-          const date = new Date(roleData.created_at);
-          document.getElementById('createdDate').textContent = date.toLocaleDateString('ar-EG');
-        }
-        
-        // تحميل الصلاحيات
-        const permResponse = await axios.get(\`/api/roles/\${roleId}/permissions\`);
-        permissionsData = permResponse.data.data || [];
-        
-        // تحميل عدد المستخدمين
-        // TODO: إضافة API لعدد المستخدمين
-        document.getElementById('totalUsers').textContent = '-';
-        
-        displayPermissions();
-        
-      } catch (error) {
-        console.error('Error loading role:', error);
-        alert('❌ حدث خطأ في تحميل بيانات الدور');
-      }
-    }
-
-    // عرض الصلاحيات حسب الفئات
-    function displayPermissions() {
-      const container = document.getElementById('permissionsContainer');
-      const loadingState = document.getElementById('loadingState');
-      const emptyState = document.getElementById('emptyState');
-      
-      loadingState.classList.add('hidden');
-      
-      if (permissionsData.length === 0) {
-        emptyState.classList.remove('hidden');
-        return;
-      }
-      
-      container.classList.remove('hidden');
-      
-      // تجميع الصلاحيات حسب الفئة
-      const categorized = {};
-      permissionsData.forEach(perm => {
-        const category = perm.category || 'other';
-        if (!categorized[category]) {
-          categorized[category] = [];
-        }
-        categorized[category].push(perm);
-      });
-      
-      // عرض عدد الفئات
-      document.getElementById('totalCategories').textContent = Object.keys(categorized).length;
-      
-      // أيقونات الفئات
-      const categoryIcons = {
-        'dashboard': 'fa-tachometer-alt',
-        'customers': 'fa-users',
-        'requests': 'fa-file-invoice',
-        'hr': 'fa-user-tie',
-        'reports': 'fa-chart-bar',
-        'admin': 'fa-cog',
-        'system': 'fa-server',
-        'other': 'fa-folder'
-      };
-      
-      // أسماء الفئات بالعربية
-      const categoryNames = {
-        'dashboard': 'لوحة التحكم',
-        'customers': 'إدارة العملاء',
-        'requests': 'طلبات التمويل',
-        'hr': 'الموارد البشرية',
-        'reports': 'التقارير',
-        'admin': 'إدارة النظام',
-        'system': 'إعدادات النظام',
-        'other': 'أخرى'
-      };
-      
-      // بناء HTML
-      let html = '';
-      
-      for (const [category, permissions] of Object.entries(categorized)) {
-        const icon = categoryIcons[category] || categoryIcons['other'];
-        const categoryName = categoryNames[category] || category;
-        
-        html += \`
-          <div class="mb-8">
-            <div class="category-header flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <i class="fas \${icon} text-2xl"></i>
-                <div>
-                  <h2 class="text-xl font-bold">\${categoryName}</h2>
-                  <p class="text-sm text-white/80">\${permissions.length} صلاحية</p>
-                </div>
-              </div>
-              <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-bold">
-                \${permissions.length}
-              </span>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        \`;
-        
-        permissions.forEach(perm => {
-          html += \`
-            <div class="permission-card bg-white rounded-xl p-5 shadow-md">
-              <div class="flex items-start justify-between mb-3">
-                <div class="flex-1">
-                  <h3 class="text-lg font-bold text-gray-800 mb-1">\${perm.display_name}</h3>
-                  <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">\${perm.name}</code>
-                </div>
-                <i class="fas fa-check-circle text-green-500 text-xl"></i>
-              </div>
-              \${perm.description ? \`
-                <p class="text-sm text-gray-600 mt-2">\${perm.description}</p>
-              \` : ''}
-            </div>
-          \`;
-        });
-        
-        html += \`
-            </div>
-          </div>
-        \`;
-      }
-      
-      container.innerHTML = html;
-    }
-
-    // تعديل الدور
-    function editRole() {
-      window.location.href = '/admin/roles';
-    }
-
-    // إدارة الصلاحيات
-    function managePermissions() {
-      window.location.href = \`/admin/roles/\${roleId}/permissions\`;
-    }
-
-    // تحميل البيانات عند تحميل الصفحة
-    loadRoleData();
-  <\/script>
-</body>
-</html>
-`,qt=()=>`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة المستخدمين</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-  <style>
-    .user-card {
-      transition: all 0.3s ease;
-    }
-    .user-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 24px rgba(0,0,0,0.15);
-    }
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
-    }
-    .modal.active {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100">
-  
-  <div class="min-h-screen">
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg">
-      <div class="max-w-7xl mx-auto px-6 py-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold flex items-center gap-3">
-              <i class="fas fa-users"></i>
-              إدارة المستخدمين
-            </h1>
-            <p class="text-blue-100 mt-2">إدارة المستخدمين وتعيين الأدوار والصلاحيات</p>
-          </div>
-          <div class="flex gap-3">
-            <button onclick="showAddUserModal()" class="bg-white text-blue-600 hover:bg-blue-50 px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
-              <i class="fas fa-plus"></i>
-              <span>إضافة مستخدم</span>
-            </button>
-            <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-              <i class="fas fa-arrow-right"></i>
-              <span>العودة</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="max-w-7xl mx-auto px-6 py-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div class="bg-white rounded-xl p-6 shadow-lg">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">إجمالي المستخدمين</p>
-              <p id="totalUsers" class="text-3xl font-bold text-blue-600 mt-2">0</p>
-            </div>
-            <div class="bg-blue-100 p-4 rounded-xl">
-              <i class="fas fa-users text-2xl text-blue-600"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-xl p-6 shadow-lg">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">النشطون</p>
-              <p id="activeUsers" class="text-3xl font-bold text-green-600 mt-2">0</p>
-            </div>
-            <div class="bg-green-100 p-4 rounded-xl">
-              <i class="fas fa-check-circle text-2xl text-green-600"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-xl p-6 shadow-lg">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">المدراء</p>
-              <p id="adminUsers" class="text-3xl font-bold text-purple-600 mt-2">0</p>
-            </div>
-            <div class="bg-purple-100 p-4 rounded-xl">
-              <i class="fas fa-user-shield text-2xl text-purple-600"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-xl p-6 shadow-lg">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-600 font-medium">الموظفون</p>
-              <p id="employeeUsers" class="text-3xl font-bold text-orange-600 mt-2">0</p>
-            </div>
-            <div class="bg-orange-100 p-4 rounded-xl">
-              <i class="fas fa-user-tie text-2xl text-orange-600"></i>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filters -->
-      <div class="bg-white rounded-xl p-6 shadow-lg mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <input type="text" id="searchInput" placeholder="🔍 البحث بالاسم أو البريد..." 
-                 class="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 onkeyup="filterUsers()">
-          
-          <select id="roleFilter" class="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" onchange="filterUsers()">
-            <option value="">جميع الأدوار</option>
-          </select>
-          
-          <select id="statusFilter" class="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" onchange="filterUsers()">
-            <option value="">جميع الحالات</option>
-            <option value="1">نشط</option>
-            <option value="0">غير نشط</option>
-          </select>
-          
-          <button onclick="resetFilters()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold transition-all">
-            <i class="fas fa-redo ml-2"></i>
-            إعادة تعيين
-          </button>
-        </div>
-      </div>
-
-      <!-- Users Table -->
-      <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-              <tr>
-                <th class="px-6 py-4 text-right">#</th>
-                <th class="px-6 py-4 text-right">الاسم الكامل</th>
-                <th class="px-6 py-4 text-right">البريد الإلكتروني</th>
-                <th class="px-6 py-4 text-right">رقم الجوال</th>
-                <th class="px-6 py-4 text-right">الدور</th>
-                <th class="px-6 py-4 text-right">الحالة</th>
-                <th class="px-6 py-4 text-right">تاريخ الإنشاء</th>
-                <th class="px-6 py-4 text-center">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <tr>
-                <td colspan="8" class="text-center py-12">
-                  <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
-                  <p class="text-gray-600 font-bold">جاري تحميل المستخدمين...</p>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Add User Modal -->
-  <div id="addUserModal" class="modal">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl">
-        <h2 class="text-2xl font-bold flex items-center gap-2">
-          <i class="fas fa-user-plus"></i>
-          إضافة مستخدم جديد
-        </h2>
-      </div>
-      
-      <form id="addUserForm" class="p-6 space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
-            <input type="text" name="full_name" required
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
-            <input type="email" name="email" required
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">رقم الجوال</label>
-            <input type="tel" name="phone" required
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">الدور</label>
-            <select name="role_id" id="addUserRole" required
-                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-              <option value="">اختر الدور...</option>
-            </select>
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">كلمة المرور</label>
-            <input type="password" name="password" required minlength="6"
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">الحالة</label>
-            <select name="is_active" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
-              <option value="1">نشط</option>
-              <option value="0">غير نشط</option>
-            </select>
-          </div>
-        </div>
-        
-        <div class="flex gap-3 pt-4">
-          <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all">
-            <i class="fas fa-save ml-2"></i>
-            حفظ
-          </button>
-          <button type="button" onclick="closeAddUserModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold transition-all">
-            <i class="fas fa-times ml-2"></i>
-            إلغاء
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Edit User Modal -->
-  <div id="editUserModal" class="modal">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <div class="bg-gradient-to-r from-yellow-600 to-orange-600 text-white p-6 rounded-t-2xl">
-        <h2 class="text-2xl font-bold flex items-center gap-2">
-          <i class="fas fa-user-edit"></i>
-          تعديل المستخدم
-        </h2>
-      </div>
-      
-      <form id="editUserForm" class="p-6 space-y-4">
-        <input type="hidden" name="id" id="editUserId">
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
-            <input type="text" name="full_name" id="editUserName" required
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
-            <input type="email" name="email" id="editUserEmail" required
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">رقم الجوال</label>
-            <input type="tel" name="phone" id="editUserPhone" required
-                   class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">الدور</label>
-            <select name="role_id" id="editUserRole" required
-                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
-              <option value="">اختر الدور...</option>
-            </select>
-          </div>
-        </div>
-        
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-2">الحالة</label>
-          <select name="is_active" id="editUserStatus"
-                  class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
-            <option value="1">نشط</option>
-            <option value="0">غير نشط</option>
-          </select>
-        </div>
-        
-        <div class="flex gap-3 pt-4">
-          <button type="submit" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-xl font-bold transition-all">
-            <i class="fas fa-save ml-2"></i>
-            حفظ التعديلات
-          </button>
-          <button type="button" onclick="closeEditUserModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold transition-all">
-            <i class="fas fa-times ml-2"></i>
-            إلغاء
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script>
-    let allUsers = [];
-    let allRoles = [];
-
-    // تحميل البيانات
-    async function loadData() {
-      try {
-        // تحميل المستخدمين
-        const usersResponse = await axios.get('/api/users');
-        allUsers = usersResponse.data.data || [];
-        
-        // تحميل الأدوار
-        const rolesResponse = await axios.get('/api/roles');
-        allRoles = rolesResponse.data.data || [];
-        
-        // ملء قوائم الأدوار
-        populateRoleSelects();
-        
-        // عرض المستخدمين
-        displayUsers(allUsers);
-        
-        // تحديث الإحصاءات
-        updateStats();
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        alert('❌ حدث خطأ في تحميل البيانات');
-      }
-    }
-
-    // ملء قوائم الأدوار
-    function populateRoleSelects() {
-      const roleFilter = document.getElementById('roleFilter');
-      const addUserRole = document.getElementById('addUserRole');
-      const editUserRole = document.getElementById('editUserRole');
-      
-      allRoles.forEach(role => {
-        // فلتر الأدوار
-        const filterOption = document.createElement('option');
-        filterOption.value = role.id;
-        filterOption.textContent = role.role_name;
-        roleFilter.appendChild(filterOption);
-        
-        // قائمة إضافة
-        const addOption = document.createElement('option');
-        addOption.value = role.id;
-        addOption.textContent = role.role_name;
-        addUserRole.appendChild(addOption);
-        
-        // قائمة تعديل
-        const editOption = document.createElement('option');
-        editOption.value = role.id;
-        editOption.textContent = role.role_name;
-        editUserRole.appendChild(editOption);
-      });
-    }
-
-    // عرض المستخدمين
-    function displayUsers(users) {
-      const tbody = document.getElementById('usersTableBody');
-      
-      if (users.length === 0) {
-        tbody.innerHTML = \`
-          <tr>
-            <td colspan="8" class="text-center py-12">
-              <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
-              <p class="text-gray-600 font-bold">لا توجد مستخدمين</p>
-            </td>
-          </tr>
-        \`;
-        return;
-      }
-      
-      tbody.innerHTML = users.map((user, index) => {
-        const role = allRoles.find(r => r.id === user.role_id);
-        const roleName = role ? role.role_name : 'غير محدد';
-        const statusBadge = user.is_active ? 
-          '<span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold"><i class="fas fa-check-circle ml-1"></i>نشط</span>' :
-          '<span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-bold"><i class="fas fa-times-circle ml-1"></i>غير نشط</span>';
-        
-        const date = new Date(user.created_at);
-        const formattedDate = date.toLocaleDateString('ar-EG');
-        
-        return \`
-          <tr class="border-b hover:bg-blue-50 transition-colors">
-            <td class="px-6 py-4 font-medium">\${index + 1}</td>
-            <td class="px-6 py-4">
-              <div class="flex items-center gap-3">
-                <div class="bg-blue-100 w-10 h-10 rounded-full flex items-center justify-center">
-                  <i class="fas fa-user text-blue-600"></i>
-                </div>
-                <span class="font-bold text-gray-800">\${user.full_name}</span>
-              </div>
-            </td>
-            <td class="px-6 py-4 text-gray-600">\${user.email}</td>
-            <td class="px-6 py-4 text-gray-600 font-english">\${user.phone || '-'}</td>
-            <td class="px-6 py-4">
-              <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
-                <i class="fas fa-user-shield ml-1"></i>
-                \${roleName}
-              </span>
-            </td>
-            <td class="px-6 py-4">\${statusBadge}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
-            <td class="px-6 py-4">
-              <div class="flex items-center justify-center gap-2">
-                <button onclick="viewUserPermissions(\${user.id})" 
-                        class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
-                        title="عرض الصلاحيات">
-                  <i class="fas fa-key"></i>
-                </button>
-                <button onclick="editUser(\${user.id})" 
-                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
-                        title="تعديل">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button onclick="deleteUser(\${user.id}, '\${user.full_name}')" 
-                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm"
-                        title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        \`;
-      }).join('');
-    }
-
-    // تحديث الإحصاءات
-    function updateStats() {
-      const total = allUsers.length;
-      const active = allUsers.filter(u => u.is_active).length;
-      const admins = allUsers.filter(u => {
-        const role = allRoles.find(r => r.id === u.role_id);
-        return role && (role.id === 11 || role.id === 12); // مدير نظام أو مدير شركة
-      }).length;
-      const employees = allUsers.filter(u => {
-        const role = allRoles.find(r => r.id === u.role_id);
-        return role && role.id === 14; // موظف
-      }).length;
-      
-      document.getElementById('totalUsers').textContent = total;
-      document.getElementById('activeUsers').textContent = active;
-      document.getElementById('adminUsers').textContent = admins;
-      document.getElementById('employeeUsers').textContent = employees;
-    }
-
-    // فلترة المستخدمين
-    function filterUsers() {
-      const search = document.getElementById('searchInput').value.toLowerCase();
-      const roleFilter = document.getElementById('roleFilter').value;
-      const statusFilter = document.getElementById('statusFilter').value;
-      
-      let filtered = allUsers;
-      
-      // بحث بالاسم أو البريد
-      if (search) {
-        filtered = filtered.filter(u => 
-          u.full_name.toLowerCase().includes(search) || 
-          u.email.toLowerCase().includes(search)
-        );
-      }
-      
-      // فلتر حسب الدور
-      if (roleFilter) {
-        filtered = filtered.filter(u => u.role_id == roleFilter);
-      }
-      
-      // فلتر حسب الحالة
-      if (statusFilter !== '') {
-        filtered = filtered.filter(u => u.is_active == statusFilter);
-      }
-      
-      displayUsers(filtered);
-    }
-
-    // إعادة تعيين الفلاتر
-    function resetFilters() {
-      document.getElementById('searchInput').value = '';
-      document.getElementById('roleFilter').value = '';
-      document.getElementById('statusFilter').value = '';
-      displayUsers(allUsers);
-    }
-
-    // Modal functions
-    function showAddUserModal() {
-      document.getElementById('addUserModal').classList.add('active');
-    }
-
-    function closeAddUserModal() {
-      document.getElementById('addUserModal').classList.remove('active');
-      document.getElementById('addUserForm').reset();
-    }
-
-    function showEditUserModal() {
-      document.getElementById('editUserModal').classList.add('active');
-    }
-
-    function closeEditUserModal() {
-      document.getElementById('editUserModal').classList.remove('active');
-      document.getElementById('editUserForm').reset();
-    }
-
-    // إضافة مستخدم
-    document.getElementById('addUserForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-      
-      try {
-        const response = await axios.post('/api/users', data);
-        
-        if (response.data.success) {
-          alert('✅ تم إضافة المستخدم بنجاح');
-          closeAddUserModal();
-          loadData();
-        }
-      } catch (error) {
-        console.error('Error adding user:', error);
-        alert('❌ حدث خطأ في إضافة المستخدم');
-      }
-    });
-
-    // تعديل مستخدم
-    function editUser(id) {
-      const user = allUsers.find(u => u.id === id);
-      if (!user) return;
-      
-      document.getElementById('editUserId').value = user.id;
-      document.getElementById('editUserName').value = user.full_name;
-      document.getElementById('editUserEmail').value = user.email;
-      document.getElementById('editUserPhone').value = user.phone || '';
-      document.getElementById('editUserRole').value = user.role_id || '';
-      document.getElementById('editUserStatus').value = user.is_active ? '1' : '0';
-      
-      showEditUserModal();
-    }
-
-    // حفظ التعديلات
-    document.getElementById('editUserForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-      const userId = data.id;
-      delete data.id;
-      
-      try {
-        const response = await axios.put(\`/api/users/\${userId}\`, data);
-        
-        if (response.data.success) {
-          alert('✅ تم تحديث المستخدم بنجاح');
-          closeEditUserModal();
-          loadData();
-        }
-      } catch (error) {
-        console.error('Error updating user:', error);
-        alert('❌ حدث خطأ في تحديث المستخدم');
-      }
-    });
-
-    // حذف مستخدم
-    async function deleteUser(id, name) {
-      if (!confirm(\`هل أنت متأكد من حذف المستخدم "\${name}"؟\`)) {
-        return;
-      }
-      
-      try {
-        const response = await axios.delete(\`/api/users/\${id}\`);
-        
-        if (response.data.success) {
-          alert('✅ تم حذف المستخدم بنجاح');
-          loadData();
-        }
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        alert('❌ حدث خطأ في حذف المستخدم');
-      }
-    }
-
-    // عرض صلاحيات المستخدم
-    function viewUserPermissions(userId) {
-      window.location.href = \`/admin/users/\${userId}/permissions\`;
-    }
-
-    // تحميل البيانات عند تحميل الصفحة
-    loadData();
-  <\/script>
-</body>
-</html>
-`,jt=e=>`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>صلاحيات المستخدم</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-  <style>
-    .permission-card {
-      transition: all 0.3s ease;
-      border: 2px solid transparent;
-    }
-    .permission-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-      border-color: #3b82f6;
-    }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-  
-  <div class="max-w-7xl mx-auto px-4 py-6">
-    
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl shadow-lg p-6 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-4">
-          <div class="bg-white/20 p-4 rounded-xl">
-            <i class="fas fa-user-shield text-4xl"></i>
-          </div>
-          <div>
-            <h1 id="userName" class="text-3xl font-bold">جاري التحميل...</h1>
-            <p id="userRole" class="text-lg text-white/90 mt-1">جاري تحميل الدور...</p>
-            <p id="userEmail" class="text-sm text-white/80 mt-1">---</p>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <a href="/admin/users" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-            <i class="fas fa-arrow-right"></i>
-            <span>العودة للمستخدمين</span>
-          </a>
-          <button onclick="editUser()" class="bg-white text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-            <i class="fas fa-edit"></i>
-            <span>تعديل المستخدم</span>
-          </button>
-        </div>
-      </div>
-      
-      <!-- إحصاءات سريعة -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-white/80 font-medium">إجمالي الصلاحيات</p>
-              <p id="totalPermissions" class="text-3xl font-bold text-white mt-1">0</p>
-            </div>
-            <div class="bg-white/20 p-3 rounded-xl">
-              <i class="fas fa-key text-2xl text-white"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-white/80 font-medium">الفئات</p>
-              <p id="totalCategories" class="text-3xl font-bold text-white mt-1">0</p>
-            </div>
-            <div class="bg-white/20 p-3 rounded-xl">
-              <i class="fas fa-folder text-2xl text-white"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-white/80 font-medium">الحالة</p>
-              <p id="userStatus" class="text-xl font-bold text-white mt-1">---</p>
-            </div>
-            <div class="bg-white/20 p-3 rounded-xl">
-              <i class="fas fa-check-circle text-2xl text-white"></i>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-white/80 font-medium">تاريخ الإنشاء</p>
-              <p id="createdDate" class="text-sm font-bold text-white mt-1">---</p>
-            </div>
-            <div class="bg-white/20 p-3 rounded-xl">
-              <i class="fas fa-calendar text-2xl text-white"></i>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Loading State -->
-    <div id="loadingState" class="flex justify-center items-center py-20">
-      <div class="text-center">
-        <i class="fas fa-spinner fa-spin text-6xl text-blue-600 mb-4"></i>
-        <p class="text-xl text-gray-600 font-bold">جاري تحميل الصلاحيات...</p>
-      </div>
-    </div>
-
-    <!-- Permissions by Category -->
-    <div id="permissionsContainer" class="hidden">
-      <!-- سيتم ملؤها ديناميكياً -->
-    </div>
-
-    <!-- Empty State -->
-    <div id="emptyState" class="hidden bg-white rounded-2xl shadow-lg p-12 text-center">
-      <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
-      <h3 class="text-2xl font-bold text-gray-700 mb-2">لا توجد صلاحيات</h3>
-      <p class="text-gray-500">لم يتم تعيين دور أو صلاحيات لهذا المستخدم بعد</p>
-      <button onclick="editUser()" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all">
-        <i class="fas fa-edit ml-2"></i>
-        تعيين دور
-      </button>
-    </div>
-
-  </div>
-
-  <script>
-    const userId = ${e};
-    let userData = null;
-    let permissionsData = [];
-
-    // تحميل بيانات المستخدم
-    async function loadUserData() {
-      try {
-        // تحميل معلومات المستخدم
-        const userResponse = await axios.get('/api/users');
-        const users = userResponse.data.data || [];
-        userData = users.find(u => u.id === userId);
-        
-        if (userData) {
-          document.getElementById('userName').textContent = userData.full_name;
-          document.getElementById('userRole').textContent = userData.role_name || 'لا يوجد دور';
-          document.getElementById('userEmail').textContent = userData.email;
-          
-          const statusText = userData.is_active ? 'نشط ✓' : 'غير نشط ✗';
-          document.getElementById('userStatus').textContent = statusText;
-          
-          // تنسيق التاريخ
-          const date = new Date(userData.created_at);
-          document.getElementById('createdDate').textContent = date.toLocaleDateString('ar-EG');
-        }
-        
-        // تحميل الصلاحيات
-        const permResponse = await axios.get(\`/api/users/\${userId}/permissions\`);
-        permissionsData = permResponse.data.data || [];
-        
-        document.getElementById('totalPermissions').textContent = permissionsData.length;
-        
-        displayPermissions();
-        
-      } catch (error) {
-        console.error('Error loading user:', error);
-        alert('❌ حدث خطأ في تحميل بيانات المستخدم');
-      }
-    }
-
-    // عرض الصلاحيات حسب الفئات
-    function displayPermissions() {
-      const container = document.getElementById('permissionsContainer');
-      const loadingState = document.getElementById('loadingState');
-      const emptyState = document.getElementById('emptyState');
-      
-      loadingState.classList.add('hidden');
-      
-      if (permissionsData.length === 0) {
-        emptyState.classList.remove('hidden');
-        return;
-      }
-      
-      container.classList.remove('hidden');
-      
-      // تجميع الصلاحيات حسب الفئة
-      const categorized = {};
-      permissionsData.forEach(perm => {
-        const category = perm.category || 'other';
-        if (!categorized[category]) {
-          categorized[category] = [];
-        }
-        categorized[category].push(perm);
-      });
-      
-      // عرض عدد الفئات
-      document.getElementById('totalCategories').textContent = Object.keys(categorized).length;
-      
-      // أيقونات الفئات
-      const categoryIcons = {
-        'dashboard': 'fa-tachometer-alt',
-        'customers': 'fa-users',
-        'requests': 'fa-file-invoice',
-        'hr': 'fa-user-tie',
-        'reports': 'fa-chart-bar',
-        'admin': 'fa-cog',
-        'system': 'fa-server',
-        'finance': 'fa-dollar-sign',
-        'tools': 'fa-tools',
-        'other': 'fa-folder'
-      };
-      
-      // أسماء الفئات بالعربية
-      const categoryNames = {
-        'dashboard': 'لوحة التحكم',
-        'customers': 'إدارة العملاء',
-        'requests': 'طلبات التمويل',
-        'hr': 'الموارد البشرية',
-        'reports': 'التقارير',
-        'admin': 'إدارة النظام',
-        'system': 'إعدادات النظام',
-        'finance': 'المالية',
-        'tools': 'الأدوات',
-        'other': 'أخرى'
-      };
-      
-      // بناء HTML
-      let html = '';
-      
-      for (const [category, permissions] of Object.entries(categorized)) {
-        const icon = categoryIcons[category] || categoryIcons['other'];
-        const categoryName = categoryNames[category] || category;
-        
-        html += \`
-          <div class="mb-6">
-            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl p-4 flex items-center justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <i class="fas \${icon} text-2xl"></i>
-                <div>
-                  <h2 class="text-xl font-bold">\${categoryName}</h2>
-                  <p class="text-sm text-white/80">\${permissions.length} صلاحية</p>
-                </div>
-              </div>
-              <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-bold">
-                \${permissions.length}
-              </span>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        \`;
-        
-        permissions.forEach(perm => {
-          html += \`
-            <div class="permission-card bg-white rounded-xl p-5 shadow-md">
-              <div class="flex items-start justify-between mb-3">
-                <div class="flex-1">
-                  <h3 class="text-lg font-bold text-gray-800 mb-1">\${perm.display_name}</h3>
-                  <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">\${perm.name}</code>
-                </div>
-                <i class="fas fa-check-circle text-green-500 text-xl"></i>
-              </div>
-              \${perm.description ? \`
-                <p class="text-sm text-gray-600 mt-2">\${perm.description}</p>
-              \` : ''}
-            </div>
-          \`;
-        });
-        
-        html += \`
-            </div>
-          </div>
-        \`;
-      }
-      
-      container.innerHTML = html;
-    }
-
-    // تعديل المستخدم
-    function editUser() {
-      window.location.href = '/admin/users';
-    }
-
-    // تحميل البيانات عند تحميل الصفحة
-    loadUserData();
-  <\/script>
-</body>
-</html>
-`,Ot=()=>`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة الصلاحيات</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-  <style>
-    .permission-checkbox {
-      width: 20px;
-      height: 20px;
-      cursor: pointer;
-    }
-    .category-section {
-      transition: all 0.3s ease;
-    }
-    .category-section:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-    }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-  
-  <div class="max-w-7xl mx-auto px-4 py-6">
-    
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl shadow-lg p-6 mb-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold flex items-center gap-3">
-            <i class="fas fa-shield-alt"></i>
-            إدارة الصلاحيات المخصصة
-          </h1>
-          <p class="text-purple-100 mt-2">تخصيص صلاحيات كل دور حسب احتياجات العمل</p>
-        </div>
-        <div class="flex gap-3">
-          <button onclick="saveAllChanges()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
-            <i class="fas fa-save"></i>
-            <span>حفظ جميع التغييرات</span>
-          </button>
-          <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-            <i class="fas fa-arrow-right"></i>
-            <span>العودة</span>
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Roles Tabs -->
-    <div class="bg-white rounded-2xl shadow-lg mb-6 overflow-hidden">
-      <div class="flex border-b border-gray-200 overflow-x-auto">
-        <button id="tab-11" onclick="selectRole(11)" class="flex-1 px-6 py-4 font-bold text-gray-600 hover:bg-gray-50 transition-colors border-b-4 border-transparent">
-          <i class="fas fa-crown ml-2 text-yellow-500"></i>
-          مدير النظام SaaS
-          <span id="count-11" class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs ml-2">0</span>
-        </button>
-        <button id="tab-12" onclick="selectRole(12)" class="flex-1 px-6 py-4 font-bold text-gray-600 hover:bg-gray-50 transition-colors border-b-4 border-transparent">
-          <i class="fas fa-building ml-2 text-blue-500"></i>
-          مدير شركة
-          <span id="count-12" class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs ml-2">0</span>
-        </button>
-        <button id="tab-13" onclick="selectRole(13)" class="flex-1 px-6 py-4 font-bold text-gray-600 hover:bg-gray-50 transition-colors border-b-4 border-transparent">
-          <i class="fas fa-user-tie ml-2 text-indigo-500"></i>
-          مشرف موظفين
-          <span id="count-13" class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs ml-2">0</span>
-        </button>
-        <button id="tab-14" onclick="selectRole(14)" class="flex-1 px-6 py-4 font-bold text-gray-600 hover:bg-gray-50 transition-colors border-b-4 border-transparent">
-          <i class="fas fa-user ml-2 text-green-500"></i>
-          موظف
-          <span id="count-14" class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs ml-2">0</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Bulk Actions -->
-    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-      <div class="flex items-center justify-between">
-        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-          <i class="fas fa-tasks"></i>
-          إجراءات سريعة
-        </h3>
-        <div class="flex gap-3">
-          <button onclick="selectAllPermissions()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold transition-all">
-            <i class="fas fa-check-double ml-2"></i>
-            تحديد الكل
-          </button>
-          <button onclick="deselectAllPermissions()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold transition-all">
-            <i class="fas fa-times ml-2"></i>
-            إلغاء الكل
-          </button>
-          <button onclick="selectCategoryPermissions()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold transition-all">
-            <i class="fas fa-folder ml-2"></i>
-            تحديد فئة
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Permissions Grid -->
-    <div id="permissionsGrid" class="space-y-6">
-      <div class="flex justify-center items-center py-20">
-        <div class="text-center">
-          <i class="fas fa-spinner fa-spin text-6xl text-purple-600 mb-4"></i>
-          <p class="text-xl text-gray-600 font-bold">جاري تحميل الصلاحيات...</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Changes Summary -->
-    <div id="changesSummary" class="hidden bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-6 mt-6">
-      <div class="flex items-start gap-4">
-        <i class="fas fa-exclamation-triangle text-3xl text-yellow-600"></i>
-        <div class="flex-1">
-          <h3 class="text-lg font-bold text-gray-800 mb-2">تغييرات غير محفوظة!</h3>
-          <p class="text-gray-600 mb-3">لديك تغييرات لم يتم حفظها بعد. تأكد من حفظها قبل مغادرة الصفحة.</p>
-          <div id="changesCount" class="text-sm font-bold text-yellow-800"></div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <script>
-    let allPermissions = [];
-    let allRoles = [];
-    let currentRoleId = 11;
-    let rolePermissions = {};
-    let originalRolePermissions = {};
-    let hasUnsavedChanges = false;
-
-    // تحميل البيانات
-    async function loadData() {
-      try {
-        // تحميل جميع الصلاحيات
-        const permsResponse = await axios.get('/api/permissions');
-        allPermissions = permsResponse.data.data || [];
-        
-        // تحميل الأدوار
-        const rolesResponse = await axios.get('/api/roles');
-        allRoles = rolesResponse.data.data || [];
-        
-        // تحميل صلاحيات كل دور
-        for (const role of allRoles) {
-          const rolePermsResponse = await axios.get(\`/api/roles/\${role.id}/permissions\`);
-          const perms = rolePermsResponse.data.data || [];
-          rolePermissions[role.id] = perms.map(p => p.id);
-          originalRolePermissions[role.id] = [...rolePermissions[role.id]];
-          
-          // تحديث عدد الصلاحيات
-          document.getElementById(\`count-\${role.id}\`).textContent = perms.length;
-        }
-        
-        // عرض الدور الأول
-        selectRole(11);
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        alert('❌ حدث خطأ في تحميل البيانات');
-      }
-    }
-
-    // اختيار دور
-    function selectRole(roleId) {
-      currentRoleId = roleId;
-      
-      // تحديث tabs
-      document.querySelectorAll('[id^="tab-"]').forEach(tab => {
-        tab.classList.remove('border-purple-600', 'text-purple-600', 'bg-purple-50');
-        tab.classList.add('border-transparent', 'text-gray-600');
-      });
-      
-      const selectedTab = document.getElementById(\`tab-\${roleId}\`);
-      selectedTab.classList.remove('border-transparent', 'text-gray-600');
-      selectedTab.classList.add('border-purple-600', 'text-purple-600', 'bg-purple-50');
-      
-      // عرض الصلاحيات
-      displayPermissions();
-    }
-
-    // عرض الصلاحيات
-    function displayPermissions() {
-      const grid = document.getElementById('permissionsGrid');
-      
-      // تجميع الصلاحيات حسب الفئة
-      const categorized = {};
-      allPermissions.forEach(perm => {
-        const category = perm.category || 'other';
-        if (!categorized[category]) {
-          categorized[category] = [];
-        }
-        categorized[category].push(perm);
-      });
-      
-      // أيقونات وأسماء الفئات
-      const categoryIcons = {
-        'dashboard': 'fa-tachometer-alt',
-        'customers': 'fa-users',
-        'requests': 'fa-file-invoice',
-        'hr': 'fa-user-tie',
-        'reports': 'fa-chart-bar',
-        'admin': 'fa-cog',
-        'system': 'fa-server',
-        'finance': 'fa-dollar-sign',
-        'tools': 'fa-tools',
-        'other': 'fa-folder'
-      };
-      
-      const categoryNames = {
-        'dashboard': 'لوحة التحكم',
-        'customers': 'إدارة العملاء',
-        'requests': 'طلبات التمويل',
-        'hr': 'الموارد البشرية',
-        'reports': 'التقارير',
-        'admin': 'إدارة النظام',
-        'system': 'إعدادات النظام',
-        'finance': 'المالية',
-        'tools': 'الأدوات',
-        'other': 'أخرى'
-      };
-      
-      // بناء HTML
-      let html = '';
-      
-      for (const [category, permissions] of Object.entries(categorized)) {
-        const icon = categoryIcons[category] || categoryIcons['other'];
-        const categoryName = categoryNames[category] || category;
-        const selectedCount = permissions.filter(p => rolePermissions[currentRoleId].includes(p.id)).length;
-        
-        html += \`
-          <div class="category-section bg-white rounded-2xl shadow-lg overflow-hidden">
-            <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <i class="fas \${icon} text-2xl"></i>
-                  <div>
-                    <h2 class="text-xl font-bold">\${categoryName}</h2>
-                    <p class="text-sm text-white/80">\${permissions.length} صلاحية متاحة</p>
-                  </div>
-                </div>
-                <div class="flex items-center gap-4">
-                  <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-bold">
-                    \${selectedCount} / \${permissions.length} محددة
-                  </span>
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" 
-                           class="permission-checkbox" 
-                           onchange="toggleCategory('\${category}')"
-                           \${selectedCount === permissions.length ? 'checked' : ''}>
-                    <span class="text-sm font-bold">تحديد الكل</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-            
-            <div class="p-6">
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        \`;
-        
-        permissions.forEach(perm => {
-          const isChecked = rolePermissions[currentRoleId].includes(perm.id);
-          
-          html += \`
-            <label class="flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer hover:bg-purple-50 transition-all \${isChecked ? 'border-purple-500 bg-purple-50' : 'border-gray-200'}">
-              <input type="checkbox" 
-                     class="permission-checkbox mt-1" 
-                     value="\${perm.id}"
-                     onchange="togglePermission(\${perm.id})"
-                     \${isChecked ? 'checked' : ''}>
-              <div class="flex-1">
-                <div class="font-bold text-gray-800 mb-1">\${perm.display_name}</div>
-                <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">\${perm.name}</code>
-                \${perm.description ? \`
-                  <p class="text-sm text-gray-600 mt-2">\${perm.description}</p>
-                \` : ''}
-              </div>
-            </label>
-          \`;
-        });
-        
-        html += \`
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-      
-      grid.innerHTML = html;
-    }
-
-    // تبديل صلاحية
-    function togglePermission(permId) {
-      const index = rolePermissions[currentRoleId].indexOf(permId);
-      
-      if (index > -1) {
-        rolePermissions[currentRoleId].splice(index, 1);
-      } else {
-        rolePermissions[currentRoleId].push(permId);
-      }
-      
-      updateChangesStatus();
-      updatePermissionCount();
-      displayPermissions();
-    }
-
-    // تبديل فئة كاملة
-    function toggleCategory(category) {
-      const categoryPerms = allPermissions.filter(p => p.category === category);
-      const allSelected = categoryPerms.every(p => rolePermissions[currentRoleId].includes(p.id));
-      
-      if (allSelected) {
-        // إلغاء تحديد الكل
-        categoryPerms.forEach(p => {
-          const index = rolePermissions[currentRoleId].indexOf(p.id);
-          if (index > -1) {
-            rolePermissions[currentRoleId].splice(index, 1);
-          }
-        });
-      } else {
-        // تحديد الكل
-        categoryPerms.forEach(p => {
-          if (!rolePermissions[currentRoleId].includes(p.id)) {
-            rolePermissions[currentRoleId].push(p.id);
-          }
-        });
-      }
-      
-      updateChangesStatus();
-      updatePermissionCount();
-      displayPermissions();
-    }
-
-    // تحديد جميع الصلاحيات
-    function selectAllPermissions() {
-      rolePermissions[currentRoleId] = allPermissions.map(p => p.id);
-      updateChangesStatus();
-      updatePermissionCount();
-      displayPermissions();
-    }
-
-    // إلغاء جميع الصلاحيات
-    function deselectAllPermissions() {
-      rolePermissions[currentRoleId] = [];
-      updateChangesStatus();
-      updatePermissionCount();
-      displayPermissions();
-    }
-
-    // تحديد صلاحيات فئة معينة
-    function selectCategoryPermissions() {
-      const category = prompt('أدخل اسم الفئة (dashboard, customers, requests, hr, reports, admin, system, finance, tools):');
-      if (!category) return;
-      
-      const categoryPerms = allPermissions.filter(p => p.category === category);
-      if (categoryPerms.length === 0) {
-        alert('لم يتم العثور على صلاحيات في هذه الفئة');
-        return;
-      }
-      
-      categoryPerms.forEach(p => {
-        if (!rolePermissions[currentRoleId].includes(p.id)) {
-          rolePermissions[currentRoleId].push(p.id);
-        }
-      });
-      
-      updateChangesStatus();
-      updatePermissionCount();
-      displayPermissions();
-    }
-
-    // تحديث عدد الصلاحيات
-    function updatePermissionCount() {
-      const count = rolePermissions[currentRoleId].length;
-      document.getElementById(\`count-\${currentRoleId}\`).textContent = count;
-    }
-
-    // تحديث حالة التغييرات
-    function updateChangesStatus() {
-      let totalChanges = 0;
-      
-      for (const roleId of [11, 12, 13, 14]) {
-        const original = originalRolePermissions[roleId] || [];
-        const current = rolePermissions[roleId] || [];
-        
-        const added = current.filter(id => !original.includes(id)).length;
-        const removed = original.filter(id => !current.includes(id)).length;
-        
-        totalChanges += added + removed;
-      }
-      
-      hasUnsavedChanges = totalChanges > 0;
-      const summary = document.getElementById('changesSummary');
-      const changesCount = document.getElementById('changesCount');
-      
-      if (hasUnsavedChanges) {
-        summary.classList.remove('hidden');
-        changesCount.textContent = \`عدد التغييرات: \${totalChanges}\`;
-      } else {
-        summary.classList.add('hidden');
-      }
-    }
-
-    // حفظ جميع التغييرات
-    async function saveAllChanges() {
-      if (!hasUnsavedChanges) {
-        alert('✅ لا توجد تغييرات لحفظها');
-        return;
-      }
-      
-      if (!confirm('هل أنت متأكد من حفظ جميع التغييرات؟')) {
-        return;
-      }
-      
-      try {
-        for (const roleId of [11, 12, 13, 14]) {
-          await axios.put(\`/api/roles/\${roleId}/permissions\`, {
-            permission_ids: rolePermissions[roleId]
-          });
-        }
-        
-        alert('✅ تم حفظ جميع التغييرات بنجاح');
-        
-        // تحديث original
-        for (const roleId of [11, 12, 13, 14]) {
-          originalRolePermissions[roleId] = [...rolePermissions[roleId]];
-        }
-        
-        hasUnsavedChanges = false;
-        document.getElementById('changesSummary').classList.add('hidden');
-        
-      } catch (error) {
-        console.error('Error saving changes:', error);
-        alert('❌ حدث خطأ في حفظ التغييرات');
-      }
-    }
-
-    // تحذير عند المغادرة
-    window.addEventListener('beforeunload', (e) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    });
-
-    // تحميل البيانات عند تحميل الصفحة
-    loadData();
-  <\/script>
-</body>
-</html>
-`,Mt=`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تقارير الشركة المتقدمة</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>
-    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    <style>
-        .report-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: all 0.3s;
-        }
-        .report-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-        }
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin: 20px 0;
-        }
-    </style>
-</head>
-<body class="bg-gray-100">
-    <div class="container mx-auto p-6">
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl p-6 mb-6 shadow-lg">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold mb-2">
-                        <i class="fas fa-chart-line mr-2"></i>
-                        تقارير الشركة المتقدمة
-                    </h1>
-                    <p class="opacity-90">تحليل شامل لأداء الشركة وإحصائيات التمويل</p>
-                </div>
-                <div class="text-left">
-                    <div class="text-sm opacity-75">الشركة:</div>
-                    <div class="text-xl font-bold" id="companyName">جاري التحميل...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- إحصائيات سريعة -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div class="stat-card">
-                <div class="text-sm opacity-80 mb-1">إجمالي الطلبات</div>
-                <div class="text-3xl font-bold" id="totalRequests">0</div>
-                <div class="text-sm opacity-75 mt-1">
-                    <i class="fas fa-file-invoice"></i> جميع طلبات التمويل
-                </div>
-            </div>
-            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
-                <div class="text-sm opacity-80 mb-1">إجمالي المبالغ</div>
-                <div class="text-3xl font-bold" id="totalAmount">0 ر.س</div>
-                <div class="text-sm opacity-75 mt-1">
-                    <i class="fas fa-money-bill-wave"></i> المبالغ المطلوبة
-                </div>
-            </div>
-            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
-                <div class="text-sm opacity-80 mb-1">عدد العملاء</div>
-                <div class="text-3xl font-bold" id="totalCustomers">0</div>
-                <div class="text-sm opacity-75 mt-1">
-                    <i class="fas fa-users"></i> العملاء النشطين
-                </div>
-            </div>
-            <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)">
-                <div class="text-sm opacity-80 mb-1">معدل الموافقة</div>
-                <div class="text-3xl font-bold" id="approvalRate">0%</div>
-                <div class="text-sm opacity-75 mt-1">
-                    <i class="fas fa-check-circle"></i> نسبة القبول
-                </div>
-            </div>
-        </div>
-
-        <!-- الرسوم البيانية -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <!-- توزيع حالات الطلبات -->
-            <div class="report-card p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">
-                    <i class="fas fa-chart-pie text-purple-600 mr-2"></i>
-                    توزيع حالات الطلبات
-                </h3>
-                <div class="chart-container">
-                    <canvas id="statusChart"></canvas>
-                </div>
-            </div>
-
-            <!-- المبالغ حسب الشهر -->
-            <div class="report-card p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">
-                    <i class="fas fa-chart-bar text-blue-600 mr-2"></i>
-                    المبالغ حسب الشهر
-                </h3>
-                <div class="chart-container">
-                    <canvas id="monthlyChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- جداول تفصيلية -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <!-- أفضل 5 عملاء -->
-            <div class="report-card p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">
-                    <i class="fas fa-trophy text-yellow-500 mr-2"></i>
-                    أفضل 5 عملاء
-                </h3>
-                <div id="topCustomers" class="space-y-3">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-
-            <!-- البنوك الأكثر استخداماً -->
-            <div class="report-card p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">
-                    <i class="fas fa-university text-green-500 mr-2"></i>
-                    البنوك الأكثر استخداماً
-                </h3>
-                <div id="topBanks" class="space-y-3">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-        </div>
-
-        <!-- جدول الطلبات الأخيرة -->
-        <div class="report-card p-6 mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-list text-indigo-600 mr-2"></i>
-                    آخر طلبات التمويل
-                </h3>
-                <button onclick="exportReport()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-                    <i class="fas fa-file-export mr-2"></i>
-                    تصدير التقرير
-                </button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-right">الرقم</th>
-                            <th class="px-4 py-3 text-right">العميل</th>
-                            <th class="px-4 py-3 text-right">المبلغ</th>
-                            <th class="px-4 py-3 text-right">المدة</th>
-                            <th class="px-4 py-3 text-right">البنك</th>
-                            <th class="px-4 py-3 text-right">الحالة</th>
-                            <th class="px-4 py-3 text-right">التاريخ</th>
-                        </tr>
-                    </thead>
-                    <tbody id="requestsTable">
-                        <!-- سيتم ملؤها ديناميكياً -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- أزرار العودة -->
-        <div class="flex gap-3">
-            <a href="/admin/panel" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg">
-                <i class="fas fa-arrow-right mr-2"></i>
-                العودة للوحة التحكم
-            </a>
-        </div>
-    </div>
-
-    <script>
-        let statusChart, monthlyChart;
-        let reportData = {};
-
-        // تحميل البيانات عند بدء الصفحة
-        async function loadReportData() {
-            try {
-                // الحصول على معلومات المستخدم
-                const userResponse = await axios.get('/api/user-info');
-                const tenantId = userResponse.data.tenant_id;
-                const companyName = userResponse.data.company_name || 'الشركة';
-                
-                document.getElementById('companyName').textContent = companyName;
-
-                // تحميل بيانات الطلبات
-                const requestsResponse = await axios.get(\`/api/financing-requests?tenant_id=\${tenantId}\`);
-                const requests = requestsResponse.data.data || [];
-
-                // تحميل بيانات العملاء
-                const customersResponse = await axios.get(\`/api/customers?tenant_id=\${tenantId}\`);
-                const customers = customersResponse.data.data || [];
-
-                // حساب الإحصائيات
-                reportData = {
-                    requests,
-                    customers,
-                    tenantId
-                };
-
-                calculateStatistics();
-                renderCharts();
-                renderTables();
-                
-            } catch (error) {
-                console.error('خطأ في تحميل البيانات:', error);
-                alert('حدث خطأ في تحميل التقرير');
-            }
-        }
-
-        function calculateStatistics() {
-            const { requests, customers } = reportData;
-
-            // إجمالي الطلبات
-            document.getElementById('totalRequests').textContent = requests.length;
-
-            // إجمالي المبالغ
-            const totalAmount = requests.reduce((sum, req) => sum + (req.requested_amount || 0), 0);
-            document.getElementById('totalAmount').textContent = totalAmount.toLocaleString('ar-SA') + ' ر.س';
-
-            // عدد العملاء
-            document.getElementById('totalCustomers').textContent = customers.length;
-
-            // معدل الموافقة
-            const approvedCount = requests.filter(r => r.status === 'approved').length;
-            const approvalRate = requests.length > 0 ? ((approvedCount / requests.length) * 100).toFixed(1) : 0;
-            document.getElementById('approvalRate').textContent = approvalRate + '%';
-        }
-
-        function renderCharts() {
-            const { requests } = reportData;
-
-            // رسم بياني لتوزيع الحالات
-            const statusCounts = {
-                'pending': requests.filter(r => r.status === 'pending').length,
-                'approved': requests.filter(r => r.status === 'approved').length,
-                'rejected': requests.filter(r => r.status === 'rejected').length,
-                'under_review': requests.filter(r => r.status === 'under_review').length
-            };
-
-            const statusLabels = {
-                'pending': 'قيد الانتظار',
-                'approved': 'موافق عليه',
-                'rejected': 'مرفوض',
-                'under_review': 'قيد المراجعة'
-            };
-
-            if (statusChart) statusChart.destroy();
-            statusChart = new Chart(document.getElementById('statusChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(statusCounts).map(k => statusLabels[k]),
-                    datasets: [{
-                        data: Object.values(statusCounts),
-                        backgroundColor: ['#FCD34D', '#34D399', '#F87171', '#60A5FA']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-
-            // رسم بياني للمبالغ حسب الشهر
-            const monthlyData = {};
-            requests.forEach(req => {
-                const month = new Date(req.created_at).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long' });
-                monthlyData[month] = (monthlyData[month] || 0) + (req.requested_amount || 0);
-            });
-
-            if (monthlyChart) monthlyChart.destroy();
-            monthlyChart = new Chart(document.getElementById('monthlyChart'), {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(monthlyData),
-                    datasets: [{
-                        label: 'المبلغ (ر.س)',
-                        data: Object.values(monthlyData),
-                        backgroundColor: '#667eea'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderTables() {
-            const { requests, customers } = reportData;
-
-            // أفضل 5 عملاء
-            const customerRequests = {};
-            requests.forEach(req => {
-                customerRequests[req.customer_id] = (customerRequests[req.customer_id] || 0) + 1;
-            });
-
-            const topCustomersHTML = Object.entries(customerRequests)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5)
-                .map(([customerId, count], index) => {
-                    const customer = customers.find(c => c.id == customerId);
-                    const customerName = customer ? customer.full_name : 'غير معروف';
-                    return \`
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center text-white font-bold">
-                                    \${index + 1}
-                                </div>
-                                <span class="font-medium">\${customerName}</span>
-                            </div>
-                            <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-bold">
-                                \${count} طلب
-                            </span>
-                        </div>
-                    \`;
-                }).join('');
-            document.getElementById('topCustomers').innerHTML = topCustomersHTML || '<p class="text-gray-500 text-center">لا توجد بيانات</p>';
-
-            // جدول الطلبات الأخيرة
-            const requestsHTML = requests
-                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                .slice(0, 10)
-                .map(req => {
-                    const statusColors = {
-                        'pending': 'bg-yellow-100 text-yellow-800',
-                        'approved': 'bg-green-100 text-green-800',
-                        'rejected': 'bg-red-100 text-red-800',
-                        'under_review': 'bg-blue-100 text-blue-800'
-                    };
-                    const statusLabels = {
-                        'pending': 'قيد الانتظار',
-                        'approved': 'موافق عليه',
-                        'rejected': 'مرفوض',
-                        'under_review': 'قيد المراجعة'
-                    };
-                    
-                    const customer = customers.find(c => c.id == req.customer_id);
-                    const customerName = customer ? customer.full_name : 'غير معروف';
-                    
-                    return \`
-                        <tr class="border-b hover:bg-gray-50">
-                            <td class="px-4 py-3">\${req.id}</td>
-                            <td class="px-4 py-3">\${customerName}</td>
-                            <td class="px-4 py-3 font-bold text-green-600">\${(req.requested_amount || 0).toLocaleString('ar-SA')} ر.س</td>
-                            <td class="px-4 py-3">\${req.duration_months || 0} شهر</td>
-                            <td class="px-4 py-3">\${req.bank_name || 'غير محدد'}</td>
-                            <td class="px-4 py-3">
-                                <span class="px-3 py-1 rounded-full text-xs font-bold \${statusColors[req.status] || 'bg-gray-100'}">
-                                    \${statusLabels[req.status] || req.status}
-                                </span>
-                            </td>
-                            <td class="px-4 py-3 text-sm text-gray-600">\${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
-                        </tr>
-                    \`;
-                }).join('');
-            document.getElementById('requestsTable').innerHTML = requestsHTML || '<tr><td colspan="7" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';
-        }
-
-        function exportReport() {
-            const { requests, customers } = reportData;
-            let csv = 'الرقم,العميل,المبلغ,المدة,الحالة,التاريخ\\n';
-            
-            requests.forEach(req => {
-                const customer = customers.find(c => c.id == req.customer_id);
-                const customerName = customer ? customer.full_name : 'غير معروف';
-                csv += \`\${req.id},\${customerName},\${req.requested_amount},\${req.duration_months},\${req.status},\${req.created_at}\\n\`;
-            });
-
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'تقرير-الشركة-' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
-        }
-
-        // تحميل البيانات عند بدء الصفحة
-        window.onload = loadReportData;
-    <\/script>
-</body>
-</html>
-`,Ft=()=>`
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تقارير الصلاحيات</title>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-  <style>
-    .report-card {
-      transition: all 0.3s ease;
-    }
-    .report-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 24px rgba(0,0,0,0.15);
-    }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-  
-  <div class="max-w-7xl mx-auto px-4 py-6">
-    
-    <!-- Header -->
-    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl shadow-lg p-6 mb-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold flex items-center gap-3">
-            <i class="fas fa-chart-pie"></i>
-            تقارير وإحصاءات الصلاحيات
-          </h1>
-          <p class="text-indigo-100 mt-2">تقارير شاملة عن توزيع الصلاحيات والأدوار</p>
-        </div>
-        <div class="flex gap-3">
-          <button onclick="exportReport()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
-            <i class="fas fa-file-export"></i>
-            <span>تصدير التقرير</span>
-          </button>
-          <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all font-bold flex items-center gap-2">
-            <i class="fas fa-arrow-right"></i>
-            <span>العودة</span>
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats Overview -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-      <div class="report-card bg-white rounded-xl p-6 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600 font-medium">إجمالي الصلاحيات</p>
-            <p id="totalPermissions" class="text-3xl font-bold text-indigo-600 mt-2">0</p>
-          </div>
-          <div class="bg-indigo-100 p-4 rounded-xl">
-            <i class="fas fa-key text-2xl text-indigo-600"></i>
-          </div>
-        </div>
-      </div>
-      
-      <div class="report-card bg-white rounded-xl p-6 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600 font-medium">عدد الفئات</p>
-            <p id="totalCategories" class="text-3xl font-bold text-purple-600 mt-2">0</p>
-          </div>
-          <div class="bg-purple-100 p-4 rounded-xl">
-            <i class="fas fa-folder text-2xl text-purple-600"></i>
-          </div>
-        </div>
-      </div>
-      
-      <div class="report-card bg-white rounded-xl p-6 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600 font-medium">عدد الأدوار</p>
-            <p id="totalRoles" class="text-3xl font-bold text-blue-600 mt-2">0</p>
-          </div>
-          <div class="bg-blue-100 p-4 rounded-xl">
-            <i class="fas fa-user-shield text-2xl text-blue-600"></i>
-          </div>
-        </div>
-      </div>
-      
-      <div class="report-card bg-white rounded-xl p-6 shadow-lg">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-gray-600 font-medium">عدد المستخدمين</p>
-            <p id="totalUsers" class="text-3xl font-bold text-green-600 mt-2">0</p>
-          </div>
-          <div class="bg-green-100 p-4 rounded-xl">
-            <i class="fas fa-users text-2xl text-green-600"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-      <!-- Permissions by Category -->
-      <div class="bg-white rounded-xl shadow-lg p-6">
-        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <i class="fas fa-chart-bar text-indigo-600"></i>
-          توزيع الصلاحيات حسب الفئة
-        </h2>
-        <canvas id="categoryChart" height="250"></canvas>
-      </div>
-      
-      <!-- Permissions by Role -->
-      <div class="bg-white rounded-xl shadow-lg p-6">
-        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <i class="fas fa-chart-pie text-purple-600"></i>
-          صلاحيات الأدوار
-        </h2>
-        <canvas id="roleChart" height="250"></canvas>
-      </div>
-    </div>
-
-    <!-- Detailed Reports -->
-    <div class="space-y-6">
-      
-      <!-- Roles Comparison -->
-      <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
-          <h2 class="text-2xl font-bold flex items-center gap-2">
-            <i class="fas fa-balance-scale"></i>
-            مقارنة الأدوار
-          </h2>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-4 text-right font-bold text-gray-700">الدور</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">الصلاحيات</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">Dashboard</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">Customers</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">Requests</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">HR</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">Reports</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">System</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">Finance</th>
-              </tr>
-            </thead>
-            <tbody id="rolesComparisonTable">
-              <tr>
-                <td colspan="9" class="text-center py-8">
-                  <i class="fas fa-spinner fa-spin text-3xl text-indigo-600"></i>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Permissions Details -->
-      <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6">
-          <h2 class="text-2xl font-bold flex items-center gap-2">
-            <i class="fas fa-list"></i>
-            تفاصيل الصلاحيات
-          </h2>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-4 text-right font-bold text-gray-700">#</th>
-                <th class="px-6 py-4 text-right font-bold text-gray-700">الصلاحية</th>
-                <th class="px-6 py-4 text-right font-bold text-gray-700">الفئة</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">الأدوار المستخدمة</th>
-                <th class="px-6 py-4 text-center font-bold text-gray-700">معدل الاستخدام</th>
-              </tr>
-            </thead>
-            <tbody id="permissionsDetailsTable">
-              <tr>
-                <td colspan="5" class="text-center py-8">
-                  <i class="fas fa-spinner fa-spin text-3xl text-purple-600"></i>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Users by Role -->
-      <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-          <h2 class="text-2xl font-bold flex items-center gap-2">
-            <i class="fas fa-users"></i>
-            توزيع المستخدمين حسب الدور
-          </h2>
-        </div>
-        <div class="p-6">
-          <div id="usersDistribution" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- سيتم ملؤها ديناميكياً -->
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-  </div>
-
-  <script>
-    let allPermissions = [];
-    let allRoles = [];
-    let allUsers = [];
-    let rolePermissions = {};
-
-    // تحميل البيانات
-    async function loadData() {
-      try {
-        // تحميل الصلاحيات
-        const permsResponse = await axios.get('/api/permissions');
-        allPermissions = permsResponse.data.data || [];
-        
-        // تحميل الأدوار
-        const rolesResponse = await axios.get('/api/roles');
-        allRoles = rolesResponse.data.data || [];
-        
-        // تحميل المستخدمين
-        const usersResponse = await axios.get('/api/users');
-        allUsers = usersResponse.data.data || [];
-        
-        // تحميل صلاحيات كل دور
-        for (const role of allRoles) {
-          const rolePermsResponse = await axios.get(\`/api/roles/\${role.id}/permissions\`);
-          rolePermissions[role.id] = rolePermsResponse.data.data || [];
-        }
-        
-        // تحديث الإحصاءات
-        updateStats();
-        
-        // رسم الرسوم البيانية
-        drawCharts();
-        
-        // عرض التقارير
-        displayReports();
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        alert('❌ حدث خطأ في تحميل البيانات');
-      }
-    }
-
-    // تحديث الإحصاءات
-    function updateStats() {
-      // تجميع الفئات
-      const categories = new Set(allPermissions.map(p => p.category));
-      
-      document.getElementById('totalPermissions').textContent = allPermissions.length;
-      document.getElementById('totalCategories').textContent = categories.size;
-      document.getElementById('totalRoles').textContent = allRoles.length;
-      document.getElementById('totalUsers').textContent = allUsers.length;
-    }
-
-    // رسم الرسوم البيانية
-    function drawCharts() {
-      // توزيع الصلاحيات حسب الفئة
-      const categoryCounts = {};
-      allPermissions.forEach(perm => {
-        const cat = perm.category || 'other';
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      });
-      
-      const categoryNames = {
-        'dashboard': 'لوحة التحكم',
-        'customers': 'العملاء',
-        'requests': 'الطلبات',
-        'hr': 'الموارد البشرية',
-        'reports': 'التقارير',
-        'admin': 'الإدارة',
-        'system': 'النظام',
-        'finance': 'المالية',
-        'tools': 'الأدوات',
-        'other': 'أخرى'
-      };
-      
-      new Chart(document.getElementById('categoryChart'), {
-        type: 'bar',
-        data: {
-          labels: Object.keys(categoryCounts).map(c => categoryNames[c] || c),
-          datasets: [{
-            label: 'عدد الصلاحيات',
-            data: Object.values(categoryCounts),
-            backgroundColor: [
-              '#6366f1', '#8b5cf6', '#3b82f6', '#10b981',
-              '#f59e0b', '#ef4444', '#ec4899', '#14b8a6'
-            ]
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
-          }
-        }
-      });
-      
-      // صلاحيات الأدوار
-      new Chart(document.getElementById('roleChart'), {
-        type: 'doughnut',
-        data: {
-          labels: allRoles.map(r => r.role_name),
-          datasets: [{
-            data: allRoles.map(r => r.permissions_count),
-            backgroundColor: ['#6366f1', '#8b5cf6', '#3b82f6', '#10b981']
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false
-        }
-      });
-    }
-
-    // عرض التقارير
-    function displayReports() {
-      // مقارنة الأدوار
-      const tbody = document.getElementById('rolesComparisonTable');
-      
-      tbody.innerHTML = allRoles.map(role => {
-        const perms = rolePermissions[role.id] || [];
-        
-        // حساب الصلاحيات لكل فئة
-        const catCounts = {
-          dashboard: 0, customers: 0, requests: 0, hr: 0,
-          reports: 0, system: 0, finance: 0
-        };
-        
-        perms.forEach(p => {
-          if (catCounts.hasOwnProperty(p.category)) {
-            catCounts[p.category]++;
-          }
-        });
-        
-        return \`
-          <tr class="border-b hover:bg-gray-50">
-            <td class="px-6 py-4">
-              <div class="font-bold text-gray-800">\${role.role_name}</div>
-              <div class="text-xs text-gray-500">\${role.description}</div>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm font-bold">
-                \${perms.length}
-              </span>
-            </td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.dashboard}</td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.customers}</td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.requests}</td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.hr}</td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.reports}</td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.system}</td>
-            <td class="px-6 py-4 text-center font-bold text-gray-700">\${catCounts.finance}</td>
-          </tr>
-        \`;
-      }).join('');
-      
-      // تفاصيل الصلاحيات
-      const permTbody = document.getElementById('permissionsDetailsTable');
-      
-      const categoryNames = {
-        'dashboard': 'لوحة التحكم',
-        'customers': 'العملاء',
-        'requests': 'الطلبات',
-        'hr': 'الموارد البشرية',
-        'reports': 'التقارير',
-        'admin': 'الإدارة',
-        'system': 'النظام',
-        'finance': 'المالية',
-        'tools': 'الأدوات',
-        'other': 'أخرى'
-      };
-      
-      permTbody.innerHTML = allPermissions.map((perm, index) => {
-        // حساب عدد الأدوار التي تستخدم هذه الصلاحية
-        let rolesCount = 0;
-        Object.values(rolePermissions).forEach(perms => {
-          if (perms.some(p => p.id === perm.id)) {
-            rolesCount++;
-          }
-        });
-        
-        const usagePercent = ((rolesCount / allRoles.length) * 100).toFixed(0);
-        
-        return \`
-          <tr class="border-b hover:bg-gray-50">
-            <td class="px-6 py-4 font-medium text-gray-700">\${index + 1}</td>
-            <td class="px-6 py-4">
-              <div class="font-bold text-gray-800">\${perm.display_name}</div>
-              <code class="text-xs text-gray-500">\${perm.name}</code>
-            </td>
-            <td class="px-6 py-4">
-              <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">
-                \${categoryNames[perm.category] || perm.category}
-              </span>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <span class="font-bold text-gray-700">\${rolesCount} / \${allRoles.length}</span>
-            </td>
-            <td class="px-6 py-4 text-center">
-              <div class="flex items-center justify-center gap-2">
-                <div class="w-24 bg-gray-200 rounded-full h-2">
-                  <div class="bg-indigo-600 h-2 rounded-full" style="width: \${usagePercent}%"></div>
-                </div>
-                <span class="text-sm font-bold text-gray-700">\${usagePercent}%</span>
-              </div>
-            </td>
-          </tr>
-        \`;
-      }).join('');
-      
-      // توزيع المستخدمين
-      const usersDiv = document.getElementById('usersDistribution');
-      
-      usersDiv.innerHTML = allRoles.map(role => {
-        const roleUsers = allUsers.filter(u => u.role_id === role.id);
-        
-        return \`
-          <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200">
-            <div class="flex items-center justify-between mb-4">
-              <i class="fas fa-user-shield text-3xl text-blue-600"></i>
-              <span class="text-3xl font-bold text-blue-600">\${roleUsers.length}</span>
-            </div>
-            <h3 class="font-bold text-gray-800 mb-1">\${role.role_name}</h3>
-            <p class="text-sm text-gray-600">\${roleUsers.length} مستخدم</p>
-          </div>
-        \`;
-      }).join('');
-    }
-
-    // تصدير التقرير
-    function exportReport() {
-      let report = 'تقرير الصلاحيات والأدوار\\n';
-      report += '='.repeat(60) + '\\n\\n';
-      
-      report += '📊 الإحصاءات العامة:\\n';
-      report += \`- إجمالي الصلاحيات: \${allPermissions.length}\\n\`;
-      report += \`- عدد الأدوار: \${allRoles.length}\\n\`;
-      report += \`- عدد المستخدمين: \${allUsers.length}\\n\\n\`;
-      
-      report += '📋 تفاصيل الأدوار:\\n';
-      allRoles.forEach(role => {
-        const perms = rolePermissions[role.id] || [];
-        report += \`\\n\${role.role_name}:\\n\`;
-        report += \`  - الوصف: \${role.description}\\n\`;
-        report += \`  - الصلاحيات: \${perms.length}\\n\`;
-        report += \`  - المستخدمون: \${allUsers.filter(u => u.role_id === role.id).length}\\n\`;
-      });
-      
-      // تحميل كملف
-      const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = \`permissions-report-\${new Date().toISOString().split('T')[0]}.txt\`;
-      a.click();
-      
-      alert('✅ تم تصدير التقرير بنجاح');
-    }
-
-    // تحميل البيانات عند تحميل الصفحة
-    loadData();
-  <\/script>
-</body>
-</html>
-`,d=new oe,D=()=>`
+`,c=new ne,k=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -18244,7 +12576,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       min-width: 60px !important;
     }
   }
-`;d.use("*",Ze());async function At(e){const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
+`;c.use("*",Ze());c.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});async function Et(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -18254,23 +12586,11 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LIMIT 1
     `).bind(r).first()),o||(o=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),o}async function x(e){try{let t=e.req.header("Authorization")?.replace("Bearer ","");if(!t){const n=e.req.header("Cookie");if(n){const p=n.split(";").map(u=>u.trim()).find(u=>u.startsWith("authToken="));p&&(t=p.split("=")[1],console.log("✅ Token found in cookie"))}}if(!t){console.log("❌ No token found in header or cookie");const n=e.req.query("tenant_id");return{userId:null,tenantId:n?parseInt(n):null,roleId:null}}console.log("🔍 Token:",t.substring(0,20)+"...");const s=atob(t).split(":");console.log("🔍 Decoded token parts:",s);const r=parseInt(s[0]),o=s[1]!=="null"&&s[1]!=="undefined"?parseInt(s[1]):null,l=s[2]!=="null"&&s[2]!=="undefined"?parseInt(s[2]):null,i=await e.env.DB.prepare(`
+    `).bind().first()),o}async function h(e){try{let t=e.req.header("Authorization")?.replace("Bearer ","");if(!t){const i=e.req.header("Cookie");if(i){const d=i.split(";").map(p=>p.trim()).find(p=>p.startsWith("authToken="));d&&(t=d.split("=")[1],console.log("✅ Token found in cookie"))}}if(!t){console.log("❌ No token found in header or cookie");const i=e.req.query("tenant_id");return{userId:null,tenantId:i?parseInt(i):null,roleId:null}}console.log("🔍 Token:",t.substring(0,20)+"...");const s=atob(t).split(":"),r=parseInt(s[0]),o=s[1]!=="null"&&s[1]!=="undefined"?parseInt(s[1]):null;if(!e.env?.DB)return console.error("❌ getUserInfo: DB binding not available"),{userId:null,tenantId:null,roleId:null};const l=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
-    `).bind(r).first();if(!i)return console.log("❌ User not found in DB"),{userId:null,tenantId:null,roleId:null};if(console.log("✅ User found:",{userId:i.id,tenantId:i.tenant_id,roleId:i.role_id}),i.role_id===11){const n=e.req.query("tenant_id");return{userId:i.id,tenantId:n?parseInt(n):null,roleId:11}}return{userId:i.id,tenantId:o||i.tenant_id,roleId:l||i.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}d.use("/c/:tenant/*",async(e,t)=>{const a=await At(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(r).first();if(!l)return{userId:null,tenantId:null,roleId:null};if(l.role_id===1){const i=e.req.query("tenant_id");return{userId:l.id,tenantId:i?parseInt(i):null,roleId:1}}return{userId:l.id,tenantId:o||l.tenant_id,roleId:l.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}c.use("/c/:tenant/*",async(e,t)=>{const a=await Et(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});c.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);const a=await e.env.DB.prepare(`
-      SELECT u.*, r.role_name, r.description as role_description, t.company_name
-      FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN tenants t ON u.tenant_id = t.id
-      WHERE u.id = ?
-    `).bind(t.userId).first();return e.json({success:!0,user:{id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:a.role_name,role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name,user_type:a.user_type}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/my-permissions",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);const a=await e.env.DB.prepare(`
-      SELECT p.name as permission_key, p.display_name as permission_name, p.category, p.description
-      FROM role_permissions rp
-      JOIN permissions p ON rp.permission_id = p.id
-      WHERE rp.role_id = ?
-      ORDER BY p.category, p.display_name
-    `).bind(t.roleId).all();return e.json({success:!0,role_id:t.roleId,permissions_count:a.results.length,permissions:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
     `).bind(t.slug).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const s=await e.env.DB.prepare(`
       INSERT INTO tenants (
@@ -18278,7 +12598,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         max_customers, max_requests, contact_email, contact_phone,
         primary_color, secondary_color
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.company_name,t.slug,t.subdomain||t.slug,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:s.meta.last_row_id,...t},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/tenants/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t.company_name,t.slug,t.subdomain||t.slug,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:s.meta.last_row_id,...t},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/tenants/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE id = ?
     `).bind(t).first()?(await e.env.DB.prepare(`
       UPDATE tenants SET
@@ -18294,14 +12614,14 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         primary_color = ?,
         secondary_color = ?
       WHERE id = ?
-    `).bind(a.company_name,a.slug,a.subdomain,a.status,a.max_users,a.max_customers,a.max_requests,a.contact_email,a.contact_phone,a.primary_color||"#667eea",a.secondary_color||"#764ba2",t).run(),e.json({success:!0,data:{id:t,...a},message:"تم تحديث الشركة بنجاح"})):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/tenants/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `).bind(a.company_name,a.slug,a.subdomain,a.status,a.max_users,a.max_customers,a.max_requests,a.contact_email,a.contact_phone,a.primary_color||"#667eea",a.secondary_color||"#764ba2",t).run(),e.json({success:!0,data:{id:t,...a},message:"تم تحديث الشركة بنجاح"})):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/tenants/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE tenant_id = ?
     `).bind(t).first();return a&&a.count>0?e.json({success:!1,error:`لا يمكن حذف الشركة لأنها تحتوي على ${a.count} مستخدم/مستخدمين`},400):(await e.env.DB.prepare(`
       DELETE FROM tenants WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/auth/login",async e=>{try{const{username:t,password:a}=await e.req.json();console.log(`🔐 Login attempt: ${t}`);const s=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/auth/login",async e=>{try{if(!e.env.DB)return console.error("❌ DB binding is not available"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const{username:t,password:a}=await e.req.json();if(console.log(`🔐 Login attempt: ${t}`),console.log(`🔍 DB binding check: ${!!e.env.DB}`),!e.env?.DB)return console.error("❌ DB binding check failed in login query"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const s=await e.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.user_type, u.subscription_id, u.is_active, 
-             u.tenant_id,
+             u.tenant_id, u.role as user_role,
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
              t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
@@ -18310,12 +12630,12 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ User found: ${s.full_name} (Role ID: ${s.role_id})`),await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run();const r=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`,o=btoa(r),l=10080*60;e.header("Set-Cookie",`authToken=${o}; Path=/; Max-Age=${l}; SameSite=Lax`);const i="/admin/panel";return console.log(`🎯 Redirect to: ${i}`),console.log(`🍪 Cookie set: authToken=${o.substring(0,20)}...`),e.json({success:!0,token:o,redirect:i,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role:s.user_role||"employee",role_id:s.role_id,role_name:s.role_name||"موظف",role_description:s.role_description,user_type:s.user_type,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}})}catch(t){return console.error("❌ Login error:",t),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول: "+t.message},500)}});d.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
+    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ User found: ${s.full_name} (Role ID: ${s.role_id})`),e.env?.DB?await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run():console.error("❌ DB binding lost after user query");const r=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`,o=btoa(r),l=10080*60,i=`authToken=${o}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,n="/admin/panel";console.log(`🎯 Redirect to: ${n}`),console.log(`🍪 Cookie set: authToken=${o.substring(0,20)}...`);const d=e.json({success:!0,token:o,redirect:n,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role:s.user_role||"employee",role_id:s.role_id,role_name:s.role_name||"موظف",role_description:s.role_description,user_type:s.user_type,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}});return d.headers.set("Set-Cookie",i),d}catch(t){return console.error("❌ Login error:",t),console.error("❌ Error stack:",t.stack),console.error("❌ Error details:",{message:t.message,name:t.name,cause:t.cause,DB_available:!!e.env?.DB}),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول: "+t.message,details:void 0},500)}});c.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!a)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const s=Math.floor(1e5+Math.random()*9e5).toString(),r=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
       VALUES (?, ?, ?, 0)
-    `).bind(a.id,s,r.toISOString()).run(),console.log(`Verification code for ${a.email}: ${s}`),e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني",devCode:s})}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(a.id,s,r.toISOString()).run(),console.log(`Verification code for ${a.email}: ${s}`),e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني",devCode:s})}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!s)return e.json({success:!1,message:"المستخدم غير موجود"},404);const r=await e.env.DB.prepare(`
       SELECT id, verification_code, expires_at, is_used
@@ -18323,18 +12643,18 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       WHERE user_id = ? AND is_used = 0
       ORDER BY created_at DESC
       LIMIT 1
-    `).bind(s.id).first();if(!r)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(r.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(r.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const o=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:o})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const r=await e.env.DB.prepare(`
+    `).bind(s.id).first();if(!r)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(r.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(r.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const o=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:o})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const r=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();return r?(await e.env.DB.prepare(`
       UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).bind(s,r.id).run(),await e.env.DB.prepare(`
       UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
-    `).bind(r.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.get("/api/banks",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM banks",s;return t?(a+=" WHERE tenant_id = ? ORDER BY bank_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY bank_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:r,is_active:o,tenant_id:l}=t;let i=l;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const n=await e.env.DB.prepare(`
+    `).bind(r.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.get("/api/banks",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM banks",s;return t?(a+=" WHERE tenant_id = ? ORDER BY bank_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY bank_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:r,is_active:o,tenant_id:l}=t;let i=l;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const n=await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
       VALUES (?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,i).run();return e.json({success:!0,id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:r,logo_url:o,is_active:l}=a,n=e.req.header("Authorization")?.replace("Bearer ","");let c=null;if(n){const m=atob(n).split(":");c=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return c?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,r,o,l,t,c).run()):await e.env.DB.prepare(p).bind(s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),r=a.get("bank_code"),o=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
+    `).bind(a,s,r,o,i).run();return e.json({success:!0,id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:r,logo_url:o,is_active:l}=a,n=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(n){const m=atob(n).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,r,o,l,t,d).run()):await e.env.DB.prepare(p).bind(s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),r=a.get("bank_code"),o=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(s,r,o,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const n=atob(s).split(":");r=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT id FROM banks WHERE id = ?";return r&&(o+=" AND tenant_id = ?"),(r?await e.env.DB.prepare(o).bind(t,r).first():await e.env.DB.prepare(o).bind(t).first())?(await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0})):e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(s,r,o,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const n=atob(s).split(":");r=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT id FROM banks WHERE id = ?";return r&&(o+=" AND tenant_id = ?"),(r?await e.env.DB.prepare(o).bind(t,r).first():await e.env.DB.prepare(o).bind(t).first())?(await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0})):e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
       SELECT 
         r.*,
         b.bank_name,
@@ -18342,41 +12662,41 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM bank_financing_rates r
       JOIN banks b ON r.bank_id = b.id
       JOIN financing_types f ON r.financing_type_id = f.id
-    `;s!==null&&(r+=" WHERE r.tenant_id = ?"),r+=" ORDER BY b.bank_name, f.type_name";const{results:o}=s!==null?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const n=atob(a).split(":");s=n[1]!=="null"?parseInt(n[1]):null}const r=await e.req.formData(),o={};r.forEach((i,n)=>{o[n]=i});const l=await e.env.DB.prepare(`
+    `;s!==null&&(r+=" WHERE r.tenant_id = ?"),r+=" ORDER BY b.bank_name, f.type_name";const{results:o}=s!==null?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const n=atob(a).split(":");s=n[1]!=="null"?parseInt(n[1]):null}const r=await e.req.formData(),o={};r.forEach((i,n)=>{o[n]=i});const l=await e.env.DB.prepare(`
       INSERT INTO bank_financing_rates 
       (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_duration||null,o.max_duration||null,o.is_active||1,s).run();return e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const n=atob(r).split(":");o=n[1]!=="null"?parseInt(n[1]):null}let l=`
+    `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_duration||null,o.max_duration||null,o.is_active||1,s).run();return e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const n=atob(r).split(":");o=n[1]!=="null"?parseInt(n[1]):null}let l=`
       UPDATE bank_financing_rates 
       SET bank_id = ?, financing_type_id = ?, rate = ?, 
           min_amount = ?, max_amount = ?, min_salary = ?, max_salary = ?,
           min_duration = ?, max_duration = ?, is_active = ?
       WHERE id = ?
-    `;return o?(l+=" AND tenant_id = ?",await e.env.DB.prepare(l).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t,o).run()):await e.env.DB.prepare(l).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const i=atob(s).split(":");r=i[1]!=="null"?parseInt(i[1]):null}let o="DELETE FROM bank_financing_rates WHERE id = ?";return r?(o+=" AND tenant_id = ?",await e.env.DB.prepare(o).bind(t,r).run()):await e.env.DB.prepare(o).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `;return o?(l+=" AND tenant_id = ?",await e.env.DB.prepare(l).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t,o).run()):await e.env.DB.prepare(l).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const i=atob(s).split(":");r=i[1]!=="null"?parseInt(i[1]):null}let o="DELETE FROM bank_financing_rates WHERE id = ?";return r?(o+=" AND tenant_id = ?",await e.env.DB.prepare(o).bind(t,r).run()):await e.env.DB.prepare(o).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),r=t.get("price"),o=t.get("duration_months"),l=t.get("max_calculations"),i=t.get("max_users"),n=t.get("is_active")||"1",c=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),r=t.get("price"),o=t.get("duration_months"),l=t.get("max_calculations"),i=t.get("max_users"),n=t.get("is_active")||"1",d=await e.env.DB.prepare(`
       INSERT INTO packages (package_name, description, price, duration_months, max_calculations, max_users, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s||null,r,o,l||null,i||null,n).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:r,duration_months:o,max_calculations:l,max_users:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s||null,r,o,l||null,i||null,n).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:r,duration_months:o,max_calculations:l,max_users:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE packages 
       SET package_name = ?, description = ?, price = ?, duration_months = ?, 
           max_calculations = ?, max_users = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
       SELECT 
         s.*,
         p.package_name,
         p.price,
         p.max_calculations
       FROM subscriptions s
-      JOIN packages p ON s.package_id = p.id`;s&&(r+=` WHERE s.tenant_id = ${s}`),r+=" ORDER BY s.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),r=t.get("start_date"),o=t.get("end_date"),l=t.get("status")||"active",i=t.get("calculations_used")||0,c=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(c){const f=atob(c).split(":");p=f[1]!=="null"?parseInt(f[1]):null}const u=await e.env.DB.prepare(`
+      JOIN packages p ON s.package_id = p.id`;s&&(r+=` WHERE s.tenant_id = ${s}`),r+=" ORDER BY s.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),r=t.get("start_date"),o=t.get("end_date"),l=t.get("status")||"active",i=t.get("calculations_used")||0,d=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(d){const f=atob(d).split(":");p=f[1]!=="null"?parseInt(f[1]):null}const u=await e.env.DB.prepare(`
       INSERT INTO subscriptions (company_name, package_id, start_date, end_date, status, calculations_used, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:r,end_date:o,status:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s,r,o,l,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:r,end_date:o,status:l}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscriptions 
       SET company_name = ?, package_id = ?, start_date = ?, end_date = ?, status = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(a,s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name,
@@ -18385,7 +12705,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       ORDER BY sr.created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name,
@@ -18396,19 +12716,19 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       WHERE sr.id = ?
-    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:r,package_id:o,notes:l}=await e.req.json();if(!t||!a||!s||!r||!o)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(r.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
+    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:r,package_id:o,notes:l}=await e.req.json();if(!t||!a||!s||!r||!o)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(r.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
       SELECT id FROM packages WHERE id = ? AND is_active = 1
     `).bind(o).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const p=await e.env.DB.prepare(`
       INSERT INTO subscription_requests 
       (company_name, contact_name, email, phone, package_id, status, notes)
       VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(t,a,s,r,o,l||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,r,o,l||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
-    `).bind(a,s||null,t).run(),e.json({success:!0,message:"تم تحديث الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s||null,t).run(),e.json({success:!0,message:"تم تحديث الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM subscription_requests WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/users",async e=>{try{const t=await x(e),a=t.roleId,s=t.tenantId;let r=`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/users",async e=>{try{const t=await h(e),a=t.roleId,s=t.tenantId;let r=`
       SELECT u.*, r.role_name, r.description as role_description,
              t.company_name as tenant_name,
              COUNT(DISTINCT rp.permission_id) as permissions_count
@@ -18417,27 +12737,27 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(r+=` WHERE u.tenant_id = ${s}`),r+=`
       GROUP BY u.id
-      ORDER BY u.id DESC`;const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),r=t.get("full_name"),o=t.get("email"),l=t.get("phone"),i=t.get("user_type"),n=t.get("role_id"),c=t.get("subscription_id")||null,p=t.get("is_active")||"1",u=await x(e);let m=t.get("tenant_id");if(m&&m!==""?m=parseInt(m):u.roleId===11?m=null:m=u.tenantId,await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),r=t.get("full_name"),o=t.get("email"),l=t.get("phone"),i=t.get("user_type"),n=t.get("role_id"),d=t.get("subscription_id")||null,p=t.get("is_active")||"1",u=await h(e);let m=t.get("tenant_id");if(m&&m!==""?m=parseInt(m):u.roleId===1?m=null:m=u.tenantId,await e.env.DB.prepare(`
       SELECT id FROM users WHERE username = ?
     `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(o&&await e.env.DB.prepare(`
         SELECT id FROM users WHERE email = ?
       `).bind(o).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const g=await e.env.DB.prepare(`
       INSERT INTO users (username, password, full_name, email, phone, user_type, role_id, subscription_id, is_active, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,n,c,p,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:g.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});d.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{username:a,full_name:s,email:r,phone:o,role_id:l,subscription_id:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s,r,o,l,i,n,d,p,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:g.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});c.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{username:a,full_name:s,email:r,phone:o,role_id:l,subscription_id:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/customers",async e=>{try{const t=await x(e);let a=`
+    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers",async e=>{try{const t=await h(e);let a=`
       SELECT 
         c.*,
         COUNT(f.id) as total_requests,
         SUM(CASE WHEN f.status = 'pending' THEN 1 ELSE 0 END) as pending_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests
       FROM customers c
-      LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===11||(t.roleId===12||t.roleId===13?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===14&&t.tenantId?a+=` WHERE c.tenant_id = ${t.tenantId}`:a+=" WHERE 1 = 0"),a+=`
+      LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4&&t.userId?a+=` WHERE c.assigned_to = ${t.userId}`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,o=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),f=e.req.header("Authorization")?.replace("Bearer ","");let g=null;if(f){const y=atob(f).split(":");g=y[1]!=="null"?parseInt(y[1]):null}if(o){let _="SELECT id, full_name FROM customers WHERE national_id = ?",y=[o];g&&(_+=" AND tenant_id = ?",y.push(g));const k=await e.env.DB.prepare(_).bind(...y).first();if(k)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,o=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,d=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),f=e.req.header("Authorization")?.replace("Bearer ","");let g=null;if(f){const w=atob(f).split(":");g=w[1]!=="null"?parseInt(w[1]):null}if(o){let _="SELECT id, full_name FROM customers WHERE national_id = ?",w=[o];g&&(_+=" AND tenant_id = ?",w.push(g));const D=await e.env.DB.prepare(_).bind(...w).first();if(D)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -18459,15 +12779,15 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div class="bg-white rounded-lg p-4 mb-4">
                   <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${o}</p>
-                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${k.full_name}</p>
-                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${k.id}</p>
+                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${D.full_name}</p>
+                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${D.id}</p>
                 </div>
                 <div class="flex gap-3">
                   <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-arrow-right ml-2"></i>
                     العودة للنموذج
                   </a>
-                  <a href="/admin/customers/${k.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <a href="/admin/customers/${D.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-eye ml-2"></i>
                     عرض العميل الموجود
                   </a>
@@ -18480,7 +12800,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             </div>
           </body>
           </html>
-        `)}let b="SELECT id, full_name FROM customers WHERE phone = ?",h=[s];g&&(b+=" AND tenant_id = ?",h.push(g));const w=await e.env.DB.prepare(b).bind(...h).first();if(w)return e.html(`
+        `)}let b="SELECT id, full_name FROM customers WHERE phone = ?",x=[s];g&&(b+=" AND tenant_id = ?",x.push(g));const v=await e.env.DB.prepare(b).bind(...x).first();if(v)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -18502,15 +12822,15 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               </div>
               <div class="bg-white rounded-lg p-4 mb-4">
                 <p class="text-gray-700"><strong>رقم الهاتف:</strong> ${s}</p>
-                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${w.full_name}</p>
-                <p class="text-gray-700"><strong>رقم العميل:</strong> #${w.id}</p>
+                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${v.full_name}</p>
+                <p class="text-gray-700"><strong>رقم العميل:</strong> #${v.id}</p>
               </div>
               <div class="flex gap-3">
                 <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-arrow-right ml-2"></i>
                   العودة للنموذج
                 </a>
-                <a href="/admin/customers/${w.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/customers/${v.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-eye ml-2"></i>
                   عرض العميل الموجود
                 </a>
@@ -18519,10 +12839,10 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
         </body>
         </html>
-      `);const E=await e.env.DB.prepare(`
+      `);const S=await e.env.DB.prepare(`
       INSERT INTO customers (full_name, phone, email, national_id, birthdate, employer_name, job_title, work_start_date, city, monthly_salary, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,n,c,p,u,g).run();return e.redirect("/admin/customers")}catch(t){return e.html(`
+    `).bind(a,s,r,o,l,i,n,d,p,u,g).run();return e.redirect("/admin/customers")}catch(t){return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18553,12 +12873,12 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}});d.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),r=a.get("phone"),o=a.get("email")||null,l=a.get("national_id")||null,i=a.get("date_of_birth")||null,n=a.get("employer_name")||null,c=a.get("job_title")||null,p=a.get("work_start_date")||null,u=a.get("city")||null,m=parseFloat(a.get("monthly_salary")||"0");return await e.env.DB.prepare(`
+    `)}});c.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),r=a.get("phone"),o=a.get("email")||null,l=a.get("national_id")||null,i=a.get("date_of_birth")||null,n=a.get("employer_name")||null,d=a.get("job_title")||null,p=a.get("work_start_date")||null,u=a.get("city")||null,m=parseFloat(a.get("monthly_salary")||"0");return await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?,
           employer_name = ?, job_title = ?, work_start_date = ?, city = ?, monthly_salary = ?
       WHERE id = ?
-    `).bind(s,r,o,l,i,n,c,p,u,m,t).run(),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(s,r,o,l,i,n,d,p,u,m,t).run(),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
       SELECT 
         f.*,
         c.full_name as customer_name,
@@ -18567,33 +12887,65 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         c.employer_name,
         c.job_title,
         b.bank_name as selected_bank_name,
-        ft.type_name as financing_type_name
+        ft.type_name as financing_type_name,
+        ca.employee_id as assigned_employee_id,
+        u.full_name as assigned_employee_name
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
       LEFT JOIN banks b ON f.selected_bank_id = b.id
-      LEFT JOIN financing_types ft ON f.financing_type_id = ft.id`;s&&(r+=` WHERE f.tenant_id = ${s}`),r+=" ORDER BY f.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/requests",async e=>{try{const t=await e.req.formData(),a=t.get("customer_id"),s=t.get("financing_type_id"),r=t.get("requested_amount"),o=t.get("duration_months"),l=t.get("salary_at_request"),i=t.get("selected_bank_id")||null,n=t.get("status")||"pending",c=t.get("notes")||"",u=e.req.header("Authorization")?.replace("Bearer ","");let m=null;if(u){const b=atob(u).split(":");m=b[1]!=="null"?parseInt(b[1]):null}const f=await e.env.DB.prepare(`
+      LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id`;s&&(r+=` WHERE f.tenant_id = ${s}`),r+=" ORDER BY f.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/requests",async e=>{try{const t=await e.req.formData(),a=t.get("customer_id"),s=t.get("financing_type_id"),r=t.get("requested_amount"),o=t.get("duration_months"),l=t.get("salary_at_request"),i=t.get("selected_bank_id")||null,n=t.get("status")||"pending",d=t.get("notes")||"",u=e.req.header("Authorization")?.replace("Bearer ","");let m=null;if(u){const b=atob(u).split(":");m=b[1]!=="null"?parseInt(b[1]):null}const f=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,i,r,l,o,n,c,m).run();return e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});d.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(a,s,i,r,l,o,n,d,m).run();return e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});c.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
       ORDER BY stage_order ASC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/workflow/timeline/:requestId",async e=>{try{const t=e.req.param("requestId"),a=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/workflow/timeline/:requestId",async e=>{try{const t=e.req.param("requestId"),{results:a}=await e.env.DB.prepare(`
       SELECT 
-        fr.*,
-        c.full_name as customer_name,
-        c.phone as customer_phone,
-        b.bank_name as bank_name,
-        u.full_name as employee_name
-      FROM financing_requests fr
-      LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN banks b ON fr.selected_bank_id = b.id
-      LEFT JOIN users u ON c.assigned_to = u.id
-      WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.json({success:!1,error:"الطلب غير موجود"},404);const s={pending:{name:"جديد",color:"#3B82F6",icon:"fa-file-alt",description:"تم إنشاء الطلب وفي انتظار المراجعة"},under_review:{name:"قيد المراجعة",color:"#F59E0B",icon:"fa-search",description:"الطلب قيد المراجعة من قبل الفريق"},approved:{name:"مقبول",color:"#10B981",icon:"fa-check-circle",description:"تم قبول الطلب"},rejected:{name:"مرفوض",color:"#EF4444",icon:"fa-times-circle",description:"تم رفض الطلب"},completed:{name:"مكتمل",color:"#8B5CF6",icon:"fa-check-double",description:"تم إكمال الطلب بنجاح"},processing:{name:"قيد المعالجة",color:"#06B6D4",icon:"fa-cog",description:"الطلب قيد المعالجة"},cancelled:{name:"ملغي",color:"#6B7280",icon:"fa-ban",description:"تم إلغاء الطلب"}},r=[{id:1,from_stage_name:null,to_stage_name:s[a.status]?.name||a.status,to_stage_color:s[a.status]?.color||"#3B82F6",to_stage_icon:s[a.status]?.icon||"fa-circle",transitioned_by_name:a.employee_name||"النظام",created_at:a.created_at,notes:s[a.status]?.description||""}],o=[],l=[];return e.json({success:!0,data:{request:a,transitions:r,actions:o,tasks:l}})}catch(t){return console.error("Timeline error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:r}=await e.req.json();return await e.env.DB.prepare(`
+        wst.*,
+        from_stage.stage_name_ar as from_stage_name,
+        from_stage.stage_color as from_stage_color,
+        from_stage.stage_icon as from_stage_icon,
+        to_stage.stage_name_ar as to_stage_name,
+        to_stage.stage_color as to_stage_color,
+        to_stage.stage_icon as to_stage_icon,
+        u.full_name as transitioned_by_name
+      FROM workflow_stage_transitions wst
+      LEFT JOIN workflow_stages from_stage ON wst.from_stage_id = from_stage.id
+      LEFT JOIN workflow_stages to_stage ON wst.to_stage_id = to_stage.id
+      LEFT JOIN users u ON wst.transitioned_by = u.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.created_at ASC
+    `).bind(t).all(),{results:s}=await e.env.DB.prepare(`
+      SELECT 
+        wsa.*,
+        ws.stage_name_ar,
+        ws.stage_color,
+        ws.stage_icon,
+        u.full_name as performed_by_name
+      FROM workflow_stage_actions wsa
+      LEFT JOIN workflow_stages ws ON wsa.stage_id = ws.id
+      LEFT JOIN users u ON wsa.performed_by = u.id
+      WHERE wsa.request_id = ?
+      ORDER BY wsa.created_at ASC
+    `).bind(t).all(),{results:r}=await e.env.DB.prepare(`
+      SELECT 
+        wst.*,
+        ws.stage_name_ar,
+        assigned_user.full_name as assigned_to_name,
+        completed_user.full_name as completed_by_name
+      FROM workflow_stage_tasks wst
+      LEFT JOIN workflow_stages ws ON wst.stage_id = ws.id
+      LEFT JOIN users assigned_user ON wst.assigned_to = assigned_user.id
+      LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.due_date ASC
+    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:r}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:r}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE financing_requests 
       SET current_stage_id = ?, 
           stage_entered_at = CURRENT_TIMESTAMP
@@ -18604,21 +12956,21 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         WHERE request_id = ? AND to_stage_id = ?
         ORDER BY created_at DESC
         LIMIT 1
-      `).bind(s,r,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:r,performedBy:o,notes:l}=await e.req.json();return await e.env.DB.prepare(`
+      `).bind(s,r,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:r,performedBy:o,notes:l}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_actions 
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,r,o,l).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:r,assignedTo:o,dueDate:l,priority:i}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,r,o,l).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:r,assignedTo:o,dueDate:l,priority:i}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_tasks 
       (request_id, stage_id, task_title, task_description, assigned_to, due_date, priority)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,r,o,l,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,r,o,l,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE workflow_stage_tasks 
       SET status = 'completed', 
           completed_at = CURRENT_TIMESTAMP,
           completed_by = ?
       WHERE id = ?
-    `).bind(a,t).run(),e.json({success:!0,message:"تم إتمام المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/workflow/my-tasks/:userId",async e=>{try{const t=e.req.param("userId"),{results:a}=await e.env.DB.prepare(`
+    `).bind(a,t).run(),e.json({success:!0,message:"تم إتمام المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/workflow/my-tasks/:userId",async e=>{try{const t=e.req.param("userId"),{results:a}=await e.env.DB.prepare(`
       SELECT 
         wst.*,
         ws.stage_name_ar,
@@ -18632,7 +12984,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN customers c ON fr.customer_id = c.id
       WHERE wst.assigned_to = ? AND wst.status = 'pending'
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a),[n,c]=i.split(":");s=c==="null"?null:parseInt(c)}catch{}let r=`
+    `).bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a),[n,d]=i.split(":");s=d==="null"?null:parseInt(d)}catch{}let r=`
       SELECT 
         p.*,
         c.full_name as customer_name,
@@ -18640,12 +12992,12 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM payments p
       LEFT JOIN customers c ON p.customer_id = c.id
       LEFT JOIN users u ON p.employee_id = u.id
-    `;const o=[];s&&(r+=" WHERE p.tenant_id = ?",o.push(s)),r+=" ORDER BY p.created_at DESC";const{results:l}=await e.env.DB.prepare(r).bind(...o).all();return e.json({success:!0,data:l})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=parseInt(r);if(!l)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const n=await e.req.json();return!n.financing_request_id||!n.customer_id||!n.amount||!n.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
+    `;const o=[];s&&(r+=" WHERE p.tenant_id = ?",o.push(s)),r+=" ORDER BY p.created_at DESC";const{results:l}=await e.env.DB.prepare(r).bind(...o).all();return e.json({success:!0,data:l})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=parseInt(r);if(!l)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const n=await e.req.json();return!n.financing_request_id||!n.customer_id||!n.amount||!n.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
       INSERT INTO payments (
         financing_request_id, customer_id, tenant_id, employee_id,
         amount, payment_date, payment_method, receipt_number, notes, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(n.financing_request_id,n.customer_id,l,n.employee_id||null,n.amount,n.payment_date,n.payment_method||"cash",n.receipt_number||null,n.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=e.req.param("id");if(l){const n=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(n&&n.tenant_id!==l)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(n.financing_request_id,n.customer_id,l,n.employee_id||null,n.amount,n.payment_date,n.payment_method||"cash",n.receipt_number||null,n.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=e.req.param("id");if(l){const n=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(n&&n.tenant_id!==l)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ? AND status = 'active'
     `).bind(t).first();if(!s)return e.json({success:!1,error:"شركة غير موجودة"},404);const r=s.id;let o=await e.env.DB.prepare(`
       SELECT id FROM customers WHERE (national_id = ? OR phone = ?) AND tenant_id = ?
@@ -18664,7 +13016,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             job_title, work_start_date, city, tenant_id,
             financing_amount, monthly_obligations, financing_type_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null).run()).meta.last_row_id}catch(c){if(c.message&&c.message.includes("UNIQUE")){const p=await e.env.DB.prepare(`
+        `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null).run()).meta.last_row_id}catch(d){if(d.message&&d.message.includes("UNIQUE")){const p=await e.env.DB.prepare(`
             SELECT id FROM customers WHERE (national_id = ? OR phone = ?)
           `).bind(a.national_id||"",a.phone||"").first();if(p)l=p.id,await e.env.DB.prepare(`
               UPDATE customers 
@@ -18674,14 +13026,14 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   work_start_date = ?, city = ?, tenant_id = ?,
                   financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
               WHERE id = ?
-            `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else throw c}else throw c}const n=(await e.env.DB.prepare(`
+            `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else throw d}else throw d}const n=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id,
         requested_amount, salary_at_request, duration_months,
         monthly_obligations, monthly_payment,
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-    `).bind(l,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,r).run()).meta.last_row_id;return e.json({success:!0,request_id:n,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});d.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const l=await e.env.DB.prepare(`
+    `).bind(l,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,r).run()).meta.last_row_id;return e.json({success:!0,request_id:n,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});c.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const l=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
       `).bind(a).first();l&&(s=l.id)}if(!s){const l=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
@@ -18711,7 +13063,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           monthly_payment, total_payment, calculation_date,
           national_id, tenant_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-      `).bind(t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,l,s).run()).meta.last_row_id}return e.json({success:!0,customer_id:o,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const n=await e.env.DB.prepare(`
+      `).bind(t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,l,s).run()).meta.last_row_id}return e.json({success:!0,customer_id:o,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const n=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
       `).bind(a).first();n&&(s=n.id)}if(!s){const n=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
@@ -18731,9 +13083,9 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             birthdate, monthly_salary, employer_name, 
             job_title, work_start_date, city, tenant_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s).run()).meta.last_row_id}catch(n){if(n.message&&n.message.includes("UNIQUE")){const c=await e.env.DB.prepare(`
+        `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s).run()).meta.last_row_id}catch(n){if(n.message&&n.message.includes("UNIQUE")){const d=await e.env.DB.prepare(`
             SELECT id, tenant_id FROM customers WHERE national_id = ? OR phone = ?
-          `).bind(t.national_id,t.phone).first();if(c)o=c.id,c.tenant_id&&(s=c.tenant_id);else throw n}else throw n}const i=(await e.env.DB.prepare(`
+          `).bind(t.national_id,t.phone).first();if(d)o=d.id,d.tenant_id&&(s=d.tenant_id);else throw n}else throw n}const i=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id,
         requested_amount, salary_at_request, duration_months,
@@ -18743,11 +13095,11 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(o,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const E=a.substring(7).split(".");E.length===3&&(s=JSON.parse(atob(E[1])).tenant_id||null)}const{requested_amount:r,duration_months:o,salary_at_request:l,monthly_obligations:i,status:n,notes:c,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:f}=await e.req.json();let g=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[r,o,l||0,i||0,n||"pending",c||""];p&&(g.push("id_attachment_url = ?"),b.push(p)),u&&(g.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(g.push("salary_attachment_url = ?"),b.push(m)),f&&(g.push("additional_attachment_url = ?"),b.push(f)),b.push(t);let h=`
+    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const S=a.substring(7).split(".");S.length===3&&(s=JSON.parse(atob(S[1])).tenant_id||null)}const{requested_amount:r,duration_months:o,salary_at_request:l,monthly_obligations:i,status:n,notes:d,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:f}=await e.req.json();let g=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[r,o,l||0,i||0,n||"pending",d||""];p&&(g.push("id_attachment_url = ?"),b.push(p)),u&&(g.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(g.push("salary_attachment_url = ?"),b.push(m)),f&&(g.push("additional_attachment_url = ?"),b.push(f)),b.push(t);let x=`
       UPDATE financing_requests 
       SET ${g.join(", ")}
       WHERE id = ?
-    `;return s!==null&&(h+=" AND tenant_id = ?",b.push(s)),await e.env.DB.prepare(h).bind(...b).run(),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),r=await e.env.DB.prepare(`
+    `;return s!==null&&(x+=" AND tenant_id = ?",b.push(s)),await e.env.DB.prepare(x).bind(...b).run(),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),r=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
     `).bind(t).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];l?await e.env.DB.prepare(`
         UPDATE financing_requests 
@@ -18760,18 +13112,18 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         VALUES (?, ?, ?, 'admin', ?)
       `).bind(t,r.status,a,s||"").run();const i=await e.env.DB.prepare(`
       SELECT requested_amount FROM financing_requests WHERE id = ?
-    `).bind(t).first(),n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},c={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
+    `).bind(t).first(),n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},d={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,c[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/attachments/upload",async e=>{try{const t=await e.req.formData(),a=t.get("file"),s=t.get("request_id"),r=t.get("attachmentType")||t.get("attachment_type");if(!a)return e.json({success:!1,error:"No file provided"},400);const o=Date.now(),l=Math.random().toString(36).substring(7),i=a.name.split(".").pop(),n=s?`${s}/${r}_${o}.${i}`:`temp/${r}_${o}_${l}.${i}`,c=await a.arrayBuffer();await e.env.ATTACHMENTS.put(n,c,{httpMetadata:{contentType:a.type}});const p=`/api/attachments/view/${n}`;if(s){const u=`${r}_attachment_url`;console.log("📎 Updating attachment:",{requestId:s,attachmentType:r,columnName:u,publicUrl:p});const m=await e.env.DB.prepare(`
+    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,d[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/attachments/upload",async e=>{try{const t=await e.req.formData(),a=t.get("file"),s=t.get("request_id"),r=t.get("attachmentType")||t.get("attachment_type");if(!a)return e.json({success:!1,error:"No file provided"},400);const o=Date.now(),l=Math.random().toString(36).substring(7),i=a.name.split(".").pop(),n=s?`${s}/${r}_${o}.${i}`:`temp/${r}_${o}_${l}.${i}`,d=await a.arrayBuffer();await e.env.ATTACHMENTS.put(n,d,{httpMetadata:{contentType:a.type}});const p=`/api/attachments/view/${n}`;if(s){const u=`${r}_attachment_url`;console.log("📎 Updating attachment:",{requestId:s,attachmentType:r,columnName:u,publicUrl:p});const m=await e.env.DB.prepare(`
         UPDATE financing_requests 
         SET ${u} = ? 
         WHERE id = ?
-      `).bind(p,s).run();console.log("✅ Update result:",m)}return e.json({success:!0,url:p,filename:n})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/attachments/view/:path{.+}",async e=>{try{const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/attachments/delete/:path{.+}",async e=>{try{const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let o=null;r.startsWith("id_")?o="id_attachment_url":r.startsWith("salary_")?o="salary_attachment_url":r.startsWith("bank_statement_")?o="bank_statement_attachment_url":r.startsWith("additional_")&&(o="additional_attachment_url"),o&&await e.env.DB.prepare(`
+      `).bind(p,s).run();console.log("✅ Update result:",m)}return e.json({success:!0,url:p,filename:n})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/attachments/view/:path{.+}",async e=>{try{const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/attachments/delete/:path{.+}",async e=>{try{const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let o=null;r.startsWith("id_")?o="id_attachment_url":r.startsWith("salary_")?o="salary_attachment_url":r.startsWith("bank_statement_")?o="bank_statement_attachment_url":r.startsWith("additional_")&&(o="additional_attachment_url"),o&&await e.env.DB.prepare(`
           UPDATE financing_requests 
           SET ${o} = NULL 
           WHERE id = ?
-        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o=`
+        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o=`
       SELECT 
         n.*,
         fr.requested_amount,
@@ -18780,21 +13132,21 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN financing_requests fr ON n.related_request_id = fr.id
       WHERE n.user_id = ?`;s&&(o+=` AND n.tenant_id = ${s}`),o+=`
       ORDER BY n.created_at DESC
-      LIMIT 50`;const{results:l}=await e.env.DB.prepare(o).bind(r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(o+=` AND tenant_id = ${s}`);const l=await e.env.DB.prepare(o).bind(r).first();return e.json({success:!0,count:l?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+      LIMIT 50`;const{results:l}=await e.env.DB.prepare(o).bind(r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(o+=` AND tenant_id = ${s}`);const l=await e.env.DB.prepare(o).bind(r).first();return e.json({success:!0,count:l?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE notifications
       SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
-    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error marking notification as read:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/notifications/read-all",async e=>{try{return await e.env.DB.prepare(`
+    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error marking notification as read:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/notifications/read-all",async e=>{try{return await e.env.DB.prepare(`
       UPDATE notifications
       SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE user_id = ? AND is_read = 0
-    `).bind(1).run(),e.json({success:!0})}catch(t){return console.error("Error marking all as read:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/notifications/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(1).run(),e.json({success:!0})}catch(t){return console.error("Error marking all as read:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/notifications/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM notifications
       WHERE id = ? AND user_id = ?
-    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:r,category:o,related_request_id:l}=await e.req.json(),i=await e.env.DB.prepare(`
+    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:r,category:o,related_request_id:l}=await e.req.json(),i=await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t||1,a,s,r||"info",o||"general",l||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(t||1,a,s,r||"info",o||"general",l||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         calc.*,
         u.full_name as user_name,
@@ -18806,15 +13158,15 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       JOIN financing_types ft ON calc.financing_type_id = ft.id
       ORDER BY calc.created_at DESC
       LIMIT 100
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:r,financing_type_id:o,user_id:l,subscription_id:i}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:r,financing_type_id:o,user_id:l,subscription_id:i}=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT rate FROM bank_financing_rates 
       WHERE bank_id = ? AND financing_type_id = ? AND is_active = 1
       LIMIT 1
-    `).bind(r,o).first();if(!n)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const c=n.rate,p=c/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,f=m-t,g=await e.env.DB.prepare(`
+    `).bind(r,o).first();if(!n)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const d=n.rate,p=d/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,f=m-t,g=await e.env.DB.prepare(`
       INSERT INTO calculations 
       (user_id, subscription_id, financing_type_id, bank_id, amount, duration_months, salary, rate, monthly_payment, total_payment, total_interest)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(l||null,i||null,o,r,t,a,s,c,u,m,f).run();return e.json({success:!0,data:{id:g.meta.last_row_id,amount:t,duration_months:a,rate:c,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(f*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
+    `).bind(l||null,i||null,o,r,t,a,s,d,u,m,f).run();return e.json({success:!0,data:{id:g.meta.last_row_id,amount:t,duration_months:a,rate:d,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(f*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         financing_request_id INTEGER NOT NULL,
@@ -18830,84 +13182,63 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',o='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',l='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===11?n=null:t.roleId===12||t.roleId===13?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",o+=" AND tenant_id = ?",l+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===14&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",o+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",o+=" AND 1 = 0");const c=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(o).bind(n).first():await e.env.DB.prepare(o).first(),f=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(l).bind(t.tenantId).first():t.roleId===11?await e.env.DB.prepare(l).first():{count:0},g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===11?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),w=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:c?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:f?.count||0,total_calculations:w?.count||0,active_banks:b?.count||0,active_tenants:h?.count||0,active_users:g?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/reports/workflow",async e=>{try{const t=await x(e),a=e.req.query("start_date")||"",s=e.req.query("end_date")||"",r=e.req.query("customer_id")||"";let o="WHERE 1=1";const l=[];t.roleId===12||t.roleId===13?t.tenantId&&(o+=" AND fr.tenant_id = ?",l.push(t.tenantId)):t.roleId===14&&(t.userId?(o+=" AND c.assigned_to = ?",l.push(t.userId)):o+=" AND 1=0"),a&&(o+=" AND DATE(fr.created_at) >= DATE(?)",l.push(a)),s&&(o+=" AND DATE(fr.created_at) <= DATE(?)",l.push(s)),r&&(o+=" AND c.id = ?",l.push(r));const i=`
-      SELECT 
-        fr.status,
-        COUNT(*) as count
-      FROM financing_requests fr
-      LEFT JOIN customers c ON fr.customer_id = c.id
-      ${o}
-      GROUP BY fr.status
-    `,n=await e.env.DB.prepare(i).bind(...l).all(),c=`
-      SELECT 
-        c.id as customerId,
-        c.full_name as customerName,
-        fr.id as requestId,
-        fr.requested_amount as amount,
-        fr.status as stage,
-        fr.created_at
-      FROM financing_requests fr
-      LEFT JOIN customers c ON fr.customer_id = c.id
-      ${o}
-      ORDER BY fr.created_at DESC
-      LIMIT 100
-    `,p=await e.env.DB.prepare(c).bind(...l).all(),u={pending:"جديد",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",completed:"مكتمل",processing:"قيد المعالجة",cancelled:"ملغي"},m=(n.results||[]).map(b=>({name:u[b.status]||b.status,count:b.count})),f=(p.results||[]).map(b=>{const h=new Date(b.created_at),E=new Date().getTime()-h.getTime(),_=Math.floor(E/(1e3*60*60)),y=Math.floor(_/24);let k="";return y>0?k=`${y} يوم`:_>0?k=`${_} ساعة`:k=`${Math.floor(E/6e4)} دقيقة`,{customerId:b.customerId?.toString()||"",customerName:b.customerName||"غير محدد",requestId:b.requestId?.toString()||"",amount:b.amount||0,stage:u[b.stage]||b.stage,transitions:1,duration:k,status:b.stage==="completed"?"مكتمل":"نشط"}}),g=[{stage:"جديد → مراجعة",duration:120},{stage:"مراجعة → قبول",duration:240},{stage:"قبول → مكتمل",duration:360}];return e.json({success:!0,data:{stages:m,durations:g,details:f}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/dashboard/stats",async e=>{try{const t=await h(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',o='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',l='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===1?n=null:t.roleId===2||t.roleId===3?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",o+=" AND tenant_id = ?",l+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",o+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",o+=" AND 1 = 0");const d=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(o).bind(n).first():await e.env.DB.prepare(o).first(),f=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(l).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(l).first():{count:0},g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),x=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),v=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:d?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:f?.count||0,total_calculations:v?.count||0,active_banks:b?.count||0,active_tenants:x?.count||0,active_users:g?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       ORDER BY sr.created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/subscription-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/subscription-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/permissions",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(r=>{s[r.category]||(s[r.category]=[]),s[r.category].push(r)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(r=>{s[r.category]||(s[r.category]=[]),s[r.category].push(r)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
       SELECT p.* FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = ?
       ORDER BY p.category, p.id
-    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/users/:userId/permissions",async e=>{try{const t=e.req.param("userId"),a=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/users/:userId/permissions",async e=>{try{const t=e.req.param("userId"),a=await e.env.DB.prepare(`
       SELECT p.* FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       INNER JOIN users u ON u.role_id = rp.role_id
       WHERE u.id = ?
       ORDER BY p.category, p.id
-    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),{permission_ids:a}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(t).run();for(const s of a)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(t,s).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),{permission_ids:a}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(t).run();for(const s of a)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(t,s).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as has_permission FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       INNER JOIN users u ON u.role_id = rp.role_id
       WHERE u.id = ? AND p.permission_key = ?
-    `).bind(t,a).first();return e.json({success:!0,has_permission:s?.has_permission>0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/permissions",async e=>{try{const t=await e.env.DB.prepare(`
-      SELECT * FROM permissions
-      ORDER BY category, id
-    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/roles",async e=>{try{const t=await e.env.DB.prepare(`
+    `).bind(t,a).first();return e.json({success:!0,has_permission:s?.has_permission>0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/roles",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT r.*, 
              COUNT(rp.permission_id) as permissions_count
       FROM roles r
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       GROUP BY r.id
       ORDER BY r.id
-    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/roles",async e=>{try{const{role_name:t,description:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/roles",async e=>{try{const{role_name:t,description:a}=await e.req.json(),s=await e.env.DB.prepare(`
       INSERT INTO roles (role_name, description, created_at)
       VALUES (?, ?, datetime('now'))
-    `).bind(t,a).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:s.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/roles/:id",async e=>{try{const t=e.req.param("id"),{role_name:a,description:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:s.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:id",async e=>{try{const t=e.req.param("id"),{role_name:a,description:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE roles 
       SET role_name = ?, description = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/roles/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/roles/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE role_id = ?
     `).bind(t).first();return a&&a.count>0?e.json({success:!1,error:"لا يمكن حذف هذا الدور لأنه مرتبط بمستخدمين"},400):(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(t).run(),await e.env.DB.prepare(`
       DELETE FROM roles WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:r,role_id:o,is_active:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:r,role_id:o,is_active:l}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/",e=>e.html(et));d.get("/calculator",e=>e.html(ne));d.get("/calculator-old",e=>e.html(tt));d.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
-    SELECT * FROM tenants WHERE slug = ? AND is_active = 1
-  `).bind(t).first();if(!a)return e.html(`
+    `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(et));c.get("/calculator",e=>e.html(ie));c.get("/calculator-old",e=>e.html(tt));c.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    SELECT * FROM tenants WHERE slug = ? AND status = 'active'
+  `).bind(t).first();return a?e.html(ie.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+        // Tenant information for company-specific calculator
+        window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
+    `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18929,11 +13260,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `);const s=a.company_name||"الشركة",r=a.id;let o=ne.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${s}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`);return o=o.replace("<script>",`<script>
-        window.TENANT_ID = ${r};
-        window.TENANT_NAME = '${s.replace(/'/g,"\\'")}';
-        window.TENANT_SLUG = '${t}';
-        `),e.html(o)});d.get("/login",e=>e.html(at));d.get("/forgot-password",e=>e.html(st));d.get("/packages",e=>e.html(rt));d.get("/subscribe",e=>e.html(lt));d.get("/admin",e=>e.html(`
+    `)});c.get("/login",e=>e.html(at));c.get("/forgot-password",e=>e.html(st));c.get("/packages",e=>e.html(rt));c.get("/subscribe",e=>e.html(lt));c.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -18983,7 +13310,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
     </body>
     </html>
-  `));d.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const f=atob(r).split(":");o=f[1]!=="null"?parseInt(f[1]):null}let l="1=1";const i=[];o&&(l+=" AND f.tenant_id = ?",i.push(o)),t&&(l+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(l+=" AND DATE(f.created_at) <= ?",i.push(a));const n=`
+  `));c.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const f=atob(r).split(":");o=f[1]!=="null"?parseInt(f[1]):null}let l="1=1";const i=[];o&&(l+=" AND f.tenant_id = ?",i.push(o)),t&&(l+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(l+=" AND DATE(f.created_at) <= ?",i.push(a));const n=`
       SELECT 
         COUNT(*) as total_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
@@ -18992,7 +13319,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         SUM(f.requested_amount) as total_amount
       FROM financing_requests f
       WHERE ${l}
-    `,c=await e.env.DB.prepare(n).bind(...i).first(),p=`
+    `,d=await e.env.DB.prepare(n).bind(...i).first(),p=`
       SELECT 
         c.full_name as customer_name,
         COUNT(f.id) as request_count,
@@ -19004,10 +13331,13 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       GROUP BY c.id
       ORDER BY request_count DESC, total_amount DESC
       LIMIT 10
-    `,{results:u}=await e.env.DB.prepare(p).bind(...i).all();return e.json({success:!0,data:{...c,top_customers:u}})}catch(t){return console.error("Reports API error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/requests-followup",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("tenant_id");let s=a?parseInt(a):t.tenantId;t.roleId===11&&!s&&(s=null),console.log("📊 Requests followup report - User:",t.userId,"Role:",t.roleId,"Tenant:",s);let r=`
+    `,{results:u}=await e.env.DB.prepare(p).bind(...i).all();return e.json({success:!0,data:{...d,top_customers:u}})}catch(t){return console.error("Reports API error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/requests-followup",async e=>{try{const t=await h(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("tenant_id");let s=a?parseInt(a):t.tenantId;t.roleId===1&&!s&&(s=null),console.log("📊 Requests followup report - User:",t.userId,"Role:",t.roleId,"Tenant:",s);let r=`
       SELECT 
         fr.id,
         fr.created_at,
+        fr.approved_at,
+        fr.rejected_at,
+        fr.reviewed_at,
         fr.status,
         fr.requested_amount,
         c.full_name as customer_name,
@@ -19015,17 +13345,30 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         u.full_name as employee_name,
         u.username as employee_username,
         t.company_name as tenant_name,
-        fr.created_at as last_update,
-        CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER) as days_elapsed,
         CASE 
-          WHEN fr.status IN ('approved', 'rejected', 'completed', 'cancelled') THEN 1
+          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
+          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN fr.rejected_at
+          WHEN fr.reviewed_at IS NOT NULL THEN fr.reviewed_at
+          ELSE NULL
+        END as last_update,
+        CASE 
+          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN 
+            CAST((julianday(fr.approved_at) - julianday(fr.created_at)) AS INTEGER)
+          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN 
+            CAST((julianday(fr.rejected_at) - julianday(fr.created_at)) AS INTEGER)
+          ELSE 
+            CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER)
+        END as days_elapsed,
+        CASE 
+          WHEN fr.status IN ('approved', 'rejected') THEN 1
           ELSE 0
         END as is_closed
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-    `;s&&(r+=" WHERE c.tenant_id = ?"),r+=" ORDER BY fr.created_at DESC";const{results:o}=s?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/banks",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const r=`
+    `;s&&(r+=" WHERE c.tenant_id = ?"),r+=" ORDER BY fr.created_at DESC";const{results:o}=s?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/banks",async e=>{try{const t=await h(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const r=`
       SELECT 
         b.id,
         b.bank_name,
@@ -19044,7 +13387,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       ${a}
       GROUP BY b.id, b.bank_name
       ORDER BY total_requests DESC
-    `,{results:o}=s.length>0?await e.env.DB.prepare(r).bind(...s).all():await e.env.DB.prepare(r).all(),l={total_banks:o.length,total_requests:o.reduce((i,n)=>i+(n.total_requests||0),0),overall_approval_rate:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.approval_rate)||0),0)/o.length).toFixed(2):"0.00",average_amount:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.average_amount)||0),0)/o.length).toFixed(2):"0.00"};return e.json({success:!0,banks:o,summary:l})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/performance",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let r="",o=[];t.roleId!==1&&t.tenantId&&(r="WHERE c.tenant_id = ?",o.push(t.tenantId)),a&&s&&(r+=(r?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",o.push(a,s));const l=`
+    `,{results:o}=s.length>0?await e.env.DB.prepare(r).bind(...s).all():await e.env.DB.prepare(r).all(),l={total_banks:o.length,total_requests:o.reduce((i,n)=>i+(n.total_requests||0),0),overall_approval_rate:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.approval_rate)||0),0)/o.length).toFixed(2):"0.00",average_amount:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.average_amount)||0),0)/o.length).toFixed(2):"0.00"};return e.json({success:!0,banks:o,summary:l})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/performance",async e=>{try{const t=await h(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let r="",o=[];t.roleId!==1&&t.tenantId&&(r="WHERE c.tenant_id = ?",o.push(t.tenantId)),a&&s&&(r+=(r?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",o.push(a,s));const l=`
       SELECT 
         COUNT(DISTINCT c.id) as total_customers,
         COUNT(DISTINCT CASE WHEN c.created_at >= date('now', '-30 days') THEN c.id END) as active_customers,
@@ -19076,7 +13419,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         ) as success_rate,
         ROUND(SUM(CASE WHEN fr.status = 'approved' THEN fr.requested_amount ELSE 0 END), 2) as total_amount
       FROM users u
-      
+      LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
       LEFT JOIN customers c ON ca.customer_id = c.id
       LEFT JOIN financing_requests fr ON c.id = fr.customer_id
       ${r.replace("c.tenant_id","u.tenant_id")}
@@ -19084,56 +13427,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       HAVING requests_count > 0
       ORDER BY approved_count DESC
       LIMIT 10
-    `,{results:c}=o.length>0?await e.env.DB.prepare(n).bind(...o).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:c})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/test-auth",async e=>{const t=e.req.header("Cookie"),a=await x(e);return e.html(`
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-        <meta charset="UTF-8">
-        <title>اختبار المصادقة</title>
-        <script src="https://cdn.tailwindcss.com"><\/script>
-    </head>
-    <body class="p-8 bg-gray-100">
-        <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
-            <h1 class="text-2xl font-bold mb-4">اختبار المصادقة</h1>
-            
-            <div class="space-y-4">
-                <div class="bg-blue-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">Cookie Header من الخادم:</h3>
-                    <pre class="text-sm">${t||"لا توجد كوكيز"}</pre>
-                </div>
-                
-                <div class="bg-green-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">معلومات المستخدم:</h3>
-                    <pre class="text-sm">${JSON.stringify(a,null,2)}</pre>
-                </div>
-                
-                <div class="bg-yellow-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">Cookies من JavaScript:</h3>
-                    <pre id="jsCookies" class="text-sm"></pre>
-                </div>
-                
-                <div class="bg-purple-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">LocalStorage:</h3>
-                    <pre id="localStorage" class="text-sm"></pre>
-                </div>
-            </div>
-            
-            <div class="mt-6 space-x-3">
-                <a href="/login" class="bg-blue-600 text-white px-4 py-2 rounded">تسجيل الدخول</a>
-                <a href="/admin/panel" class="bg-green-600 text-white px-4 py-2 rounded">لوحة التحكم</a>
-            </div>
-        </div>
-        
-        <script>
-            document.getElementById('jsCookies').textContent = document.cookie || 'لا توجد كوكيز';
-            document.getElementById('localStorage').textContent = JSON.stringify({
-                authToken: localStorage.getItem('authToken'),
-                userData: localStorage.getItem('userData')
-            }, null, 2);
-        <\/script>
-    </body>
-    </html>
-  `)});d.get("/admin/panel",async e=>{const t=await x(e),a=e.req.header("Cookie")||"لا توجد كوكيز",s=e.req.header("Authorization")||"لا يوجد Authorization Header";if(console.log("🔍 /admin/panel - تشخيص المصادقة:"),console.log("  Cookie Header:",a),console.log("  Authorization Header:",s),console.log("  UserInfo:",JSON.stringify(t,null,2)),!t.userId||!t.roleId)return e.html(`
+    `,{results:d}=o.length>0?await e.env.DB.prepare(n).bind(...o).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:d})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/admin/panel",async e=>{const t=await h(e);return!t.userId||!t.roleId?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -19143,42 +13437,22 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           <script src="https://cdn.tailwindcss.com"><\/script>
           <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
-      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
-          <div class="max-w-2xl w-full mx-4">
-              <div class="bg-white rounded-2xl shadow-2xl p-8">
-                  <div class="mb-6 text-center">
+      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center">
+          <div class="max-w-md w-full mx-4">
+              <div class="bg-white rounded-2xl shadow-2xl p-8 text-center">
+                  <div class="mb-6">
                       <i class="fas fa-lock text-6xl text-blue-600"></i>
                   </div>
-                  <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">تسجيل الدخول مطلوب</h1>
-                  <p class="text-gray-600 mb-6 text-center">
+                  <h1 class="text-3xl font-bold text-gray-800 mb-4">تسجيل الدخول مطلوب</h1>
+                  <p class="text-gray-600 mb-6">
                       يجب تسجيل الدخول للوصول إلى لوحة التحكم
                   </p>
-                  
-                  <!-- معلومات التشخيص -->
-                  <div class="bg-gray-100 rounded-lg p-4 mb-6 text-sm">
-                      <h3 class="font-bold text-gray-700 mb-2">🔍 معلومات التشخيص:</h3>
-                      <div class="space-y-2">
-                          <div><strong>Cookie Header:</strong> <code class="bg-white px-2 py-1 rounded">${a.substring(0,100)}...</code></div>
-                          <div><strong>User ID:</strong> ${t.userId||"غير موجود"}</div>
-                          <div><strong>Role ID:</strong> ${t.roleId||"غير موجود"}</div>
-                          <div><strong>Tenant ID:</strong> ${t.tenantId||"غير موجود"}</div>
-                      </div>
-                  </div>
-                  
                   <div class="space-y-3">
-                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
                           <i class="fas fa-sign-in-alt ml-2"></i>
                           تسجيل الدخول
                       </a>
-                      <a href="/test-login.html" class="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
-                          <i class="fas fa-vial ml-2"></i>
-                          صفحة اختبار تسجيل الدخول
-                      </a>
-                      <a href="/test-auth" class="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
-                          <i class="fas fa-bug ml-2"></i>
-                          صفحة تشخيص المصادقة
-                      </a>
-                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors">
                           <i class="fas fa-home ml-2"></i>
                           العودة للرئيسية
                       </a>
@@ -19187,25 +13461,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
       </body>
       </html>
-    `);const r=await e.env.DB.prepare(`
-    SELECT u.*, r.role_name, r.description as role_description, t.company_name
-    FROM users u
-    LEFT JOIN roles r ON u.role_id = r.id
-    LEFT JOIN tenants t ON u.tenant_id = t.id
-    WHERE u.id = ?
-  `).bind(t.userId).first(),o=await e.env.DB.prepare(`
-    SELECT p.name as permission_key, p.display_name as permission_name, p.category
-    FROM role_permissions rp
-    JOIN permissions p ON rp.permission_id = p.id
-    WHERE rp.role_id = ?
-  `).bind(t.roleId).all();let l=ie;return l=l.replace("<script>",`<script>
-      window.USER_DATA = ${JSON.stringify({id:r.id,username:r.username,full_name:r.full_name,email:r.email,role_id:r.role_id,role_name:r.role_name,role_description:r.role_description,tenant_id:r.tenant_id,company_name:r.company_name,user_type:r.user_type})};
-      window.USER_PERMISSIONS = ${JSON.stringify(o.results.map(i=>i.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${JSON.stringify(o.results)};
-      console.log('✅ User data loaded:', window.USER_DATA);
-      console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
-    <\/script>
-    <script>`),e.html(l)});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
+    `):e.html(de)});c.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -19256,7 +13512,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${D()}
+          ${k()}
           
           /* Scroll Buttons for Tables */
           .scroll-btn {
@@ -19756,7 +14012,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>Error: "+t.message+"</h1>",500)}});d.get("/admin/tenants/add",e=>e.html(`
+    `)}catch(t){return e.html("<h1>Error: "+t.message+"</h1>",500)}});c.get("/admin/tenants/add",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -19964,7 +14220,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
     </body>
     </html>
-  `));d.get("/admin/tenants/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+  `));c.get("/admin/tenants/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(t).first();return a?e.html(`
       <!DOCTYPE html>
@@ -20163,7 +14419,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           <\/script>
       </body>
       </html>
-    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/tenants/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(t).first();if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT 
@@ -20334,14 +14590,9 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/tenants",e=>e.html(ot));d.get("/admin/tenant-calculators",e=>e.html(nt));d.get("/admin/saas-settings",e=>e.html(de));d.get("/admin/settings",e=>e.html(de));d.get("/admin/reports",e=>e.html(it));d.get("/admin/reports/customers",e=>e.html(dt));d.get("/admin/reports/requests",e=>e.html(ct));d.get("/admin/reports/financial",e=>e.html(pt));d.get("/admin/reports/banks",e=>e.html(ht));d.get("/admin/reports/performance",e=>e.html(yt));d.get("/admin/reports/clicks",e=>e.html(vt));d.get("/admin/reports/workflow",e=>e.html(wt));d.get("/admin/reports/employee-performance",e=>e.html(_t));d.get("/admin/payments",e=>e.html(mt));d.get("/admin/banks",e=>e.html(gt));d.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants",e=>e.html(ot));c.get("/admin/tenant-calculators",e=>e.html(nt));c.get("/admin/saas-settings",e=>e.html(it));c.get("/admin/reports",e=>e.html(dt));c.get("/admin/reports/customers",e=>e.html(ct));c.get("/admin/reports/requests",e=>e.html(pt));c.get("/admin/reports/financial",e=>e.html(ut));c.get("/admin/reports/banks",e=>e.html(yt));c.get("/admin/reports/performance",e=>e.html(vt));c.get("/admin/payments",e=>e.html(gt));c.get("/admin/banks",e=>e.html(ft));c.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(ie.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`).replace("window.initMenuPermissions();",`
-      // تعيين role_id من Backend مباشرة
-      window.USER_ROLE_ID = ${userInfo.roleId};
-      console.log('🎯 Role ID من Backend:', window.USER_ROLE_ID);
-      window.initMenuPermissions();
-    `)):e.html(`
+  `).bind(t).first();return a?e.html(de.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -20363,7 +14614,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)});d.get("/test",e=>e.html(`
+    `)});c.get("/test",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -20397,7 +14648,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </body>
     </html>
-  `));d.get("/admin/dashboard",async e=>{try{const t=await x(e);let a="",s="",r="",o=[];t.roleId===11?(a="",s="",r=""):t.roleId===12||t.roleId===13?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,r=`AND c.tenant_id = ${t.tenantId}`,o.push(t.tenantId)):t.roleId===14&&t.tenantId?(a=`WHERE tenant_id = ${t.tenantId}`,s=`WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = ${t.tenantId})`,r=`AND c.tenant_id = ${t.tenantId}`,o.push(t.tenantId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",r="AND 1 = 0");const l=await e.env.DB.prepare(`
+  `));c.get("/admin/dashboard",async e=>{try{const t=await h(e);let a="",s="",r="",o=[];t.roleId===1?(a="",s="",r=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,r=`AND c.tenant_id = ${t.tenantId}`,o.push(t.tenantId)):t.roleId===4&&t.userId?(a=`WHERE assigned_to = ${t.userId}`,s=`WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${t.userId})`,r=`AND c.assigned_to = ${t.userId}`,o.push(t.userId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",r="AND 1 = 0");const l=await e.env.DB.prepare(`
       SELECT 
         (SELECT COUNT(*) FROM customers ${a}) as total_customers,
         (SELECT COUNT(*) FROM financing_requests ${s}) as total_requests,
@@ -20431,15 +14682,15 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       GROUP BY b.id, b.bank_name
       ORDER BY request_count DESC
       LIMIT 5
-    `).all(),c=await e.env.DB.prepare(`
+    `).all(),d=await e.env.DB.prepare(`
       SELECT 
         status,
         COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${s}), 2) as percentage
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${whereClause}), 2) as percentage
       FROM financing_requests
-      ${s}
+      ${whereClause}
       GROUP BY status
-    `).all(),p=i.results||[],u=n.results||[],m=c.results||[];return e.html(`
+    `).all(),p=i.results||[],u=n.results||[],m=d.results||[];return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -20455,7 +14706,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             .print-full-width { width: 100%; }
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -20821,7 +15072,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/customers/add",async e=>e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/add",async e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -20967,18 +15218,19 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       </div>
     </body>
     </html>
-  `));d.get("/admin/customer-assignment",async e=>{const t=e.req.query("tenant_id")||1,a=await e.env.DB.prepare(`
-    SELECT id, username, full_name, email, role_id 
+  `));c.get("/admin/customer-assignment",async e=>{const t=e.req.query("tenant_id")||1,a=await e.env.DB.prepare(`
+    SELECT id, username, full_name, email, role 
     FROM users 
-    WHERE role_id = 4 AND tenant_id = ?
+    WHERE role = 'employee' AND tenant_id = ?
     ORDER BY full_name
   `).bind(t).all(),s=await e.env.DB.prepare(`
     SELECT 
       c.*,
-      u.full_name as assigned_employee_name,
-      c.assigned_to as employee_id
+      ca.employee_id,
+      u.full_name as assigned_employee_name
     FROM customers c
-    LEFT JOIN users u ON c.assigned_to = u.id
+    LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+    LEFT JOIN users u ON ca.employee_id = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
   `).bind(t).all(),r=await e.env.DB.prepare(`
@@ -20986,11 +15238,12 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       u.id,
       u.full_name,
       u.username,
-      COUNT(DISTINCT c.id) as customer_count
+      COUNT(ca.customer_id) as customer_count
     FROM users u
-    LEFT JOIN customers c ON c.assigned_to = u.id AND c.tenant_id = ?
-    WHERE u.role_id = 4 AND u.tenant_id = ?
-    GROUP BY u.id, u.full_name, u.username
+    LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
+    LEFT JOIN customers c ON ca.customer_id = c.id AND c.tenant_id = ?
+    WHERE u.role = 'employee' AND u.tenant_id = ?
+    GROUP BY u.id
     ORDER BY customer_count DESC
   `).bind(t,t).all(),o=`
     <!DOCTYPE html>
@@ -21019,175 +15272,27 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
         
-        ${D()}
+        ${k()}
       </style>
     </head>
-    <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
-      <!-- Top Header with Burger Menu -->
-      <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
-        <div class="flex items-center justify-between px-6 py-4">
-          <!-- Right: Burger Menu Toggle -->
-          <div>
-            <button onclick="toggleSidebar()" class="text-white hover:bg-blue-700 p-2 rounded-lg transition-all">
-              <i class="fas fa-bars text-2xl"></i>
-            </button>
-          </div>
-          
-          <!-- Center: Page Title -->
-          <div class="flex-1 text-center">
-            <h1 class="text-xl font-bold flex items-center justify-center gap-2">
-              <i class="fas fa-users-cog"></i>
-              <span>توزيع العملاء على الموظفين</span>
-            </h1>
-          </div>
-          
-          <!-- Left: Back Button -->
-          <div>
-            <a href="/admin/customers" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm">
+    <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
+      <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-users-cog text-indigo-600"></i>
+                توزيع العملاء على الموظفين
+              </h1>
+              <p class="text-gray-600">قم بتوزيع العملاء على الموظفين لتنظيم العمل</p>
+            </div>
+            <a href="/admin/customers" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all">
               <i class="fas fa-arrow-right ml-2"></i>
-              العودة
+              العودة للعملاء
             </a>
           </div>
         </div>
-      </div>
-
-      <!-- Sidebar Menu -->
-      <div id="sidebar" class="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
-        <!-- Sidebar Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-bold flex items-center gap-2">
-              <i class="fas fa-bars"></i>
-              <span>القائمة الرئيسية</span>
-            </h2>
-            <button onclick="toggleSidebar()" class="hover:bg-white/20 p-2 rounded-lg transition-all">
-              <i class="fas fa-times text-xl"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- Menu Items -->
-        <div class="p-4">
-          <!-- الإدارة والتقارير -->
-          <div class="mb-2">
-            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الإدارة والتقارير</div>
-            <a href="/admin/panel" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-home text-blue-600 group-hover:scale-110 transition-transform"></i>
-              <span>لوحة الوصول السريع</span>
-            </a>
-            <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-chart-line text-green-600 group-hover:scale-110 transition-transform"></i>
-              <span>لوحة المعلومات</span>
-            </a>
-            <a href="/admin/reports" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-file-alt text-purple-600 group-hover:scale-110 transition-transform"></i>
-              <span>التقارير</span>
-            </a>
-          </div>
-
-          <div class="border-t border-gray-200 my-2"></div>
-
-          <!-- إدارة العملاء والطلبات -->
-          <div class="mb-2">
-            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">العملاء والطلبات</div>
-            <a href="/admin/customers" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-users text-blue-600 group-hover:scale-110 transition-transform"></i>
-              <span>العملاء</span>
-            </a>
-            <a href="/admin/customer-assignment?tenant_id=${t}" class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg">
-              <i class="fas fa-users-cog text-blue-600"></i>
-              <span class="font-semibold">توزيع العملاء</span>
-            </a>
-            <a href="/admin/requests" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-file-invoice text-orange-600 group-hover:scale-110 transition-transform"></i>
-              <span>طلبات التمويل</span>
-            </a>
-            <a href="/admin/payments" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-receipt text-green-600 group-hover:scale-110 transition-transform"></i>
-              <span>سندات القبض</span>
-            </a>
-          </div>
-
-          <div class="border-t border-gray-200 my-2"></div>
-
-          <!-- الإعدادات المالية -->
-          <div class="mb-2">
-            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الإعدادات المالية</div>
-            <a href="/admin/rates" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-percentage text-indigo-600 group-hover:scale-110 transition-transform"></i>
-              <span>نسب التمويل</span>
-            </a>
-            <a href="/admin/banks" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-university text-cyan-600 group-hover:scale-110 transition-transform"></i>
-              <span>البنوك</span>
-            </a>
-            <a href="/admin/company-rates" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-building text-purple-600 group-hover:scale-110 transition-transform"></i>
-              <span>نسب الشركة</span>
-            </a>
-          </div>
-
-          <div class="border-t border-gray-200 my-2"></div>
-
-          <!-- الاشتراكات -->
-          <div class="mb-2">
-            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الاشتراكات</div>
-            <a href="/admin/subscriptions" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-calendar-check text-teal-600 group-hover:scale-110 transition-transform"></i>
-              <span>الاشتراكات</span>
-            </a>
-            <a href="/admin/packages" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-box text-pink-600 group-hover:scale-110 transition-transform"></i>
-              <span>الباقات</span>
-            </a>
-          </div>
-
-          <div class="border-t border-gray-200 my-2"></div>
-
-          <!-- الموارد البشرية -->
-          <div class="mb-2">
-            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">الموارد البشرية</div>
-            <a href="/admin/hr" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-users-cog text-indigo-600 group-hover:scale-110 transition-transform"></i>
-              <span>نظام HR</span>
-            </a>
-          </div>
-
-          <div class="border-t border-gray-200 my-2"></div>
-
-          <!-- إدارة النظام (Super Admin) -->
-          <div class="mb-2">
-            <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">إدارة النظام</div>
-            <a href="/admin/users" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-user-shield text-red-600 group-hover:scale-110 transition-transform"></i>
-              <span>المستخدمون</span>
-            </a>
-            <a href="/admin/roles" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-user-tag text-orange-600 group-hover:scale-110 transition-transform"></i>
-              <span>الصلاحيات</span>
-            </a>
-            <a href="/admin/settings" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-cog text-gray-600 group-hover:scale-110 transition-transform"></i>
-              <span>إعدادات النظام</span>
-            </a>
-          </div>
-
-          <div class="border-t border-gray-200 my-2"></div>
-
-          <!-- تسجيل الخروج -->
-          <div class="mb-2">
-            <a href="/login" onclick="logout(); return false;" class="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-all group font-semibold">
-              <i class="fas fa-sign-out-alt group-hover:scale-110 transition-transform"></i>
-              <span>تسجيل الخروج</span>
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Overlay -->
-      <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 hidden z-40" onclick="toggleSidebar()"></div>
-
-      <div class="max-w-7xl mx-auto p-6">
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -21432,62 +15537,51 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             row.style.display = (matchSearch && matchEmployee) ? '' : 'none';
           });
         }
-
-        // Toggle sidebar
-        function toggleSidebar() {
-          const sidebar = document.getElementById('sidebar');
-          const overlay = document.getElementById('sidebar-overlay');
-          
-          if (sidebar.classList.contains('translate-x-full')) {
-            sidebar.classList.remove('translate-x-full');
-            sidebar.classList.add('translate-x-0');
-            overlay.classList.remove('hidden');
-          } else {
-            sidebar.classList.add('translate-x-full');
-            sidebar.classList.remove('translate-x-0');
-            overlay.classList.add('hidden');
-          }
-        }
-
-        // Logout function
-        function logout() {
-          localStorage.removeItem('authToken');
-          document.cookie = 'authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-          window.location.href = '/login';
-        }
       <\/script>
     </body>
     </html>
-  `;return e.html(o)});d.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json();return a?(await e.env.DB.prepare(`
-      UPDATE customers 
-      SET assigned_to = ? 
-      WHERE id = ?
-    `).bind(a,t).run(),e.json({success:!0,message:"تم التخصيص بنجاح"})):(await e.env.DB.prepare(`
-        UPDATE customers 
-        SET assigned_to = NULL 
-        WHERE id = ?
-      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"}))}catch(t){return console.error("Customer assignment error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/auto-distribute",async e=>{try{const a=(await e.req.json().catch(()=>({}))).tenant_id||e.req.query("tenant_id")||1,s=await e.env.DB.prepare(`
+  `;return e.html(o)});c.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json();if(!a)return await e.env.DB.prepare(`
+        DELETE FROM customer_assignments WHERE customer_id = ?
+      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"});const r=await e.env.DB.prepare(`
+      SELECT * FROM customer_assignments WHERE customer_id = ?
+    `).bind(t).first();return r?(await e.env.DB.prepare(`
+        INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+        VALUES (?, ?, ?, 1, ?)
+      `).bind(t,r.employee_id,a,s||"").run(),await e.env.DB.prepare(`
+        UPDATE customer_assignments 
+        SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now'), notes = ?
+        WHERE customer_id = ?
+      `).bind(a,s||"",t).run()):(await e.env.DB.prepare(`
+        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        VALUES (?, ?, 1, ?)
+      `).bind(t,a,s||"").run(),await e.env.DB.prepare(`
+        INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+        VALUES (?, NULL, ?, 1, ?)
+      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/auto-distribute",async e=>{try{const a=(await e.req.json().catch(()=>({}))).tenant_id||e.req.query("tenant_id")||1,s=await e.env.DB.prepare(`
       SELECT id FROM users 
-      WHERE role_id = 4 AND tenant_id = ?
+      WHERE role = 'employee' AND tenant_id = ?
       ORDER BY id
     `).bind(a).all();if(s.results.length===0)return e.json({success:!1,error:"لا يوجد موظفين في هذه الشركة"});const r=await e.env.DB.prepare(`
-      SELECT id 
-      FROM customers
-      WHERE assigned_to IS NULL AND tenant_id = ?
-      ORDER BY id
-    `).bind(a).all();if(r.results.length===0)return e.json({success:!1,error:"لا يوجد عملاء غير موزعين"});let o=0;const l=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],c=s.results[i%l];await e.env.DB.prepare(`
-        UPDATE customers 
-        SET assigned_to = ? 
-        WHERE id = ?
-      `).bind(c.id,n.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/clear-all",async e=>{try{const a=(await e.req.json().catch(()=>({}))).tenant_id||e.req.query("tenant_id")||1,s=await e.env.DB.prepare(`
-      UPDATE customers 
-      SET assigned_to = NULL 
-      WHERE tenant_id = ?
-    `).bind(a).run();return e.json({success:!0,cleared_count:s.meta.changes})}catch(t){return console.error("Clear assignments error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json();if(!t||t.length===0)return e.json({success:!1,error:"لم يتم تحديد عملاء"});const s=t.map(()=>"?").join(","),r=await e.env.DB.prepare(`
-      UPDATE customers 
-      SET assigned_to = ? 
-      WHERE id IN (${s})
-    `).bind(a,...t).run();return e.json({success:!0,assigned_count:r.meta.changes})}catch(t){return console.error("Bulk assignment error:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/banks",async e=>{try{const t=e.req.query("tenant_id");let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(t).first());let s="SELECT * FROM banks";t&&(s+=" WHERE tenant_id = ?"),s+=" ORDER BY bank_name";const r=t?await e.env.DB.prepare(s).bind(t).all():await e.env.DB.prepare(s).all();return e.html(`
+      SELECT c.id 
+      FROM customers c
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      WHERE ca.customer_id IS NULL AND c.tenant_id = ?
+      ORDER BY c.id
+    `).bind(a).all();let o=0;const l=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],d=s.results[i%l];await e.env.DB.prepare(`
+        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        VALUES (?, ?, 1, 'توزيع تلقائي')
+      `).bind(n.id,d.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
+      DELETE FROM customer_assignments
+    `).run();return e.json({success:!0,cleared_count:t.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json();let s=0;for(const r of t)await e.env.DB.prepare(`
+        SELECT * FROM customer_assignments WHERE customer_id = ?
+      `).bind(r).first()?await e.env.DB.prepare(`
+          UPDATE customer_assignments 
+          SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now')
+          WHERE customer_id = ?
+        `).bind(a,r).run():await e.env.DB.prepare(`
+          INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
+          VALUES (?, ?, 1)
+        `).bind(r,a).run(),s++;return e.json({success:!0,assigned_count:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/admin/banks",async e=>{try{const t=e.req.query("tenant_id");let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(t).first());let s="SELECT * FROM banks";t&&(s+=" WHERE tenant_id = ?"),s+=" ORDER BY bank_name";const r=t?await e.env.DB.prepare(s).bind(t).all():await e.env.DB.prepare(s).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -21549,7 +15643,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});d.get("/admin/rates",async e=>{try{const t=e.req.query("tenant_id");let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(t).first());let s=`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates",async e=>{try{const t=e.req.query("tenant_id");let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(t).first());let s=`
       SELECT 
         r.*,
         b.bank_name,
@@ -21607,7 +15701,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -21745,13 +15839,13 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});d.get("/admin/rates/add",async e=>{const t=e.req.query("tenant_id");if(!t)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const a=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name").bind(t).all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ft(t,a.results,s.results))});d.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates/add",async e=>{const t=e.req.query("tenant_id");if(!t)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const a=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(bt(t,a.results,s.results))});c.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name").bind(a).all(),o=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(bt(a,s,r.results,o.results))});d.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),o=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(xt(a,s,r.results,o.results))});c.get("/admin/customers",async e=>{try{const t=await h(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -21785,7 +15879,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             </div>
         </body>
         </html>
-      `);let a="SELECT * FROM customers",s=[];t.roleId===11||(t.roleId===12||t.roleId===13?t.tenantId&&(a+=" WHERE tenant_id = ?",s.push(t.tenantId)):t.roleId===14&&t.userId?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
+      `);let a="SELECT * FROM customers",s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -21830,7 +15924,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -21869,7 +15963,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -21894,19 +15988,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </select>
                 </div>
                 
-                <div>
-                  <select 
-                    id="dateFilter" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="handleDateFilterChange()"
-                  >
-                    <option value="all">الفترة: الجميع</option>
-                    <option value="30">آخر 30 يوم</option>
-                    <option value="60">آخر 60 يوم</option>
-                    <option value="custom">مدة محددة</option>
-                  </select>
-                </div>
-                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -21914,37 +15995,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
-              </div>
-              
-              <!-- Custom Date Range (Hidden by default) -->
-              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="startDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="endDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div class="flex items-end">
-                  <button 
-                    onclick="applyCustomDateFilter()" 
-                    class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                  >
-                    <i class="fas fa-filter ml-2"></i>
-                    تطبيق الفلتر
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -21963,7 +16013,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${r.results.map(l=>`
-                  <tr class="hover:bg-gray-50" data-name="${l.full_name||""}" data-phone="${l.phone||""}" data-email="${l.email||""}" data-created-at="${l.created_at}">
+                  <tr class="hover:bg-gray-50" data-name="${l.full_name||""}" data-phone="${l.phone||""}" data-email="${l.email||""}">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${l.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${l.full_name||"-"}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${l.phone||"-"}</td>
@@ -21995,69 +16045,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
         
         <script>
-          // Date filter state
-          let currentDateFilter = 'all';
-          let customStartDate = null;
-          let customEndDate = null;
-          
-          // Handle date filter dropdown change
-          function handleDateFilterChange() {
-            const dateFilter = document.getElementById('dateFilter').value;
-            const customDateRange = document.getElementById('customDateRange');
-            
-            if (dateFilter === 'custom') {
-              customDateRange.style.display = 'grid';
-            } else {
-              customDateRange.style.display = 'none';
-              currentDateFilter = dateFilter;
-              filterTable();
-            }
-          }
-          
-          // Apply custom date filter
-          function applyCustomDateFilter() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (startDate && endDate) {
-              customStartDate = new Date(startDate);
-              customEndDate = new Date(endDate);
-              currentDateFilter = 'custom';
-              filterTable();
-            } else {
-              alert('الرجاء إدخال تاريخ البداية والنهاية');
-            }
-          }
-          
-          // Check if date is within filter range
-          function isDateInRange(dateString) {
-            if (currentDateFilter === 'all') return true;
-            
-            const rowDate = new Date(dateString);
-            const today = new Date();
-            today.setHours(23, 59, 59, 999); // End of today
-            
-            if (currentDateFilter === '30') {
-              const thirtyDaysAgo = new Date(today);
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              return rowDate >= thirtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === '60') {
-              const sixtyDaysAgo = new Date(today);
-              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-              return rowDate >= sixtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === 'custom') {
-              if (customStartDate && customEndDate) {
-                const start = new Date(customStartDate);
-                start.setHours(0, 0, 0, 0);
-                const end = new Date(customEndDate);
-                end.setHours(23, 59, 59, 999);
-                return rowDate >= start && rowDate <= end;
-              }
-            }
-            
-            return true;
-          }
-          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -22071,9 +16058,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               const name = row.getAttribute('data-name') || ''
               const phone = row.getAttribute('data-phone') || ''
               const email = row.getAttribute('data-email') || ''
-              const createdAt = row.getAttribute('data-created-at') || ''
               
-              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -22096,11 +16081,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 }
               }
               
-              // Apply date filter
-              if (shouldShow && createdAt) {
-                shouldShow = isDateInRange(createdAt);
-              }
-              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -22112,13 +16092,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
-            document.getElementById('dateFilter').value = 'all'
-            document.getElementById('customDateRange').style.display = 'none'
-            document.getElementById('startDate').value = ''
-            document.getElementById('endDate').value = ''
-            currentDateFilter = 'all'
-            customStartDate = null
-            customEndDate = null
             filterTable()
           }
           
@@ -22144,7 +16117,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/permissions/manage",async e=>{try{return e.html(Ot())}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/permissions/reports",async e=>{try{return e.html(Ft())}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/company-reports",async e=>{try{return e.html(Mt)}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/users",async e=>{try{return e.html(qt())}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id");return e.html(jt(t))}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/roles/:id",async e=>{try{const t=e.req.param("id");return e.html(Lt(t))}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/roles",async e=>{try{return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/roles",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -22353,11 +16326,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
                   <td class="px-6 py-4">
                     <div class="flex items-center justify-center gap-2">
-                      <button onclick="viewRoleDetails(\${role.id})" 
-                              class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
-                              title="عرض التفاصيل">
-                        <i class="fas fa-eye"></i>
-                      </button>
                       <button onclick="openEditRoleModal(\${role.id}, '\${role.role_name}', '\${role.description}')" 
                               class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
                               title="تعديل">
@@ -22491,11 +16459,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             }
           }
 
-          // View role details
-          function viewRoleDetails(roleId) {
-            window.location.href = '/admin/roles/' + roleId;
-          }
-
           // Manage permissions
           function managePermissions(roleId, roleName) {
             window.location.href = '/admin/roles/' + roleId + '/permissions';
@@ -22511,7 +16474,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});d.get("/admin/notifications",async e=>{try{return e.html(`
+    `)}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});c.get("/admin/notifications",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -22543,7 +16506,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             50% { opacity: .5; }
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -22812,7 +16775,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/requests/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/requests/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
@@ -23244,7 +17207,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Edit request page error:",t),e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/requests",async e=>{try{const t=await x(e);let a=`
+    `)}catch(t){return console.error("Edit request page error:",t),e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/requests",async e=>{try{const t=await h(e);let a=`
       SELECT 
         fr.id,
         fr.customer_id,
@@ -23254,11 +17217,12 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         fr.status,
         fr.created_at,
         c.full_name as customer_name,
+        c.assigned_to as customer_assigned_to,
         b.bank_name as bank_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
-    `,s=[];t.roleId===11||(t.roleId===12||t.roleId===13?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===14&&t.tenantId?(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
+    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE c.assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -23303,7 +17267,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -23360,7 +17324,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -23385,19 +17349,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </select>
                 </div>
                 
-                <div>
-                  <select 
-                    id="dateFilter" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="handleDateFilterChange()"
-                  >
-                    <option value="all">الفترة: الجميع</option>
-                    <option value="30">آخر 30 يوم</option>
-                    <option value="60">آخر 60 يوم</option>
-                    <option value="custom">مدة محددة</option>
-                  </select>
-                </div>
-                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -23405,37 +17356,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
-              </div>
-              
-              <!-- Custom Date Range (Hidden by default) -->
-              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="startDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="endDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div class="flex items-end">
-                  <button 
-                    onclick="applyCustomDateFilter()" 
-                    class="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                  >
-                    <i class="fas fa-filter ml-2"></i>
-                    تطبيق الفلتر
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -23459,8 +17379,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <tr class="hover:bg-gray-50" 
                       data-customer="${l.customer_name||""}" 
                       data-bank="${l.bank_name||""}" 
-                      data-status="${n}"
-                      data-created-at="${l.created_at}">
+                      data-status="${n}">
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${l.customer_name||"عميل #"+l.customer_id}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${l.bank_name||"بنك #"+(l.selected_bank_id||"-")}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${l.requested_amount?.toLocaleString("ar-SA")} ريال</td>
@@ -23501,69 +17420,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
         
         <script>
-          // Date filter state
-          let currentDateFilter = 'all';
-          let customStartDate = null;
-          let customEndDate = null;
-          
-          // Handle date filter dropdown change
-          function handleDateFilterChange() {
-            const dateFilter = document.getElementById('dateFilter').value;
-            const customDateRange = document.getElementById('customDateRange');
-            
-            if (dateFilter === 'custom') {
-              customDateRange.style.display = 'grid';
-            } else {
-              customDateRange.style.display = 'none';
-              currentDateFilter = dateFilter;
-              filterTable();
-            }
-          }
-          
-          // Apply custom date filter
-          function applyCustomDateFilter() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (startDate && endDate) {
-              customStartDate = new Date(startDate);
-              customEndDate = new Date(endDate);
-              currentDateFilter = 'custom';
-              filterTable();
-            } else {
-              alert('الرجاء إدخال تاريخ البداية والنهاية');
-            }
-          }
-          
-          // Check if date is within filter range
-          function isDateInRange(dateString) {
-            if (currentDateFilter === 'all') return true;
-            
-            const rowDate = new Date(dateString);
-            const today = new Date();
-            today.setHours(23, 59, 59, 999); // End of today
-            
-            if (currentDateFilter === '30') {
-              const thirtyDaysAgo = new Date(today);
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              return rowDate >= thirtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === '60') {
-              const sixtyDaysAgo = new Date(today);
-              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-              return rowDate >= sixtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === 'custom') {
-              if (customStartDate && customEndDate) {
-                const start = new Date(customStartDate);
-                start.setHours(0, 0, 0, 0);
-                const end = new Date(customEndDate);
-                end.setHours(23, 59, 59, 999);
-                return rowDate >= start && rowDate <= end;
-              }
-            }
-            
-            return true;
-          }
-          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -23577,9 +17433,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               const customer = row.getAttribute('data-customer') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
-              const createdAt = row.getAttribute('data-created-at') || ''
               
-              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -23602,11 +17456,6 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 }
               }
               
-              // Apply date filter
-              if (shouldShow && createdAt) {
-                shouldShow = isDateInRange(createdAt);
-              }
-              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -23617,20 +17466,13 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
-            document.getElementById('dateFilter').value = 'all'
-            document.getElementById('customDateRange').style.display = 'none'
-            document.getElementById('startDate').value = ''
-            document.getElementById('endDate').value = ''
-            currentDateFilter = 'all'
-            customStartDate = null
-            customEndDate = null
             filterTable()
           }
           
           function exportToCSV() {
             const data = [
               ['العميل', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
-              ${r.results.map(l=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[l.status]||l.status,c=l.customer_name||`عميل #${l.customer_id}`,p=l.bank_name||`بنك #${l.selected_bank_id||"-"}`;return`['${c}', '${p}', '${l.requested_amount||0}', '${l.duration_months}', '${n}', '${new Date(l.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
+              ${r.results.map(l=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[l.status]||l.status,d=l.customer_name||`عميل #${l.customer_id}`,p=l.bank_name||`بنك #${l.selected_bank_id||"-"}`;return`['${d}', '${p}', '${l.requested_amount||0}', '${l.duration_months}', '${n}', '${new Date(l.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
               `)}
             ];
             
@@ -23648,7 +17490,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});d.get("/admin/requests/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, full_name, phone FROM customers ORDER BY full_name").all(),a=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
+    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});c.get("/admin/requests/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, full_name, phone FROM customers ORDER BY full_name").all(),a=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -23797,7 +17639,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});d.get("/admin/requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});c.get("/admin/requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT fr.*, 
              c.full_name as customer_name, c.phone as customer_phone, c.email as customer_email,
              b.bank_name, ft.type_name as financing_type_name
@@ -24100,7 +17942,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `):e.html("<h1>الطلب غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(t).first();return a?e.html(`
+    `):e.html("<h1>الطلب غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -24168,7 +18010,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/customers/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(t).first();return a?e.html(`
+    `):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -24226,7 +18068,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/customers/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.redirect("/admin/customers")}catch{return e.html("<h1>خطأ في حذف العميل</h1>")}});d.get("/admin/banks/add",async e=>e.html(`
+    `):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.redirect("/admin/customers")}catch{return e.html("<h1>خطأ في حذف العميل</h1>")}});c.get("/admin/banks/add",async e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -24277,7 +18119,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       </div>
     </body>
     </html>
-  `));d.get("/admin/customers/:id/report",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+  `));c.get("/admin/customers/:id/report",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         c.*,
         ft.type_name as financing_type_name,
@@ -24304,7 +18146,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             page-break-inside: avoid;
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -24583,7 +18425,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}catch(t){return console.error("خطأ في عرض تقرير العميل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.get("/admin/requests/:id/report",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("خطأ في عرض تقرير العميل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.get("/admin/requests/:id/report",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
@@ -24617,7 +18459,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             page-break-inside: avoid;
           }
           
-          ${D()}
+          ${k()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -24864,22 +18706,41 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}catch(t){return console.error("خطأ في عرض تقرير طلب التمويل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.get("/admin/requests/:id/workflow",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("خطأ في عرض تقرير طلب التمويل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.get("/admin/requests/:id/workflow",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
-        c.phone as customer_phone,
-        b.bank_name,
-        u.full_name as employee_name
+        ws.stage_name_ar,
+        ws.stage_color,
+        ws.stage_icon
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN banks b ON fr.selected_bank_id = b.id
-      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s={pending:{name:"جديد",color:"#3B82F6",icon:"fa-file-alt",order:1},under_review:{name:"قيد المراجعة",color:"#F59E0B",icon:"fa-search",order:2},approved:{name:"مقبول",color:"#10B981",icon:"fa-check-circle",order:3},rejected:{name:"مرفوض",color:"#EF4444",icon:"fa-times-circle",order:3},processing:{name:"قيد المعالجة",color:"#06B6D4",icon:"fa-cog",order:4},completed:{name:"مكتمل",color:"#8B5CF6",icon:"fa-check-double",order:5},cancelled:{name:"ملغي",color:"#6B7280",icon:"fa-ban",order:5}},r=[{id:1,stage_name_ar:"جديد",stage_color:"#3B82F6",stage_icon:"fa-file-alt",stage_order:1,is_active:1},{id:2,stage_name_ar:"قيد المراجعة",stage_color:"#F59E0B",stage_icon:"fa-search",stage_order:2,is_active:1},{id:3,stage_name_ar:"مقبول",stage_color:"#10B981",stage_icon:"fa-check-circle",stage_order:3,is_active:1},{id:4,stage_name_ar:"قيد المعالجة",stage_color:"#06B6D4",stage_icon:"fa-cog",stage_order:4,is_active:1},{id:5,stage_name_ar:"مكتمل",stage_color:"#8B5CF6",stage_icon:"fa-check-double",stage_order:5,is_active:1}],o=s[a.status]||s.pending;a.stage_name_ar=o.name,a.stage_color=o.color,a.stage_icon=o.icon;const i={data:{transitions:[{id:1,from_stage_name:null,to_stage_name:o.name,changed_by_name:a.employee_name||"النظام",created_at:a.created_at,notes:"تم إنشاء الطلب"}],actions:[],tasks:[]}},n=xt(parseInt(t),a,r,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const{results:s}=await e.env.DB.prepare(`
+      SELECT * FROM workflow_stages 
+      WHERE is_active = 1 
+      ORDER BY stage_order ASC
+    `).all(),{results:r}=await e.env.DB.prepare(`
+      SELECT 
+        wst.*,
+        ws_from.stage_name_ar as from_stage_name,
+        ws_to.stage_name_ar as to_stage_name,
+        u.full_name as changed_by_name
+      FROM workflow_stage_transitions wst
+      LEFT JOIN workflow_stages ws_from ON wst.from_stage_id = ws_from.id
+      LEFT JOIN workflow_stages ws_to ON wst.to_stage_id = ws_to.id
+      LEFT JOIN users u ON wst.transitioned_by = u.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.created_at DESC
+    `).bind(t).all(),{results:o}=await e.env.DB.prepare(`
+      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(t).all(),{results:l}=await e.env.DB.prepare(`
+      SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(t).all(),i={data:{transitions:r,actions:o,tasks:l}},n=ht(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
-    `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});d.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
+    `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});c.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -24942,7 +18803,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/banks/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
+    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/banks/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -24993,11 +18854,11 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.parseBody();return await e.env.DB.prepare(`
+    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.parseBody();return await e.env.DB.prepare(`
       UPDATE banks 
       SET bank_name = ?, description = ?
       WHERE id = ?
-    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});d.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});d.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
+    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});c.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});c.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -25187,7 +19048,201 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/rates/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),a=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/rates",async e=>{try{const t=await e.env.DB.prepare(`
+      SELECT fr.*, b.bank_name, ft.type_name
+      FROM bank_financing_rates fr
+      LEFT JOIN banks b ON fr.bank_id = b.id
+      LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
+      ORDER BY b.bank_name, ft.type_name
+    `).all();return e.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>نسب التمويل</title>
+        <script src="https://cdn.tailwindcss.com"><\/script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      </head>
+      <body class="bg-gray-50">
+        <div class="max-w-7xl mx-auto p-6">
+          <div class="mb-6">
+            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+          </div>
+          
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+              <h1 class="text-3xl font-bold text-gray-800">
+                <i class="fas fa-percentage text-orange-600 ml-2"></i>
+                نسب التمويل (<span id="totalCount">${t.results.length}</span>)
+              </h1>
+              
+              <div class="flex gap-3">
+                <a href="/admin/rates/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-plus ml-2"></i>
+                  إضافة جديد
+                </a>
+                <button onclick="exportToCSV()" 
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-file-export ml-2"></i>
+                  تصدير Excel
+                </button>
+              </div>
+            </div>
+            
+            <!-- شريط البحث والفلترة -->
+            <div class="border-t pt-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="relative">
+                  <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
+                  <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="بحث في جميع الحقول..." 
+                    class="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    onkeyup="filterTable()"
+                  >
+                </div>
+                
+                <div>
+                  <select 
+                    id="filterField" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    onchange="filterTable()"
+                  >
+                    <option value="all">البحث في: الكل</option>
+                    <option value="bank">البنك فقط</option>
+                    <option value="type">نوع التمويل فقط</option>
+                  </select>
+                </div>
+                
+                <button 
+                  onclick="resetFilters()" 
+                  class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                >
+                  <i class="fas fa-redo ml-2"></i>
+                  إعادة تعيين
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <table class="w-full" id="dataTable">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">#</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">البنك</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نوع التمويل</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نسبة الفائدة</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحد الأدنى</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحد الأقصى</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200" id="tableBody">
+                ${t.results.map(a=>`
+                  <tr class="hover:bg-gray-50" data-bank="${a.bank_name||""}" data-type="${a.type_name||""}">
+                    <td class="px-6 py-4 text-sm text-gray-900">${a.id}</td>
+                    <td class="px-6 py-4">
+                      <div class="flex items-center">
+                        <i class="fas fa-university text-yellow-600 ml-2"></i>
+                        <span class="text-sm font-bold text-gray-900">${a.bank_name||"غير محدد"}</span>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${a.type_name||"غير محدد"}</td>
+                    <td class="px-6 py-4">
+                      <span class="text-lg font-bold text-orange-600">${a.rate||0}%</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${a.min_amount?a.min_amount.toLocaleString():"0"} ريال</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${a.max_amount?a.max_amount.toLocaleString():"0"} ريال</td>
+                    <td class="px-6 py-4">
+                      <div class="flex gap-2 justify-end">
+                        <a href="/admin/rates/${a.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
+                          <i class="fas fa-eye"></i> عرض
+                        </a>
+                        <a href="/admin/rates/${a.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
+                          <i class="fas fa-edit"></i> تعديل
+                        </a>
+                        <a href="/admin/rates/${a.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
+                          <i class="fas fa-trash"></i> حذف
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <script>
+          // البحث والفلترة
+          function filterTable() {
+            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
+            const filterField = document.getElementById('filterField').value
+            const tableBody = document.getElementById('tableBody')
+            const rows = tableBody.getElementsByTagName('tr')
+            let visibleCount = 0
+            
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i]
+              const bank = row.getAttribute('data-bank') || ''
+              const type = row.getAttribute('data-type') || ''
+              
+              let shouldShow = false
+              
+              if (searchInput === '') {
+                shouldShow = true
+              } else {
+                switch(filterField) {
+                  case 'bank':
+                    shouldShow = bank.toLowerCase().includes(searchInput)
+                    break
+                  case 'type':
+                    shouldShow = type.toLowerCase().includes(searchInput)
+                    break
+                  default: // 'all'
+                    shouldShow = bank.toLowerCase().includes(searchInput) || 
+                                type.toLowerCase().includes(searchInput)
+                }
+              }
+              
+              row.style.display = shouldShow ? '' : 'none'
+              if (shouldShow) visibleCount++
+            }
+            
+            document.getElementById('totalCount').textContent = visibleCount
+          }
+          
+          function resetFilters() {
+            document.getElementById('searchInput').value = ''
+            document.getElementById('filterField').value = 'all'
+            filterTable()
+          }
+          
+          function exportToCSV() {
+            const data = [
+              ['#', 'البنك', 'نوع التمويل', 'نسبة الفائدة', 'الحد الأدنى', 'الحد الأقصى'],
+              ${t.results.map(a=>`['${a.id}', '${a.bank_name||"غير محدد"}', '${a.type_name||"غير محدد"}', '${a.rate||0}%', '${a.min_amount||0}', '${a.max_amount||0}']`).join(`,
+              `)}
+            ];
+            
+            let csv = '\\uFEFF';
+            data.forEach(row => {
+              csv += row.join(',') + '\\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+          }
+        <\/script>
+      </body>
+      </html>
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/rates/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),a=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -25313,7 +19368,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});d.get("/admin/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});c.get("/admin/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT fr.*, b.bank_name, ft.type_name
       FROM bank_financing_rates fr
       LEFT JOIN banks b ON fr.bank_id = b.id
@@ -25406,7 +19461,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>النسبة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/subscriptions",async e=>{try{const t=await e.env.DB.prepare(`
+    `):e.html("<h1>النسبة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/subscriptions",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT s.*, p.package_name, p.price
       FROM subscriptions s
       LEFT JOIN packages p ON s.package_id = p.id
@@ -25612,7 +19667,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/subscriptions/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, package_name, price, duration_months FROM packages WHERE is_active = 1 ORDER BY price").all();return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/subscriptions/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, package_name, price, duration_months FROM packages WHERE is_active = 1 ORDER BY price").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -25756,7 +19811,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});d.get("/admin/subscriptions/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});c.get("/admin/subscriptions/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT s.*, p.package_name, p.price
       FROM subscriptions s
       LEFT JOIN packages p ON s.package_id = p.id
@@ -25843,7 +19898,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>الاشتراك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/packages",async e=>{try{const t=await e.env.DB.prepare(`
+    `):e.html("<h1>الاشتراك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/packages",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
     `).all();return e.html(`
       <!DOCTYPE html>
@@ -26032,7 +20087,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/packages/new",async e=>e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/packages/new",async e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -26159,7 +20214,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       </div>
     </body>
     </html>
-  `));d.get("/admin/packages/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM packages WHERE id = ?").bind(t).first();return a?e.html(`
+  `));c.get("/admin/packages/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM packages WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26240,7 +20295,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>الباقة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/users",async e=>{try{return e.html(`
+    `):e.html("<h1>الباقة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/users",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26543,7 +20598,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/users/:id",async e=>{try{const t=e.req.param("id");if(t==="new")return e.redirect("/admin/users-new");const a=`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/users/:id",async e=>{try{const t=e.req.param("id");if(t==="new")return e.redirect("/admin/users-new");const a=`
       SELECT u.*, r.role_name, r.description as role_description,
              t.company_name as tenant_name
       FROM users u
@@ -26677,7 +20732,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});d.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),s=(await x(e)).roleId,r=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),s=(await h(e)).roleId,r=`
       SELECT u.*, r.role_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
@@ -26767,9 +20822,9 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </label>
                   <select name="role_id" id="roleSelect" required
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    ${i.results?.map(c=>`
-                      <option value="${c.id}" ${l.role_id===c.id?"selected":""}>
-                        ${c.role_name} ${c.description?`- ${c.description}`:""}
+                    ${i.results?.map(d=>`
+                      <option value="${d.id}" ${l.role_id===d.id?"selected":""}>
+                        ${d.role_name} ${d.description?`- ${d.description}`:""}
                       </option>
                     `).join("")||""}
                   </select>
@@ -26783,9 +20838,9 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <select name="tenant_id"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">لا توجد شركة (Super Admin فقط)</option>
-                    ${n.results?.map(c=>`
-                      <option value="${c.id}" ${l.tenant_id===c.id?"selected":""}>
-                        ${c.company_name}
+                    ${n.results?.map(d=>`
+                      <option value="${d.id}" ${l.tenant_id===d.id?"selected":""}>
+                        ${d.company_name}
                       </option>
                     `).join("")||""}
                   </select>
@@ -26869,15 +20924,15 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});d.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("username"),r=a.get("full_name"),o=a.get("email")||null,l=a.get("phone")||null,i=a.get("password"),n=a.get("user_type"),c=a.get("role_id"),p=a.get("tenant_id")||null,u=a.get("is_active");let m=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("username"),r=a.get("full_name"),o=a.get("email")||null,l=a.get("phone")||null,i=a.get("password"),n=a.get("user_type"),d=a.get("role_id"),p=a.get("tenant_id")||null,u=a.get("is_active");let m=`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
           user_type = ?, role_id = ?, tenant_id = ?, is_active = ?
-    `,f=[s,r,o,l,n,c,p,u];return i&&i.toString().trim()!==""&&(m=`
+    `,f=[s,r,o,l,n,d,p,u];return i&&i.toString().trim()!==""&&(m=`
         UPDATE users 
         SET username = ?, full_name = ?, email = ?, phone = ?, 
             password = ?, user_type = ?, role_id = ?, tenant_id = ?, is_active = ?
-      `,f=[s,r,o,l,i,n,c,p,u]),m+=" WHERE id = ?",f.push(t),await e.env.DB.prepare(m).bind(...f).run(),e.html(`
+      `,f=[s,r,o,l,i,n,d,p,u]),m+=" WHERE id = ?",f.push(t),await e.env.DB.prepare(m).bind(...f).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26934,7 +20989,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}});d.get("/admin/users/:id/delete",async e=>{try{const t=e.req.param("id"),{results:a}=await e.env.DB.prepare("SELECT id, username, full_name FROM users WHERE id = ?").bind(t).all();if(!a||a.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const s=a[0];return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.html(`
+    `)}});c.get("/admin/users/:id/delete",async e=>{try{const t=e.req.param("id"),{results:a}=await e.env.DB.prepare("SELECT id, username, full_name FROM users WHERE id = ?").bind(t).all();if(!a||a.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const s=a[0];return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26987,7 +21042,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}});d.get("/admin/users-new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, role_name, description FROM roles ORDER BY id").all(),a=await e.env.DB.prepare("SELECT id, company_name FROM tenants ORDER BY company_name").all();return e.html(`
+    `)}});c.get("/admin/users-new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, role_name, description FROM roles ORDER BY id").all(),a=await e.env.DB.prepare("SELECT id, company_name FROM tenants ORDER BY company_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -27291,7 +21346,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error loading add user page:",t),e.html(`<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr;">${t.stack}</pre>`)}});d.get("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("Error loading add user page:",t),e.html(`<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr;">${t.stack}</pre>`)}});c.get("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT u.*, r.role_name, s.company_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
@@ -27395,7 +21450,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `):e.html("<h1>المستخدم غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});d.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `):e.html("<h1>المستخدم غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT u.*, r.role_name 
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
@@ -27453,19 +21508,19 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </h2>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  ${l[n].map(c=>`
+                  ${l[n].map(d=>`
                     <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                       <input 
                         type="checkbox" 
-                        id="perm_${c.id}" 
+                        id="perm_${d.id}" 
                         name="permissions[]" 
-                        value="${c.id}"
-                        ${c.hasPermission?"checked":""}
+                        value="${d.id}"
+                        ${d.hasPermission?"checked":""}
                         class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                       >
-                      <label for="perm_${c.id}" class="mr-3 flex-1 cursor-pointer">
-                        <div class="font-semibold text-gray-800">${c.permission_name}</div>
-                        ${c.description?`<div class="text-xs text-gray-500">${c.description}</div>`:""}
+                      <label for="perm_${d.id}" class="mr-3 flex-1 cursor-pointer">
+                        <div class="font-semibold text-gray-800">${d.permission_name}</div>
+                        ${d.description?`<div class="text-xs text-gray-500">${d.description}</div>`:""}
                       </label>
                     </div>
                   `).join("")}
@@ -27533,215 +21588,50 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});d.post("/api/users/:id/permissions",async e=>{try{const t=e.req.param("id"),{role_id:a,permission_ids:s}=await e.req.json();if(await e.env.DB.prepare(`
+    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});c.post("/api/users/:id/permissions",async e=>{try{const t=e.req.param("id"),{role_id:a,permission_ids:s}=await e.req.json();if(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(a).run(),s&&s.length>0)for(const r of s)await e.env.DB.prepare(`
           INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
           VALUES (?, ?)
-        `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",r=e.req.query("employee_id")||"";let o=`
-      SELECT 
-        l.*,
-        e.full_name_ar as employee_name,
-        e.department,
-        e.job_title,
-        l.total_days as days_count
-      FROM hr_leaves l
-      LEFT JOIN hr_employees e ON l.employee_id = e.id
-      WHERE 1=1
-    `;const l=[];a&&(o+=" AND l.status = ?",l.push(a)),s&&(o+=" AND l.leave_type = ?",l.push(s)),r&&(o+=" AND l.employee_id = ?",l.push(r)),o+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:r,end_date:o,reason:l}=await e.req.json(),i=new Date(r),n=new Date(o),c=Math.ceil((n.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
-      INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(t.tenantId||1,a,s,r,o,c,l||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
-      UPDATE hr_leaves 
-      SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(a.userId,t).run(),e.json({success:!0})}catch(t){return console.error("Error approving leave:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id/reject",async e=>{try{const t=e.req.param("id"),a=await x(e),{reason:s}=await e.req.json();return await e.env.DB.prepare(`
-      UPDATE hr_leaves 
-      SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
-      WHERE id = ?
-    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:r,status:o}=e.req.query();let l=`
-      SELECT s.*, e.full_name_ar as employee_name
-      FROM hr_salaries s
-      LEFT JOIN hr_employees e ON s.employee_id = e.id
-      WHERE 1=1
-    `;const i=[];s&&(l+=" AND s.employee_id = ?",i.push(s)),r&&(l+=" AND s.salary_month = ?",i.push(r)),o&&(l+=" AND s.payment_status = ?",i.push(o)),l+=" ORDER BY s.salary_month DESC, s.created_at DESC";const n=i.length>0?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),r=parseFloat(s.basic_salary)||0,o=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,n=parseFloat(s.bonuses)||0,c=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,f=r+o+l+i+n+c,g=p+u+m,b=f-g;return await e.env.DB.prepare(`
-      INSERT INTO hr_salaries (
-        tenant_id, employee_id, salary_month, basic_salary,
-        housing_allowance, transportation_allowance, other_allowances,
-        bonuses, overtime_amount, late_deductions, absence_deductions,
-        other_deductions, gross_salary, total_deductions, net_salary,
-        payment_status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(a,s.employee_id,s.salary_month,r,o,l,i,n,c,p,u,m,f,g,b,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
-      UPDATE hr_salaries 
-      SET payment_status = 'approved'
-      WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error approving salary:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
-      UPDATE hr_salaries 
-      SET payment_status = 'paid', payment_date = date('now')
-      WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error paying salary:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_salaries WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting salary:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId,s=a?`WHERE d.tenant_id = ${a}`:"",r=await e.env.DB.prepare(`
-      SELECT d.*, 
-             m.full_name as manager_name,
-             (SELECT COUNT(*) FROM hr_employees e WHERE e.department = d.department_code AND e.tenant_id = d.tenant_id) as employee_count
-      FROM hr_departments d
-      LEFT JOIN hr_employees m ON d.manager_id = m.id
-      ${s}
-      ORDER BY d.department_name
-    `).all();return e.json({success:!0,data:r.results})}catch(t){return console.error("Error fetching departments:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json();return await e.env.DB.prepare(`
-      INSERT INTO hr_departments (
-        tenant_id, department_name, department_code, 
-        manager_id, description, budget
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId;console.log("🔍 HR Performance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const r=await e.env.DB.prepare(`
-      SELECT p.*, 
-             e.full_name_ar as employee_name,
-             r.full_name_ar as reviewer_name,
-             p.attendance_punctuality as attendance_rating,
-             p.quality_of_work as quality_rating,
-             p.teamwork as teamwork_rating,
-             p.attendance_punctuality as punctuality_rating,
-             p.areas_for_improvement as weaknesses,
-             (p.review_period_start || ' - ' || p.review_period_end) as review_period
-      FROM hr_performance_reviews p
-      LEFT JOIN hr_employees e ON p.employee_id = e.id
-      LEFT JOIN hr_employees r ON p.reviewer_id = r.id
-      ORDER BY p.review_date DESC
-    `).all();return console.log("🔍 HR Performance API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let r=s.review_period_start||s.review_date,o=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(r=s.review_date,o=s.review_date);const l=s.attendance_rating||3,i=s.quality_rating||3,n=s.teamwork_rating||3,c=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(l)+parseFloat(i)+parseFloat(n)+parseFloat(c))/4;return await e.env.DB.prepare(`
-      INSERT INTO hr_performance_reviews (
-        tenant_id, employee_id, reviewer_id, review_period_start, review_period_end, review_date,
-        overall_rating, attendance_punctuality, quality_of_work, 
-        teamwork, strengths, areas_for_improvement,
-        goals, comments, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(a,s.employee_id,t.userId,r,o,s.review_date,p,l,i,n,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
-      SELECT p.*, 
-             e.full_name_ar as employee_name,
-             e.job_title as current_position,
-             p.old_job_title as old_position,
-             p.new_job_title as new_position,
-             p.effective_date as promotion_date
-      FROM hr_promotions_transfers p
-      LEFT JOIN hr_employees e ON p.employee_id = e.id
-    `;console.log("🔍 HR Promotions API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),s=s.replace("WHERE 1=1",""),s+=" ORDER BY p.effective_date DESC";const r=await e.env.DB.prepare(s).all();return console.log("🔍 HR Promotions API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json(),r=await e.env.DB.prepare(`
-      SELECT job_title, basic_salary, department FROM hr_employees WHERE id = ?
-    `).bind(s.employee_id).first();return await e.env.DB.prepare(`
-      INSERT INTO hr_promotions_transfers (
-        tenant_id, employee_id, type, old_job_title, new_job_title,
-        old_salary, new_salary, effective_date,
-        old_department, new_department, reason, approved_by, status
-      ) VALUES (?, ?, 'promotion', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(a,s.employee_id,r?.job_title||"",s.new_position,r?.basic_salary||0,s.new_salary,s.effective_date||s.promotion_date,r?.department||"",s.new_department||r?.department||"",s.reason||"",t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e),s=await e.env.DB.prepare(`
-      SELECT * FROM hr_promotions_transfers WHERE id = ?
-    `).bind(t).first();return s?(await e.env.DB.prepare(`
-      UPDATE hr_promotions_transfers 
-      SET status = 'approved', approved_by = ?, approved_at = datetime('now')
-      WHERE id = ?
-    `).bind(a.userId,t).run(),await e.env.DB.prepare(`
-      UPDATE hr_employees 
-      SET job_title = ?, basic_salary = ?, department = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(s.new_job_title,s.new_salary,s.new_department,s.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
-      UPDATE hr_promotions_transfers SET status = 'rejected' WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.query("search")||"",r=e.req.query("type")||"",o=e.req.query("status")||"";let l=`
-      SELECT d.*, e.full_name as employee_name, e.employee_number
-      FROM hr_documents d
-      LEFT JOIN hr_employees e ON d.employee_id = e.id
-      WHERE d.tenant_id = ?
-    `;const i=[a];s&&(l+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),r&&(l+=" AND d.document_type = ?",i.push(r)),l+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const n=await e.env.DB.prepare(l).bind(...i).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=await e.req.json(),{employee_id:r,document_type:o,document_number:l,issue_date:i,expiry_date:n,notes:c}=s,p=await e.env.DB.prepare(`
-      INSERT INTO hr_documents (tenant_id, employee_id, document_type, document_number, issue_date, expiry_date, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,r,o,l||null,i||null,n||null,c||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.param("type"),r=e.req.query("start_date")||"",o=e.req.query("end_date")||"";let l={};const i=await e.env.DB.prepare(`
-      SELECT COUNT(*) as total, 
-             COUNT(CASE WHEN status = 'active' THEN 1 END) as active
-      FROM hr_employees 
-      WHERE tenant_id = ?
-    `).bind(a).first();if(l.totalEmployees=i?.total||0,s==="overview"||s==="attendance"){const u=await e.env.DB.prepare(`
-        SELECT 
-          COUNT(*) as total,
-          COUNT(CASE WHEN status = 'present' THEN 1 END) as present
-        FROM hr_attendance
-        WHERE tenant_id = ?
-        ${r?"AND attendance_date >= ?":""}
-        ${o?"AND attendance_date <= ?":""}
-      `).bind(a,...r?[r]:[],...o?[o]:[]).first(),m=u?.total||0,f=u?.present||0;l.attendanceRate=m>0?Math.round(f/m*100):0,l.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],l.attendanceData=[95,92,88,94,90,85]}const n=await e.env.DB.prepare(`
-      SELECT SUM(net_salary) as total
-      FROM hr_salaries
-      WHERE tenant_id = ?
-      ${r?"AND salary_month >= ?":""}
-      ${o?"AND salary_month <= ?":""}
-    `).bind(a,...r?[r]:[],...o?[o]:[]).first();l.totalSalaries=n?.total||0;const c=await e.env.DB.prepare(`
-      SELECT AVG(overall_rating) as avg
-      FROM hr_performance_reviews
-      WHERE tenant_id = ?
-    `).bind(a).first();l.avgPerformance=c?.avg||0,(s==="overview"||s==="leaves")&&(l.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],l.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
-      SELECT d.department_name as department, SUM(s.net_salary) as total
-      FROM hr_salaries s
-      LEFT JOIN hr_employees e ON s.employee_id = e.id
-      LEFT JOIN hr_departments d ON e.department = d.department_code
-      WHERE s.tenant_id = ?
-      GROUP BY d.department_name
-      ORDER BY total DESC
-      LIMIT 5
-    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(Et));d.get("/admin/hr/employees",e=>e.html(kt));d.get("/admin/hr/attendance",e=>e.html(It));d.get("/admin/hr/leaves",e=>e.html(Dt));d.get("/admin/hr/salaries",e=>e.html(St));d.get("/admin/hr/departments",e=>e.html(Tt));d.get("/admin/hr/performance",e=>e.html(Rt));d.get("/admin/hr/promotions",e=>e.html(Ct));d.get("/admin/hr/documents",e=>e.html($t));d.get("/admin/hr/reports",e=>e.html(Bt));d.get("/admin/hr/employees/:id",e=>e.redirect("/admin/hr/employees"));d.get("/admin/hr/employees/:id/edit",e=>e.redirect("/admin/hr/employees"));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e).catch(()=>({tenantId:1})))?.tenantId||1,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT attendance_date as date, 
+        `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/admin/hr",e=>e.html(T));c.get("/admin/hr/employees",e=>e.html(wt));c.get("/admin/hr/attendance",e=>e.html(_t));c.get("/admin/hr/leaves",e=>e.html(T));c.get("/admin/hr/salaries",e=>e.html(T));c.get("/admin/hr/performance",e=>e.html(T));c.get("/admin/hr/promotions",e=>e.html(T));c.get("/admin/hr/documents",e=>e.html(T));c.get("/admin/hr/reports",e=>e.html(T));c.get("/api/hr/dashboard/stats",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
-         WHERE attendance_date >= DATE('now', '-7 days') AND tenant_id = ${a}
-         GROUP BY attendance_date ORDER BY attendance_date`:`SELECT attendance_date as date, 
+         WHERE DATE(date) >= DATE('now', '-7 days') AND tenant_id = ${a}
+         GROUP BY DATE(date) ORDER BY date`:`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
-         WHERE attendance_date >= DATE('now', '-7 days')
-         GROUP BY attendance_date ORDER BY attendance_date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:c?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
-        id, tenant_id,
-        employee_code as employee_number,
-        full_name_ar as full_name,
-        full_name_en,
-        national_id,
-        date_of_birth as birthdate,
-        gender, email, phone,
-        department, job_title,
-        basic_salary, housing_allowance, transportation_allowance,
-        hire_date, contract_start_date, contract_end_date,
-        direct_manager_id,
-        employment_type, work_schedule,
-        status, notes,
-        created_at, updated_at
-      FROM hr_employees 
-      ORDER BY created_at DESC, hire_date DESC`).all();return console.log("🔍 HR Employees API - Results count:",s.results?.length||0),e.json({success:!0,data:s.results||[]})}catch(t){return console.error("Error fetching employees:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM hr_employees WHERE id = ?").bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
+         WHERE DATE(date) >= DATE('now', '-7 days')
+         GROUP BY DATE(date) ORDER BY date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:d?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/employees",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT * FROM hr_employees WHERE tenant_id = ${a} ORDER BY hire_date DESC`:"SELECT * FROM hr_employees ORDER BY hire_date DESC",{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM hr_employees WHERE id = ?").bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await h(e)).tenantId,r=await e.env.DB.prepare(`
       INSERT INTO hr_employees (
-        employee_number, full_name, national_id, email, phone, birthdate, gender,
-        department, job_title, basic_salary, housing_allowance, transportation_allowance,
-        hire_date, contract_start_date, contract_end_date, direct_manager,
-        employment_type, work_schedule, status, notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_number||null,t.full_name,t.national_id||null,t.email||null,t.phone||null,t.birthdate||t.date_of_birth||null,t.gender||null,t.department||null,t.job_title||null,t.basic_salary||0,t.housing_allowance||0,t.transportation_allowance||0,t.hire_date||null,t.contract_start_date||null,t.contract_end_date||null,t.direct_manager||null,t.employment_type||"full_time",t.work_schedule||"regular",t.status||"active",t.notes||null,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return console.error("Error adding employee:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
+        employee_number, full_name, national_id, gender, date_of_birth, nationality,
+        marital_status, number_of_dependents, phone, personal_email, work_email,
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+        address, city, postal_code, country, hire_date, job_title, department,
+        employment_type, work_schedule, direct_manager, basic_salary, housing_allowance,
+        transportation_allowance, status, contract_start_date, contract_end_date, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(t.employee_number,t.full_name,t.national_id,t.gender,t.date_of_birth,t.nationality,t.marital_status,t.number_of_dependents,t.phone,t.personal_email,t.work_email,t.emergency_contact_name,t.emergency_contact_phone,t.emergency_contact_relationship,t.address,t.city,t.postal_code,t.country,t.hire_date,t.job_title,t.department,t.employment_type,t.work_schedule,t.direct_manager,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.status||"active",t.contract_start_date,t.contract_end_date,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_employees SET
-        employee_number = ?, full_name = ?, national_id = ?, email = ?, phone = ?,
-        birthdate = ?, gender = ?, department = ?, job_title = ?, basic_salary = ?,
-        housing_allowance = ?, transportation_allowance = ?, hire_date = ?,
-        contract_start_date = ?, contract_end_date = ?, direct_manager = ?,
-        employment_type = ?, work_schedule = ?, status = ?, notes = ?,
-        updated_at = datetime('now')
+        full_name = ?, national_id = ?, gender = ?, date_of_birth = ?, nationality = ?,
+        marital_status = ?, number_of_dependents = ?, phone = ?, personal_email = ?, work_email = ?,
+        emergency_contact_name = ?, emergency_contact_phone = ?, emergency_contact_relationship = ?,
+        address = ?, city = ?, postal_code = ?, country = ?, hire_date = ?, job_title = ?,
+        department = ?, employment_type = ?, work_schedule = ?, direct_manager = ?, basic_salary = ?,
+        housing_allowance = ?, transportation_allowance = ?, status = ?, contract_start_date = ?,
+        contract_end_date = ?
       WHERE id = ?
-    `).bind(a.employee_number||null,a.full_name,a.national_id||null,a.email||null,a.phone||null,a.birthdate||a.date_of_birth||null,a.gender||null,a.department||null,a.job_title||null,a.basic_salary||0,a.housing_allowance||0,a.transportation_allowance||0,a.hire_date||null,a.contract_start_date||null,a.contract_end_date||null,a.direct_manager||null,a.employment_type||"full_time",a.work_schedule||"regular",a.status||"active",a.notes||null,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return console.error("Error updating employee:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/attendance",async e=>{try{const t=await x(e);console.log("🔍 HR Attendance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
-        a.*,
-        e.full_name_ar as employee_name,
-        e.employee_code as employee_number,
-        e.department,
-        a.working_hours as work_hours
-      FROM hr_attendance a 
-      LEFT JOIN hr_employees e ON a.employee_id = e.id 
-      ORDER BY a.attendance_date DESC, a.check_in_time DESC`).all();return console.log("🔍 HR Attendance API - Results count:",s.results?.length||0),e.json({success:!0,data:s.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
+    `).bind(a.full_name,a.national_id,a.gender,a.date_of_birth,a.nationality,a.marital_status,a.number_of_dependents,a.phone,a.personal_email,a.work_email,a.emergency_contact_name,a.emergency_contact_phone,a.emergency_contact_relationship,a.address,a.city,a.postal_code,a.country,a.hire_date,a.job_title,a.department,a.employment_type,a.work_schedule,a.direct_manager,a.basic_salary,a.housing_allowance,a.transportation_allowance,a.status,a.contract_start_date,a.contract_end_date,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/attendance",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
+         LEFT JOIN hr_employees e ON a.employee_id = e.id 
+         WHERE a.tenant_id = ${a} ORDER BY a.date DESC, a.check_in DESC`:`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
+         LEFT JOIN hr_employees e ON a.employee_id = e.id 
+         ORDER BY a.date DESC, a.check_in DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await h(e)).tenantId,r=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
-        employee_id, attendance_date, check_in_time, check_out_time, status, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.attendance_date||t.date,t.check_in_time||t.check_in,t.check_out_time||t.check_out,t.status,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
-      UPDATE hr_attendance 
-      SET attendance_date = ?, check_in_time = ?, check_out_time = ?, status = ?
-      WHERE id = ?
-    `).bind(a.attendance_date||a.date,a.check_in_time||a.check_in,a.check_out_time||a.check_out,a.status,t).run(),e.json({success:!0,message:"تم تحديث سجل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_attendance WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف سجل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT l.*, e.full_name, e.employee_number, lt.type_name 
+        employee_id, date, check_in, check_out, status, late_minutes, 
+        overtime_minutes, notes, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(t.employee_id,t.date,t.check_in,t.check_out,t.status,t.late_minutes||0,t.overtime_minutes||0,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/leaves",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT l.*, e.full_name, e.employee_number, lt.type_name 
          FROM hr_leaves l 
          LEFT JOIN hr_employees e ON l.employee_id = e.id 
          LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
@@ -27749,15 +21639,25 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
          FROM hr_leaves l 
          LEFT JOIN hr_employees e ON l.employee_id = e.id 
          LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
-         ORDER BY l.request_date DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/leaves",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,r=await e.env.DB.prepare(`
+         ORDER BY l.request_date DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await e.req.json(),s=(await h(e)).tenantId,r=await e.env.DB.prepare(`
       INSERT INTO hr_leaves (
         employee_id, leave_type_id, start_date, end_date, days_count,
         reason, status, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:r}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:r}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_leaves SET status = ?, rejection_reason = ?, approved_by = ?, approval_date = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(a,s,r,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
-      UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
+    `).bind(a,s,r,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/salaries",async e=>{try{const a=(await h(e)).tenantId,s=a?`SELECT s.*, e.full_name, e.employee_number FROM hr_salaries s 
+         LEFT JOIN hr_employees e ON s.employee_id = e.id 
+         WHERE s.tenant_id = ${a} ORDER BY s.month DESC`:`SELECT s.*, e.full_name, e.employee_number FROM hr_salaries s 
+         LEFT JOIN hr_employees e ON s.employee_id = e.id 
+         ORDER BY s.month DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/salaries",async e=>{try{const t=await e.req.json(),s=(await h(e)).tenantId,r=await e.env.DB.prepare(`
+      INSERT INTO hr_salaries (
+        employee_id, month, basic_salary, housing_allowance, transportation_allowance,
+        other_allowances, deductions, net_salary, payment_status, payment_date,
+        notes, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(t.employee_id,t.month,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.other_allowances,t.deductions,t.net_salary,t.payment_status||"pending",t.payment_date,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة سجل الراتب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id"),{payment_status:a,payment_date:s}=await e.req.json();return await e.env.DB.prepare(`
+      UPDATE hr_salaries SET payment_status = ?, payment_date = ?
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});const Y=new oe,Nt=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(Nt))e&&(Y.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Y.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Y as default};
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});c.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});const z=new ne,kt=Object.assign({"/src/index.tsx":c});let be=!1;for(const[,e]of Object.entries(kt))e&&(z.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),z.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{z as default};

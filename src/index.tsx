@@ -20,17 +20,8 @@ import { generateAddRatePage, generateEditRatePage } from './rates-forms'
 import { generateWorkflowTimelinePage } from './workflow-page'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
-import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
-import { hrLeavesPage, hrSalariesPage, hrDepartmentsPage, hrPerformancePage, hrPromotionsPage, hrDocumentsPage, hrReportsPage } from './hr-pages'
-import { roleDetailsPage } from './role-details-page'
-import { usersManagementPage } from './users-management-page'
-import { userPermissionsPage } from './user-permissions-page'
-import { permissionsManagementPage } from './permissions-management-page'
-import { companyReportsPage } from './company-reports-page'
-import { permissionsReportsPage } from './permissions-reports-page'
-import { checkPermission, getUserPermissions } from './permissions-middleware'
 
 type Bindings = {
   DB: D1Database;
@@ -251,12 +242,27 @@ const getMobileResponsiveCSS = () => `
 // Enable CORS
 app.use('*', cors())
 
+// Middleware: Log binding availability for debugging
+app.use('*', async (c, next) => {
+  // Log binding status for API routes (helps debug production issues)
+  if (c.req.path.startsWith('/api/')) {
+    console.log(`🔍 [${c.req.method}] ${c.req.path} - DB binding: ${!!c.env?.DB}`)
+  }
+  await next()
+})
+
 // ===================================
 // MULTI-TENANT MIDDLEWARE & HELPERS
 // ===================================
 
 // Helper: Get tenant from subdomain or slug
 async function getTenant(c: any): Promise<any> {
+  // Safety check for DB binding
+  if (!c.env?.DB) {
+    console.error('❌ getTenant: DB binding not available')
+    return null
+  }
+  
   // Try to get from subdomain first (e.g., tamweel1.tamweel.app)
   const host = c.req.header('host') || ''
   const subdomain = host.split('.')[0]
@@ -321,39 +327,34 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     
     console.log('🔍 Token:', token.substring(0, 20) + '...')
     
-    // Decode token: format is "userId:tenantId:roleId:timestamp" (base64 encoded)
+    
     const decoded = atob(token)
     const parts = decoded.split(':')
-    console.log('🔍 Decoded token parts:', parts)
-    
     const userId = parseInt(parts[0])
     const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
-    const roleIdFromToken = parts[2] !== 'null' && parts[2] !== 'undefined' ? parseInt(parts[2]) : null
+    
+    // Safety check for DB binding
+    if (!c.env?.DB) {
+      console.error('❌ getUserInfo: DB binding not available')
+      return { userId: null, tenantId: null, roleId: null }
+    }
     
     const user = await c.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
     `).bind(userId).first()
     
     if (!user) {
-      console.log('❌ User not found in DB')
       return { userId: null, tenantId: null, roleId: null }
     }
     
-    console.log('✅ User found:', { userId: user.id, tenantId: user.tenant_id, roleId: user.role_id })
-    
-    // SaaS Admin (role_id = 11) can see all companies and data
-    if (user.role_id === 11) {
+    // Super Admin (role_id = 1) can see all data
+    if (user.role_id === 1) {
       const queryTenantId = c.req.query('tenant_id')
-      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 11 }
+      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1 }
     }
     
-    // For other roles (Company Admin, Supervisor, Employee), return their tenant_id and role_id
-    // Prefer token values if available, fallback to DB values
-    return { 
-      userId: user.id, 
-      tenantId: tenantIdFromToken || user.tenant_id, 
-      roleId: roleIdFromToken || user.role_id 
-    }
+    // For other roles, return their tenant_id
+    return { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id }
   } catch (error) {
     console.error('Error getting user info:', error)
     return { userId: null, tenantId: null, roleId: null }
@@ -393,73 +394,6 @@ app.get('/api/tenants', async (c) => {
     return c.json({ success: true, data: results })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Get current user info (tenant, role, etc.)
-app.get('/api/user-info', async (c) => {
-  try {
-    const userInfo = await getUserInfo(c);
-    
-    if (!userInfo.userId) {
-      return c.json({ success: false, error: 'غير مصرح' }, 401);
-    }
-    
-    // Get user details
-    const user = await c.env.DB.prepare(`
-      SELECT u.*, r.role_name, r.description as role_description, t.company_name
-      FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN tenants t ON u.tenant_id = t.id
-      WHERE u.id = ?
-    `).bind(userInfo.userId).first();
-    
-    return c.json({
-      success: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        full_name: user.full_name,
-        email: user.email,
-        role_id: user.role_id,
-        role_name: user.role_name,
-        role_description: user.role_description,
-        tenant_id: user.tenant_id,
-        company_name: user.company_name,
-        user_type: user.user_type
-      }
-    });
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500);
-  }
-})
-
-// Get my permissions
-app.get('/api/my-permissions', async (c) => {
-  try {
-    const userInfo = await getUserInfo(c);
-    
-    if (!userInfo.userId || !userInfo.roleId) {
-      return c.json({ success: false, error: 'غير مصرح' }, 401);
-    }
-    
-    // Get permissions for this role
-    const permissions = await c.env.DB.prepare(`
-      SELECT p.name as permission_key, p.display_name as permission_name, p.category, p.description
-      FROM role_permissions rp
-      JOIN permissions p ON rp.permission_id = p.id
-      WHERE rp.role_id = ?
-      ORDER BY p.category, p.display_name
-    `).bind(userInfo.roleId).all();
-    
-    return c.json({
-      success: true,
-      role_id: userInfo.roleId,
-      permissions_count: permissions.results.length,
-      permissions: permissions.results
-    });
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500);
   }
 })
 
@@ -604,15 +538,34 @@ app.delete('/api/tenants/:id', async (c) => {
 // Login API
 app.post('/api/auth/login', async (c) => {
   try {
+    // Check if DB binding is available
+    if (!c.env.DB) {
+      console.error('❌ DB binding is not available')
+      return c.json({ 
+        success: false, 
+        error: 'Database connection not available. Please check bindings configuration.' 
+      }, 500)
+    }
+    
     const { username, password } = await c.req.json()
     
     console.log(`🔐 Login attempt: ${username}`)
+    console.log(`🔍 DB binding check: ${!!c.env.DB}`)
     
     // Get user with tenant information
+    // Double-check DB is available before using it
+    if (!c.env?.DB) {
+      console.error('❌ DB binding check failed in login query')
+      return c.json({ 
+        success: false, 
+        error: 'Database connection not available. Please check bindings configuration.' 
+      }, 500)
+    }
+    
     const user = await c.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.user_type, u.subscription_id, u.is_active, 
-             u.tenant_id,
+             u.tenant_id, u.role as user_role,
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
              t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
@@ -630,17 +583,22 @@ app.post('/api/auth/login', async (c) => {
     
     console.log(`✅ User found: ${user.full_name} (Role ID: ${user.role_id})`)
     
-    // Update last login
-    await c.env.DB.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(user.id).run()
+    // Update last login - check DB again before update
+    if (!c.env?.DB) {
+      console.error('❌ DB binding lost after user query')
+      // Continue anyway - user is authenticated, just can't update last_login
+    } else {
+      await c.env.DB.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
+        .bind(user.id).run()
+    }
     
     // Create token with tenant_id (user_id:tenant_id:role_id:timestamp)
     const tokenData = `${user.id}:${user.tenant_id || 'null'}:${user.role_id}:${Date.now()}`
     const token = btoa(tokenData)
     
-    // Set cookie for 7 days (without HttpOnly for now to allow JavaScript access for debugging)
+    // Set cookie for 7 days - use Response headers directly for Cloudflare Pages compatibility
     const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
-    c.header('Set-Cookie', `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax`)
+    const cookieValue = `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
     
     // Determine redirect URL - always go to /admin/panel
     const redirect = '/admin/panel'
@@ -648,7 +606,8 @@ app.post('/api/auth/login', async (c) => {
     console.log(`🎯 Redirect to: ${redirect}`)
     console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
     
-    return c.json({ 
+    // Create response with cookie header set directly (avoids getSetCookie compatibility issue)
+    const response = c.json({ 
       success: true,
       token: token,
       redirect: redirect,
@@ -670,9 +629,30 @@ app.post('/api/auth/login', async (c) => {
         tenant_slug: user.tenant_slug
       }
     })
+    
+    // Set cookie header directly on the response to avoid getSetCookie compatibility issue
+    response.headers.set('Set-Cookie', cookieValue)
+    return response
   } catch (error: any) {
     console.error('❌ Login error:', error)
-    return c.json({ success: false, error: 'حدث خطأ في تسجيل الدخول: ' + error.message }, 500)
+    console.error('❌ Error stack:', error.stack)
+    console.error('❌ Error details:', {
+      message: error.message,
+      name: error.name,
+      cause: error.cause,
+      DB_available: !!c.env?.DB
+    })
+    
+    // Return detailed error for debugging
+    return c.json({ 
+      success: false, 
+      error: 'حدث خطأ في تسجيل الدخول: ' + error.message,
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack,
+        DB_available: !!c.env?.DB
+      } : undefined
+    }, 500)
   }
 })
 
@@ -1481,7 +1461,7 @@ app.post('/api/users', async (c) => {
     if (tenant_id && tenant_id !== '') {
       // Convert to integer if provided as string
       tenant_id = parseInt(tenant_id as string);
-    } else if (userInfo.roleId === 11) {
+    } else if (userInfo.roleId === 1) {
       // Super admin creating user without tenant - allow null
       tenant_id = null;
     } else {
@@ -1569,19 +1549,19 @@ app.get('/api/customers', async (c) => {
       LEFT JOIN financing_requests f ON c.id = f.customer_id`
     
     // Apply filtering based on role
-    if (userInfo.roleId === 11) {
+    if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL customers (no filter)
-    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin & Role 3: Supervisor - see company customers only
       if (userInfo.tenantId) {
         query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       }
-    } else if (userInfo.roleId === 14) {
-      // Role 4: Employee - sees customers from same tenant
-      if (userInfo.tenantId) {
-        query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees only assigned customers
+      if (userInfo.userId) {
+        query += ` WHERE c.assigned_to = ${userInfo.userId}`
       } else {
-        query += ` WHERE 1 = 0` // No data if tenant not found
+        query += ` WHERE 1 = 0` // No data if user ID not found
       }
     } else {
       // Unknown role - no data
@@ -1833,11 +1813,15 @@ app.get('/api/financing-requests', async (c) => {
         c.employer_name,
         c.job_title,
         b.bank_name as selected_bank_name,
-        ft.type_name as financing_type_name
+        ft.type_name as financing_type_name,
+        ca.employee_id as assigned_employee_id,
+        u.full_name as assigned_employee_name
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
       LEFT JOIN banks b ON f.selected_bank_id = b.id
-      LEFT JOIN financing_types ft ON f.financing_type_id = ft.id`
+      LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id`
     
     if (tenant_id) {
       query += ` WHERE f.tenant_id = ${tenant_id}`
@@ -1924,99 +1908,64 @@ app.get('/api/workflow/timeline/:requestId', async (c) => {
   try {
     const requestId = c.req.param('requestId')
     
-    // Get request details with customer info
-    const request = await c.env.DB.prepare(`
+    // Get all stage transitions
+    const { results: transitions } = await c.env.DB.prepare(`
       SELECT 
-        fr.*,
-        c.full_name as customer_name,
-        c.phone as customer_phone,
-        b.bank_name as bank_name,
-        u.full_name as employee_name
-      FROM financing_requests fr
-      LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN banks b ON fr.selected_bank_id = b.id
-      LEFT JOIN users u ON c.assigned_to = u.id
-      WHERE fr.id = ?
-    `).bind(requestId).first()
+        wst.*,
+        from_stage.stage_name_ar as from_stage_name,
+        from_stage.stage_color as from_stage_color,
+        from_stage.stage_icon as from_stage_icon,
+        to_stage.stage_name_ar as to_stage_name,
+        to_stage.stage_color as to_stage_color,
+        to_stage.stage_icon as to_stage_icon,
+        u.full_name as transitioned_by_name
+      FROM workflow_stage_transitions wst
+      LEFT JOIN workflow_stages from_stage ON wst.from_stage_id = from_stage.id
+      LEFT JOIN workflow_stages to_stage ON wst.to_stage_id = to_stage.id
+      LEFT JOIN users u ON wst.transitioned_by = u.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.created_at ASC
+    `).bind(requestId).all()
     
-    if (!request) {
-      return c.json({ success: false, error: 'الطلب غير موجود' }, 404)
-    }
+    // Get all actions for this request
+    const { results: actions } = await c.env.DB.prepare(`
+      SELECT 
+        wsa.*,
+        ws.stage_name_ar,
+        ws.stage_color,
+        ws.stage_icon,
+        u.full_name as performed_by_name
+      FROM workflow_stage_actions wsa
+      LEFT JOIN workflow_stages ws ON wsa.stage_id = ws.id
+      LEFT JOIN users u ON wsa.performed_by = u.id
+      WHERE wsa.request_id = ?
+      ORDER BY wsa.created_at ASC
+    `).bind(requestId).all()
     
-    // Create simple timeline based on status
-    const statusMap: Record<string, any> = {
-      'pending': { 
-        name: 'جديد', 
-        color: '#3B82F6', 
-        icon: 'fa-file-alt',
-        description: 'تم إنشاء الطلب وفي انتظار المراجعة'
-      },
-      'under_review': { 
-        name: 'قيد المراجعة', 
-        color: '#F59E0B', 
-        icon: 'fa-search',
-        description: 'الطلب قيد المراجعة من قبل الفريق'
-      },
-      'approved': { 
-        name: 'مقبول', 
-        color: '#10B981', 
-        icon: 'fa-check-circle',
-        description: 'تم قبول الطلب'
-      },
-      'rejected': { 
-        name: 'مرفوض', 
-        color: '#EF4444', 
-        icon: 'fa-times-circle',
-        description: 'تم رفض الطلب'
-      },
-      'completed': { 
-        name: 'مكتمل', 
-        color: '#8B5CF6', 
-        icon: 'fa-check-double',
-        description: 'تم إكمال الطلب بنجاح'
-      },
-      'processing': { 
-        name: 'قيد المعالجة', 
-        color: '#06B6D4', 
-        icon: 'fa-cog',
-        description: 'الطلب قيد المعالجة'
-      },
-      'cancelled': { 
-        name: 'ملغي', 
-        color: '#6B7280', 
-        icon: 'fa-ban',
-        description: 'تم إلغاء الطلب'
-      }
-    }
-    
-    // Build timeline events
-    const transitions = [
-      {
-        id: 1,
-        from_stage_name: null,
-        to_stage_name: statusMap[request.status]?.name || request.status,
-        to_stage_color: statusMap[request.status]?.color || '#3B82F6',
-        to_stage_icon: statusMap[request.status]?.icon || 'fa-circle',
-        transitioned_by_name: request.employee_name || 'النظام',
-        created_at: request.created_at,
-        notes: statusMap[request.status]?.description || ''
-      }
-    ]
-    
-    const actions = []
-    const tasks = []
+    // Get all tasks for this request
+    const { results: tasks } = await c.env.DB.prepare(`
+      SELECT 
+        wst.*,
+        ws.stage_name_ar,
+        assigned_user.full_name as assigned_to_name,
+        completed_user.full_name as completed_by_name
+      FROM workflow_stage_tasks wst
+      LEFT JOIN workflow_stages ws ON wst.stage_id = ws.id
+      LEFT JOIN users assigned_user ON wst.assigned_to = assigned_user.id
+      LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.due_date ASC
+    `).bind(requestId).all()
     
     return c.json({ 
       success: true, 
       data: {
-        request,
         transitions,
         actions,
         tasks
       }
     })
   } catch (error: any) {
-    console.error('Timeline error:', error);
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -3297,10 +3246,10 @@ app.get('/api/dashboard/stats', async (c) => {
     // Apply role-based filtering
     let tenant_id = null;
     
-    if (userInfo.roleId === 11) {
+    if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL data (no filter)
       tenant_id = null;
-    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin & Role 3: Supervisor - see company data only
       tenant_id = userInfo.tenantId;
       if (tenant_id !== null) {
@@ -3311,7 +3260,7 @@ app.get('/api/dashboard/stats', async (c) => {
         subscriptions_query += ' AND tenant_id = ?'
         users_query += ' AND tenant_id = ?'
       }
-    } else if (userInfo.roleId === 14) {
+    } else if (userInfo.roleId === 4) {
       // Role 4: Employee - sees only assigned customers/requests
       if (userInfo.userId) {
         customers_query += ' WHERE assigned_to = ?'
@@ -3354,11 +3303,11 @@ app.get('/api/dashboard/stats', async (c) => {
       
     const subscriptions_count = tenant_id !== null && userInfo.roleId !== 1 && userInfo.roleId !== 4
       ? await c.env.DB.prepare(subscriptions_query).bind(userInfo.tenantId).first()
-      : (userInfo.roleId === 11 ? await c.env.DB.prepare(subscriptions_query).first() : { count: 0 })
+      : (userInfo.roleId === 1 ? await c.env.DB.prepare(subscriptions_query).first() : { count: 0 })
       
     const users_count = tenant_id !== null && userInfo.roleId !== 1 && userInfo.roleId !== 4
       ? await c.env.DB.prepare(users_query).bind(userInfo.tenantId).first()
-      : (userInfo.roleId === 11 ? await c.env.DB.prepare(users_query).first() : { count: 0 })
+      : (userInfo.roleId === 1 ? await c.env.DB.prepare(users_query).first() : { count: 0 })
     
     // Banks - no tenant_id column, count all active banks
     // Banks are shared across all tenants
@@ -3435,146 +3384,6 @@ app.delete('/api/rates/:id', async (c) => {
     return c.json({ success: true, message: 'تم حذف النسبة بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Get workflow report data
-app.get('/api/reports/workflow', async (c) => {
-  try {
-    const userInfo = await getUserInfo(c);
-    const startDate = c.req.query('start_date') || '';
-    const endDate = c.req.query('end_date') || '';
-    const customerId = c.req.query('customer_id') || '';
-
-    // Build query with role-based access control
-    let whereClause = 'WHERE 1=1';
-    const params: any[] = [];
-
-    // Apply role-based filtering
-    if (userInfo.roleId === 12 || userInfo.roleId === 13) {
-      // Company Admin/Supervisor - see company data
-      if (userInfo.tenantId) {
-        whereClause += ' AND fr.tenant_id = ?';
-        params.push(userInfo.tenantId);
-      }
-    } else if (userInfo.roleId === 14) {
-      // Employee - see only assigned customers
-      if (userInfo.userId) {
-        whereClause += ' AND c.assigned_to = ?';
-        params.push(userInfo.userId);
-      } else {
-        whereClause += ' AND 1=0';
-      }
-    }
-
-    // Apply date filters
-    if (startDate) {
-      whereClause += ' AND DATE(fr.created_at) >= DATE(?)';
-      params.push(startDate);
-    }
-    if (endDate) {
-      whereClause += ' AND DATE(fr.created_at) <= DATE(?)';
-      params.push(endDate);
-    }
-    if (customerId) {
-      whereClause += ' AND c.id = ?';
-      params.push(customerId);
-    }
-
-    // Get stage distribution
-    const stagesQuery = `
-      SELECT 
-        fr.status,
-        COUNT(*) as count
-      FROM financing_requests fr
-      LEFT JOIN customers c ON fr.customer_id = c.id
-      ${whereClause}
-      GROUP BY fr.status
-    `;
-    const stages = await c.env.DB.prepare(stagesQuery).bind(...params).all();
-
-    // Get workflow details
-    const detailsQuery = `
-      SELECT 
-        c.id as customerId,
-        c.full_name as customerName,
-        fr.id as requestId,
-        fr.requested_amount as amount,
-        fr.status as stage,
-        fr.created_at
-      FROM financing_requests fr
-      LEFT JOIN customers c ON fr.customer_id = c.id
-      ${whereClause}
-      ORDER BY fr.created_at DESC
-      LIMIT 100
-    `;
-    const details = await c.env.DB.prepare(detailsQuery).bind(...params).all();
-
-    // Map status names to Arabic
-    const statusMap: Record<string, string> = {
-      'pending': 'جديد',
-      'under_review': 'قيد المراجعة',
-      'approved': 'مقبول',
-      'rejected': 'مرفوض',
-      'completed': 'مكتمل',
-      'processing': 'قيد المعالجة',
-      'cancelled': 'ملغي'
-    };
-
-    // Format stages data
-    const formattedStages = (stages.results || []).map((s: any) => ({
-      name: statusMap[s.status] || s.status,
-      count: s.count
-    }));
-
-    // Format details data
-    const formattedDetails = (details.results || []).map((d: any) => {
-      const createdAt = new Date(d.created_at);
-      const now = new Date();
-      const durationMs = now.getTime() - createdAt.getTime();
-      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
-      const durationDays = Math.floor(durationHours / 24);
-
-      let durationText = '';
-      if (durationDays > 0) {
-        durationText = `${durationDays} يوم`;
-      } else if (durationHours > 0) {
-        durationText = `${durationHours} ساعة`;
-      } else {
-        const durationMinutes = Math.floor(durationMs / (1000 * 60));
-        durationText = `${durationMinutes} دقيقة`;
-      }
-
-      return {
-        customerId: d.customerId?.toString() || '',
-        customerName: d.customerName || 'غير محدد',
-        requestId: d.requestId?.toString() || '',
-        amount: d.amount || 0,
-        stage: statusMap[d.stage] || d.stage,
-        transitions: 1,
-        duration: durationText,
-        status: d.stage === 'completed' ? 'مكتمل' : 'نشط'
-      };
-    });
-
-    // Calculate average durations between stages (simplified)
-    const durations = [
-      { stage: 'جديد → مراجعة', duration: 120 },
-      { stage: 'مراجعة → قبول', duration: 240 },
-      { stage: 'قبول → مكتمل', duration: 360 }
-    ];
-
-    return c.json({
-      success: true,
-      data: {
-        stages: formattedStages,
-        durations: durations,
-        details: formattedDetails
-      }
-    });
-  } catch (error: any) {
-    console.error('Workflow report error:', error);
-    return c.json({ success: false, error: error.message }, 500);
   }
 })
 
@@ -3773,20 +3582,6 @@ app.post('/api/users/check-permission', async (c) => {
   }
 })
 
-// Get all permissions
-app.get('/api/permissions', async (c) => {
-  try {
-    const result = await c.env.DB.prepare(`
-      SELECT * FROM permissions
-      ORDER BY category, id
-    `).all()
-    
-    return c.json({ success: true, data: result.results })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
 // Get all roles with permissions count
 app.get('/api/roles', async (c) => {
   try {
@@ -3899,7 +3694,17 @@ app.put('/api/users/:id', async (c) => {
 // ============================================
 
 // Public pages (no authentication required)
-app.get('/', (c) => c.html(homePage))
+// Test bindings at root with ?test=bindings
+app.get('/', async (c) => {
+  if (c.req.query('test') === 'bindings') {
+    return c.json({
+      DB: !!c.env.DB,
+      ATTACHMENTS: !!c.env.ATTACHMENTS,
+      timestamp: new Date().toISOString()
+    })
+  }
+  return c.html(homePage)
+})
 app.get('/calculator', (c) => c.html(smartCalculator))
 app.get('/calculator-old', (c) => c.html(calculatorPage))
 
@@ -3909,7 +3714,7 @@ app.get('/c/:tenant/calculator', async (c) => {
   
   // Get tenant information from database
   const tenant = await c.env.DB.prepare(`
-    SELECT * FROM tenants WHERE slug = ? AND is_active = 1
+    SELECT * FROM tenants WHERE slug = ? AND status = 'active'
   `).bind(tenantSlug).first()
   
   if (!tenant) {
@@ -3939,21 +3744,13 @@ app.get('/c/:tenant/calculator', async (c) => {
   }
   
   // Return calculator page with tenant context
-  const companyName = (tenant as any).company_name || 'الشركة'
-  const tenantId = (tenant as any).id
-  
-  // Create modified calculator HTML with tenant branding
-  let calculatorHTML = smartCalculator
-    .replace(/حاسبة التمويل الذكية/g, `حاسبة تمويل ${companyName}`)
+  // Add tenant info as JavaScript variable and update messages
+  return c.html(smartCalculator
+    .replace(/حاسبة التمويل الذكية/g, `حاسبة تمويل ${tenant.company_name}`)
     .replace('/api/calculator/submit-request', `/api/c/${tenantSlug}/calculator/submit-request`)
-  
-  // Add tenant context to page
-  calculatorHTML = calculatorHTML.replace(
-    '<script>',
-    `<script>\n        window.TENANT_ID = ${tenantId};\n        window.TENANT_NAME = '${companyName.replace(/'/g, "\\'")}';\n        window.TENANT_SLUG = '${tenantSlug}';\n        `
+    .replace('<script>', `<script>\n        // Tenant information for company-specific calculator\n        window.TENANT_NAME = '${tenant.company_name.replace(/'/g, "\\'")}';\n    `)
+    .replace('سيتم التواصل معك قريباً من \' + selectedBestOffer.bank.bank_name', `سيتم المراجعة من شركة ${tenant.company_name.replace(/'/g, "\\'")} وسوف يتم التواصل معك قريباً'`)
   )
-  
-  return c.html(calculatorHTML)
 })
 
 app.get('/login', (c) => c.html(loginPage))
@@ -4113,7 +3910,7 @@ app.get('/api/reports/requests-followup', async (c) => {
     let tenant_id = queryTenantId ? parseInt(queryTenantId) : userInfo.tenantId
     
     // Super Admin (role_id = 1) can access all tenants if no specific tenant_id provided
-    if (userInfo.roleId === 11 && !tenant_id) {
+    if (userInfo.roleId === 1 && !tenant_id) {
       // If no tenant_id specified, show all requests
       tenant_id = null
     }
@@ -4125,6 +3922,9 @@ app.get('/api/reports/requests-followup', async (c) => {
       SELECT 
         fr.id,
         fr.created_at,
+        fr.approved_at,
+        fr.rejected_at,
+        fr.reviewed_at,
         fr.status,
         fr.requested_amount,
         c.full_name as customer_name,
@@ -4132,15 +3932,28 @@ app.get('/api/reports/requests-followup', async (c) => {
         u.full_name as employee_name,
         u.username as employee_username,
         t.company_name as tenant_name,
-        fr.created_at as last_update,
-        CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER) as days_elapsed,
         CASE 
-          WHEN fr.status IN ('approved', 'rejected', 'completed', 'cancelled') THEN 1
+          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
+          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN fr.rejected_at
+          WHEN fr.reviewed_at IS NOT NULL THEN fr.reviewed_at
+          ELSE NULL
+        END as last_update,
+        CASE 
+          WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN 
+            CAST((julianday(fr.approved_at) - julianday(fr.created_at)) AS INTEGER)
+          WHEN fr.status = 'rejected' AND fr.rejected_at IS NOT NULL THEN 
+            CAST((julianday(fr.rejected_at) - julianday(fr.created_at)) AS INTEGER)
+          ELSE 
+            CAST((julianday('now') - julianday(fr.created_at)) AS INTEGER)
+        END as days_elapsed,
+        CASE 
+          WHEN fr.status IN ('approved', 'rejected') THEN 1
           ELSE 0
         END as is_closed
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
     `
     
@@ -4291,7 +4104,7 @@ app.get('/api/reports/performance', async (c) => {
         ) as success_rate,
         ROUND(SUM(CASE WHEN fr.status = 'approved' THEN fr.requested_amount ELSE 0 END), 2) as total_amount
       FROM users u
-      
+      LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
       LEFT JOIN customers c ON ca.customer_id = c.id
       LEFT JOIN financing_requests fr ON c.id = fr.customer_id
       ${whereClause.replace('c.tenant_id', 'u.tenant_id')}
@@ -4337,75 +4150,9 @@ app.get('/api/reports/performance', async (c) => {
   }
 });
 
-// Test Auth Page - للتحقق من الكوكيز
-app.get('/test-auth', async (c) => {
-  const cookieHeader = c.req.header('Cookie')
-  const userInfo = await getUserInfo(c);
-  
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-        <meta charset="UTF-8">
-        <title>اختبار المصادقة</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body class="p-8 bg-gray-100">
-        <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
-            <h1 class="text-2xl font-bold mb-4">اختبار المصادقة</h1>
-            
-            <div class="space-y-4">
-                <div class="bg-blue-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">Cookie Header من الخادم:</h3>
-                    <pre class="text-sm">${cookieHeader || 'لا توجد كوكيز'}</pre>
-                </div>
-                
-                <div class="bg-green-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">معلومات المستخدم:</h3>
-                    <pre class="text-sm">${JSON.stringify(userInfo, null, 2)}</pre>
-                </div>
-                
-                <div class="bg-yellow-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">Cookies من JavaScript:</h3>
-                    <pre id="jsCookies" class="text-sm"></pre>
-                </div>
-                
-                <div class="bg-purple-50 p-4 rounded">
-                    <h3 class="font-bold mb-2">LocalStorage:</h3>
-                    <pre id="localStorage" class="text-sm"></pre>
-                </div>
-            </div>
-            
-            <div class="mt-6 space-x-3">
-                <a href="/login" class="bg-blue-600 text-white px-4 py-2 rounded">تسجيل الدخول</a>
-                <a href="/admin/panel" class="bg-green-600 text-white px-4 py-2 rounded">لوحة التحكم</a>
-            </div>
-        </div>
-        
-        <script>
-            document.getElementById('jsCookies').textContent = document.cookie || 'لا توجد كوكيز';
-            document.getElementById('localStorage').textContent = JSON.stringify({
-                authToken: localStorage.getItem('authToken'),
-                userData: localStorage.getItem('userData')
-            }, null, 2);
-        </script>
-    </body>
-    </html>
-  `)
-})
-
 app.get('/admin/panel', async (c) => {
   // Check authentication
   const userInfo = await getUserInfo(c);
-  
-  // تشخيص للكوكيز والتوكن
-  const cookieHeader = c.req.header('Cookie') || 'لا توجد كوكيز';
-  const authHeader = c.req.header('Authorization') || 'لا يوجد Authorization Header';
-  
-  console.log('🔍 /admin/panel - تشخيص المصادقة:');
-  console.log('  Cookie Header:', cookieHeader);
-  console.log('  Authorization Header:', authHeader);
-  console.log('  UserInfo:', JSON.stringify(userInfo, null, 2));
   
   if (!userInfo.userId || !userInfo.roleId) {
     return c.html(`
@@ -4418,42 +4165,22 @@ app.get('/admin/panel', async (c) => {
           <script src="https://cdn.tailwindcss.com"></script>
           <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
-      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
-          <div class="max-w-2xl w-full mx-4">
-              <div class="bg-white rounded-2xl shadow-2xl p-8">
-                  <div class="mb-6 text-center">
+      <body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen flex items-center justify-center">
+          <div class="max-w-md w-full mx-4">
+              <div class="bg-white rounded-2xl shadow-2xl p-8 text-center">
+                  <div class="mb-6">
                       <i class="fas fa-lock text-6xl text-blue-600"></i>
                   </div>
-                  <h1 class="text-3xl font-bold text-gray-800 mb-4 text-center">تسجيل الدخول مطلوب</h1>
-                  <p class="text-gray-600 mb-6 text-center">
+                  <h1 class="text-3xl font-bold text-gray-800 mb-4">تسجيل الدخول مطلوب</h1>
+                  <p class="text-gray-600 mb-6">
                       يجب تسجيل الدخول للوصول إلى لوحة التحكم
                   </p>
-                  
-                  <!-- معلومات التشخيص -->
-                  <div class="bg-gray-100 rounded-lg p-4 mb-6 text-sm">
-                      <h3 class="font-bold text-gray-700 mb-2">🔍 معلومات التشخيص:</h3>
-                      <div class="space-y-2">
-                          <div><strong>Cookie Header:</strong> <code class="bg-white px-2 py-1 rounded">${cookieHeader.substring(0, 100)}...</code></div>
-                          <div><strong>User ID:</strong> ${userInfo.userId || 'غير موجود'}</div>
-                          <div><strong>Role ID:</strong> ${userInfo.roleId || 'غير موجود'}</div>
-                          <div><strong>Tenant ID:</strong> ${userInfo.tenantId || 'غير موجود'}</div>
-                      </div>
-                  </div>
-                  
                   <div class="space-y-3">
-                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                      <a href="/login" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
                           <i class="fas fa-sign-in-alt ml-2"></i>
                           تسجيل الدخول
                       </a>
-                      <a href="/test-login.html" class="block w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
-                          <i class="fas fa-vial ml-2"></i>
-                          صفحة اختبار تسجيل الدخول
-                      </a>
-                      <a href="/test-auth" class="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-center">
-                          <i class="fas fa-bug ml-2"></i>
-                          صفحة تشخيص المصادقة
-                      </a>
-                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors text-center">
+                      <a href="/" class="block w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-lg transition-colors">
                           <i class="fas fa-home ml-2"></i>
                           العودة للرئيسية
                       </a>
@@ -4465,6 +4192,7 @@ app.get('/admin/panel', async (c) => {
     `);
   }
   
+<<<<<<< HEAD
   // Get user details from database
   const user = await c.env.DB.prepare(`
     SELECT u.*, r.role_name, r.description as role_description, t.company_name
@@ -5783,16 +5511,12 @@ app.get('/admin/tenants/:id', async (c) => {
 app.get('/admin/tenants', (c) => c.html(tenantsPage))
 app.get('/admin/tenant-calculators', (c) => c.html(tenantCalculatorsPage))
 app.get('/admin/saas-settings', (c) => c.html(saasSettingsPage))
-app.get('/admin/settings', (c) => c.html(saasSettingsPage)) // Alias for saas-settings
 app.get('/admin/reports', (c) => c.html(reportsPage))
 app.get('/admin/reports/customers', (c) => c.html(customersReportPage))
 app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
 app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
 app.get('/admin/reports/banks', (c) => c.html(banksReportPage))
 app.get('/admin/reports/performance', (c) => c.html(performanceReportPage))
-app.get('/admin/reports/clicks', (c) => c.html(clicksReportPage))
-app.get('/admin/reports/workflow', (c) => c.html(workflowReportPage))
-app.get('/admin/reports/employee-performance', (c) => c.html(employeePerformanceReportPage))
 app.get('/admin/payments', (c) => c.html(paymentsPage))
 app.get('/admin/banks', (c) => c.html(banksManagementPage))
 
@@ -5831,16 +5555,10 @@ app.get('/c/:tenant/admin', async (c) => {
     `)
   }
   
-  // Return admin panel with tenant branding and user role
-  // Inject role_id directly into HTML for menu filtering
+  // Return admin panel with tenant branding
+  // Note: User name and email are loaded dynamically from localStorage by JavaScript
   return c.html(fullAdminPanel
     .replace('لوحة التحكم - نظام حاسبة التمويل', `لوحة التحكم - ${tenant.company_name}`)
-    .replace('window.initMenuPermissions();', `
-      // تعيين role_id من Backend مباشرة
-      window.USER_ROLE_ID = ${userInfo.roleId};
-      console.log('🎯 Role ID من Backend:', window.USER_ROLE_ID);
-      window.initMenuPermissions();
-    `)
   )
 })
 
@@ -5894,12 +5612,12 @@ app.get('/admin/dashboard', async (c) => {
     let requestsJoinWhere = '';
     let queryParams: any[] = [];
     
-    if (userInfo.roleId === 11) {
+    if (userInfo.roleId === 1) {
       // Super Admin - sees ALL data
       customersWhere = '';
       requestsWhere = '';
       requestsJoinWhere = '';
-    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin & Role 3: Supervisor - see company data only
       if (userInfo.tenantId) {
         customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
@@ -5907,13 +5625,13 @@ app.get('/admin/dashboard', async (c) => {
         requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 14) {
-      // Role 4: Employee - sees customers/requests from same tenant
-      if (userInfo.tenantId) {
-        customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
-        requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE tenant_id = ${userInfo.tenantId})`;
-        requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
-        queryParams.push(userInfo.tenantId);
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees only assigned customers/requests
+      if (userInfo.userId) {
+        customersWhere = `WHERE assigned_to = ${userInfo.userId}`;
+        requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${userInfo.userId})`;
+        requestsJoinWhere = `AND c.assigned_to = ${userInfo.userId}`;
+        queryParams.push(userInfo.userId);
       } else {
         customersWhere = 'WHERE 1 = 0';
         requestsWhere = 'WHERE 1 = 0';
@@ -5974,9 +5692,9 @@ app.get('/admin/dashboard', async (c) => {
       SELECT 
         status,
         COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${requestsWhere}), 2) as percentage
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${whereClause}), 2) as percentage
       FROM financing_requests
-      ${requestsWhere}
+      ${whereClause}
       GROUP BY status
     `).all()
     
@@ -6546,37 +6264,39 @@ app.get('/admin/customer-assignment', async (c) => {
   // Temporary: Get tenant_id from query or default to 1
   const tenantId = c.req.query('tenant_id') || 1;
   
-  // Get employees of THIS tenant only (role_id = 4 is Employee)
+  // Get employees of THIS tenant only
   const employees = await c.env.DB.prepare(`
-    SELECT id, username, full_name, email, role_id 
+    SELECT id, username, full_name, email, role 
     FROM users 
-    WHERE role_id = 4 AND tenant_id = ?
+    WHERE role = 'employee' AND tenant_id = ?
     ORDER BY full_name
   `).bind(tenantId).all();
 
-  // Get customers of THIS tenant only with assigned employee name
+  // Get customers of THIS tenant only
   const customers = await c.env.DB.prepare(`
     SELECT 
       c.*,
-      u.full_name as assigned_employee_name,
-      c.assigned_to as employee_id
+      ca.employee_id,
+      u.full_name as assigned_employee_name
     FROM customers c
-    LEFT JOIN users u ON c.assigned_to = u.id
+    LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+    LEFT JOIN users u ON ca.employee_id = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
   `).bind(tenantId).all();
 
-  // Get employee statistics for THIS tenant only (role_id = 4 is Employee)
+  // Get employee statistics for THIS tenant only
   const employeeStats = await c.env.DB.prepare(`
     SELECT 
       u.id,
       u.full_name,
       u.username,
-      COUNT(DISTINCT c.id) as customer_count
+      COUNT(ca.customer_id) as customer_count
     FROM users u
-    LEFT JOIN customers c ON c.assigned_to = u.id AND c.tenant_id = ?
-    WHERE u.role_id = 4 AND u.tenant_id = ?
-    GROUP BY u.id, u.full_name, u.username
+    LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
+    LEFT JOIN customers c ON ca.customer_id = c.id AND c.tenant_id = ?
+    WHERE u.role = 'employee' AND u.tenant_id = ?
+    GROUP BY u.id
     ORDER BY customer_count DESC
   `).bind(tenantId, tenantId).all();
 
@@ -6610,33 +6330,25 @@ app.get('/admin/customer-assignment', async (c) => {
         ${getMobileResponsiveCSS()}
       </style>
     </head>
-    <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
-      <!-- Top Header with Burger Menu -->
-      <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
-        <div class="flex items-center justify-between px-6 py-4">
-          <!-- Right: Burger Menu Toggle -->
-          <div>
-            <button onclick="toggleSidebar()" class="text-white hover:bg-blue-700 p-2 rounded-lg transition-all">
-              <i class="fas fa-bars text-2xl"></i>
-            </button>
-          </div>
-          
-          <!-- Center: Page Title -->
-          <div class="flex-1 text-center">
-            <h1 class="text-xl font-bold flex items-center justify-center gap-2">
-              <i class="fas fa-users-cog"></i>
-              <span>توزيع العملاء على الموظفين</span>
-            </h1>
-          </div>
-          
-          <!-- Left: Back Button -->
-          <div>
-            <a href="/admin/customers" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm">
+    <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
+      <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-users-cog text-indigo-600"></i>
+                توزيع العملاء على الموظفين
+              </h1>
+              <p class="text-gray-600">قم بتوزيع العملاء على الموظفين لتنظيم العمل</p>
+            </div>
+            <a href="/admin/customers" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all">
               <i class="fas fa-arrow-right ml-2"></i>
-              العودة
+              العودة للعملاء
             </a>
           </div>
         </div>
+<<<<<<< HEAD
       </div>
 
       <!-- Sidebar Menu -->
@@ -7034,29 +6746,6 @@ app.get('/admin/customer-assignment', async (c) => {
             row.style.display = (matchSearch && matchEmployee) ? '' : 'none';
           });
         }
-
-        // Toggle sidebar
-        function toggleSidebar() {
-          const sidebar = document.getElementById('sidebar');
-          const overlay = document.getElementById('sidebar-overlay');
-          
-          if (sidebar.classList.contains('translate-x-full')) {
-            sidebar.classList.remove('translate-x-full');
-            sidebar.classList.add('translate-x-0');
-            overlay.classList.remove('hidden');
-          } else {
-            sidebar.classList.add('translate-x-full');
-            sidebar.classList.remove('translate-x-0');
-            overlay.classList.add('hidden');
-          }
-        }
-
-        // Logout function
-        function logout() {
-          localStorage.removeItem('authToken');
-          document.cookie = 'authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-          window.location.href = '/login';
-        }
       </script>
     </body>
     </html>
@@ -7070,27 +6759,49 @@ app.post('/api/customer-assignment', async (c) => {
   try {
     const { customer_id, employee_id, notes } = await c.req.json();
     
-    // If employee_id is empty or null, remove assignment
+    // If employee_id is null, delete the assignment
     if (!employee_id) {
       await c.env.DB.prepare(`
-        UPDATE customers 
-        SET assigned_to = NULL 
-        WHERE id = ?
+        DELETE FROM customer_assignments WHERE customer_id = ?
       `).bind(customer_id).run();
       
       return c.json({ success: true, message: 'تم إلغاء التخصيص' });
     }
     
-    // Assign customer to employee
-    await c.env.DB.prepare(`
-      UPDATE customers 
-      SET assigned_to = ? 
-      WHERE id = ?
-    `).bind(employee_id, customer_id).run();
+    // Check if assignment already exists
+    const existing = await c.env.DB.prepare(`
+      SELECT * FROM customer_assignments WHERE customer_id = ?
+    `).bind(customer_id).first();
+    
+    if (existing) {
+      // Record in history
+      await c.env.DB.prepare(`
+        INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+        VALUES (?, ?, ?, 1, ?)
+      `).bind(customer_id, existing.employee_id, employee_id, notes || '').run();
+      
+      // Update assignment
+      await c.env.DB.prepare(`
+        UPDATE customer_assignments 
+        SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now'), notes = ?
+        WHERE customer_id = ?
+      `).bind(employee_id, notes || '', customer_id).run();
+    } else {
+      // Create new assignment
+      await c.env.DB.prepare(`
+        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        VALUES (?, ?, 1, ?)
+      `).bind(customer_id, employee_id, notes || '').run();
+      
+      // Record in history
+      await c.env.DB.prepare(`
+        INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+        VALUES (?, NULL, ?, 1, ?)
+      `).bind(customer_id, employee_id, notes || '').run();
+    }
     
     return c.json({ success: true, message: 'تم التخصيص بنجاح' });
   } catch (error: any) {
-    console.error('Customer assignment error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -7105,7 +6816,7 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     // Get employees of THIS tenant only
     const employees = await c.env.DB.prepare(`
       SELECT id FROM users 
-      WHERE role_id = 4 AND tenant_id = ?
+      WHERE role = 'employee' AND tenant_id = ?
       ORDER BY id
     `).bind(tenantId).all();
     
@@ -7115,15 +6826,12 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     
     // Get unassigned customers of THIS tenant only
     const customers = await c.env.DB.prepare(`
-      SELECT id 
-      FROM customers
-      WHERE assigned_to IS NULL AND tenant_id = ?
-      ORDER BY id
+      SELECT c.id 
+      FROM customers c
+      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
+      WHERE ca.customer_id IS NULL AND c.tenant_id = ?
+      ORDER BY c.id
     `).bind(tenantId).all();
-    
-    if (customers.results.length === 0) {
-      return c.json({ success: false, error: 'لا يوجد عملاء غير موزعين' });
-    }
     
     let assignedCount = 0;
     const employeeCount = employees.results.length;
@@ -7134,10 +6842,9 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
       const employee = employees.results[i % employeeCount];
       
       await c.env.DB.prepare(`
-        UPDATE customers 
-        SET assigned_to = ? 
-        WHERE id = ?
-      `).bind(employee.id, customer.id).run();
+        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        VALUES (?, ?, 1, 'توزيع تلقائي')
+      `).bind(customer.id, employee.id).run();
       
       assignedCount++;
     }
@@ -7155,21 +6862,15 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
 // API: Clear all assignments
 app.post('/api/customer-assignment/clear-all', async (c) => {
   try {
-    const body = await c.req.json().catch(() => ({}));
-    const tenantId = body.tenant_id || c.req.query('tenant_id') || 1;
-    
     const result = await c.env.DB.prepare(`
-      UPDATE customers 
-      SET assigned_to = NULL 
-      WHERE tenant_id = ?
-    `).bind(tenantId).run();
+      DELETE FROM customer_assignments
+    `).run();
     
     return c.json({ 
       success: true, 
       cleared_count: result.meta.changes 
     });
   } catch (error: any) {
-    console.error('Clear assignments error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -7179,25 +6880,34 @@ app.post('/api/customer-assignment/bulk', async (c) => {
   try {
     const { customer_ids, employee_id } = await c.req.json();
     
-    if (!customer_ids || customer_ids.length === 0) {
-      return c.json({ success: false, error: 'لم يتم تحديد عملاء' });
+    let assignedCount = 0;
+    for (const customerId of customer_ids) {
+      // Check if exists
+      const existing = await c.env.DB.prepare(`
+        SELECT * FROM customer_assignments WHERE customer_id = ?
+      `).bind(customerId).first();
+      
+      if (existing) {
+        await c.env.DB.prepare(`
+          UPDATE customer_assignments 
+          SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now')
+          WHERE customer_id = ?
+        `).bind(employee_id, customerId).run();
+      } else {
+        await c.env.DB.prepare(`
+          INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
+          VALUES (?, ?, 1)
+        `).bind(customerId, employee_id).run();
+      }
+      
+      assignedCount++;
     }
-    
-    // Build placeholders for IN clause
-    const placeholders = customer_ids.map(() => '?').join(',');
-    
-    const result = await c.env.DB.prepare(`
-      UPDATE customers 
-      SET assigned_to = ? 
-      WHERE id IN (${placeholders})
-    `).bind(employee_id, ...customer_ids).run();
     
     return c.json({ 
       success: true, 
-      assigned_count: result.meta.changes
+      assigned_count: assignedCount
     });
   } catch (error: any) {
-    console.error('Bulk assignment error:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -7536,9 +7246,7 @@ app.get('/admin/rates/add', async (c) => {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400);
   }
   
-  // جلب بنوك الشركة فقط
-  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name')
-    .bind(tenantId).all();
+  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name').all();
   const financingTypes = await c.env.DB.prepare('SELECT * FROM financing_types ORDER BY type_name').all();
   
   return c.html(generateAddRatePage(tenantId, banks.results, financingTypes.results));
@@ -7565,9 +7273,7 @@ app.get('/admin/rates/edit/:id', async (c) => {
     return c.html('<h1>خطأ: النسبة غير موجودة</h1>', 404);
   }
   
-  // جلب بنوك الشركة فقط
-  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 AND tenant_id = ? ORDER BY bank_name')
-    .bind(tenantId).all();
+  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name').all();
   const financingTypes = await c.env.DB.prepare('SELECT * FROM financing_types ORDER BY type_name').all();
   
   return c.html(generateEditRatePage(tenantId, rate, banks.results, financingTypes.results));
@@ -7627,17 +7333,17 @@ app.get('/admin/customers', async (c) => {
     let query = 'SELECT * FROM customers';
     let queryParams: any[] = [];
     
-    if (userInfo.roleId === 11) {
+    if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL customers
       // No filtering
-    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin - sees all company customers
       // Role 3: Supervisor - sees all company customers (read-only)
       if (userInfo.tenantId) {
         query += ' WHERE tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 14) {
+    } else if (userInfo.roleId === 4) {
       // Role 4: Employee - sees ONLY assigned customers
       if (userInfo.userId) {
         query += ' WHERE assigned_to = ?';
@@ -7744,7 +7450,7 @@ app.get('/admin/customers', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -7769,19 +7475,6 @@ app.get('/admin/customers', async (c) => {
                   </select>
                 </div>
                 
-                <div>
-                  <select 
-                    id="dateFilter" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="handleDateFilterChange()"
-                  >
-                    <option value="all">الفترة: الجميع</option>
-                    <option value="30">آخر 30 يوم</option>
-                    <option value="60">آخر 60 يوم</option>
-                    <option value="custom">مدة محددة</option>
-                  </select>
-                </div>
-                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -7789,37 +7482,6 @@ app.get('/admin/customers', async (c) => {
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
-              </div>
-              
-              <!-- Custom Date Range (Hidden by default) -->
-              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="startDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="endDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div class="flex items-end">
-                  <button 
-                    onclick="applyCustomDateFilter()" 
-                    class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                  >
-                    <i class="fas fa-filter ml-2"></i>
-                    تطبيق الفلتر
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -7838,7 +7500,7 @@ app.get('/admin/customers', async (c) => {
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${customers.results.map((customer: any) => `
-                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}" data-created-at="${customer.created_at}">
+                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.phone || '-'}</td>
@@ -7870,69 +7532,6 @@ app.get('/admin/customers', async (c) => {
         </div>
         
         <script>
-          // Date filter state
-          let currentDateFilter = 'all';
-          let customStartDate = null;
-          let customEndDate = null;
-          
-          // Handle date filter dropdown change
-          function handleDateFilterChange() {
-            const dateFilter = document.getElementById('dateFilter').value;
-            const customDateRange = document.getElementById('customDateRange');
-            
-            if (dateFilter === 'custom') {
-              customDateRange.style.display = 'grid';
-            } else {
-              customDateRange.style.display = 'none';
-              currentDateFilter = dateFilter;
-              filterTable();
-            }
-          }
-          
-          // Apply custom date filter
-          function applyCustomDateFilter() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (startDate && endDate) {
-              customStartDate = new Date(startDate);
-              customEndDate = new Date(endDate);
-              currentDateFilter = 'custom';
-              filterTable();
-            } else {
-              alert('الرجاء إدخال تاريخ البداية والنهاية');
-            }
-          }
-          
-          // Check if date is within filter range
-          function isDateInRange(dateString) {
-            if (currentDateFilter === 'all') return true;
-            
-            const rowDate = new Date(dateString);
-            const today = new Date();
-            today.setHours(23, 59, 59, 999); // End of today
-            
-            if (currentDateFilter === '30') {
-              const thirtyDaysAgo = new Date(today);
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              return rowDate >= thirtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === '60') {
-              const sixtyDaysAgo = new Date(today);
-              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-              return rowDate >= sixtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === 'custom') {
-              if (customStartDate && customEndDate) {
-                const start = new Date(customStartDate);
-                start.setHours(0, 0, 0, 0);
-                const end = new Date(customEndDate);
-                end.setHours(23, 59, 59, 999);
-                return rowDate >= start && rowDate <= end;
-              }
-            }
-            
-            return true;
-          }
-          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -7946,9 +7545,7 @@ app.get('/admin/customers', async (c) => {
               const name = row.getAttribute('data-name') || ''
               const phone = row.getAttribute('data-phone') || ''
               const email = row.getAttribute('data-email') || ''
-              const createdAt = row.getAttribute('data-created-at') || ''
               
-              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -7971,11 +7568,6 @@ app.get('/admin/customers', async (c) => {
                 }
               }
               
-              // Apply date filter
-              if (shouldShow && createdAt) {
-                shouldShow = isDateInRange(createdAt);
-              }
-              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -7987,13 +7579,6 @@ app.get('/admin/customers', async (c) => {
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
-            document.getElementById('dateFilter').value = 'all'
-            document.getElementById('customDateRange').style.display = 'none'
-            document.getElementById('startDate').value = ''
-            document.getElementById('endDate').value = ''
-            currentDateFilter = 'all'
-            customStartDate = null
-            customEndDate = null
             filterTable()
           }
           
@@ -8025,62 +7610,6 @@ app.get('/admin/customers', async (c) => {
 })
 
 // ==================== صفحة مركز الإشعارات ====================
-// Permissions Management Page
-app.get('/admin/permissions/manage', async (c) => {
-  try {
-    return c.html(permissionsManagementPage())
-  } catch (error: any) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
-  }
-})
-
-// Permissions Reports Page
-app.get('/admin/permissions/reports', async (c) => {
-  try {
-    return c.html(permissionsReportsPage())
-  } catch (error: any) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
-  }
-})
-
-// Company Reports Page
-app.get('/admin/company-reports', async (c) => {
-  try {
-    return c.html(companyReportsPage)
-  } catch (error: any) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
-  }
-})
-
-// Users Management Page
-app.get('/admin/users', async (c) => {
-  try {
-    return c.html(usersManagementPage())
-  } catch (error: any) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
-  }
-})
-
-// User Permissions Page
-app.get('/admin/users/:id/permissions', async (c) => {
-  try {
-    const userId = c.req.param('id')
-    return c.html(userPermissionsPage(userId))
-  } catch (error: any) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
-  }
-})
-
-// Role Details Page
-app.get('/admin/roles/:id', async (c) => {
-  try {
-    const roleId = c.req.param('id')
-    return c.html(roleDetailsPage(roleId))
-  } catch (error: any) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1><p>' + error.message + '</p>')
-  }
-})
-
 // Roles Management Page
 app.get('/admin/roles', async (c) => {
   try {
@@ -8293,11 +7822,6 @@ app.get('/admin/roles', async (c) => {
                   <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
                   <td class="px-6 py-4">
                     <div class="flex items-center justify-center gap-2">
-                      <button onclick="viewRoleDetails(\${role.id})" 
-                              class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
-                              title="عرض التفاصيل">
-                        <i class="fas fa-eye"></i>
-                      </button>
                       <button onclick="openEditRoleModal(\${role.id}, '\${role.role_name}', '\${role.description}')" 
                               class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
                               title="تعديل">
@@ -8429,11 +7953,6 @@ app.get('/admin/roles', async (c) => {
               console.error('Error deleting role:', error);
               alert('❌ حدث خطأ أثناء حذف الدور');
             }
-          }
-
-          // View role details
-          function viewRoleDetails(roleId) {
-            window.location.href = '/admin/roles/' + roleId;
           }
 
           // Manage permissions
@@ -9236,6 +8755,7 @@ app.get('/admin/requests', async (c) => {
         fr.status,
         fr.created_at,
         c.full_name as customer_name,
+        c.assigned_to as customer_assigned_to,
         b.bank_name as bank_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
@@ -9244,21 +8764,21 @@ app.get('/admin/requests', async (c) => {
     
     let queryParams: any[] = [];
     
-    if (userInfo.roleId === 11) {
+    if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL requests
       // No WHERE clause
-    } else if (userInfo.roleId === 12 || userInfo.roleId === 13) {
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin - sees all company requests
       // Role 3: Supervisor - sees all company requests (read-only)
       if (userInfo.tenantId) {
         query += ' WHERE c.tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 14) {
-      // Role 4: Employee - sees requests from same tenant
-      if (userInfo.tenantId) {
-        query += ' WHERE c.tenant_id = ?';
-        queryParams.push(userInfo.tenantId);
+    } else if (userInfo.roleId === 4) {
+      // Role 4: Employee - sees ONLY requests for assigned customers
+      if (userInfo.userId) {
+        query += ' WHERE c.assigned_to = ?';
+        queryParams.push(userInfo.userId);
       } else {
         query += ' WHERE 1 = 0'; // No data if user ID not found
       }
@@ -9378,7 +8898,7 @@ app.get('/admin/requests', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -9403,19 +8923,6 @@ app.get('/admin/requests', async (c) => {
                   </select>
                 </div>
                 
-                <div>
-                  <select 
-                    id="dateFilter" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="handleDateFilterChange()"
-                  >
-                    <option value="all">الفترة: الجميع</option>
-                    <option value="30">آخر 30 يوم</option>
-                    <option value="60">آخر 60 يوم</option>
-                    <option value="custom">مدة محددة</option>
-                  </select>
-                </div>
-                
                 <button 
                   onclick="resetFilters()" 
                   class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
@@ -9423,37 +8930,6 @@ app.get('/admin/requests', async (c) => {
                   <i class="fas fa-redo ml-2"></i>
                   إعادة تعيين
                 </button>
-              </div>
-              
-              <!-- Custom Date Range (Hidden by default) -->
-              <div id="customDateRange" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" style="display: none;">
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="startDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">إلى تاريخ</label>
-                  <input 
-                    type="date" 
-                    id="endDate" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="applyCustomDateFilter()"
-                  >
-                </div>
-                <div class="flex items-end">
-                  <button 
-                    onclick="applyCustomDateFilter()" 
-                    class="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                  >
-                    <i class="fas fa-filter ml-2"></i>
-                    تطبيق الفلتر
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -9502,8 +8978,7 @@ app.get('/admin/requests', async (c) => {
                   <tr class="hover:bg-gray-50" 
                       data-customer="${req.customer_name || ''}" 
                       data-bank="${req.bank_name || ''}" 
-                      data-status="${statusAr}"
-                      data-created-at="${req.created_at}">
+                      data-status="${statusAr}">
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${req.customer_name || 'عميل #' + req.customer_id}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${req.bank_name || 'بنك #' + (req.selected_bank_id || '-')}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${req.requested_amount?.toLocaleString('ar-SA')} ريال</td>
@@ -9544,69 +9019,6 @@ app.get('/admin/requests', async (c) => {
         </div>
         
         <script>
-          // Date filter state
-          let currentDateFilter = 'all';
-          let customStartDate = null;
-          let customEndDate = null;
-          
-          // Handle date filter dropdown change
-          function handleDateFilterChange() {
-            const dateFilter = document.getElementById('dateFilter').value;
-            const customDateRange = document.getElementById('customDateRange');
-            
-            if (dateFilter === 'custom') {
-              customDateRange.style.display = 'grid';
-            } else {
-              customDateRange.style.display = 'none';
-              currentDateFilter = dateFilter;
-              filterTable();
-            }
-          }
-          
-          // Apply custom date filter
-          function applyCustomDateFilter() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (startDate && endDate) {
-              customStartDate = new Date(startDate);
-              customEndDate = new Date(endDate);
-              currentDateFilter = 'custom';
-              filterTable();
-            } else {
-              alert('الرجاء إدخال تاريخ البداية والنهاية');
-            }
-          }
-          
-          // Check if date is within filter range
-          function isDateInRange(dateString) {
-            if (currentDateFilter === 'all') return true;
-            
-            const rowDate = new Date(dateString);
-            const today = new Date();
-            today.setHours(23, 59, 59, 999); // End of today
-            
-            if (currentDateFilter === '30') {
-              const thirtyDaysAgo = new Date(today);
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              return rowDate >= thirtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === '60') {
-              const sixtyDaysAgo = new Date(today);
-              sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-              return rowDate >= sixtyDaysAgo && rowDate <= today;
-            } else if (currentDateFilter === 'custom') {
-              if (customStartDate && customEndDate) {
-                const start = new Date(customStartDate);
-                start.setHours(0, 0, 0, 0);
-                const end = new Date(customEndDate);
-                end.setHours(23, 59, 59, 999);
-                return rowDate >= start && rowDate <= end;
-              }
-            }
-            
-            return true;
-          }
-          
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -9620,9 +9032,7 @@ app.get('/admin/requests', async (c) => {
               const customer = row.getAttribute('data-customer') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
-              const createdAt = row.getAttribute('data-created-at') || ''
               
-              // Check search filter
               let shouldShow = false
               
               if (searchInput === '') {
@@ -9645,11 +9055,6 @@ app.get('/admin/requests', async (c) => {
                 }
               }
               
-              // Apply date filter
-              if (shouldShow && createdAt) {
-                shouldShow = isDateInRange(createdAt);
-              }
-              
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
             }
@@ -9660,13 +9065,6 @@ app.get('/admin/requests', async (c) => {
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
-            document.getElementById('dateFilter').value = 'all'
-            document.getElementById('customDateRange').style.display = 'none'
-            document.getElementById('startDate').value = ''
-            document.getElementById('endDate').value = ''
-            currentDateFilter = 'all'
-            customStartDate = null
-            customEndDate = null
             filterTable()
           }
           
@@ -11098,18 +10496,17 @@ app.get('/admin/requests/:id/workflow', async (c) => {
   try {
     const id = c.req.param('id')
     
-    // Get request data with customer info
+    // Get request data with current stage
     const request = await c.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
-        c.phone as customer_phone,
-        b.bank_name,
-        u.full_name as employee_name
+        ws.stage_name_ar,
+        ws.stage_color,
+        ws.stage_icon
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN banks b ON fr.selected_bank_id = b.id
-      LEFT JOIN users u ON c.assigned_to = u.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
       WHERE fr.id = ?
     `).bind(id).first()
     
@@ -11117,51 +10514,37 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       return c.html('<h1>الطلب غير موجود</h1>')
     }
     
-    // Map status to Arabic
-    const statusMap: Record<string, any> = {
-      'pending': { name: 'جديد', color: '#3B82F6', icon: 'fa-file-alt', order: 1 },
-      'under_review': { name: 'قيد المراجعة', color: '#F59E0B', icon: 'fa-search', order: 2 },
-      'approved': { name: 'مقبول', color: '#10B981', icon: 'fa-check-circle', order: 3 },
-      'rejected': { name: 'مرفوض', color: '#EF4444', icon: 'fa-times-circle', order: 3 },
-      'processing': { name: 'قيد المعالجة', color: '#06B6D4', icon: 'fa-cog', order: 4 },
-      'completed': { name: 'مكتمل', color: '#8B5CF6', icon: 'fa-check-double', order: 5 },
-      'cancelled': { name: 'ملغي', color: '#6B7280', icon: 'fa-ban', order: 5 }
-    }
+    // Get all stages
+    const { results: stages } = await c.env.DB.prepare(`
+      SELECT * FROM workflow_stages 
+      WHERE is_active = 1 
+      ORDER BY stage_order ASC
+    `).all()
     
-    // Create simple stages list
-    const stages = [
-      { id: 1, stage_name_ar: 'جديد', stage_color: '#3B82F6', stage_icon: 'fa-file-alt', stage_order: 1, is_active: 1 },
-      { id: 2, stage_name_ar: 'قيد المراجعة', stage_color: '#F59E0B', stage_icon: 'fa-search', stage_order: 2, is_active: 1 },
-      { id: 3, stage_name_ar: 'مقبول', stage_color: '#10B981', stage_icon: 'fa-check-circle', stage_order: 3, is_active: 1 },
-      { id: 4, stage_name_ar: 'قيد المعالجة', stage_color: '#06B6D4', stage_icon: 'fa-cog', stage_order: 4, is_active: 1 },
-      { id: 5, stage_name_ar: 'مكتمل', stage_color: '#8B5CF6', stage_icon: 'fa-check-double', stage_order: 5, is_active: 1 }
-    ]
+    // Get workflow timeline (transitions, actions, tasks) - Direct DB query instead of internal API call
+    const { results: transitions } = await c.env.DB.prepare(`
+      SELECT 
+        wst.*,
+        ws_from.stage_name_ar as from_stage_name,
+        ws_to.stage_name_ar as to_stage_name,
+        u.full_name as changed_by_name
+      FROM workflow_stage_transitions wst
+      LEFT JOIN workflow_stages ws_from ON wst.from_stage_id = ws_from.id
+      LEFT JOIN workflow_stages ws_to ON wst.to_stage_id = ws_to.id
+      LEFT JOIN users u ON wst.transitioned_by = u.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.created_at DESC
+    `).bind(id).all()
     
-    // Add current stage info to request
-    const currentStageInfo = statusMap[request.status] || statusMap['pending']
-    request.stage_name_ar = currentStageInfo.name
-    request.stage_color = currentStageInfo.color
-    request.stage_icon = currentStageInfo.icon
+    const { results: actions } = await c.env.DB.prepare(`
+      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(id).all()
     
-    // Create simple timeline
-    const transitions = [
-      {
-        id: 1,
-        from_stage_name: null,
-        to_stage_name: currentStageInfo.name,
-        changed_by_name: request.employee_name || 'النظام',
-        created_at: request.created_at,
-        notes: 'تم إنشاء الطلب'
-      }
-    ]
+    const { results: tasks } = await c.env.DB.prepare(`
+      SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(id).all()
     
-    const timelineData = { 
-      data: { 
-        transitions, 
-        actions: [], 
-        tasks: [] 
-      } 
-    }
+    const timelineData = { data: { transitions, actions, tasks } }
     
     const html = generateWorkflowTimelinePage(
       parseInt(id),
@@ -11556,6 +10939,211 @@ app.get('/admin/banks', async (c) => {
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'البنوك_' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+          }
+        </script>
+      </body>
+      </html>
+    `)
+  } catch (error) {
+    return c.html('<h1>خطأ في تحميل البيانات</h1>')
+  }
+})
+
+// ==================== صفحة نسب التمويل (Rates) ====================
+
+app.get('/admin/rates', async (c) => {
+  try {
+    const rates = await c.env.DB.prepare(`
+      SELECT fr.*, b.bank_name, ft.type_name
+      FROM bank_financing_rates fr
+      LEFT JOIN banks b ON fr.bank_id = b.id
+      LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
+      ORDER BY b.bank_name, ft.type_name
+    `).all()
+    
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>نسب التمويل</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      </head>
+      <body class="bg-gray-50">
+        <div class="max-w-7xl mx-auto p-6">
+          <div class="mb-6">
+            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+          </div>
+          
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+              <h1 class="text-3xl font-bold text-gray-800">
+                <i class="fas fa-percentage text-orange-600 ml-2"></i>
+                نسب التمويل (<span id="totalCount">${rates.results.length}</span>)
+              </h1>
+              
+              <div class="flex gap-3">
+                <a href="/admin/rates/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-plus ml-2"></i>
+                  إضافة جديد
+                </a>
+                <button onclick="exportToCSV()" 
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-file-export ml-2"></i>
+                  تصدير Excel
+                </button>
+              </div>
+            </div>
+            
+            <!-- شريط البحث والفلترة -->
+            <div class="border-t pt-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="relative">
+                  <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
+                  <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="بحث في جميع الحقول..." 
+                    class="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    onkeyup="filterTable()"
+                  >
+                </div>
+                
+                <div>
+                  <select 
+                    id="filterField" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    onchange="filterTable()"
+                  >
+                    <option value="all">البحث في: الكل</option>
+                    <option value="bank">البنك فقط</option>
+                    <option value="type">نوع التمويل فقط</option>
+                  </select>
+                </div>
+                
+                <button 
+                  onclick="resetFilters()" 
+                  class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                >
+                  <i class="fas fa-redo ml-2"></i>
+                  إعادة تعيين
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <table class="w-full" id="dataTable">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">#</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">البنك</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نوع التمويل</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نسبة الفائدة</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحد الأدنى</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحد الأقصى</th>
+                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200" id="tableBody">
+                ${rates.results.map((rate: any) => `
+                  <tr class="hover:bg-gray-50" data-bank="${rate.bank_name || ''}" data-type="${rate.type_name || ''}">
+                    <td class="px-6 py-4 text-sm text-gray-900">${rate.id}</td>
+                    <td class="px-6 py-4">
+                      <div class="flex items-center">
+                        <i class="fas fa-university text-yellow-600 ml-2"></i>
+                        <span class="text-sm font-bold text-gray-900">${rate.bank_name || 'غير محدد'}</span>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${rate.type_name || 'غير محدد'}</td>
+                    <td class="px-6 py-4">
+                      <span class="text-lg font-bold text-orange-600">${rate.rate || 0}%</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${rate.min_amount ? rate.min_amount.toLocaleString() : '0'} ريال</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${rate.max_amount ? rate.max_amount.toLocaleString() : '0'} ريال</td>
+                    <td class="px-6 py-4">
+                      <div class="flex gap-2 justify-end">
+                        <a href="/admin/rates/${rate.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
+                          <i class="fas fa-eye"></i> عرض
+                        </a>
+                        <a href="/admin/rates/${rate.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
+                          <i class="fas fa-edit"></i> تعديل
+                        </a>
+                        <a href="/admin/rates/${rate.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
+                          <i class="fas fa-trash"></i> حذف
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <script>
+          // البحث والفلترة
+          function filterTable() {
+            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
+            const filterField = document.getElementById('filterField').value
+            const tableBody = document.getElementById('tableBody')
+            const rows = tableBody.getElementsByTagName('tr')
+            let visibleCount = 0
+            
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i]
+              const bank = row.getAttribute('data-bank') || ''
+              const type = row.getAttribute('data-type') || ''
+              
+              let shouldShow = false
+              
+              if (searchInput === '') {
+                shouldShow = true
+              } else {
+                switch(filterField) {
+                  case 'bank':
+                    shouldShow = bank.toLowerCase().includes(searchInput)
+                    break
+                  case 'type':
+                    shouldShow = type.toLowerCase().includes(searchInput)
+                    break
+                  default: // 'all'
+                    shouldShow = bank.toLowerCase().includes(searchInput) || 
+                                type.toLowerCase().includes(searchInput)
+                }
+              }
+              
+              row.style.display = shouldShow ? '' : 'none'
+              if (shouldShow) visibleCount++
+            }
+            
+            document.getElementById('totalCount').textContent = visibleCount
+          }
+          
+          function resetFilters() {
+            document.getElementById('searchInput').value = ''
+            document.getElementById('filterField').value = 'all'
+            filterTable()
+          }
+          
+          function exportToCSV() {
+            const data = [
+              ['#', 'البنك', 'نوع التمويل', 'نسبة الفائدة', 'الحد الأدنى', 'الحد الأقصى'],
+              ${rates.results.map((rate: any) => `['${rate.id}', '${rate.bank_name || 'غير محدد'}', '${rate.type_name || 'غير محدد'}', '${rate.rate || 0}%', '${rate.min_amount || 0}', '${rate.max_amount || 0}']`).join(',\n              ')}
+            ];
+            
+            let csv = '\\uFEFF';
+            data.forEach(row => {
+              csv += row.join(',') + '\\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
             link.click();
           }
         </script>
@@ -14284,6 +13872,7 @@ app.post('/api/users/:id/permissions', async (c) => {
   }
 })
 
+<<<<<<< HEAD
 // ===============================================
 // HR LEAVES APIs
 // ===============================================
@@ -15087,7 +14676,6 @@ app.get('/api/hr/reports/:type', async (c) => {
   }
 });
 
-export default app
 // HR SYSTEM ROUTES & APIs
 // ===============================================
 
@@ -15106,57 +14694,41 @@ app.get('/admin/hr/attendance', (c) => {
   return c.html(hrAttendancePage)
 })
 
-// HR Leaves Page
+// HR Leaves Page (قيد التطوير)
 app.get('/admin/hr/leaves', (c) => {
-  return c.html(hrLeavesPage)
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
-// HR Salaries Page
+// HR Salaries Page (قيد التطوير)
 app.get('/admin/hr/salaries', (c) => {
-  return c.html(hrSalariesPage)
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
-// HR Departments Page
-app.get('/admin/hr/departments', (c) => {
-  return c.html(hrDepartmentsPage)
-})
-
-// HR Performance Page
+// HR Performance Page (قيد التطوير)
 app.get('/admin/hr/performance', (c) => {
-  return c.html(hrPerformancePage)
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
-// HR Promotions Page
+// HR Promotions Page (قيد التطوير)
 app.get('/admin/hr/promotions', (c) => {
-  return c.html(hrPromotionsPage)
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
-// HR Documents Page
+// HR Documents Page (قيد التطوير)
 app.get('/admin/hr/documents', (c) => {
-  return c.html(hrDocumentsPage)
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
-// HR Reports Page
+// HR Reports Page (قيد التطوير)
 app.get('/admin/hr/reports', (c) => {
-  return c.html(hrReportsPage)
-})
-
-// Employee View/Edit Routes (temporary redirect)
-app.get('/admin/hr/employees/:id', (c) => {
-  // سيتم تطويرها لاحقاً
-  return c.redirect('/admin/hr/employees')
-})
-
-app.get('/admin/hr/employees/:id/edit', (c) => {
-  // سيتم تطويرها لاحقاً
-  return c.redirect('/admin/hr/employees')
+  return c.html(hrMainPage) // سيتم استبداله لاحقاً
 })
 
 // HR Dashboard Statistics API
 app.get('/api/hr/dashboard/stats', async (c) => {
   try {
-    const userInfo = await getUserInfo(c).catch(() => ({ tenantId: 1 }))
-    const tenantId = userInfo?.tenantId || 1
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
     
     // Total & Active Employees
     const employeesQuery = tenantId 
@@ -15168,8 +14740,8 @@ app.get('/api/hr/dashboard/stats', async (c) => {
     // Attendance Today
     const today = new Date().toISOString().split('T')[0]
     const attendanceQuery = tenantId
-      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present' AND tenant_id = ${tenantId}`
-      : `SELECT COUNT(*) as present FROM hr_attendance WHERE attendance_date = ? AND status = 'present'`
+      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'`
     
     const attendance = await c.env.DB.prepare(attendanceQuery).bind(today).first()
     
@@ -15196,18 +14768,18 @@ app.get('/api/hr/dashboard/stats', async (c) => {
     
     // Attendance Trend (last 7 days)
     const trendQuery = tenantId
-      ? `SELECT attendance_date as date, 
+      ? `SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
-         WHERE attendance_date >= DATE('now', '-7 days') AND tenant_id = ${tenantId}
-         GROUP BY attendance_date ORDER BY attendance_date`
-      : `SELECT attendance_date as date, 
+         WHERE DATE(date) >= DATE('now', '-7 days') AND tenant_id = ${tenantId}
+         GROUP BY DATE(date) ORDER BY date`
+      : `SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
-         WHERE attendance_date >= DATE('now', '-7 days')
-         GROUP BY attendance_date ORDER BY attendance_date`
+         WHERE DATE(date) >= DATE('now', '-7 days')
+         GROUP BY DATE(date) ORDER BY date`
     
     const { results: trend } = await c.env.DB.prepare(trendQuery).all()
     
@@ -15390,16 +14962,30 @@ app.get('/api/hr/attendance', async (c) => {
     const userInfo = await getUserInfo(c)
     console.log('🔍 HR Attendance API - UserInfo:', { userId: userInfo.userId, tenantId: userInfo.tenantId, roleId: userInfo.roleId })
     
-    // For now, show all data regardless of tenant_id to ensure data is visible
-    const query = `SELECT 
-        a.*,
-        e.full_name_ar as employee_name,
-        e.employee_code as employee_number,
-        e.department,
-        a.working_hours as work_hours
-      FROM hr_attendance a 
-      LEFT JOIN hr_employees e ON a.employee_id = e.id 
-      ORDER BY a.attendance_date DESC, a.check_in_time DESC`
+    // Get tenant_id from userInfo for filtering
+    const tenantId = userInfo.tenantId;
+    
+    // Build query with tenant filtering if tenant_id exists
+    const query = tenantId
+      ? `SELECT 
+          a.*,
+          e.full_name_ar as employee_name,
+          e.employee_code as employee_number,
+          e.department,
+          a.working_hours as work_hours
+        FROM hr_attendance a 
+        LEFT JOIN hr_employees e ON a.employee_id = e.id 
+        WHERE a.tenant_id = ${tenantId}
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`
+      : `SELECT 
+          a.*,
+          e.full_name_ar as employee_name,
+          e.employee_code as employee_number,
+          e.department,
+          a.working_hours as work_hours
+        FROM hr_attendance a 
+        LEFT JOIN hr_employees e ON a.employee_id = e.id 
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`
     
     const result = await c.env.DB.prepare(query).all()
     console.log('🔍 HR Attendance API - Results count:', result.results?.length || 0)
@@ -15416,59 +15002,19 @@ app.post('/api/hr/attendance', async (c) => {
   try {
     const data = await c.req.json()
     const userInfo = await getUserInfo(c)
-    const tenantId = userInfo.tenantId || 1
+    const tenantId = userInfo.tenantId
     
     const result = await c.env.DB.prepare(`
       INSERT INTO hr_attendance (
-        employee_id, attendance_date, check_in_time, check_out_time, status, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        employee_id, date, check_in, check_out, status, late_minutes, 
+        overtime_minutes, notes, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      data.employee_id, 
-      data.attendance_date || data.date, 
-      data.check_in_time || data.check_in, 
-      data.check_out_time || data.check_out, 
-      data.status,
-      tenantId
+      data.employee_id, data.date, data.check_in, data.check_out, data.status,
+      data.late_minutes || 0, data.overtime_minutes || 0, data.notes, tenantId
     ).run()
     
     return c.json({ success: true, id: result.meta.last_row_id, message: 'تم تسجيل الحضور بنجاح' })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Update Attendance Record
-app.put('/api/hr/attendance/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    const data = await c.req.json()
-    
-    await c.env.DB.prepare(`
-      UPDATE hr_attendance 
-      SET attendance_date = ?, check_in_time = ?, check_out_time = ?, status = ?
-      WHERE id = ?
-    `).bind(
-      data.attendance_date || data.date, 
-      data.check_in_time || data.check_in, 
-      data.check_out_time || data.check_out, 
-      data.status,
-      id
-    ).run()
-    
-    return c.json({ success: true, message: 'تم تحديث سجل الحضور بنجاح' })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Delete Attendance Record
-app.delete('/api/hr/attendance/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    
-    await c.env.DB.prepare('DELETE FROM hr_attendance WHERE id = ?').bind(id).run()
-    
-    return c.json({ success: true, message: 'تم حذف سجل الحضور بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -15556,3 +15102,60 @@ app.put('/api/hr/salaries/:id/pay', async (c) => {
   }
 })
 
+// Test login endpoint (simplified)
+app.post('/api/test/login', async (c) => {
+  try {
+    if (!c.env?.DB) {
+      return c.json({ 
+        success: false, 
+        error: 'DB binding not available',
+        DB_exists: false
+      }, 500)
+    }
+    
+    // Try a simple query
+    const testQuery = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first()
+    
+    return c.json({
+      success: true,
+      DB_exists: true,
+      DB_usable: true,
+      user_count: testQuery
+    })
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+      DB_exists: !!c.env?.DB,
+      stack: error.stack
+    }, 500)
+  }
+})
+
+// Runtime check for deployed bindings
+app.get('/api/test/bindings', async (c) => {
+  const result: any = {
+    DB_exists: !!c.env.DB,
+    ATTACHMENTS_exists: !!c.env.ATTACHMENTS,
+    timestamp: new Date().toISOString()
+  }
+  
+  // Try to actually use the DB binding
+  if (c.env.DB) {
+    try {
+      const testQuery = await c.env.DB.prepare('SELECT 1 as test').first()
+      result.DB_usable = true
+      result.DB_test_result = testQuery
+    } catch (error: any) {
+      result.DB_usable = false
+      result.DB_error = error.message
+    }
+  } else {
+    result.DB_usable = false
+    result.DB_error = 'DB binding is undefined'
+  }
+  
+  return c.json(result)
+})
+
+export default app
