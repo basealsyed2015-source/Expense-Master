@@ -1068,13 +1068,13 @@ export const hrPerformancePage = `
               <td class="px-6 py-4 whitespace-nowrap">\${review.employee_name || 'غير محدد'}</td>
               <td class="px-6 py-4 whitespace-nowrap">\${review.reviewer_name || 'غير محدد'}</td>
               <td class="px-6 py-4 whitespace-nowrap">\${review.review_period}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-bold \${ratingColor(review.overall_rating)}">
-                \${'★'.repeat(review.overall_rating)}\${'☆'.repeat(5 - review.overall_rating)}
+              <td class="px-6 py-4 whitespace-nowrap font-bold \${ratingColor(Math.round(review.overall_rating || 0))}">
+                \${'★'.repeat(Math.round(review.overall_rating || 0))}\${'☆'.repeat(5 - Math.round(review.overall_rating || 0))}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.attendance_rating || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.quality_rating || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.teamwork_rating || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.punctuality_rating || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.attendance_rating || review.attendance_punctuality || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.quality_rating || review.quality_of_work || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.teamwork_rating || review.teamwork || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.punctuality_rating || review.attendance_punctuality || '-'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 py-1 rounded-full text-xs \${statusColors[review.status] || 'bg-gray-100 text-gray-800'}">
                   \${statusLabels[review.status] || review.status}
@@ -1287,20 +1287,22 @@ export const hrPromotionsPage = `
             rejected: 'مرفوض'
           };
           
-          const salaryIncrease = promo.new_salary - promo.old_salary;
-          const increasePercent = ((salaryIncrease / promo.old_salary) * 100).toFixed(1);
+          const oldSalary = parseFloat(promo.old_salary) || 0;
+          const newSalary = parseFloat(promo.new_salary) || 0;
+          const salaryIncrease = newSalary - oldSalary;
+          const increasePercent = oldSalary > 0 ? ((salaryIncrease / oldSalary) * 100).toFixed(1) : '0';
           
           return \`
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">\${promo.employee_name || 'غير محدد'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_position || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-medium text-blue-600">\${promo.new_position}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_salary.toLocaleString()} ر.س</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_position || promo.old_job_title || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap font-medium text-blue-600">\${promo.new_position || promo.new_job_title || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${oldSalary.toLocaleString()} ر.س</td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="font-bold text-green-600">\${promo.new_salary.toLocaleString()} ر.س</span>
-                <span class="text-xs text-gray-500 block">+\${increasePercent}%</span>
+                <span class="font-bold text-green-600">\${newSalary.toLocaleString()} ر.س</span>
+                \${oldSalary > 0 ? \`<span class="text-xs text-gray-500 block">+\${increasePercent}%</span>\` : ''}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.promotion_date}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${promo.promotion_date || promo.effective_date || '-'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 py-1 rounded-full text-xs \${statusColors[promo.status] || 'bg-gray-100 text-gray-800'}">
                   \${statusLabels[promo.status] || promo.status}

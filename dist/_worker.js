@@ -14341,13 +14341,13 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <td class="px-6 py-4 whitespace-nowrap">\${review.employee_name || 'غير محدد'}</td>
               <td class="px-6 py-4 whitespace-nowrap">\${review.reviewer_name || 'غير محدد'}</td>
               <td class="px-6 py-4 whitespace-nowrap">\${review.review_period}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-bold \${ratingColor(review.overall_rating)}">
-                \${'★'.repeat(review.overall_rating)}\${'☆'.repeat(5 - review.overall_rating)}
+              <td class="px-6 py-4 whitespace-nowrap font-bold \${ratingColor(Math.round(review.overall_rating || 0))}">
+                \${'★'.repeat(Math.round(review.overall_rating || 0))}\${'☆'.repeat(5 - Math.round(review.overall_rating || 0))}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.attendance_rating || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.quality_rating || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.teamwork_rating || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${review.punctuality_rating || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.attendance_rating || review.attendance_punctuality || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.quality_rating || review.quality_of_work || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.teamwork_rating || review.teamwork || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${review.punctuality_rating || review.attendance_punctuality || '-'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 py-1 rounded-full text-xs \${statusColors[review.status] || 'bg-gray-100 text-gray-800'}">
                   \${statusLabels[review.status] || review.status}
@@ -14557,20 +14557,22 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             rejected: 'مرفوض'
           };
           
-          const salaryIncrease = promo.new_salary - promo.old_salary;
-          const increasePercent = ((salaryIncrease / promo.old_salary) * 100).toFixed(1);
+          const oldSalary = parseFloat(promo.old_salary) || 0;
+          const newSalary = parseFloat(promo.new_salary) || 0;
+          const salaryIncrease = newSalary - oldSalary;
+          const increasePercent = oldSalary > 0 ? ((salaryIncrease / oldSalary) * 100).toFixed(1) : '0';
           
           return \`
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">\${promo.employee_name || 'غير محدد'}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_position || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap font-medium text-blue-600">\${promo.new_position}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_salary.toLocaleString()} ر.س</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${promo.old_position || promo.old_job_title || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap font-medium text-blue-600">\${promo.new_position || promo.new_job_title || '-'}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${oldSalary.toLocaleString()} ر.س</td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="font-bold text-green-600">\${promo.new_salary.toLocaleString()} ر.س</span>
-                <span class="text-xs text-gray-500 block">+\${increasePercent}%</span>
+                <span class="font-bold text-green-600">\${newSalary.toLocaleString()} ر.س</span>
+                \${oldSalary > 0 ? \`<span class="text-xs text-gray-500 block">+\${increasePercent}%</span>\` : ''}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">\${promo.promotion_date}</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${promo.promotion_date || promo.effective_date || '-'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 py-1 rounded-full text-xs \${statusColors[promo.status] || 'bg-gray-100 text-gray-800'}">
                   \${statusLabels[promo.status] || promo.status}
@@ -27539,16 +27541,17 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",r=e.req.query("employee_id")||"";let o=`
       SELECT 
         l.*,
-        e.full_name as employee_name,
+        e.full_name_ar as employee_name,
         e.department,
-        e.job_title
+        e.job_title,
+        l.total_days as days_count
       FROM hr_leaves l
       LEFT JOIN hr_employees e ON l.employee_id = e.id
       WHERE 1=1
-    `;const l=[];t.tenantId&&(o+=" AND l.tenant_id = ?",l.push(t.tenantId)),a&&(o+=" AND l.status = ?",l.push(a)),s&&(o+=" AND l.leave_type = ?",l.push(s)),r&&(o+=" AND l.employee_id = ?",l.push(r)),o+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:r,end_date:o,reason:l}=await e.req.json(),i=await e.env.DB.prepare(`
-      INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, reason, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(t.tenantId||1,a,s,r,o,l).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
+    `;const l=[];a&&(o+=" AND l.status = ?",l.push(a)),s&&(o+=" AND l.leave_type = ?",l.push(s)),r&&(o+=" AND l.employee_id = ?",l.push(r)),o+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:r,end_date:o,reason:l}=await e.req.json(),i=new Date(r),n=new Date(o),c=Math.ceil((n.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
+      INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).bind(t.tenantId||1,a,s,r,o,c,l||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
       UPDATE hr_leaves 
       SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -27556,13 +27559,12 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       UPDATE hr_leaves 
       SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
       WHERE id = ?
-    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:r,status:o}=e.req.query();let l=a?`s.tenant_id = ${a}`:"1=1";s&&(l+=` AND s.employee_id = ${s}`),r&&(l+=` AND s.salary_month = '${r}'`),o&&(l+=` AND s.status = '${o}'`);const i=await e.env.DB.prepare(`
-      SELECT s.*, e.full_name as employee_name
+    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:r,status:o}=e.req.query();let l=`
+      SELECT s.*, e.full_name_ar as employee_name
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
-      WHERE ${l}
-      ORDER BY s.salary_month DESC, s.created_at DESC
-    `).all();return e.json({success:!0,data:i.results})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),r=parseFloat(s.basic_salary)||0,o=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,n=parseFloat(s.bonuses)||0,c=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,f=r+o+l+i+n+c,g=p+u+m,b=f-g;return await e.env.DB.prepare(`
+      WHERE 1=1
+    `;const i=[];s&&(l+=" AND s.employee_id = ?",i.push(s)),r&&(l+=" AND s.salary_month = ?",i.push(r)),o&&(l+=" AND s.payment_status = ?",i.push(o)),l+=" ORDER BY s.salary_month DESC, s.created_at DESC";const n=i.length>0?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),r=parseFloat(s.basic_salary)||0,o=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,n=parseFloat(s.bonuses)||0,c=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,f=r+o+l+i+n+c,g=p+u+m,b=f-g;return await e.env.DB.prepare(`
       INSERT INTO hr_salaries (
         tenant_id, employee_id, salary_month, basic_salary,
         housing_allowance, transportation_allowance, other_allowances,
@@ -27591,49 +27593,57 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         tenant_id, department_name, department_code, 
         manager_id, description, budget
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/performance",async e=>{try{const a=(await x(e)).tenantId,s=a?`WHERE p.tenant_id = ${a}`:"",r=await e.env.DB.prepare(`
+    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId;console.log("🔍 HR Performance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const r=await e.env.DB.prepare(`
       SELECT p.*, 
-             e.full_name as employee_name,
-             r.full_name as reviewer_name
+             e.full_name_ar as employee_name,
+             r.full_name_ar as reviewer_name,
+             p.attendance_punctuality as attendance_rating,
+             p.quality_of_work as quality_rating,
+             p.teamwork as teamwork_rating,
+             p.attendance_punctuality as punctuality_rating,
+             p.areas_for_improvement as weaknesses,
+             (p.review_period_start || ' - ' || p.review_period_end) as review_period
       FROM hr_performance_reviews p
       LEFT JOIN hr_employees e ON p.employee_id = e.id
       LEFT JOIN hr_employees r ON p.reviewer_id = r.id
-      ${s}
       ORDER BY p.review_date DESC
-    `).all();return e.json({success:!0,data:r.results})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();return await e.env.DB.prepare(`
+    `).all();return console.log("🔍 HR Performance API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let r=s.review_period_start||s.review_date,o=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(r=s.review_date,o=s.review_date);const l=s.attendance_rating||3,i=s.quality_rating||3,n=s.teamwork_rating||3,c=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(l)+parseFloat(i)+parseFloat(n)+parseFloat(c))/4;return await e.env.DB.prepare(`
       INSERT INTO hr_performance_reviews (
-        tenant_id, employee_id, reviewer_id, review_period, review_date,
-        overall_rating, attendance_rating, quality_rating, 
-        teamwork_rating, punctuality_rating, strengths, weaknesses,
+        tenant_id, employee_id, reviewer_id, review_period_start, review_period_end, review_date,
+        overall_rating, attendance_punctuality, quality_of_work, 
+        teamwork, strengths, areas_for_improvement,
         goals, comments, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(a,s.employee_id,t.userId,s.review_period,s.review_date,s.overall_rating,s.attendance_rating||3,s.quality_rating||3,s.teamwork_rating||3,s.punctuality_rating||3,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/promotions",async e=>{try{const a=(await x(e)).tenantId,s=a?`WHERE p.tenant_id = ${a}`:"",r=await e.env.DB.prepare(`
+    `).bind(a,s.employee_id,t.userId,r,o,s.review_date,p,l,i,n,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
       SELECT p.*, 
-             e.full_name as employee_name,
-             e.job_title as current_position
-      FROM hr_promotions p
+             e.full_name_ar as employee_name,
+             e.job_title as current_position,
+             p.old_job_title as old_position,
+             p.new_job_title as new_position,
+             p.effective_date as promotion_date
+      FROM hr_promotions_transfers p
       LEFT JOIN hr_employees e ON p.employee_id = e.id
-      ${s}
-      ORDER BY p.promotion_date DESC
-    `).all();return e.json({success:!0,data:r.results})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json(),r=await e.env.DB.prepare(`
-      SELECT job_title, basic_salary FROM hr_employees WHERE id = ?
+    `;console.log("🔍 HR Promotions API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),s=s.replace("WHERE 1=1",""),s+=" ORDER BY p.effective_date DESC";const r=await e.env.DB.prepare(s).all();return console.log("🔍 HR Promotions API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json(),r=await e.env.DB.prepare(`
+      SELECT job_title, basic_salary, department FROM hr_employees WHERE id = ?
     `).bind(s.employee_id).first();return await e.env.DB.prepare(`
-      INSERT INTO hr_promotions (
-        tenant_id, employee_id, old_position, new_position,
-        old_salary, new_salary, promotion_date, effective_date,
-        reason, approved_by, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(a,s.employee_id,r?.job_title||"",s.new_position,r?.basic_salary||0,s.new_salary,s.promotion_date,s.effective_date||s.promotion_date,s.reason||null,t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
-      SELECT * FROM hr_promotions WHERE id = ?
-    `).bind(t).first();return a?(await e.env.DB.prepare(`
-      UPDATE hr_promotions SET status = 'approved' WHERE id = ?
-    `).bind(t).run(),await e.env.DB.prepare(`
-      UPDATE hr_employees 
-      SET job_title = ?, basic_salary = ?, updated_at = datetime('now')
+      INSERT INTO hr_promotions_transfers (
+        tenant_id, employee_id, type, old_job_title, new_job_title,
+        old_salary, new_salary, effective_date,
+        old_department, new_department, reason, approved_by, status
+      ) VALUES (?, ?, 'promotion', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).bind(a,s.employee_id,r?.job_title||"",s.new_position,r?.basic_salary||0,s.new_salary,s.effective_date||s.promotion_date,r?.department||"",s.new_department||r?.department||"",s.reason||"",t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e),s=await e.env.DB.prepare(`
+      SELECT * FROM hr_promotions_transfers WHERE id = ?
+    `).bind(t).first();return s?(await e.env.DB.prepare(`
+      UPDATE hr_promotions_transfers 
+      SET status = 'approved', approved_by = ?, approved_at = datetime('now')
       WHERE id = ?
-    `).bind(a.new_position,a.new_salary,a.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
-      UPDATE hr_promotions SET status = 'rejected' WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.query("search")||"",r=e.req.query("type")||"",o=e.req.query("status")||"";let l=`
+    `).bind(a.userId,t).run(),await e.env.DB.prepare(`
+      UPDATE hr_employees 
+      SET job_title = ?, basic_salary = ?, department = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(s.new_job_title,s.new_salary,s.new_department,s.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+      UPDATE hr_promotions_transfers SET status = 'rejected' WHERE id = ?
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.query("search")||"",r=e.req.query("type")||"",o=e.req.query("status")||"";let l=`
       SELECT d.*, e.full_name as employee_name, e.employee_number
       FROM hr_documents d
       LEFT JOIN hr_employees e ON d.employee_id = e.id
@@ -27683,30 +27693,47 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
          WHERE attendance_date >= DATE('now', '-7 days')
-         GROUP BY attendance_date ORDER BY attendance_date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:c?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT * FROM hr_employees WHERE tenant_id = ${a} ORDER BY hire_date DESC`:"SELECT * FROM hr_employees ORDER BY hire_date DESC",{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM hr_employees WHERE id = ?").bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,r=await e.env.DB.prepare(`
+         GROUP BY attendance_date ORDER BY attendance_date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:c?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
+        id, tenant_id,
+        employee_code as employee_number,
+        full_name_ar as full_name,
+        full_name_en,
+        national_id,
+        date_of_birth as birthdate,
+        gender, email, phone,
+        department, job_title,
+        basic_salary, housing_allowance, transportation_allowance,
+        hire_date, contract_start_date, contract_end_date,
+        direct_manager_id,
+        employment_type, work_schedule,
+        status, notes,
+        created_at, updated_at
+      FROM hr_employees 
+      ORDER BY created_at DESC, hire_date DESC`).all();return console.log("🔍 HR Employees API - Results count:",s.results?.length||0),e.json({success:!0,data:s.results||[]})}catch(t){return console.error("Error fetching employees:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM hr_employees WHERE id = ?").bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
       INSERT INTO hr_employees (
-        employee_number, full_name, national_id, gender, date_of_birth, nationality,
-        marital_status, number_of_dependents, phone, personal_email, work_email,
-        emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
-        address, city, postal_code, country, hire_date, job_title, department,
-        employment_type, work_schedule, direct_manager, basic_salary, housing_allowance,
-        transportation_allowance, status, contract_start_date, contract_end_date, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_number,t.full_name,t.national_id,t.gender,t.date_of_birth,t.nationality,t.marital_status,t.number_of_dependents,t.phone,t.personal_email,t.work_email,t.emergency_contact_name,t.emergency_contact_phone,t.emergency_contact_relationship,t.address,t.city,t.postal_code,t.country,t.hire_date,t.job_title,t.department,t.employment_type,t.work_schedule,t.direct_manager,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.status||"active",t.contract_start_date,t.contract_end_date,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
+        employee_number, full_name, national_id, email, phone, birthdate, gender,
+        department, job_title, basic_salary, housing_allowance, transportation_allowance,
+        hire_date, contract_start_date, contract_end_date, direct_manager,
+        employment_type, work_schedule, status, notes, tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(t.employee_number||null,t.full_name,t.national_id||null,t.email||null,t.phone||null,t.birthdate||t.date_of_birth||null,t.gender||null,t.department||null,t.job_title||null,t.basic_salary||0,t.housing_allowance||0,t.transportation_allowance||0,t.hire_date||null,t.contract_start_date||null,t.contract_end_date||null,t.direct_manager||null,t.employment_type||"full_time",t.work_schedule||"regular",t.status||"active",t.notes||null,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return console.error("Error adding employee:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_employees SET
-        full_name = ?, national_id = ?, gender = ?, date_of_birth = ?, nationality = ?,
-        marital_status = ?, number_of_dependents = ?, phone = ?, personal_email = ?, work_email = ?,
-        emergency_contact_name = ?, emergency_contact_phone = ?, emergency_contact_relationship = ?,
-        address = ?, city = ?, postal_code = ?, country = ?, hire_date = ?, job_title = ?,
-        department = ?, employment_type = ?, work_schedule = ?, direct_manager = ?, basic_salary = ?,
-        housing_allowance = ?, transportation_allowance = ?, status = ?, contract_start_date = ?,
-        contract_end_date = ?
+        employee_number = ?, full_name = ?, national_id = ?, email = ?, phone = ?,
+        birthdate = ?, gender = ?, department = ?, job_title = ?, basic_salary = ?,
+        housing_allowance = ?, transportation_allowance = ?, hire_date = ?,
+        contract_start_date = ?, contract_end_date = ?, direct_manager = ?,
+        employment_type = ?, work_schedule = ?, status = ?, notes = ?,
+        updated_at = datetime('now')
       WHERE id = ?
-    `).bind(a.full_name,a.national_id,a.gender,a.date_of_birth,a.nationality,a.marital_status,a.number_of_dependents,a.phone,a.personal_email,a.work_email,a.emergency_contact_name,a.emergency_contact_phone,a.emergency_contact_relationship,a.address,a.city,a.postal_code,a.country,a.hire_date,a.job_title,a.department,a.employment_type,a.work_schedule,a.direct_manager,a.basic_salary,a.housing_allowance,a.transportation_allowance,a.status,a.contract_start_date,a.contract_end_date,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/attendance",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
-         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-         WHERE a.tenant_id = ${a} ORDER BY a.attendance_date DESC, a.check_in_time DESC`:`SELECT a.*, e.full_name, e.employee_number FROM hr_attendance a 
-         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-         ORDER BY a.attendance_date DESC, a.check_in_time DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
+    `).bind(a.employee_number||null,a.full_name,a.national_id||null,a.email||null,a.phone||null,a.birthdate||a.date_of_birth||null,a.gender||null,a.department||null,a.job_title||null,a.basic_salary||0,a.housing_allowance||0,a.transportation_allowance||0,a.hire_date||null,a.contract_start_date||null,a.contract_end_date||null,a.direct_manager||null,a.employment_type||"full_time",a.work_schedule||"regular",a.status||"active",a.notes||null,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return console.error("Error updating employee:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/attendance",async e=>{try{const t=await x(e);console.log("🔍 HR Attendance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
+        a.*,
+        e.full_name_ar as employee_name,
+        e.employee_code as employee_number,
+        e.department,
+        a.working_hours as work_hours
+      FROM hr_attendance a 
+      LEFT JOIN hr_employees e ON a.employee_id = e.id 
+      ORDER BY a.attendance_date DESC, a.check_in_time DESC`).all();return console.log("🔍 HR Attendance API - Results count:",s.results?.length||0),e.json({success:!0,data:s.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
         employee_id, attendance_date, check_in_time, check_out_time, status, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?)
@@ -27730,17 +27757,7 @@ var H=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:r}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_leaves SET status = ?, rejection_reason = ?, approved_by = ?, approval_date = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(a,s,r,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT s.*, e.full_name, e.employee_number FROM hr_salaries s 
-         LEFT JOIN hr_employees e ON s.employee_id = e.id 
-         WHERE s.tenant_id = ${a} ORDER BY s.month DESC`:`SELECT s.*, e.full_name, e.employee_number FROM hr_salaries s 
-         LEFT JOIN hr_employees e ON s.employee_id = e.id 
-         ORDER BY s.month DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/hr/salaries",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,r=await e.env.DB.prepare(`
-      INSERT INTO hr_salaries (
-        employee_id, month, basic_salary, housing_allowance, transportation_allowance,
-        other_allowances, deductions, net_salary, payment_status, payment_date,
-        notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.month,t.basic_salary,t.housing_allowance,t.transportation_allowance,t.other_allowances,t.deductions,t.net_salary,t.payment_status||"pending",t.payment_date,t.notes,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة سجل الراتب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id"),{payment_status:a,payment_date:s}=await e.req.json();return await e.env.DB.prepare(`
-      UPDATE hr_salaries SET payment_status = ?, payment_date = ?
+    `).bind(a,s,r,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+      UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});const Y=new oe,Nt=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(Nt))e&&(Y.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Y.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Y as default};
+    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});const Y=new oe,Nt=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(Nt))e&&(Y.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Y.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Y as default};
