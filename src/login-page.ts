@@ -215,9 +215,14 @@ export const loginPage = `<!DOCTYPE html>
                     localStorage.setItem('authToken', token);
                     localStorage.setItem('userData', JSON.stringify(response.data.user));
                     
-                    // ثم حفظ في Cookie يدوياً كنسخة احتياطية
+                    // ثم حفظ في Cookie يدوياً كنسخة احتياطية (وقد نحتاج Secure على https)
                     const maxAge = 7 * 24 * 60 * 60;
-                    document.cookie = \`authToken=\${token}; path=/; max-age=\${maxAge}; SameSite=Lax\`;
+                    // امسح أي كوكي قديم أولاً لتجنب بقاء جلسة سوبرأدمن في SSR
+                    document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax';
+                    document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+
+                    const isHttps = window.location.protocol === 'https:';
+                    document.cookie = \`authToken=\${token}; Path=/; Max-Age=\${maxAge}; SameSite=Lax\` + (isHttps ? '; Secure' : '');
                     
                     console.log('✅ تم حفظ بيانات المستخدم:', response.data.user);
                     console.log('🍪 Cookie saved:', document.cookie.includes('authToken') ? 'YES' : 'NO');

@@ -301,7 +301,9 @@ async function getTenant(c: any): Promise<any> {
 }
 
 // Get tenant_id for current user (for multi-tenancy filtering)
-async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: number | null; roleId: number | null }> {
+async function getUserInfo(
+  c: any
+): Promise<{ userId: number | null; tenantId: number | null; roleId: number | null; tokenRoleId: number | null }> {
   try {
     // Try to get token from Authorization Header (for API calls)
     let token = c.req.header('Authorization')?.replace('Bearer ', '')
@@ -322,7 +324,12 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     if (!token) {
       console.log('❌ No token found in header or cookie')
       const queryTenantId = c.req.query('tenant_id')
-      return { userId: null, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: null }
+      return {
+        userId: null,
+        tenantId: queryTenantId ? parseInt(queryTenantId) : null,
+        roleId: null,
+        tokenRoleId: null
+      }
     }
     
     console.log('🔍 Token:', token.substring(0, 20) + '...')
@@ -332,11 +339,12 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     const parts = decoded.split(':')
     const userId = parseInt(parts[0])
     const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
+    const tokenRoleId = parts[2] !== 'null' && parts[2] !== 'undefined' ? parseInt(parts[2]) : null
     
     // Safety check for DB binding
     if (!c.env?.DB) {
       console.error('❌ getUserInfo: DB binding not available')
-      return { userId: null, tenantId: null, roleId: null }
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId }
     }
     
     const user = await c.env.DB.prepare(`
@@ -344,20 +352,20 @@ async function getUserInfo(c: any): Promise<{ userId: number | null; tenantId: n
     `).bind(userId).first()
     
     if (!user) {
-      return { userId: null, tenantId: null, roleId: null }
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId }
     }
     
     // Super Admin (role_id = 1) can see all data
     if (user.role_id === 1) {
       const queryTenantId = c.req.query('tenant_id')
-      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1 }
+      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId }
     }
     
     // For other roles, return their tenant_id
-    return { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id }
+    return { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id, tokenRoleId }
   } catch (error) {
     console.error('Error getting user info:', error)
-    return { userId: null, tenantId: null, roleId: null }
+    return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
   }
 }
 
@@ -365,6 +373,118 @@ async function getUserTenantId(c: any): Promise<number | null> {
   const info = await getUserInfo(c)
   return info.tenantId
 }
+
+// ----------------------------
+// Server-side RBAC for admin pages (effective security; not just UI hiding)
+// ----------------------------
+const SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES = [
+  '/admin/subscriptions',
+  '/admin/packages',
+  '/admin/tenants',
+  '/admin/settings',
+  '/admin/hr',
+  '/admin/users',
+  '/admin/roles',
+  '/admin/saas-settings',
+  '/admin/tenant-calculators'
+]
+
+function stripSuperAdminLinksFromHtml(html: string): string {
+  const superAdminPrefixGroup = '(subscriptions|packages|tenants|settings|hr|users|roles|saas-settings|tenant-calculators)'
+  const anchorPattern = new RegExp(
+    `<a[^>]*\\bhref=["']\\/admin\\/${superAdminPrefixGroup}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,
+    'g'
+  )
+  let result = html.replace(anchorPattern, '')
+
+  // Hide any remaining elements that link to super-admin paths (belt-and-suspenders)
+  const style = `
+<style>
+  [href^="/admin/subscriptions"],
+  [href^="/admin/packages"],
+  [href^="/admin/tenants"],
+  [href^="/admin/settings"],
+  [href^="/admin/hr"],
+  [href^="/admin/users"],
+  [href^="/admin/roles"],
+  [href^="/admin/saas-settings"],
+  [href^="/admin/tenant-calculators"] { display: none !important; }
+</style>
+`
+  result = result.replace('</head>', `${style}</head>`)
+  return result
+}
+
+app.use('/admin/*', async (c, next) => {
+  const info = await getUserInfo(c)
+
+  // Basic auth gate for all admin pages
+  if (!info.userId) {
+    return c.redirect('/login')
+  }
+
+  // Treat as super-admin only if BOTH DB role and token role agree on 1.
+  const isSuperAdmin =
+    info.roleId === 1 && (info.tokenRoleId === null || info.tokenRoleId === 1)
+
+  // Super-admin-only pages
+  // NOTE: Avoid using global URL here because this repo's TS config doesn't include DOM libs.
+  const pathname = (c.req as any).path || String(c.req.url).split('?')[0].replace(/^https?:\/\/[^/]+/, '')
+  const isSuperAdminOnly = SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + '/')
+  )
+  if (isSuperAdminOnly && !isSuperAdmin) {
+    // Redirect to dashboard (or you can render 403)
+    return c.redirect('/admin/dashboard')
+  }
+
+  await next()
+
+  // Post-process HTML responses to remove super-admin-only links for non-superadmin users
+  if (!isSuperAdmin) {
+    const res = c.res
+    const contentType = res.headers.get('content-type') || ''
+    if (contentType.includes('text/html')) {
+      const html = await res.text()
+      const updated = stripSuperAdminLinksFromHtml(html)
+      const headers = new Headers(res.headers)
+      headers.set('content-type', 'text/html; charset=UTF-8')
+      c.res = new Response(updated, { status: res.status, statusText: res.statusText, headers })
+    }
+  }
+})
+
+// Used by the admin panel sidebar permission script (full-admin-panel.ts)
+app.get('/api/user-info', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId || !info.roleId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const user = await c.env.DB.prepare(
+      `SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?`
+    ).bind(info.userId).first()
+
+    if (!user) {
+      return c.json({ success: false, error: 'User not found' }, 404)
+    }
+
+    return c.json({
+      success: true,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        tenant_id: user.tenant_id,
+        role_id: user.role_id
+      }
+    })
+  } catch (error: any) {
+    console.error('Error in /api/user-info:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
 
 // Get user ID and role for employee-specific filtering
 
@@ -654,6 +774,19 @@ app.post('/api/auth/login', async (c) => {
       } : undefined
     }, 500)
   }
+})
+
+// Logout API (clears auth cookie)
+app.post('/api/auth/logout', async (c) => {
+  // Expire cookie in multiple ways to handle Secure/non-Secure variants across environments
+  const expiredSecure = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure'
+  const expiredInsecure = 'authToken=; Path=/; Max-Age=0; SameSite=Lax'
+
+  const res = c.json({ success: true })
+  // Use append so we can send multiple Set-Cookie headers
+  res.headers.append('Set-Cookie', expiredSecure)
+  res.headers.append('Set-Cookie', expiredInsecure)
+  return res
 })
 
 // Forgot Password - Step 1: Send verification code
@@ -1016,7 +1149,7 @@ app.post('/api/rates', async (c) => {
     
     const formData = await c.req.formData()
     const data: any = {}
-    formData.forEach((value, key) => {
+    formData.forEach((value: FormDataEntryValue, key: string) => {
       data[key] = value
     })
     const result = await c.env.DB.prepare(`
@@ -4192,7 +4325,6 @@ app.get('/admin/panel', async (c) => {
     `);
   }
   
-<<<<<<< HEAD
   // Get user details from database
   const user = await c.env.DB.prepare(`
     SELECT u.*, r.role_name, r.description as role_description, t.company_name
@@ -4212,86 +4344,34 @@ app.get('/admin/panel', async (c) => {
   
   // Inject user data and permissions into the page
   let adminPanel = fullAdminPanel;
-  
-  // Check if user is super admin (role_id = 11)
-  const isSuperAdmin = userInfo.roleId === 11;
-  
-  // Remove super admin only menu items if not super admin
-  if (!isSuperAdmin) {
-    // Remove Subscriptions menu item from sidebar (including comment and newline after)
+
+  // Hard server-side removal of super-admin-only menu entries (fail-closed).
+  // This avoids any client-side/localStorage issues and guarantees the nav is correct.
+  if (userInfo.roleId !== 1) {
+    const superAdminOnlyPaths = [
+      '/admin/subscriptions',
+      '/admin/packages',
+      '/admin/tenants',
+      '/admin/settings',
+      '/admin/hr',
+      '/admin/users',
+      '/admin/roles',
+      '/admin/saas-settings',
+      '/admin/tenant-calculators'
+    ];
+
+    for (const path of superAdminOnlyPaths) {
+      const linkPattern = new RegExp(
+        `<a[^>]*\\bhref=["']${path}["'][^>]*>[\\s\\S]*?<\\/a>`,
+        'g'
+      );
+      adminPanel = adminPanel.replace(linkPattern, '');
+    }
+
+    // Belt-and-suspenders: hide any remaining super-admin-only items by attribute
     adminPanel = adminPanel.replace(
-      /                <!-- Subscriptions -->\s*<a href="\/admin\/subscriptions"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove Packages menu item from sidebar
-    adminPanel = adminPanel.replace(
-      /                <!-- Packages -->\s*<a href="\/admin\/packages"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove Tenants Management (Corporate Management) menu item from sidebar
-    adminPanel = adminPanel.replace(
-      /                <!-- Tenants Management -->\s*<a href="\/admin\/tenants"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove Settings menu item from sidebar
-    adminPanel = adminPanel.replace(
-      /                <!-- Settings -->\s*<a href="\/admin\/settings"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove HR System menu item from sidebar
-    adminPanel = adminPanel.replace(
-      /                <!-- HR System -->\s*<a href="\/admin\/hr"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove Users menu item from sidebar
-    adminPanel = adminPanel.replace(
-      /                <!-- Users \(Admin Only\) -->\s*<a href="\/admin\/users"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove Roles menu item from sidebar
-    adminPanel = adminPanel.replace(
-      /                <!-- Roles \(Admin Only\) -->\s*<a href="\/admin\/roles"[^>]*>[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    
-    // Remove super admin only quick access buttons
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر الاشتراكات -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر الباقات -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر المستخدمين -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر الأدوار \(Super Admin فقط\) -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر نظام الموارد البشرية HR -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر الشركات \(Super Admin فقط\) -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر حاسبات الشركات -->[\s\S]*?<\/a>\s*\n/g,
-      ''
-    );
-    adminPanel = adminPanel.replace(
-      /                    <!-- زر نموذج SaaS -->[\s\S]*?<\/a>\s*\n/g,
-      ''
+      '</head>',
+      '<style>[data-superadmin-only="true"]{display:none !important;}</style></head>'
     );
   }
   
@@ -5692,9 +5772,9 @@ app.get('/admin/dashboard', async (c) => {
       SELECT 
         status,
         COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${whereClause}), 2) as percentage
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${requestsWhere}), 2) as percentage
       FROM financing_requests
-      ${whereClause}
+      ${requestsWhere}
       GROUP BY status
     `).all()
     
@@ -5952,12 +6032,13 @@ app.get('/admin/dashboard', async (c) => {
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               ${statusData.map((item: any) => {
-                const statusInfo = {
+                const statusMap: Record<string, { color: string; icon: string; label: string }> = {
                   'pending': { color: 'yellow', icon: 'clock', label: 'قيد الانتظار' },
                   'under_review': { color: 'blue', icon: 'search', label: 'قيد المراجعة' },
                   'approved': { color: 'green', icon: 'check-circle', label: 'موافق' },
                   'rejected': { color: 'red', icon: 'times-circle', label: 'مرفوض' }
-                }[item.status] || { color: 'gray', icon: 'question', label: item.status }
+                }
+                const statusInfo = statusMap[item.status] || { color: 'gray', icon: 'question', label: item.status }
                 
                 return `
                   <div class="bg-${statusInfo.color}-50 border-2 border-${statusInfo.color}-200 rounded-lg p-4">
@@ -6084,14 +6165,22 @@ app.get('/admin/dashboard', async (c) => {
           });
           
           // دالة تسجيل الخروج
-          function doLogout() {
-            if (confirm('هل تريد تسجيل الخروج؟')) {
-              console.log('🚪 تسجيل الخروج من لوحة المعلومات...');
+          async function doLogout() {
+            if (!confirm('هل تريد تسجيل الخروج؟')) return;
+            try {
+              await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+            } catch (e) {
+              console.warn('Logout API failed:', e);
+            }
+            try {
               localStorage.removeItem('user');
               localStorage.removeItem('userData');
+              localStorage.removeItem('authToken');
               localStorage.removeItem('token');
-              window.location.href = '/login';
-            }
+              document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax';
+              document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+            } catch (e) {}
+            window.location.href = '/login';
           }
         </script>
       </body>
@@ -6259,7 +6348,7 @@ app.get('/admin/customers/add', async (c) => {
 app.get('/admin/customer-assignment', async (c) => {
   // Get user info to check role
   const userInfo = await getUserInfo(c);
-  const isSuperAdmin = userInfo.roleId === 11;
+  const isSuperAdmin = userInfo.roleId === 1;
   
   // Temporary: Get tenant_id from query or default to 1
   const tenantId = c.req.query('tenant_id') || 1;
@@ -6348,7 +6437,6 @@ app.get('/admin/customer-assignment', async (c) => {
             </a>
           </div>
         </div>
-<<<<<<< HEAD
       </div>
 
       <!-- Sidebar Menu -->
@@ -6478,7 +6566,7 @@ app.get('/admin/customer-assignment', async (c) => {
 
           <!-- تسجيل الخروج -->
           <div class="mb-2">
-            <a href="/login" onclick="logout(); return false;" class="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-all group font-semibold">
+            <a href="/login" onclick="doLogout(); return false;" class="flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-all group font-semibold">
               <i class="fas fa-sign-out-alt group-hover:scale-110 transition-transform"></i>
               <span>تسجيل الخروج</span>
             </a>
@@ -6493,7 +6581,7 @@ app.get('/admin/customer-assignment', async (c) => {
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          ${employeeStats.results.map((emp, index) => {
+          ${employeeStats.results.map((emp: any, index: number) => {
             const colors = [
               'from-blue-500 to-blue-600',
               'from-green-500 to-green-600',
@@ -6548,7 +6636,7 @@ app.get('/admin/customer-assignment', async (c) => {
               <select id="filterEmployee" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
                 <option value="">كل الموظفين</option>
                 <option value="unassigned">غير مخصص</option>
-                ${employeeStats.results.map(emp => `
+                ${employeeStats.results.map((emp: any) => `
                   <option value="${emp.id}">${emp.full_name} (${emp.customer_count})</option>
                 `).join('')}
               </select>
@@ -6570,7 +6658,7 @@ app.get('/admin/customer-assignment', async (c) => {
                   </tr>
                 </thead>
                 <tbody id="customersTableBody">
-                  ${customers.results.map(customer => `
+                  ${customers.results.map((customer: any) => `
                     <tr class="border-t hover:bg-gray-50 customer-row" data-customer-id="${customer.id}" data-employee-id="${customer.employee_id || ''}">
                       <td class="px-4 py-3">
                         <input type="checkbox" class="customer-checkbox rounded" value="${customer.id}">
@@ -6590,7 +6678,7 @@ app.get('/admin/customer-assignment', async (c) => {
                                 data-customer-id="${customer.id}"
                                 onchange="assignCustomer(${customer.id}, this.value)">
                           <option value="">اختر موظف...</option>
-                          ${employees.results.map(emp => `
+                          ${employees.results.map((emp: any) => `
                             <option value="${emp.id}" ${customer.employee_id == emp.id ? 'selected' : ''}>
                               ${emp.full_name}
                             </option>
@@ -6745,6 +6833,42 @@ app.get('/admin/customer-assignment', async (c) => {
             
             row.style.display = (matchSearch && matchEmployee) ? '' : 'none';
           });
+        }
+
+        // Sidebar toggle (used by the menu button)
+        function toggleSidebar() {
+          const sidebar = document.getElementById('sidebar');
+          const overlay = document.getElementById('sidebar-overlay');
+          if (!sidebar || !overlay) return;
+
+          if (sidebar.classList.contains('translate-x-full')) {
+            sidebar.classList.remove('translate-x-full');
+            sidebar.classList.add('translate-x-0');
+            overlay.classList.remove('hidden');
+          } else {
+            sidebar.classList.add('translate-x-full');
+            sidebar.classList.remove('translate-x-0');
+            overlay.classList.add('hidden');
+          }
+        }
+
+        // Logout (clears cookie + localStorage so SSR role can't get "stuck")
+        async function doLogout() {
+          if (!confirm('هل تريد تسجيل الخروج؟')) return;
+          try {
+            await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+          } catch (e) {
+            console.warn('Logout API failed:', e);
+          }
+          try {
+            localStorage.removeItem('user');
+            localStorage.removeItem('userData');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('token');
+            document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax';
+            document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+          } catch (e) {}
+          window.location.href = '/login';
         }
       </script>
     </body>
@@ -6981,7 +7105,7 @@ app.get('/admin/banks', async (c) => {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
-                    ${banks.results.map((bank, index) => `
+                    ${banks.results.map((bank: any, index: number) => `
                       <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 text-sm">${index + 1}</td>
                         <td class="px-6 py-4 font-bold">${bank.bank_name}</td>
@@ -7153,7 +7277,7 @@ app.get('/admin/rates', async (c) => {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
-                    ${rates.results.map((rate, index) => `
+                    ${rates.results.map((rate: any, index: number) => `
                       <tr class="hover:bg-gray-50">
                         <td class="px-4 py-4 text-sm">${index + 1}</td>
                         <td class="px-4 py-4 font-bold">${rate.bank_name || '-'}</td>
@@ -13394,16 +13518,24 @@ app.get('/admin/users-new', async (c) => {
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script>
           // دالة تسجيل الخروج
-          function doLogout() {
-            if (confirm('هل تريد تسجيل الخروج؟')) {
-              console.log('🚪 تسجيل الخروج...');
+          async function doLogout() {
+            if (!confirm('هل تريد تسجيل الخروج؟')) return;
+            try {
+              await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+            } catch (e) {
+              console.warn('Logout API failed:', e);
+            }
+            console.log('🚪 تسجيل الخروج...');
+            try {
               localStorage.removeItem('user');
               localStorage.removeItem('userData');
               localStorage.removeItem('authToken');
               localStorage.removeItem('token');
-              console.log('✅ تم حذف بيانات المستخدم والتوكن');
-              window.location.href = '/login';
-            }
+              document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax';
+              document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+            } catch (e) {}
+            console.log('✅ تم حذف بيانات المستخدم والتوكن');
+            window.location.href = '/login';
           }
           
           // تحميل بيانات المستخدم
@@ -13872,7 +14004,6 @@ app.post('/api/users/:id/permissions', async (c) => {
   }
 })
 
-<<<<<<< HEAD
 // ===============================================
 // HR LEAVES APIs
 // ===============================================
@@ -14504,7 +14635,7 @@ app.delete('/api/hr/promotions/:id', async (c) => {
 app.get('/api/hr/documents', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
-    const tenantId = userInfo?.tenant_id || 1;
+    const tenantId = userInfo?.tenantId || 1;
     
     const searchTerm = c.req.query('search') || '';
     const typeFilter = c.req.query('type') || '';
@@ -14543,7 +14674,7 @@ app.get('/api/hr/documents', async (c) => {
 app.post('/api/hr/documents', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
-    const tenantId = userInfo?.tenant_id || 1;
+    const tenantId = userInfo?.tenantId || 1;
     
     const body = await c.req.json();
     const { employee_id, document_type, document_number, issue_date, expiry_date, notes } = body;
@@ -14582,7 +14713,7 @@ app.delete('/api/hr/documents/:id', async (c) => {
 app.get('/api/hr/reports/:type', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
-    const tenantId = userInfo?.tenant_id || 1;
+    const tenantId = userInfo?.tenantId || 1;
     
     const reportType = c.req.param('type');
     const startDate = c.req.query('start_date') || '';
