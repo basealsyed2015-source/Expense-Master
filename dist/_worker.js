@@ -1,4 +1,4 @@
-var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ye=Symbol(),ve=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof K?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?we(e,{all:a,dot:s}):{}};async function we(e,t){const a=await e.formData();return a?_e(a,t):{}}function _e(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Ee(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(ke(a,s,r),delete a[s])}),a}var Ee=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},ke=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},J=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Se=e=>{const{groups:t,path:a}=Ie(e),s=J(a);return Te(s,t)},Ie=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Te=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},O={},De=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return O[s]||(a[2]?O[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:O[s]=[e,a[1],!0]),O[s]}return null},P=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Re=e=>P(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Re(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Be=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},B=(e,t,...a)=>(a.length&&(t=B(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),G=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},F=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?P(e,X):e):e,Q=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,c=e.indexOf("&",n);return F(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=F(n)),o=l,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,l===-1?void 0:l),s&&(c=F(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},Ce=Q,$e=(e,t)=>Q(e,t,!0),X=decodeURIComponent,W=e=>P(e,X),K=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#l()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?W(a):a}#l(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?W(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Ce(this.url,e)}queries(e){return $e(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await ve(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ye](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Le={Stringify:1},Z=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>Z(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},qe="text/plain; charset=UTF-8",N=(e,t)=>({"Content-Type":e,...t}),je=class{#t;#e;env={};#a;finalized=!1;error;#l;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new K(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#l=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#l;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#n&&!this.#l&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,N(qe,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,N("application/json",a));html=(e,t,a)=>{const s=r=>this.#o(r,t,N("text/html; charset=UTF-8",a));return typeof e=="object"?Z(e,Le.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},y="ALL",Oe="all",Ae=["get","post","put","delete","options","patch"],ee="Can not add a route since the matcher is already built.",te=class extends Error{},Fe="__COMPOSED_HANDLER",Ne=e=>e.text("404 Not Found",404),Y=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Me=class ae{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Ae,Oe].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#l(o,this.#t,l),i.forEach(n=>{this.#l(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const c of[o].flat())i.map(p=>{this.#l(c.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#l(y,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Be}#e(){const t=new ae({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ne;errorHandler=Y;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===Y?o=r.handler:(o=async(l,i)=>(await U([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Fe]=r.handler),s.#l(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=B(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const c=o(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=B(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await c()};return this.#l(y,B(t,"*"),i),this}#l(t,a,s){t=t.toUpperCase(),a=B(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new je(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let c;try{c=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=U(l[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${B("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},se=[];function Pe(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[y],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],se];const c=n.indexOf("",1);return[l[1][c],n]});return this.match=s,s(e,t)}var A="[^/]+",q=".*",j="(?:|/.*)",C=Symbol(),He=new Set(".\\+*[^]$()");function Ue(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===q||e===j?1:t===q||t===j?-1:e===A?1:t===A?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var We=class M{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw C;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",q]:["","",A]:l==="/*"?["","",j]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||A;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw C;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==q&&m!==j))throw C;if(o)return;c=this.#a[u]=new M,p!==""&&(c.#e=r.varIndex++)}!o&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[l],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==q&&p!==j))throw C;if(o)return;c=this.#a[l]=new M}c.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ue).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:He.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new We;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${l}`;return r[l]=[c,n],l++,i=!0,c}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ze=[/^$/,[],Object.create(null)],re=Object.create(null);function le(e){return re[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Je(){re=Object.create(null)}function Ve(e){const t=new Ye,a=[];if(e.length===0)return ze;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,f,g]=s[c];m?r[f]=[g.map(([h])=>[h,Object.create(null)]),se]:p++;let b;try{b=t.insert(f,p,m)}catch(h){throw h===C?new te(f):h}m||(a[p]=g.map(([h,v])=>{const S=Object.create(null);for(v-=1;v>=0;v--){const[_,w]=b[v];S[_]=w}return[h,S]}))}const[o,l,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const f=a[c][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,h=g.length;b<h;b++)f[g[b]]=i[f[g[b]]]}const n=[];for(const c in l)n[c]=a[l[c]];return[o,n,r]}function R(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Ge=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[y]:Object.create(null)},this.#e={[y]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(ee);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[y]).forEach(n=>{i[e][n]=[...i[y][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===y?Object.keys(s).forEach(n=>{s[n][t]||=R(s[n],t)||R(s[y],t)||[]}):s[e][t]||=R(s[e],t)||R(s[y],t)||[],Object.keys(s).forEach(n=>{(e===y||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,o])})}),Object.keys(r).forEach(n=>{(e===y||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,o]))});return}const l=G(t)||[t];for(let i=0,n=l.length;i<n;i++){const c=l[i];Object.keys(r).forEach(p=>{(e===y||e===p)&&(r[p][c]||=[...R(s[p],c)||R(s[y],c)||[]],r[p][c].push([a,o-n+i+1]))})}}match=Pe;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Je(),e}#a(e){const t=[];let a=e===y;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==y&&t.push(...Object.keys(s[y]).map(o=>[o,s[y][o]]))}),a?Ve(t):null}},Qe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(ee);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof te)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},L=Object.create(null),Xe=class oe{#t;#e;#a;#l=0;#r=L;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#l=++this.#l;let r=this;const o=Se(a),l=[];for(let i=0,n=o.length;i<n;i++){const c=o[i],p=o[i+1],u=De(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new oe,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,c)=>c.indexOf(i)===n),score:this.#l}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],c=n[a]||n[y],p={};if(c!==void 0&&(c.params=Object.create(null),o.push(c),s!==L||r&&r!==L))for(let u=0,m=c.possibleKeys.length;u<m;u++){const f=c.possibleKeys[u],g=p[c.score];c.params[f]=r?.[f]&&!g?r[f]:s[f]??r?.[f],p[c.score]=!0}}return o}search(t,a){const s=[];this.#r=L;let o=[this];const l=J(a),i=[];for(let n=0,c=l.length;n<c;n++){const p=l[n],u=n===c-1,m=[];for(let f=0,g=o.length;f<g;f++){const b=o[f],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let v=0,S=b.#a.length;v<S;v++){const _=b.#a[v],w=b.#r===L?{}:{...b.#r};if(_==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#r)),I.#r=w,m.push(I));continue}const[D,H,$]=_;if(!p&&!($ instanceof RegExp))continue;const E=b.#e[D],xe=l.slice(n).join("/");if($ instanceof RegExp){const I=$.exec(xe);if(I){if(w[H]=I[0],s.push(...this.#s(E,t,b.#r,w)),Object.keys(E.#e).length){E.#r=w;const he=I[0].match(/\//)?.length??0;(i[he]||=[]).push(E)}continue}}($===!0||$.test(p))&&(w[H]=p,u?(s.push(...this.#s(E,t,w,b.#r)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,w,b.#r))):(E.#r=w,m.push(E)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ke=class{name="TrieRouter";#t;constructor(){this.#t=new Xe}add(e,t,a){const s=G(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ne=class extends Me{constructor(e={}){super(e),this.router=e.router??new Qe({routers:[new Ge,new Ke]})}},Ze=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const c=await s(l.req.header("origin")||"",l);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const et=`<!DOCTYPE html>
+var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw new Error("next() called multiple times");l=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>o(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ve=Symbol(),we=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,l=(e instanceof Z?e.raw.headers:e.headers).get("Content-Type");return l?.startsWith("multipart/form-data")||l?.startsWith("application/x-www-form-urlencoded")?_e(e,{all:a,dot:s}):{}};async function _e(e,t){const a=await e.formData();return a?Ee(a,t):{}}function Ee(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?ke(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Se(a,s,r),delete a[s])}),a}var ke=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Se=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((l,o)=>{o===r.length-1?s[l]=a:((!s[l]||typeof s[l]!="object"||Array.isArray(s[l])||s[l]instanceof File)&&(s[l]=Object.create(null)),s=s[l])})},G=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Ie=e=>{const{groups:t,path:a}=Te(e),s=G(a);return De(s,t)},Te=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},De=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Re=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},H=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Ce=e=>H(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const l=t.indexOf("?",s),o=t.slice(a,l===-1?void 0:l);return Ce(o.includes("%25")?o.replace(/%25/g,"%2525"):o)}else if(r===63)break}return t.slice(a,s)},Be=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},C=(e,t,...a)=>(a.length&&(t=C(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Q=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const l=r.replace("?","");s+="/"+l,a.push(s)}else s+="/"+r}),a.filter((r,l,o)=>o.indexOf(r)===l)},N=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?H(e,K):e):e,X=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let o=e.indexOf("?",8);if(o===-1)return;for(e.startsWith(t,o+1)||(o=e.indexOf(`&${t}`,o+1));o!==-1;){const i=e.charCodeAt(o+t.length+1);if(i===61){const n=o+t.length+2,c=e.indexOf("&",n);return N(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";o=e.indexOf(`&${t}`,o+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let l=e.indexOf("?",8);for(;l!==-1;){const o=e.indexOf("&",l+1);let i=e.indexOf("=",l);i>o&&o!==-1&&(i=-1);let n=e.slice(l+1,i===-1?o===-1?void 0:o:i);if(s&&(n=N(n)),l=o,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,o===-1?void 0:o),s&&(c=N(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},$e=X,Le=(e,t)=>X(e,t,!0),K=decodeURIComponent,Y=e=>H(e,K),Z=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#o()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?Y(a):a}#o(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Y(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return $e(this.url,e)}queries(e){return Le(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await we(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(l=>(r==="json"&&(l=JSON.stringify(l)),new Response(l)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ve](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},qe={Stringify:1},ee=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const l=e.callbacks;return l?.length?(r?r[0]+=e:r=[e],Promise.all(l.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>ee(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},Oe="text/plain; charset=UTF-8",F=(e,t)=>({"Content-Type":e,...t}),je=class{#t;#e;env={};#a;finalized=!1;error;#o;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Z(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#o=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#l(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const l=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[o,i]of l)o.toLowerCase()==="set-cookie"?s.append(o,i):s.set(o,i)}if(a)for(const[l,o]of Object.entries(a))if(typeof o=="string")s.set(l,o);else{s.delete(l);for(const i of o)s.append(l,i)}const r=typeof t=="number"?t:t?.status??this.#o;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#l(...e);body=(e,t,a)=>this.#l(e,t,a);text=(e,t,a)=>!this.#n&&!this.#o&&!t&&!a&&!this.finalized?new Response(e):this.#l(e,t,F(Oe,a));json=(e,t,a)=>this.#l(JSON.stringify(e),t,F("application/json",a));html=(e,t,a)=>{const s=r=>this.#l(r,t,F("text/html; charset=UTF-8",a));return typeof e=="object"?ee(e,qe.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},y="ALL",Ae="all",Ne=["get","post","put","delete","options","patch"],te="Can not add a route since the matcher is already built.",ae=class extends Error{},Fe="__COMPOSED_HANDLER",Me=e=>e.text("404 Not Found",404),z=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Pe=class se{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Ne,Ae].forEach(l=>{this[l]=(o,...i)=>(typeof o=="string"?this.#t=o:this.#o(l,this.#t,o),i.forEach(n=>{this.#o(l,this.#t,n)}),this)}),this.on=(l,o,...i)=>{for(const n of[o].flat()){this.#t=n;for(const c of[l].flat())i.map(p=>{this.#o(c.toUpperCase(),this.#t,p)})}return this},this.use=(l,...o)=>(typeof l=="string"?this.#t=l:(this.#t="*",o.unshift(l)),o.forEach(i=>{this.#o(y,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Be}#e(){const t=new se({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Me;errorHandler=z;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let l;a.errorHandler===z?l=r.handler:(l=async(o,i)=>(await W([],a.errorHandler)(o,()=>r.handler(o,i))).res,l[Fe]=r.handler),s.#o(r.method,r.path,l)}),this}basePath(t){const a=this.#e();return a._basePath=C(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,l;s&&(typeof s=="function"?l=s:(l=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const o=l?n=>{const c=l(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=C(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...o(n));if(p)return p;await c()};return this.#o(y,C(t,"*"),i),this}#o(t,a,s){t=t.toUpperCase(),a=C(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const l=this.getPath(t,{env:s}),o=this.router.match(r,l),i=new je(t,{path:l,matchResult:o,env:s,executionCtx:a,notFoundHandler:this.#a});if(o[0].length===1){let c;try{c=o[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=W(o[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${C("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},re=[];function He(e,t){const a=this.buildAllMatchers(),s=((r,l)=>{const o=a[r]||a[y],i=o[2][l];if(i)return i;const n=l.match(o[0]);if(!n)return[[],re];const c=n.indexOf("",1);return[o[1][c],n]});return this.match=s,s(e,t)}var A="[^/]+",q=".*",O="(?:|/.*)",B=Symbol(),Ue=new Set(".\\+*[^]$()");function We(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===q||e===O?1:t===q||t===O?-1:e===A?1:t===A?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Ye=class P{#t;#e;#a=Object.create(null);insert(t,a,s,r,l){if(t.length===0){if(this.#t!==void 0)throw B;if(l)return;this.#t=a;return}const[o,...i]=t,n=o==="*"?i.length===0?["","",q]:["","",A]:o==="/*"?["","",O]:o.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||A;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw B;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==q&&m!==O))throw B;if(l)return;c=this.#a[u]=new P,p!==""&&(c.#e=r.varIndex++)}!l&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[o],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==q&&p!==O))throw B;if(l)return;c=this.#a[o]=new P}c.insert(i,a,s,r,l)}buildRegExpStr(){const a=Object.keys(this.#a).sort(We).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Ue.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},ze=class{#t={varIndex:0};#e=new Ye;insert(e,t,a){const s=[],r=[];for(let o=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${o}`;return r[o]=[c,n],o++,i=!0,c}),!i)break}const l=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let o=r.length-1;o>=0;o--){const[i]=r[o];for(let n=l.length-1;n>=0;n--)if(l[n].indexOf(i)!==-1){l[n]=l[n].replace(i,r[o][1]);break}}return this.#e.insert(l,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,l,o)=>l!==void 0?(a[++t]=Number(l),"$()"):(o!==void 0&&(s[Number(o)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Je=[/^$/,[],Object.create(null)],oe=Object.create(null);function le(e){return oe[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Ge(){oe=Object.create(null)}function Ve(e){const t=new ze,a=[];if(e.length===0)return Je;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,g,f]=s[c];m?r[g]=[f.map(([h])=>[h,Object.create(null)]),re]:p++;let b;try{b=t.insert(g,p,m)}catch(h){throw h===B?new ae(g):h}m||(a[p]=f.map(([h,v])=>{const S=Object.create(null);for(v-=1;v>=0;v--){const[_,w]=b[v];S[_]=w}return[h,S]}))}const[l,o,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const g=a[c][u]?.[1];if(!g)continue;const f=Object.keys(g);for(let b=0,h=f.length;b<h;b++)g[f[b]]=i[g[f[b]]]}const n=[];for(const c in o)n[c]=a[o[c]];return[l,n,r]}function R(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Qe=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[y]:Object.create(null)},this.#e={[y]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(te);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[y]).forEach(n=>{i[e][n]=[...i[y][n]]})}),t==="/*"&&(t="*");const l=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===y?Object.keys(s).forEach(n=>{s[n][t]||=R(s[n],t)||R(s[y],t)||[]}):s[e][t]||=R(s[e],t)||R(s[y],t)||[],Object.keys(s).forEach(n=>{(e===y||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,l])})}),Object.keys(r).forEach(n=>{(e===y||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,l]))});return}const o=Q(t)||[t];for(let i=0,n=o.length;i<n;i++){const c=o[i];Object.keys(r).forEach(p=>{(e===y||e===p)&&(r[p][c]||=[...R(s[p],c)||R(s[y],c)||[]],r[p][c].push([a,l-n+i+1]))})}}match=He;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Ge(),e}#a(e){const t=[];let a=e===y;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(l=>[l,s[e][l]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==y&&t.push(...Object.keys(s[y]).map(l=>[l,s[y][l]]))}),a?Ve(t):null}},Xe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(te);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let l=0,o;for(;l<r;l++){const i=a[l];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);o=i.match(e,t)}catch(n){if(n instanceof ae)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(l===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,o}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},L=Object.create(null),Ke=class ne{#t;#e;#a;#o=0;#r=L;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#o=++this.#o;let r=this;const l=Ie(a),o=[];for(let i=0,n=l.length;i<n;i++){const c=l[i],p=l[i+1],u=Re(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&o.push(u[1]);continue}r.#e[m]=new ne,u&&(r.#a.push(u),o.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:o.filter((i,n,c)=>c.indexOf(i)===n),score:this.#o}}),r}#s(t,a,s,r){const l=[];for(let o=0,i=t.#t.length;o<i;o++){const n=t.#t[o],c=n[a]||n[y],p={};if(c!==void 0&&(c.params=Object.create(null),l.push(c),s!==L||r&&r!==L))for(let u=0,m=c.possibleKeys.length;u<m;u++){const g=c.possibleKeys[u],f=p[c.score];c.params[g]=r?.[g]&&!f?r[g]:s[g]??r?.[g],p[c.score]=!0}}return l}search(t,a){const s=[];this.#r=L;let l=[this];const o=G(a),i=[];for(let n=0,c=o.length;n<c;n++){const p=o[n],u=n===c-1,m=[];for(let g=0,f=l.length;g<f;g++){const b=l[g],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let v=0,S=b.#a.length;v<S;v++){const _=b.#a[v],w=b.#r===L?{}:{...b.#r};if(_==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#r)),I.#r=w,m.push(I));continue}const[D,U,$]=_;if(!p&&!($ instanceof RegExp))continue;const E=b.#e[D],he=o.slice(n).join("/");if($ instanceof RegExp){const I=$.exec(he);if(I){if(w[U]=I[0],s.push(...this.#s(E,t,b.#r,w)),Object.keys(E.#e).length){E.#r=w;const ye=I[0].match(/\//)?.length??0;(i[ye]||=[]).push(E)}continue}}($===!0||$.test(p))&&(w[U]=p,u?(s.push(...this.#s(E,t,w,b.#r)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,w,b.#r))):(E.#r=w,m.push(E)))}}l=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ze=class{name="TrieRouter";#t;constructor(){this.#t=new Ke}add(e,t,a){const s=Q(t);if(s){for(let r=0,l=s.length;r<l;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ie=class extends Pe{constructor(e={}){super(e),this.router=e.router??new Xe({routers:[new Qe,new Ze]})}},et=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(l=>typeof l=="string"?l==="*"?()=>l:o=>l===o?o:null:typeof l=="function"?l:o=>l.includes(o)?o:null)(a.origin),r=(l=>typeof l=="function"?l:Array.isArray(l)?()=>l:()=>[])(a.allowMethods);return async function(o,i){function n(p,u){o.res.headers.set(p,u)}const c=await s(o.req.header("origin")||"",o);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),o.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(o.req.header("origin")||"",o);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=o.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const tt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,tt=`<!DOCTYPE html>
+`,at=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ie=`<!DOCTYPE html>
+`,de=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -1652,7 +1652,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,at=`<!DOCTYPE html>
+`,st=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -1903,7 +1903,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,st=`<!DOCTYPE html>
+`,rt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2239,7 +2239,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,rt=`<!DOCTYPE html>
+`,ot=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3027,7 +3027,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,de=`<!DOCTYPE html>
+`,ce=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3241,31 +3241,31 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </a>
 
                 <!-- Subscriptions -->
-                <a href="/admin/subscriptions" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-pink-50 rounded-lg transition-all group">
+                <a href="/admin/subscriptions" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-pink-50 rounded-lg transition-all group">
                     <i class="fas fa-calendar-check text-xl text-pink-600 group-hover:text-pink-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-pink-700">الاشتراكات</span>
                 </a>
 
                 <!-- Packages -->
-                <a href="/admin/packages" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-yellow-50 rounded-lg transition-all group">
+                <a href="/admin/packages" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-yellow-50 rounded-lg transition-all group">
                     <i class="fas fa-box text-xl text-yellow-600 group-hover:text-yellow-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-yellow-700">الباقات</span>
                 </a>
 
                 <!-- Tenants Management -->
-                <a href="/admin/tenants" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
+                <a href="/admin/tenants" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
                     <i class="fas fa-building text-xl text-cyan-600 group-hover:text-cyan-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-cyan-700">إدارة الشركات</span>
                 </a>
 
                 <!-- Settings -->
-                <a href="/admin/settings" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                <a href="/admin/settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
                     <i class="fas fa-cog text-xl text-gray-600 group-hover:text-gray-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-gray-700">إعدادات النظام</span>
                 </a>
 
                 <!-- HR System -->
-                <a href="/admin/hr" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-users-cog text-xl text-blue-600 group-hover:text-blue-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
                 </a>
@@ -3273,15 +3273,47 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 <hr class="my-4">
 
                 <!-- Users (Admin Only) -->
-                <a href="/admin/users" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
+                <a href="/admin/users" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
                     <i class="fas fa-user-shield text-xl text-slate-600 group-hover:text-slate-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-slate-700">المستخدمين</span>
                 </a>
 
                 <!-- Roles (Admin Only) -->
-                <a href="/admin/roles" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
+                <a href="/admin/roles" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
                     <i class="fas fa-user-tag text-xl text-violet-600 group-hover:text-violet-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-violet-700">الأدوار والصلاحيات</span>
+                </a>
+
+                <!-- Notifications -->
+                <a href="/admin/notifications" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
+                    <i class="fas fa-bell text-xl text-red-600 group-hover:text-red-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-red-700">الإشعارات</span>
+                </a>
+
+                <!-- Tenant Calculators -->
+                <a href="/admin/tenant-calculators" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
+                    <i class="fas fa-calculator text-xl text-violet-600 group-hover:text-violet-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-violet-700">حاسبات الشركات</span>
+                </a>
+
+                <!-- SaaS Settings -->
+                <a href="/admin/saas-settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-cogs text-xl text-amber-600 group-hover:text-amber-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-700">إعدادات SaaS</span>
+                </a>
+
+                <hr class="my-4">
+
+                <!-- Calculator -->
+                <a href="/calculator" id="sidebarCalculatorLink" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
+                    <i class="fas fa-calculator text-xl text-cyan-600 group-hover:text-cyan-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-cyan-700">الحاسبة</span>
+                </a>
+
+                <!-- Home -->
+                <a href="/" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                    <i class="fas fa-home text-xl text-gray-600 group-hover:text-gray-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-gray-700">الصفحة الرئيسية</span>
                 </a>
 
                 <hr class="my-4">
@@ -3355,31 +3387,31 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </a>
                     
                     <!-- زر الاشتراكات -->
-                    <a href="/admin/subscriptions" class="quick-access-btn bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/subscriptions" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-id-card text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الاشتراكات</div>
                     </a>
                     
                     <!-- زر الباقات -->
-                    <a href="/admin/packages" class="quick-access-btn bg-gradient-to-br from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/packages" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-box text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الباقات</div>
                     </a>
                     
                     <!-- زر المستخدمين -->
-                    <a href="/admin/users" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/users" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-users-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">المستخدمين</div>
                     </a>
                     
                     <!-- زر الأدوار (Super Admin فقط) -->
-                    <a href="/admin/roles" class="quick-access-btn bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/roles" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-user-shield text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الأدوار والصلاحيات</div>
                     </a>
                     
                     <!-- زر نظام الموارد البشرية HR -->
-                    <a href="/admin/hr" class="quick-access-btn bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center border-2 border-white/30">
+                    <a href="/admin/hr" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center border-2 border-white/30">
                         <i class="fas fa-users-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الموارد البشرية HR</div>
                         <div class="text-xs mt-1 opacity-90">إدارة الموظفين</div>
@@ -3404,19 +3436,25 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </a>
                     
                     <!-- زر الشركات (Super Admin فقط) -->
-                    <a href="/admin/tenants" class="quick-access-btn bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/tenants" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-building text-3xl mb-2"></i>
                         <div class="text-sm font-bold">إدارة الشركات</div>
                     </a>
                     
                     <!-- زر حاسبات الشركات -->
-                    <a href="/admin/tenant-calculators" class="quick-access-btn bg-gradient-to-br from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/tenant-calculators" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-calculator text-3xl mb-2"></i>
                         <div class="text-sm font-bold">حاسبات الشركات</div>
                     </a>
                     
+                    <!-- زر إعدادات النظام -->
+                    <a href="/admin/settings" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-cog text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">إعدادات النظام</div>
+                    </a>
+                    
                     <!-- زر نموذج SaaS -->
-                    <a href="/admin/saas-settings" class="quick-access-btn bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/saas-settings" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-cogs text-3xl mb-2"></i>
                         <div class="text-sm font-bold">إعدادات SaaS</div>
                     </a>
@@ -4859,15 +4897,30 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     const href = link.getAttribute('href');
                     if (!href) return;
                     
+                    // Check if link has data-superadmin-only attribute
+                    const isSuperAdminOnly = link.hasAttribute('data-superadmin-only') && 
+                                          link.getAttribute('data-superadmin-only') === 'true';
+                    
+                    // If it's superadmin-only and user is not superadmin, hide it
+                    if (isSuperAdminOnly && roleId !== 1) {
+                        link.style.display = 'none';
+                        sidebarHidden++;
+                        console.log('🚫 إخفاء رابط السايدبار (superadmin-only):', href);
+                        return;
+                    }
+                    
                     // Always keep calculator links visible if present
                     const isAlways = (href === '/calculator' || href.startsWith('/c/'));
                     
+                    // Check if href is in allowed links
                     if (isAlways || userAllowedLinks.includes(href)) {
                         link.style.display = 'flex';
                         sidebarVisible++;
+                        console.log('✅ عرض رابط السايدبار:', href);
                     } else {
                         link.style.display = 'none';
                         sidebarHidden++;
+                        console.log('🚫 إخفاء رابط السايدبار:', href);
                     }
                 });
                 
@@ -4953,20 +5006,30 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 
                 const user = JSON.parse(userStr);
                 const calculatorLink = document.getElementById('calculatorLink');
+                const sidebarCalculatorLink = document.getElementById('sidebarCalculatorLink');
                 
-                if (!calculatorLink) {
-                    console.warn('⚠️ زر الحاسبة غير موجود');
-                    return;
-                }
-                
-                // إذا كان المستخدم لديه tenant_slug، استخدم حاسبة الشركة
+                // تحديد رابط الحاسبة حسب الشركة
+                let calculatorHref = '/calculator';
                 if (user.tenant_slug) {
-                    calculatorLink.href = \`/c/\${user.tenant_slug}/calculator\`;
+                    calculatorHref = \`/c/\${user.tenant_slug}/calculator\`;
                     console.log(\`✅ تم تحديث رابط الحاسبة إلى: /c/\${user.tenant_slug}/calculator\`);
                 } else {
-                    // SuperAdmin أو مستخدم بدون شركة: استخدم الحاسبة العامة
-                    calculatorLink.href = '/calculator';
                     console.log('✅ تم تحديث رابط الحاسبة إلى: /calculator (حاسبة عامة)');
+                }
+                
+                // تحديث رابط الحاسبة في لوحة الوصول السريع
+                if (calculatorLink) {
+                    calculatorLink.href = calculatorHref;
+                } else {
+                    console.warn('⚠️ زر الحاسبة في لوحة الوصول السريع غير موجود');
+                }
+                
+                // تحديث رابط الحاسبة في السايدبار
+                if (sidebarCalculatorLink) {
+                    sidebarCalculatorLink.href = calculatorHref;
+                    console.log('✅ تم تحديث رابط الحاسبة في السايدبار');
+                } else {
+                    console.warn('⚠️ رابط الحاسبة في السايدبار غير موجود');
                 }
                 
             } catch (error) {
@@ -6991,7 +7054,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <div id="sidebar-overlay"></div>
 </body>
 </html>
-`,ot=`<!DOCTYPE html>
+`,nt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7203,7 +7266,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,nt=`<!DOCTYPE html>
+`,it=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7271,7 +7334,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,it=`<!DOCTYPE html>
+`,dt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7508,7 +7571,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,dt=`<!DOCTYPE html>
+`,ct=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7792,7 +7855,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ce=()=>`
+`,pe=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -7851,7 +7914,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,ct=`<!DOCTYPE html>
+`,pt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7902,7 +7965,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${ce()}
+        ${pe()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -8042,7 +8105,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,pt=`<!DOCTYPE html>
+</html>`,ut=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8094,7 +8157,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${ce()}
+        ${pe()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -8308,7 +8371,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ut=`<!DOCTYPE html>
+</html>`,mt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8436,7 +8499,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,mt=()=>`
+</html>`,gt=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -8483,7 +8546,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,gt=`<!DOCTYPE html>
+`,ft=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8534,7 +8597,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             width: max-content;
         }
         
-        ${mt()}
+        ${gt()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -8979,7 +9042,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,ft=`<!DOCTYPE html>
+</html>`,bt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9344,7 +9407,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,pe=()=>`
+`,ue=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -9375,7 +9438,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function bt(e,t,a){return`
+`;function xt(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -9385,7 +9448,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${pe()}
+        ${ue()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -9533,7 +9596,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <\/script>
     </body>
     </html>
-  `}function xt(e,t,a,s){return`
+  `}function ht(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -9543,7 +9606,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${pe()}
+        ${ue()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -9686,7 +9749,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       <\/script>
     </body>
     </html>
-  `}function ht(e,t,a,s){const{transitions:r=[],actions:o=[],tasks:l=[]}=s,i=(n,c)=>{const p=new Date(n),m=new Date(c).getTime()-p.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
+  `}function yt(e,t,a,s){const{transitions:r=[],actions:l=[],tasks:o=[]}=s,i=(n,c)=>{const p=new Date(n),m=new Date(c).getTime()-p.getTime(),g=Math.floor(m/(1e3*60*60)),f=Math.floor(g/24);return f>0?`${f} يوم`:`${g} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -9866,7 +9929,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
         `:""}
         
-        ${r.map((n,c)=>{const p=c===r.length-1,u=c>0?i(r[c-1].created_at,n.created_at):null,m=o.filter(g=>g.stage_id===n.to_stage_id),f=l.filter(g=>g.stage_id===n.to_stage_id);return`
+        ${r.map((n,c)=>{const p=c===r.length-1,u=c>0?i(r[c-1].created_at,n.created_at):null,m=l.filter(f=>f.stage_id===n.to_stage_id),g=o.filter(f=>f.stage_id===n.to_stage_id);return`
             <div class="timeline-item">
               <div class="timeline-dot ${p?"current":""}" style="background-color: ${n.to_stage_color}">
                 <i class="fas ${n.to_stage_icon}"></i>
@@ -9914,37 +9977,37 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                       <i class="fas fa-tasks ml-1"></i>
                       الإجراءات المتخذة:
                     </h4>
-                    ${m.map(g=>`
+                    ${m.map(f=>`
                       <div class="action-badge bg-green-50 text-green-700 border border-green-200">
                         <i class="fas fa-check-circle"></i>
-                        <span>${g.action_data||g.action_type}</span>
-                        ${g.performed_by_name?`<span class="text-xs text-green-600">- ${g.performed_by_name}</span>`:""}
+                        <span>${f.action_data||f.action_type}</span>
+                        ${f.performed_by_name?`<span class="text-xs text-green-600">- ${f.performed_by_name}</span>`:""}
                       </div>
                     `).join("")}
                   </div>
                 `:""}
                 
-                ${f.length>0?`
+                ${g.length>0?`
                   <div>
                     <h4 class="text-sm font-bold text-gray-700 mb-2">
                       <i class="fas fa-list-check ml-1"></i>
                       المهام:
                     </h4>
-                    ${f.map(g=>`
-                      <div class="task-item ${g.status}">
+                    ${g.map(f=>`
+                      <div class="task-item ${f.status}">
                         <div class="flex justify-between items-start">
                           <div class="flex-1">
-                            <div class="font-medium text-gray-800">${g.task_title}</div>
-                            ${g.task_description?`<div class="text-sm text-gray-600 mt-1">${g.task_description}</div>`:""}
-                            ${g.assigned_to_name?`
+                            <div class="font-medium text-gray-800">${f.task_title}</div>
+                            ${f.task_description?`<div class="text-sm text-gray-600 mt-1">${f.task_description}</div>`:""}
+                            ${f.assigned_to_name?`
                               <div class="text-xs text-gray-500 mt-1">
                                 <i class="fas fa-user ml-1"></i>
-                                ${g.assigned_to_name}
+                                ${f.assigned_to_name}
                               </div>
                             `:""}
                           </div>
                           <div class="text-sm">
-                            ${g.status==="completed"?`
+                            ${f.status==="completed"?`
                               <span class="text-green-600">
                                 <i class="fas fa-check-circle ml-1"></i>
                                 مكتمل
@@ -10186,7 +10249,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
   
 </body>
 </html>
-  `}const yt=`
+  `}const vt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10496,7 +10559,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,vt=`
+`,wt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11378,7 +11441,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,ue=`
+`,me=`
 <style>
     .stat-card {
         transition: all 0.3s ease;
@@ -11437,7 +11500,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         overflow-y: auto;
     }
 </style>
-`;function me(e,t,a){return`
+`;function ge(e,t,a){return`
     <nav class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -11466,7 +11529,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             </div>
         </div>
     </nav>
-    `}function ge(e){return`
+    `}function fe(e){return`
     <div id="sidebar" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
         <div class="p-6">
             <button onclick="toggleSidebar()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
@@ -11506,7 +11569,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </div>
     <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleSidebar()"></div>
-    `}const fe=`
+    `}const be=`
 <script>
     const token = localStorage.getItem('authToken') || getCookie('authToken');
     if (!token) {
@@ -11556,7 +11619,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         alert('❌ ' + message);
     }
 <\/script>
-`,wt=`<!DOCTYPE html>
+`,_t=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -11565,11 +11628,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${me}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
-    ${ge("employees")}
+    ${ge("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
+    ${fe("employees")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics Cards -->
@@ -11785,7 +11848,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </div>
 
-    ${fe}
+    ${be}
     <script>
         async function loadEmployees() {
             try {
@@ -11916,7 +11979,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,_t=`<!DOCTYPE html>
+`,Et=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -11925,11 +11988,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${me}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
-    ${ge("attendance")}
+    ${ge("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
+    ${fe("attendance")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics -->
@@ -12117,7 +12180,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </div>
 
-    ${fe}
+    ${be}
     <script>
         // Set today's date as default
         document.getElementById('dateFilter').valueAsDate = new Date();
@@ -12247,7 +12310,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     <\/script>
 </body>
 </html>
-`,d=new ne,k=()=>`
+`,d=new ie,k=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -12448,19 +12511,31 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       min-width: 60px !important;
     }
   }
-`;d.use("*",Ze());d.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});async function Et(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
+`;d.use("*",et());d.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});async function kt(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let l=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(l=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
-    `).bind(a).first()),!o&&r&&(o=await e.env.DB.prepare(`
+    `).bind(a).first()),!l&&r&&(l=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE slug = ? AND status = 'active'
       LIMIT 1
-    `).bind(r).first()),o||(o=await e.env.DB.prepare(`
+    `).bind(r).first()),l||(l=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),o}async function x(e){try{let t=e.req.header("Authorization")?.replace("Bearer ","");if(!t){const i=e.req.header("Cookie");if(i){const c=i.split(";").map(p=>p.trim()).find(p=>p.startsWith("authToken="));c&&(t=c.split("=")[1],console.log("✅ Token found in cookie"))}}if(!t){console.log("❌ No token found in header or cookie");const i=e.req.query("tenant_id");return{userId:null,tenantId:i?parseInt(i):null,roleId:null}}console.log("🔍 Token:",t.substring(0,20)+"...");const s=atob(t).split(":"),r=parseInt(s[0]),o=s[1]!=="null"&&s[1]!=="undefined"?parseInt(s[1]):null;if(!e.env?.DB)return console.error("❌ getUserInfo: DB binding not available"),{userId:null,tenantId:null,roleId:null};const l=await e.env.DB.prepare(`
+    `).bind().first()),l}function St(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),r=s.length%4;if(r===1)return null;const l=r===0?"":"=".repeat(4-r);return s+l}function M(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const p=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",p?"Present":"Missing"),p){const m=p.split(";").map(g=>g.trim()).find(g=>g.startsWith("authToken="));m?(t=m.split("=")[1],console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const p=e.req.query("tenant_id");return{userId:null,tenantId:p?parseInt(p):null,roleId:null,tokenRoleId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=St(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const r=s.split(":");console.log("🔍 [getUserInfo] Token parts:",r.length,"parts");const l=M(r[0]);if(!l)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};const o=M(r[1]),i=M(r[2]);if(console.log("🔍 [getUserInfo] Parsed:",{userId:l,tenantIdFromToken:o,tokenRoleId:i}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("🔍 [getUserInfo] Querying database for user:",l);const n=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
-    `).bind(r).first();if(!l)return{userId:null,tenantId:null,roleId:null};if(l.role_id===1){const i=e.req.query("tenant_id");return{userId:l.id,tenantId:i?parseInt(i):null,roleId:1}}return{userId:l.id,tenantId:o||l.tenant_id,roleId:l.role_id}}catch(t){return console.error("Error getting user info:",t),{userId:null,tenantId:null,roleId:null}}}const kt=new Set(["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/settings","/admin/hr","/admin/users","/admin/roles","/admin/saas-settings","/admin/tenant-calculators"]);d.use("/admin/*",async(e,t)=>{const a=await x(e);if(!a.userId)return e.redirect("/login");const s=e.req.path||String(e.req.url).split("?")[0].replace(/^https?:\/\/[^/]+/,"");if(kt.has(s)&&a.roleId!==1)return e.redirect("/admin/dashboard");await t()});d.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:a.role_id}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});d.use("/c/:tenant/*",async(e,t)=>{const a=await Et(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(l).first();if(!n)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};if(console.log("✅ [getUserInfo] User found:",{id:n.id,tenant_id:n.tenant_id,role_id:n.role_id}),n.role_id===1){const p=e.req.query("tenant_id"),u={userId:n.id,tenantId:p?parseInt(p):null,roleId:1,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning super admin info:",u),u}const c={userId:n.id,tenantId:o||n.tenant_id,roleId:n.role_id,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning user info:",c),c}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null}}}const It=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/settings","/admin/hr","/admin/users","/admin/roles","/admin/saas-settings","/admin/tenant-calculators"];function Tt(e){const t="(subscriptions|packages|tenants|settings|hr|users|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
+<style>
+  [href^="/admin/subscriptions"],
+  [href^="/admin/packages"],
+  [href^="/admin/tenants"],
+  [href^="/admin/settings"],
+  [href^="/admin/hr"],
+  [href^="/admin/users"],
+  [href^="/admin/roles"],
+  [href^="/admin/saas-settings"],
+  [href^="/admin/tenant-calculators"] { display: none !important; }
+</style>
+</head>`),s}d.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=a.roleId===1&&(a.tokenRoleId===null||a.tokenRoleId===1),r=e.req.path||"";if(It.some(o=>r===o||r.startsWith(o+"/"))&&!s)return e.redirect("/admin/dashboard");if(await t(),!s&&e.res)try{console.log("🔒 [RBAC] Post-processing HTML for non-superadmin user");const o=e.res;if(o.status>=300&&o.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(o.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const i=o.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",i),i.includes("text/html")&&o.body){console.log("🔒 [RBAC] Processing HTML response...");const c=await o.clone().text();console.log("🔒 [RBAC] HTML length:",c.length);const p=Tt(c);console.log("🔒 [RBAC] HTML processed, updated length:",p.length);const u=new Headers(o.headers);u.set("content-type","text/html; charset=UTF-8"),e.res=new Response(p,{status:o.status,statusText:o.statusText,headers:u}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(o){const i={message:o?.message||"Unknown error",name:o?.name||"Error",stack:o?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(o,Object.getOwnPropertyNames(o),2)}catch(n){return`Failed to stringify: ${n}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",i)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(r){return`Failed to stringify: ${r}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});d.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:a.role_id}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});d.use("/c/:tenant/*",async(e,t)=>{const a=await kt(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});d.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
@@ -12490,7 +12565,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SELECT COUNT(*) as count FROM users WHERE tenant_id = ?
     `).bind(t).first();return a&&a.count>0?e.json({success:!1,error:`لا يمكن حذف الشركة لأنها تحتوي على ${a.count} مستخدم/مستخدمين`},400):(await e.env.DB.prepare(`
       DELETE FROM tenants WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/auth/login",async e=>{try{if(!e.env.DB)return console.error("❌ DB binding is not available"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const{username:t,password:a}=await e.req.json();if(console.log(`🔐 Login attempt: ${t}`),console.log(`🔍 DB binding check: ${!!e.env.DB}`),!e.env?.DB)return console.error("❌ DB binding check failed in login query"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const s=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/auth/login",async e=>{try{if(console.log("🔐 [LOGIN] Starting login process..."),console.log("🔐 [LOGIN] Request URL:",e.req.url),console.log("🔐 [LOGIN] Request method:",e.req.method),!e.env.DB)return console.error("❌ [LOGIN] DB binding is not available"),console.error("❌ [LOGIN] c.env:",JSON.stringify(Object.keys(e.env||{}))),e.json({success:!1,error:"Database connection not available. Please check bindings configuration.",debug:{env_keys:Object.keys(e.env||{})}},500);console.log("🔐 [LOGIN] DB binding available, parsing request body...");const{username:t,password:a}=await e.req.json();if(console.log(`🔐 [LOGIN] Login attempt: ${t}`),console.log(`🔍 [LOGIN] DB binding check: ${!!e.env.DB}`),!e.env?.DB)return console.error("❌ DB binding check failed in login query"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const s=await e.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.user_type, u.subscription_id, u.is_active, 
              u.tenant_id, u.role as user_role,
@@ -12502,7 +12577,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ User found: ${s.full_name} (Role ID: ${s.role_id})`),e.env?.DB?await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run():console.error("❌ DB binding lost after user query");const r=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`,o=btoa(r),l=10080*60,i=`authToken=${o}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,n="/admin/panel";console.log(`🎯 Redirect to: ${n}`),console.log(`🍪 Cookie set: authToken=${o.substring(0,20)}...`);const c=e.json({success:!0,token:o,redirect:n,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role:s.user_role||"employee",role_id:s.role_id,role_name:s.role_name||"موظف",role_description:s.role_description,user_type:s.user_type,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}});return c.headers.set("Set-Cookie",i),c}catch(t){return console.error("❌ Login error:",t),console.error("❌ Error stack:",t.stack),console.error("❌ Error details:",{message:t.message,name:t.name,cause:t.cause,DB_available:!!e.env?.DB}),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول: "+t.message,details:void 0},500)}});d.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});d.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
+    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),e.env?.DB?(console.log("✅ [LOGIN] Updating last_login timestamp..."),await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")):console.error("❌ [LOGIN] DB binding lost after user query"),console.log("🔐 [LOGIN] Creating authentication token...");const r=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",r);const l=btoa(r);console.log("🔐 [LOGIN] Token created:",l.substring(0,30)+"...");const o=10080*60,i=`authToken=${l}; Path=/; Max-Age=${o}; SameSite=Lax; Secure`,n="/admin/panel";console.log(`🎯 Redirect to: ${n}`),console.log(`🍪 Cookie set: authToken=${l.substring(0,20)}...`);const c=e.json({success:!0,token:l,redirect:n,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role:s.user_role||"employee",role_id:s.role_id,role_name:s.role_name||"موظف",role_description:s.role_description,user_type:s.user_type,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}});return console.log("🍪 [LOGIN] Setting cookie header..."),c.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),c}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,r)=>{try{s[r]=String(t[r])}catch{s[r]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});d.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});d.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!a)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const s=Math.floor(1e5+Math.random()*9e5).toString(),r=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
@@ -12515,18 +12590,18 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       WHERE user_id = ? AND is_used = 0
       ORDER BY created_at DESC
       LIMIT 1
-    `).bind(s.id).first();if(!r)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(r.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(r.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const o=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:o})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const r=await e.env.DB.prepare(`
+    `).bind(s.id).first();if(!r)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(r.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(r.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const l=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:l})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const r=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();return r?(await e.env.DB.prepare(`
       UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).bind(s,r.id).run(),await e.env.DB.prepare(`
       UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
-    `).bind(r.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.get("/api/banks",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM banks",s;return t?(a+=" WHERE tenant_id = ? ORDER BY bank_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY bank_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:r,is_active:o,tenant_id:l}=t;let i=l;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const n=await e.env.DB.prepare(`
+    `).bind(r.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.get("/api/banks",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM banks",s;return t?(a+=" WHERE tenant_id = ? ORDER BY bank_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY bank_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:r,is_active:l,tenant_id:o}=t;let i=o;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const n=await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
       VALUES (?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,i).run();return e.json({success:!0,id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:r,logo_url:o,is_active:l}=a,n=e.req.header("Authorization")?.replace("Bearer ","");let c=null;if(n){const m=atob(n).split(":");c=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return c?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,r,o,l,t,c).run()):await e.env.DB.prepare(p).bind(s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),r=a.get("bank_code"),o=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
+    `).bind(a,s,r,l,i).run();return e.json({success:!0,id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:r,logo_url:l,is_active:o}=a,n=e.req.header("Authorization")?.replace("Bearer ","");let c=null;if(n){const m=atob(n).split(":");c=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return c?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,r,l,o,t,c).run()):await e.env.DB.prepare(p).bind(s,r,l,o,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),r=a.get("bank_code"),l=a.get("logo_url")||null,o=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(s,r,o,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const n=atob(s).split(":");r=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT id FROM banks WHERE id = ?";return r&&(o+=" AND tenant_id = ?"),(r?await e.env.DB.prepare(o).bind(t,r).first():await e.env.DB.prepare(o).bind(t).first())?(await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0})):e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(s,r,l,o,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const n=atob(s).split(":");r=n[1]!=="null"?parseInt(n[1]):null}let l="SELECT id FROM banks WHERE id = ?";return r&&(l+=" AND tenant_id = ?"),(r?await e.env.DB.prepare(l).bind(t,r).first():await e.env.DB.prepare(l).bind(t).first())?(await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0})):e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
       SELECT 
         r.*,
         b.bank_name,
@@ -12534,41 +12609,41 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM bank_financing_rates r
       JOIN banks b ON r.bank_id = b.id
       JOIN financing_types f ON r.financing_type_id = f.id
-    `;s!==null&&(r+=" WHERE r.tenant_id = ?"),r+=" ORDER BY b.bank_name, f.type_name";const{results:o}=s!==null?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const n=atob(a).split(":");s=n[1]!=="null"?parseInt(n[1]):null}const r=await e.req.formData(),o={};r.forEach((i,n)=>{o[n]=i});const l=await e.env.DB.prepare(`
+    `;s!==null&&(r+=" WHERE r.tenant_id = ?"),r+=" ORDER BY b.bank_name, f.type_name";const{results:l}=s!==null?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const n=atob(a).split(":");s=n[1]!=="null"?parseInt(n[1]):null}const r=await e.req.formData(),l={};r.forEach((i,n)=>{l[n]=i});const o=await e.env.DB.prepare(`
       INSERT INTO bank_financing_rates 
       (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_duration||null,o.max_duration||null,o.is_active||1,s).run();return e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const n=atob(r).split(":");o=n[1]!=="null"?parseInt(n[1]):null}let l=`
+    `).bind(l.bank_id,l.financing_type_id,l.rate,l.min_amount||null,l.max_amount||null,l.min_duration||null,l.max_duration||null,l.is_active||1,s).run();return e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),r=e.req.header("Authorization")?.replace("Bearer ","");let l=null;if(r){const n=atob(r).split(":");l=n[1]!=="null"?parseInt(n[1]):null}let o=`
       UPDATE bank_financing_rates 
       SET bank_id = ?, financing_type_id = ?, rate = ?, 
           min_amount = ?, max_amount = ?, min_salary = ?, max_salary = ?,
           min_duration = ?, max_duration = ?, is_active = ?
       WHERE id = ?
-    `;return o?(l+=" AND tenant_id = ?",await e.env.DB.prepare(l).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t,o).run()):await e.env.DB.prepare(l).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const i=atob(s).split(":");r=i[1]!=="null"?parseInt(i[1]):null}let o="DELETE FROM bank_financing_rates WHERE id = ?";return r?(o+=" AND tenant_id = ?",await e.env.DB.prepare(o).bind(t,r).run()):await e.env.DB.prepare(o).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `;return l?(o+=" AND tenant_id = ?",await e.env.DB.prepare(o).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t,l).run()):await e.env.DB.prepare(o).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const i=atob(s).split(":");r=i[1]!=="null"?parseInt(i[1]):null}let l="DELETE FROM bank_financing_rates WHERE id = ?";return r?(l+=" AND tenant_id = ?",await e.env.DB.prepare(l).bind(t,r).run()):await e.env.DB.prepare(l).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),r=t.get("price"),o=t.get("duration_months"),l=t.get("max_calculations"),i=t.get("max_users"),n=t.get("is_active")||"1",c=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),r=t.get("price"),l=t.get("duration_months"),o=t.get("max_calculations"),i=t.get("max_users"),n=t.get("is_active")||"1",c=await e.env.DB.prepare(`
       INSERT INTO packages (package_name, description, price, duration_months, max_calculations, max_users, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s||null,r,o,l||null,i||null,n).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:r,duration_months:o,max_calculations:l,max_users:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s||null,r,l,o||null,i||null,n).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:r,duration_months:l,max_calculations:o,max_users:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE packages 
       SET package_name = ?, description = ?, price = ?, duration_months = ?, 
           max_calculations = ?, max_users = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(a,s,r,l,o,i,n,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
       SELECT 
         s.*,
         p.package_name,
         p.price,
         p.max_calculations
       FROM subscriptions s
-      JOIN packages p ON s.package_id = p.id`;s&&(r+=` WHERE s.tenant_id = ${s}`),r+=" ORDER BY s.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),r=t.get("start_date"),o=t.get("end_date"),l=t.get("status")||"active",i=t.get("calculations_used")||0,c=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(c){const f=atob(c).split(":");p=f[1]!=="null"?parseInt(f[1]):null}const u=await e.env.DB.prepare(`
+      JOIN packages p ON s.package_id = p.id`;s&&(r+=` WHERE s.tenant_id = ${s}`),r+=" ORDER BY s.created_at DESC";const{results:l}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),r=t.get("start_date"),l=t.get("end_date"),o=t.get("status")||"active",i=t.get("calculations_used")||0,c=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(c){const g=atob(c).split(":");p=g[1]!=="null"?parseInt(g[1]):null}const u=await e.env.DB.prepare(`
       INSERT INTO subscriptions (company_name, package_id, start_date, end_date, status, calculations_used, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:r,end_date:o,status:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s,r,l,o,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:r,end_date:l,status:o}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscriptions 
       SET company_name = ?, package_id = ?, start_date = ?, end_date = ?, status = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(a,s,r,l,o,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name,
@@ -12588,13 +12663,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       WHERE sr.id = ?
-    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:r,package_id:o,notes:l}=await e.req.json();if(!t||!a||!s||!r||!o)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(r.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
+    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:r,package_id:l,notes:o}=await e.req.json();if(!t||!a||!s||!r||!l)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(r.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
       SELECT id FROM packages WHERE id = ? AND is_active = 1
-    `).bind(o).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const p=await e.env.DB.prepare(`
+    `).bind(l).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const p=await e.env.DB.prepare(`
       INSERT INTO subscription_requests 
       (company_name, contact_name, email, phone, package_id, status, notes)
       VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(t,a,s,r,o,l||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,r,l,o||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
@@ -12609,18 +12684,18 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(r+=` WHERE u.tenant_id = ${s}`),r+=`
       GROUP BY u.id
-      ORDER BY u.id DESC`;const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),r=t.get("full_name"),o=t.get("email"),l=t.get("phone"),i=t.get("user_type"),n=t.get("role_id"),c=t.get("subscription_id")||null,p=t.get("is_active")||"1",u=await x(e);let m=t.get("tenant_id");if(m&&m!==""?m=parseInt(m):u.roleId===1?m=null:m=u.tenantId,await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:l}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),r=t.get("full_name"),l=t.get("email"),o=t.get("phone"),i=t.get("user_type"),n=t.get("role_id"),c=t.get("subscription_id")||null,p=t.get("is_active")||"1",u=await x(e);let m=t.get("tenant_id");if(m&&m!==""?m=parseInt(m):u.roleId===1?m=null:m=u.tenantId,await e.env.DB.prepare(`
       SELECT id FROM users WHERE username = ?
-    `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(o&&await e.env.DB.prepare(`
+    `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(l&&await e.env.DB.prepare(`
         SELECT id FROM users WHERE email = ?
-      `).bind(o).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const g=await e.env.DB.prepare(`
+      `).bind(l).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const f=await e.env.DB.prepare(`
       INSERT INTO users (username, password, full_name, email, phone, user_type, role_id, subscription_id, is_active, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,n,c,p,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:g.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});d.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{username:a,full_name:s,email:r,phone:o,role_id:l,subscription_id:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s,r,l,o,i,n,c,p,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:f.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});d.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{username:a,full_name:s,email:r,phone:l,role_id:o,subscription_id:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/customers",async e=>{try{const t=await x(e);let a=`
+    `).bind(a,s,r,l,o,i,n,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/customers",async e=>{try{const t=await x(e);let a=`
       SELECT 
         c.*,
         COUNT(f.id) as total_requests,
@@ -12629,7 +12704,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4&&t.userId?a+=` WHERE c.assigned_to = ${t.userId}`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,o=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),f=e.req.header("Authorization")?.replace("Bearer ","");let g=null;if(f){const w=atob(f).split(":");g=w[1]!=="null"?parseInt(w[1]):null}if(o){let _="SELECT id, full_name FROM customers WHERE national_id = ?",w=[o];g&&(_+=" AND tenant_id = ?",w.push(g));const D=await e.env.DB.prepare(_).bind(...w).first();if(D)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,l=t.get("national_id")||null,o=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),g=e.req.header("Authorization")?.replace("Bearer ","");let f=null;if(g){const w=atob(g).split(":");f=w[1]!=="null"?parseInt(w[1]):null}if(l){let _="SELECT id, full_name FROM customers WHERE national_id = ?",w=[l];f&&(_+=" AND tenant_id = ?",w.push(f));const D=await e.env.DB.prepare(_).bind(...w).first();if(D)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -12650,7 +12725,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </div>
                 </div>
                 <div class="bg-white rounded-lg p-4 mb-4">
-                  <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${o}</p>
+                  <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${l}</p>
                   <p class="text-gray-700"><strong>مسجل باسم:</strong> ${D.full_name}</p>
                   <p class="text-gray-700"><strong>رقم العميل:</strong> #${D.id}</p>
                 </div>
@@ -12672,7 +12747,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             </div>
           </body>
           </html>
-        `)}let b="SELECT id, full_name FROM customers WHERE phone = ?",h=[s];g&&(b+=" AND tenant_id = ?",h.push(g));const v=await e.env.DB.prepare(b).bind(...h).first();if(v)return e.html(`
+        `)}let b="SELECT id, full_name FROM customers WHERE phone = ?",h=[s];f&&(b+=" AND tenant_id = ?",h.push(f));const v=await e.env.DB.prepare(b).bind(...h).first();if(v)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -12714,7 +12789,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       `);const S=await e.env.DB.prepare(`
       INSERT INTO customers (full_name, phone, email, national_id, birthdate, employer_name, job_title, work_start_date, city, monthly_salary, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,n,c,p,u,g).run();return e.redirect("/admin/customers")}catch(t){return e.html(`
+    `).bind(a,s,r,l,o,i,n,c,p,u,f).run();return e.redirect("/admin/customers")}catch(t){return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -12745,12 +12820,12 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)}});d.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),r=a.get("phone"),o=a.get("email")||null,l=a.get("national_id")||null,i=a.get("date_of_birth")||null,n=a.get("employer_name")||null,c=a.get("job_title")||null,p=a.get("work_start_date")||null,u=a.get("city")||null,m=parseFloat(a.get("monthly_salary")||"0");return await e.env.DB.prepare(`
+    `)}});d.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),r=a.get("phone"),l=a.get("email")||null,o=a.get("national_id")||null,i=a.get("date_of_birth")||null,n=a.get("employer_name")||null,c=a.get("job_title")||null,p=a.get("work_start_date")||null,u=a.get("city")||null,m=parseFloat(a.get("monthly_salary")||"0");return await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?,
           employer_name = ?, job_title = ?, work_start_date = ?, city = ?, monthly_salary = ?
       WHERE id = ?
-    `).bind(s,r,o,l,i,n,c,p,u,m,t).run(),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(s,r,l,o,i,n,c,p,u,m,t).run(),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
       SELECT 
         f.*,
         c.full_name as customer_name,
@@ -12767,13 +12842,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN banks b ON f.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id`;s&&(r+=` WHERE f.tenant_id = ${s}`),r+=" ORDER BY f.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/requests",async e=>{try{const t=await e.req.formData(),a=t.get("customer_id"),s=t.get("financing_type_id"),r=t.get("requested_amount"),o=t.get("duration_months"),l=t.get("salary_at_request"),i=t.get("selected_bank_id")||null,n=t.get("status")||"pending",c=t.get("notes")||"",u=e.req.header("Authorization")?.replace("Bearer ","");let m=null;if(u){const b=atob(u).split(":");m=b[1]!=="null"?parseInt(b[1]):null}const f=await e.env.DB.prepare(`
+      LEFT JOIN users u ON ca.employee_id = u.id`;s&&(r+=` WHERE f.tenant_id = ${s}`),r+=" ORDER BY f.created_at DESC";const{results:l}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/requests",async e=>{try{const t=await e.req.formData(),a=t.get("customer_id"),s=t.get("financing_type_id"),r=t.get("requested_amount"),l=t.get("duration_months"),o=t.get("salary_at_request"),i=t.get("selected_bank_id")||null,n=t.get("status")||"pending",c=t.get("notes")||"",u=e.req.header("Authorization")?.replace("Bearer ","");let m=null;if(u){const b=atob(u).split(":");m=b[1]!=="null"?parseInt(b[1]):null}const g=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,i,r,l,o,n,c,m).run();return e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});d.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(a,s,i,r,o,l,n,c,m).run();return e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});d.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
       ORDER BY stage_order ASC
@@ -12828,15 +12903,15 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         WHERE request_id = ? AND to_stage_id = ?
         ORDER BY created_at DESC
         LIMIT 1
-      `).bind(s,r,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:r,performedBy:o,notes:l}=await e.req.json();return await e.env.DB.prepare(`
+      `).bind(s,r,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:r,performedBy:l,notes:o}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_actions 
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,r,o,l).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:r,assignedTo:o,dueDate:l,priority:i}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,r,l,o).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:r,assignedTo:l,dueDate:o,priority:i}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_tasks 
       (request_id, stage_id, task_title, task_description, assigned_to, due_date, priority)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,r,o,l,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,r,l,o,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE workflow_stage_tasks 
       SET status = 'completed', 
           completed_at = CURRENT_TIMESTAMP,
@@ -12864,16 +12939,16 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM payments p
       LEFT JOIN customers c ON p.customer_id = c.id
       LEFT JOIN users u ON p.employee_id = u.id
-    `;const o=[];s&&(r+=" WHERE p.tenant_id = ?",o.push(s)),r+=" ORDER BY p.created_at DESC";const{results:l}=await e.env.DB.prepare(r).bind(...o).all();return e.json({success:!0,data:l})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=parseInt(r);if(!l)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const n=await e.req.json();return!n.financing_request_id||!n.customer_id||!n.amount||!n.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
+    `;const l=[];s&&(r+=" WHERE p.tenant_id = ?",l.push(s)),r+=" ORDER BY p.created_at DESC";const{results:o}=await e.env.DB.prepare(r).bind(...l).all();return e.json({success:!0,data:o})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,l]=s.split(":"),o=l==="null"?null:parseInt(l),i=parseInt(r);if(!o)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const n=await e.req.json();return!n.financing_request_id||!n.customer_id||!n.amount||!n.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
       INSERT INTO payments (
         financing_request_id, customer_id, tenant_id, employee_id,
         amount, payment_date, payment_method, receipt_number, notes, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(n.financing_request_id,n.customer_id,l,n.employee_id||null,n.amount,n.payment_date,n.payment_method||"cash",n.receipt_number||null,n.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=e.req.param("id");if(l){const n=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(n&&n.tenant_id!==l)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(n.financing_request_id,n.customer_id,o,n.employee_id||null,n.amount,n.payment_date,n.payment_method||"cash",n.receipt_number||null,n.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,l]=s.split(":"),o=l==="null"?null:parseInt(l),i=e.req.param("id");if(o){const n=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(n&&n.tenant_id!==o)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ? AND status = 'active'
-    `).bind(t).first();if(!s)return e.json({success:!1,error:"شركة غير موجودة"},404);const r=s.id;let o=await e.env.DB.prepare(`
+    `).bind(t).first();if(!s)return e.json({success:!1,error:"شركة غير موجودة"},404);const r=s.id;let l=await e.env.DB.prepare(`
       SELECT id FROM customers WHERE (national_id = ? OR phone = ?) AND tenant_id = ?
-    `).bind(a.national_id||"",a.phone||"",r).first(),l;if(o)l=o.id,await e.env.DB.prepare(`
+    `).bind(a.national_id||"",a.phone||"",r).first(),o;if(l)o=l.id,await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, phone = ?, email = ?, 
             birthdate = ?, monthly_salary = ?,
@@ -12881,7 +12956,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             work_start_date = ?, city = ?,
             financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
         WHERE id = ?
-      `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else try{l=(await e.env.DB.prepare(`
+      `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,o).run();else try{o=(await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
@@ -12890,7 +12965,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null).run()).meta.last_row_id}catch(c){if(c.message&&c.message.includes("UNIQUE")){const p=await e.env.DB.prepare(`
             SELECT id FROM customers WHERE (national_id = ? OR phone = ?)
-          `).bind(a.national_id||"",a.phone||"").first();if(p)l=p.id,await e.env.DB.prepare(`
+          `).bind(a.national_id||"",a.phone||"").first();if(p)o=p.id,await e.env.DB.prepare(`
               UPDATE customers 
               SET full_name = ?, phone = ?, email = ?, 
                   birthdate = ?, monthly_salary = ?,
@@ -12898,20 +12973,20 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   work_start_date = ?, city = ?, tenant_id = ?,
                   financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
               WHERE id = ?
-            `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else throw c}else throw c}const n=(await e.env.DB.prepare(`
+            `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,o).run();else throw c}else throw c}const n=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id,
         requested_amount, salary_at_request, duration_months,
         monthly_obligations, monthly_payment,
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-    `).bind(l,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,r).run()).meta.last_row_id;return e.json({success:!0,request_id:n,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});d.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const l=await e.env.DB.prepare(`
+    `).bind(o,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,r).run()).meta.last_row_id;return e.json({success:!0,request_id:n,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});d.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const o=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
-      `).bind(a).first();l&&(s=l.id)}if(!s){const l=await e.env.DB.prepare(`
+      `).bind(a).first();o&&(s=o.id)}if(!s){const o=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
-      `).first();l&&(s=l.id)}let r=await e.env.DB.prepare(`
+      `).first();o&&(s=o.id)}let r=await e.env.DB.prepare(`
       SELECT id FROM customers WHERE phone = ?
-    `).bind(t.phone).first(),o;if(r)o=r.id,await e.env.DB.prepare(`
+    `).bind(t.phone).first(),l;if(r)l=r.id,await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, 
             birthdate = ?, 
@@ -12927,7 +13002,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             calculation_date = CURRENT_TIMESTAMP,
             tenant_id = COALESCE(?, tenant_id)
         WHERE id = ?
-      `).bind(t.name,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,s,o).run();else{const l=`TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`;o=(await e.env.DB.prepare(`
+      `).bind(t.name,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,s,l).run();else{const o=`TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`;l=(await e.env.DB.prepare(`
         INSERT INTO customers (
           full_name, phone, birthdate, monthly_salary,
           financing_amount, monthly_obligations, financing_type_id,
@@ -12935,13 +13010,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           monthly_payment, total_payment, calculation_date,
           national_id, tenant_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-      `).bind(t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,l,s).run()).meta.last_row_id}return e.json({success:!0,customer_id:o,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const n=await e.env.DB.prepare(`
+      `).bind(t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,o,s).run()).meta.last_row_id}return e.json({success:!0,customer_id:l,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const n=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
       `).bind(a).first();n&&(s=n.id)}if(!s){const n=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
       `).first();n&&(s=n.id)}let r=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM customers WHERE national_id = ? OR phone = ?
-    `).bind(t.national_id,t.phone).first(),o;if(r)o=r.id,await e.env.DB.prepare(`
+    `).bind(t.national_id,t.phone).first(),l;if(r)l=r.id,await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, phone = ?, email = ?, 
             birthdate = ?, monthly_salary = ?,
@@ -12949,7 +13024,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             work_start_date = ?, city = ?,
             tenant_id = COALESCE(tenant_id, ?)
         WHERE id = ?
-      `).bind(t.full_name,t.phone,t.email||null,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s,o).run(),r.tenant_id&&(s=r.tenant_id);else try{o=(await e.env.DB.prepare(`
+      `).bind(t.full_name,t.phone,t.email||null,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s,l).run(),r.tenant_id&&(s=r.tenant_id);else try{l=(await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
@@ -12957,25 +13032,25 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s).run()).meta.last_row_id}catch(n){if(n.message&&n.message.includes("UNIQUE")){const c=await e.env.DB.prepare(`
             SELECT id, tenant_id FROM customers WHERE national_id = ? OR phone = ?
-          `).bind(t.national_id,t.phone).first();if(c)o=c.id,c.tenant_id&&(s=c.tenant_id);else throw n}else throw n}const i=(await e.env.DB.prepare(`
+          `).bind(t.national_id,t.phone).first();if(c)l=c.id,c.tenant_id&&(s=c.tenant_id);else throw n}else throw n}const i=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id,
         requested_amount, salary_at_request, duration_months,
         monthly_obligations, monthly_payment,
         status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(o,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
+    `).bind(l,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const S=a.substring(7).split(".");S.length===3&&(s=JSON.parse(atob(S[1])).tenant_id||null)}const{requested_amount:r,duration_months:o,salary_at_request:l,monthly_obligations:i,status:n,notes:c,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:f}=await e.req.json();let g=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[r,o,l||0,i||0,n||"pending",c||""];p&&(g.push("id_attachment_url = ?"),b.push(p)),u&&(g.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(g.push("salary_attachment_url = ?"),b.push(m)),f&&(g.push("additional_attachment_url = ?"),b.push(f)),b.push(t);let h=`
+    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:l,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const S=a.substring(7).split(".");S.length===3&&(s=JSON.parse(atob(S[1])).tenant_id||null)}const{requested_amount:r,duration_months:l,salary_at_request:o,monthly_obligations:i,status:n,notes:c,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:g}=await e.req.json();let f=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[r,l,o||0,i||0,n||"pending",c||""];p&&(f.push("id_attachment_url = ?"),b.push(p)),u&&(f.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(f.push("salary_attachment_url = ?"),b.push(m)),g&&(f.push("additional_attachment_url = ?"),b.push(g)),b.push(t);let h=`
       UPDATE financing_requests 
-      SET ${g.join(", ")}
+      SET ${f.join(", ")}
       WHERE id = ?
     `;return s!==null&&(h+=" AND tenant_id = ?",b.push(s)),await e.env.DB.prepare(h).bind(...b).run(),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),r=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
-    `).bind(t).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];l?await e.env.DB.prepare(`
+    `).bind(t).first(),o={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];o?await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET status = ?, notes = ?, ${l} = datetime('now'), reviewed_at = datetime('now')
+        SET status = ?, notes = ?, ${o} = datetime('now'), reviewed_at = datetime('now')
         WHERE id = ?
       `).bind(a,s,t).run():await e.env.DB.prepare(`
         UPDATE financing_requests SET status = ?, notes = ? WHERE id = ?
@@ -12987,24 +13062,24 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(t).first(),n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},c={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,c[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/attachments/upload",async e=>{try{const t=await e.req.formData(),a=t.get("file"),s=t.get("request_id"),r=t.get("attachmentType")||t.get("attachment_type");if(!a)return e.json({success:!1,error:"No file provided"},400);const o=Date.now(),l=Math.random().toString(36).substring(7),i=a.name.split(".").pop(),n=s?`${s}/${r}_${o}.${i}`:`temp/${r}_${o}_${l}.${i}`,c=await a.arrayBuffer();await e.env.ATTACHMENTS.put(n,c,{httpMetadata:{contentType:a.type}});const p=`/api/attachments/view/${n}`;if(s){const u=`${r}_attachment_url`;console.log("📎 Updating attachment:",{requestId:s,attachmentType:r,columnName:u,publicUrl:p});const m=await e.env.DB.prepare(`
+    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,c[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),r=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),l=new Set(["id","salary","bank_statement","additional"]),o=r.toLowerCase();if(!l.has(o))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,n=Date.now(),c=Math.random().toString(36).substring(7),u=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",m=s?`${s}/${o}_${n}.${u}`:`temp/${o}_${n}_${c}.${u}`,g=await i.arrayBuffer();await e.env.ATTACHMENTS.put(m,g,{httpMetadata:{contentType:i.type}});const f=`/api/attachments/view/${m}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const h={id:"id_attachment_url",salary:"salary_attachment_url",bank_statement:"bank_statement_attachment_url",additional:"additional_attachment_url"}[o];console.log("📎 Updating attachment:",{requestId:s,attachmentType:o,columnName:h,publicUrl:f});const v=await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET ${u} = ? 
+        SET ${h} = ? 
         WHERE id = ?
-      `).bind(p,s).run();console.log("✅ Update result:",m)}return e.json({success:!0,url:p,filename:n})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/attachments/view/:path{.+}",async e=>{try{const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/attachments/delete/:path{.+}",async e=>{try{const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let o=null;r.startsWith("id_")?o="id_attachment_url":r.startsWith("salary_")?o="salary_attachment_url":r.startsWith("bank_statement_")?o="bank_statement_attachment_url":r.startsWith("additional_")&&(o="additional_attachment_url"),o&&await e.env.DB.prepare(`
+      `).bind(f,s).run();console.log("✅ Update result:",v)}return e.json({success:!0,url:f,filename:m})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let l=null;r.startsWith("id_")?l="id_attachment_url":r.startsWith("salary_")?l="salary_attachment_url":r.startsWith("bank_statement_")?l="bank_statement_attachment_url":r.startsWith("additional_")&&(l="additional_attachment_url"),l&&await e.env.DB.prepare(`
           UPDATE financing_requests 
-          SET ${o} = NULL 
+          SET ${l} = NULL 
           WHERE id = ?
-        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o=`
+        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let l=`
       SELECT 
         n.*,
         fr.requested_amount,
         fr.status as request_status
       FROM notifications n
       LEFT JOIN financing_requests fr ON n.related_request_id = fr.id
-      WHERE n.user_id = ?`;s&&(o+=` AND n.tenant_id = ${s}`),o+=`
+      WHERE n.user_id = ?`;s&&(l+=` AND n.tenant_id = ${s}`),l+=`
       ORDER BY n.created_at DESC
-      LIMIT 50`;const{results:l}=await e.env.DB.prepare(o).bind(r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(o+=` AND tenant_id = ${s}`);const l=await e.env.DB.prepare(o).bind(r).first();return e.json({success:!0,count:l?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+      LIMIT 50`;const{results:o}=await e.env.DB.prepare(l).bind(r).all();return e.json({success:!0,data:o})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let l="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(l+=` AND tenant_id = ${s}`);const o=await e.env.DB.prepare(l).bind(r).first();return e.json({success:!0,count:o?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE notifications
       SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
@@ -13015,10 +13090,10 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(1).run(),e.json({success:!0})}catch(t){return console.error("Error marking all as read:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/notifications/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM notifications
       WHERE id = ? AND user_id = ?
-    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:r,category:o,related_request_id:l}=await e.req.json(),i=await e.env.DB.prepare(`
+    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:r,category:l,related_request_id:o}=await e.req.json(),i=await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t||1,a,s,r||"info",o||"general",l||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(t||1,a,s,r||"info",l||"general",o||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         calc.*,
         u.full_name as user_name,
@@ -13030,15 +13105,15 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       JOIN financing_types ft ON calc.financing_type_id = ft.id
       ORDER BY calc.created_at DESC
       LIMIT 100
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:r,financing_type_id:o,user_id:l,subscription_id:i}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:r,financing_type_id:l,user_id:o,subscription_id:i}=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT rate FROM bank_financing_rates 
       WHERE bank_id = ? AND financing_type_id = ? AND is_active = 1
       LIMIT 1
-    `).bind(r,o).first();if(!n)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const c=n.rate,p=c/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,f=m-t,g=await e.env.DB.prepare(`
+    `).bind(r,l).first();if(!n)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const c=n.rate,p=c/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,g=m-t,f=await e.env.DB.prepare(`
       INSERT INTO calculations 
       (user_id, subscription_id, financing_type_id, bank_id, amount, duration_months, salary, rate, monthly_payment, total_payment, total_interest)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(l||null,i||null,o,r,t,a,s,c,u,m,f).run();return e.json({success:!0,data:{id:g.meta.last_row_id,amount:t,duration_months:a,rate:c,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(f*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
+    `).bind(o||null,i||null,l,r,t,a,s,c,u,m,g).run();return e.json({success:!0,data:{id:f.meta.last_row_id,amount:t,duration_months:a,rate:c,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(g*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         financing_request_id INTEGER NOT NULL,
@@ -13054,7 +13129,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',o='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',l='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===1?n=null:t.roleId===2||t.roleId===3?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",o+=" AND tenant_id = ?",l+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",o+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",o+=" AND 1 = 0");const c=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(o).bind(n).first():await e.env.DB.prepare(o).first(),f=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(l).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(l).first():{count:0},g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),v=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:c?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:f?.count||0,total_calculations:v?.count||0,active_banks:b?.count||0,active_tenants:h?.count||0,active_users:g?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',l='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',o='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===1?n=null:t.roleId===2||t.roleId===3?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",l+=" AND tenant_id = ?",o+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",l+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",l+=" AND 1 = 0");const c=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(l).bind(n).first():await e.env.DB.prepare(l).first(),g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(o).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(o).first():{count:0},f=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),v=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:c?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:g?.count||0,total_calculations:v?.count||0,active_banks:b?.count||0,active_tenants:h?.count||0,active_users:f?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name
@@ -13101,13 +13176,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(t).run(),await e.env.DB.prepare(`
       DELETE FROM roles WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:r,role_id:o,is_active:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:r,role_id:l,is_active:o}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(et));d.get("/calculator",e=>e.html(ie));d.get("/calculator-old",e=>e.html(tt));d.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(a,s,r,l,o,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(tt));d.get("/calculator",e=>e.html(de));d.get("/calculator-old",e=>e.html(at));d.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(ie.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+  `).bind(t).first();return a?e.html(de.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
         // Tenant information for company-specific calculator
         window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
     `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
@@ -13132,7 +13207,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
       </body>
       </html>
-    `)});d.get("/login",e=>e.html(at));d.get("/forgot-password",e=>e.html(st));d.get("/packages",e=>e.html(rt));d.get("/subscribe",e=>e.html(lt));d.get("/admin",e=>e.html(`
+    `)});d.get("/login",e=>e.html(st));d.get("/forgot-password",e=>e.html(rt));d.get("/packages",e=>e.html(ot));d.get("/subscribe",e=>e.html(lt));d.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -13182,7 +13257,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
     </body>
     </html>
-  `));d.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const f=atob(r).split(":");o=f[1]!=="null"?parseInt(f[1]):null}let l="1=1";const i=[];o&&(l+=" AND f.tenant_id = ?",i.push(o)),t&&(l+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(l+=" AND DATE(f.created_at) <= ?",i.push(a));const n=`
+  `));d.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),r=e.req.header("Authorization")?.replace("Bearer ","");let l=null;if(r){const g=atob(r).split(":");l=g[1]!=="null"?parseInt(g[1]):null}let o="1=1";const i=[];l&&(o+=" AND f.tenant_id = ?",i.push(l)),t&&(o+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(o+=" AND DATE(f.created_at) <= ?",i.push(a));const n=`
       SELECT 
         COUNT(*) as total_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
@@ -13190,7 +13265,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         SUM(CASE WHEN f.status = 'rejected' THEN 1 ELSE 0 END) as rejected_requests,
         SUM(f.requested_amount) as total_amount
       FROM financing_requests f
-      WHERE ${l}
+      WHERE ${o}
     `,c=await e.env.DB.prepare(n).bind(...i).first(),p=`
       SELECT 
         c.full_name as customer_name,
@@ -13199,7 +13274,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         MAX(f.created_at) as last_request_date
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
-      WHERE ${l}
+      WHERE ${o}
       GROUP BY c.id
       ORDER BY request_count DESC, total_amount DESC
       LIMIT 10
@@ -13240,7 +13315,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-    `;s&&(r+=" WHERE c.tenant_id = ?"),r+=" ORDER BY fr.created_at DESC";const{results:o}=s?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/banks",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const r=`
+    `;s&&(r+=" WHERE c.tenant_id = ?"),r+=" ORDER BY fr.created_at DESC";const{results:l}=s?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/banks",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const r=`
       SELECT 
         b.id,
         b.bank_name,
@@ -13259,7 +13334,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       ${a}
       GROUP BY b.id, b.bank_name
       ORDER BY total_requests DESC
-    `,{results:o}=s.length>0?await e.env.DB.prepare(r).bind(...s).all():await e.env.DB.prepare(r).all(),l={total_banks:o.length,total_requests:o.reduce((i,n)=>i+(n.total_requests||0),0),overall_approval_rate:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.approval_rate)||0),0)/o.length).toFixed(2):"0.00",average_amount:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.average_amount)||0),0)/o.length).toFixed(2):"0.00"};return e.json({success:!0,banks:o,summary:l})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/performance",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let r="",o=[];t.roleId!==1&&t.tenantId&&(r="WHERE c.tenant_id = ?",o.push(t.tenantId)),a&&s&&(r+=(r?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",o.push(a,s));const l=`
+    `,{results:l}=s.length>0?await e.env.DB.prepare(r).bind(...s).all():await e.env.DB.prepare(r).all(),o={total_banks:l.length,total_requests:l.reduce((i,n)=>i+(n.total_requests||0),0),overall_approval_rate:l.length>0?(l.reduce((i,n)=>i+(parseFloat(n.approval_rate)||0),0)/l.length).toFixed(2):"0.00",average_amount:l.length>0?(l.reduce((i,n)=>i+(parseFloat(n.average_amount)||0),0)/l.length).toFixed(2):"0.00"};return e.json({success:!0,banks:l,summary:o})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/reports/performance",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let r="",l=[];t.roleId!==1&&t.tenantId&&(r="WHERE c.tenant_id = ?",l.push(t.tenantId)),a&&s&&(r+=(r?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",l.push(a,s));const o=`
       SELECT 
         COUNT(DISTINCT c.id) as total_customers,
         COUNT(DISTINCT CASE WHEN c.created_at >= date('now', '-30 days') THEN c.id END) as active_customers,
@@ -13277,7 +13352,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM customers c
       LEFT JOIN financing_requests fr ON c.id = fr.customer_id
       ${r}
-    `,i=o.length>0?await e.env.DB.prepare(l).bind(...o).first():await e.env.DB.prepare(l).first(),n=`
+    `,i=l.length>0?await e.env.DB.prepare(o).bind(...l).first():await e.env.DB.prepare(o).first(),n=`
       SELECT 
         u.id,
         u.full_name as name,
@@ -13299,7 +13374,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       HAVING requests_count > 0
       ORDER BY approved_count DESC
       LIMIT 10
-    `,{results:c}=o.length>0?await e.env.DB.prepare(n).bind(...o).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:c})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/panel",async e=>{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
+    `,{results:c}=l.length>0?await e.env.DB.prepare(n).bind(...l).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:c})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/panel",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -13339,20 +13414,39 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     LEFT JOIN roles r ON u.role_id = r.id
     LEFT JOIN tenants t ON u.tenant_id = t.id
     WHERE u.id = ?
-  `).bind(t.userId).first(),s=await e.env.DB.prepare(`
-    SELECT p.name as permission_key, p.display_name as permission_name, p.category
+  `).bind(t.userId).first();if(!a)return e.redirect("/login");const s=await e.env.DB.prepare(`
+    SELECT
+      p.permission_key as permission_key,
+      p.permission_name as permission_name,
+      p.category
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
-  `).bind(t.roleId).all();let r=de;if(t.roleId!==1){const o=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/settings","/admin/hr","/admin/users","/admin/roles","/admin/saas-settings","/admin/tenant-calculators"];for(const l of o){const i=new RegExp(`<a[^>]*\\bhref=["']${l}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(i,"")}}return r=r.replace("<script>",`<script>
+  `).bind(t.roleId).all(),r=Array.isArray(s.results)?s.results:[];let l=ce;if(t.roleId!==1){const o=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/settings","/admin/hr","/admin/users","/admin/roles","/admin/saas-settings","/admin/tenant-calculators"];for(const i of o){const n=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");l=l.replace(n,"")}l=l.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return l=l.replace("<script>",`<script>
       window.USER_DATA = ${JSON.stringify({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:a.role_name,role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name,user_type:a.user_type})};
-      window.USER_PERMISSIONS = ${JSON.stringify(s.results.map(o=>o.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${JSON.stringify(s.results)};
+      window.USER_PERMISSIONS = ${JSON.stringify(r.map(o=>o.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${JSON.stringify(r)};
       window.USER_ROLE_ID = ${t.roleId};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
     <\/script>
-    <script>`),e.html(r)});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
+    <script>`),e.html(l)}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [ADMIN_PANEL] ERROR DUMP:",a),e.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>خطأ في تحميل لوحة التحكم</title>
+        <script src="https://cdn.tailwindcss.com"><\/script>
+      </head>
+      <body class="bg-gray-100 p-8">
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+          <h1 class="text-2xl font-bold text-red-600 mb-4">❌ خطأ في تحميل لوحة التحكم</h1>
+          <pre class="bg-gray-800 text-green-400 p-4 rounded overflow-auto text-sm">${JSON.stringify(a,null,2)}</pre>
+          <a href="/login" class="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded">العودة لتسجيل الدخول</a>
+        </div>
+      </body>
+      </html>
+    `)}});d.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -14481,9 +14575,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/tenants",e=>e.html(ot));d.get("/admin/tenant-calculators",e=>e.html(nt));d.get("/admin/saas-settings",e=>e.html(it));d.get("/admin/reports",e=>e.html(dt));d.get("/admin/reports/customers",e=>e.html(ct));d.get("/admin/reports/requests",e=>e.html(pt));d.get("/admin/reports/financial",e=>e.html(ut));d.get("/admin/reports/banks",e=>e.html(yt));d.get("/admin/reports/performance",e=>e.html(vt));d.get("/admin/payments",e=>e.html(gt));d.get("/admin/banks",e=>e.html(ft));d.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});d.get("/admin/tenants",e=>e.html(nt));d.get("/admin/tenant-calculators",e=>e.html(it));d.get("/admin/saas-settings",e=>e.html(dt));d.get("/admin/reports",e=>e.html(ct));d.get("/admin/reports/customers",e=>e.html(pt));d.get("/admin/reports/requests",e=>e.html(ut));d.get("/admin/reports/financial",e=>e.html(mt));d.get("/admin/reports/banks",e=>e.html(vt));d.get("/admin/reports/performance",e=>e.html(wt));d.get("/admin/payments",e=>e.html(ft));d.get("/admin/banks",e=>e.html(bt));d.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(de.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(ce.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -14539,7 +14633,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         </div>
     </body>
     </html>
-  `));d.get("/admin/dashboard",async e=>{try{const t=await x(e);let a="",s="",r="",o=[];t.roleId===1?(a="",s="",r=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,r=`AND c.tenant_id = ${t.tenantId}`,o.push(t.tenantId)):t.roleId===4&&t.userId?(a=`WHERE assigned_to = ${t.userId}`,s=`WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${t.userId})`,r=`AND c.assigned_to = ${t.userId}`,o.push(t.userId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",r="AND 1 = 0");const l=await e.env.DB.prepare(`
+  `));d.get("/admin/dashboard",async e=>{try{const t=await x(e);let a="",s="",r="",l=[];t.roleId===1?(a="",s="",r=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,r=`AND c.tenant_id = ${t.tenantId}`,l.push(t.tenantId)):t.roleId===4&&t.userId?(a=`WHERE assigned_to = ${t.userId}`,s=`WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${t.userId})`,r=`AND c.assigned_to = ${t.userId}`,l.push(t.userId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",r="AND 1 = 0");const o=await e.env.DB.prepare(`
       SELECT 
         (SELECT COUNT(*) FROM customers ${a}) as total_customers,
         (SELECT COUNT(*) FROM financing_requests ${s}) as total_requests,
@@ -14577,9 +14671,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       SELECT 
         status,
         COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${whereClause}), 2) as percentage
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM financing_requests ${s}), 2) as percentage
       FROM financing_requests
-      ${whereClause}
+      ${s}
       GROUP BY status
     `).all(),p=i.results||[],u=n.results||[],m=c.results||[];return e.html(`
       <!DOCTYPE html>
@@ -14633,7 +14727,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-blue-100 text-sm mb-1">إجمالي العملاء</p>
-                  <p class="text-4xl font-bold">${l?.total_customers||0}</p>
+                  <p class="text-4xl font-bold">${o?.total_customers||0}</p>
                 </div>
                 <i class="fas fa-users text-6xl opacity-20"></i>
               </div>
@@ -14643,7 +14737,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-green-100 text-sm mb-1">إجمالي الطلبات</p>
-                  <p class="text-4xl font-bold">${l?.total_requests||0}</p>
+                  <p class="text-4xl font-bold">${o?.total_requests||0}</p>
                 </div>
                 <i class="fas fa-file-invoice text-6xl opacity-20"></i>
               </div>
@@ -14653,7 +14747,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-yellow-100 text-sm mb-1">قيد الانتظار</p>
-                  <p class="text-4xl font-bold">${l?.pending_requests||0}</p>
+                  <p class="text-4xl font-bold">${o?.pending_requests||0}</p>
                 </div>
                 <i class="fas fa-clock text-6xl opacity-20"></i>
               </div>
@@ -14663,7 +14757,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-purple-100 text-sm mb-1">موافق عليها</p>
-                  <p class="text-4xl font-bold">${l?.approved_requests||0}</p>
+                  <p class="text-4xl font-bold">${o?.approved_requests||0}</p>
                 </div>
                 <i class="fas fa-check-circle text-6xl opacity-20"></i>
               </div>
@@ -14673,7 +14767,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-red-100 text-sm mb-1">مرفوضة</p>
-                  <p class="text-4xl font-bold">${l?.rejected_requests||0}</p>
+                  <p class="text-4xl font-bold">${o?.rejected_requests||0}</p>
                 </div>
                 <i class="fas fa-times-circle text-6xl opacity-20"></i>
               </div>
@@ -14689,7 +14783,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">إجمالي التمويل المطلوب</p>
-                  <p class="text-2xl font-bold text-gray-800">${parseFloat(l?.total_requested_amount||0).toLocaleString("ar-SA")} ر.س</p>
+                  <p class="text-2xl font-bold text-gray-800">${parseFloat(o?.total_requested_amount||0).toLocaleString("ar-SA")} ر.س</p>
                 </div>
               </div>
             </div>
@@ -14701,7 +14795,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">التمويل الموافق عليه</p>
-                  <p class="text-2xl font-bold text-gray-800">${parseFloat(l?.total_approved_amount||0).toLocaleString("ar-SA")} ر.س</p>
+                  <p class="text-2xl font-bold text-gray-800">${parseFloat(o?.total_approved_amount||0).toLocaleString("ar-SA")} ر.س</p>
                 </div>
               </div>
             </div>
@@ -14713,7 +14807,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">نسبة القبول</p>
-                  <p class="text-2xl font-bold text-gray-800">${((l?.approved_requests||0)/Math.max(l?.total_requests,1)*100).toFixed(1)}%</p>
+                  <p class="text-2xl font-bold text-gray-800">${((o?.approved_requests||0)/Math.max(o?.total_requests,1)*100).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -14725,7 +14819,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">متوسط المبلغ</p>
-                  <p class="text-2xl font-bold text-gray-800">${(parseFloat(l?.total_requested_amount||0)/Math.max(l?.total_requests,1)).toLocaleString("ar-SA",{maximumFractionDigits:0})} ر.س</p>
+                  <p class="text-2xl font-bold text-gray-800">${(parseFloat(o?.total_requested_amount||0)/Math.max(o?.total_requests,1)).toLocaleString("ar-SA",{maximumFractionDigits:0})} ر.س</p>
                 </div>
               </div>
             </div>
@@ -14746,11 +14840,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </div>
                   <div class="bg-white/20 rounded-lg p-4">
                     <p class="text-sm opacity-90">الطلبات النشطة</p>
-                    <p class="text-xl font-bold mt-1">${(l?.pending_requests||0)+(l?.under_review_requests||0)}</p>
+                    <p class="text-xl font-bold mt-1">${(o?.pending_requests||0)+(o?.under_review_requests||0)}</p>
                   </div>
                   <div class="bg-white/20 rounded-lg p-4">
                     <p class="text-sm opacity-90">معدل النجاح</p>
-                    <p class="text-xl font-bold mt-1">${((l?.approved_requests||0)/Math.max((l?.approved_requests||0)+(l?.rejected_requests||0),1)*100).toFixed(1)}%</p>
+                    <p class="text-xl font-bold mt-1">${((o?.approved_requests||0)/Math.max((o?.approved_requests||0)+(o?.rejected_requests||0),1)*100).toFixed(1)}%</p>
                   </div>
                 </div>
               </div>
@@ -14796,13 +14890,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </tr>
                   </thead>
                   <tbody>
-                    ${u.map((f,g)=>`
+                    ${u.map((g,f)=>`
                       <tr class="border-t hover:bg-gray-50">
                         <td class="px-4 py-3">
-                          <span class="text-2xl">${g===0?"🥇":g===1?"🥈":g===2?"🥉":(g+1).toString()}</span>
+                          <span class="text-2xl">${f===0?"🥇":f===1?"🥈":f===2?"🥉":(f+1).toString()}</span>
                         </td>
-                        <td class="px-4 py-3 font-bold text-gray-800">${f.bank_name}</td>
-                        <td class="px-4 py-3 text-blue-600 font-bold">${f.request_count}</td>
+                        <td class="px-4 py-3 font-bold text-gray-800">${g.bank_name}</td>
+                        <td class="px-4 py-3 text-blue-600 font-bold">${g.request_count}</td>
                       </tr>
                       `).join("")}
                   </tbody>
@@ -14827,14 +14921,14 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               تفاصيل حالات الطلبات
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              ${m.map(f=>{const g={pending:{color:"yellow",icon:"clock",label:"قيد الانتظار"},under_review:{color:"blue",icon:"search",label:"قيد المراجعة"},approved:{color:"green",icon:"check-circle",label:"موافق"},rejected:{color:"red",icon:"times-circle",label:"مرفوض"}}[f.status]||{color:"gray",icon:"question",label:f.status};return`
-                  <div class="bg-${g.color}-50 border-2 border-${g.color}-200 rounded-lg p-4">
+              ${m.map(g=>{const b={pending:{color:"yellow",icon:"clock",label:"قيد الانتظار"},under_review:{color:"blue",icon:"search",label:"قيد المراجعة"},approved:{color:"green",icon:"check-circle",label:"موافق"},rejected:{color:"red",icon:"times-circle",label:"مرفوض"}}[g.status]||{color:"gray",icon:"question",label:g.status};return`
+                  <div class="bg-${b.color}-50 border-2 border-${b.color}-200 rounded-lg p-4">
                     <div class="flex items-center justify-between mb-2">
-                      <i class="fas fa-${g.icon} text-2xl text-${g.color}-600"></i>
-                      <span class="text-3xl font-bold text-${g.color}-600">${f.count}</span>
+                      <i class="fas fa-${b.icon} text-2xl text-${b.color}-600"></i>
+                      <span class="text-3xl font-bold text-${b.color}-600">${g.count}</span>
                     </div>
-                    <p class="text-sm text-gray-700 font-bold">${g.label}</p>
-                    <p class="text-xs text-gray-600">${f.percentage}% من الإجمالي</p>
+                    <p class="text-sm text-gray-700 font-bold">${b.label}</p>
+                    <p class="text-xs text-gray-600">${g.percentage}% من الإجمالي</p>
                   </div>
                 `}).join("")}
             </div>
@@ -15122,7 +15216,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     FROM users 
     WHERE role = 'employee' AND tenant_id = ?
     ORDER BY full_name
-  `).bind(s).all(),o=await e.env.DB.prepare(`
+  `).bind(s).all(),l=await e.env.DB.prepare(`
     SELECT 
       c.*,
       ca.employee_id,
@@ -15132,7 +15226,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     LEFT JOIN users u ON ca.employee_id = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
-  `).bind(s).all(),l=await e.env.DB.prepare(`
+  `).bind(s).all(),o=await e.env.DB.prepare(`
     SELECT 
       u.id,
       u.full_name,
@@ -15336,7 +15430,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          ${l.results.map((n,c)=>`
+          ${o.results.map((n,c)=>`
               <div class="stat-card bg-gradient-to-br ${["from-blue-500 to-blue-600","from-green-500 to-green-600","from-purple-500 to-purple-600","from-orange-500 to-orange-600","from-pink-500 to-pink-600"][c%5]} text-white rounded-xl p-5 shadow-lg">
                 <div class="text-sm opacity-90 mb-1">${n.full_name}</div>
                 <div class="text-3xl font-bold">${n.customer_count}</div>
@@ -15372,7 +15466,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           <div class="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <h2 class="text-2xl font-bold">
               <i class="fas fa-list ml-2"></i>
-              قائمة العملاء (${o.results.length})
+              قائمة العملاء (${l.results.length})
             </h2>
           </div>
           
@@ -15382,7 +15476,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               <select id="filterEmployee" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
                 <option value="">كل الموظفين</option>
                 <option value="unassigned">غير مخصص</option>
-                ${l.results.map(n=>`
+                ${o.results.map(n=>`
                   <option value="${n.id}">${n.full_name} (${n.customer_count})</option>
                 `).join("")}
               </select>
@@ -15404,7 +15498,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </tr>
                 </thead>
                 <tbody id="customersTableBody">
-                  ${o.results.map(n=>`
+                  ${l.results.map(n=>`
                     <tr class="border-t hover:bg-gray-50 customer-row" data-customer-id="${n.id}" data-employee-id="${n.employee_id||""}">
                       <td class="px-4 py-3">
                         <input type="checkbox" class="customer-checkbox rounded" value="${n.id}">
@@ -15643,10 +15737,10 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       WHERE ca.customer_id IS NULL AND c.tenant_id = ?
       ORDER BY c.id
-    `).bind(a).all();let o=0;const l=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],c=s.results[i%l];await e.env.DB.prepare(`
+    `).bind(a).all();let l=0;const o=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],c=s.results[i%o];await e.env.DB.prepare(`
         INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
         VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(n.id,c.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
+      `).bind(n.id,c.id).run(),l++}return e.json({success:!0,assigned_count:l,employee_count:o})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
       DELETE FROM customer_assignments
     `).run();return e.json({success:!0,cleared_count:t.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json();let s=0;for(const r of t)await e.env.DB.prepare(`
         SELECT * FROM customer_assignments WHERE customer_id = ?
@@ -15699,14 +15793,14 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
-                    ${r.results.map((o,l)=>`
+                    ${r.results.map((l,o)=>`
                       <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 text-sm">${l+1}</td>
-                        <td class="px-6 py-4 font-bold">${o.bank_name}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${o.bank_code||"-"}</td>
+                        <td class="px-6 py-4 text-sm">${o+1}</td>
+                        <td class="px-6 py-4 font-bold">${l.bank_name}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${l.bank_code||"-"}</td>
                         <td class="px-6 py-4 text-sm">
                           <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                            Tenant ${o.tenant_id||"N/A"}
+                            Tenant ${l.tenant_id||"N/A"}
                           </span>
                         </td>
                       </tr>
@@ -15836,25 +15930,25 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
-                    ${r.results.map((o,l)=>`
+                    ${r.results.map((l,o)=>`
                       <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-4 text-sm">${l+1}</td>
-                        <td class="px-4 py-4 font-bold">${o.bank_name||"-"}</td>
-                        <td class="px-4 py-4 text-sm">${o.financing_type_name||"-"}</td>
+                        <td class="px-4 py-4 text-sm">${o+1}</td>
+                        <td class="px-4 py-4 font-bold">${l.bank_name||"-"}</td>
+                        <td class="px-4 py-4 text-sm">${l.financing_type_name||"-"}</td>
                         <td class="px-4 py-4">
                           <span class="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                            ${o.rate}%
+                            ${l.rate}%
                           </span>
                         </td>
-                        <td class="px-4 py-4 text-sm">${o.min_amount?o.min_amount.toLocaleString():"-"} ريال</td>
-                        <td class="px-4 py-4 text-sm">${o.max_amount?o.max_amount.toLocaleString():"-"} ريال</td>
-                        <td class="px-4 py-4 text-sm">${o.min_duration||"-"} - ${o.max_duration||"-"} شهر</td>
+                        <td class="px-4 py-4 text-sm">${l.min_amount?l.min_amount.toLocaleString():"-"} ريال</td>
+                        <td class="px-4 py-4 text-sm">${l.max_amount?l.max_amount.toLocaleString():"-"} ريال</td>
+                        <td class="px-4 py-4 text-sm">${l.min_duration||"-"} - ${l.max_duration||"-"} شهر</td>
                         ${t?`
                           <td class="px-4 py-4 text-sm">
-                            <a href="/admin/rates/edit/${o.id}?tenant_id=${t}" class="text-blue-600 hover:text-blue-800 ml-2" title="تعديل">
+                            <a href="/admin/rates/edit/${l.id}?tenant_id=${t}" class="text-blue-600 hover:text-blue-800 ml-2" title="تعديل">
                               <i class="fas fa-edit"></i>
                             </a>
-                            <button onclick="deleteRate(${o.id})" class="text-red-600 hover:text-red-800" title="حذف">
+                            <button onclick="deleteRate(${l.id})" class="text-red-600 hover:text-red-800" title="حذف">
                               <i class="fas fa-trash"></i>
                             </button>
                           </td>
@@ -15915,13 +16009,13 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});d.get("/admin/rates/add",async e=>{const t=e.req.query("tenant_id");if(!t)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const a=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(bt(t,a.results,s.results))});d.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});d.get("/admin/rates/add",async e=>{const t=e.req.query("tenant_id");if(!t)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const a=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(xt(t,a.results,s.results))});d.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),o=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(xt(a,s,r.results,o.results))});d.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),l=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ht(a,s,r.results,l.results))});d.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -15955,7 +16049,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             </div>
         </body>
         </html>
-      `);let a="SELECT * FROM customers",s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
+      `);let a="SELECT * FROM customers",s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -16028,7 +16122,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
-                ${o?`
+                ${l?`
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة عميل جديد
@@ -16088,26 +16182,26 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${r.results.map(l=>`
-                  <tr class="hover:bg-gray-50" data-name="${l.full_name||""}" data-phone="${l.phone||""}" data-email="${l.email||""}">
-                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${l.id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${l.full_name||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.phone||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.email||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(l.created_at).toLocaleDateString("ar-SA")}</td>
+                ${r.results.map(o=>`
+                  <tr class="hover:bg-gray-50" data-name="${o.full_name||""}" data-phone="${o.phone||""}" data-email="${o.email||""}">
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${o.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${o.full_name||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${o.phone||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${o.email||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(o.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
                       <div class="flex items-center justify-end gap-2">
-                        <a href="/admin/customers/${l.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm" title="تقرير العميل الكامل">
+                        <a href="/admin/customers/${o.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm" title="تقرير العميل الكامل">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
-                        <a href="/admin/customers/${l.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                        <a href="/admin/customers/${o.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-eye"></i> عرض
                         </a>
-                        ${o?`
-                        <a href="/admin/customers/${l.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
+                        ${l?`
+                        <a href="/admin/customers/${o.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-edit"></i> تعديل
                         </a>
-                        <a href="/admin/customers/${l.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                        <a href="/admin/customers/${o.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-trash"></i> حذف
                         </a>
                         `:""}
@@ -16175,7 +16269,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           function exportToCSV() {
             const data = [
               ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${r.results.map(l=>`['${l.id}', '${l.full_name||"-"}', '${l.phone||"-"}', '${l.email||"-"}', '${l.national_id||"-"}', '${new Date(l.created_at).toLocaleDateString("ar-SA")}']`).join(`,
+              ${r.results.map(o=>`['${o.id}', '${o.full_name||"-"}', '${o.phone||"-"}', '${o.email||"-"}', '${o.national_id||"-"}', '${new Date(o.created_at).toLocaleDateString("ar-SA")}']`).join(`,
               `)}
             ];
             
@@ -17298,7 +17392,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
-    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE c.assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
+    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE c.assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -17379,7 +17473,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
               </h1>
               
               <div class="flex gap-3">
-                ${o?`
+                ${l?`
                 <a href="/admin/requests/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
@@ -17451,37 +17545,37 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${r.results.map(l=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[l.status]||l.status,p={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"}[l.status]||"bg-gray-100 text-gray-800";return`
+                ${r.results.map(o=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[o.status]||o.status,p={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"}[o.status]||"bg-gray-100 text-gray-800";return`
                   <tr class="hover:bg-gray-50" 
-                      data-customer="${l.customer_name||""}" 
-                      data-bank="${l.bank_name||""}" 
+                      data-customer="${o.customer_name||""}" 
+                      data-bank="${o.bank_name||""}" 
                       data-status="${n}">
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${l.customer_name||"عميل #"+l.customer_id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.bank_name||"بنك #"+(l.selected_bank_id||"-")}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.requested_amount?.toLocaleString("ar-SA")} ريال</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.duration_months} شهر</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${o.customer_name||"عميل #"+o.customer_id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${o.bank_name||"بنك #"+(o.selected_bank_id||"-")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${o.requested_amount?.toLocaleString("ar-SA")} ريال</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${o.duration_months} شهر</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="px-2 py-1 text-xs rounded-full ${p}">
                         ${n}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(l.created_at).toLocaleDateString("ar-SA")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(o.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="flex gap-2 justify-end">
-                        <a href="/admin/requests/${l.id}/workflow" class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-2 rounded text-xs transition-all shadow-md" title="الجدول الزمني التفصيلي">
+                        <a href="/admin/requests/${o.id}/workflow" class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-2 rounded text-xs transition-all shadow-md" title="الجدول الزمني التفصيلي">
                           <i class="fas fa-clock"></i> ⏱️ Timeline
                         </a>
-                        <a href="/admin/requests/${l.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-xs transition-all" title="تقرير الطلب الكامل">
+                        <a href="/admin/requests/${o.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-xs transition-all" title="تقرير الطلب الكامل">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
-                        <a href="/admin/requests/${l.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
+                        <a href="/admin/requests/${o.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-eye"></i> عرض
                         </a>
-                        ${o?`
-                        <a href="/admin/requests/${l.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
+                        ${l?`
+                        <a href="/admin/requests/${o.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-edit"></i> تعديل
                         </a>
-                        <a href="/admin/requests/${l.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
+                        <a href="/admin/requests/${o.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-trash"></i> حذف
                         </a>
                         `:""}
@@ -17548,7 +17642,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           function exportToCSV() {
             const data = [
               ['العميل', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
-              ${r.results.map(l=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[l.status]||l.status,c=l.customer_name||`عميل #${l.customer_id}`,p=l.bank_name||`بنك #${l.selected_bank_id||"-"}`;return`['${c}', '${p}', '${l.requested_amount||0}', '${l.duration_months}', '${n}', '${new Date(l.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
+              ${r.results.map(o=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[o.status]||o.status,c=o.customer_name||`عميل #${o.customer_id}`,p=o.bank_name||`بنك #${o.selected_bank_id||"-"}`;return`['${c}', '${p}', '${o.requested_amount||0}', '${o.duration_months}', '${n}', '${new Date(o.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
               `)}
             ];
             
@@ -18204,7 +18298,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN financing_types ft ON c.financing_type_id = ft.id
       LEFT JOIN banks b ON c.best_bank_id = b.id
       WHERE c.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>العميل غير موجود</h1>");const s=a,r=l=>l?new Date(l).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",o=l=>l?l.toLocaleString("ar-SA"):"غير محدد";return e.html(`
+    `).bind(t).first();if(!a)return e.html("<h1>العميل غير موجود</h1>");const s=a,r=o=>o?new Date(o).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=o=>o?o.toLocaleString("ar-SA"):"غير محدد";return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18333,7 +18427,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">الراتب الشهري</p>
-                  <p class="text-2xl font-bold text-green-600">${o(s.monthly_salary)} ريال</p>
+                  <p class="text-2xl font-bold text-green-600">${l(s.monthly_salary)} ريال</p>
                 </div>
               </div>
               
@@ -18343,7 +18437,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">مبلغ التمويل المطلوب</p>
-                  <p class="text-2xl font-bold text-blue-600">${o(s.financing_amount)} ريال</p>
+                  <p class="text-2xl font-bold text-blue-600">${l(s.financing_amount)} ريال</p>
                 </div>
               </div>
               
@@ -18353,7 +18447,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">الالتزامات الشهرية</p>
-                  <p class="text-2xl font-bold text-red-600">${o(s.monthly_obligations)} ريال</p>
+                  <p class="text-2xl font-bold text-red-600">${l(s.monthly_obligations)} ريال</p>
                 </div>
               </div>
               
@@ -18421,7 +18515,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">القسط الشهري</p>
-                      <p class="text-2xl font-bold text-purple-600">${o(s.monthly_payment)} ريال</p>
+                      <p class="text-2xl font-bold text-purple-600">${l(s.monthly_payment)} ريال</p>
                     </div>
                   </div>
                 </div>
@@ -18433,7 +18527,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">إجمالي المبلغ المستحق</p>
-                      <p class="text-3xl font-bold text-indigo-600">${o(s.total_payment)} ريال</p>
+                      <p class="text-3xl font-bold text-indigo-600">${l(s.total_payment)} ريال</p>
                     </div>
                   </div>
                 </div>
@@ -18517,7 +18611,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a,r=n=>n?new Date(n).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",o=n=>n?n.toLocaleString("ar-SA"):"غير محدد",l={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=l[s.status]||l.pending;return e.html(`
+    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a,r=n=>n?new Date(n).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=n=>n?n.toLocaleString("ar-SA"):"غير محدد",o={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=o[s.status]||o.pending;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18634,7 +18728,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">الراتب الشهري</p>
-                  <p class="text-xl font-bold text-yellow-600">${o(s.customer_salary)} ريال</p>
+                  <p class="text-xl font-bold text-yellow-600">${l(s.customer_salary)} ريال</p>
                 </div>
               </div>
               
@@ -18676,7 +18770,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">المبلغ المطلوب</p>
-                    <p class="text-2xl font-bold text-blue-600">${o(s.requested_amount)} ريال</p>
+                    <p class="text-2xl font-bold text-blue-600">${l(s.requested_amount)} ريال</p>
                   </div>
                 </div>
               </div>
@@ -18712,7 +18806,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">الالتزامات الشهرية</p>
-                    <p class="text-2xl font-bold text-red-600">${o(s.monthly_obligations)} ريال</p>
+                    <p class="text-2xl font-bold text-red-600">${l(s.monthly_obligations)} ريال</p>
                   </div>
                 </div>
               </div>
@@ -18724,7 +18818,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">القسط الشهري</p>
-                    <p class="text-2xl font-bold text-indigo-600">${o(s.monthly_payment)} ريال</p>
+                    <p class="text-2xl font-bold text-indigo-600">${l(s.monthly_payment)} ريال</p>
                   </div>
                 </div>
               </div>
@@ -18809,11 +18903,11 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN users u ON wst.transitioned_by = u.id
       WHERE wst.request_id = ?
       ORDER BY wst.created_at DESC
-    `).bind(t).all(),{results:o}=await e.env.DB.prepare(`
-      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
     `).bind(t).all(),{results:l}=await e.env.DB.prepare(`
+      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(t).all(),{results:o}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(t).all(),i={data:{transitions:r,actions:o,tasks:l}},n=ht(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).all(),i={data:{transitions:r,actions:l,tasks:o}},n=yt(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});d.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
     `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});d.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
@@ -20813,20 +20907,20 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       WHERE u.id = ?
-    `,{results:o}=await e.env.DB.prepare(r).bind(t).all();if(!o||o.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const l=o[0],i=await e.env.DB.prepare("SELECT id, role_name, description FROM roles ORDER BY id").all();let n={results:[]};return s===1&&(n=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()),e.html(`
+    `,{results:l}=await e.env.DB.prepare(r).bind(t).all();if(!l||l.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const o=l[0],i=await e.env.DB.prepare("SELECT id, role_name, description FROM roles ORDER BY id").all();let n={results:[]};return s===1&&(n=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>تعديل مستخدم - ${l.full_name}</title>
+        <title>تعديل مستخدم - ${o.full_name}</title>
         <script src="https://cdn.tailwindcss.com"><\/script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin/users/${l.id}" class="text-blue-600 hover:text-blue-800">
+            <a href="/admin/users/${o.id}" class="text-blue-600 hover:text-blue-800">
               <i class="fas fa-arrow-left ml-2"></i> العودة لعرض المستخدم
             </a>
           </div>
@@ -20834,16 +20928,16 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
           <div class="bg-white rounded-xl shadow-lg p-6">
             <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center">
               <i class="fas fa-user-edit text-indigo-600 ml-2"></i>
-              تعديل مستخدم: ${l.full_name}
+              تعديل مستخدم: ${o.full_name}
             </h1>
             
-            <form action="/admin/users/${l.id}" method="POST" class="space-y-6">
+            <form action="/admin/users/${o.id}" method="POST" class="space-y-6">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     اسم المستخدم <span class="text-red-500">*</span>
                   </label>
-                  <input type="text" name="username" value="${l.username}" required 
+                  <input type="text" name="username" value="${o.username}" required 
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
                 
@@ -20851,7 +20945,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     الاسم الكامل <span class="text-red-500">*</span>
                   </label>
-                  <input type="text" name="full_name" value="${l.full_name||""}" required 
+                  <input type="text" name="full_name" value="${o.full_name||""}" required 
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
                 
@@ -20859,7 +20953,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     البريد الإلكتروني
                   </label>
-                  <input type="email" name="email" value="${l.email||""}" 
+                  <input type="email" name="email" value="${o.email||""}" 
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
                 
@@ -20867,7 +20961,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     رقم الجوال
                   </label>
-                  <input type="text" name="phone" value="${l.phone||""}" 
+                  <input type="text" name="phone" value="${o.phone||""}" 
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
                 
@@ -20886,9 +20980,9 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </label>
                   <select name="user_type" required onchange="updateRoleFilter(this.value)"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="admin" ${l.user_type==="admin"?"selected":""}>مدير النظام (Super Admin)</option>
-                    <option value="company" ${l.user_type==="company"?"selected":""}>حساب شركة</option>
-                    <option value="employee" ${l.user_type==="employee"?"selected":""}>موظف</option>
+                    <option value="admin" ${o.user_type==="admin"?"selected":""}>مدير النظام (Super Admin)</option>
+                    <option value="company" ${o.user_type==="company"?"selected":""}>حساب شركة</option>
+                    <option value="employee" ${o.user_type==="employee"?"selected":""}>موظف</option>
                   </select>
                 </div>
                 
@@ -20899,7 +20993,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   <select name="role_id" id="roleSelect" required
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     ${i.results?.map(c=>`
-                      <option value="${c.id}" ${l.role_id===c.id?"selected":""}>
+                      <option value="${c.id}" ${o.role_id===c.id?"selected":""}>
                         ${c.role_name} ${c.description?`- ${c.description}`:""}
                       </option>
                     `).join("")||""}
@@ -20915,14 +21009,14 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">لا توجد شركة (Super Admin فقط)</option>
                     ${n.results?.map(c=>`
-                      <option value="${c.id}" ${l.tenant_id===c.id?"selected":""}>
+                      <option value="${c.id}" ${o.tenant_id===c.id?"selected":""}>
                         ${c.company_name}
                       </option>
                     `).join("")||""}
                   </select>
                 </div>
                 `:`
-                <input type="hidden" name="tenant_id" value="${l.tenant_id||""}">
+                <input type="hidden" name="tenant_id" value="${o.tenant_id||""}">
                 `}
                 
                 <div>
@@ -20931,8 +21025,8 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                   </label>
                   <select name="is_active" required
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="1" ${l.is_active?"selected":""}>نشط</option>
-                    <option value="0" ${l.is_active?"":"selected"}>غير نشط</option>
+                    <option value="1" ${o.is_active?"selected":""}>نشط</option>
+                    <option value="0" ${o.is_active?"":"selected"}>غير نشط</option>
                   </select>
                 </div>
               </div>
@@ -20941,7 +21035,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-save ml-2"></i> حفظ التعديلات
                 </button>
-                <a href="/admin/users/${l.id}" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/users/${o.id}" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-times ml-2"></i> إلغاء
                 </a>
               </div>
@@ -21000,15 +21094,15 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});d.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("username"),r=a.get("full_name"),o=a.get("email")||null,l=a.get("phone")||null,i=a.get("password"),n=a.get("user_type"),c=a.get("role_id"),p=a.get("tenant_id")||null,u=a.get("is_active");let m=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});d.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("username"),r=a.get("full_name"),l=a.get("email")||null,o=a.get("phone")||null,i=a.get("password"),n=a.get("user_type"),c=a.get("role_id"),p=a.get("tenant_id")||null,u=a.get("is_active");let m=`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
           user_type = ?, role_id = ?, tenant_id = ?, is_active = ?
-    `,f=[s,r,o,l,n,c,p,u];return i&&i.toString().trim()!==""&&(m=`
+    `,g=[s,r,l,o,n,c,p,u];return i&&i.toString().trim()!==""&&(m=`
         UPDATE users 
         SET username = ?, full_name = ?, email = ?, phone = ?, 
             password = ?, user_type = ?, role_id = ?, tenant_id = ?, is_active = ?
-      `,f=[s,r,o,l,i,n,c,p,u]),m+=" WHERE id = ?",f.push(t),await e.env.DB.prepare(m).bind(...f).run(),e.html(`
+      `,g=[s,r,l,o,i,n,c,p,u]),m+=" WHERE id = ?",g.push(t),await e.env.DB.prepare(m).bind(...g).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -21541,12 +21635,12 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       WHERE u.id = ?
     `).bind(t).first();if(!a)return e.html("<h1>المستخدم غير موجود</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM permissions ORDER BY category, id
-    `).all(),o=(await e.env.DB.prepare(`
+    `).all(),l=(await e.env.DB.prepare(`
       SELECT p.id, p.permission_key
       FROM permissions p
       JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = ?
-    `).bind(a.role_id).all()).results.map(n=>n.id),l={};s.results.forEach(n=>{l[n.category]||(l[n.category]=[]),l[n.category].push({...n,hasPermission:o.includes(n.id)})});const i={dashboard:"لوحة التحكم",customers:"العملاء",requests:"طلبات التمويل",banks:"البنوك",rates:"النسب التمويلية",packages:"الباقات",subscriptions:"الاشتراكات",users:"المستخدمين",calculator:"الحاسبة",reports:"التقارير"};return e.html(`
+    `).bind(a.role_id).all()).results.map(n=>n.id),o={};s.results.forEach(n=>{o[n.category]||(o[n.category]=[]),o[n.category].push({...n,hasPermission:l.includes(n.id)})});const i={dashboard:"لوحة التحكم",customers:"العملاء",requests:"طلبات التمويل",banks:"البنوك",rates:"النسب التمويلية",packages:"الباقات",subscriptions:"الاشتراكات",users:"المستخدمين",calculator:"الحاسبة",reports:"التقارير"};return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -21584,7 +21678,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
             <input type="hidden" name="user_id" value="${t}">
             <input type="hidden" name="role_id" value="${a.role_id}">
             
-            ${Object.keys(l).map(n=>`
+            ${Object.keys(o).map(n=>`
               <div class="bg-white rounded-lg shadow-md p-6">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 border-b-2 border-indigo-600 pb-2">
                   <i class="fas fa-folder text-indigo-600 ml-2"></i>
@@ -21592,7 +21686,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
                 </h2>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  ${l[n].map(c=>`
+                  ${o[n].map(c=>`
                     <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                       <input 
                         type="checkbox" 
@@ -21677,7 +21771,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(a).run(),s&&s.length>0)for(const r of s)await e.env.DB.prepare(`
           INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
           VALUES (?, ?)
-        `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",r=e.req.query("employee_id")||"";let o=`
+        `).bind(a,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",r=e.req.query("employee_id")||"";let l=`
       SELECT 
         l.*,
         e.full_name_ar as employee_name,
@@ -21687,10 +21781,10 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       FROM hr_leaves l
       LEFT JOIN hr_employees e ON l.employee_id = e.id
       WHERE 1=1
-    `;const l=[];a&&(o+=" AND l.status = ?",l.push(a)),s&&(o+=" AND l.leave_type = ?",l.push(s)),r&&(o+=" AND l.employee_id = ?",l.push(r)),o+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:r,end_date:o,reason:l}=await e.req.json(),i=new Date(r),n=new Date(o),c=Math.ceil((n.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
+    `;const o=[];a&&(l+=" AND l.status = ?",o.push(a)),s&&(l+=" AND l.leave_type = ?",o.push(s)),r&&(l+=" AND l.employee_id = ?",o.push(r)),l+=" ORDER BY l.created_at DESC";const i=o.length>0?await e.env.DB.prepare(l).bind(...o).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:r,end_date:l,reason:o}=await e.req.json(),i=new Date(r),n=new Date(l),c=Math.ceil((n.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
       INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(t.tenantId||1,a,s,r,o,c,l||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
+    `).bind(t.tenantId||1,a,s,r,l,c,o||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
       UPDATE hr_leaves 
       SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -21698,12 +21792,12 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       UPDATE hr_leaves 
       SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
       WHERE id = ?
-    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:r,status:o}=e.req.query();let l=`
+    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:r,status:l}=e.req.query();let o=`
       SELECT s.*, e.full_name_ar as employee_name
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
       WHERE 1=1
-    `;const i=[];s&&(l+=" AND s.employee_id = ?",i.push(s)),r&&(l+=" AND s.salary_month = ?",i.push(r)),o&&(l+=" AND s.payment_status = ?",i.push(o)),l+=" ORDER BY s.salary_month DESC, s.created_at DESC";const n=i.length>0?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),r=parseFloat(s.basic_salary)||0,o=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,n=parseFloat(s.bonuses)||0,c=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,f=r+o+l+i+n+c,g=p+u+m,b=f-g;return await e.env.DB.prepare(`
+    `;const i=[];s&&(o+=" AND s.employee_id = ?",i.push(s)),r&&(o+=" AND s.salary_month = ?",i.push(r)),l&&(o+=" AND s.payment_status = ?",i.push(l)),o+=" ORDER BY s.salary_month DESC, s.created_at DESC";const n=i.length>0?await e.env.DB.prepare(o).bind(...i).all():await e.env.DB.prepare(o).all();return e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),r=parseFloat(s.basic_salary)||0,l=parseFloat(s.housing_allowance)||0,o=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,n=parseFloat(s.bonuses)||0,c=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,g=r+l+o+i+n+c,f=p+u+m,b=g-f;return await e.env.DB.prepare(`
       INSERT INTO hr_salaries (
         tenant_id, employee_id, salary_month, basic_salary,
         housing_allowance, transportation_allowance, other_allowances,
@@ -21711,7 +21805,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
         other_deductions, gross_salary, total_deductions, net_salary,
         payment_status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(a,s.employee_id,s.salary_month,r,o,l,i,n,c,p,u,m,f,g,b,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s.employee_id,s.salary_month,r,l,o,i,n,c,p,u,m,g,f,b,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries 
       SET payment_status = 'approved'
       WHERE id = ?
@@ -21746,14 +21840,14 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       LEFT JOIN hr_employees e ON p.employee_id = e.id
       LEFT JOIN hr_employees r ON p.reviewer_id = r.id
       ORDER BY p.review_date DESC
-    `).all();return console.log("🔍 HR Performance API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let r=s.review_period_start||s.review_date,o=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(r=s.review_date,o=s.review_date);const l=s.attendance_rating||3,i=s.quality_rating||3,n=s.teamwork_rating||3,c=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(l)+parseFloat(i)+parseFloat(n)+parseFloat(c))/4;return await e.env.DB.prepare(`
+    `).all();return console.log("🔍 HR Performance API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let r=s.review_period_start||s.review_date,l=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(r=s.review_date,l=s.review_date);const o=s.attendance_rating||3,i=s.quality_rating||3,n=s.teamwork_rating||3,c=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(o)+parseFloat(i)+parseFloat(n)+parseFloat(c))/4;return await e.env.DB.prepare(`
       INSERT INTO hr_performance_reviews (
         tenant_id, employee_id, reviewer_id, review_period_start, review_period_end, review_date,
         overall_rating, attendance_punctuality, quality_of_work, 
         teamwork, strengths, areas_for_improvement,
         goals, comments, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(a,s.employee_id,t.userId,r,o,s.review_date,p,l,i,n,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
+    `).bind(a,s.employee_id,t.userId,r,l,s.review_date,p,o,i,n,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
       SELECT p.*, 
              e.full_name_ar as employee_name,
              e.job_title as current_position,
@@ -21782,38 +21876,38 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       WHERE id = ?
     `).bind(s.new_job_title,s.new_salary,s.new_department,s.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});d.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_promotions_transfers SET status = 'rejected' WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.query("search")||"",r=e.req.query("type")||"",o=e.req.query("status")||"";let l=`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.query("search")||"",r=e.req.query("type")||"",l=e.req.query("status")||"";let o=`
       SELECT d.*, e.full_name as employee_name, e.employee_number
       FROM hr_documents d
       LEFT JOIN hr_employees e ON d.employee_id = e.id
       WHERE d.tenant_id = ?
-    `;const i=[a];s&&(l+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),r&&(l+=" AND d.document_type = ?",i.push(r)),l+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const n=await e.env.DB.prepare(l).bind(...i).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenant_id||1,s=await e.req.json(),{employee_id:r,document_type:o,document_number:l,issue_date:i,expiry_date:n,notes:c}=s,p=await e.env.DB.prepare(`
+    `;const i=[a];s&&(o+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),r&&(o+=" AND d.document_type = ?",i.push(r)),o+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const n=await e.env.DB.prepare(o).bind(...i).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=await e.req.json(),{employee_id:r,document_type:l,document_number:o,issue_date:i,expiry_date:n,notes:c}=s,p=await e.env.DB.prepare(`
       INSERT INTO hr_documents (tenant_id, employee_id, document_type, document_number, issue_date, expiry_date, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,r,o,l||null,i||null,n||null,c||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenant_id||1,s=e.req.param("type"),r=e.req.query("start_date")||"",o=e.req.query("end_date")||"";let l={};const i=await e.env.DB.prepare(`
+    `).bind(a,r,l,o||null,i||null,n||null,c||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.param("type"),r=e.req.query("start_date")||"",l=e.req.query("end_date")||"";let o={};const i=await e.env.DB.prepare(`
       SELECT COUNT(*) as total, 
              COUNT(CASE WHEN status = 'active' THEN 1 END) as active
       FROM hr_employees 
       WHERE tenant_id = ?
-    `).bind(a).first();if(l.totalEmployees=i?.total||0,s==="overview"||s==="attendance"){const u=await e.env.DB.prepare(`
+    `).bind(a).first();if(o.totalEmployees=i?.total||0,s==="overview"||s==="attendance"){const u=await e.env.DB.prepare(`
         SELECT 
           COUNT(*) as total,
           COUNT(CASE WHEN status = 'present' THEN 1 END) as present
         FROM hr_attendance
         WHERE tenant_id = ?
         ${r?"AND attendance_date >= ?":""}
-        ${o?"AND attendance_date <= ?":""}
-      `).bind(a,...r?[r]:[],...o?[o]:[]).first(),m=u?.total||0,f=u?.present||0;l.attendanceRate=m>0?Math.round(f/m*100):0,l.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],l.attendanceData=[95,92,88,94,90,85]}const n=await e.env.DB.prepare(`
+        ${l?"AND attendance_date <= ?":""}
+      `).bind(a,...r?[r]:[],...l?[l]:[]).first(),m=u?.total||0,g=u?.present||0;o.attendanceRate=m>0?Math.round(g/m*100):0,o.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],o.attendanceData=[95,92,88,94,90,85]}const n=await e.env.DB.prepare(`
       SELECT SUM(net_salary) as total
       FROM hr_salaries
       WHERE tenant_id = ?
       ${r?"AND salary_month >= ?":""}
-      ${o?"AND salary_month <= ?":""}
-    `).bind(a,...r?[r]:[],...o?[o]:[]).first();l.totalSalaries=n?.total||0;const c=await e.env.DB.prepare(`
+      ${l?"AND salary_month <= ?":""}
+    `).bind(a,...r?[r]:[],...l?[l]:[]).first();o.totalSalaries=n?.total||0;const c=await e.env.DB.prepare(`
       SELECT AVG(overall_rating) as avg
       FROM hr_performance_reviews
       WHERE tenant_id = ?
-    `).bind(a).first();l.avgPerformance=c?.avg||0,(s==="overview"||s==="leaves")&&(l.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],l.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
+    `).bind(a).first();o.avgPerformance=c?.avg||0,(s==="overview"||s==="leaves")&&(o.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],o.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
       SELECT d.department_name as department, SUM(s.net_salary) as total
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
@@ -21822,7 +21916,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(T));d.get("/admin/hr/employees",e=>e.html(wt));d.get("/admin/hr/attendance",e=>e.html(_t));d.get("/admin/hr/leaves",e=>e.html(T));d.get("/admin/hr/salaries",e=>e.html(T));d.get("/admin/hr/performance",e=>e.html(T));d.get("/admin/hr/promotions",e=>e.html(T));d.get("/admin/hr/documents",e=>e.html(T));d.get("/admin/hr/reports",e=>e.html(T));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
+    `).bind(a).all();return o.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],o.salariesData=p.results?.map(u=>u.total||0)||[],o.performanceLabels=["ممتاز","جيد جداً","جيد"],o.performanceData=[30,50,20],o.details=[],e.json({success:!0,data:o})}catch(t){return console.error("Error generating report:",t),e.json({success:!1,error:t.message},500)}});d.get("/admin/hr",e=>e.html(T));d.get("/admin/hr/employees",e=>e.html(_t));d.get("/admin/hr/attendance",e=>e.html(Et));d.get("/admin/hr/leaves",e=>e.html(T));d.get("/admin/hr/salaries",e=>e.html(T));d.get("/admin/hr/performance",e=>e.html(T));d.get("/admin/hr/promotions",e=>e.html(T));d.get("/admin/hr/documents",e=>e.html(T));d.get("/admin/hr/reports",e=>e.html(T));d.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),l=new Date().toISOString().split("T")[0],o=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'",i=await e.env.DB.prepare(o).bind(l).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",c=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:g}=await e.env.DB.prepare(m).all(),f=a?`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -21832,7 +21926,7 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
          WHERE DATE(date) >= DATE('now', '-7 days')
-         GROUP BY DATE(date) ORDER BY date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:c?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
+         GROUP BY DATE(date) ORDER BY date`,{results:b}=await e.env.DB.prepare(f).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:c?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:g||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
         id, tenant_id,
         employee_code as employee_number,
         full_name_ar as full_name,
@@ -21905,4 +21999,4 @@ var U=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw ne
     `).bind(a,s,r,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});d.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});const z=new ne,St=Object.assign({"/src/index.tsx":d});let be=!1;for(const[,e]of Object.entries(St))e&&(z.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),z.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),be=!0);if(!be)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{z as default};
+    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});d.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});const J=new ie,Dt=Object.assign({"/src/index.tsx":d});let xe=!1;for(const[,e]of Object.entries(Dt))e&&(J.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),J.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),xe=!0);if(!xe)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{J as default};

@@ -255,6 +255,38 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <span class="font-medium text-gray-700 group-hover:text-violet-700">الأدوار والصلاحيات</span>
                 </a>
 
+                <!-- Notifications -->
+                <a href="/admin/notifications" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
+                    <i class="fas fa-bell text-xl text-red-600 group-hover:text-red-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-red-700">الإشعارات</span>
+                </a>
+
+                <!-- Tenant Calculators -->
+                <a href="/admin/tenant-calculators" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
+                    <i class="fas fa-calculator text-xl text-violet-600 group-hover:text-violet-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-violet-700">حاسبات الشركات</span>
+                </a>
+
+                <!-- SaaS Settings -->
+                <a href="/admin/saas-settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-cogs text-xl text-amber-600 group-hover:text-amber-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-700">إعدادات SaaS</span>
+                </a>
+
+                <hr class="my-4">
+
+                <!-- Calculator -->
+                <a href="/calculator" id="sidebarCalculatorLink" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
+                    <i class="fas fa-calculator text-xl text-cyan-600 group-hover:text-cyan-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-cyan-700">الحاسبة</span>
+                </a>
+
+                <!-- Home -->
+                <a href="/" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                    <i class="fas fa-home text-xl text-gray-600 group-hover:text-gray-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-gray-700">الصفحة الرئيسية</span>
+                </a>
+
                 <hr class="my-4">
 
                 <!-- Logout -->
@@ -384,6 +416,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <a href="/admin/tenant-calculators" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-calculator text-3xl mb-2"></i>
                         <div class="text-sm font-bold">حاسبات الشركات</div>
+                    </a>
+                    
+                    <!-- زر إعدادات النظام -->
+                    <a href="/admin/settings" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-cog text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">إعدادات النظام</div>
                     </a>
                     
                     <!-- زر نموذج SaaS -->
@@ -1830,15 +1868,30 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     const href = link.getAttribute('href');
                     if (!href) return;
                     
+                    // Check if link has data-superadmin-only attribute
+                    const isSuperAdminOnly = link.hasAttribute('data-superadmin-only') && 
+                                          link.getAttribute('data-superadmin-only') === 'true';
+                    
+                    // If it's superadmin-only and user is not superadmin, hide it
+                    if (isSuperAdminOnly && roleId !== 1) {
+                        link.style.display = 'none';
+                        sidebarHidden++;
+                        console.log('🚫 إخفاء رابط السايدبار (superadmin-only):', href);
+                        return;
+                    }
+                    
                     // Always keep calculator links visible if present
                     const isAlways = (href === '/calculator' || href.startsWith('/c/'));
                     
+                    // Check if href is in allowed links
                     if (isAlways || userAllowedLinks.includes(href)) {
                         link.style.display = 'flex';
                         sidebarVisible++;
+                        console.log('✅ عرض رابط السايدبار:', href);
                     } else {
                         link.style.display = 'none';
                         sidebarHidden++;
+                        console.log('🚫 إخفاء رابط السايدبار:', href);
                     }
                 });
                 
@@ -1924,20 +1977,30 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 const user = JSON.parse(userStr);
                 const calculatorLink = document.getElementById('calculatorLink');
+                const sidebarCalculatorLink = document.getElementById('sidebarCalculatorLink');
                 
-                if (!calculatorLink) {
-                    console.warn('⚠️ زر الحاسبة غير موجود');
-                    return;
-                }
-                
-                // إذا كان المستخدم لديه tenant_slug، استخدم حاسبة الشركة
+                // تحديد رابط الحاسبة حسب الشركة
+                let calculatorHref = '/calculator';
                 if (user.tenant_slug) {
-                    calculatorLink.href = \`/c/\${user.tenant_slug}/calculator\`;
+                    calculatorHref = \`/c/\${user.tenant_slug}/calculator\`;
                     console.log(\`✅ تم تحديث رابط الحاسبة إلى: /c/\${user.tenant_slug}/calculator\`);
                 } else {
-                    // SuperAdmin أو مستخدم بدون شركة: استخدم الحاسبة العامة
-                    calculatorLink.href = '/calculator';
                     console.log('✅ تم تحديث رابط الحاسبة إلى: /calculator (حاسبة عامة)');
+                }
+                
+                // تحديث رابط الحاسبة في لوحة الوصول السريع
+                if (calculatorLink) {
+                    calculatorLink.href = calculatorHref;
+                } else {
+                    console.warn('⚠️ زر الحاسبة في لوحة الوصول السريع غير موجود');
+                }
+                
+                // تحديث رابط الحاسبة في السايدبار
+                if (sidebarCalculatorLink) {
+                    sidebarCalculatorLink.href = calculatorHref;
+                    console.log('✅ تم تحديث رابط الحاسبة في السايدبار');
+                } else {
+                    console.warn('⚠️ رابط الحاسبة في السايدبار غير موجود');
                 }
                 
             } catch (error) {

@@ -264,7 +264,7 @@ async function getTenant(c: any): Promise<any> {
   }
   
   // Try to get from subdomain first (e.g., tamweel1.tamweel.app)
-  const host = c.req.header('host') || ''
+  const host = (c.req.header('host') || '').split(':')[0]
   const subdomain = host.split('.')[0]
   
   // Try to get from URL path (e.g., /c/tamweel-1/calculator)
@@ -300,29 +300,65 @@ async function getTenant(c: any): Promise<any> {
   return tenant
 }
 
+function normalizeAuthToken(rawToken: string): string | null {
+  const trimmed = rawToken.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  let decodedToken = trimmed
+  try {
+    decodedToken = decodeURIComponent(trimmed)
+  } catch {
+    // If the token isn't URI-encoded, use it as-is.
+  }
+
+  const base64 = decodedToken.replace(/-/g, '+').replace(/_/g, '/')
+  const remainder = base64.length % 4
+  if (remainder === 1) {
+    return null
+  }
+
+  const padding = remainder === 0 ? '' : '='.repeat(4 - remainder)
+  return base64 + padding
+}
+
+function parseOptionalInt(value?: string): number | null {
+  if (!value || value === 'null' || value === 'undefined') {
+    return null
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
 // Get tenant_id for current user (for multi-tenancy filtering)
 async function getUserInfo(
   c: any
 ): Promise<{ userId: number | null; tenantId: number | null; roleId: number | null; tokenRoleId: number | null }> {
   try {
+    console.log('🔍 [getUserInfo] Starting user info retrieval...')
     // Try to get token from Authorization Header (for API calls)
     let token = c.req.header('Authorization')?.replace('Bearer ', '')
+    console.log('🔍 [getUserInfo] Token from header:', token ? 'Found' : 'Not found')
     
     // If not in header, try to get from cookie (for HTML pages)
     if (!token) {
       const cookieHeader = c.req.header('Cookie')
+      console.log('🔍 [getUserInfo] Cookie header:', cookieHeader ? 'Present' : 'Missing')
       if (cookieHeader) {
         const cookies = cookieHeader.split(';').map((cookie: string) => cookie.trim())
         const authCookie = cookies.find((cookie: string) => cookie.startsWith('authToken='))
         if (authCookie) {
           token = authCookie.split('=')[1]
-          console.log('✅ Token found in cookie')
+          console.log('✅ [getUserInfo] Token found in cookie')
+        } else {
+          console.log('❌ [getUserInfo] No authToken cookie found')
         }
       }
     }
     
     if (!token) {
-      console.log('❌ No token found in header or cookie')
+      console.log('❌ [getUserInfo] No token found in header or cookie')
       const queryTenantId = c.req.query('tenant_id')
       return {
         userId: null,
@@ -332,39 +368,77 @@ async function getUserInfo(
       }
     }
     
-    console.log('🔍 Token:', token.substring(0, 20) + '...')
-    
-    
-    const decoded = atob(token)
+    console.log('🔍 [getUserInfo] Token found:', token.substring(0, 20) + '...')
+
+    console.log('🔍 [getUserInfo] Normalizing token...')
+    const normalizedToken = normalizeAuthToken(token)
+    if (!normalizedToken) {
+      console.log('❌ [getUserInfo] Invalid token format after normalization')
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
+    }
+
+    console.log('🔍 [getUserInfo] Decoding token...')
+    const decoded = atob(normalizedToken)
+    console.log('🔍 [getUserInfo] Decoded token:', decoded.substring(0, 50) + '...')
     const parts = decoded.split(':')
-    const userId = parseInt(parts[0])
-    const tenantIdFromToken = parts[1] !== 'null' && parts[1] !== 'undefined' ? parseInt(parts[1]) : null
-    const tokenRoleId = parts[2] !== 'null' && parts[2] !== 'undefined' ? parseInt(parts[2]) : null
+    console.log('🔍 [getUserInfo] Token parts:', parts.length, 'parts')
+    const userId = parseOptionalInt(parts[0])
+    if (!userId) {
+      console.log('❌ [getUserInfo] Invalid token payload - no userId')
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
+    }
+
+    const tenantIdFromToken = parseOptionalInt(parts[1])
+    const tokenRoleId = parseOptionalInt(parts[2])
+    console.log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId })
     
     // Safety check for DB binding
     if (!c.env?.DB) {
-      console.error('❌ getUserInfo: DB binding not available')
+      console.error('❌ [getUserInfo] DB binding not available')
       return { userId: null, tenantId: null, roleId: null, tokenRoleId }
     }
     
+    console.log('🔍 [getUserInfo] Querying database for user:', userId)
     const user = await c.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
     `).bind(userId).first()
     
     if (!user) {
+      console.log('❌ [getUserInfo] User not found in database')
       return { userId: null, tenantId: null, roleId: null, tokenRoleId }
     }
+    
+    console.log('✅ [getUserInfo] User found:', { id: user.id, tenant_id: user.tenant_id, role_id: user.role_id })
     
     // Super Admin (role_id = 1) can see all data
     if (user.role_id === 1) {
       const queryTenantId = c.req.query('tenant_id')
-      return { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId }
+      const result = { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId }
+      console.log('✅ [getUserInfo] Returning super admin info:', result)
+      return result
     }
     
     // For other roles, return their tenant_id
-    return { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id, tokenRoleId }
-  } catch (error) {
-    console.error('Error getting user info:', error)
+    const result = { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id, tokenRoleId }
+    console.log('✅ [getUserInfo] Returning user info:', result)
+    return result
+  } catch (error: any) {
+    // Aggressive debug dump for getUserInfo errors
+    const errorDump = {
+      message: error?.message || 'Unknown error',
+      name: error?.name || 'Error',
+      stack: error?.stack || 'No stack trace',
+      error_stringified: (() => {
+        try {
+          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+        } catch (e) {
+          return `Failed to stringify: ${e}`
+        }
+      })()
+    }
+    
+    console.error('❌ [getUserInfo] ERROR DUMP:', errorDump)
+    // Don't throw - return null values so request can continue
     return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
   }
 }
@@ -416,20 +490,29 @@ function stripSuperAdminLinksFromHtml(html: string): string {
 }
 
 app.use('/admin/*', async (c, next) => {
-  const info = await getUserInfo(c)
+  try {
+    console.log('🔒 [RBAC] Checking access for:', c.req.path)
+    const info = await getUserInfo(c)
+    console.log('🔒 [RBAC] User info:', {
+      userId: info.userId,
+      roleId: info.roleId,
+      tenantId: info.tenantId,
+      tokenRoleId: info.tokenRoleId
+    })
 
-  // Basic auth gate for all admin pages
-  if (!info.userId) {
-    return c.redirect('/login')
-  }
+    // Basic auth gate for all admin pages
+    if (!info.userId) {
+      console.log('🔒 [RBAC] No userId, redirecting to login')
+      return c.redirect('/login')
+    }
 
   // Treat as super-admin only if BOTH DB role and token role agree on 1.
   const isSuperAdmin =
     info.roleId === 1 && (info.tokenRoleId === null || info.tokenRoleId === 1)
 
   // Super-admin-only pages
-  // NOTE: Avoid using global URL here because this repo's TS config doesn't include DOM libs.
-  const pathname = (c.req as any).path || String(c.req.url).split('?')[0].replace(/^https?:\/\/[^/]+/, '')
+  // Use c.req.path directly (it's available in Hono)
+  const pathname = c.req.path || ''
   const isSuperAdminOnly = SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix + '/')
   )
@@ -440,17 +523,78 @@ app.use('/admin/*', async (c, next) => {
 
   await next()
 
-  // Post-process HTML responses to remove super-admin-only links for non-superadmin users
-  if (!isSuperAdmin) {
-    const res = c.res
-    const contentType = res.headers.get('content-type') || ''
-    if (contentType.includes('text/html')) {
-      const html = await res.text()
-      const updated = stripSuperAdminLinksFromHtml(html)
-      const headers = new Headers(res.headers)
-      headers.set('content-type', 'text/html; charset=UTF-8')
-      c.res = new Response(updated, { status: res.status, statusText: res.statusText, headers })
+    // Post-process HTML responses to remove super-admin-only links for non-superadmin users
+    if (!isSuperAdmin && c.res) {
+      try {
+        console.log('🔒 [RBAC] Post-processing HTML for non-superadmin user')
+        const res = c.res
+        // Skip if response is a redirect or error
+        if (res.status >= 300 && res.status < 400) {
+          console.log('🔒 [RBAC] Skipping HTML processing - redirect response')
+          return // Redirect responses don't have HTML body
+        }
+        if (res.status >= 400) {
+          console.log('🔒 [RBAC] Skipping HTML processing - error response')
+          return // Error responses, don't modify
+        }
+        
+        const contentType = res.headers.get('content-type') || ''
+        console.log('🔒 [RBAC] Content-Type:', contentType)
+        if (contentType.includes('text/html') && res.body) {
+          console.log('🔒 [RBAC] Processing HTML response...')
+          // Clone the response to avoid consuming the original
+          const clonedRes = res.clone()
+          const html = await clonedRes.text()
+          console.log('🔒 [RBAC] HTML length:', html.length)
+          const updated = stripSuperAdminLinksFromHtml(html)
+          console.log('🔒 [RBAC] HTML processed, updated length:', updated.length)
+          const headers = new Headers(res.headers)
+          headers.set('content-type', 'text/html; charset=UTF-8')
+          c.res = new Response(updated, { status: res.status, statusText: res.statusText, headers })
+          console.log('🔒 [RBAC] HTML processing complete')
+        } else {
+          console.log('🔒 [RBAC] Not HTML response or no body, skipping')
+        }
+      } catch (error: any) {
+        // If HTML processing fails, log but don't break the response
+        const errorDump = {
+          message: error?.message || 'Unknown error',
+          name: error?.name || 'Error',
+          stack: error?.stack || 'No stack trace',
+          error_stringified: (() => {
+            try {
+              return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+            } catch (e) {
+              return `Failed to stringify: ${e}`
+            }
+          })()
+        }
+        console.error('❌ [RBAC] Error processing HTML DUMP:', errorDump)
+        // Continue with original response - don't throw
+      }
     }
+  } catch (error: any) {
+    // Aggressive debug dump for critical RBAC errors
+    const errorDump = {
+      message: error?.message || 'Unknown error',
+      name: error?.name || 'Error',
+      stack: error?.stack || 'No stack trace',
+      path: c.req.path,
+      error_stringified: (() => {
+        try {
+          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+        } catch (e) {
+          return `Failed to stringify: ${e}`
+        }
+      })()
+    }
+    console.error('❌ [RBAC] CRITICAL ERROR DUMP:', errorDump)
+    // Return error response with dump instead of throwing
+    return c.json({
+      success: false,
+      error: 'RBAC Middleware Error',
+      dd: errorDump
+    }, 500)
   }
 })
 
@@ -658,19 +802,26 @@ app.delete('/api/tenants/:id', async (c) => {
 // Login API
 app.post('/api/auth/login', async (c) => {
   try {
+    console.log('🔐 [LOGIN] Starting login process...')
+    console.log('🔐 [LOGIN] Request URL:', c.req.url)
+    console.log('🔐 [LOGIN] Request method:', c.req.method)
+    
     // Check if DB binding is available
     if (!c.env.DB) {
-      console.error('❌ DB binding is not available')
+      console.error('❌ [LOGIN] DB binding is not available')
+      console.error('❌ [LOGIN] c.env:', JSON.stringify(Object.keys(c.env || {})))
       return c.json({ 
         success: false, 
-        error: 'Database connection not available. Please check bindings configuration.' 
+        error: 'Database connection not available. Please check bindings configuration.',
+        debug: { env_keys: Object.keys(c.env || {}) }
       }, 500)
     }
     
+    console.log('🔐 [LOGIN] DB binding available, parsing request body...')
     const { username, password } = await c.req.json()
     
-    console.log(`🔐 Login attempt: ${username}`)
-    console.log(`🔍 DB binding check: ${!!c.env.DB}`)
+    console.log(`🔐 [LOGIN] Login attempt: ${username}`)
+    console.log(`🔍 [LOGIN] DB binding check: ${!!c.env.DB}`)
     
     // Get user with tenant information
     // Double-check DB is available before using it
@@ -701,20 +852,26 @@ app.post('/api/auth/login', async (c) => {
       return c.json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }, 401)
     }
     
-    console.log(`✅ User found: ${user.full_name} (Role ID: ${user.role_id})`)
+    console.log(`✅ [LOGIN] User found: ${user.full_name} (Role ID: ${user.role_id})`)
+    console.log(`✅ [LOGIN] User ID: ${user.id}, Tenant ID: ${user.tenant_id}`)
     
     // Update last login - check DB again before update
     if (!c.env?.DB) {
-      console.error('❌ DB binding lost after user query')
+      console.error('❌ [LOGIN] DB binding lost after user query')
       // Continue anyway - user is authenticated, just can't update last_login
     } else {
+      console.log('✅ [LOGIN] Updating last_login timestamp...')
       await c.env.DB.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
         .bind(user.id).run()
+      console.log('✅ [LOGIN] last_login updated successfully')
     }
     
     // Create token with tenant_id (user_id:tenant_id:role_id:timestamp)
+    console.log('🔐 [LOGIN] Creating authentication token...')
     const tokenData = `${user.id}:${user.tenant_id || 'null'}:${user.role_id}:${Date.now()}`
+    console.log('🔐 [LOGIN] Token data:', tokenData)
     const token = btoa(tokenData)
+    console.log('🔐 [LOGIN] Token created:', token.substring(0, 30) + '...')
     
     // Set cookie for 7 days - use Response headers directly for Cloudflare Pages compatibility
     const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
@@ -751,27 +908,63 @@ app.post('/api/auth/login', async (c) => {
     })
     
     // Set cookie header directly on the response to avoid getSetCookie compatibility issue
+    console.log('🍪 [LOGIN] Setting cookie header...')
     response.headers.set('Set-Cookie', cookieValue)
+    console.log('✅ [LOGIN] Login successful, returning response')
     return response
   } catch (error: any) {
-    console.error('❌ Login error:', error)
-    console.error('❌ Error stack:', error.stack)
-    console.error('❌ Error details:', {
-      message: error.message,
-      name: error.name,
-      cause: error.cause,
-      DB_available: !!c.env?.DB
-    })
+    // Aggressive debug dump - return full error in response
+    const errorDump = {
+      // Basic error info
+      message: error?.message || 'Unknown error',
+      name: error?.name || 'Error',
+      stack: error?.stack || 'No stack trace',
+      
+      // Full error object (try to serialize)
+      error: error ? {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        cause: error.cause,
+        toString: error.toString(),
+        // Try to get all enumerable properties
+        ...Object.getOwnPropertyNames(error).reduce((acc, key) => {
+          try {
+            acc[key] = String(error[key])
+          } catch {
+            acc[key] = '[Cannot serialize]'
+          }
+          return acc
+        }, {} as any)
+      } : null,
+      
+      // Environment info
+      DB_available: !!c.env?.DB,
+      env_keys: Object.keys(c.env || {}),
+      env_DB_type: typeof c.env?.DB,
+      
+      // Request info
+      request_url: c.req.url,
+      request_method: c.req.method,
+      request_headers: Object.fromEntries(c.req.raw.headers.entries()),
+      
+      // Try to stringify the whole error
+      error_stringified: (() => {
+        try {
+          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+        } catch (e) {
+          return `Failed to stringify: ${e}`
+        }
+      })()
+    }
     
-    // Return detailed error for debugging
+    console.error('❌ [LOGIN] FULL ERROR DUMP:', errorDump)
+    
+    // Return full error dump in response (temporary for debugging)
     return c.json({ 
       success: false, 
-      error: 'حدث خطأ في تسجيل الدخول: ' + error.message,
-      details: process.env.NODE_ENV === 'development' ? {
-        message: error.message,
-        stack: error.stack,
-        DB_available: !!c.env?.DB
-      } : undefined
+      error: 'حدث خطأ في تسجيل الدخول',
+      dd: errorDump // Debug dump
     }, 500)
   }
 })
@@ -2984,19 +3177,32 @@ app.put('/api/financing-requests/:id/status', async (c) => {
 // Upload attachment to R2
 app.post('/api/attachments/upload', async (c) => {
   try {
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'Attachment storage not configured' }, 500)
+    }
+
     const formData = await c.req.formData()
-    const file = formData.get('file') as File
-    const requestId = formData.get('request_id') as string
-    const attachmentType = (formData.get('attachmentType') || formData.get('attachment_type')) as string // 'id', 'salary', 'bank_statement', 'additional'
+    const fileEntry = formData.get('file')
+    const requestId = String(formData.get('request_id') || '').trim()
+    const rawAttachmentType = String(formData.get('attachmentType') || formData.get('attachment_type') || '').trim()
+    const allowedAttachmentTypes = new Set(['id', 'salary', 'bank_statement', 'additional'])
+    const attachmentType = rawAttachmentType.toLowerCase()
     
-    if (!file) {
+    if (!allowedAttachmentTypes.has(attachmentType)) {
+      return c.json({ success: false, error: 'Invalid attachment type' }, 400)
+    }
+
+    if (!fileEntry || !(fileEntry instanceof File)) {
       return c.json({ success: false, error: 'No file provided' }, 400)
     }
-    
+
+    const file = fileEntry
+
     // Generate unique filename
     const timestamp = Date.now()
     const random = Math.random().toString(36).substring(7)
-    const fileExtension = file.name.split('.').pop()
+    const rawExtension = file.name.split('.').pop() || 'bin'
+    const fileExtension = rawExtension.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'bin'
     const filename = requestId 
       ? `${requestId}/${attachmentType}_${timestamp}.${fileExtension}`
       : `temp/${attachmentType}_${timestamp}_${random}.${fileExtension}`
@@ -3013,7 +3219,17 @@ app.post('/api/attachments/upload', async (c) => {
     
     // Update database only if requestId is provided
     if (requestId) {
-      const columnName = `${attachmentType}_attachment_url`
+      if (!c.env?.DB) {
+        return c.json({ success: false, error: 'Database not configured' }, 500)
+      }
+
+      const attachmentColumns: Record<string, string> = {
+        id: 'id_attachment_url',
+        salary: 'salary_attachment_url',
+        bank_statement: 'bank_statement_attachment_url',
+        additional: 'additional_attachment_url'
+      }
+      const columnName = attachmentColumns[attachmentType]
       console.log('📎 Updating attachment:', { requestId, attachmentType, columnName, publicUrl })
       
       const result = await c.env.DB.prepare(`
@@ -3039,6 +3255,10 @@ app.post('/api/attachments/upload', async (c) => {
 // View/Download attachment from R2
 app.get('/api/attachments/view/:path{.+}', async (c) => {
   try {
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'Attachment storage not configured' }, 500)
+    }
+
     const path = c.req.param('path')
     const object = await c.env.ATTACHMENTS.get(path)
     
@@ -3059,6 +3279,10 @@ app.get('/api/attachments/view/:path{.+}', async (c) => {
 // Delete attachment from R2
 app.delete('/api/attachments/delete/:path{.+}', async (c) => {
   try {
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'Attachment storage not configured' }, 500)
+    }
+
     const path = c.req.param('path')
     
     // Delete from R2
@@ -4284,10 +4508,11 @@ app.get('/api/reports/performance', async (c) => {
 });
 
 app.get('/admin/panel', async (c) => {
-  // Check authentication
-  const userInfo = await getUserInfo(c);
-  
-  if (!userInfo.userId || !userInfo.roleId) {
+  try {
+    // Check authentication
+    const userInfo = await getUserInfo(c);
+    
+    if (!userInfo.userId || !userInfo.roleId) {
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -4334,13 +4559,21 @@ app.get('/admin/panel', async (c) => {
     WHERE u.id = ?
   `).bind(userInfo.userId).first();
   
+  if (!user) {
+    return c.redirect('/login')
+  }
+  
   // Get user permissions
   const permissions = await c.env.DB.prepare(`
-    SELECT p.name as permission_key, p.display_name as permission_name, p.category
+    SELECT
+      p.permission_key as permission_key,
+      p.permission_name as permission_name,
+      p.category
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
   `).bind(userInfo.roleId).all();
+  const permissionResults = Array.isArray(permissions.results) ? permissions.results : []
   
   // Inject user data and permissions into the page
   let adminPanel = fullAdminPanel;
@@ -4391,8 +4624,8 @@ app.get('/admin/panel', async (c) => {
         company_name: user.company_name,
         user_type: user.user_type
       })};
-      window.USER_PERMISSIONS = ${JSON.stringify(permissions.results.map((p: any) => p.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${JSON.stringify(permissions.results)};
+      window.USER_PERMISSIONS = ${JSON.stringify(permissionResults.map((p: any) => p.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${JSON.stringify(permissionResults)};
       window.USER_ROLE_ID = ${userInfo.roleId};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
@@ -4400,7 +4633,43 @@ app.get('/admin/panel', async (c) => {
     <script>`
   );
   
-  return c.html(adminPanel);
+    return c.html(adminPanel);
+  } catch (error: any) {
+    // Aggressive debug dump for /admin/panel errors
+    const errorDump = {
+      message: error?.message || 'Unknown error',
+      name: error?.name || 'Error',
+      stack: error?.stack || 'No stack trace',
+      error_stringified: (() => {
+        try {
+          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+        } catch (e) {
+          return `Failed to stringify: ${e}`
+        }
+      })()
+    }
+    
+    console.error('❌ [ADMIN_PANEL] ERROR DUMP:', errorDump)
+    
+    // Return error page with debug info
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>خطأ في تحميل لوحة التحكم</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-gray-100 p-8">
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+          <h1 class="text-2xl font-bold text-red-600 mb-4">❌ خطأ في تحميل لوحة التحكم</h1>
+          <pre class="bg-gray-800 text-green-400 p-4 rounded overflow-auto text-sm">${JSON.stringify(errorDump, null, 2)}</pre>
+          <a href="/login" class="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded">العودة لتسجيل الدخول</a>
+        </div>
+      </body>
+      </html>
+    `)
+  }
 })
 
 // Requests Follow-up Report Page (Manager only)
