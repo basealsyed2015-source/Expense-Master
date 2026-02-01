@@ -5,7 +5,12 @@
 -- ═══════════════════════════════════════
 -- 1. جدول الأدوار (Roles)
 -- ═══════════════════════════════════════
-CREATE TABLE IF NOT EXISTS roles (
+-- Drop and recreate to ensure correct structure
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS roles;
+
+CREATE TABLE roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   role_name TEXT NOT NULL UNIQUE,
   role_name_ar TEXT NOT NULL,
@@ -18,7 +23,7 @@ CREATE TABLE IF NOT EXISTS roles (
 -- ═══════════════════════════════════════
 -- 2. جدول الصلاحيات (Permissions)
 -- ═══════════════════════════════════════
-CREATE TABLE IF NOT EXISTS permissions (
+CREATE TABLE permissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   permission_key TEXT NOT NULL UNIQUE,
   permission_name TEXT NOT NULL,
@@ -31,7 +36,7 @@ CREATE TABLE IF NOT EXISTS permissions (
 -- ═══════════════════════════════════════
 -- 3. جدول ربط الأدوار بالصلاحيات
 -- ═══════════════════════════════════════
-CREATE TABLE IF NOT EXISTS role_permissions (
+CREATE TABLE role_permissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   role_id INTEGER NOT NULL,
   permission_id INTEGER NOT NULL,
@@ -42,11 +47,9 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 );
 
 -- ═══════════════════════════════════════
--- 4. حذف البيانات القديمة وإدراج الجديدة
+-- 4. إدراج البيانات الجديدة
 -- ═══════════════════════════════════════
-DELETE FROM role_permissions;
-DELETE FROM permissions;
-DELETE FROM roles;
+-- Tables already dropped and recreated above
 
 INSERT INTO roles (id, role_name, role_name_ar, description, is_system_role) VALUES
 (1, 'super_admin', 'سوبر أدمن', 'صلاحيات كاملة للنظام + إدارة SaaS', 1),

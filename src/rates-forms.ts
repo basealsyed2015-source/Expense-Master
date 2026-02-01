@@ -184,10 +184,10 @@ export function generateAddRatePage(tenantId: string, banks: any[], financingTyp
               alert('✅ تم إضافة النسبة بنجاح!');
               window.location.href = '/admin/rates?tenant_id=${tenantId}';
             } else {
-              alert('❌ خطأ: ' + result.message);
+              alert('❌ خطأ: ' + (result.message || result.error || 'Unknown error'));
             }
           } catch (error) {
-            alert('❌ حدث خطأ: ' + error.message);
+            alert('❌ حدث خطأ: ' + (error?.message || 'Unknown error'));
           }
         });
       </script>

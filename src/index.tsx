@@ -331,6 +331,19 @@ function parseOptionalInt(value?: string): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+function normalizeRoleId(roleId: number | null): number | null {
+  if (roleId === null) {
+    return null
+  }
+  const legacyMap: Record<number, number> = {
+    11: 1,
+    12: 2,
+    13: 3,
+    14: 4
+  }
+  return legacyMap[roleId] ?? roleId
+}
+
 // Get tenant_id for current user (for multi-tenancy filtering)
 async function getUserInfo(
   c: any
@@ -389,7 +402,7 @@ async function getUserInfo(
     }
 
     const tenantIdFromToken = parseOptionalInt(parts[1])
-    const tokenRoleId = parseOptionalInt(parts[2])
+    const tokenRoleId = normalizeRoleId(parseOptionalInt(parts[2]))
     console.log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId })
     
     // Safety check for DB binding
@@ -411,7 +424,9 @@ async function getUserInfo(
     console.log('✅ [getUserInfo] User found:', { id: user.id, tenant_id: user.tenant_id, role_id: user.role_id })
     
     // Super Admin (role_id = 1) can see all data
-    if (user.role_id === 1) {
+    const normalizedRoleId = normalizeRoleId(user.role_id)
+
+    if (normalizedRoleId === 1) {
       const queryTenantId = c.req.query('tenant_id')
       const result = { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId }
       console.log('✅ [getUserInfo] Returning super admin info:', result)
@@ -419,7 +434,12 @@ async function getUserInfo(
     }
     
     // For other roles, return their tenant_id
-    const result = { userId: user.id, tenantId: tenantIdFromToken || user.tenant_id, roleId: user.role_id, tokenRoleId }
+    const result = {
+      userId: user.id,
+      tenantId: tenantIdFromToken || user.tenant_id,
+      roleId: normalizedRoleId,
+      tokenRoleId
+    }
     console.log('✅ [getUserInfo] Returning user info:', result)
     return result
   } catch (error: any) {
@@ -455,16 +475,13 @@ const SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES = [
   '/admin/subscriptions',
   '/admin/packages',
   '/admin/tenants',
-  '/admin/settings',
-  '/admin/hr',
-  '/admin/users',
   '/admin/roles',
   '/admin/saas-settings',
   '/admin/tenant-calculators'
 ]
 
 function stripSuperAdminLinksFromHtml(html: string): string {
-  const superAdminPrefixGroup = '(subscriptions|packages|tenants|settings|hr|users|roles|saas-settings|tenant-calculators)'
+  const superAdminPrefixGroup = '(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)'
   const anchorPattern = new RegExp(
     `<a[^>]*\\bhref=["']\\/admin\\/${superAdminPrefixGroup}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,
     'g'
@@ -477,9 +494,6 @@ function stripSuperAdminLinksFromHtml(html: string): string {
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
   [href^="/admin/tenants"],
-  [href^="/admin/settings"],
-  [href^="/admin/hr"],
-  [href^="/admin/users"],
   [href^="/admin/roles"],
   [href^="/admin/saas-settings"],
   [href^="/admin/tenant-calculators"] { display: none !important; }
@@ -621,7 +635,7 @@ app.get('/api/user-info', async (c) => {
         full_name: user.full_name,
         email: user.email,
         tenant_id: user.tenant_id,
-        role_id: user.role_id
+        role_id: normalizeRoleId(user.role_id)
       }
     })
   } catch (error: any) {
@@ -1340,11 +1354,21 @@ app.post('/api/rates', async (c) => {
       tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
     }
     
-    const formData = await c.req.formData()
-    const data: any = {}
-    formData.forEach((value: FormDataEntryValue, key: string) => {
-      data[key] = value
-    })
+    const contentType = c.req.header('Content-Type') || ''
+    let data: any = {}
+    if (contentType.includes('application/json')) {
+      data = await c.req.json()
+    } else {
+      const formData = await c.req.formData()
+      formData.forEach((value: FormDataEntryValue, key: string) => {
+        data[key] = value
+      })
+    }
+
+    if (tenant_id === null && data.tenant_id) {
+      tenant_id = parseInt(data.tenant_id)
+    }
+
     const result = await c.env.DB.prepare(`
       INSERT INTO bank_financing_rates 
       (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id)
@@ -1360,9 +1384,12 @@ app.post('/api/rates', async (c) => {
       data.is_active || 1,
       tenant_id
     ).run()
+    if (contentType.includes('application/json')) {
+      return c.json({ success: true, message: 'تم إضافة النسبة بنجاح', id: result.meta.last_row_id })
+    }
     return c.redirect('/admin/rates')
   } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
+    return c.json({ success: false, error: error.message || 'Unknown error', message: error.message || 'Unknown error' }, 500)
   }
 })
 
@@ -2175,16 +2202,33 @@ app.post('/api/requests', async (c) => {
     const status = formData.get('status') || 'pending'
     const notes = formData.get('notes') || ''
     
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
     }
+
+    const customer = await c.env.DB.prepare(`
+      SELECT id, tenant_id, assigned_to FROM customers WHERE id = ?
+    `).bind(customer_id).first()
+
+    if (!customer) {
+      return c.json({ success: false, error: 'العميل غير موجود' }, 400)
+    }
+
+    // Enforce tenant and assignment scope for non-superadmins
+    if (userInfo.roleId !== 1) {
+      if (!userInfo.tenantId) {
+        return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+      }
+      if (customer.tenant_id !== userInfo.tenantId) {
+        return c.json({ success: false, error: 'غير مصرح لهذه الشركة' }, 403)
+      }
+      if (userInfo.roleId === 4 && customer.assigned_to !== userInfo.userId) {
+        return c.json({ success: false, error: 'غير مصرح لهذا العميل' }, 403)
+      }
+    }
+
+    const tenant_id = userInfo.roleId === 1 ? customer.tenant_id : userInfo.tenantId
     
     // Insert financing request directly (customer already exists from dropdown)
     const result = await c.env.DB.prepare(`
@@ -3715,9 +3759,15 @@ app.delete('/api/customers/:id', async (c) => {
 app.delete('/api/financing-requests/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
+    const result = await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
+    
+    if (result.meta.changes === 0) {
+      return c.json({ success: false, error: 'الطلب غير موجود' }, 404)
+    }
+    
     return c.json({ success: true, message: 'تم حذف الطلب بنجاح' })
   } catch (error: any) {
+    console.error('Error deleting financing request:', error)
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -4585,9 +4635,6 @@ app.get('/admin/panel', async (c) => {
       '/admin/subscriptions',
       '/admin/packages',
       '/admin/tenants',
-      '/admin/settings',
-      '/admin/hr',
-      '/admin/users',
       '/admin/roles',
       '/admin/saas-settings',
       '/admin/tenant-calculators'
@@ -6618,6 +6665,8 @@ app.get('/admin/customer-assignment', async (c) => {
   // Get user info to check role
   const userInfo = await getUserInfo(c);
   const isSuperAdmin = userInfo.roleId === 1;
+  const canManageCompany = userInfo.roleId === 1 || userInfo.roleId === 2;
+  const canAccessHr = userInfo.roleId === 1 || userInfo.roleId === 2 || userInfo.roleId === 3;
   
   // Temporary: Get tenant_id from query or default to 1
   const tenantId = c.req.query('tenant_id') || 1;
@@ -6799,7 +6848,9 @@ app.get('/admin/customer-assignment', async (c) => {
               <span>الباقات</span>
             </a>
           </div>
+          ` : ''}
 
+          ${canAccessHr ? `
           <div class="border-t border-gray-200 my-2"></div>
 
           <!-- الموارد البشرية -->
@@ -6810,20 +6861,24 @@ app.get('/admin/customer-assignment', async (c) => {
               <span>نظام HR</span>
             </a>
           </div>
+          ` : ''}
 
+          ${canManageCompany ? `
           <div class="border-t border-gray-200 my-2"></div>
 
-          <!-- إدارة النظام (Super Admin) -->
+          <!-- إدارة النظام -->
           <div class="mb-2">
             <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">إدارة النظام</div>
             <a href="/admin/users" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-user-shield text-red-600 group-hover:scale-110 transition-transform"></i>
               <span>المستخدمون</span>
             </a>
+            ${isSuperAdmin ? `
             <a href="/admin/roles" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-user-tag text-orange-600 group-hover:scale-110 transition-transform"></i>
               <span>الصلاحيات</span>
             </a>
+            ` : ''}
             <a href="/admin/settings" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-cog text-gray-600 group-hover:scale-110 transition-transform"></i>
               <span>إعدادات النظام</span>
@@ -7405,8 +7460,11 @@ app.get('/admin/banks', async (c) => {
 // ============================
 app.get('/admin/rates', async (c) => {
   try {
-    // Get tenant_id from query parameter
-    const tenantId = c.req.query('tenant_id');
+    // Get user info (userId, tenantId, roleId)
+    const userInfo = await getUserInfo(c);
+    
+    // Get tenant_id from query parameter (fallback) or from user info
+    let tenantId = c.req.query('tenant_id') || (userInfo.tenantId ? userInfo.tenantId.toString() : null);
     
     // Get tenant info
     let tenantInfo = null;
@@ -7416,7 +7474,7 @@ app.get('/admin/rates', async (c) => {
       tenantInfo = tenant;
     }
     
-    // Build query with optional tenant filter
+    // Build query with role-based filtering
     let query = `
       SELECT 
         r.*,
@@ -7427,15 +7485,35 @@ app.get('/admin/rates', async (c) => {
       LEFT JOIN financing_types f ON r.financing_type_id = f.id
     `;
     
-    if (tenantId) {
-      query += ' WHERE r.tenant_id = ?';
+    let queryParams: any[] = [];
+    
+    if (userInfo.roleId === 1) {
+      // Role 1: Super Admin - sees ALL rates
+      // No WHERE clause
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin - sees all company rates
+      // Role 3: Supervisor - sees all company rates (read-only)
+      if (userInfo.tenantId) {
+        query += ' WHERE r.tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
+        tenantId = userInfo.tenantId.toString();
+      }
+    } else {
+      // Other roles - no data or filtered by tenant_id if provided
+      if (tenantId) {
+        query += ' WHERE r.tenant_id = ?';
+        queryParams.push(tenantId);
+      }
     }
     
     query += ' ORDER BY b.bank_name, f.type_name';
     
-    const rates = tenantId
-      ? await c.env.DB.prepare(query).bind(tenantId).all()
+    const rates = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
+    
+    // Determine if user can edit/add (company admin and super admin can)
+    const canEdit = userInfo.roleId === 1 || userInfo.roleId === 2;
     
     return c.html(`
       <!DOCTYPE html>
@@ -7516,7 +7594,7 @@ app.get('/admin/rates', async (c) => {
                   />
                   <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
                 </div>
-                ${tenantId ? `
+                ${canEdit && tenantId ? `
                   <a href="/admin/rates/add?tenant_id=${tenantId}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg">
                     <i class="fas fa-plus ml-2"></i>
                     إضافة نسبة جديدة
@@ -7542,7 +7620,7 @@ app.get('/admin/rates', async (c) => {
                       <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">الحد الأدنى</th>
                       <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">الحد الأقصى</th>
                       <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">المدة</th>
-                      ${tenantId ? '<th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجراءات</th>' : ''}
+                      ${canEdit ? '<th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجراءات</th>' : ''}
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
@@ -7559,9 +7637,9 @@ app.get('/admin/rates', async (c) => {
                         <td class="px-4 py-4 text-sm">${rate.min_amount ? rate.min_amount.toLocaleString() : '-'} ريال</td>
                         <td class="px-4 py-4 text-sm">${rate.max_amount ? rate.max_amount.toLocaleString() : '-'} ريال</td>
                         <td class="px-4 py-4 text-sm">${rate.min_duration || '-'} - ${rate.max_duration || '-'} شهر</td>
-                        ${tenantId ? `
+                        ${canEdit ? `
                           <td class="px-4 py-4 text-sm">
-                            <a href="/admin/rates/edit/${rate.id}?tenant_id=${tenantId}" class="text-blue-600 hover:text-blue-800 ml-2" title="تعديل">
+                            <a href="/admin/rates/edit/${rate.id}?tenant_id=${tenantId || rate.tenant_id}" class="text-blue-600 hover:text-blue-800 ml-2" title="تعديل">
                               <i class="fas fa-edit"></i>
                             </a>
                             <button onclick="deleteRate(${rate.id})" class="text-red-600 hover:text-red-800" title="حذف">
@@ -7633,16 +7711,36 @@ app.get('/admin/rates', async (c) => {
 
 // Add Rate Page
 app.get('/admin/rates/add', async (c) => {
-  const tenantId = c.req.query('tenant_id');
-  
-  if (!tenantId) {
-    return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400);
+  try {
+    // Get user info
+    const userInfo = await getUserInfo(c);
+    
+    // Get tenant_id from query or from user info
+    let tenantId = c.req.query('tenant_id') || (userInfo.tenantId ? userInfo.tenantId.toString() : null);
+    
+    // Check permissions - only super admin (role 1) and company admin (role 2) can add rates
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.html('<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>', 403);
+    }
+    
+    // For company admin, must have tenant_id
+    if (userInfo.roleId === 2 && !tenantId) {
+      return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400);
+    }
+    
+    // For super admin, tenant_id is optional (can add for any tenant)
+    if (userInfo.roleId === 1 && !tenantId) {
+      // Super admin can add without tenant_id, but we'll use null
+      tenantId = null;
+    }
+    
+    const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name').all();
+    const financingTypes = await c.env.DB.prepare('SELECT * FROM financing_types ORDER BY type_name').all();
+    
+    return c.html(generateAddRatePage(tenantId || '', banks.results, financingTypes.results));
+  } catch (error: any) {
+    return c.html(`<h1>خطأ: ${error.message}</h1>`, 500);
   }
-  
-  const banks = await c.env.DB.prepare('SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name').all();
-  const financingTypes = await c.env.DB.prepare('SELECT * FROM financing_types ORDER BY type_name').all();
-  
-  return c.html(generateAddRatePage(tenantId, banks.results, financingTypes.results));
 });
 
 // Edit Rate Page
@@ -9502,13 +9600,77 @@ app.get('/admin/requests', async (c) => {
   }
 })
 
+// Delete financing request (GET route for link-based deletion)
+app.get('/admin/requests/:id/delete', async (c) => {
+  try {
+    const id = c.req.param('id')
+    await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
+    return c.redirect('/admin/requests?deleted=1')
+  } catch (error: any) {
+    console.error('Error deleting financing request:', error)
+    return c.redirect('/admin/requests?error=' + encodeURIComponent(error.message))
+  }
+})
+
 // ==================== صفحة عرض طلب تمويل واحد ====================
 app.get('/admin/requests/new', async (c) => {
   try {
-    // Get customers and banks for dropdowns
-    const customers = await c.env.DB.prepare('SELECT id, full_name, phone FROM customers ORDER BY full_name').all()
-    const banks = await c.env.DB.prepare('SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name').all()
-    const financingTypes = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all()
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.redirect('/login')
+    }
+
+    // Get customers scoped by role/tenant
+    let customersQuery = 'SELECT id, full_name, phone FROM customers'
+    const customersParams: any[] = []
+    if (userInfo.roleId === 1) {
+      // Super Admin - no filter
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (!userInfo.tenantId) {
+        return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
+      }
+      customersQuery += ' WHERE tenant_id = ?'
+      customersParams.push(userInfo.tenantId)
+    } else if (userInfo.roleId === 4) {
+      customersQuery += ' WHERE assigned_to = ?'
+      customersParams.push(userInfo.userId)
+    } else {
+      customersQuery += ' WHERE 1 = 0'
+    }
+    customersQuery += ' ORDER BY full_name'
+    const customers = customersParams.length
+      ? await c.env.DB.prepare(customersQuery).bind(...customersParams).all()
+      : await c.env.DB.prepare(customersQuery).all()
+
+    // Get banks scoped by tenant (allow global banks if tenant_id is NULL)
+    let banksQuery = 'SELECT id, bank_name FROM banks WHERE is_active = 1'
+    const banksParams: any[] = []
+    if (userInfo.roleId !== 1) {
+      if (!userInfo.tenantId) {
+        return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
+      }
+      banksQuery += ' AND (tenant_id = ? OR tenant_id IS NULL)'
+      banksParams.push(userInfo.tenantId)
+    }
+    banksQuery += ' ORDER BY bank_name'
+    const banks = banksParams.length
+      ? await c.env.DB.prepare(banksQuery).bind(...banksParams).all()
+      : await c.env.DB.prepare(banksQuery).all()
+
+    // Get financing types scoped by tenant (allow global types if tenant_id is NULL)
+    let financingTypesQuery = 'SELECT id, type_name FROM financing_types WHERE is_active = 1'
+    const financingTypesParams: any[] = []
+    if (userInfo.roleId !== 1) {
+      if (!userInfo.tenantId) {
+        return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
+      }
+      financingTypesQuery += ' AND (tenant_id = ? OR tenant_id IS NULL)'
+      financingTypesParams.push(userInfo.tenantId)
+    }
+    financingTypesQuery += ' ORDER BY type_name'
+    const financingTypes = financingTypesParams.length
+      ? await c.env.DB.prepare(financingTypesQuery).bind(...financingTypesParams).all()
+      : await c.env.DB.prepare(financingTypesQuery).all()
     
     return c.html(`
       <!DOCTYPE html>

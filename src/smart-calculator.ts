@@ -713,12 +713,34 @@ export const smartCalculator = `<!DOCTYPE html>
         // Step 3: Complete Request Form submission
         document.getElementById('completeRequestForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const resetSubmitButton = () => {
+                if (!submitBtn) return;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i> إرسال الطلب';
+            };
+
+            if (!customerData || !customerData.phone || !customerData.birthdate) {
+                showErrorModal('الرجاء إكمال بيانات العميل أولاً قبل إرسال الطلب.');
+                resetSubmitButton();
+                return;
+            }
+
+            if (!selectedBestOffer || !selectedBestOffer.bank || !selectedBestOffer.bestCalculation) {
+                showErrorModal('لا يوجد عرض تمويل محدد. الرجاء إعادة الحساب ثم المحاولة مرة أخرى.');
+                resetSubmitButton();
+                return;
+            }
             
             // Get file attachments info (filename only for now)
             const idFile = document.getElementById('idAttachment').files[0];
             const bankStatementFile = document.getElementById('bankStatementAttachment').files[0];
             const salaryFile = document.getElementById('salaryAttachment').files[0];
             const additionalFile = document.getElementById('additionalAttachment').files[0];
+
+            const pathParts = window.location.pathname.split('/');
+            const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
             
             // Build request data object
             const requestData = {
@@ -739,6 +761,7 @@ export const smartCalculator = `<!DOCTYPE html>
                 duration: selectedBestOffer.bestCalculation.duration,
                 monthly_payment: selectedBestOffer.bestCalculation.monthlyPayment,
                 notes: document.getElementById('notes').value || null,
+                tenant_slug: tenantSlug,
                 // Store filenames for tracking
                 id_attachment_filename: idFile ? idFile.name : null,
                 bank_statement_attachment_filename: bankStatementFile ? bankStatementFile.name : null,
@@ -748,10 +771,11 @@ export const smartCalculator = `<!DOCTYPE html>
             
             try {
                 // Show loading message
-                const submitBtn = e.target.querySelector('button[type="submit"]');
-                const originalText = submitBtn.innerHTML;
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الإرسال...';
+                const originalText = submitBtn ? submitBtn.innerHTML : '';
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الإرسال...';
+                }
                 
                 // Step 1: Create the financing request first
                 const response = await axios.post('/api/calculator/submit-request', requestData, {
@@ -773,7 +797,9 @@ export const smartCalculator = `<!DOCTYPE html>
                     ].filter(att => att.file);
                     
                     if (attachments.length > 0) {
-                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع المرفقات...';
+                        if (submitBtn) {
+                            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري رفع المرفقات...';
+                        }
                         
                         // Show progress container
                         const progressContainer = document.getElementById('uploadProgress');
@@ -841,7 +867,9 @@ export const smartCalculator = `<!DOCTYPE html>
                             }
                         }
                         
-                        submitBtn.innerHTML = '<i class="fas fa-check ml-2"></i> اكتمل الرفع!';
+                        if (submitBtn) {
+                            submitBtn.innerHTML = '<i class="fas fa-check ml-2"></i> اكتمل الرفع!';
+                        }
                     }
                     
                     closeCompleteRequestModal();
@@ -855,15 +883,15 @@ export const smartCalculator = `<!DOCTYPE html>
                     }, 3000);
                 } else {
                     showErrorModal(response.data.error || response.data.message || 'حدث خطأ غير متوقع');
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalText;
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                    }
                 }
             } catch (error) {
                 console.error('Error submitting request:', error);
                 showErrorModal('حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.');
-                const submitBtn = e.target.querySelector('button[type="submit"]');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i> إرسال الطلب';
+                resetSubmitButton();
             }
         });
         

@@ -26,10 +26,16 @@ const PAGE_PERMISSIONS = {
   '/calculator': [] // متاح للجميع
 };
 
+function normalizeRoleId(roleId) {
+  const numeric = parseInt(roleId, 10);
+  const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
+  return legacyMap[numeric] || numeric;
+}
+
 // الصفحات المتاحة حسب الدور
 const ROLE_PAGES = {
-  // مدير النظام SaaS (Role ID: 11) - جميع الصفحات
-  11: [
+  // مدير النظام SaaS (Role ID: 1) - جميع الصفحات
+  1: [
     '/admin/dashboard',
     '/admin/customers',
     '/admin/requests',
@@ -50,8 +56,8 @@ const ROLE_PAGES = {
     '/admin/settings'
   ],
   
-  // مدير شركة (Role ID: 12) - إدارة شركته فقط
-  12: [
+  // مدير شركة (Role ID: 2) - إدارة شركته فقط
+  2: [
     '/admin/dashboard',
     '/admin/customers',
     '/admin/requests',
@@ -59,8 +65,6 @@ const ROLE_PAGES = {
     '/admin/rates',
     '/admin/payments',
     '/admin/banks',
-    '/admin/subscriptions',
-    '/admin/packages',
     '/admin/users',
     '/admin/hr',
     '/admin/notifications',
@@ -68,8 +72,8 @@ const ROLE_PAGES = {
     '/admin/settings'
   ],
   
-  // مشرف موظفين (Role ID: 13) - الموارد البشرية
-  13: [
+  // مشرف موظفين (Role ID: 3) - الموارد البشرية
+  3: [
     '/admin/dashboard',
     '/admin/hr',
     '/admin/notifications',
@@ -77,8 +81,8 @@ const ROLE_PAGES = {
     '/admin/reports'
   ],
   
-  // موظف (Role ID: 14) - محدود
-  14: [
+  // موظف (Role ID: 4) - محدود
+  4: [
     '/admin/dashboard',
     '/admin/customers',
     '/admin/requests',
@@ -100,8 +104,9 @@ function filterMenuByRole(roleId) {
     return;
   }
   
+  const normalizedRoleId = normalizeRoleId(roleId);
   // الحصول على الصفحات المتاحة للدور
-  const allowedPages = ROLE_PAGES[roleId] || [];
+  const allowedPages = ROLE_PAGES[normalizedRoleId] || [];
   console.log('✅ الصفحات المتاحة:', allowedPages.length);
   
   // إخفاء جميع الروابط أولاً
@@ -157,7 +162,7 @@ async function initMenuPermissions() {
       const response = await fetch('/api/user-info');
       if (response.ok) {
         const userData = await response.json();
-        roleId = userData.role_id;
+        roleId = normalizeRoleId(userData.role_id);
         
         // حفظ في localStorage
         if (roleId) {
@@ -170,7 +175,7 @@ async function initMenuPermissions() {
     
     // تطبيق التصفية
     if (roleId) {
-      filterMenuByRole(parseInt(roleId));
+      filterMenuByRole(normalizeRoleId(roleId));
     } else {
       console.warn('⚠️ لم يتم العثور على معلومات المستخدم');
       hideAllAdminLinks();

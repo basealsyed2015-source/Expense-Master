@@ -230,21 +230,21 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </a>
 
                 <!-- Settings -->
-                <a href="/admin/settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                <a href="/admin/settings" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
                     <i class="fas fa-cog text-xl text-gray-600 group-hover:text-gray-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-gray-700">إعدادات النظام</span>
                 </a>
 
                 <!-- HR System -->
-                <a href="/admin/hr" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
+                <a href="/admin/hr" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-users-cog text-xl text-blue-600 group-hover:text-blue-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
                 </a>
 
                 <hr class="my-4">
 
-                <!-- Users (Admin Only) -->
-                <a href="/admin/users" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
+                <!-- Users -->
+                <a href="/admin/users" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
                     <i class="fas fa-user-shield text-xl text-slate-600 group-hover:text-slate-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-slate-700">المستخدمين</span>
                 </a>
@@ -370,7 +370,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </a>
                     
                     <!-- زر المستخدمين -->
-                    <a href="/admin/users" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/users" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-users-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">المستخدمين</div>
                     </a>
@@ -382,7 +382,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </a>
                     
                     <!-- زر نظام الموارد البشرية HR -->
-                    <a href="/admin/hr" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center border-2 border-white/30">
+                    <a href="/admin/hr" class="quick-access-btn bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center border-2 border-white/30">
                         <i class="fas fa-users-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الموارد البشرية HR</div>
                         <div class="text-xs mt-1 opacity-90">إدارة الموظفين</div>
@@ -419,7 +419,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </a>
                     
                     <!-- زر إعدادات النظام -->
-                    <a href="/admin/settings" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/settings" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">إعدادات النظام</div>
                     </a>
@@ -1566,6 +1566,60 @@ export const fullAdminPanel = `<!DOCTYPE html>
     </div>
 
     <script>
+        // Debug dump function - displays data on screen
+        window.dd = function(data) {
+            console.log('🔍 DD:', data);
+            
+            // Create or get debug panel
+            let debugPanel = document.getElementById('dd-debug-panel');
+            if (!debugPanel) {
+                debugPanel = document.createElement('div');
+                debugPanel.id = 'dd-debug-panel';
+                debugPanel.style.cssText = 'position: fixed; top: 10px; right: 10px; width: 400px; max-height: 80vh; background: #1a1a1a; color: #0f0; padding: 15px; border-radius: 8px; z-index: 99999; overflow-y: auto; font-family: monospace; font-size: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border: 2px solid #0f0;';
+                document.body.appendChild(debugPanel);
+                
+                // Add close button
+                const closeBtn = document.createElement('button');
+                closeBtn.textContent = '✕';
+                closeBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; background: #ff0000; color: white; border: none; border-radius: 3px; width: 25px; height: 25px; cursor: pointer; font-weight: bold;';
+                closeBtn.onclick = () => debugPanel.remove();
+                debugPanel.appendChild(closeBtn);
+                
+                // Add clear button
+                const clearBtn = document.createElement('button');
+                clearBtn.textContent = 'Clear';
+                clearBtn.style.cssText = 'position: absolute; top: 5px; right: 35px; background: #ff8800; color: white; border: none; border-radius: 3px; padding: 2px 8px; cursor: pointer; font-size: 10px;';
+                clearBtn.onclick = () => { debugPanel.innerHTML = ''; debugPanel.appendChild(closeBtn); debugPanel.appendChild(clearBtn); };
+                debugPanel.appendChild(clearBtn);
+            }
+            
+            // Format the data
+            let formatted = '';
+            try {
+                if (data === null) {
+                    formatted = '<span style="color: #888;">null</span>';
+                } else if (data === undefined) {
+                    formatted = '<span style="color: #888;">undefined</span>';
+                } else if (typeof data === 'object') {
+                    formatted = '<pre style="margin: 5px 0; color: #0f0;">' + JSON.stringify(data, null, 2) + '</pre>';
+                } else {
+                    formatted = '<span style="color: #0f0;">' + String(data) + '</span>';
+                }
+            } catch (e) {
+                formatted = '<span style="color: #ff0;">[Error formatting: ' + e.message + ']</span>';
+            }
+            
+            // Add timestamp
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.style.cssText = 'margin: 8px 0; padding: 8px; background: #2a2a2a; border-left: 3px solid #0f0; border-radius: 4px;';
+            entry.innerHTML = '<div style="color: #888; font-size: 10px; margin-bottom: 4px;">[' + time + ']</div>' + formatted;
+            debugPanel.appendChild(entry);
+            
+            // Auto-scroll to bottom
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+        };
+        
         // دالة بسيطة للانتقال بين الأقسام
         window.goToSection = function(sectionName) {
             console.log('🚀 الانتقال إلى:', sectionName);
@@ -1742,20 +1796,25 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 let userStr = localStorage.getItem('userData') || localStorage.getItem('user');
                 let user = null;
                 let roleId = null;
+                const normalizeRoleId = (value) => {
+                    const numeric = parseInt(value, 10);
+                    const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
+                    return legacyMap[numeric] || numeric || null;
+                };
 
                 if (userStr) {
                     user = JSON.parse(userStr);
-                    roleId = user.role_id || null;
+                    roleId = normalizeRoleId(user.role_id);
                 }
 
-                // Fallback to server-injected role if localStorage is missing/stale
-                if (!roleId && typeof window.USER_ROLE_ID !== 'undefined') {
-                    roleId = window.USER_ROLE_ID;
+                // Prefer server-injected role to avoid stale localStorage
+                if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
+                    roleId = normalizeRoleId(window.USER_ROLE_ID);
                     console.log('✅ role_id من USER_ROLE_ID:', roleId);
                 }
 
                 if (!roleId && typeof window.USER_DATA !== 'undefined' && window.USER_DATA) {
-                    roleId = window.USER_DATA.role_id || null;
+                    roleId = normalizeRoleId(window.USER_DATA.role_id);
                     console.log('✅ role_id من USER_DATA:', roleId);
                 }
 
@@ -1771,7 +1830,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 // تعريف الروابط المسموحة لكل role_id
                 // Source of truth for permissions:
                 // - Sidebar MUST match quick-access behavior exactly.
-                // - The items you requested (Subscriptions/Packages/Tenants/Settings/HR/Users/Roles)
+                // - SaaS-only items (Subscriptions/Packages/Tenants/Roles/SaaS Settings)
                 //   must be super-admin only (role_id = 1).
                 const allowedLinks = {
                     '1': [ // Super Admin
@@ -1791,7 +1850,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/tenant-calculators',
                         '/admin/saas-settings',
                         '/admin/reports',
-                        '/admin/payments'
+                        '/admin/payments',
+                        '/admin/settings',
+                        '/admin/hr'
                     ],
                     '2': [ // Company Admin (companyadmin)
                         '/admin/dashboard',
@@ -1800,6 +1861,11 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/reports',
                         '/admin/banks',
                         '/admin/rates',
+                        '/admin/payments',
+                        '/admin/users',
+                        '/admin/hr',
+                        '/admin/notifications',
+                        '/admin/settings',
                         '/calculator',
                         '/'
                     ],
@@ -1846,9 +1912,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 allButtons.forEach(button => {
                     const href = button.getAttribute('href');
+                    const normalizedHref = href ? href.split('?')[0] : href;
                     
                     // فحص الصلاحية
-                    if (!userAllowedLinks.includes(href)) {
+                    if (!userAllowedLinks.includes(normalizedHref)) {
                         button.style.display = 'none';
                         hiddenCount++;
                         console.log('🚫 إخفاء زر:', href);
@@ -1867,6 +1934,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 sidebarLinks.forEach(link => {
                     const href = link.getAttribute('href');
                     if (!href) return;
+                    const normalizedHref = href.split('?')[0];
                     
                     // Check if link has data-superadmin-only attribute
                     const isSuperAdminOnly = link.hasAttribute('data-superadmin-only') && 
@@ -1881,10 +1949,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     }
                     
                     // Always keep calculator links visible if present
-                    const isAlways = (href === '/calculator' || href.startsWith('/c/'));
+                    const isAlways = (normalizedHref === '/calculator' || normalizedHref.startsWith('/c/'));
                     
                     // Check if href is in allowed links
-                    if (isAlways || userAllowedLinks.includes(href)) {
+                    if (isAlways || userAllowedLinks.includes(normalizedHref)) {
                         link.style.display = 'flex';
                         sidebarVisible++;
                         console.log('✅ عرض رابط السايدبار:', href);
@@ -2194,7 +2262,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <button onclick="updateStatus(\${req.id})" class="text-green-600 hover:text-green-800 ml-2" title="تعديل الحالة">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button onclick="deleteRequest(\${req.id})" class="text-red-600 hover:text-red-800" title="حذف">
+                                    <button onclick="deleteRequest(event, \${req.id})" class="text-red-600 hover:text-red-800" title="حذف">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
@@ -2826,9 +2894,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
             }
         }
         
-        window.deleteRequest = async function(id) {
+        window.deleteRequest = async function(e, id) {
+            if (e && e.preventDefault) {
+                e.preventDefault();
+            }
             if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) {
-                return;
+                return false;
             }
             
             try {
@@ -2842,7 +2913,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 }
             } catch (error) {
                 console.error('Error deleting request:', error);
-                alert('❌ حدث خطأ أثناء الحذف');
+                alert('❌ حدث خطأ أثناء الحذف: ' + (error.response?.data?.error || error.message || 'Unknown error'));
             }
         }
         
