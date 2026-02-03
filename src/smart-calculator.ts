@@ -400,7 +400,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-3 rounded-lg font-bold">
                         إلغاء
                     </button>
-                    <button type="submit" 
+                    <button type="submit" id="submitRequestBtn"
                             class="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg font-bold">
                         <i class="fas fa-paper-plane ml-2"></i>
                         إرسال الطلب
@@ -523,6 +523,15 @@ export const smartCalculator = `<!DOCTYPE html>
         let allBanks = [];
         let financingTypes = [];
         let allRates = [];
+        
+        function sanitizeRequestData(data) {
+            const sanitized = {};
+            Object.keys(data).forEach((key) => {
+                const value = data[key];
+                sanitized[key] = value === undefined ? null : value;
+            });
+            return sanitized;
+        }
         
         // File validation and preview
         function previewFile(input, previewId) {
@@ -768,6 +777,8 @@ export const smartCalculator = `<!DOCTYPE html>
                 salary_attachment_filename: salaryFile ? salaryFile.name : null,
                 additional_attachment_filename: additionalFile ? additionalFile.name : null
             };
+            const sanitizedRequestData = sanitizeRequestData(requestData);
+            const missingFields = Object.keys(requestData).filter((key) => requestData[key] === undefined);
             
             try {
                 // Show loading message
@@ -778,7 +789,7 @@ export const smartCalculator = `<!DOCTYPE html>
                 }
                 
                 // Step 1: Create the financing request first
-                const response = await axios.post('/api/calculator/submit-request', requestData, {
+                const response = await axios.post('/api/calculator/submit-request', sanitizedRequestData, {
                     headers: {
                         'Content-Type': 'application/json'
                     }
@@ -890,6 +901,11 @@ export const smartCalculator = `<!DOCTYPE html>
                 }
             } catch (error) {
                 console.error('Error submitting request:', error);
+                dd({
+                    action: 'submit-request-error',
+                    endpoint: '/api/calculator/submit-request',
+                    error: error?.response || error?.message || error
+                });
                 showErrorModal('حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.');
                 resetSubmitButton();
             }
@@ -1263,6 +1279,7 @@ export const smartCalculator = `<!DOCTYPE html>
         
         // Load data on page load
         loadData();
+
     </script>
 </body>
 </html>
