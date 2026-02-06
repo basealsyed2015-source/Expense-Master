@@ -469,13 +469,16 @@ export const smartCalculator = `<!DOCTYPE html>
             <div id="qualificationStatus" class="text-center mb-8">
                 <!-- Will be filled dynamically -->
             </div>
+            
+            <!-- Debug filter reasons (shown only when enabled) -->
+            <div id="filterDebug" class="hidden bg-yellow-50 border border-yellow-200 text-yellow-900 rounded-lg p-4 mb-6 text-sm"></div>
 
             <!-- Best Offer Banner -->
             <div id="bestOfferBanner" class="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl shadow-2xl p-8 mb-8 text-center">
                 <div class="inline-block bg-white/20 rounded-full p-4 mb-4">
-                    <i class="fas fa-trophy text-5xl"></i>
+                    <i id="bestOfferIcon" class="fas fa-trophy text-5xl"></i>
                 </div>
-                <h2 class="text-3xl font-bold mb-2">🎉 وجدنا لك أفضل عرض!</h2>
+                <h2 id="bestOfferTitle" class="text-3xl font-bold mb-2">🎉 وجدنا لك أفضل عرض!</h2>
                 <p class="text-xl mb-4" id="bestOfferText">جاري التحميل...</p>
                 
                 <!-- Complete Request Button -->
@@ -523,6 +526,12 @@ export const smartCalculator = `<!DOCTYPE html>
         let allBanks = [];
         let financingTypes = [];
         let allRates = [];
+        const showFilterDebug = true;
+        
+        function toNumber(value, fallback = null) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : fallback;
+        }
         
         function sanitizeRequestData(data) {
             const sanitized = {};
@@ -614,9 +623,24 @@ export const smartCalculator = `<!DOCTYPE html>
                     axios.get(ratesUrl)
                 ]);
                 
-                allBanks = banksRes.data.data;
-                financingTypes = typesRes.data.data;
-                allRates = ratesRes.data.data;
+                allBanks = (banksRes.data.data || []).map((bank) => ({
+                    ...bank,
+                    id: toNumber(bank.id, bank.id)
+                }));
+                financingTypes = typesRes.data.data || [];
+                allRates = (ratesRes.data.data || []).map((rate) => ({
+                    ...rate,
+                    bank_id: toNumber(rate.bank_id, rate.bank_id),
+                    financing_type_id: toNumber(rate.financing_type_id, rate.financing_type_id),
+                    rate: toNumber(rate.rate, rate.rate),
+                    min_duration: toNumber(rate.min_duration, rate.min_duration),
+                    max_duration: toNumber(rate.max_duration, rate.max_duration),
+                    min_salary: toNumber(rate.min_salary, rate.min_salary),
+                    max_salary: toNumber(rate.max_salary, rate.max_salary),
+                    min_amount: toNumber(rate.min_amount, rate.min_amount),
+                    max_amount: toNumber(rate.max_amount, rate.max_amount),
+                    is_active: toNumber(rate.is_active, rate.is_active)
+                }));
                 
                 console.log(\`✅ تم تحميل \${allBanks.length} بنك و \${allRates.length} نسبة\`);
                 if (tenantId) {
@@ -643,7 +667,7 @@ export const smartCalculator = `<!DOCTYPE html>
             
             // Get form data
             calculationData = {
-                financing_type_id: parseInt(document.getElementById('financingType').value),
+                financing_type_id: parseInt(document.getElementById('financingType').value, 10),
                 amount: parseFloat(document.getElementById('amount').value),
                 salary: parseFloat(document.getElementById('salary').value),
                 obligations: parseFloat(document.getElementById('obligations').value) || 0
@@ -914,6 +938,11 @@ export const smartCalculator = `<!DOCTYPE html>
         async function calculateAllOffers() {
             const availableIncome = calculationData.salary - calculationData.obligations;
             const maxMonthlyPayment = availableIncome * 0.33; // 33% من الدخل المتاح
+            const debugBox = document.getElementById('filterDebug');
+            if (debugBox) {
+                debugBox.classList.add('hidden');
+                debugBox.innerHTML = '';
+            }
             
             // Determine qualification status
             const isQualified = maxMonthlyPayment >= 500; // الحد الأدنى للقسط الشهري
@@ -932,7 +961,7 @@ export const smartCalculator = `<!DOCTYPE html>
             \`;
             
             if (!isQualified) {
-                document.getElementById('bestOfferBanner').classList.add('hidden');
+                setBestOfferBannerState('no-offers');
                 document.getElementById('offersGrid').innerHTML = '<div class="col-span-full text-center text-gray-600 text-lg">عذراً، القدرة الشرائية الحالية غير كافية للحصول على تمويل</div>';
                 return;
             }
@@ -946,23 +975,92 @@ export const smartCalculator = `<!DOCTYPE html>
                 rate.min_amount <= calculationData.amount &&
                 rate.max_amount >= calculationData.amount
             );
+
+            let mismatchType = [];
+            let inactiveRates = [];
+            let salaryOutOfRange = [];
+            let amountOutOfRange = [];
+
+            if (showFilterDebug && debugBox) {
+                mismatchType = allRates.filter(rate => rate.financing_type_id !== calculationData.financing_type_id);
+                inactiveRates = allRates.filter(rate => rate.is_active !== 1);
+                salaryOutOfRange = allRates.filter(rate =>
+                    rate.financing_type_id === calculationData.financing_type_id &&
+                    rate.is_active === 1 &&
+                    (rate.min_salary > calculationData.salary || rate.max_salary < calculationData.salary)
+                );
+                amountOutOfRange = allRates.filter(rate =>
+                    rate.financing_type_id === calculationData.financing_type_id &&
+                    rate.is_active === 1 &&
+                    rate.min_salary <= calculationData.salary &&
+                    rate.max_salary >= calculationData.salary &&
+                    (rate.min_amount > calculationData.amount || rate.max_amount < calculationData.amount)
+                );
+            }
             
             if (applicableRates.length === 0) {
+                if (showFilterDebug && debugBox) {
+                    debugBox.innerHTML =
+                        '<div class="font-bold mb-2">تفاصيل التصفية:</div>' +
+                        '<div>إجمالي العروض: ' + allRates.length + '</div>' +
+                        '<div>اختلاف نوع التمويل: ' + mismatchType.length + '</div>' +
+                        '<div>عروض غير مفعّلة: ' + inactiveRates.length + '</div>' +
+                        '<div>خارج نطاق الراتب: ' + salaryOutOfRange.length + '</div>' +
+                        '<div>خارج نطاق مبلغ التمويل: ' + amountOutOfRange.length + '</div>' +
+                        '<div>مطابقة للشروط: ' + applicableRates.length + '</div>' +
+                        '<div>الحد الأقصى للقسط الشهري: ' + maxMonthlyPayment.toLocaleString('ar-SA') + ' ريال</div>' +
+                        '<div class="mt-2">عروض ضمن القدرة الشرائية: 0</div>';
+                    debugBox.classList.remove('hidden');
+                }
+                setBestOfferBannerState('no-offers');
                 document.getElementById('bestOfferText').textContent = 'عذراً، لا توجد عروض متاحة حالياً تناسب معاييرك';
                 document.getElementById('completeRequestBtn').classList.add('hidden');
                 return;
             }
             
             // Calculate offers for each bank
+            let affordableOfferCount = 0;
+            const unaffordableDetails = [];
+            let skippedMissingBank = 0;
+            const missingBankIds = new Set();
+            let skippedInvalidDuration = 0;
             const offers = applicableRates.map(rate => {
                 const bank = allBanks.find(b => b.id === rate.bank_id);
+                if (!bank) {
+                    skippedMissingBank += 1;
+                    if (rate.bank_id !== undefined && rate.bank_id !== null) {
+                        missingBankIds.add(rate.bank_id);
+                    }
+                    return null;
+                }
                 const calculations = [];
+                const minDuration = toNumber(rate.min_duration);
+                const maxDuration = toNumber(rate.max_duration);
+                if (!Number.isFinite(minDuration) || !Number.isFinite(maxDuration) || minDuration <= 0 || maxDuration <= 0) {
+                    skippedInvalidDuration += 1;
+                    return null;
+                }
+                let minMonthlyPayment = null;
+                let minMonthlyMonth = null;
+                const durationPayments = [];
                 
                 // Try different durations
-                for (let months = rate.min_duration; months <= rate.max_duration; months += 12) {
+                for (let months = minDuration; months <= maxDuration; months += 1) {
                     const monthlyRate = rate.rate / 100 / 12;
                     const monthlyPayment = (calculationData.amount * monthlyRate * Math.pow(1 + monthlyRate, months)) / 
                                           (Math.pow(1 + monthlyRate, months) - 1);
+                    
+                    if (minMonthlyPayment === null || monthlyPayment < minMonthlyPayment) {
+                        minMonthlyPayment = monthlyPayment;
+                        minMonthlyMonth = months;
+                    }
+                    
+                    if (months === minDuration || months === maxDuration || months % 12 === 0) {
+                        durationPayments.push({
+                            months: months,
+                            monthlyPayment: Math.round(monthlyPayment * 100) / 100
+                        });
+                    }
                     
                     if (monthlyPayment <= maxMonthlyPayment) {
                         const totalPayment = monthlyPayment * months;
@@ -980,13 +1078,61 @@ export const smartCalculator = `<!DOCTYPE html>
                 // Get best duration (lowest total interest)
                 const bestCalc = calculations.sort((a, b) => a.totalInterest - b.totalInterest)[0];
                 
+                if (bestCalc) {
+                    affordableOfferCount += 1;
+                } else if (minMonthlyPayment !== null) {
+                    unaffordableDetails.push({
+                        bankName: bank.bank_name,
+                        rate: rate.rate,
+                        minPayment: Math.round(minMonthlyPayment * 100) / 100,
+                        minPaymentMonth: minMonthlyMonth,
+                        minDuration: minDuration,
+                        maxDuration: maxDuration,
+                        durationPayments: durationPayments
+                    });
+                }
+
                 return {
                     bank: bank,
                     rate: rate.rate,
                     bestCalculation: bestCalc,
                     allCalculations: calculations
                 };
-            }).filter(offer => offer.bestCalculation);
+            }).filter(offer => offer && offer.bestCalculation);
+
+            if (showFilterDebug && debugBox) {
+                const unaffordableList = unaffordableDetails.length
+                    ? '<div class="mt-2 font-bold">تفاصيل العروض غير المناسبة:</div>' +
+                      unaffordableDetails.map(detail =>
+                          '<div>• ' + detail.bankName +
+                          ' | نسبة: ' + detail.rate + '%' +
+                          ' | أقل قسط متاح: ' + detail.minPayment.toLocaleString('ar-SA') +
+                          ' (عند ' + detail.minPaymentMonth + ' شهر)' +
+                          ' ريال | المدد: ' + detail.minDuration + '-' + detail.maxDuration + ' شهر' +
+                          '<div class="mr-4 text-xs text-gray-700">الأقساط حسب المدة: ' +
+                          detail.durationPayments.map(payment =>
+                              payment.months + 'ش=' + payment.monthlyPayment.toLocaleString('ar-SA')
+                          ).join(' | ') +
+                          '</div></div>'
+                      ).join('')
+                    : '';
+
+                debugBox.innerHTML =
+                    '<div class="font-bold mb-2">تفاصيل التصفية:</div>' +
+                    '<div>إجمالي العروض: ' + allRates.length + '</div>' +
+                    '<div>اختلاف نوع التمويل: ' + mismatchType.length + '</div>' +
+                    '<div>عروض غير مفعّلة: ' + inactiveRates.length + '</div>' +
+                    '<div>خارج نطاق الراتب: ' + salaryOutOfRange.length + '</div>' +
+                    '<div>خارج نطاق مبلغ التمويل: ' + amountOutOfRange.length + '</div>' +
+                    '<div>مطابقة للشروط: ' + applicableRates.length + '</div>' +
+                    '<div>تم استبعادها لعدم وجود بنك: ' + skippedMissingBank + '</div>' +
+                    '<div>معرفات البنوك المفقودة: ' + (missingBankIds.size ? Array.from(missingBankIds).join(', ') : '-') + '</div>' +
+                    '<div>تم استبعادها لمدد غير صالحة: ' + skippedInvalidDuration + '</div>' +
+                    '<div>الحد الأقصى للقسط الشهري: ' + maxMonthlyPayment.toLocaleString('ar-SA') + ' ريال</div>' +
+                    '<div class="mt-2">عروض ضمن القدرة الشرائية: ' + affordableOfferCount + '</div>' +
+                    unaffordableList;
+                debugBox.classList.remove('hidden');
+            }
             
             // Sort by total interest (best first)
             offers.sort((a, b) => a.bestCalculation.totalInterest - b.bestCalculation.totalInterest);
@@ -1033,7 +1179,8 @@ export const smartCalculator = `<!DOCTYPE html>
         
         function displayOffers(offers) {
             if (offers.length === 0) {
-                document.getElementById('bestOfferText').textContent = 'عذراً، لا توجد عروض تناسب قدرتك الشرائية حالياً';
+                setBestOfferBannerState('no-offers');
+                document.getElementById('bestOfferText').textContent = 'العروض المتاحة لا تحتوي على قسط شهري ضمن قدرتك الشرائية حالياً';
                 document.getElementById('completeRequestBtn').classList.add('hidden');
                 return;
             }
@@ -1042,6 +1189,7 @@ export const smartCalculator = `<!DOCTYPE html>
             selectedBestOffer = bestOffer;
             
             // Update best offer banner
+            setBestOfferBannerState('best');
             document.getElementById('bestOfferText').innerHTML = \`
                 <span class="text-2xl">أفضل عرض من <span class="font-bold">\${bestOffer.bank.bank_name}</span></span>
                 <br>
@@ -1208,6 +1356,27 @@ export const smartCalculator = `<!DOCTYPE html>
         
         function printResults() {
             window.print();
+        }
+
+        function setBestOfferBannerState(state) {
+            const banner = document.getElementById('bestOfferBanner');
+            const title = document.getElementById('bestOfferTitle');
+            const icon = document.getElementById('bestOfferIcon');
+            if (!banner || !title || !icon) return;
+            
+            if (state === 'no-offers') {
+                banner.classList.remove('from-green-500', 'to-green-600');
+                banner.classList.add('from-yellow-500', 'to-orange-500');
+                icon.className = 'fas fa-info-circle text-5xl';
+                title.textContent = 'لا توجد عروض مناسبة حالياً';
+                return;
+            }
+            
+            // default: best offer
+            banner.classList.remove('from-yellow-500', 'to-orange-500');
+            banner.classList.add('from-green-500', 'to-green-600');
+            icon.className = 'fas fa-trophy text-5xl';
+            title.textContent = '🎉 وجدنا لك أفضل عرض!';
         }
         
         function openCompleteRequestModal() {

@@ -1146,7 +1146,7 @@ app.get('/api/banks', async (c) => {
     let results;
     
     if (tenantId) {
-      query += ` WHERE tenant_id = ? ORDER BY bank_name`;
+      query += ` WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`;
       results = (await c.env.DB.prepare(query).bind(parseInt(tenantId)).all()).results;
     } else {
       query += ` ORDER BY bank_name`;
@@ -2200,6 +2200,8 @@ app.get('/api/financing-requests', async (c) => {
 // Create new financing request
 app.post('/api/requests', async (c) => {
   try {
+    const acceptHeader = c.req.header('Accept') || ''
+    const wantsJson = acceptHeader.includes('application/json') || c.req.header('X-Requested-With') === 'fetch'
     const formData = await c.req.formData()
     const customer_id = formData.get('customer_id')
     const financing_type_id = formData.get('financing_type_id')
@@ -2257,6 +2259,9 @@ app.post('/api/requests', async (c) => {
       tenant_id
     ).run()
     
+    if (wantsJson) {
+      return c.json({ success: true, id: result.meta.last_row_id }, 201)
+    }
     return c.redirect('/admin/requests')
   } catch (error: any) {
     console.error('Error creating request:', error)
@@ -9661,9 +9666,16 @@ app.get('/admin/requests/new', async (c) => {
       banksParams.push(userInfo.tenantId)
     }
     banksQuery += ' ORDER BY bank_name'
-    const banks = banksParams.length
-      ? await c.env.DB.prepare(banksQuery).bind(...banksParams).all()
-      : await c.env.DB.prepare(banksQuery).all()
+    let banks
+    try {
+      banks = banksParams.length
+        ? await c.env.DB.prepare(banksQuery).bind(...banksParams).all()
+        : await c.env.DB.prepare(banksQuery).all()
+    } catch (error: any) {
+      console.error('Error loading banks for /admin/requests/new:', error)
+      // Fallback for legacy schemas missing tenant_id or is_active
+      banks = await c.env.DB.prepare('SELECT id, bank_name FROM banks ORDER BY bank_name').all()
+    }
 
     // Get financing types scoped by tenant (allow global types if tenant_id is NULL)
     let financingTypesQuery = 'SELECT id, type_name FROM financing_types WHERE is_active = 1'
@@ -9676,9 +9688,16 @@ app.get('/admin/requests/new', async (c) => {
       financingTypesParams.push(userInfo.tenantId)
     }
     financingTypesQuery += ' ORDER BY type_name'
-    const financingTypes = financingTypesParams.length
-      ? await c.env.DB.prepare(financingTypesQuery).bind(...financingTypesParams).all()
-      : await c.env.DB.prepare(financingTypesQuery).all()
+    let financingTypes
+    try {
+      financingTypes = financingTypesParams.length
+        ? await c.env.DB.prepare(financingTypesQuery).bind(...financingTypesParams).all()
+        : await c.env.DB.prepare(financingTypesQuery).all()
+    } catch (error: any) {
+      console.error('Error loading financing types for /admin/requests/new:', error)
+      // Fallback for legacy schemas missing tenant_id or is_active
+      financingTypes = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all()
+    }
     
     return c.html(`
       <!DOCTYPE html>
@@ -9705,7 +9724,7 @@ app.get('/admin/requests/new', async (c) => {
               إضافة طلب تمويل جديد
             </h1>
             
-            <form action="/api/requests" method="POST" enctype="application/x-www-form-urlencoded" class="space-y-6">
+            <form id="newRequestForm" action="/api/requests" method="POST" enctype="application/x-www-form-urlencoded" class="space-y-6">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- اختيار العميل -->
                 <div class="md:col-span-2">
@@ -9825,13 +9844,75 @@ app.get('/admin/requests/new', async (c) => {
                 </a>
               </div>
             </form>
+            <div class="mt-6 border-t pt-6">
+              <h2 class="text-lg font-bold text-gray-800 mb-3">
+                <i class="fas fa-terminal text-indigo-600 ml-2"></i>
+                سجلات المتصفح واستجابة الـ API
+              </h2>
+              <div id="browserLogs" class="bg-gray-900 text-green-200 text-sm rounded-lg p-4 max-h-64 overflow-auto whitespace-pre-wrap"></div>
+            </div>
           </div>
         </div>
+        <script>
+          (function() {
+            const logsEl = document.getElementById('browserLogs');
+            const form = document.getElementById('newRequestForm');
+
+            function writeLog(label, data) {
+              const timestamp = new Date().toLocaleTimeString('ar-SA');
+              const payload = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+              logsEl.textContent += '[' + timestamp + '] ' + label + '\\n' + payload + '\\n\\n';
+              logsEl.scrollTop = logsEl.scrollHeight;
+            }
+
+            form.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              logsEl.textContent = '';
+              writeLog('بدء إرسال الطلب...', 'POST /api/requests');
+
+              try {
+                const formData = new FormData(form);
+                const response = await fetch('/api/requests', {
+                  method: 'POST',
+                  body: formData,
+                  headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'fetch'
+                  }
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                let body;
+                if (contentType.includes('application/json')) {
+                  body = await response.json();
+                } else {
+                  body = await response.text();
+                }
+
+                writeLog('استجابة API:', {
+                  status: response.status,
+                  ok: response.ok,
+                  body
+                });
+
+                if (response.ok && body && body.success) {
+                  writeLog('تم الحفظ بنجاح', body);
+                  setTimeout(() => {
+                    window.location.href = '/admin/requests';
+                  }, 800);
+                }
+              } catch (error) {
+                writeLog('خطأ في الطلب', { message: error?.message || String(error) });
+              }
+            });
+          })();
+        </script>
       </body>
       </html>
     `)
   } catch (error) {
-    return c.html('<h1>خطأ في تحميل الصفحة</h1>')
+    console.error('Error in /admin/requests/new:', error)
+    return c.html('<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">' + (error?.message || error) + '</p><pre style="direction:ltr; text-align:left;">' + (error?.stack || 'No stack') + '</pre>')
   }
 })
 app.get('/admin/requests/:id', async (c) => {
