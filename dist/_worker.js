@@ -1,4 +1,4 @@
-var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw new Error("next() called multiple times");l=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>o(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ve=Symbol(),we=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,l=(e instanceof Z?e.raw.headers:e.headers).get("Content-Type");return l?.startsWith("multipart/form-data")||l?.startsWith("application/x-www-form-urlencoded")?_e(e,{all:a,dot:s}):{}};async function _e(e,t){const a=await e.formData();return a?Ee(a,t):{}}function Ee(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?ke(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Ie(a,s,r),delete a[s])}),a}var ke=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Ie=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((l,o)=>{o===r.length-1?s[l]=a:((!s[l]||typeof s[l]!="object"||Array.isArray(s[l])||s[l]instanceof File)&&(s[l]=Object.create(null)),s=s[l])})},G=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Se=e=>{const{groups:t,path:a}=Te(e),s=G(a);return De(s,t)},Te=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},De=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Re=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},H=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Be=e=>H(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const l=t.indexOf("?",s),o=t.slice(a,l===-1?void 0:l);return Be(o.includes("%25")?o.replace(/%25/g,"%2525"):o)}else if(r===63)break}return t.slice(a,s)},Ce=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Q=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const l=r.replace("?","");s+="/"+l,a.push(s)}else s+="/"+r}),a.filter((r,l,o)=>o.indexOf(r)===l)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?H(e,K):e):e,X=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let o=e.indexOf("?",8);if(o===-1)return;for(e.startsWith(t,o+1)||(o=e.indexOf(`&${t}`,o+1));o!==-1;){const i=e.charCodeAt(o+t.length+1);if(i===61){const n=o+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";o=e.indexOf(`&${t}`,o+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let l=e.indexOf("?",8);for(;l!==-1;){const o=e.indexOf("&",l+1);let i=e.indexOf("=",l);i>o&&o!==-1&&(i=-1);let n=e.slice(l+1,i===-1?o===-1?void 0:o:i);if(s&&(n=M(n)),l=o,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,o===-1?void 0:o),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},$e=X,Le=(e,t)=>X(e,t,!0),K=decodeURIComponent,Y=e=>H(e,K),Z=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#o()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?Y(a):a}#o(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Y(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return $e(this.url,e)}queries(e){return Le(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await we(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(l=>(r==="json"&&(l=JSON.stringify(l)),new Response(l)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ve](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},qe={Stringify:1},ee=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const l=e.callbacks;return l?.length?(r?r[0]+=e:r=[e],Promise.all(l.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>ee(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},je="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),Oe=class{#t;#e;env={};#a;finalized=!1;error;#o;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Z(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#o=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#l(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const l=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[o,i]of l)o.toLowerCase()==="set-cookie"?s.append(o,i):s.set(o,i)}if(a)for(const[l,o]of Object.entries(a))if(typeof o=="string")s.set(l,o);else{s.delete(l);for(const i of o)s.append(l,i)}const r=typeof t=="number"?t:t?.status??this.#o;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#l(...e);body=(e,t,a)=>this.#l(e,t,a);text=(e,t,a)=>!this.#n&&!this.#o&&!t&&!a&&!this.finalized?new Response(e):this.#l(e,t,A(je,a));json=(e,t,a)=>this.#l(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#l(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?ee(e,qe.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},y="ALL",Me="all",Ae=["get","post","put","delete","options","patch"],te="Can not add a route since the matcher is already built.",ae=class extends Error{},Fe="__COMPOSED_HANDLER",Ne=e=>e.text("404 Not Found",404),z=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Pe=class se{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Ae,Me].forEach(l=>{this[l]=(o,...i)=>(typeof o=="string"?this.#t=o:this.#o(l,this.#t,o),i.forEach(n=>{this.#o(l,this.#t,n)}),this)}),this.on=(l,o,...i)=>{for(const n of[o].flat()){this.#t=n;for(const c of[l].flat())i.map(p=>{this.#o(c.toUpperCase(),this.#t,p)})}return this},this.use=(l,...o)=>(typeof l=="string"?this.#t=l:(this.#t="*",o.unshift(l)),o.forEach(i=>{this.#o(y,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Ce}#e(){const t=new se({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ne;errorHandler=z;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let l;a.errorHandler===z?l=r.handler:(l=async(o,i)=>(await W([],a.errorHandler)(o,()=>r.handler(o,i))).res,l[Fe]=r.handler),s.#o(r.method,r.path,l)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,l;s&&(typeof s=="function"?l=s:(l=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const o=l?n=>{const c=l(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...o(n));if(p)return p;await c()};return this.#o(y,R(t,"*"),i),this}#o(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const l=this.getPath(t,{env:s}),o=this.router.match(r,l),i=new Oe(t,{path:l,matchResult:o,env:s,executionCtx:a,notFoundHandler:this.#a});if(o[0].length===1){let c;try{c=o[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=W(o[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},re=[];function He(e,t){const a=this.buildAllMatchers(),s=((r,l)=>{const o=a[r]||a[y],i=o[2][l];if(i)return i;const n=l.match(o[0]);if(!n)return[[],re];const c=n.indexOf("",1);return[o[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",B=Symbol(),Ue=new Set(".\\+*[^]$()");function We(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Ye=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,l){if(t.length===0){if(this.#t!==void 0)throw B;if(l)return;this.#t=a;return}const[o,...i]=t,n=o==="*"?i.length===0?["","",L]:["","",O]:o==="/*"?["","",q]:o.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw B;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw B;if(l)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!l&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[o],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw B;if(l)return;c=this.#a[o]=new N}c.insert(i,a,s,r,l)}buildRegExpStr(){const a=Object.keys(this.#a).sort(We).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Ue.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},ze=class{#t={varIndex:0};#e=new Ye;insert(e,t,a){const s=[],r=[];for(let o=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${o}`;return r[o]=[c,n],o++,i=!0,c}),!i)break}const l=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let o=r.length-1;o>=0;o--){const[i]=r[o];for(let n=l.length-1;n>=0;n--)if(l[n].indexOf(i)!==-1){l[n]=l[n].replace(i,r[o][1]);break}}return this.#e.insert(l,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,l,o)=>l!==void 0?(a[++t]=Number(l),"$()"):(o!==void 0&&(s[Number(o)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Je=[/^$/,[],Object.create(null)],oe=Object.create(null);function le(e){return oe[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Ge(){oe=Object.create(null)}function Ve(e){const t=new ze,a=[];if(e.length===0)return Je;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,g,f]=s[c];m?r[g]=[f.map(([h])=>[h,Object.create(null)]),re]:p++;let b;try{b=t.insert(g,p,m)}catch(h){throw h===B?new ae(g):h}m||(a[p]=f.map(([h,v])=>{const I=Object.create(null);for(v-=1;v>=0;v--){const[_,w]=b[v];I[_]=w}return[h,I]}))}const[l,o,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const g=a[c][u]?.[1];if(!g)continue;const f=Object.keys(g);for(let b=0,h=f.length;b<h;b++)g[f[b]]=i[g[f[b]]]}const n=[];for(const c in o)n[c]=a[o[c]];return[l,n,r]}function D(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Qe=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[y]:Object.create(null)},this.#e={[y]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(te);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[y]).forEach(n=>{i[e][n]=[...i[y][n]]})}),t==="/*"&&(t="*");const l=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===y?Object.keys(s).forEach(n=>{s[n][t]||=D(s[n],t)||D(s[y],t)||[]}):s[e][t]||=D(s[e],t)||D(s[y],t)||[],Object.keys(s).forEach(n=>{(e===y||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,l])})}),Object.keys(r).forEach(n=>{(e===y||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,l]))});return}const o=Q(t)||[t];for(let i=0,n=o.length;i<n;i++){const c=o[i];Object.keys(r).forEach(p=>{(e===y||e===p)&&(r[p][c]||=[...D(s[p],c)||D(s[y],c)||[]],r[p][c].push([a,l-n+i+1]))})}}match=He;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Ge(),e}#a(e){const t=[];let a=e===y;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(l=>[l,s[e][l]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==y&&t.push(...Object.keys(s[y]).map(l=>[l,s[y][l]]))}),a?Ve(t):null}},Xe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(te);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let l=0,o;for(;l<r;l++){const i=a[l];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);o=i.match(e,t)}catch(n){if(n instanceof ae)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(l===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,o}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},$=Object.create(null),Ke=class ne{#t;#e;#a;#o=0;#r=$;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#o=++this.#o;let r=this;const l=Se(a),o=[];for(let i=0,n=l.length;i<n;i++){const c=l[i],p=l[i+1],u=Re(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&o.push(u[1]);continue}r.#e[m]=new ne,u&&(r.#a.push(u),o.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:o.filter((i,n,c)=>c.indexOf(i)===n),score:this.#o}}),r}#s(t,a,s,r){const l=[];for(let o=0,i=t.#t.length;o<i;o++){const n=t.#t[o],c=n[a]||n[y],p={};if(c!==void 0&&(c.params=Object.create(null),l.push(c),s!==$||r&&r!==$))for(let u=0,m=c.possibleKeys.length;u<m;u++){const g=c.possibleKeys[u],f=p[c.score];c.params[g]=r?.[g]&&!f?r[g]:s[g]??r?.[g],p[c.score]=!0}}return l}search(t,a){const s=[];this.#r=$;let l=[this];const o=G(a),i=[];for(let n=0,c=o.length;n<c;n++){const p=o[n],u=n===c-1,m=[];for(let g=0,f=l.length;g<f;g++){const b=l[g],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let v=0,I=b.#a.length;v<I;v++){const _=b.#a[v],w=b.#r===$?{}:{...b.#r};if(_==="*"){const S=b.#e["*"];S&&(s.push(...this.#s(S,t,b.#r)),S.#r=w,m.push(S));continue}const[T,U,C]=_;if(!p&&!(C instanceof RegExp))continue;const E=b.#e[T],he=o.slice(n).join("/");if(C instanceof RegExp){const S=C.exec(he);if(S){if(w[U]=S[0],s.push(...this.#s(E,t,b.#r,w)),Object.keys(E.#e).length){E.#r=w;const ye=S[0].match(/\//)?.length??0;(i[ye]||=[]).push(E)}continue}}(C===!0||C.test(p))&&(w[U]=p,u?(s.push(...this.#s(E,t,w,b.#r)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,w,b.#r))):(E.#r=w,m.push(E)))}}l=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ze=class{name="TrieRouter";#t;constructor(){this.#t=new Ke}add(e,t,a){const s=Q(t);if(s){for(let r=0,l=s.length;r<l;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ie=class extends Pe{constructor(e={}){super(e),this.router=e.router??new Xe({routers:[new Qe,new Ze]})}},et=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(l=>typeof l=="string"?l==="*"?()=>l:o=>l===o?o:null:typeof l=="function"?l:o=>l.includes(o)?o:null)(a.origin),r=(l=>typeof l=="function"?l:Array.isArray(l)?()=>l:()=>[])(a.allowMethods);return async function(o,i){function n(p,u){o.res.headers.set(p,u)}const c=await s(o.req.header("origin")||"",o);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),o.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(o.req.header("origin")||"",o);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=o.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const tt=`<!DOCTYPE html>
+var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw new Error("next() called multiple times");l=i;let n,c=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>o(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),c=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||c)&&(s.res=n),s}},ve=Symbol(),we=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,l=(e instanceof Z?e.raw.headers:e.headers).get("Content-Type");return l?.startsWith("multipart/form-data")||l?.startsWith("application/x-www-form-urlencoded")?_e(e,{all:a,dot:s}):{}};async function _e(e,t){const a=await e.formData();return a?Ee(a,t):{}}function Ee(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?ke(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Ie(a,s,r),delete a[s])}),a}var ke=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Ie=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((l,o)=>{o===r.length-1?s[l]=a:((!s[l]||typeof s[l]!="object"||Array.isArray(s[l])||s[l]instanceof File)&&(s[l]=Object.create(null)),s=s[l])})},G=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Se=e=>{const{groups:t,path:a}=Te(e),s=G(a);return De(s,t)},Te=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},De=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},j={},Re=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return j[s]||(a[2]?j[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:j[s]=[e,a[1],!0]),j[s]}return null},H=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Be=e=>H(e,decodeURI),V=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const l=t.indexOf("?",s),o=t.slice(a,l===-1?void 0:l);return Be(o.includes("%25")?o.replace(/%25/g,"%2525"):o)}else if(r===63)break}return t.slice(a,s)},Ce=e=>{const t=V(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},R=(e,t,...a)=>(a.length&&(t=R(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Q=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const l=r.replace("?","");s+="/"+l,a.push(s)}else s+="/"+r}),a.filter((r,l,o)=>o.indexOf(r)===l)},M=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?H(e,K):e):e,X=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let o=e.indexOf("?",8);if(o===-1)return;for(e.startsWith(t,o+1)||(o=e.indexOf(`&${t}`,o+1));o!==-1;){const i=e.charCodeAt(o+t.length+1);if(i===61){const n=o+t.length+2,c=e.indexOf("&",n);return M(e.slice(n,c===-1?void 0:c))}else if(i==38||isNaN(i))return"";o=e.indexOf(`&${t}`,o+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let l=e.indexOf("?",8);for(;l!==-1;){const o=e.indexOf("&",l+1);let i=e.indexOf("=",l);i>o&&o!==-1&&(i=-1);let n=e.slice(l+1,i===-1?o===-1?void 0:o:i);if(s&&(n=M(n)),l=o,n==="")continue;let c;i===-1?c="":(c=e.slice(i+1,o===-1?void 0:o),s&&(c=M(c))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(c)):r[n]??=c}return t?r[t]:r},$e=X,Le=(e,t)=>X(e,t,!0),K=decodeURIComponent,z=e=>H(e,K),Z=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#o()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?z(a):a}#o(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?z(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return $e(this.url,e)}queries(e){return Le(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await we(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(l=>(r==="json"&&(l=JSON.stringify(l)),new Response(l)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[ve](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},qe={Stringify:1},ee=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const l=e.callbacks;return l?.length?(r?r[0]+=e:r=[e],Promise.all(l.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>ee(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},je="text/plain; charset=UTF-8",A=(e,t)=>({"Content-Type":e,...t}),Oe=class{#t;#e;env={};#a;finalized=!1;error;#o;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Z(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#o=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#l(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const l=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[o,i]of l)o.toLowerCase()==="set-cookie"?s.append(o,i):s.set(o,i)}if(a)for(const[l,o]of Object.entries(a))if(typeof o=="string")s.set(l,o);else{s.delete(l);for(const i of o)s.append(l,i)}const r=typeof t=="number"?t:t?.status??this.#o;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#l(...e);body=(e,t,a)=>this.#l(e,t,a);text=(e,t,a)=>!this.#n&&!this.#o&&!t&&!a&&!this.finalized?new Response(e):this.#l(e,t,A(je,a));json=(e,t,a)=>this.#l(JSON.stringify(e),t,A("application/json",a));html=(e,t,a)=>{const s=r=>this.#l(r,t,A("text/html; charset=UTF-8",a));return typeof e=="object"?ee(e,qe.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},v="ALL",Me="all",Ae=["get","post","put","delete","options","patch"],te="Can not add a route since the matcher is already built.",ae=class extends Error{},Fe="__COMPOSED_HANDLER",Ne=e=>e.text("404 Not Found",404),Y=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Pe=class se{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...Ae,Me].forEach(l=>{this[l]=(o,...i)=>(typeof o=="string"?this.#t=o:this.#o(l,this.#t,o),i.forEach(n=>{this.#o(l,this.#t,n)}),this)}),this.on=(l,o,...i)=>{for(const n of[o].flat()){this.#t=n;for(const c of[l].flat())i.map(p=>{this.#o(c.toUpperCase(),this.#t,p)})}return this},this.use=(l,...o)=>(typeof l=="string"?this.#t=l:(this.#t="*",o.unshift(l)),o.forEach(i=>{this.#o(v,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??V:Ce}#e(){const t=new se({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ne;errorHandler=Y;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let l;a.errorHandler===Y?l=r.handler:(l=async(o,i)=>(await W([],a.errorHandler)(o,()=>r.handler(o,i))).res,l[Fe]=r.handler),s.#o(r.method,r.path,l)}),this}basePath(t){const a=this.#e();return a._basePath=R(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,l;s&&(typeof s=="function"?l=s:(l=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const o=l?n=>{const c=l(n);return Array.isArray(c)?c:[c]}:n=>{let c;try{c=n.executionCtx}catch{}return[n.env,c]};r||=(()=>{const n=R(this._basePath,t),c=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(c)||"/",new Request(u,p)}})();const i=async(n,c)=>{const p=await a(r(n.req.raw),...o(n));if(p)return p;await c()};return this.#o(v,R(t,"*"),i),this}#o(t,a,s){t=t.toUpperCase(),a=R(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const l=this.getPath(t,{env:s}),o=this.router.match(r,l),i=new Oe(t,{path:l,matchResult:o,env:s,executionCtx:a,notFoundHandler:this.#a});if(o[0].length===1){let c;try{c=o[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return c instanceof Promise?c.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):c??this.#a(i)}const n=W(o[0],this.errorHandler,this.#a);return(async()=>{try{const c=await n(i);if(!c.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return c.res}catch(c){return this.#r(c,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${R("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},re=[];function He(e,t){const a=this.buildAllMatchers(),s=((r,l)=>{const o=a[r]||a[v],i=o[2][l];if(i)return i;const n=l.match(o[0]);if(!n)return[[],re];const c=n.indexOf("",1);return[o[1][c],n]});return this.match=s,s(e,t)}var O="[^/]+",L=".*",q="(?:|/.*)",B=Symbol(),Ue=new Set(".\\+*[^]$()");function We(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===L||e===q?1:t===L||t===q?-1:e===O?1:t===O?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var ze=class N{#t;#e;#a=Object.create(null);insert(t,a,s,r,l){if(t.length===0){if(this.#t!==void 0)throw B;if(l)return;this.#t=a;return}const[o,...i]=t,n=o==="*"?i.length===0?["","",L]:["","",O]:o==="/*"?["","",q]:o.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let c;if(n){const p=n[1];let u=n[2]||O;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw B;if(c=this.#a[u],!c){if(Object.keys(this.#a).some(m=>m!==L&&m!==q))throw B;if(l)return;c=this.#a[u]=new N,p!==""&&(c.#e=r.varIndex++)}!l&&p!==""&&s.push([p,c.#e])}else if(c=this.#a[o],!c){if(Object.keys(this.#a).some(p=>p.length>1&&p!==L&&p!==q))throw B;if(l)return;c=this.#a[o]=new N}c.insert(i,a,s,r,l)}buildRegExpStr(){const a=Object.keys(this.#a).sort(We).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Ue.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ye=class{#t={varIndex:0};#e=new ze;insert(e,t,a){const s=[],r=[];for(let o=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const c=`@\\${o}`;return r[o]=[c,n],o++,i=!0,c}),!i)break}const l=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let o=r.length-1;o>=0;o--){const[i]=r[o];for(let n=l.length-1;n>=0;n--)if(l[n].indexOf(i)!==-1){l[n]=l[n].replace(i,r[o][1]);break}}return this.#e.insert(l,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,l,o)=>l!==void 0?(a[++t]=Number(l),"$()"):(o!==void 0&&(s[Number(o)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Je=[/^$/,[],Object.create(null)],oe=Object.create(null);function le(e){return oe[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Ge(){oe=Object.create(null)}function Ve(e){const t=new Ye,a=[];if(e.length===0)return Je;const s=e.map(c=>[!/\*|\/:/.test(c[0]),...c]).sort(([c,p],[u,m])=>c?1:u?-1:p.length-m.length),r=Object.create(null);for(let c=0,p=-1,u=s.length;c<u;c++){const[m,g,f]=s[c];m?r[g]=[f.map(([h])=>[h,Object.create(null)]),re]:p++;let b;try{b=t.insert(g,p,m)}catch(h){throw h===B?new ae(g):h}m||(a[p]=f.map(([h,y])=>{const _=Object.create(null);for(y-=1;y>=0;y--){const[E,w]=b[y];_[E]=w}return[h,_]}))}const[l,o,i]=t.buildRegExp();for(let c=0,p=a.length;c<p;c++)for(let u=0,m=a[c].length;u<m;u++){const g=a[c][u]?.[1];if(!g)continue;const f=Object.keys(g);for(let b=0,h=f.length;b<h;b++)g[f[b]]=i[g[f[b]]]}const n=[];for(const c in o)n[c]=a[o[c]];return[l,n,r]}function D(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(le(a).test(t))return[...e[a]]}}var Qe=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[v]:Object.create(null)},this.#e={[v]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(te);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[v]).forEach(n=>{i[e][n]=[...i[v][n]]})}),t==="/*"&&(t="*");const l=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=le(t);e===v?Object.keys(s).forEach(n=>{s[n][t]||=D(s[n],t)||D(s[v],t)||[]}):s[e][t]||=D(s[e],t)||D(s[v],t)||[],Object.keys(s).forEach(n=>{(e===v||e===n)&&Object.keys(s[n]).forEach(c=>{i.test(c)&&s[n][c].push([a,l])})}),Object.keys(r).forEach(n=>{(e===v||e===n)&&Object.keys(r[n]).forEach(c=>i.test(c)&&r[n][c].push([a,l]))});return}const o=Q(t)||[t];for(let i=0,n=o.length;i<n;i++){const c=o[i];Object.keys(r).forEach(p=>{(e===v||e===p)&&(r[p][c]||=[...D(s[p],c)||D(s[v],c)||[]],r[p][c].push([a,l-n+i+1]))})}}match=He;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Ge(),e}#a(e){const t=[];let a=e===v;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(l=>[l,s[e][l]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==v&&t.push(...Object.keys(s[v]).map(l=>[l,s[v][l]]))}),a?Ve(t):null}},Xe=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(te);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let l=0,o;for(;l<r;l++){const i=a[l];try{for(let n=0,c=s.length;n<c;n++)i.add(...s[n]);o=i.match(e,t)}catch(n){if(n instanceof ae)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(l===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,o}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},$=Object.create(null),Ke=class ne{#t;#e;#a;#o=0;#r=$;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#o=++this.#o;let r=this;const l=Se(a),o=[];for(let i=0,n=l.length;i<n;i++){const c=l[i],p=l[i+1],u=Re(c,p),m=Array.isArray(u)?u[0]:c;if(m in r.#e){r=r.#e[m],u&&o.push(u[1]);continue}r.#e[m]=new ne,u&&(r.#a.push(u),o.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:o.filter((i,n,c)=>c.indexOf(i)===n),score:this.#o}}),r}#s(t,a,s,r){const l=[];for(let o=0,i=t.#t.length;o<i;o++){const n=t.#t[o],c=n[a]||n[v],p={};if(c!==void 0&&(c.params=Object.create(null),l.push(c),s!==$||r&&r!==$))for(let u=0,m=c.possibleKeys.length;u<m;u++){const g=c.possibleKeys[u],f=p[c.score];c.params[g]=r?.[g]&&!f?r[g]:s[g]??r?.[g],p[c.score]=!0}}return l}search(t,a){const s=[];this.#r=$;let l=[this];const o=G(a),i=[];for(let n=0,c=o.length;n<c;n++){const p=o[n],u=n===c-1,m=[];for(let g=0,f=l.length;g<f;g++){const b=l[g],h=b.#e[p];h&&(h.#r=b.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,b.#r)),s.push(...this.#s(h,t,b.#r))):m.push(h));for(let y=0,_=b.#a.length;y<_;y++){const E=b.#a[y],w=b.#r===$?{}:{...b.#r};if(E==="*"){const S=b.#e["*"];S&&(s.push(...this.#s(S,t,b.#r)),S.#r=w,m.push(S));continue}const[T,U,C]=E;if(!p&&!(C instanceof RegExp))continue;const k=b.#e[T],he=o.slice(n).join("/");if(C instanceof RegExp){const S=C.exec(he);if(S){if(w[U]=S[0],s.push(...this.#s(k,t,b.#r,w)),Object.keys(k.#e).length){k.#r=w;const ye=S[0].match(/\//)?.length??0;(i[ye]||=[]).push(k)}continue}}(C===!0||C.test(p))&&(w[U]=p,u?(s.push(...this.#s(k,t,w,b.#r)),k.#e["*"]&&s.push(...this.#s(k.#e["*"],t,w,b.#r))):(k.#r=w,m.push(k)))}}l=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,c)=>n.score-c.score),[s.map(({handler:n,params:c})=>[n,c])]}},Ze=class{name="TrieRouter";#t;constructor(){this.#t=new Ke}add(e,t,a){const s=Q(t);if(s){for(let r=0,l=s.length;r<l;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ie=class extends Pe{constructor(e={}){super(e),this.router=e.router??new Xe({routers:[new Qe,new Ze]})}},et=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(l=>typeof l=="string"?l==="*"?()=>l:o=>l===o?o:null:typeof l=="function"?l:o=>l.includes(o)?o:null)(a.origin),r=(l=>typeof l=="function"?l:Array.isArray(l)?()=>l:()=>[])(a.allowMethods);return async function(o,i){function n(p,u){o.res.headers.set(p,u)}const c=await s(o.req.header("origin")||"",o);if(c&&n("Access-Control-Allow-Origin",c),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),o.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(o.req.header("origin")||"",o);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=o.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const tt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -758,7 +758,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                             <input type="file" id="idAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'idPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                             <div id="idPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
                         <!-- كشف الحساب البنكي -->
@@ -770,7 +770,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                             <input type="file" id="bankStatementAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'bankStatementPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
                             <div id="bankStatementPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
                         <!-- تعريف بالراتب -->
@@ -782,7 +782,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                             <input type="file" id="salaryAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
                             <div id="salaryPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
                         <!-- مرفق إضافي -->
@@ -794,7 +794,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                             <input type="file" id="additionalAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'additionalPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
                             <div id="additionalPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                     </div>
                     
@@ -966,10 +966,10 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                 return;
             }
             
-            // Validate file size (5MB max)
-            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+            // Validate file size (2MB max)
+            const maxSize = 2 * 1024 * 1024; // 2MB in bytes
             if (file.size > maxSize) {
-                alert('حجم الملف كبير جداً! الحد الأقصى: 5 ميغابايت');
+                alert('حجم الملف كبير جداً! الحد الأقصى: 2 ميغابايت');
                 input.value = '';
                 preview.innerHTML = '';
                 return;
@@ -14645,7 +14645,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
   <\/script>
 </body>
 </html>
-`,d=new ie,k=()=>`
+`,d=new ie,I=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -15036,7 +15036,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4&&t.userId?a+=` WHERE c.assigned_to = ${t.userId}`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,l=t.get("national_id")||null,o=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),g=e.req.header("Authorization")?.replace("Bearer ","");let f=null;if(g){const w=atob(g).split(":");f=w[1]!=="null"?parseInt(w[1]):null}if(l){let _="SELECT id, full_name FROM customers WHERE national_id = ?",w=[l];f&&(_+=" AND tenant_id = ?",w.push(f));const T=await e.env.DB.prepare(_).bind(...w).first();if(T)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,l=t.get("national_id")||null,o=t.get("date_of_birth")||null,i=t.get("employer_name")||null,n=t.get("job_title")||null,c=t.get("work_start_date")||null,p=t.get("city")||null,u=parseFloat(t.get("monthly_salary")||"0"),g=e.req.header("Authorization")?.replace("Bearer ","");let f=null;if(g){const w=atob(g).split(":");f=w[1]!=="null"?parseInt(w[1]):null}if(l){let E="SELECT id, full_name FROM customers WHERE national_id = ?",w=[l];f&&(E+=" AND tenant_id = ?",w.push(f));const T=await e.env.DB.prepare(E).bind(...w).first();if(T)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -15079,7 +15079,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             </div>
           </body>
           </html>
-        `)}let b="SELECT id, full_name FROM customers WHERE phone = ?",h=[s];f&&(b+=" AND tenant_id = ?",h.push(f));const v=await e.env.DB.prepare(b).bind(...h).first();if(v)return e.html(`
+        `)}let b="SELECT id, full_name FROM customers WHERE phone = ?",h=[s];f&&(b+=" AND tenant_id = ?",h.push(f));const y=await e.env.DB.prepare(b).bind(...h).first();if(y)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -15101,15 +15101,15 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
               </div>
               <div class="bg-white rounded-lg p-4 mb-4">
                 <p class="text-gray-700"><strong>رقم الهاتف:</strong> ${s}</p>
-                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${v.full_name}</p>
-                <p class="text-gray-700"><strong>رقم العميل:</strong> #${v.id}</p>
+                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${y.full_name}</p>
+                <p class="text-gray-700"><strong>رقم العميل:</strong> #${y.id}</p>
               </div>
               <div class="flex gap-3">
                 <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-arrow-right ml-2"></i>
                   العودة للنموذج
                 </a>
-                <a href="/admin/customers/${v.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/customers/${y.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-eye ml-2"></i>
                   عرض العميل الموجود
                 </a>
@@ -15118,7 +15118,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
           </div>
         </body>
         </html>
-      `);const I=await e.env.DB.prepare(`
+      `);const _=await e.env.DB.prepare(`
       INSERT INTO customers (full_name, phone, email, national_id, birthdate, employer_name, job_title, work_start_date, city, monthly_salary, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(a,s,r,l,o,i,n,c,p,u,f).run();return e.redirect("/admin/customers")}catch(t){return e.html(`
@@ -15376,7 +15376,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
     `).bind(l,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:l,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const I=a.substring(7).split(".");I.length===3&&(s=JSON.parse(atob(I[1])).tenant_id||null)}const{requested_amount:r,duration_months:l,salary_at_request:o,monthly_obligations:i,status:n,notes:c,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:g}=await e.req.json();let f=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[r,l,o||0,i||0,n||"pending",c||""];p&&(f.push("id_attachment_url = ?"),b.push(p)),u&&(f.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(f.push("salary_attachment_url = ?"),b.push(m)),g&&(f.push("additional_attachment_url = ?"),b.push(g)),b.push(t);let h=`
+    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:l,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});d.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const _=a.substring(7).split(".");_.length===3&&(s=JSON.parse(atob(_[1])).tenant_id||null)}const{requested_amount:r,duration_months:l,salary_at_request:o,monthly_obligations:i,status:n,notes:c,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:g}=await e.req.json();let f=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[r,l,o||0,i||0,n||"pending",c||""];p&&(f.push("id_attachment_url = ?"),b.push(p)),u&&(f.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(f.push("salary_attachment_url = ?"),b.push(m)),g&&(f.push("additional_attachment_url = ?"),b.push(g)),b.push(t);let h=`
       UPDATE financing_requests 
       SET ${f.join(", ")}
       WHERE id = ?
@@ -15396,11 +15396,11 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
     `).bind(t).first(),n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},c={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,c[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),r=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),l=new Set(["id","salary","bank_statement","additional"]),o=r.toLowerCase();if(!l.has(o))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,n=Date.now(),c=Math.random().toString(36).substring(7),u=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",m=s?`${s}/${o}_${n}.${u}`:`temp/${o}_${n}_${c}.${u}`,g=await i.arrayBuffer();await e.env.ATTACHMENTS.put(m,g,{httpMetadata:{contentType:i.type}});const f=`/api/attachments/view/${m}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const h={id:"id_attachment_url",salary:"salary_attachment_url",bank_statement:"bank_statement_attachment_url",additional:"additional_attachment_url"}[o];console.log("📎 Updating attachment:",{requestId:s,attachmentType:o,columnName:h,publicUrl:f});const v=await e.env.DB.prepare(`
+    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,c[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});d.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),r=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),l=new Set(["id","salary","bank_statement","additional"]),o=r.toLowerCase();if(!l.has(o))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,n=2*1024*1024;if(i.size>n)return e.json({success:!1,error:"File too large. Max size is 2MB"},400);const c=Date.now(),p=Math.random().toString(36).substring(7),m=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",g=s?`${s}/${o}_${c}.${m}`:`temp/${o}_${c}_${p}.${m}`,f=await i.arrayBuffer();await e.env.ATTACHMENTS.put(g,f,{httpMetadata:{contentType:i.type}});const b=`/api/attachments/view/${g}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const y={id:"id_attachment_url",salary:"salary_attachment_url",bank_statement:"bank_statement_attachment_url",additional:"additional_attachment_url"}[o];console.log("📎 Updating attachment:",{requestId:s,attachmentType:o,columnName:y,publicUrl:b});const _=await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET ${h} = ? 
+        SET ${y} = ? 
         WHERE id = ?
-      `).bind(f,s).run();console.log("✅ Update result:",v)}return e.json({success:!0,url:f,filename:m})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let l=null;r.startsWith("id_")?l="id_attachment_url":r.startsWith("salary_")?l="salary_attachment_url":r.startsWith("bank_statement_")?l="bank_statement_attachment_url":r.startsWith("additional_")&&(l="additional_attachment_url"),l&&await e.env.DB.prepare(`
+      `).bind(b,s).run();console.log("✅ Update result:",_)}return e.json({success:!0,url:b,filename:g})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let l=null;r.startsWith("id_")?l="id_attachment_url":r.startsWith("salary_")?l="salary_attachment_url":r.startsWith("bank_statement_")?l="bank_statement_attachment_url":r.startsWith("additional_")&&(l="additional_attachment_url"),l&&await e.env.DB.prepare(`
           UPDATE financing_requests 
           SET ${l} = NULL 
           WHERE id = ?
@@ -15463,7 +15463,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',l='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',o='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===1?n=null:t.roleId===2||t.roleId===3?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",l+=" AND tenant_id = ?",o+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",l+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",l+=" AND 1 = 0");const c=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(l).bind(n).first():await e.env.DB.prepare(l).first(),g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(o).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(o).first():{count:0},f=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),v=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:c?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:g?.count||0,total_calculations:v?.count||0,active_banks:b?.count||0,active_tenants:h?.count||0,active_users:f?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run()).meta.changes===0?e.json({success:!1,error:"الطلب غير موجود"},404):e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return console.error("Error deleting financing request:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});d.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',l='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',o='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===1?n=null:t.roleId===2||t.roleId===3?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",l+=" AND tenant_id = ?",o+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",l+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",l+=" AND 1 = 0");const c=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(l).bind(n).first():await e.env.DB.prepare(l).first(),g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(o).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(o).first():{count:0},f=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),y=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:c?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:g?.count||0,total_calculations:y?.count||0,active_banks:b?.count||0,active_tenants:h?.count||0,active_users:f?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run()).meta.changes===0?e.json({success:!1,error:"الطلب غير موجود"},404):e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return console.error("Error deleting financing request:",t),e.json({success:!1,error:t.message},500)}});d.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});d.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name
@@ -15831,7 +15831,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             width: max-content;
           }
           
-          ${k()}
+          ${I()}
           
           /* Scroll Buttons for Tables */
           .scroll-btn {
@@ -17025,7 +17025,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             .print-full-width { width: 100%; }
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -17599,7 +17599,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
         
-        ${k()}
+        ${I()}
       </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
@@ -17871,7 +17871,180 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
         </div>
       </div>
 
+      <!-- Bulk Assign Modal -->
+      <div id="bulkAssignModal" class="fixed inset-0 hidden items-center justify-center z-50">
+        <div class="absolute inset-0 bg-black/50" onclick="closeBulkAssignModal()"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-800">
+              <i class="fas fa-users-cog text-green-600 ml-2"></i>
+              تخصيص العملاء المحددين
+            </h3>
+            <button onclick="closeBulkAssignModal()" class="text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-all" aria-label="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
+          <p class="text-sm text-gray-600 mb-4">
+            عدد العملاء المحددين:
+            <span id="bulkAssignCount" class="font-bold text-gray-800">0</span>
+          </p>
+
+          <label class="block text-sm font-bold text-gray-700 mb-2">
+            اختر الموظف
+          </label>
+          <select id="bulkAssignEmployeeSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            <option value="">اختر موظف...</option>
+            ${o.results.map(p=>`
+              <option value="${p.id}">${p.full_name}${p.username?` (${p.username})`:""}</option>
+            `).join("")}
+          </select>
+
+          <div id="bulkAssignError" class="hidden text-sm text-red-600 mt-3"></div>
+
+          <div class="flex gap-3 mt-6">
+            <button onclick="closeBulkAssignModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              إلغاء
+            </button>
+            <button id="bulkAssignConfirmBtn" onclick="confirmBulkAssign()" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              تخصيص
+            </button>
+          </div>
+        </div>
+      </div>
+
       <script>
+        let bulkSelectedIds = [];
+
+        function openBulkAssignModal(selectedIds) {
+          const modal = document.getElementById('bulkAssignModal');
+          const countEl = document.getElementById('bulkAssignCount');
+          const selectEl = document.getElementById('bulkAssignEmployeeSelect');
+          const errorEl = document.getElementById('bulkAssignError');
+          const confirmBtn = document.getElementById('bulkAssignConfirmBtn');
+
+          bulkSelectedIds = Array.isArray(selectedIds) ? selectedIds : [];
+          if (countEl) countEl.textContent = String(bulkSelectedIds.length);
+          if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+          }
+          if (selectEl) selectEl.value = '';
+
+          // If no employees exist, block assignment with a clear message
+          const hasEmployees = selectEl && selectEl.options && selectEl.options.length > 1;
+          if (!hasEmployees) {
+            if (errorEl) {
+              errorEl.textContent = 'لا يوجد موظفون في هذه الشركة لتخصيص العملاء لهم.';
+              errorEl.classList.remove('hidden');
+            }
+            if (confirmBtn) confirmBtn.disabled = true;
+          } else {
+            if (confirmBtn) confirmBtn.disabled = false;
+          }
+
+          if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+          }
+        }
+
+        function closeBulkAssignModal() {
+          const modal = document.getElementById('bulkAssignModal');
+          const errorEl = document.getElementById('bulkAssignError');
+          const confirmBtn = document.getElementById('bulkAssignConfirmBtn');
+          const selectEl = document.getElementById('bulkAssignEmployeeSelect');
+
+          bulkSelectedIds = [];
+          if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+          }
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'تخصيص';
+          }
+          if (selectEl) selectEl.value = '';
+
+          if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.classList.remove('overflow-hidden');
+          }
+        }
+
+        document.addEventListener('keydown', (e) => {
+          if (e.key !== 'Escape') return;
+          const modal = document.getElementById('bulkAssignModal');
+          if (modal && !modal.classList.contains('hidden')) closeBulkAssignModal();
+        });
+
+        async function confirmBulkAssign() {
+          const selectEl = document.getElementById('bulkAssignEmployeeSelect');
+          const errorEl = document.getElementById('bulkAssignError');
+          const confirmBtn = document.getElementById('bulkAssignConfirmBtn');
+
+          const employeeId = selectEl ? selectEl.value : '';
+          if (!employeeId) {
+            if (errorEl) {
+              errorEl.textContent = 'الرجاء اختيار موظف أولاً.';
+              errorEl.classList.remove('hidden');
+            }
+            return;
+          }
+
+          if (!bulkSelectedIds || bulkSelectedIds.length === 0) {
+            if (errorEl) {
+              errorEl.textContent = 'لا يوجد عملاء محددين.';
+              errorEl.classList.remove('hidden');
+            }
+            return;
+          }
+
+          if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+          }
+
+          if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'جارٍ التخصيص...';
+          }
+
+          try {
+            const response = await fetch('/api/customer-assignment/bulk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customer_ids: bulkSelectedIds,
+                employee_id: employeeId
+              })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+              alert('تم تخصيص ' + data.assigned_count + ' عميل!');
+              closeBulkAssignModal();
+              location.reload();
+            } else {
+              throw new Error(data.error || 'خطأ غير معروف');
+            }
+          } catch (error) {
+            if (errorEl) {
+              errorEl.textContent = 'حدث خطأ: ' + (error?.message || String(error));
+              errorEl.classList.remove('hidden');
+            } else {
+              alert('حدث خطأ: ' + (error?.message || String(error)));
+            }
+          } finally {
+            if (confirmBtn) {
+              confirmBtn.disabled = false;
+              confirmBtn.textContent = 'تخصيص';
+            }
+          }
+        }
+
         // Assign single customer
         async function assignCustomer(customerId, employeeId) {
           if (!employeeId) {
@@ -17962,28 +18135,8 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             alert('الرجاء تحديد عملاء أولاً');
             return;
           }
-          
-          const employeeId = prompt('أدخل رقم الموظف:');
-          if (!employeeId) return;
-          
-          try {
-            const response = await fetch('/api/customer-assignment/bulk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                customer_ids: selectedIds, 
-                employee_id: employeeId 
-              })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-              alert(\`تم تخصيص \${data.assigned_count} عميل!\`);
-              location.reload();
-            }
-          } catch (error) {
-            alert('حدث خطأ: ' + error.message);
-          }
+
+          openBulkAssignModal(selectedIds);
         }
 
         // Search functionality
@@ -18211,7 +18364,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             width: max-content;
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -18434,7 +18587,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             width: max-content;
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -19016,7 +19169,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             50% { opacity: .5; }
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -19455,7 +19608,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('id_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="id_attachment_preview" class="mt-2"></div>
                     </div>
                     
@@ -19471,7 +19624,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('bank_statement_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="bank_statement_attachment_preview" class="mt-2"></div>
                     </div>
                     
@@ -19487,7 +19640,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('salary_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="salary_attachment_preview" class="mt-2"></div>
                     </div>
                     
@@ -19503,7 +19656,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('additional_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="additional_attachment_preview" class="mt-2"></div>
                     </div>
                   </div>
@@ -19584,9 +19737,9 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
               return
             }
             
-            // Check file size (5MB max)
-            if (file.size > 5 * 1024 * 1024) {
-              previewDiv.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 5MB</span>'
+            // Check file size (2MB max)
+            if (file.size > 2 * 1024 * 1024) {
+              previewDiv.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>'
               fileInput.value = ''
               attachmentFiles[fieldName] = null
               return
@@ -19777,7 +19930,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             width: max-content;
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -20543,7 +20696,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
               
               <div class="border-r-4 border-green-500 pr-4">
                 <p class="text-sm text-gray-500 mb-1">الاسم الكامل</p>
-                <p class="text-xl font-bold text-gray-800">${a.name}</p>
+                <p class="text-xl font-bold text-gray-800">${a.full_name||"غير متوفر"}</p>
               </div>
               
               <div class="border-r-4 border-yellow-500 pr-4">
@@ -20717,7 +20870,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             page-break-inside: avoid;
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -21030,7 +21183,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
             page-break-inside: avoid;
           }
           
-          ${k()}
+          ${I()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -23613,7 +23766,7 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
         </div>
       </body>
       </html>
-    `)}});d.get("/admin/users-new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, role_name, description FROM roles ORDER BY id").all(),a=await e.env.DB.prepare("SELECT id, company_name FROM tenants ORDER BY company_name").all();return e.html(`
+    `)}});d.get("/admin/users-new",async e=>{try{const t=await x(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const r=await e.env.DB.prepare("SELECT id, role_name, description FROM roles ORDER BY id").all(),l=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -23737,8 +23890,8 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                   </label>
                   <select name="role_id" required id="roleSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الدور --</option>
-                    ${t.results.map(s=>`
-                      <option value="${s.id}" data-role-name="${s.role_name}">${s.role_name} - ${s.description||""}</option>
+                    ${r.results.map(o=>`
+                      <option value="${o.id}" data-role-name="${o.role_name}">${o.role_name} - ${o.description||""}</option>
                     `).join("")}
                   </select>
                 </div>
@@ -23751,8 +23904,8 @@ var W=(e,t,a)=>(s,r)=>{let l=-1;return o(0);async function o(i){if(i<=l)throw ne
                   </label>
                   <select name="tenant_id" id="tenantSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الشركة --</option>
-                    ${a.results.map(s=>`
-                      <option value="${s.id}">${s.company_name}</option>
+                    ${l.results.map(o=>`
+                      <option value="${o.id}">${o.company_name}</option>
                     `).join("")}
                   </select>
                 </div>

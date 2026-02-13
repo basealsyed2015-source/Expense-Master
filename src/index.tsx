@@ -476,6 +476,11 @@ async function getUserTenantId(c: any): Promise<number | null> {
   return info.tenantId
 }
 
+function isSuperAdminUser(info: { roleId: number | null; tokenRoleId: number | null }): boolean {
+  // Treat as super-admin only if BOTH DB role and token role agree on 1.
+  return info.roleId === 1 && (info.tokenRoleId === null || info.tokenRoleId === 1)
+}
+
 // ----------------------------
 // Server-side RBAC for admin pages (effective security; not just UI hiding)
 // ----------------------------
@@ -528,9 +533,7 @@ app.use('/admin/*', async (c, next) => {
       return c.redirect('/login')
     }
 
-  // Treat as super-admin only if BOTH DB role and token role agree on 1.
-  const isSuperAdmin =
-    info.roleId === 1 && (info.tokenRoleId === null || info.tokenRoleId === 1)
+  const isSuperAdmin = isSuperAdminUser(info)
 
   // Super-admin-only pages
   // Use c.req.path directly (it's available in Hono)
@@ -1769,6 +1772,9 @@ app.get('/api/users', async (c) => {
   try {
     // Get user info including role_id
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
     const roleId = userInfo.roleId
     const tenantId = userInfo.tenantId
     
@@ -1814,20 +1820,42 @@ app.post('/api/users', async (c) => {
     
     // Get user info to check role
     const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const requestedRoleId = Number.parseInt(String(role_id || ''), 10)
+    if (Number.isNaN(requestedRoleId)) {
+      return c.json({ success: false, error: 'Invalid role_id' }, 400)
+    }
+
+    // Only super admin can create SaaS super admin users (role_id = 1)
+    if (requestedRoleId === 1 && !isSuperAdminUser(userInfo)) {
+      return c.json({ success: false, error: 'Forbidden: cannot grant SaaS role' }, 403)
+    }
+
+    // Prevent non-superadmins from creating "admin" user_type as well
+    if (String(user_type || '') === 'admin' && !isSuperAdminUser(userInfo)) {
+      return c.json({ success: false, error: 'Forbidden: cannot create SaaS admin user type' }, 403)
+    }
     
     // Get tenant_id from form data (if provided by super admin)
     // If not provided, use the current user's tenant_id (for company admin adding users)
     let tenant_id = formData.get('tenant_id');
-    
-    if (tenant_id && tenant_id !== '') {
-      // Convert to integer if provided as string
-      tenant_id = parseInt(tenant_id as string);
-    } else if (userInfo.roleId === 1) {
-      // Super admin creating user without tenant - allow null
-      tenant_id = null;
+
+    if (isSuperAdminUser(userInfo)) {
+      if (tenant_id && tenant_id !== '') {
+        tenant_id = parseInt(tenant_id as string);
+      } else {
+        // Super admin creating user without tenant - allow null
+        tenant_id = null;
+      }
     } else {
-      // Company admin/supervisor creating user - use their tenant_id
-      tenant_id = userInfo.tenantId;
+      // Non-superadmin: ignore any provided tenant_id to prevent cross-tenant creation
+      if (!userInfo.tenantId) {
+        return c.json({ success: false, error: 'No tenant context' }, 400)
+      }
+      tenant_id = userInfo.tenantId
     }
     
     // Check for duplicate username
@@ -1859,7 +1887,7 @@ app.post('/api/users', async (c) => {
     const result = await c.env.DB.prepare(`
       INSERT INTO users (username, password, full_name, email, phone, user_type, role_id, subscription_id, is_active, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(username, password, full_name, email, phone, user_type, role_id, subscription_id, is_active, tenant_id).run()
+    `).bind(username, password, full_name, email, phone, user_type, requestedRoleId, subscription_id, is_active, tenant_id).run()
     
     return c.json({ 
       success: true, 
@@ -1878,13 +1906,26 @@ app.post('/api/users', async (c) => {
 // Update user
 app.put('/api/users/:id', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
     const id = c.req.param('id')
     const { username, full_name, email, phone, role_id, subscription_id, is_active } = await c.req.json()
+
+    const requestedRoleId = Number.parseInt(String(role_id ?? ''), 10)
+    if (Number.isNaN(requestedRoleId)) {
+      return c.json({ success: false, error: 'Invalid role_id' }, 400)
+    }
+    if (requestedRoleId === 1 && !isSuperAdminUser(requester)) {
+      return c.json({ success: false, error: 'Forbidden: cannot grant SaaS role' }, 403)
+    }
+
     await c.env.DB.prepare(`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(username, full_name, email, phone, role_id, subscription_id, is_active, id).run()
+    `).bind(username, full_name, email, phone, requestedRoleId, subscription_id, is_active, id).run()
     return c.json({ success: true })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -3254,6 +3295,11 @@ app.post('/api/attachments/upload', async (c) => {
     }
 
     const file = fileEntry
+    const maxAttachmentSizeBytes = 2 * 1024 * 1024 // 2MB
+
+    if (file.size > maxAttachmentSizeBytes) {
+      return c.json({ success: false, error: 'File too large. Max size is 2MB' }, 400)
+    }
 
     // Generate unique filename
     const timestamp = Date.now()
@@ -3962,6 +4008,13 @@ app.get('/api/users/:userId/permissions', async (c) => {
 // Update role permissions
 app.put('/api/roles/:roleId/permissions', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    if (!isSuperAdminUser(requester)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const roleId = c.req.param('roleId')
     const { permission_ids } = await c.req.json()
     
@@ -4023,6 +4076,13 @@ app.get('/api/roles', async (c) => {
 // Create new role
 app.post('/api/roles', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    if (!isSuperAdminUser(requester)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const { role_name, description } = await c.req.json()
     
     const result = await c.env.DB.prepare(`
@@ -4043,6 +4103,13 @@ app.post('/api/roles', async (c) => {
 // Update role
 app.put('/api/roles/:id', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    if (!isSuperAdminUser(requester)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const id = c.req.param('id')
     const { role_name, description } = await c.req.json()
     
@@ -4061,6 +4128,13 @@ app.put('/api/roles/:id', async (c) => {
 // Delete role
 app.delete('/api/roles/:id', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    if (!isSuperAdminUser(requester)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const id = c.req.param('id')
     
     // Check if role is in use
@@ -7031,7 +7105,180 @@ app.get('/admin/customer-assignment', async (c) => {
         </div>
       </div>
 
+      <!-- Bulk Assign Modal -->
+      <div id="bulkAssignModal" class="fixed inset-0 hidden items-center justify-center z-50">
+        <div class="absolute inset-0 bg-black/50" onclick="closeBulkAssignModal()"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-800">
+              <i class="fas fa-users-cog text-green-600 ml-2"></i>
+              تخصيص العملاء المحددين
+            </h3>
+            <button onclick="closeBulkAssignModal()" class="text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-all" aria-label="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
+          <p class="text-sm text-gray-600 mb-4">
+            عدد العملاء المحددين:
+            <span id="bulkAssignCount" class="font-bold text-gray-800">0</span>
+          </p>
+
+          <label class="block text-sm font-bold text-gray-700 mb-2">
+            اختر الموظف
+          </label>
+          <select id="bulkAssignEmployeeSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            <option value="">اختر موظف...</option>
+            ${employees.results.map((emp: any) => `
+              <option value="${emp.id}">${emp.full_name}${emp.username ? ` (${emp.username})` : ''}</option>
+            `).join('')}
+          </select>
+
+          <div id="bulkAssignError" class="hidden text-sm text-red-600 mt-3"></div>
+
+          <div class="flex gap-3 mt-6">
+            <button onclick="closeBulkAssignModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              إلغاء
+            </button>
+            <button id="bulkAssignConfirmBtn" onclick="confirmBulkAssign()" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              تخصيص
+            </button>
+          </div>
+        </div>
+      </div>
+
       <script>
+        let bulkSelectedIds = [];
+
+        function openBulkAssignModal(selectedIds) {
+          const modal = document.getElementById('bulkAssignModal');
+          const countEl = document.getElementById('bulkAssignCount');
+          const selectEl = document.getElementById('bulkAssignEmployeeSelect');
+          const errorEl = document.getElementById('bulkAssignError');
+          const confirmBtn = document.getElementById('bulkAssignConfirmBtn');
+
+          bulkSelectedIds = Array.isArray(selectedIds) ? selectedIds : [];
+          if (countEl) countEl.textContent = String(bulkSelectedIds.length);
+          if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+          }
+          if (selectEl) selectEl.value = '';
+
+          // If no employees exist, block assignment with a clear message
+          const hasEmployees = selectEl && selectEl.options && selectEl.options.length > 1;
+          if (!hasEmployees) {
+            if (errorEl) {
+              errorEl.textContent = 'لا يوجد موظفون في هذه الشركة لتخصيص العملاء لهم.';
+              errorEl.classList.remove('hidden');
+            }
+            if (confirmBtn) confirmBtn.disabled = true;
+          } else {
+            if (confirmBtn) confirmBtn.disabled = false;
+          }
+
+          if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+          }
+        }
+
+        function closeBulkAssignModal() {
+          const modal = document.getElementById('bulkAssignModal');
+          const errorEl = document.getElementById('bulkAssignError');
+          const confirmBtn = document.getElementById('bulkAssignConfirmBtn');
+          const selectEl = document.getElementById('bulkAssignEmployeeSelect');
+
+          bulkSelectedIds = [];
+          if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+          }
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'تخصيص';
+          }
+          if (selectEl) selectEl.value = '';
+
+          if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.classList.remove('overflow-hidden');
+          }
+        }
+
+        document.addEventListener('keydown', (e) => {
+          if (e.key !== 'Escape') return;
+          const modal = document.getElementById('bulkAssignModal');
+          if (modal && !modal.classList.contains('hidden')) closeBulkAssignModal();
+        });
+
+        async function confirmBulkAssign() {
+          const selectEl = document.getElementById('bulkAssignEmployeeSelect');
+          const errorEl = document.getElementById('bulkAssignError');
+          const confirmBtn = document.getElementById('bulkAssignConfirmBtn');
+
+          const employeeId = selectEl ? selectEl.value : '';
+          if (!employeeId) {
+            if (errorEl) {
+              errorEl.textContent = 'الرجاء اختيار موظف أولاً.';
+              errorEl.classList.remove('hidden');
+            }
+            return;
+          }
+
+          if (!bulkSelectedIds || bulkSelectedIds.length === 0) {
+            if (errorEl) {
+              errorEl.textContent = 'لا يوجد عملاء محددين.';
+              errorEl.classList.remove('hidden');
+            }
+            return;
+          }
+
+          if (errorEl) {
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+          }
+
+          if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'جارٍ التخصيص...';
+          }
+
+          try {
+            const response = await fetch('/api/customer-assignment/bulk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customer_ids: bulkSelectedIds,
+                employee_id: employeeId
+              })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+              alert('تم تخصيص ' + data.assigned_count + ' عميل!');
+              closeBulkAssignModal();
+              location.reload();
+            } else {
+              throw new Error(data.error || 'خطأ غير معروف');
+            }
+          } catch (error) {
+            if (errorEl) {
+              errorEl.textContent = 'حدث خطأ: ' + (error?.message || String(error));
+              errorEl.classList.remove('hidden');
+            } else {
+              alert('حدث خطأ: ' + (error?.message || String(error)));
+            }
+          } finally {
+            if (confirmBtn) {
+              confirmBtn.disabled = false;
+              confirmBtn.textContent = 'تخصيص';
+            }
+          }
+        }
+
         // Assign single customer
         async function assignCustomer(customerId, employeeId) {
           if (!employeeId) {
@@ -7122,28 +7369,8 @@ app.get('/admin/customer-assignment', async (c) => {
             alert('الرجاء تحديد عملاء أولاً');
             return;
           }
-          
-          const employeeId = prompt('أدخل رقم الموظف:');
-          if (!employeeId) return;
-          
-          try {
-            const response = await fetch('/api/customer-assignment/bulk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                customer_ids: selectedIds, 
-                employee_id: employeeId 
-              })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-              alert(\`تم تخصيص \${data.assigned_count} عميل!\`);
-              location.reload();
-            }
-          } catch (error) {
-            alert('حدث خطأ: ' + error.message);
-          }
+
+          openBulkAssignModal(selectedIds);
         }
 
         // Search functionality
@@ -8974,7 +9201,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('id_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="id_attachment_preview" class="mt-2"></div>
                     </div>
                     
@@ -8990,7 +9217,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('bank_statement_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="bank_statement_attachment_preview" class="mt-2"></div>
                     </div>
                     
@@ -9006,7 +9233,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('salary_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="salary_attachment_preview" class="mt-2"></div>
                     </div>
                     
@@ -9022,7 +9249,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                         onchange="handleFileSelect('additional_attachment')"
                       >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
                       <div id="additional_attachment_preview" class="mt-2"></div>
                     </div>
                   </div>
@@ -9103,9 +9330,9 @@ app.get('/admin/requests/:id/edit', async (c) => {
               return
             }
             
-            // Check file size (5MB max)
-            if (file.size > 5 * 1024 * 1024) {
-              previewDiv.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 5MB</span>'
+            // Check file size (2MB max)
+            if (file.size > 2 * 1024 * 1024) {
+              previewDiv.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>'
               fileInput.value = ''
               attachmentFiles[fieldName] = null
               return
@@ -10279,7 +10506,7 @@ app.get('/admin/customers/:id', async (c) => {
               
               <div class="border-r-4 border-green-500 pr-4">
                 <p class="text-sm text-gray-500 mb-1">الاسم الكامل</p>
-                <p class="text-xl font-bold text-gray-800">${(customer as any).name}</p>
+                <p class="text-xl font-bold text-gray-800">${(customer as any).full_name || 'غير متوفر'}</p>
               </div>
               
               <div class="border-r-4 border-yellow-500 pr-4">
@@ -13462,6 +13689,7 @@ app.get('/admin/users/:id/edit', async (c) => {
     // Get current user info to check permissions
     const userInfo = await getUserInfo(c)
     const currentUserRoleId = userInfo.roleId
+    const isSuperAdmin = isSuperAdminUser(userInfo)
     
     // Get user data
     const userQuery = `
@@ -13477,9 +13705,23 @@ app.get('/admin/users/:id/edit', async (c) => {
     }
     
     const user = userResults[0]
+
+    // Non-superadmin cannot edit SaaS super admins or cross-tenant users
+    if (!isSuperAdmin) {
+      if (normalizeRoleId(user.role_id) === 1) {
+        return c.html('<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>', 403 as any)
+      }
+      if (userInfo.tenantId && user.tenant_id && user.tenant_id !== userInfo.tenantId) {
+        return c.html('<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>', 403 as any)
+      }
+    }
     
     // Get roles
-    const roles = await c.env.DB.prepare('SELECT id, role_name, description FROM roles ORDER BY id').all()
+    const rolesQuery =
+      isSuperAdmin
+        ? 'SELECT id, role_name, description FROM roles ORDER BY id'
+        : 'SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id'
+    const roles = await c.env.DB.prepare(rolesQuery).all()
     
     // Get tenants only if current user is superadmin (role_id = 1)
     let tenants = { results: [] }
@@ -13560,7 +13802,7 @@ app.get('/admin/users/:id/edit', async (c) => {
                   </label>
                   <select name="user_type" required onchange="updateRoleFilter(this.value)"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="admin" ${user.user_type === 'admin' ? 'selected' : ''}>مدير النظام (Super Admin)</option>
+                    ${isSuperAdmin ? `<option value="admin" ${user.user_type === 'admin' ? 'selected' : ''}>مدير النظام (Super Admin)</option>` : ''}
                     <option value="company" ${user.user_type === 'company' ? 'selected' : ''}>حساب شركة</option>
                     <option value="employee" ${user.user_type === 'employee' ? 'selected' : ''}>موظف</option>
                   </select>
@@ -13685,6 +13927,12 @@ app.post('/admin/users/:id', async (c) => {
   try {
     const id = c.req.param('id')
     const formData = await c.req.formData()
+
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.html('<h1>Unauthorized</h1>', 401 as any)
+    }
+    const requesterIsSuperAdmin = isSuperAdminUser(requester)
     
     const username = formData.get('username')
     const full_name = formData.get('full_name')
@@ -13695,6 +13943,35 @@ app.post('/admin/users/:id', async (c) => {
     const role_id = formData.get('role_id')
     const tenant_id = formData.get('tenant_id') || null
     const is_active = formData.get('is_active')
+
+    const requestedRoleId = Number.parseInt(String(role_id || ''), 10)
+    if (Number.isNaN(requestedRoleId)) {
+      return c.html('<h1>خطأ</h1><p>role_id غير صحيح</p>', 400 as any)
+    }
+
+    // Load target user to enforce scope
+    const targetUser = await c.env.DB.prepare(`SELECT id, tenant_id, role_id FROM users WHERE id = ?`).bind(id).first()
+    if (!targetUser) {
+      return c.html('<h1>المستخدم غير موجود</h1>', 404 as any)
+    }
+
+    // Non-superadmin restrictions:
+    // - cannot grant SaaS super admin role_id=1 or user_type=admin
+    // - cannot edit SaaS super admin accounts
+    // - cannot move users across tenants; force tenant_id to requester's tenant
+    if (!requesterIsSuperAdmin) {
+      if (normalizeRoleId((targetUser as any).role_id) === 1) {
+        return c.html('<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>', 403 as any)
+      }
+      if (requestedRoleId === 1 || String(user_type || '') === 'admin') {
+        return c.html('<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>', 403 as any)
+      }
+      if (!requester.tenantId) {
+        return c.html('<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>', 400 as any)
+      }
+    }
+
+    const finalTenantId = requesterIsSuperAdmin ? tenant_id : requester.tenantId
     
     // Build UPDATE query
     let query = `
@@ -13702,7 +13979,7 @@ app.post('/admin/users/:id', async (c) => {
       SET username = ?, full_name = ?, email = ?, phone = ?, 
           user_type = ?, role_id = ?, tenant_id = ?, is_active = ?
     `
-    let params = [username, full_name, email, phone, user_type, role_id, tenant_id, is_active]
+    let params = [username, full_name, email, phone, user_type, requestedRoleId, finalTenantId, is_active]
     
     // Only update password if provided
     if (password && password.toString().trim() !== '') {
@@ -13711,7 +13988,7 @@ app.post('/admin/users/:id', async (c) => {
         SET username = ?, full_name = ?, email = ?, phone = ?, 
             password = ?, user_type = ?, role_id = ?, tenant_id = ?, is_active = ?
       `
-      params = [username, full_name, email, phone, password, user_type, role_id, tenant_id, is_active]
+      params = [username, full_name, email, phone, password, user_type, requestedRoleId, finalTenantId, is_active]
     }
     
     query += ` WHERE id = ?`
@@ -13861,8 +14138,32 @@ app.get('/admin/users/:id/delete', async (c) => {
 // ==================== صفحة إضافة مستخدم جديد - بدون تعارض ====================
 app.get('/admin/users-new', async (c) => {
   try {
-    const roles = await c.env.DB.prepare('SELECT id, role_name, description FROM roles ORDER BY id').all()
-    const tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants ORDER BY company_name').all()
+    const userInfo = await getUserInfo(c)
+
+    // Super admin can assign any company; other users can only assign their own tenant.
+    let tenantsQuery = 'SELECT id, company_name FROM tenants'
+    const tenantParams: any[] = []
+
+    if (userInfo.roleId !== 1) {
+      if (userInfo.tenantId) {
+        tenantsQuery += ' WHERE id = ?'
+        tenantParams.push(userInfo.tenantId)
+      } else {
+        // No tenant context -> return no options instead of leaking all tenants.
+        tenantsQuery += ' WHERE 1 = 0'
+      }
+    }
+
+    tenantsQuery += ' ORDER BY company_name'
+
+    const rolesQuery =
+      isSuperAdminUser(userInfo)
+        ? 'SELECT id, role_name, description FROM roles ORDER BY id'
+        : 'SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id'
+    const roles = await c.env.DB.prepare(rolesQuery).all()
+    const tenants = tenantParams.length > 0
+      ? await c.env.DB.prepare(tenantsQuery).bind(...tenantParams).all()
+      : await c.env.DB.prepare(tenantsQuery).all()
     
     return c.html(`
       <!DOCTYPE html>
@@ -13973,7 +14274,7 @@ app.get('/admin/users-new', async (c) => {
                   <select name="user_type" required id="userType" onchange="updateRoleOptions()" 
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر نوع المستخدم --</option>
-                    <option value="admin">مدير النظام (Super Admin)</option>
+                    ${isSuperAdminUser(userInfo) ? `<option value="admin">مدير النظام (Super Admin)</option>` : ''}
                     <option value="company_admin">مدير شركة (Company Admin)</option>
                     <option value="supervisor">مشرف موظفين (Supervisor)</option>
                     <option value="employee">موظف (Employee)</option>
@@ -14312,6 +14613,14 @@ app.get('/admin/users/:id', async (c) => {
 app.get('/admin/users/:id/permissions', async (c) => {
   try {
     const userId = c.req.param('id')
+
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.html('<h1>Unauthorized</h1>', 401 as any)
+    }
+    if (!isSuperAdminUser(requester)) {
+      return c.html('<h1>غير مسموح</h1><p>هذه الصفحة متاحة لمدير SaaS فقط.</p>', 403 as any)
+    }
     
     // جلب بيانات المستخدم
     const user = await c.env.DB.prepare(`
@@ -14500,6 +14809,13 @@ app.get('/admin/users/:id/permissions', async (c) => {
 // API لحفظ صلاحيات المستخدم
 app.post('/api/users/:id/permissions', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    if (!isSuperAdminUser(requester)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const userId = c.req.param('id')
     const { role_id, permission_ids } = await c.req.json()
     

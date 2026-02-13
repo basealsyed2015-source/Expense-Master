@@ -344,7 +344,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="idAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'idPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                             <div id="idPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
                         <!-- كشف الحساب البنكي -->
@@ -356,7 +356,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="bankStatementAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'bankStatementPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
                             <div id="bankStatementPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
                         <!-- تعريف بالراتب -->
@@ -368,7 +368,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="salaryAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
                             <div id="salaryPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
                         <!-- مرفق إضافي -->
@@ -380,7 +380,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="additionalAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'additionalPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
                             <div id="additionalPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 5 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                     </div>
                     
@@ -552,10 +552,10 @@ export const smartCalculator = `<!DOCTYPE html>
                 return;
             }
             
-            // Validate file size (5MB max)
-            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+            // Validate file size (2MB max)
+            const maxSize = 2 * 1024 * 1024; // 2MB in bytes
             if (file.size > maxSize) {
-                alert('حجم الملف كبير جداً! الحد الأقصى: 5 ميغابايت');
+                alert('حجم الملف كبير جداً! الحد الأقصى: 2 ميغابايت');
                 input.value = '';
                 preview.innerHTML = '';
                 return;
