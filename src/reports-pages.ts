@@ -564,7 +564,7 @@ export const workflowReportPage = `
         async function loadWorkflowReport() {
             try {
                 // Get filter values
-                const customerId = document.getElementById('customerIdFilter').value;
+                const customerId = document.getElementById('customerId').value;
                 const startDate = document.getElementById('startDate').value;
                 const endDate = document.getElementById('endDate').value;
 

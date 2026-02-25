@@ -20,6 +20,7 @@ import { generateAddRatePage, generateEditRatePage } from './rates-forms'
 import { generateWorkflowTimelinePage } from './workflow-page'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
+import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrAttendancePage } from './hr-complete-system'
 import {
@@ -1996,15 +1997,11 @@ app.post('/api/customers', async (c) => {
     const city = formData.get('city') as string || null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    // Resolve tenant from authenticated user (supports both cookie + bearer flows).
+    const userInfo = await getUserInfo(c)
+    let tenant_id = userInfo.tenantId
+    if (userInfo.roleId && userInfo.roleId !== 1 && !tenant_id) {
+      throw new Error('Missing tenant context for customer creation')
     }
     
     // Check if national_id already exists within the same tenant
@@ -4644,6 +4641,174 @@ app.get('/api/reports/performance', async (c) => {
   }
 });
 
+// Workflow Report API
+app.get('/api/reports/workflow', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح بالوصول' }, 401);
+    }
+
+    const customerId = c.req.query('customer_id');
+    const startDate = c.req.query('start_date');
+    const endDate = c.req.query('end_date');
+
+    const whereConditions: string[] = ['1=1'];
+    const queryParams: any[] = [];
+
+    if (userInfo.roleId !== 1 && userInfo.tenantId) {
+      whereConditions.push('c.tenant_id = ?');
+      queryParams.push(userInfo.tenantId);
+    }
+
+    if (customerId) {
+      whereConditions.push('c.id = ?');
+      queryParams.push(customerId);
+    }
+
+    if (startDate) {
+      whereConditions.push('DATE(fr.created_at) >= DATE(?)');
+      queryParams.push(startDate);
+    }
+
+    if (endDate) {
+      whereConditions.push('DATE(fr.created_at) <= DATE(?)');
+      queryParams.push(endDate);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
+    const stagesQuery = `
+      SELECT
+        COALESCE(ws.stage_name_ar, 'غير محدد') as name,
+        COUNT(fr.id) as count
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      WHERE ${whereClause}
+      GROUP BY COALESCE(ws.stage_name_ar, 'غير محدد')
+      ORDER BY count DESC
+    `;
+
+    const durationsQuery = `
+      SELECT
+        stage,
+        ROUND(AVG(duration_minutes), 2) as duration
+      FROM (
+        SELECT
+          COALESCE(to_stage.stage_name_ar, 'غير محدد') as stage,
+          (julianday(
+            COALESCE(
+              LEAD(wst.created_at) OVER (PARTITION BY wst.request_id ORDER BY wst.created_at),
+              fr.approved_at,
+              fr.rejected_at,
+              datetime('now')
+            )
+          ) - julianday(wst.created_at)) * 24 * 60 as duration_minutes
+        FROM workflow_stage_transitions wst
+        JOIN financing_requests fr ON wst.request_id = fr.id
+        LEFT JOIN customers c ON fr.customer_id = c.id
+        LEFT JOIN workflow_stages to_stage ON wst.to_stage_id = to_stage.id
+        WHERE ${whereClause}
+      ) stage_durations
+      WHERE duration_minutes IS NOT NULL AND duration_minutes >= 0
+      GROUP BY stage
+      ORDER BY duration DESC
+    `;
+
+    const detailsQuery = `
+      SELECT
+        c.id as customer_id,
+        c.full_name as customer_name,
+        fr.id as request_id,
+        COALESCE(fr.requested_amount, 0) as requested_amount,
+        COALESCE(ws.stage_name_ar, 'غير محدد') as current_stage,
+        COALESCE(ts.transition_count, 0) as transitions,
+        ROUND(
+          (julianday(COALESCE(fr.approved_at, fr.rejected_at, datetime('now'))) - julianday(fr.created_at)) * 24 * 60,
+          0
+        ) as total_duration_minutes,
+        fr.status
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      LEFT JOIN (
+        SELECT request_id, COUNT(*) as transition_count
+        FROM workflow_stage_transitions
+        GROUP BY request_id
+      ) ts ON ts.request_id = fr.id
+      WHERE ${whereClause}
+      ORDER BY fr.created_at DESC
+      LIMIT 500
+    `;
+
+    const { results: stagesRaw } = queryParams.length > 0
+      ? await c.env.DB.prepare(stagesQuery).bind(...queryParams).all()
+      : await c.env.DB.prepare(stagesQuery).all();
+
+    const { results: durationsRaw } = queryParams.length > 0
+      ? await c.env.DB.prepare(durationsQuery).bind(...queryParams).all()
+      : await c.env.DB.prepare(durationsQuery).all();
+
+    const { results: detailsRaw } = queryParams.length > 0
+      ? await c.env.DB.prepare(detailsQuery).bind(...queryParams).all()
+      : await c.env.DB.prepare(detailsQuery).all();
+
+    const statusLabels: Record<string, string> = {
+      approved: 'مكتمل',
+      rejected: 'مرفوض',
+      pending: 'قيد المعالجة',
+      under_review: 'قيد المراجعة',
+      reviewed: 'تمت المراجعة',
+      submitted: 'مقدم'
+    };
+
+    const formatMinutes = (value: any) => {
+      const totalMinutes = Number(value || 0);
+      if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return '0 دقيقة';
+
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = Math.round(totalMinutes % 60);
+      if (hours <= 0) return `${minutes} دقيقة`;
+      return `${hours} ساعة ${minutes} دقيقة`;
+    };
+
+    const details = (detailsRaw || []).map((row: any) => ({
+      customerId: row.customer_id,
+      customerName: row.customer_name || '-',
+      requestId: row.request_id,
+      amount: Number(row.requested_amount || 0),
+      stage: row.current_stage || 'غير محدد',
+      transitions: Number(row.transitions || 0),
+      duration: formatMinutes(row.total_duration_minutes),
+      status: statusLabels[row.status] || row.status || 'غير محدد'
+    }));
+
+    const durations = (durationsRaw || []).map((row: any) => ({
+      stage: row.stage || 'غير محدد',
+      duration: Number(row.duration || 0)
+    }));
+
+    const stages = (stagesRaw || []).map((row: any) => ({
+      name: row.name || 'غير محدد',
+      count: Number(row.count || 0)
+    }));
+
+    return c.json({
+      success: true,
+      data: {
+        stages,
+        durations,
+        details
+      }
+    });
+  } catch (error: any) {
+    console.error('Workflow report error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 app.get('/admin/panel', async (c) => {
   try {
     // Check authentication
@@ -6000,6 +6165,9 @@ app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
 app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
 app.get('/admin/reports/banks', (c) => c.html(banksReportPage))
 app.get('/admin/reports/performance', (c) => c.html(performanceReportPage))
+app.get('/admin/reports/clicks', (c) => c.html(clicksReportPage))
+app.get('/admin/reports/workflow', (c) => c.html(workflowReportPage))
+app.get('/admin/reports/employee-performance', (c) => c.html(employeePerformanceReportPage))
 app.get('/admin/payments', (c) => c.html(paymentsPage))
 app.get('/admin/banks', (c) => c.html(banksManagementPage))
 
@@ -6618,7 +6786,7 @@ app.get('/admin/customers/add', async (c) => {
             إضافة عميل جديد
           </h1>
           
-          <form method="POST" action="/api/customers" enctype="application/x-www-form-urlencoded" class="space-y-6">
+          <form id="add-customer-form" method="POST" action="/api/customers" enctype="application/x-www-form-urlencoded" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -6740,6 +6908,53 @@ app.get('/admin/customers/add', async (c) => {
           </form>
         </div>
       </div>
+      <script>
+        (function () {
+          const form = document.getElementById('add-customer-form');
+          if (!form) return;
+
+          form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            const formData = new FormData(form);
+            const payload = Object.fromEntries(formData.entries());
+            console.log('[CustomerCreate] Submitting payload:', payload);
+
+            try {
+              const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include',
+                redirect: 'follow'
+              });
+              const responseText = await response.text();
+              console.log('[CustomerCreate] Response:', {
+                status: response.status,
+                ok: response.ok,
+                redirected: response.redirected,
+                url: response.url,
+                bodyPreview: responseText.slice(0, 500)
+              });
+
+              if (response.url.includes('/admin/customers') && !responseText.includes('حدث خطأ') && !responseText.includes('مكرر')) {
+                window.location.href = '/admin/customers';
+                return;
+              }
+
+              document.open();
+              document.write(responseText);
+              document.close();
+            } catch (error) {
+              console.error('[CustomerCreate] Request failed:', error);
+              alert('حدث خطأ أثناء إضافة العميل. راجع Console للمزيد من التفاصيل.');
+            } finally {
+              if (submitBtn) submitBtn.disabled = false;
+            }
+          });
+        })();
+      </script>
     </body>
     </html>
   `)
@@ -8181,7 +8396,7 @@ app.get('/admin/customers', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -8203,6 +8418,19 @@ app.get('/admin/customers', async (c) => {
                     <option value="name">الاسم فقط</option>
                     <option value="phone">الهاتف فقط</option>
                     <option value="email">البريد فقط</option>
+                  </select>
+                </div>
+
+                <div>
+                  <select
+                    id="dateRangeFilter"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onchange="filterTable()"
+                  >
+                    <option value="all">تاريخ التسجيل: الكل</option>
+                    <option value="30">آخر 30 يوم</option>
+                    <option value="60">آخر 60 يوم</option>
+                    <option value="90">آخر 90 يوم</option>
                   </select>
                 </div>
                 
@@ -8231,7 +8459,7 @@ app.get('/admin/customers', async (c) => {
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${customers.results.map((customer: any) => `
-                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}">
+                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}" data-created-at="${customer.created_at || ''}">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.phone || '-'}</td>
@@ -8267,6 +8495,7 @@ app.get('/admin/customers', async (c) => {
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
             const filterField = document.getElementById('filterField').value
+            const dateRangeFilter = document.getElementById('dateRangeFilter').value
             const tableBody = document.getElementById('tableBody')
             const rows = tableBody.getElementsByTagName('tr')
             let visibleCount = 0
@@ -8276,28 +8505,40 @@ app.get('/admin/customers', async (c) => {
               const name = row.getAttribute('data-name') || ''
               const phone = row.getAttribute('data-phone') || ''
               const email = row.getAttribute('data-email') || ''
+              const createdAt = row.getAttribute('data-created-at') || ''
               
-              let shouldShow = false
+              let matchesSearch = false
               
               if (searchInput === '') {
-                shouldShow = true
+                matchesSearch = true
               } else {
                 switch(filterField) {
                   case 'name':
-                    shouldShow = name.toLowerCase().includes(searchInput)
+                    matchesSearch = name.toLowerCase().includes(searchInput)
                     break
                   case 'phone':
-                    shouldShow = phone.toLowerCase().includes(searchInput)
+                    matchesSearch = phone.toLowerCase().includes(searchInput)
                     break
                   case 'email':
-                    shouldShow = email.toLowerCase().includes(searchInput)
+                    matchesSearch = email.toLowerCase().includes(searchInput)
                     break
                   default: // 'all'
-                    shouldShow = name.toLowerCase().includes(searchInput) || 
-                                phone.toLowerCase().includes(searchInput) || 
-                                email.toLowerCase().includes(searchInput)
+                    matchesSearch = name.toLowerCase().includes(searchInput) || 
+                                    phone.toLowerCase().includes(searchInput) || 
+                                    email.toLowerCase().includes(searchInput)
                 }
               }
+
+              let matchesDateRange = true
+              if (dateRangeFilter !== 'all') {
+                const days = parseInt(dateRangeFilter, 10)
+                const createdDate = new Date(createdAt)
+                const cutoffDate = new Date()
+                cutoffDate.setDate(cutoffDate.getDate() - days)
+                matchesDateRange = !isNaN(createdDate.getTime()) && createdDate >= cutoffDate
+              }
+
+              const shouldShow = matchesSearch && matchesDateRange
               
               row.style.display = shouldShow ? '' : 'none'
               if (shouldShow) visibleCount++
@@ -8310,6 +8551,7 @@ app.get('/admin/customers', async (c) => {
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('dateRangeFilter').value = 'all'
             filterTable()
           }
           
