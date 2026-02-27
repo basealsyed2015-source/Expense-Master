@@ -532,6 +532,15 @@ export const smartCalculator = `<!DOCTYPE html>
             const numeric = Number(value);
             return Number.isFinite(numeric) ? numeric : fallback;
         }
+
+        function toNullableNumber(value) {
+            if (value === null || value === undefined || value === '') {
+                return null;
+            }
+
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : null;
+        }
         
         function sanitizeRequestData(data) {
             const sanitized = {};
@@ -614,7 +623,7 @@ export const smartCalculator = `<!DOCTYPE html>
                 }
                 
                 // Build API URLs with tenant_id if available
-                const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}\` : '/api/banks';
+                const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}&include_global=0\` : '/api/banks';
                 const ratesUrl = tenantId ? \`/api/rates?tenant_id=\${tenantId}\` : '/api/rates';
                 
                 const [banksRes, typesRes, ratesRes] = await Promise.all([
@@ -635,12 +644,16 @@ export const smartCalculator = `<!DOCTYPE html>
                     rate: toNumber(rate.rate, rate.rate),
                     min_duration: toNumber(rate.min_duration, rate.min_duration),
                     max_duration: toNumber(rate.max_duration, rate.max_duration),
-                    min_salary: toNumber(rate.min_salary, rate.min_salary),
-                    max_salary: toNumber(rate.max_salary, rate.max_salary),
-                    min_amount: toNumber(rate.min_amount, rate.min_amount),
-                    max_amount: toNumber(rate.max_amount, rate.max_amount),
+                    min_salary: toNullableNumber(rate.min_salary),
+                    max_salary: toNullableNumber(rate.max_salary),
+                    min_amount: toNullableNumber(rate.min_amount),
+                    max_amount: toNullableNumber(rate.max_amount),
                     is_active: toNumber(rate.is_active, rate.is_active)
                 }));
+                if (tenantId) {
+                    const allowedBankIds = new Set(allBanks.map((bank) => bank.id));
+                    allRates = allRates.filter((rate) => allowedBankIds.has(rate.bank_id));
+                }
                 
                 console.log(\`✅ تم تحميل \${allBanks.length} بنك و \${allRates.length} نسبة\`);
                 if (tenantId) {
@@ -938,6 +951,20 @@ export const smartCalculator = `<!DOCTYPE html>
         async function calculateAllOffers() {
             const availableIncome = calculationData.salary - calculationData.obligations;
             const maxMonthlyPayment = availableIncome * 0.33; // 33% من الدخل المتاح
+            const matchesSalaryRange = (rate) => {
+                const minSalary = rate.min_salary;
+                const maxSalary = rate.max_salary;
+                const minOk = minSalary === null || minSalary === undefined || minSalary <= calculationData.salary;
+                const maxOk = maxSalary === null || maxSalary === undefined || maxSalary >= calculationData.salary;
+                return minOk && maxOk;
+            };
+            const matchesAmountRange = (rate) => {
+                const minAmount = rate.min_amount;
+                const maxAmount = rate.max_amount;
+                const minOk = minAmount === null || minAmount === undefined || minAmount <= calculationData.amount;
+                const maxOk = maxAmount === null || maxAmount === undefined || maxAmount >= calculationData.amount;
+                return minOk && maxOk;
+            };
             const debugBox = document.getElementById('filterDebug');
             if (debugBox) {
                 debugBox.classList.add('hidden');
@@ -970,10 +997,8 @@ export const smartCalculator = `<!DOCTYPE html>
             const applicableRates = allRates.filter(rate => 
                 rate.financing_type_id === calculationData.financing_type_id &&
                 rate.is_active === 1 &&
-                rate.min_salary <= calculationData.salary &&
-                rate.max_salary >= calculationData.salary &&
-                rate.min_amount <= calculationData.amount &&
-                rate.max_amount >= calculationData.amount
+                matchesSalaryRange(rate) &&
+                matchesAmountRange(rate)
             );
 
             let mismatchType = [];
@@ -987,14 +1012,13 @@ export const smartCalculator = `<!DOCTYPE html>
                 salaryOutOfRange = allRates.filter(rate =>
                     rate.financing_type_id === calculationData.financing_type_id &&
                     rate.is_active === 1 &&
-                    (rate.min_salary > calculationData.salary || rate.max_salary < calculationData.salary)
+                    !matchesSalaryRange(rate)
                 );
                 amountOutOfRange = allRates.filter(rate =>
                     rate.financing_type_id === calculationData.financing_type_id &&
                     rate.is_active === 1 &&
-                    rate.min_salary <= calculationData.salary &&
-                    rate.max_salary >= calculationData.salary &&
-                    (rate.min_amount > calculationData.amount || rate.max_amount < calculationData.amount)
+                    matchesSalaryRange(rate) &&
+                    !matchesAmountRange(rate)
                 );
             }
             

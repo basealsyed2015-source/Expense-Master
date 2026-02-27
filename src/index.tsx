@@ -1144,14 +1144,20 @@ app.post('/api/auth/reset-password', async (c) => {
 app.get('/api/banks', async (c) => {
   try {
     // Get tenant_id from query parameter or Authorization header
-    const tenantId = c.req.query('tenant_id');
+    const tenantIdRaw = c.req.query('tenant_id');
+    const tenantId = tenantIdRaw ? parseInt(tenantIdRaw, 10) : null;
+    const includeGlobal = c.req.query('include_global') !== '0';
     
     let query = `SELECT * FROM banks`;
     let results;
     
-    if (tenantId) {
-      query += ` WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`;
-      results = (await c.env.DB.prepare(query).bind(parseInt(tenantId)).all()).results;
+    if (tenantId !== null && !Number.isNaN(tenantId)) {
+      if (includeGlobal) {
+        query += ` WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`;
+      } else {
+        query += ` WHERE tenant_id = ? ORDER BY bank_name`;
+      }
+      results = (await c.env.DB.prepare(query).bind(tenantId).all()).results;
     } else {
       query += ` ORDER BY bank_name`;
       results = (await c.env.DB.prepare(query).all()).results;
@@ -1314,6 +1320,10 @@ app.get('/api/financing-types', async (c) => {
 // Get all rates with bank and type names
 app.get('/api/rates', async (c) => {
   try {
+    // Support explicit tenant filter for public calculator endpoints
+    const tenantIdFromQueryRaw = c.req.query('tenant_id')
+    const tenantIdFromQuery = tenantIdFromQueryRaw ? parseInt(tenantIdFromQueryRaw, 10) : null
+
     // Get tenant_id from Authorization header
     const authHeader = c.req.header('Authorization')
     const token = authHeader?.replace('Bearer ', '')
@@ -1323,6 +1333,10 @@ app.get('/api/rates', async (c) => {
       const decoded = atob(token)
       const parts = decoded.split(':')
       tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+
+    if (tenantIdFromQuery !== null && !Number.isNaN(tenantIdFromQuery)) {
+      tenant_id = tenantIdFromQuery
     }
     
     // Build query with tenant_id filter
@@ -16017,23 +16031,34 @@ app.get('/api/hr/employees', async (c) => {
     console.log('🔍 HR Employees API - UserInfo:', { userId: userInfo.userId, tenantId: userInfo.tenantId, roleId: userInfo.roleId })
     
     // Map actual database columns to expected API format
-    // For now, show all data regardless of tenant_id to ensure data is visible
-    // TODO: Re-enable tenant filtering once tenant_id sync is confirmed
+    // NOTE: Use existing column names from migrations (no date_of_birth column)
     const query = `SELECT 
-        id, tenant_id,
-        employee_code as employee_number,
-        full_name_ar as full_name,
+        id,
+        tenant_id,
+        COALESCE(employee_number, employee_code) AS employee_number,
+        COALESCE(full_name, full_name_ar, full_name_en) AS full_name,
+        full_name_ar,
         full_name_en,
         national_id,
-        date_of_birth as birthdate,
-        gender, email, phone,
-        department, job_title,
-        basic_salary, housing_allowance, transportation_allowance,
-        hire_date, contract_start_date, contract_end_date,
+        COALESCE(birthdate, birth_date) AS birthdate,
+        gender,
+        email,
+        phone,
+        department,
+        job_title,
+        basic_salary,
+        housing_allowance,
+        transportation_allowance,
+        hire_date,
+        contract_start_date,
+        contract_end_date,
         direct_manager_id,
-        employment_type, work_schedule,
-        status, notes,
-        created_at, updated_at
+        employment_type,
+        work_schedule,
+        status,
+        notes,
+        created_at,
+        updated_at
       FROM hr_employees 
       ORDER BY created_at DESC, hire_date DESC`
     
