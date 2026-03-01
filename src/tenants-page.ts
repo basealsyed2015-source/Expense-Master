@@ -158,15 +158,15 @@ export const tenantsPage = `<!DOCTYPE html>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div class="flex gap-2">
-                                <button onclick="viewTenant(\${tenant.id})" 
+                                <button onclick="viewTenant('\${tenant.public_uuid || tenant.id}')" 
                                         class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-all">
                                     <i class="fas fa-eye"></i> عرض
                                 </button>
-                                <button onclick="editTenant(\${tenant.id})" 
+                                <button onclick="editTenant('\${tenant.public_uuid || tenant.id}')" 
                                         class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs transition-all">
                                     <i class="fas fa-edit"></i> تعديل
                                 </button>
-                                <button onclick="deleteTenant(\${tenant.id})" 
+                                <button onclick="deleteTenant('\${tenant.public_uuid || tenant.id}')" 
                                         class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-all">
                                     <i class="fas fa-trash"></i> حذف
                                 </button>
@@ -184,19 +184,19 @@ export const tenantsPage = `<!DOCTYPE html>
             window.location.href = '/admin/tenants/add';
         }
 
-        function editTenant(id) {
-            window.location.href = \`/admin/tenants/\${id}/edit\`;
+        function editTenant(tenantRef) {
+            window.location.href = \`/admin/tenants/\${tenantRef}/edit\`;
         }
 
-        function viewTenant(id) {
-            window.location.href = \`/admin/tenants/\${id}\`;
+        function viewTenant(tenantRef) {
+            window.location.href = \`/admin/tenants/\${tenantRef}\`;
         }
 
-        async function deleteTenant(id) {
+        async function deleteTenant(tenantRef) {
             if (!confirm('هل أنت متأكد من حذف هذه الشركة؟')) return;
             
             try {
-                await axios.delete(\`/api/tenants/\${id}\`);
+                await axios.delete(\`/api/tenants/\${tenantRef}\`);
                 alert('تم حذف الشركة بنجاح');
                 loadTenants();
             } catch (error) {

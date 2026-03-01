@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS workflow_stage_tasks;
 DROP TABLE IF EXISTS workflow_stage_actions;
 DROP TABLE IF EXISTS workflow_stage_transitions;
 DROP TABLE IF EXISTS financing_request_status_history;
+DROP TABLE IF EXISTS request_status_history;
 DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS calculations;
@@ -22,6 +23,7 @@ DROP TABLE IF EXISTS assignment_history;
 DROP TABLE IF EXISTS customer_assignments;
 DROP TABLE IF EXISTS financing_requests;
 DROP TABLE IF EXISTS customers;
+DROP TABLE IF EXISTS expenses;
 DROP TABLE IF EXISTS bank_financing_rates;
 DROP TABLE IF EXISTS financing_types;
 DROP TABLE IF EXISTS banks;
@@ -32,7 +34,8 @@ DROP TABLE IF EXISTS packages;
 DROP TABLE IF EXISTS role_permissions;
 DROP TABLE IF EXISTS permissions;
 DROP TABLE IF EXISTS roles;
-DROP TABLE IF EXISTS tenants;
+-- IMPORTANT: tenants is a parent table for many others (including HR tables),
+-- so drop all HR tables BEFORE dropping tenants to avoid FK errors.
 DROP TABLE IF EXISTS hr_document_alerts;
 DROP TABLE IF EXISTS hr_documents;
 DROP TABLE IF EXISTS hr_promotions_transfers;
@@ -45,5 +48,6 @@ DROP TABLE IF EXISTS hr_attendance;
 DROP TABLE IF EXISTS hr_departments;
 DROP TABLE IF EXISTS hr_employees;
 DROP TABLE IF EXISTS workflow_stages;
+DROP TABLE IF EXISTS tenants;
 
 PRAGMA foreign_keys = ON;

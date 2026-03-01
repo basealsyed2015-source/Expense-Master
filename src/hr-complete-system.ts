@@ -586,6 +586,397 @@ export const hrEmployeesPage = `<!DOCTYPE html>
 `;
 
 // ======================================
+// 1.1. صفحة عرض تفاصيل الموظف
+// ======================================
+export const hrEmployeeViewPage = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تفاصيل الموظف - نظام HR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    ${sharedStyles}
+</head>
+<body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
+    ${getNavbar('تفاصيل الموظف', 'عرض معلومات الموظف الكاملة', 'fas fa-user')}
+    ${getSidebar('employees')}
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-6">
+            <a href="/admin/hr/employees" class="text-blue-600 hover:text-blue-800 flex items-center gap-2">
+                <i class="fas fa-arrow-right"></i>
+                العودة إلى قائمة الموظفين
+            </a>
+        </div>
+
+        <div id="employeeDetails" class="bg-white rounded-xl shadow-xl p-6">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin text-4xl text-gray-400 mb-4"></i>
+                <p class="text-gray-500">جاري تحميل البيانات...</p>
+            </div>
+        </div>
+    </div>
+
+    ${sharedScripts}
+    <script>
+        const employeeId = window.location.pathname.split('/').pop();
+        
+        async function loadEmployeeDetails() {
+            try {
+                const response = await axios.get(\`/api/hr/employees/\${employeeId}\`, {
+                    headers: { 'Authorization': \`Bearer \${token}\` }
+                });
+
+                if (response.data.success) {
+                    const emp = response.data.data;
+                    const statusBadge = {
+                        'active': '<span class="badge badge-success">نشط</span>',
+                        'inactive': '<span class="badge badge-danger">غير نشط</span>',
+                        'on_leave': '<span class="badge badge-warning">في إجازة</span>',
+                        'suspended': '<span class="badge badge-secondary">موقوف</span>'
+                    }[emp.status] || '<span class="badge badge-secondary">غير محدد</span>';
+
+                    document.getElementById('employeeDetails').innerHTML = \`
+                        <div class="flex justify-between items-start mb-6">
+                            <h2 class="text-3xl font-bold text-gray-800">\${emp.full_name || 'غير محدد'}</h2>
+                            <div class="flex gap-3">
+                                <a href="/admin/hr/employees/\${emp.id}/edit" class="btn-primary">
+                                    <i class="fas fa-edit ml-2"></i>
+                                    تعديل
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-bold text-gray-700 mb-4">المعلومات الأساسية</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <span class="text-gray-600">رقم الموظف:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.employee_number || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">رقم الهوية:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.national_id || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">البريد الإلكتروني:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.email || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">رقم الجوال:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.phone || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">تاريخ الميلاد:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.birthdate || emp.birth_date || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">الجنس:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.gender || '-'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-bold text-gray-700 mb-4">المعلومات الوظيفية</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <span class="text-gray-600">القسم:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.department || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">المسمى الوظيفي:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.job_title || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">الراتب الأساسي:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${(emp.basic_salary || 0).toLocaleString('ar-SA')} ريال</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">بدل السكن:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${(emp.housing_allowance || 0).toLocaleString('ar-SA')} ريال</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">بدل النقل:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${(emp.transportation_allowance || 0).toLocaleString('ar-SA')} ريال</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">تاريخ التعيين:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.hire_date || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">الحالة:</span>
+                                        <span class="mr-2">\${statusBadge}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-bold text-gray-700 mb-4">معلومات العقد</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <span class="text-gray-600">تاريخ بداية العقد:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.contract_start_date || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">تاريخ نهاية العقد:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.contract_end_date || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">نوع التوظيف:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.employment_type || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600">جدول العمل:</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${emp.work_schedule || '-'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-bold text-gray-700 mb-4">ملاحظات</h3>
+                                <p class="text-gray-700">\${emp.notes || 'لا توجد ملاحظات'}</p>
+                            </div>
+                        </div>
+                    \`;
+                } else {
+                    document.getElementById('employeeDetails').innerHTML = \`
+                        <div class="text-center py-8">
+                            <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>
+                            <p class="text-red-600">فشل تحميل بيانات الموظف</p>
+                        </div>
+                    \`;
+                }
+            } catch (error) {
+                console.error('Error loading employee details:', error);
+                document.getElementById('employeeDetails').innerHTML = \`
+                    <div class="text-center py-8">
+                        <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>
+                        <p class="text-red-600">حدث خطأ في تحميل البيانات</p>
+                    </div>
+                \`;
+            }
+        }
+
+        loadEmployeeDetails();
+    </script>
+</body>
+</html>
+`;
+
+// ======================================
+// 1.2. صفحة تعديل الموظف
+// ======================================
+export const hrEmployeeEditPage = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تعديل الموظف - نظام HR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    ${sharedStyles}
+</head>
+<body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
+    ${getNavbar('تعديل الموظف', 'تعديل بيانات الموظف', 'fas fa-user-edit')}
+    ${getSidebar('employees')}
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-6">
+            <a href="/admin/hr/employees" class="text-blue-600 hover:text-blue-800 flex items-center gap-2">
+                <i class="fas fa-arrow-right"></i>
+                العودة إلى قائمة الموظفين
+            </a>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-xl p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">تعديل بيانات الموظف</h2>
+            
+            <div id="loadingMessage" class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-4xl text-gray-400 mb-4"></i>
+                <p class="text-gray-500">جاري تحميل البيانات...</p>
+            </div>
+
+            <form id="editEmployeeForm" style="display: none;" onsubmit="updateEmployee(event)">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الموظف *</label>
+                        <input type="text" name="employee_number" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">الاسم الكامل *</label>
+                        <input type="text" name="full_name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الهوية *</label>
+                        <input type="text" name="national_id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label>
+                        <input type="email" name="email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال *</label>
+                        <input type="tel" name="phone" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ الميلاد</label>
+                        <input type="date" name="birthdate" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">القسم *</label>
+                        <select name="department" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="">اختر القسم</option>
+                            <option value="it">تقنية المعلومات</option>
+                            <option value="hr">الموارد البشرية</option>
+                            <option value="finance">المالية</option>
+                            <option value="sales">المبيعات</option>
+                            <option value="marketing">التسويق</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">المسمى الوظيفي *</label>
+                        <input type="text" name="job_title" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">الراتب الأساسي *</label>
+                        <input type="number" name="basic_salary" required step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">بدل السكن</label>
+                        <input type="number" name="housing_allowance" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">بدل النقل</label>
+                        <input type="number" name="transportation_allowance" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ التعيين *</label>
+                        <input type="date" name="hire_date" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ بداية العقد</label>
+                        <input type="date" name="contract_start_date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ نهاية العقد</label>
+                        <input type="date" name="contract_end_date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">الحالة</label>
+                        <select name="status" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="active">نشط</option>
+                            <option value="inactive">غير نشط</option>
+                            <option value="on_leave">في إجازة</option>
+                            <option value="suspended">موقوف</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">ملاحظات</label>
+                        <textarea name="notes" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <a href="/admin/hr/employees" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all">
+                        إلغاء
+                    </a>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save ml-2"></i>
+                        حفظ التعديلات
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    ${sharedScripts}
+    <script>
+        const employeeId = window.location.pathname.split('/').slice(0, -1).pop();
+        
+        async function loadEmployeeForEdit() {
+            try {
+                const response = await axios.get(\`/api/hr/employees/\${employeeId}\`, {
+                    headers: { 'Authorization': \`Bearer \${token}\` }
+                });
+
+                if (response.data.success) {
+                    const emp = response.data.data;
+                    const form = document.getElementById('editEmployeeForm');
+                    
+                    // Fill form fields
+                    form.querySelector('[name="employee_number"]').value = emp.employee_number || '';
+                    form.querySelector('[name="full_name"]').value = emp.full_name || '';
+                    form.querySelector('[name="national_id"]').value = emp.national_id || '';
+                    form.querySelector('[name="email"]').value = emp.email || '';
+                    form.querySelector('[name="phone"]').value = emp.phone || '';
+                    form.querySelector('[name="birthdate"]').value = emp.birthdate || emp.birth_date || '';
+                    form.querySelector('[name="department"]').value = emp.department || '';
+                    form.querySelector('[name="job_title"]').value = emp.job_title || '';
+                    form.querySelector('[name="basic_salary"]').value = emp.basic_salary || '';
+                    form.querySelector('[name="housing_allowance"]').value = emp.housing_allowance || '';
+                    form.querySelector('[name="transportation_allowance"]').value = emp.transportation_allowance || '';
+                    form.querySelector('[name="hire_date"]').value = emp.hire_date || '';
+                    form.querySelector('[name="contract_start_date"]').value = emp.contract_start_date || '';
+                    form.querySelector('[name="contract_end_date"]').value = emp.contract_end_date || '';
+                    form.querySelector('[name="status"]').value = emp.status || 'active';
+                    form.querySelector('[name="notes"]').value = emp.notes || '';
+                    
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    form.style.display = 'block';
+                } else {
+                    document.getElementById('loadingMessage').innerHTML = \`
+                        <div class="text-center py-8">
+                            <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>
+                            <p class="text-red-600">فشل تحميل بيانات الموظف</p>
+                        </div>
+                    \`;
+                }
+            } catch (error) {
+                console.error('Error loading employee:', error);
+                document.getElementById('loadingMessage').innerHTML = \`
+                    <div class="text-center py-8">
+                        <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>
+                        <p class="text-red-600">حدث خطأ في تحميل البيانات</p>
+                    </div>
+                \`;
+            }
+        }
+
+        async function updateEmployee(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await axios.put(\`/api/hr/employees/\${employeeId}\`, data, {
+                    headers: { 'Authorization': \`Bearer \${token}\` }
+                });
+
+                if (response.data.success) {
+                    showSuccess('تم تحديث بيانات الموظف بنجاح');
+                    setTimeout(() => {
+                        window.location.href = \`/admin/hr/employees/\${employeeId}\`;
+                    }, 1000);
+                } else {
+                    showError('فشل تحديث بيانات الموظف');
+                }
+            } catch (error) {
+                console.error('Error updating employee:', error);
+                showError('فشل تحديث بيانات الموظف');
+            }
+        }
+
+        loadEmployeeForEdit();
+    </script>
+</body>
+</html>
+`;
+
+// ======================================
 // 2. صفحة الحضور والغياب
 // ======================================
 export const hrAttendancePage = `<!DOCTYPE html>

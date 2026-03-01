@@ -13,11 +13,11 @@ INSERT OR IGNORE INTO tenants (id, company_name, slug, subdomain, status, max_us
 (1, 'شركة التمويل الأولى', 'tamweel-1', 'tamweel1', 'active', 50, 5000, 10000);
 
 -- Insert users (matching schema)
-INSERT OR IGNORE INTO users (id, username, password, full_name, email, phone, role_id, user_type, tenant_id, is_active) VALUES
-(1, 'superadmin', 'Super@2025', 'المدير العام للنظام', 'super@tamweel.sa', '0500000001', 1, 'admin', NULL, 1),
-(2, 'companyadmin', 'Company@2025', 'مدير شركة التمويل الأولى', 'company@tamweel.sa', '0500000002', 2, 'company', 1, 1),
-(3, 'supervisor', 'Supervisor@2025', 'مشرف موظفين الشركة', 'supervisor@tamweel.sa', '0500000003', 3, 'company', 1, 1),
-(4, 'employee', 'Employee@2025', 'موظف الشركة الأولى', 'employee@tamweel.sa', '0500000004', 4, 'employee', 1, 1);
+INSERT OR IGNORE INTO users (id, username, password, full_name, email, phone, role_id, tenant_id, is_active) VALUES
+(1, 'superadmin', 'Super@2025', 'المدير العام للنظام', 'super@tamweel.sa', '0500000001', 1, NULL, 1),
+(2, 'companyadmin', 'Company@2025', 'مدير شركة التمويل الأولى', 'company@tamweel.sa', '0500000002', 2, 1, 1),
+(3, 'supervisor', 'Supervisor@2025', 'مشرف موظفين الشركة', 'supervisor@tamweel.sa', '0500000003', 3, 1, 1),
+(4, 'employee', 'Employee@2025', 'موظف الشركة الأولى', 'employee@tamweel.sa', '0500000004', 4, 1, 1);
 
 -- Insert financing types (using type_name, not name)
 INSERT OR IGNORE INTO financing_types (id, type_name, description, tenant_id, is_active) VALUES

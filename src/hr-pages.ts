@@ -593,14 +593,15 @@ export const hrSalariesPage = `
             paid: 'مدفوع'
           };
           
+          const allowances = (salary.gross_salary || 0) - (salary.basic_salary || 0);
           return \`
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">\${salary.employee_name || 'غير محدد'}</td>
               <td class="px-6 py-4 whitespace-nowrap">\${salary.salary_month}</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.basic_salary.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.gross_salary - basic_salary.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap">\${salary.total_deductions.toLocaleString()} ر.س</td>
-              <td class="px-6 py-4 whitespace-nowrap font-bold">\${salary.net_salary.toLocaleString()} ر.س</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${(salary.basic_salary || 0).toLocaleString()} ر.س</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${allowances.toLocaleString()} ر.س</td>
+              <td class="px-6 py-4 whitespace-nowrap">\${(salary.total_deductions || 0).toLocaleString()} ر.س</td>
+              <td class="px-6 py-4 whitespace-nowrap font-bold">\${(salary.net_salary || 0).toLocaleString()} ر.س</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 py-1 rounded-full text-xs \${statusColors[salary.payment_status] || 'bg-gray-100 text-gray-800'}">
                   \${statusLabels[salary.payment_status] || salary.payment_status}
@@ -626,6 +627,10 @@ export const hrSalariesPage = `
         }).join('');
       } catch (error) {
         console.error('Error loading salaries:', error);
+        const tbody = document.getElementById('salariesTableBody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-red-500">حدث خطأ في تحميل الرواتب. يرجى المحاولة مرة أخرى.</td></tr>';
+        }
       }
     }
     
