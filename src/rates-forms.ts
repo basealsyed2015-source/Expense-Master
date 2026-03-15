@@ -138,6 +138,16 @@ export function generateAddRatePage(tenantId: string, banks: any[], financingTyp
               </div>
             </div>
             
+            <div class="md:col-span-2">
+              <label class="block text-sm font-bold text-gray-700 mb-2">
+                <i class="fas fa-sticky-note ml-1"></i>
+                ملاحظات
+              </label>
+              <textarea name="notes" rows="3"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="أضف ملاحظات اختيارية..."></textarea>
+            </div>
+            
             <div class="flex gap-4 mt-8">
               <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
                 <i class="fas fa-check ml-2"></i>
@@ -165,6 +175,7 @@ export function generateAddRatePage(tenantId: string, banks: any[], financingTyp
             max_amount: formData.get('max_amount') ? parseFloat(formData.get('max_amount')) : null,
             min_duration: formData.get('min_duration') ? parseInt(formData.get('min_duration')) : null,
             max_duration: formData.get('max_duration') ? parseInt(formData.get('max_duration')) : null,
+            notes: (formData.get('notes') as string)?.trim() || null,
             tenant_id: ${tenantId}
           };
           

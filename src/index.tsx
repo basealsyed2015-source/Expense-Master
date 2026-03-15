@@ -491,6 +491,7 @@ const SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES = [
   '/admin/tenants',
   '/admin/roles',
   '/admin/saas-settings',
+  '/admin/settings',
   '/admin/tenant-calculators'
 ]
 
@@ -1180,26 +1181,64 @@ app.post('/api/auth/reset-password', async (c) => {
 
 // BANKS APIs
 
-// Get all banks (global banks + tenant-specific banks)
+// Get all banks (tenant-specific banks only by default)
 app.get('/api/banks', async (c) => {
   try {
-    // Get tenant_id from query parameter or Authorization header
-    const tenantIdRaw = c.req.query('tenant_id');
-    const tenantId = tenantIdRaw ? parseInt(tenantIdRaw, 10) : null;
-    const includeGlobal = c.req.query('include_global') !== '0';
+    // Get tenant_id and role_id from query parameter or Authorization header
+    let tenantIdRaw = c.req.query('tenant_id');
+    let tenantId = tenantIdRaw ? parseInt(tenantIdRaw, 10) : null;
+    let roleId: number | null = null;
+    
+    // Extract tenant_id and role_id from Authorization header if not in query
+    const authHeader = c.req.header('Authorization')
+    const cookieToken = c.req.header('Cookie')?.split('authToken=')[1]?.split(';')[0]
+    const token = authHeader?.replace('Bearer ', '') || cookieToken
+    
+    if (token) {
+      try {
+        const decoded = atob(token)
+        const parts = decoded.split(':')
+        const tokenTenantId = parts[1] !== 'null' ? parseInt(parts[1]) : null
+        const tokenRoleId = parts[2] ? parseInt(parts[2]) : null
+        
+        // Only use token tenant_id if not provided in query
+        if ((!tenantId || Number.isNaN(tenantId)) && tokenTenantId && !Number.isNaN(tokenTenantId)) {
+          tenantId = tokenTenantId
+        }
+        
+        // Always extract role_id from token if available
+        if (tokenRoleId && !Number.isNaN(tokenRoleId)) {
+          roleId = tokenRoleId
+        }
+      } catch (e) {
+        // Token parsing failed, continue without tenant_id
+      }
+    }
+    
+    // Default to false - only include global banks if explicitly requested
+    const includeGlobal = c.req.query('include_global') === '1';
     
     let query = `SELECT * FROM banks`;
     let results;
     
-    if (tenantId !== null && !Number.isNaN(tenantId)) {
+    // Super admin (role_id = 1) sees all banks
+    if (roleId === 1) {
+      query += ` ORDER BY bank_name`;
+      results = (await c.env.DB.prepare(query).all()).results;
+    } 
+    // Tenant users only see their own banks (exclude global banks)
+    else if (tenantId !== null && !Number.isNaN(tenantId)) {
       if (includeGlobal) {
         query += ` WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`;
       } else {
+        // Only show banks that belong to this specific tenant (exclude global banks)
         query += ` WHERE tenant_id = ? ORDER BY bank_name`;
       }
       results = (await c.env.DB.prepare(query).bind(tenantId).all()).results;
-    } else {
-      query += ` ORDER BY bank_name`;
+    } 
+    // If no tenant_id and not super admin, return empty (shouldn't happen for authenticated users)
+    else {
+      query += ` WHERE 1=0 ORDER BY bank_name`; // Return empty result
       results = (await c.env.DB.prepare(query).all()).results;
     }
     
@@ -1299,33 +1338,80 @@ app.delete('/api/banks/:id', async (c) => {
   try {
     const id = c.req.param('id')
     
-    // Get tenant_id from Authorization header
+    // Get tenant_id and role_id from Authorization header
     const authHeader = c.req.header('Authorization')
     const token = authHeader?.replace('Bearer ', '')
     let tenant_id = null
+    let role_id = null
     if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+      try {
+        const decoded = atob(token)
+        const parts = decoded.split(':')
+        tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+        role_id = parts[2] ? parseInt(parts[2]) : null
+      } catch (e) {
+        // Token parsing failed
+      }
     }
     
-    // Check if bank exists and belongs to user's tenant
-    let checkQuery = 'SELECT id FROM banks WHERE id = ?'
-    if (tenant_id) {
-      checkQuery += ' AND tenant_id = ?'
-    }
-    const bank = tenant_id
-      ? await c.env.DB.prepare(checkQuery).bind(id, tenant_id).first()
-      : await c.env.DB.prepare(checkQuery).bind(id).first()
+    // Check if bank exists and get its tenant_id
+    const bank = await c.env.DB.prepare('SELECT id, tenant_id FROM banks WHERE id = ?').bind(id).first()
     
     if (!bank) {
-      return c.json({ success: false, error: 'البنك غير موجود أو لا يمكنك حذفه' }, 404)
+      return c.json({ success: false, error: 'البنك غير موجود' }, 404)
+    }
+    
+    // If bank is global (tenant_id IS NULL), only super admin can delete it
+    if (bank.tenant_id === null) {
+      if (role_id !== 1) {
+        return c.json({ success: false, error: 'لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها' }, 403)
+      }
+    } else {
+      // If bank belongs to a tenant, only that tenant can delete it
+      if (tenant_id !== bank.tenant_id) {
+        return c.json({ success: false, error: 'البنك غير موجود أو لا يمكنك حذفه' }, 404)
+      }
     }
     
     // Delete bank (will also delete related rates due to foreign key)
     await c.env.DB.prepare(`DELETE FROM banks WHERE id = ?`).bind(id).run()
     
     return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Delete all global banks (super admin only)
+app.delete('/api/banks/global/all', async (c) => {
+  try {
+    // Get role_id from Authorization header
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let role_id = null
+    if (token) {
+      try {
+        const decoded = atob(token)
+        const parts = decoded.split(':')
+        role_id = parts[2] ? parseInt(parts[2]) : null
+      } catch (e) {
+        // Token parsing failed
+      }
+    }
+    
+    // Only super admin can delete all global banks
+    if (role_id !== 1) {
+      return c.json({ success: false, error: 'غير مصرح لك بحذف البنوك العامة' }, 403)
+    }
+    
+    // Delete all global banks (tenant_id IS NULL)
+    const result = await c.env.DB.prepare(`DELETE FROM banks WHERE tenant_id IS NULL`).run()
+    
+    return c.json({ 
+      success: true, 
+      message: `تم حذف ${result.meta.changes || 0} بنك عام`,
+      deleted_count: result.meta.changes || 0
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -1435,10 +1521,11 @@ app.post('/api/rates', async (c) => {
       tenant_id = parseInt(data.tenant_id)
     }
 
+    const notes = data.notes && String(data.notes).trim() ? String(data.notes).trim() : null
     const result = await c.env.DB.prepare(`
       INSERT INTO bank_financing_rates 
-      (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       data.bank_id, 
       data.financing_type_id, 
@@ -1448,7 +1535,8 @@ app.post('/api/rates', async (c) => {
       data.min_duration || null, 
       data.max_duration || null,
       data.is_active || 1,
-      tenant_id
+      tenant_id,
+      notes
     ).run()
     if (contentType.includes('application/json')) {
       return c.json({ success: true, message: 'تم إضافة النسبة بنجاح', id: result.meta.last_row_id })
@@ -1475,12 +1563,13 @@ app.put('/api/rates/:id', async (c) => {
       tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
     }
     
+    const notes = data.notes != null && String(data.notes).trim() ? String(data.notes).trim() : null
     // Add tenant_id check for security
     let query = `
       UPDATE bank_financing_rates 
       SET bank_id = ?, financing_type_id = ?, rate = ?, 
           min_amount = ?, max_amount = ?, min_salary = ?, max_salary = ?,
-          min_duration = ?, max_duration = ?, is_active = ?
+          min_duration = ?, max_duration = ?, is_active = ?, notes = ?
       WHERE id = ?
     `
     if (tenant_id) {
@@ -1488,13 +1577,13 @@ app.put('/api/rates/:id', async (c) => {
       await c.env.DB.prepare(query).bind(
         data.bank_id, data.financing_type_id, data.rate,
         data.min_amount, data.max_amount, data.min_salary, data.max_salary,
-        data.min_duration, data.max_duration, data.is_active, id, tenant_id
+        data.min_duration, data.max_duration, data.is_active, notes, id, tenant_id
       ).run()
     } else {
       await c.env.DB.prepare(query).bind(
         data.bank_id, data.financing_type_id, data.rate,
         data.min_amount, data.max_amount, data.min_salary, data.max_salary,
-        data.min_duration, data.max_duration, data.is_active, id
+        data.min_duration, data.max_duration, data.is_active, notes, id
       ).run()
     }
     
@@ -1529,6 +1618,318 @@ app.delete('/api/rates/:id', async (c) => {
     }
     
     return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Download sample CSV template for rates
+app.get('/api/rates/sample-csv', async (c) => {
+  try {
+    const tenantId = c.req.query('tenant_id');
+    
+    // Get banks and financing types for the tenant
+    let banksQuery = 'SELECT id, bank_name FROM banks WHERE is_active = 1';
+    let banksParams: any[] = [];
+    
+    if (tenantId) {
+      banksQuery += ' AND tenant_id = ?';
+      banksParams.push(tenantId);
+    }
+    
+    banksQuery += ' ORDER BY bank_name';
+    
+    const banks = banksParams.length > 0
+      ? await c.env.DB.prepare(banksQuery).bind(...banksParams).all()
+      : await c.env.DB.prepare(banksQuery).all();
+    
+    const types = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all();
+    
+    // Create CSV header - 8 columns matching form structure (RTL order - rightmost first)
+    const header = [
+      'الحد الأقصى للمدة (شهر)',
+      'الحد الأدنى للمدة (شهر)',
+      'الحد الأقصى للمبلغ (ريال)',
+      'الحد الأدنى للمبلغ (ريال)',
+      'النسبة %',
+      'نوع التمويل',
+      'البنك',
+      'رقم تسلسلي'
+    ];
+    
+    // Create sample rows with placeholders (5 examples) - RTL order
+    const sampleRows: string[][] = [];
+    const bankPlaceholders = ['بنك 1', 'بنك 2', 'بنك 3', 'بنك 4', 'بنك 5'];
+    const typePlaceholders = ['نوع تمويل 1', 'نوع تمويل 2', 'نوع تمويل 3'];
+    
+    // Create 5 sample rows with different combinations (RTL order - rightmost column first)
+    for (let i = 0; i < 5; i++) {
+      sampleRows.push([
+        (60 + i * 12).toString(), // Max duration (rightmost)
+        (12 + i * 12).toString(), // Min duration
+        (500000 + i * 500000).toString(), // Max amount
+        (50000 + i * 50000).toString(), // Min amount
+        (4.5 + i * 0.5).toFixed(1), // Rate
+        typePlaceholders[i % typePlaceholders.length] || `نوع تمويل ${(i % 3) + 1}`, // Type
+        bankPlaceholders[i] || `بنك ${i + 1}`, // Bank
+        (i + 1).toString() // SL number (leftmost in RTL)
+      ]);
+    }
+    
+    // Build CSV content with proper UTF-8 BOM and RTL markers for Arabic support
+    // Note: CSV format doesn't support sheet-level RTL, so columns will appear from left to right
+    // Users need to manually set Excel to RTL mode: Page Layout > Sheet Right-to-Left
+    const BOM = String.fromCharCode(0xFEFF);
+    const RLM = '\u200F'; // Right-to-Left Mark for cell-level RTL
+    let csv = BOM;
+    
+    // Keep header in RTL order (rightmost column first) - will display correctly when Excel is set to RTL
+    const rtlHeader = header.map(h => RLM + h);
+    csv += rtlHeader.join(',') + '\r\n';
+    
+    sampleRows.forEach(row => {
+      // Keep row in RTL order to match header
+      // Escape values that contain commas or quotes, and add RLM for RTL
+      const escapedRow = row.map(cell => {
+        const str = String(cell || '');
+        const rtlStr = RLM + str;
+        if (rtlStr.includes(',') || rtlStr.includes('"') || rtlStr.includes('\n')) {
+          return '"' + rtlStr.replace(/"/g, '""') + '"';
+        }
+        return rtlStr;
+      });
+      csv += escapedRow.join(',') + '\r\n';
+    });
+    
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8;',
+        'Content-Disposition': 'attachment; filename="نموذج_نسب_التمويل.csv"'
+      }
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Export rates to CSV
+app.get('/api/rates/export-csv', async (c) => {
+  try {
+    // Get user info
+    const userInfo = await getUserInfo(c);
+    const tenantId = c.req.query('tenant_id') || (userInfo.tenantId ? userInfo.tenantId.toString() : null);
+    
+    // Build query with role-based filtering
+    let query = `
+      SELECT 
+        r.*,
+        b.bank_name,
+        f.type_name as financing_type_name
+      FROM bank_financing_rates r
+      LEFT JOIN banks b ON r.bank_id = b.id
+      LEFT JOIN financing_types f ON r.financing_type_id = f.id
+    `;
+    
+    let queryParams: any[] = [];
+    
+    if (userInfo.roleId === 1) {
+      // Role 1: Super Admin - sees ALL rates
+      if (tenantId) {
+        query += ' WHERE r.tenant_id = ?';
+        queryParams.push(tenantId);
+      }
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      // Role 2: Company Admin - sees all company rates
+      // Role 3: Supervisor - sees all company rates (read-only)
+      if (userInfo.tenantId) {
+        query += ' WHERE r.tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
+      }
+    } else {
+      // Other roles - filtered by tenant_id if provided
+      if (tenantId) {
+        query += ' WHERE r.tenant_id = ?';
+        queryParams.push(tenantId);
+      }
+    }
+    
+    query += ' ORDER BY b.bank_name, f.type_name';
+    
+    const rates = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all();
+    
+    // Create CSV header - 8 columns matching form structure (RTL order - rightmost first)
+    const header = [
+      'الحد الأقصى للمدة (شهر)',
+      'الحد الأدنى للمدة (شهر)',
+      'الحد الأقصى للمبلغ (ريال)',
+      'الحد الأدنى للمبلغ (ريال)',
+      'النسبة %',
+      'نوع التمويل',
+      'البنك',
+      'رقم تسلسلي'
+    ];
+    
+    // Build CSV content with proper UTF-8 BOM and RTL markers for Arabic support
+    // Note: CSV format doesn't support sheet-level RTL, so columns will appear from left to right
+    // Users need to manually set Excel to RTL mode: Page Layout > Sheet Right-to-Left
+    const BOM = String.fromCharCode(0xFEFF);
+    const RLM = '\u200F'; // Right-to-Left Mark for cell-level RTL
+    let csv = BOM;
+    
+    // Keep header in RTL order (rightmost column first) - will display correctly when Excel is set to RTL
+    const rtlHeader = header.map(h => RLM + h);
+    csv += rtlHeader.join(',') + '\r\n';
+    
+    rates.results.forEach((rate: any, index: number) => {
+      const row = [
+        rate.max_duration || '', // Max duration (rightmost)
+        rate.min_duration || '', // Min duration
+        rate.max_amount || '', // Max amount
+        rate.min_amount || '', // Min amount
+        rate.rate || '', // Rate
+        rate.financing_type_name || '', // Type
+        rate.bank_name || '', // Bank
+        (index + 1).toString() // SL number (leftmost in RTL)
+      ];
+      // Keep row in RTL order to match header
+      // Escape values that contain commas or quotes, and add RLM for RTL
+      const escapedRow = row.map(cell => {
+        const str = String(cell || '');
+        const rtlStr = RLM + str;
+        if (rtlStr.includes(',') || rtlStr.includes('"') || rtlStr.includes('\n')) {
+          return '"' + rtlStr.replace(/"/g, '""') + '"';
+        }
+        return rtlStr;
+      });
+      csv += escapedRow.join(',') + '\r\n';
+    });
+    
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8;',
+        'Content-Disposition': 'attachment; filename="نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv"'
+      }
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Upload Excel/CSV file for rates
+app.post('/api/rates/upload-excel', async (c) => {
+  try {
+    const { rates } = await c.req.json()
+    
+    if (!rates || !Array.isArray(rates) || rates.length === 0) {
+      return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
+    }
+
+    // Get tenant_id from Authorization header
+    const authHeader = c.req.header('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    let tenant_id = null
+    if (token) {
+      const decoded = atob(token)
+      const parts = decoded.split(':')
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    }
+
+    let created = 0
+    let updated = 0
+    const errors: string[] = []
+
+    for (const rateData of rates) {
+      try {
+        // Validate required fields
+        if (!rateData.bank_id || !rateData.financing_type_id || rateData.rate === undefined) {
+          errors.push(`سطر غير صالح: البنك=${rateData.bank_id}, النوع=${rateData.financing_type_id}, النسبة=${rateData.rate}`)
+          continue
+        }
+
+        // Check if rate already exists (by bank_id, financing_type_id, and tenant_id)
+        let checkQuery = `
+          SELECT id FROM bank_financing_rates 
+          WHERE bank_id = ? AND financing_type_id = ?
+        `
+        const checkParams: any[] = [rateData.bank_id, rateData.financing_type_id]
+        
+        if (tenant_id !== null) {
+          checkQuery += ' AND tenant_id = ?'
+          checkParams.push(tenant_id)
+        }
+
+        const existing = await c.env.DB.prepare(checkQuery).bind(...checkParams).first()
+
+        if (existing) {
+          // Update existing rate
+          let updateQuery = `
+            UPDATE bank_financing_rates 
+            SET rate = ?, 
+                min_amount = ?, 
+                max_amount = ?, 
+                min_salary = ?, 
+                max_salary = ?,
+                min_duration = ?, 
+                max_duration = ?,
+                is_active = ?
+            WHERE id = ?
+          `
+          const updateParams: any[] = [
+            rateData.rate,
+            rateData.min_amount || null,
+            rateData.max_amount || null,
+            rateData.min_salary || null,
+            rateData.max_salary || null,
+            rateData.min_duration || null,
+            rateData.max_duration || null,
+            rateData.is_active !== undefined ? rateData.is_active : 1,
+            existing.id
+          ]
+
+          if (tenant_id !== null) {
+            updateQuery += ' AND tenant_id = ?'
+            updateParams.push(tenant_id)
+          }
+
+          await c.env.DB.prepare(updateQuery).bind(...updateParams).run()
+          updated++
+        } else {
+          // Insert new rate
+          const insertQuery = `
+            INSERT INTO bank_financing_rates 
+            (bank_id, financing_type_id, rate, min_amount, max_amount, min_salary, max_salary, min_duration, max_duration, is_active, tenant_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          await c.env.DB.prepare(insertQuery).bind(
+            rateData.bank_id,
+            rateData.financing_type_id,
+            rateData.rate,
+            rateData.min_amount || null,
+            rateData.max_amount || null,
+            rateData.min_salary || null,
+            rateData.max_salary || null,
+            rateData.min_duration || null,
+            rateData.max_duration || null,
+            rateData.is_active !== undefined ? rateData.is_active : 1,
+            tenant_id
+          ).run()
+          created++
+        }
+      } catch (error: any) {
+        errors.push(`خطأ في معالجة السطر: ${error.message}`)
+        console.error('Error processing rate:', error)
+      }
+    }
+
+    return c.json({
+      success: true,
+      created,
+      updated,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `تم إضافة ${created} سجل جديد وتحديث ${updated} سجل`
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -2039,10 +2440,14 @@ app.post('/api/customers', async (c) => {
     const email = formData.get('email') as string || null
     const national_id = formData.get('national_id') as string || null
     const date_of_birth = formData.get('date_of_birth') as string || null
+    const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
+    const job_type = (formData.get('job_type') as string) || 'civilian'
     const job_title = formData.get('job_title') as string || null
+    const military_rank = formData.get('military_rank') as string || null
     const work_start_date = formData.get('work_start_date') as string || null
     const city = formData.get('city') as string || null
+    const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     
     // Resolve tenant from authenticated user (supports both cookie + bearer flows).
@@ -2167,9 +2572,28 @@ app.post('/api/customers', async (c) => {
     }
     
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, employer_name, job_title, work_start_date, city, monthly_salary, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(full_name, phone, email, national_id, date_of_birth, employer_name, job_title, work_start_date, city, monthly_salary, tenant_id).run()
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(full_name, phone, email, national_id, date_of_birth, dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian', employer_name, job_type === 'military' ? 'military' : 'civilian', job_title, job_type === 'military' ? military_rank : null, work_start_date, city, basic_salary, monthly_salary, tenant_id).run()
+    const newId = (result as { meta?: { last_row_id?: number } }).meta?.last_row_id
+    const obligationsJson = formData.get('obligations_json') as string | null
+    if (newId && obligationsJson) {
+      try {
+        const obligations = JSON.parse(obligationsJson) as Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
+        if (Array.isArray(obligations) && obligations.length > 0) {
+          let monthlySum = 0
+          for (const o of obligations) {
+            const type = (o.obligation_type ?? '') as string
+            const total = Number(o.total_amount) || 0
+            const monthly = Number(o.monthly_installment) || 0
+            const due = o.due_date || null
+            monthlySum += monthly
+            await c.env.DB.prepare('INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)').bind(newId, type, total, monthly, due, tenant_id).run()
+          }
+          await c.env.DB.prepare('UPDATE customers SET monthly_obligations = ? WHERE id = ?').bind(monthlySum, newId).run()
+        }
+      } catch (_) {}
+    }
     return c.redirect('/admin/customers')
   } catch (error: any) {
     return c.html(`
@@ -2217,19 +2641,165 @@ app.post('/api/customers/:id', async (c) => {
     const email = formData.get('email') as string || null
     const national_id = formData.get('national_id') as string || null
     const date_of_birth = formData.get('date_of_birth') as string || null
+    const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
+    const job_type = (formData.get('job_type') as string) || 'civilian'
     const job_title = formData.get('job_title') as string || null
+    const military_rank = formData.get('military_rank') as string || null
     const work_start_date = formData.get('work_start_date') as string || null
     const city = formData.get('city') as string || null
+    const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     
     await c.env.DB.prepare(`
       UPDATE customers 
-      SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?,
-          employer_name = ?, job_title = ?, work_start_date = ?, city = ?, monthly_salary = ?
+      SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?
       WHERE id = ?
-    `).bind(full_name, phone, email, national_id, date_of_birth, employer_name, job_title, work_start_date, city, monthly_salary, id).run()
+    `).bind(full_name, phone, email, national_id, date_of_birth, dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian', employer_name, job_type === 'military' ? 'military' : 'civilian', job_title, job_type === 'military' ? military_rank : null, work_start_date, city, basic_salary, monthly_salary, id).run()
+    const obligationsJson = formData.get('obligations_json') as string | null
+    if (obligationsJson) {
+      try {
+        const customerRow = await c.env.DB.prepare('SELECT tenant_id FROM customers WHERE id = ?').bind(id).first() as { tenant_id: number } | null
+        const tenant_id = customerRow?.tenant_id ?? null
+        await c.env.DB.prepare('DELETE FROM customer_obligations WHERE customer_id = ?').bind(id).run()
+        const obligations = JSON.parse(obligationsJson) as Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
+        if (Array.isArray(obligations) && obligations.length > 0) {
+          let monthlySum = 0
+          for (const o of obligations) {
+            const type = (o.obligation_type ?? '') as string
+            const total = Number(o.total_amount) || 0
+            const monthly = Number(o.monthly_installment) || 0
+            const due = o.due_date || null
+            monthlySum += monthly
+            await c.env.DB.prepare('INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)').bind(id, type, total, monthly, due, tenant_id).run()
+          }
+          await c.env.DB.prepare('UPDATE customers SET monthly_obligations = ? WHERE id = ?').bind(monthlySum, id).run()
+        } else {
+          await c.env.DB.prepare('UPDATE customers SET monthly_obligations = 0 WHERE id = ?').bind(id).run()
+        }
+      } catch (_) {}
+    }
     return c.redirect('/admin/customers')
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Calculator: list customers for tenant (dropdown; tenant_slug required)
+app.get('/api/calculator/customers', async (c) => {
+  try {
+    const tenant_slug = c.req.query('tenant_slug') as string | undefined
+    if (!tenant_slug) {
+      return c.json({ success: false, error: 'tenant_slug required' }, 400)
+    }
+    const t = await c.env.DB.prepare('SELECT id FROM tenants WHERE slug = ?').bind(tenant_slug).first() as { id: number } | null
+    if (!t) return c.json({ success: false, customers: [] })
+    const result = await c.env.DB.prepare(
+      'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name'
+    ).bind(t.id).all()
+    const customers = (result.results || []) as Array<{ id: number; full_name: string; phone?: string; national_id?: string; basic_salary?: number; monthly_salary?: number }>
+    return c.json({ success: true, customers })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Calculator: get customer by id with obligations (tenant check; for dropdown selection)
+app.get('/api/calculator/customer-by-id', async (c) => {
+  try {
+    const customer_id = c.req.query('customer_id') as string | undefined
+    const tenant_slug = c.req.query('tenant_slug') as string | undefined
+    if (!customer_id || !tenant_slug) {
+      return c.json({ success: false, error: 'customer_id and tenant_slug required' }, 400)
+    }
+    const t = await c.env.DB.prepare('SELECT id FROM tenants WHERE slug = ?').bind(tenant_slug).first() as { id: number } | null
+    if (!t) return c.json({ success: false, customer: null, obligations: [] })
+    const customer = await c.env.DB.prepare(
+      'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?'
+    ).bind(customer_id, t.id).first()
+    if (!customer) return c.json({ success: false, customer: null, obligations: [] })
+    const obligationsResult = await c.env.DB.prepare('SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(customer_id).all()
+    const obligations = (obligationsResult.results || []) as Array<{ id?: number; obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
+    return c.json({ success: true, customer, obligations })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Calculator: lookup customer by national_id or phone (optional tenant_slug for tenant calculator)
+app.get('/api/calculator/customer-by-identifier', async (c) => {
+  try {
+    const national_id = c.req.query('national_id') as string | undefined
+    const phone = c.req.query('phone') as string | undefined
+    const tenant_slug = c.req.query('tenant_slug') as string | undefined
+    if (!national_id && !phone) {
+      return c.json({ success: false, error: 'Provide national_id or phone' }, 400)
+    }
+    let tenant_id: number | null = null
+    if (tenant_slug) {
+      const t = await c.env.DB.prepare('SELECT id FROM tenants WHERE slug = ?').bind(tenant_slug).first() as { id: number } | null
+      tenant_id = t?.id ?? null
+    }
+    let customer: any = null
+    if (tenant_id != null) {
+      customer = await c.env.DB.prepare(
+        'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1'
+      ).bind(tenant_id, national_id || '', phone || '').first()
+    } else {
+      customer = await c.env.DB.prepare(
+        'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1'
+      ).bind(national_id || '', phone || '').first()
+    }
+    if (!customer) {
+      return c.json({ success: false, customer: null, obligations: [] })
+    }
+    const obligationsResult = await c.env.DB.prepare('SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind((customer as any).id).all()
+    const obligations = (obligationsResult.results || []) as Array<{ id?: number; obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
+    return c.json({ success: true, customer, obligations })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get obligations for a customer (auth + tenant check)
+app.get('/api/customers/:id/obligations', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const id = c.req.param('id')
+    const customer = await c.env.DB.prepare('SELECT id, tenant_id FROM customers WHERE id = ?').bind(id).first() as { id: number; tenant_id: number } | null
+    if (!customer) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.tenantId != null && customer.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const obligationsResult = await c.env.DB.prepare('SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(id).all()
+    const obligations = obligationsResult.results || []
+    return c.json({ success: true, obligations })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Replace obligations for a customer (auth + tenant check)
+app.post('/api/customers/:id/obligations', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const id = c.req.param('id')
+    const customer = await c.env.DB.prepare('SELECT id, tenant_id FROM customers WHERE id = ?').bind(id).first() as { id: number; tenant_id: number } | null
+    if (!customer) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.tenantId != null && customer.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const body = await c.req.json() as { obligations?: Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }> }
+    const obligations = Array.isArray(body?.obligations) ? body.obligations : []
+    await c.env.DB.prepare('DELETE FROM customer_obligations WHERE customer_id = ?').bind(id).run()
+    let monthlySum = 0
+    for (const o of obligations) {
+      const type = (o.obligation_type ?? '') as string
+      const total = Number(o.total_amount) || 0
+      const monthly = Number(o.monthly_installment) || 0
+      const due = o.due_date || null
+      monthlySum += monthly
+      await c.env.DB.prepare('INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)').bind(id, type, total, monthly, due, customer.tenant_id).run()
+    }
+    await c.env.DB.prepare('UPDATE customers SET monthly_obligations = ? WHERE id = ?').bind(monthlySum, id).run()
+    return c.json({ success: true })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -4282,12 +4852,16 @@ app.get('/c/:tenant/calculator', async (c) => {
     `)
   }
   
+  // Only show customer selection dropdown to high-access users (staff roles 1–4), not to regular customers
+  const userInfo = await getUserInfo(c)
+  const showCustomerSelect = [1, 2, 3, 4].includes(Number(userInfo.roleId ?? 0))
+
   // Return calculator page with tenant context
   // Add tenant info as JavaScript variable and update messages
   return c.html(smartCalculator
     .replace(/حاسبة التمويل الذكية/g, `حاسبة تمويل ${tenant.company_name}`)
     .replace('/api/calculator/submit-request', `/api/c/${tenantSlug}/calculator/submit-request`)
-    .replace('<script>', `<script>\n        // Tenant information for company-specific calculator\n        window.TENANT_NAME = '${tenant.company_name.replace(/'/g, "\\'")}';\n    `)
+    .replace('<script>', `<script>\n        // Tenant information for company-specific calculator\n        window.TENANT_NAME = '${tenant.company_name.replace(/'/g, "\\'")}';\n        window.CALCULATOR_SHOW_CUSTOMER_SELECT = ${showCustomerSelect};\n    `)
     .replace('سيتم التواصل معك قريباً من \' + selectedBestOffer.bank.bank_name', `سيتم المراجعة من شركة ${tenant.company_name.replace(/'/g, "\\'")} وسوف يتم التواصل معك قريباً'`)
   )
 })
@@ -4937,6 +5511,7 @@ app.get('/admin/panel', async (c) => {
       '/admin/tenants',
       '/admin/roles',
       '/admin/saas-settings',
+      '/admin/settings',
       '/admin/tenant-calculators'
     ];
 
@@ -6214,6 +6789,7 @@ app.get('/admin/tenants/:tenantRef', async (c) => {
 app.get('/admin/tenants', (c) => c.html(tenantsPage))
 app.get('/admin/tenant-calculators', (c) => c.html(tenantCalculatorsPage))
 app.get('/admin/saas-settings', (c) => c.html(saasSettingsPage))
+app.get('/admin/settings', (c) => c.html(saasSettingsPage))
 app.get('/admin/reports', (c) => c.html(reportsPage))
 app.get('/admin/reports/customers', (c) => c.html(customersReportPage))
 app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
@@ -6892,8 +7468,33 @@ app.get('/admin/customers/add', async (c) => {
                   <i class="fas fa-calendar text-orange-600 ml-1"></i>
                   تاريخ الميلاد
                 </label>
-                <input type="date" name="date_of_birth" 
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <input type="hidden" name="dob_calendar_type" id="dob_calendar_type" value="gregorian">
+                <input type="hidden" name="date_of_birth" id="date_of_birth">
+                <div class="flex gap-2 items-center flex-wrap">
+                  <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                    <input type="date" id="date_of_birth_gregorian"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <input type="text" id="date_of_birth_hijri" style="display:none"
+                           placeholder="1445-01-01 (هـ)" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                  </div>
+                  <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
+                    <button type="button" id="dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                    <button type="button" id="dob_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1"><span id="dob_calendar_label">ميلادي</span></p>
+                <script>
+                  (function(){
+                    var g=document.getElementById('date_of_birth_gregorian'),h=document.getElementById('date_of_birth_hijri'),hidden=document.getElementById('date_of_birth'),type=document.getElementById('dob_calendar_type'),lbl=document.getElementById('dob_calendar_label'),btnG=document.getElementById('dob_toggle_gregorian'),btnH=document.getElementById('dob_toggle_hijri');
+                    function setGregorian(){ g.style.display=''; h.style.display='none'; type.value='gregorian'; lbl.textContent='ميلادي'; hidden.value=g.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100'; }
+                    function setHijri(){ g.style.display='none'; h.style.display=''; type.value='hijri'; lbl.textContent='هجري'; hidden.value=h.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white'; }
+                    btnG.onclick=setGregorian; btnH.onclick=setHijri;
+                    g.onchange=function(){ if(type.value==='gregorian') hidden.value=g.value||''; };
+                    h.oninput=h.onchange=function(){ if(type.value==='hijri') hidden.value=h.value||''; };
+                    hidden.value = type.value==='hijri' ? (h.value||'') : (g.value||'');
+                  })();
+                </script>
               </div>
               
               <div>
@@ -6910,14 +7511,52 @@ app.get('/admin/customers/add', async (c) => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
-                  <i class="fas fa-briefcase text-teal-600 ml-1"></i>
-                  المسمى الوظيفي
+                  <i class="fas fa-user-tie text-teal-600 ml-1"></i>
+                  نوع الوظيفة
                 </label>
-                <input type="text" name="job_title" 
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="مثال: مهندس">
+                <select name="job_type" id="job_type" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <option value="civilian">مدني</option>
+                  <option value="military">عسكري</option>
+                </select>
               </div>
-              
+              <div>
+                <div id="job_title_civilian_wrap">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-briefcase text-teal-600 ml-1"></i>
+                    المسمى الوظيفي
+                  </label>
+                  <input type="text" name="job_title" id="job_title_input"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="مثال: مهندس">
+                </div>
+                <div id="military_rank_wrap" style="display:none">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-star text-amber-600 ml-1"></i>
+                    الرتبة العسكرية
+                  </label>
+                  <select name="military_rank" id="military_rank_select" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">-- اختر الرتبة --</option>
+                    <option value="جندي">جندي</option>
+                    <option value="عريف">عريف</option>
+                    <option value="رقيب">رقيب</option>
+                    <option value="رقيب أول">رقيب أول</option>
+                    <option value="رئيس رقباء">رئيس رقباء</option>
+                    <option value="ملازم">ملازم</option>
+                    <option value="ملازم أول">ملازم أول</option>
+                    <option value="نقيب">نقيب</option>
+                    <option value="رائد">رائد</option>
+                    <option value="مقدم">مقدم</option>
+                    <option value="عقيد">عقيد</option>
+                    <option value="عميد">عميد</option>
+                    <option value="لواء">لواء</option>
+                    <option value="فريق">فريق</option>
+                    <option value="فريق أول">فريق أول</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-calendar-check text-pink-600 ml-1"></i>
@@ -6926,9 +7565,6 @@ app.get('/admin/customers/add', async (c) => {
                 <input type="date" name="work_start_date" 
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
               </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-map-marker-alt text-red-600 ml-1"></i>
@@ -6938,7 +7574,15 @@ app.get('/admin/customers/add', async (c) => {
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="مثال: الرياض">
               </div>
-              
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-coins text-amber-600 ml-1"></i>
+                  الراتب الأساسي
+                </label>
+                <input type="number" name="basic_salary" step="0.01" min="0"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       placeholder="مثال: 8000">
+              </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-money-bill text-green-600 ml-1"></i>
@@ -6948,6 +7592,32 @@ app.get('/admin/customers/add', async (c) => {
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="10000.00">
               </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <h3 class="text-sm font-bold text-gray-700 mb-3">
+                <i class="fas fa-credit-card text-red-600 ml-1"></i>
+                الالتزامات المالية
+              </h3>
+              <input type="hidden" name="obligations_json" id="obligations_json" value="[]">
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-300 text-right">
+                      <th class="py-2 px-2">نوع الالتزام</th>
+                      <th class="py-2 px-2">إجمالي المبلغ</th>
+                      <th class="py-2 px-2">القسط الشهري</th>
+                      <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                      <th class="py-2 px-2 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="add-obligations-tbody"></tbody>
+                </table>
+              </div>
+              <button type="button" id="add-obligation-row" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                <i class="fas fa-plus ml-1"></i>
+                إضافة صف
+              </button>
             </div>
             
             <div class="flex gap-4">
@@ -6968,8 +7638,81 @@ app.get('/admin/customers/add', async (c) => {
           const form = document.getElementById('add-customer-form');
           if (!form) return;
 
+          (function jobTypeToggle() {
+            var jobType = document.getElementById('job_type');
+            var civilianWrap = document.getElementById('job_title_civilian_wrap');
+            var militaryWrap = document.getElementById('military_rank_wrap');
+            var jobTitleInput = document.getElementById('job_title_input');
+            var militarySelect = document.getElementById('military_rank_select');
+            if (!jobType || !civilianWrap || !militaryWrap) return;
+            function updateJobTypeVisibility() {
+              var isMilitary = jobType.value === 'military';
+              civilianWrap.style.display = isMilitary ? 'none' : 'block';
+              militaryWrap.style.display = isMilitary ? 'block' : 'none';
+              if (jobTitleInput) jobTitleInput.disabled = isMilitary;
+              if (militarySelect) militarySelect.disabled = !isMilitary;
+            }
+            jobType.addEventListener('change', updateJobTypeVisibility);
+            updateJobTypeVisibility();
+          })();
+
+          (function obligationsTable() {
+            var tbody = document.getElementById('add-obligations-tbody');
+            var addBtn = document.getElementById('add-obligation-row');
+            var hidden = document.getElementById('obligations_json');
+            if (!tbody || !addBtn || !hidden) return;
+            function addRow(data) {
+              data = data || {};
+              var tr = document.createElement('tr');
+              tr.className = 'border-b border-gray-200';
+              tr.innerHTML = '<td class="py-1 px-2"><input type="text" class="oblig-type w-full px-2 py-1.5 border rounded" placeholder="مثال: قرض شخصي"></td>' +
+                '<td class="py-1 px-2"><input type="number" class="oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
+                '<td class="py-1 px-2"><input type="number" class="oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
+                '<td class="py-1 px-2"><input type="date" class="oblig-due w-full px-2 py-1.5 border rounded" placeholder=""></td>' +
+                '<td class="py-1 px-2"><button type="button" class="oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+              if (data.obligation_type) tr.querySelector('.oblig-type').value = data.obligation_type;
+              if (data.total_amount != null) tr.querySelector('.oblig-total').value = data.total_amount;
+              if (data.monthly_installment != null) tr.querySelector('.oblig-monthly').value = data.monthly_installment;
+              if (data.due_date) tr.querySelector('.oblig-due').value = data.due_date;
+              tr.querySelector('.oblig-remove').onclick = function() { tr.remove(); };
+              tbody.appendChild(tr);
+            }
+            addBtn.onclick = function() { addRow(); };
+            addRow();
+          })();
+
           form.addEventListener('submit', async function (event) {
             event.preventDefault();
+            var dobType = document.getElementById('dob_calendar_type');
+            var dobHidden = document.getElementById('date_of_birth');
+            if (dobType && dobHidden) {
+              dobHidden.value = dobType.value === 'hijri'
+                ? (document.getElementById('date_of_birth_hijri').value || '')
+                : (document.getElementById('date_of_birth_gregorian').value || '');
+            }
+            var jobType = document.getElementById('job_type');
+            var jobTitleInput = document.getElementById('job_title_input');
+            var militarySelect = document.getElementById('military_rank_select');
+            if (jobType && jobType.value === 'military' && militarySelect && jobTitleInput) {
+              jobTitleInput.value = militarySelect.value || '';
+              jobTitleInput.disabled = false;
+            }
+            var obligationsJsonEl = document.getElementById('obligations_json');
+            if (obligationsJsonEl) {
+              var rows = document.querySelectorAll('#add-obligations-tbody tr');
+              var arr = [];
+              rows.forEach(function(tr) {
+                var typeEl = tr.querySelector('.oblig-type');
+                var totalEl = tr.querySelector('.oblig-total');
+                var monthlyEl = tr.querySelector('.oblig-monthly');
+                var dueEl = tr.querySelector('.oblig-due');
+                if (!typeEl || !totalEl || !monthlyEl) return;
+                var total = parseFloat(totalEl.value) || 0;
+                var monthly = parseFloat(monthlyEl.value) || 0;
+                arr.push({ obligation_type: typeEl.value || '', total_amount: total, monthly_installment: monthly, due_date: dueEl ? (dueEl.value || null) : null });
+              });
+              obligationsJsonEl.value = JSON.stringify(arr);
+            }
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
 
@@ -7235,11 +7978,11 @@ app.get('/admin/customer-assignment', async (c) => {
               <i class="fas fa-user-tag text-orange-600 group-hover:scale-110 transition-transform"></i>
               <span>الصلاحيات</span>
             </a>
-            ` : ''}
             <a href="/admin/settings" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-cog text-gray-600 group-hover:scale-110 transition-transform"></i>
               <span>إعدادات النظام</span>
             </a>
+            ` : ''}
           </div>
           ` : ''}
 
@@ -7875,26 +8618,46 @@ app.post('/api/customer-assignment/bulk', async (c) => {
 // ============================
 app.get('/admin/banks', async (c) => {
   try {
-    // Get tenant_id from query parameter
-    const tenantId = c.req.query('tenant_id');
+    // Get tenant_id from query parameter or Authorization header
+    let tenantId = c.req.query('tenant_id');
+    
+    // If no tenant_id in query, try to get it from auth token
+    if (!tenantId) {
+      const authHeader = c.req.header('Authorization')
+      const cookieToken = c.req.header('Cookie')?.split('authToken=')[1]?.split(';')[0]
+      const token = authHeader?.replace('Bearer ', '') || cookieToken
+      if (token) {
+        try {
+          const decoded = atob(token)
+          const parts = decoded.split(':')
+          tenantId = parts[1] !== 'null' ? parts[1] : null
+        } catch (e) {
+          // Token parsing failed, continue without tenant_id
+        }
+      }
+    }
     
     // Get tenant info
     let tenantInfo = null;
     if (tenantId) {
       const tenant = await c.env.DB.prepare('SELECT company_name FROM tenants WHERE id = ?')
-        .bind(tenantId).first();
+        .bind(parseInt(tenantId)).first();
       tenantInfo = tenant;
     }
     
-    // Build query with optional tenant filter
+    // Build query - exclude global banks (tenant_id IS NULL) when tenantId is provided
     let query = 'SELECT * FROM banks';
     if (tenantId) {
+      // Only show banks that belong to this specific tenant (exclude global banks)
       query += ' WHERE tenant_id = ?';
+    } else {
+      // For super admin, show all banks including global ones
+      query += ' WHERE 1=1';
     }
     query += ' ORDER BY bank_name';
     
     const banks = tenantId
-      ? await c.env.DB.prepare(query).bind(tenantId).all()
+      ? await c.env.DB.prepare(query).bind(parseInt(tenantId)).all()
       : await c.env.DB.prepare(query).all();
     
     return c.html(`
@@ -8076,6 +8839,40 @@ app.get('/admin/rates', async (c) => {
           }
           
           ${getMobileResponsiveCSS()}
+          
+          /* Dropdown menu styles */
+          .csv-dropdown {
+            position: relative;
+            display: inline-block;
+          }
+          .csv-menu {
+            display: none;
+            position: absolute;
+            left: 0;
+            top: 100%;
+            margin-top: 4px;
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            min-width: 200px;
+            z-index: 50;
+            padding: 0.25rem 0;
+          }
+          .csv-menu.show {
+            display: block;
+          }
+          /* Bridge to prevent gap */
+          .csv-dropdown::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 100%;
+            width: 100%;
+            height: 4px;
+            background: transparent;
+            z-index: 49;
+          }
         </style>
       </head>
       <body class="bg-gray-50">
@@ -8085,30 +8882,52 @@ app.get('/admin/rates', async (c) => {
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex justify-between items-center mb-6">
-              <h1 class="text-3xl font-bold text-gray-800">
-                <i class="fas fa-percent text-green-600 ml-2"></i>
-                النسب والأسعار ${tenantInfo ? '- ' + tenantInfo.company_name : '(جميع الشركات)'}
-              </h1>
-              <div class="flex flex-wrap items-center gap-4">
-                <span class="text-2xl font-bold text-green-600">${rates.results.length} نسبة</span>
-                <div class="flex-1"></div>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div>
+                <h1 class="text-3xl font-bold text-gray-800">
+                  <i class="fas fa-percent text-green-600 ml-2"></i>
+                  النسب والأسعار ${tenantInfo ? '- ' + tenantInfo.company_name : '(جميع الشركات)'}
+                </h1>
+                <span class="text-lg font-semibold text-green-600 mt-1 block">${rates.results.length} نسبة</span>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                 <!-- Search Box -->
-                <div class="relative">
+                <div class="relative flex-1 md:flex-none">
                   <input 
                     type="text" 
                     id="searchRates" 
                     placeholder="بحث عن بنك أو نوع تمويل..." 
-                    class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent w-full md:w-auto"
                     onkeyup="searchInRatesTable()"
                   />
                   <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
                 </div>
                 ${canEdit && tenantId ? `
-                  <a href="/admin/rates/add?tenant_id=${tenantId}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg">
-                    <i class="fas fa-plus ml-2"></i>
-                    إضافة نسبة جديدة
+                  <a href="/admin/rates/add?tenant_id=${tenantId}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg text-sm whitespace-nowrap">
+                    <i class="fas fa-plus ml-1"></i>
+                    إضافة نسبة
                   </a>
+                  <div class="csv-dropdown" onmouseenter="showCSVDropdown()" onmouseleave="hideCSVDropdown()">
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg text-sm flex items-center whitespace-nowrap">
+                      <i class="fas fa-file-csv ml-1"></i>
+                      CSV
+                      <i class="fas fa-chevron-down mr-1 text-xs"></i>
+                    </button>
+                    <div id="csvDropdownMenu" class="csv-menu">
+                      <button onclick="downloadSampleCSV()" class="w-full text-right px-4 py-2 hover:bg-gray-100 transition-all text-sm text-gray-700 rounded-t-lg">
+                        <i class="fas fa-download ml-2 text-yellow-600"></i>
+                        تحميل نموذج
+                      </button>
+                      <button onclick="exportToCSV()" class="w-full text-right px-4 py-2 hover:bg-gray-100 transition-all text-sm text-gray-700">
+                        <i class="fas fa-file-export ml-2 text-purple-600"></i>
+                        تصدير البيانات
+                      </button>
+                      <button onclick="showUploadModal()" class="w-full text-right px-4 py-2 hover:bg-gray-100 transition-all text-sm text-gray-700 border-t border-gray-200 rounded-b-lg">
+                        <i class="fas fa-file-upload ml-2 text-blue-600"></i>
+                        رفع ملف CSV
+                      </button>
+                    </div>
+                  </div>
                 ` : ''}
               </div>
             </div>
@@ -8165,6 +8984,99 @@ app.get('/admin/rates', async (c) => {
             `}
           </div>
         </div>
+
+        <!-- Excel Upload Modal -->
+        <div id="uploadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold text-gray-800">
+                <i class="fas fa-file-excel text-green-600 ml-2"></i>
+                رفع ملف Excel/CSV
+              </h2>
+              <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times text-2xl"></i>
+              </button>
+            </div>
+
+            <div class="mb-6">
+              <div class="bg-blue-50 border-r-4 border-blue-500 p-4 rounded mb-4">
+                <p class="text-sm text-blue-800">
+                  <i class="fas fa-info-circle ml-2"></i>
+                  <strong>تعليمات:</strong> يجب أن يحتوي ملف Excel/CSV على الأعمدة التالية (8 أعمدة):
+                </p>
+                <ul class="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
+                  <li><strong>رقم تسلسلي</strong> - سيتم تجاهله عند الرفع (يتم توليده تلقائياً)</li>
+                  <li><strong>البنك</strong> * (اسم البنك - مطلوب)</li>
+                  <li><strong>نوع التمويل</strong> * (اسم نوع التمويل - مطلوب)</li>
+                  <li><strong>النسبة %</strong> * (مطلوب)</li>
+                  <li>الحد الأدنى للمبلغ (ريال) (اختياري)</li>
+                  <li>الحد الأقصى للمبلغ (ريال) (اختياري)</li>
+                  <li>الحد الأدنى للمدة (شهر) (اختياري)</li>
+                  <li>الحد الأقصى للمدة (شهر) (اختياري)</li>
+                </ul>
+              </div>
+
+              <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" 
+                       class="hidden" onchange="handleFileSelect(event)">
+                <label for="excelFileInput" class="cursor-pointer">
+                  <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-4"></i>
+                  <p class="text-gray-700 font-bold mb-2">انقر لاختيار ملف Excel أو CSV</p>
+                  <p class="text-sm text-gray-500">أو اسحب الملف هنا</p>
+                </label>
+              </div>
+
+              <div id="fileInfo" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <i class="fas fa-file-excel text-green-600 text-xl"></i>
+                    <div>
+                      <p class="font-bold text-green-800" id="fileName">اسم الملف</p>
+                      <p class="text-sm text-green-600" id="fileSize">حجم الملف</p>
+                    </div>
+                  </div>
+                  <button onclick="clearFile()" class="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded">
+                    <i class="fas fa-times text-lg"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div id="previewSection" class="hidden mb-6" dir="rtl">
+              <h3 class="text-lg font-bold mb-3">معاينة البيانات:</h3>
+              <div class="overflow-x-auto max-h-64 border border-gray-200 rounded-lg">
+                <table id="previewTable" class="w-full text-sm" dir="rtl">
+                  <thead class="bg-gray-100 sticky top-0">
+                    <tr id="previewHeader"></tr>
+                  </thead>
+                  <tbody id="previewBody" class="divide-y divide-gray-200"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="uploadProgress" class="hidden mb-4">
+              <div class="bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+              </div>
+              <p id="progressText" class="text-sm text-gray-600 mt-2 text-center"></p>
+            </div>
+
+            <div id="uploadResults" class="hidden mb-4"></div>
+
+            <div class="flex gap-3">
+              <button onclick="closeUploadModal()" 
+                      class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <i class="fas fa-times ml-2"></i>
+                إلغاء
+              </button>
+              <button onclick="uploadExcel()" id="uploadBtn"
+                      class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <i class="fas fa-upload ml-2"></i>
+                رفع البيانات
+              </button>
+            </div>
+          </div>
+        </div>
         
         <script>
           function searchInRatesTable() {
@@ -8182,6 +9094,20 @@ app.get('/admin/rates', async (c) => {
                 row.style.display = 'none';
               }
             });
+          }
+
+          function showCSVDropdown() {
+            const menu = document.getElementById('csvDropdownMenu');
+            if (menu) {
+              menu.classList.add('show');
+            }
+          }
+
+          function hideCSVDropdown() {
+            const menu = document.getElementById('csvDropdownMenu');
+            if (menu) {
+              menu.classList.remove('show');
+            }
           }
           
           function deleteRate(rateId) {
@@ -8209,6 +9135,398 @@ app.get('/admin/rates', async (c) => {
             .catch(error => {
               alert('حدث خطأ: ' + error.message);
             });
+          }
+
+          function downloadSampleCSV() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tenantId = urlParams.get('tenant_id');
+            const url = '/api/rates/sample-csv' + (tenantId ? '?tenant_id=' + tenantId : '');
+            window.location.href = url;
+          }
+
+          async function exportToCSV() {
+            try {
+              const urlParams = new URLSearchParams(window.location.search);
+              const tenantId = urlParams.get('tenant_id');
+              const url = '/api/rates/export-csv' + (tenantId ? '?tenant_id=' + tenantId : '');
+              
+              const response = await fetch(url, {
+                headers: {
+                  'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || localStorage.getItem('token'))
+                }
+              });
+              
+              if (response.ok) {
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(downloadUrl);
+              } else {
+                alert('حدث خطأ في تصدير البيانات');
+              }
+            } catch (error) {
+              console.error('Export error:', error);
+              alert('حدث خطأ في تصدير البيانات');
+            }
+          }
+
+          let excelData = null;
+          let banksMap = {};
+          let typesMap = {};
+
+          // Load banks and types for mapping
+          async function loadMappings() {
+            try {
+              const urlParams = new URLSearchParams(window.location.search);
+              const tenantId = urlParams.get('tenant_id');
+              const tenantParam = tenantId ? '?tenant_id=' + tenantId : '';
+              
+              const [banksRes, typesRes] = await Promise.all([
+                fetch('/api/banks' + tenantParam).then(r => r.json()),
+                fetch('/api/financing-types').then(r => r.json())
+              ]);
+              
+              banksMap = {};
+              (banksRes.data || []).forEach(bank => {
+                // Only map by bank name, not by ID or code
+                if (bank.bank_name) {
+                  banksMap[bank.bank_name.toLowerCase()] = bank.id;
+                  banksMap[bank.bank_name.toLowerCase().trim()] = bank.id;
+                }
+              });
+              
+              typesMap = {};
+              (typesRes.data || []).forEach(type => {
+                if (type.type_name) {
+                  typesMap[type.type_name.toLowerCase()] = type.id;
+                  typesMap[type.type_name.toLowerCase().trim()] = type.id;
+                }
+              });
+            } catch (error) {
+              console.error('Error loading mappings:', error);
+            }
+          }
+
+          function showUploadModal() {
+            document.getElementById('uploadModal').classList.remove('hidden');
+            loadMappings();
+          }
+
+          function closeUploadModal() {
+            document.getElementById('uploadModal').classList.add('hidden');
+            clearFile();
+            document.getElementById('uploadResults').classList.add('hidden');
+            document.getElementById('uploadProgress').classList.add('hidden');
+            document.getElementById('previewSection').classList.add('hidden');
+          }
+
+          function clearFile() {
+            document.getElementById('excelFileInput').value = '';
+            document.getElementById('fileInfo').classList.add('hidden');
+            document.getElementById('previewSection').classList.add('hidden');
+            excelData = null;
+          }
+
+          function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.name.match(/\\.(xlsx|xls|csv)$/i)) {
+              alert('الرجاء اختيار ملف Excel أو CSV صالح (.xlsx, .xls, أو .csv)');
+              event.target.value = ''; // Clear the input
+              return;
+            }
+
+            // Show file info immediately with better styling
+            document.getElementById('fileName').textContent = file.name;
+            const fileSizeKB = (file.size / 1024).toFixed(2);
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            document.getElementById('fileSize').textContent = file.size > 1024 * 1024 
+              ? fileSizeMB + ' MB' 
+              : fileSizeKB + ' KB';
+            document.getElementById('fileInfo').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              try {
+                let jsonData;
+                
+                if (file.name.match(/\\.csv$/i)) {
+                  // Handle CSV file
+                  const text = e.target.result;
+                  const lines = text.split('\\n').filter(line => line.trim());
+                  if (lines.length < 2) {
+                    alert('الملف فارغ أو لا يحتوي على بيانات');
+                    clearFile();
+                    return;
+                  }
+                  jsonData = lines.map(line => {
+                    // Handle CSV parsing with quotes
+                    const result = [];
+                    let current = '';
+                    let inQuotes = false;
+                    for (let i = 0; i < line.length; i++) {
+                      const char = line[i];
+                      if (char === '"') {
+                        inQuotes = !inQuotes;
+                      } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                      } else {
+                        current += char;
+                      }
+                    }
+                    result.push(current.trim());
+                    return result;
+                  });
+                } else {
+                  // Handle Excel file
+                  const data = new Uint8Array(e.target.result);
+                  const workbook = XLSX.read(data, { type: 'array' });
+                  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                  jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                }
+                
+                if (jsonData.length < 2) {
+                  alert('الملف فارغ أو لا يحتوي على بيانات');
+                  clearFile();
+                  return;
+                }
+
+                excelData = jsonData;
+                displayPreview(jsonData);
+              } catch (error) {
+                console.error('Error reading file:', error);
+                alert('حدث خطأ في قراءة الملف. الرجاء التأكد من صحة الملف.');
+                clearFile();
+              }
+            };
+            
+            // Read file based on type
+            if (file.name.match(/\\.csv$/i)) {
+              reader.readAsText(file, 'UTF-8');
+            } else {
+              reader.readAsArrayBuffer(file);
+            }
+          }
+
+          function displayPreview(data) {
+            const headerRow = data[0];
+            const previewRows = data.slice(1, Math.min(6, data.length));
+
+            // Reverse header row for RTL display (rightmost column first)
+            const reversedHeader = [...headerRow].reverse();
+            const headerHtml = reversedHeader.map(h => '<th class="px-4 py-2 text-right bg-gray-100" dir="rtl">' + (h || '') + '</th>').join('');
+            document.getElementById('previewHeader').innerHTML = headerHtml;
+
+            const bodyHtml = previewRows.map(row => {
+              // Reverse row data to match reversed header
+              const reversedRow = [...row].reverse();
+              return '<tr>' + reversedRow.map((cell) => {
+                return '<td class="px-4 py-2 text-right" dir="rtl">' + (cell || '') + '</td>';
+              }).join('') + '</tr>';
+            }).join('');
+            document.getElementById('previewBody').innerHTML = bodyHtml;
+
+            document.getElementById('previewSection').classList.remove('hidden');
+          }
+
+          async function uploadExcel() {
+            if (!excelData || excelData.length < 2) {
+              alert('الرجاء اختيار ملف Excel أو CSV صالح');
+              return;
+            }
+            
+            // Check if file is selected
+            const fileInput = document.getElementById('excelFileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+              alert('الرجاء اختيار ملف أولاً');
+              return;
+            }
+
+            const uploadBtn = document.getElementById('uploadBtn');
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const resultsDiv = document.getElementById('uploadResults');
+
+            uploadBtn.disabled = true;
+            progressDiv.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+
+            try {
+              const urlParams = new URLSearchParams(window.location.search);
+              const tenantId = urlParams.get('tenant_id');
+
+              // Parse Excel data
+              const headerRow = excelData[0];
+              const dataRows = excelData.slice(1);
+
+              // Find column indices - matching new 8-column structure (RTL order)
+              // In RTL CSV: Column 0 = Max Duration (rightmost), Column 7 = SL number (leftmost)
+              // Column 0: Max Duration (optional) - rightmost in RTL
+              // Column 1: Min Duration (optional)
+              // Column 2: Max Amount (optional)
+              // Column 3: Min Amount (optional)
+              // Column 4: Rate (mandatory)
+              // Column 5: Type (mandatory)
+              // Column 6: Bank (mandatory)
+              // Column 7: SL number (ignore) - leftmost in RTL
+              const findColumnIndex = (names) => {
+                for (const name of names) {
+                  const index = headerRow.findIndex(h => 
+                    h && h.toString().toLowerCase().includes(name.toLowerCase())
+                  );
+                  if (index !== -1) return index;
+                }
+                return -1;
+              };
+
+              const maxDurationCol = findColumnIndex(['الحد الأقصى للمدة', 'max_duration', 'maximum duration']);
+              const minDurationCol = findColumnIndex(['الحد الأدنى للمدة', 'min_duration', 'minimum duration']);
+              const maxAmountCol = findColumnIndex(['الحد الأقصى للمبلغ', 'max_amount', 'maximum amount', 'الحد الأقصى']);
+              const minAmountCol = findColumnIndex(['الحد الأدنى للمبلغ', 'min_amount', 'minimum amount', 'الحد الأدنى']);
+              const rateCol = findColumnIndex(['النسبة', 'نسبة', 'rate', 'interest', 'فائدة', '%']);
+              const typeCol = findColumnIndex(['نوع التمويل', 'type', 'financing_type', 'financing_type_id', 'type_name']);
+              const bankCol = findColumnIndex(['البنك', 'bank', 'bank_id', 'bank_name']);
+              const slCol = findColumnIndex(['رقم تسلسلي', 'sl', 'serial', 'number']);
+
+              if (bankCol === -1 || typeCol === -1 || rateCol === -1) {
+                alert('الملف لا يحتوي على الأعمدة المطلوبة: البنك، نوع التمويل، النسبة %');
+                uploadBtn.disabled = false;
+                return;
+              }
+
+              // Prepare data for upload
+              const ratesToUpload = [];
+              let processed = 0;
+
+              for (const row of dataRows) {
+                if (!row[bankCol] || !row[typeCol] || !row[rateCol]) continue;
+
+                // Map bank name to ID (only match by name, not code or ID)
+                let bankId = null;
+                const bankValue = String(row[bankCol]).trim();
+                // Only use name matching, ignore numeric values (codes/IDs)
+                bankId = banksMap[bankValue.toLowerCase()];
+                
+                if (!bankId) {
+                  // Try partial match for better matching
+                  for (const [key, id] of Object.entries(banksMap)) {
+                    if (key === bankValue.toLowerCase() || key.includes(bankValue.toLowerCase()) || bankValue.toLowerCase().includes(key)) {
+                      bankId = id;
+                      break;
+                    }
+                  }
+                }
+
+                // Map type name to ID
+                let typeId = null;
+                const typeValue = String(row[typeCol]).trim();
+                typeId = typesMap[typeValue.toLowerCase()];
+                
+                if (!typeId) {
+                  // Try partial match
+                  for (const [key, id] of Object.entries(typesMap)) {
+                    if (key === typeValue.toLowerCase() || key.includes(typeValue.toLowerCase()) || typeValue.toLowerCase().includes(key)) {
+                      typeId = id;
+                      break;
+                    }
+                  }
+                }
+
+                if (!bankId || !typeId) {
+                  console.warn('Skipping row - bank or type not found. Bank:', bankValue, 'Type:', typeValue);
+                  continue;
+                }
+
+                const rate = parseFloat(String(row[rateCol]).replace('%', '').trim());
+                if (isNaN(rate)) continue;
+
+                ratesToUpload.push({
+                  bank_id: bankId,
+                  financing_type_id: typeId,
+                  rate: rate,
+                  min_amount: minAmountCol !== -1 && row[minAmountCol] ? parseFloat(String(row[minAmountCol]).replace(/,/g, '')) : null,
+                  max_amount: maxAmountCol !== -1 && row[maxAmountCol] ? parseFloat(String(row[maxAmountCol]).replace(/,/g, '')) : null,
+                  min_duration: minDurationCol !== -1 && row[minDurationCol] ? parseInt(String(row[minDurationCol])) : null,
+                  max_duration: maxDurationCol !== -1 && row[maxDurationCol] ? parseInt(String(row[maxDurationCol])) : null,
+                  is_active: 1,
+                  tenant_id: tenantId ? parseInt(tenantId) : null
+                });
+
+                processed++;
+                progressBar.style.width = ((processed / dataRows.length) * 100) + '%';
+                progressText.textContent = 'جاري المعالجة: ' + processed + ' من ' + dataRows.length;
+              }
+
+              if (ratesToUpload.length === 0) {
+                alert('لم يتم العثور على بيانات صالحة للرفع');
+                uploadBtn.disabled = false;
+                return;
+              }
+
+              progressText.textContent = 'جاري رفع البيانات...';
+
+              // Upload to server
+              const response = await fetch('/api/rates/upload-excel', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || localStorage.getItem('token'))
+                },
+                body: JSON.stringify({ rates: ratesToUpload })
+              });
+
+              const result = await response.json();
+
+              if (result.success) {
+                progressBar.style.width = '100%';
+                progressText.textContent = 'تم الرفع بنجاح!';
+                
+                resultsDiv.innerHTML = 
+                  '<div class="bg-green-50 border-r-4 border-green-500 p-4 rounded">' +
+                    '<div class="flex items-center">' +
+                      '<i class="fas fa-check-circle text-green-600 text-2xl ml-3"></i>' +
+                      '<div>' +
+                        '<p class="font-bold text-green-800">تم رفع البيانات بنجاح!</p>' +
+                        '<p class="text-sm text-green-700 mt-1">' +
+                          'تم إضافة/تحديث ' + (result.created || 0) + ' سجل جديد و ' + (result.updated || 0) + ' سجل محدث' +
+                        '</p>' +
+                      '</div>' +
+                    '</div>' +
+                  '</div>';
+                resultsDiv.classList.remove('hidden');
+
+                setTimeout(() => {
+                  window.location.reload();
+                }, 2000);
+              } else {
+                throw new Error(result.error || 'حدث خطأ في رفع البيانات');
+              }
+            } catch (error) {
+              console.error('Upload error:', error);
+              const errorMessage = error.message || 'حدث خطأ غير معروف';
+              resultsDiv.innerHTML = 
+                '<div class="bg-red-50 border-r-4 border-red-500 p-4 rounded">' +
+                  '<div class="flex items-center">' +
+                    '<i class="fas fa-exclamation-circle text-red-600 text-2xl ml-3"></i>' +
+                    '<div>' +
+                      '<p class="font-bold text-red-800">حدث خطأ</p>' +
+                      '<p class="text-sm text-red-700 mt-1">' + errorMessage + '</p>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+              resultsDiv.classList.remove('hidden');
+            } finally {
+              uploadBtn.disabled = false;
+            }
           }
         </script>
       </body>
@@ -10201,27 +11519,8 @@ app.get('/admin/requests/new', async (c) => {
       banks = await c.env.DB.prepare('SELECT id, bank_name FROM banks ORDER BY bank_name').all()
     }
 
-    // Get financing types scoped by tenant (allow global types if tenant_id is NULL)
-    let financingTypesQuery = 'SELECT id, type_name FROM financing_types WHERE is_active = 1'
-    const financingTypesParams: any[] = []
-    if (userInfo.roleId !== 1) {
-      if (!userInfo.tenantId) {
-        return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
-      }
-      financingTypesQuery += ' AND (tenant_id = ? OR tenant_id IS NULL)'
-      financingTypesParams.push(userInfo.tenantId)
-    }
-    financingTypesQuery += ' ORDER BY type_name'
-    let financingTypes
-    try {
-      financingTypes = financingTypesParams.length
-        ? await c.env.DB.prepare(financingTypesQuery).bind(...financingTypesParams).all()
-        : await c.env.DB.prepare(financingTypesQuery).all()
-    } catch (error: any) {
-      console.error('Error loading financing types for /admin/requests/new:', error)
-      // Fallback for legacy schemas missing tenant_id or is_active
-      financingTypes = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all()
-    }
+    // Get financing types - same query as "إضافة نسبة تمويل جديدة" so both dropdowns show the same options
+    const financingTypes = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all()
     
     return c.html(`
       <!DOCTYPE html>
@@ -10856,6 +12155,8 @@ app.get('/admin/customers/:id/edit', async (c) => {
     if (!customer) {
       return c.html('<h1>العميل غير موجود</h1>')
     }
+    const obligationsResult = await c.env.DB.prepare('SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(id).all()
+    const obligations = (obligationsResult.results || []) as Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
     
     return c.html(`
       <!DOCTYPE html>
@@ -10879,27 +12180,127 @@ app.get('/admin/customers/:id/edit', async (c) => {
               تعديل بيانات العميل #${id}
             </h1>
             
-            <form method="POST" action="/api/customers/${id}" enctype="application/x-www-form-urlencoded" class="space-y-6">
-              <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
-                <input type="text" name="name" value="${(customer as any).name}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <form method="POST" action="/api/customers/${id}" enctype="application/x-www-form-urlencoded" class="space-y-6" id="edit-customer-form">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل *</label>
+                  <input type="text" name="full_name" value="${(customer as any).full_name || ''}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف *</label>
+                  <input type="tel" name="phone" value="${(customer as any).phone || ''}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
               </div>
-              
-              <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف</label>
-                <input type="tel" name="phone" value="${(customer as any).phone || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
+                  <input type="email" name="email" value="${(customer as any).email || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">الرقم الوطني</label>
+                  <input type="text" name="national_id" value="${(customer as any).national_id || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
               </div>
-              
-              <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
-                <input type="email" name="email" value="${(customer as any).email || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ الميلاد</label>
+                  <input type="hidden" name="dob_calendar_type" id="edit_dob_calendar_type" value="${(customer as any).dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian'}">
+                  <input type="hidden" name="date_of_birth" id="edit_date_of_birth">
+                  <div class="flex gap-2 items-center flex-wrap">
+                    <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                      <input type="date" id="edit_date_of_birth_gregorian" value="${(customer as any).birthdate && (customer as any).dob_calendar_type !== 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <input type="text" id="edit_date_of_birth_hijri" style="display:none" placeholder="1445-01-01 (هـ)" value="${(customer as any).birthdate && (customer as any).dob_calendar_type === 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    </div>
+                    <div class="flex rounded-lg border border-gray-300 bg-gray-50">
+                      <button type="button" id="edit_dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg ${(customer as any).dob_calendar_type === 'hijri' ? 'text-gray-600 hover:bg-gray-100' : 'bg-blue-600 text-white'}" title="ميلادي">م</button>
+                      <button type="button" id="edit_dob_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg ${(customer as any).dob_calendar_type === 'hijri' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}" title="هجري">هـ</button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">جهة العمل</label>
+                  <input type="text" name="employer_name" value="${(customer as any).employer_name || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
               </div>
-              
-              <div>
-                <label class="block text-sm font-bold text-gray-700 mb-2">الرقم الوطني</label>
-                <input type="text" name="national_id" value="${(customer as any).national_id || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">نوع الوظيفة</label>
+                  <select name="job_type" id="edit_job_type" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="civilian" ${((customer as any).job_type || 'civilian') !== 'military' ? 'selected' : ''}>مدني</option>
+                    <option value="military" ${(customer as any).job_type === 'military' ? 'selected' : ''}>عسكري</option>
+                  </select>
+                </div>
+                <div>
+                  <div id="edit_job_title_civilian_wrap">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">المسمى الوظيفي</label>
+                    <input type="text" name="job_title" id="edit_job_title_input" value="${(customer as any).job_title || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  </div>
+                  <div id="edit_military_rank_wrap" style="display:none">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">الرتبة العسكرية</label>
+                    <select name="military_rank" id="edit_military_rank_select" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="">-- اختر الرتبة --</option>
+                      <option value="جندي">جندي</option>
+                      <option value="عريف">عريف</option>
+                      <option value="رقيب">رقيب</option>
+                      <option value="رقيب أول">رقيب أول</option>
+                      <option value="رئيس رقباء">رئيس رقباء</option>
+                      <option value="ملازم">ملازم</option>
+                      <option value="ملازم أول">ملازم أول</option>
+                      <option value="نقيب">نقيب</option>
+                      <option value="رائد">رائد</option>
+                      <option value="مقدم">مقدم</option>
+                      <option value="عقيد">عقيد</option>
+                      <option value="عميد">عميد</option>
+                      <option value="لواء">لواء</option>
+                      <option value="فريق">فريق</option>
+                      <option value="فريق أول">فريق أول</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ بدء العمل</label>
+                  <input type="date" name="work_start_date" value="${(customer as any).work_start_date || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">المدينة</label>
+                  <input type="text" name="city" value="${(customer as any).city || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">الراتب الأساسي</label>
+                  <input type="number" name="basic_salary" step="0.01" min="0" value="${(customer as any).basic_salary ?? ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">الراتب الشهري *</label>
+                  <input type="number" name="monthly_salary" step="0.01" value="${(customer as any).monthly_salary ?? ''}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+              </div>
+              <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">
+                  <i class="fas fa-credit-card text-red-600 ml-1"></i>
+                  الالتزامات المالية
+                </h3>
+                <input type="hidden" name="obligations_json" id="edit_obligations_json" value="[]">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="border-b border-gray-300 text-right">
+                        <th class="py-2 px-2">نوع الالتزام</th>
+                        <th class="py-2 px-2">إجمالي المبلغ</th>
+                        <th class="py-2 px-2">القسط الشهري</th>
+                        <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                        <th class="py-2 px-2 w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="edit-obligations-tbody"></tbody>
+                  </table>
+                </div>
+                <button type="button" id="edit-add-obligation-row" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                  <i class="fas fa-plus ml-1"></i>
+                  إضافة صف
+                </button>
+              </div>
               <div class="flex gap-4">
                 <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold">
                   <i class="fas fa-save ml-2"></i>
@@ -10911,6 +12312,63 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 </a>
               </div>
             </form>
+            <script>
+              (function(){
+                var cust = ${JSON.stringify({ birthdate: (customer as any).birthdate, dob_calendar_type: (customer as any).dob_calendar_type, job_type: (customer as any).job_type, military_rank: (customer as any).military_rank })};
+                var g=document.getElementById('edit_date_of_birth_gregorian'),h=document.getElementById('edit_date_of_birth_hijri'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri');
+                if(!g||!h||!hidden||!type) return;
+                hidden.value = cust.birthdate || '';
+                function setGregorian(){ g.style.display=''; h.style.display='none'; type.value='gregorian'; hidden.value=g.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100'; }
+                function setHijri(){ g.style.display='none'; h.style.display=''; type.value='hijri'; hidden.value=h.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white'; }
+                btnG.onclick=setGregorian; btnH.onclick=setHijri;
+                g.onchange=function(){ if(type.value==='gregorian') hidden.value=g.value||''; };
+                h.oninput=h.onchange=function(){ if(type.value==='hijri') hidden.value=h.value||''; };
+                if(cust.dob_calendar_type==='hijri'){ setHijri(); } else { setGregorian(); }
+                document.getElementById('edit-customer-form').addEventListener('submit',function(){ hidden.value=type.value==='hijri'?h.value:g.value; });
+                var jobTypeEl=document.getElementById('edit_job_type'),civilianWrap=document.getElementById('edit_job_title_civilian_wrap'),militaryWrap=document.getElementById('edit_military_rank_wrap'),jobTitleInput=document.getElementById('edit_job_title_input'),militarySelect=document.getElementById('edit_military_rank_select');
+                if(jobTypeEl&&civilianWrap&&militaryWrap){
+                  function updateEditJobType(){ var isMilitary=jobTypeEl.value==='military'; civilianWrap.style.display=isMilitary?'none':'block'; militaryWrap.style.display=isMilitary?'block':'none'; if(jobTitleInput) jobTitleInput.disabled=isMilitary; if(militarySelect) militarySelect.disabled=!isMilitary; }
+                  jobTypeEl.addEventListener('change',updateEditJobType);
+                  if(militarySelect&&cust.military_rank) militarySelect.value=cust.military_rank;
+                  updateEditJobType();
+                  document.getElementById('edit-customer-form').addEventListener('submit',function(){ if(jobTypeEl.value==='military'&&militarySelect&&jobTitleInput){ jobTitleInput.value=militarySelect.value||''; jobTitleInput.disabled=false; } });
+                }
+                var editObligationsInitial = ${JSON.stringify(obligations)};
+                var editTbody = document.getElementById('edit-obligations-tbody');
+                var editAddBtn = document.getElementById('edit-add-obligation-row');
+                var editHidden = document.getElementById('edit_obligations_json');
+                if(editTbody&&editAddBtn&&editHidden){
+                  function addEditRow(data){
+                    data=data||{};
+                    var tr=document.createElement('tr');
+                    tr.className='border-b border-gray-200';
+                    tr.innerHTML='<td class="py-1 px-2"><input type="text" class="edit-oblig-type w-full px-2 py-1.5 border rounded" placeholder="نوع الالتزام"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="date" class="edit-oblig-due w-full px-2 py-1.5 border rounded"></td><td class="py-1 px-2"><button type="button" class="edit-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+                    if(data.obligation_type) tr.querySelector('.edit-oblig-type').value=data.obligation_type;
+                    if(data.total_amount!=null) tr.querySelector('.edit-oblig-total').value=data.total_amount;
+                    if(data.monthly_installment!=null) tr.querySelector('.edit-oblig-monthly').value=data.monthly_installment;
+                    if(data.due_date) tr.querySelector('.edit-oblig-due').value=data.due_date;
+                    tr.querySelector('.edit-oblig-remove').onclick=function(){ tr.remove(); };
+                    editTbody.appendChild(tr);
+                  }
+                  editObligationsInitial.forEach(function(o){ addEditRow(o); });
+                  if(editObligationsInitial.length===0) addEditRow();
+                  editAddBtn.onclick=function(){ addEditRow(); };
+                  document.getElementById('edit-customer-form').addEventListener('submit',function(){
+                    var rows=editTbody.querySelectorAll('tr');
+                    var arr=[];
+                    rows.forEach(function(tr){
+                      var typeEl=tr.querySelector('.edit-oblig-type');
+                      var totalEl=tr.querySelector('.edit-oblig-total');
+                      var monthlyEl=tr.querySelector('.edit-oblig-monthly');
+                      var dueEl=tr.querySelector('.edit-oblig-due');
+                      if(!typeEl||!totalEl||!monthlyEl) return;
+                      arr.push({ obligation_type: typeEl.value||'', total_amount: parseFloat(totalEl.value)||0, monthly_installment: parseFloat(monthlyEl.value)||0, due_date: dueEl&&dueEl.value?dueEl.value:null });
+                    });
+                    editHidden.value=JSON.stringify(arr);
+                  });
+                }
+              })();
+            </script>
           </div>
         </div>
       </body>
@@ -11129,7 +12587,7 @@ app.get('/admin/customers/:id/report', async (c) => {
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">تاريخ الميلاد</p>
-                  <p class="text-xl font-bold text-gray-800">${formatDate(cust.birthdate)}</p>
+                  <p class="text-xl font-bold text-gray-800">${formatDate(cust.birthdate)}${(cust.dob_calendar_type === 'hijri' ? ' هـ' : ' م')}</p>
                 </div>
               </div>
               
@@ -11347,6 +12805,7 @@ app.get('/admin/requests/:id/report', async (c) => {
         c.email as customer_email,
         c.national_id as customer_national_id,
         c.birthdate as customer_birthdate,
+        c.dob_calendar_type as customer_dob_calendar_type,
         c.monthly_salary as customer_salary,
         b.bank_name,
         ft.type_name as financing_type_name
@@ -11494,7 +12953,7 @@ app.get('/admin/requests/:id/report', async (c) => {
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">تاريخ الميلاد</p>
-                  <p class="text-xl font-bold text-gray-800">${formatDate(req.customer_birthdate)}</p>
+                  <p class="text-xl font-bold text-gray-800">${formatDate(req.customer_birthdate)}${(req.customer_dob_calendar_type === 'hijri' ? ' هـ' : ' م')}</p>
                 </div>
               </div>
               
@@ -12139,6 +13598,7 @@ app.get('/admin/rates', async (c) => {
         <title>نسب التمويل</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
       </head>
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
@@ -12158,6 +13618,11 @@ app.get('/admin/rates', async (c) => {
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
                 </a>
+                <button onclick="showUploadModal()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-file-upload ml-2"></i>
+                  رفع Excel
+                </button>
                 <button onclick="exportToCSV()" 
                         class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
@@ -12251,6 +13716,99 @@ app.get('/admin/rates', async (c) => {
             </table>
           </div>
         </div>
+
+        <!-- Excel Upload Modal -->
+        <div id="uploadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold text-gray-800">
+                <i class="fas fa-file-excel text-green-600 ml-2"></i>
+                رفع ملف Excel/CSV
+              </h2>
+              <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times text-2xl"></i>
+              </button>
+            </div>
+
+            <div class="mb-6">
+              <div class="bg-blue-50 border-r-4 border-blue-500 p-4 rounded mb-4">
+                <p class="text-sm text-blue-800">
+                  <i class="fas fa-info-circle ml-2"></i>
+                  <strong>تعليمات:</strong> يجب أن يحتوي ملف Excel/CSV على الأعمدة التالية (8 أعمدة):
+                </p>
+                <ul class="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
+                  <li><strong>رقم تسلسلي</strong> - سيتم تجاهله عند الرفع (يتم توليده تلقائياً)</li>
+                  <li><strong>البنك</strong> * (اسم البنك - مطلوب)</li>
+                  <li><strong>نوع التمويل</strong> * (اسم نوع التمويل - مطلوب)</li>
+                  <li><strong>النسبة %</strong> * (مطلوب)</li>
+                  <li>الحد الأدنى للمبلغ (ريال) (اختياري)</li>
+                  <li>الحد الأقصى للمبلغ (ريال) (اختياري)</li>
+                  <li>الحد الأدنى للمدة (شهر) (اختياري)</li>
+                  <li>الحد الأقصى للمدة (شهر) (اختياري)</li>
+                </ul>
+              </div>
+
+              <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" 
+                       class="hidden" onchange="handleFileSelect(event)">
+                <label for="excelFileInput" class="cursor-pointer">
+                  <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-4"></i>
+                  <p class="text-gray-700 font-bold mb-2">انقر لاختيار ملف Excel أو CSV</p>
+                  <p class="text-sm text-gray-500">أو اسحب الملف هنا</p>
+                </label>
+              </div>
+
+              <div id="fileInfo" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <i class="fas fa-file-excel text-green-600 text-xl"></i>
+                    <div>
+                      <p class="font-bold text-green-800" id="fileName">اسم الملف</p>
+                      <p class="text-sm text-green-600" id="fileSize">حجم الملف</p>
+                    </div>
+                  </div>
+                  <button onclick="clearFile()" class="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded">
+                    <i class="fas fa-times text-lg"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div id="previewSection" class="hidden mb-6" dir="rtl">
+              <h3 class="text-lg font-bold mb-3">معاينة البيانات:</h3>
+              <div class="overflow-x-auto max-h-64 border border-gray-200 rounded-lg">
+                <table id="previewTable" class="w-full text-sm" dir="rtl">
+                  <thead class="bg-gray-100 sticky top-0">
+                    <tr id="previewHeader"></tr>
+                  </thead>
+                  <tbody id="previewBody" class="divide-y divide-gray-200"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="uploadProgress" class="hidden mb-4">
+              <div class="bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+              </div>
+              <p id="progressText" class="text-sm text-gray-600 mt-2 text-center"></p>
+            </div>
+
+            <div id="uploadResults" class="hidden mb-4"></div>
+
+            <div class="flex gap-3">
+              <button onclick="closeUploadModal()" 
+                      class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <i class="fas fa-times ml-2"></i>
+                إلغاء
+              </button>
+              <button onclick="uploadExcel()" id="uploadBtn"
+                      class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <i class="fas fa-upload ml-2"></i>
+                رفع البيانات
+              </button>
+            </div>
+          </div>
+        </div>
         
         <script>
           // البحث والفلترة
@@ -12313,6 +13871,278 @@ app.get('/admin/rates', async (c) => {
             link.href = URL.createObjectURL(blob);
             link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
             link.click();
+          }
+
+          let excelData = null;
+          let banksMap = {};
+          let typesMap = {};
+
+          // Load banks and types for mapping
+          async function loadMappings() {
+            try {
+              const [banksRes, typesRes] = await Promise.all([
+                fetch('/api/banks').then(r => r.json()),
+                fetch('/api/financing-types').then(r => r.json())
+              ]);
+              
+              banksMap = {};
+              (banksRes.data || []).forEach(bank => {
+                banksMap[bank.bank_name?.toLowerCase()] = bank.id;
+                banksMap[bank.id] = bank.id;
+              });
+              
+              typesMap = {};
+              (typesRes.data || []).forEach(type => {
+                typesMap[type.type_name?.toLowerCase()] = type.id;
+                typesMap[type.id] = type.id;
+              });
+            } catch (error) {
+              console.error('Error loading mappings:', error);
+            }
+          }
+
+          function showUploadModal() {
+            document.getElementById('uploadModal').classList.remove('hidden');
+            loadMappings();
+          }
+
+          function closeUploadModal() {
+            document.getElementById('uploadModal').classList.add('hidden');
+            clearFile();
+            document.getElementById('uploadResults').classList.add('hidden');
+            document.getElementById('uploadProgress').classList.add('hidden');
+            document.getElementById('previewSection').classList.add('hidden');
+          }
+
+          function clearFile() {
+            document.getElementById('excelFileInput').value = '';
+            document.getElementById('fileInfo').classList.add('hidden');
+            excelData = null;
+          }
+
+          function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.name.match(/\\.(xlsx|xls)$/i)) {
+              alert('الرجاء اختيار ملف Excel صالح (.xlsx أو .xls)');
+              return;
+            }
+
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = '(' + (file.size / 1024).toFixed(2) + ' KB)';
+            document.getElementById('fileInfo').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                
+                if (jsonData.length < 2) {
+                  alert('الملف فارغ أو لا يحتوي على بيانات');
+                  return;
+                }
+
+                excelData = jsonData;
+                displayPreview(jsonData);
+              } catch (error) {
+                console.error('Error reading file:', error);
+                alert('حدث خطأ في قراءة الملف. الرجاء التأكد من صحة الملف.');
+              }
+            };
+            reader.readAsArrayBuffer(file);
+          }
+
+          function displayPreview(data) {
+            const headerRow = data[0];
+            const previewRows = data.slice(1, Math.min(6, data.length));
+
+            // Reverse header row for RTL display (rightmost column first)
+            const reversedHeader = [...headerRow].reverse();
+            const headerHtml = reversedHeader.map(h => '<th class="px-4 py-2 text-right bg-gray-100" dir="rtl">' + (h || '') + '</th>').join('');
+            document.getElementById('previewHeader').innerHTML = headerHtml;
+
+            const bodyHtml = previewRows.map(row => {
+              // Reverse row data to match reversed header
+              const reversedRow = [...row].reverse();
+              return '<tr>' + reversedRow.map((cell) => {
+                return '<td class="px-4 py-2 text-right" dir="rtl">' + (cell || '') + '</td>';
+              }).join('') + '</tr>';
+            }).join('');
+            document.getElementById('previewBody').innerHTML = bodyHtml;
+
+            document.getElementById('previewSection').classList.remove('hidden');
+          }
+
+          async function uploadExcel() {
+            if (!excelData || excelData.length < 2) {
+              alert('الرجاء اختيار ملف Excel أو CSV صالح');
+              return;
+            }
+            
+            // Check if file is selected
+            const fileInput = document.getElementById('excelFileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+              alert('الرجاء اختيار ملف أولاً');
+              return;
+            }
+
+            const uploadBtn = document.getElementById('uploadBtn');
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const resultsDiv = document.getElementById('uploadResults');
+
+            uploadBtn.disabled = true;
+            progressDiv.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+
+            try {
+              // Parse Excel data
+              const headerRow = excelData[0];
+              const dataRows = excelData.slice(1);
+
+              // Find column indices
+              const findColumnIndex = (names) => {
+                for (const name of names) {
+                  const index = headerRow.findIndex(h => 
+                    h && h.toString().toLowerCase().includes(name.toLowerCase())
+                  );
+                  if (index !== -1) return index;
+                }
+                return -1;
+              };
+
+              const bankCol = findColumnIndex(['البنك', 'bank', 'bank_id', 'bank_name']);
+              const typeCol = findColumnIndex(['نوع التمويل', 'type', 'financing_type', 'financing_type_id', 'type_name']);
+              const rateCol = findColumnIndex(['نسبة', 'rate', 'interest', 'فائدة']);
+              const minAmountCol = findColumnIndex(['الحد الأدنى', 'min_amount', 'minimum']);
+              const maxAmountCol = findColumnIndex(['الحد الأقصى', 'max_amount', 'maximum']);
+              const minSalaryCol = findColumnIndex(['الحد الأدنى للراتب', 'min_salary', 'minimum salary']);
+              const maxSalaryCol = findColumnIndex(['الحد الأقصى للراتب', 'max_salary', 'maximum salary']);
+              const minDurationCol = findColumnIndex(['الحد الأدنى للمدة', 'min_duration', 'minimum duration']);
+              const maxDurationCol = findColumnIndex(['الحد الأقصى للمدة', 'max_duration', 'maximum duration']);
+
+              if (bankCol === -1 || typeCol === -1 || rateCol === -1) {
+                alert('الملف لا يحتوي على الأعمدة المطلوبة: البنك، نوع التمويل، نسبة الفائدة');
+                uploadBtn.disabled = false;
+                return;
+              }
+
+              // Prepare data for upload
+              const ratesToUpload = [];
+              let processed = 0;
+
+              for (const row of dataRows) {
+                if (!row[bankCol] || !row[typeCol] || !row[rateCol]) continue;
+
+                // Map bank name to ID
+                let bankId = null;
+                const bankValue = String(row[bankCol]).trim();
+                if (!isNaN(bankValue)) {
+                  bankId = parseInt(bankValue);
+                } else {
+                  bankId = banksMap[bankValue.toLowerCase()];
+                }
+
+                // Map type name to ID
+                let typeId = null;
+                const typeValue = String(row[typeCol]).trim();
+                if (!isNaN(typeValue)) {
+                  typeId = parseInt(typeValue);
+                } else {
+                  typeId = typesMap[typeValue.toLowerCase()];
+                }
+
+                if (!bankId || !typeId) {
+                  console.warn('Skipping row - bank or type not found:', row);
+                  continue;
+                }
+
+                const rate = parseFloat(String(row[rateCol]).replace('%', '').trim());
+                if (isNaN(rate)) continue;
+
+                ratesToUpload.push({
+                  bank_id: bankId,
+                  financing_type_id: typeId,
+                  rate: rate,
+                  min_amount: minAmountCol !== -1 && row[minAmountCol] ? parseFloat(String(row[minAmountCol]).replace(/,/g, '')) : null,
+                  max_amount: maxAmountCol !== -1 && row[maxAmountCol] ? parseFloat(String(row[maxAmountCol]).replace(/,/g, '')) : null,
+                  min_salary: minSalaryCol !== -1 && row[minSalaryCol] ? parseFloat(String(row[minSalaryCol]).replace(/,/g, '')) : null,
+                  max_salary: maxSalaryCol !== -1 && row[maxSalaryCol] ? parseFloat(String(row[maxSalaryCol]).replace(/,/g, '')) : null,
+                  min_duration: minDurationCol !== -1 && row[minDurationCol] ? parseInt(String(row[minDurationCol])) : null,
+                  max_duration: maxDurationCol !== -1 && row[maxDurationCol] ? parseInt(String(row[maxDurationCol])) : null,
+                  is_active: 1
+                });
+
+                processed++;
+                progressBar.style.width = ((processed / dataRows.length) * 100) + '%';
+                progressText.textContent = 'جاري المعالجة: ' + processed + ' من ' + dataRows.length;
+              }
+
+              if (ratesToUpload.length === 0) {
+                alert('لم يتم العثور على بيانات صالحة للرفع');
+                uploadBtn.disabled = false;
+                return;
+              }
+
+              progressText.textContent = 'جاري رفع البيانات...';
+
+              // Upload to server
+              const response = await fetch('/api/rates/upload-excel', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rates: ratesToUpload })
+              });
+
+              const result = await response.json();
+
+              if (result.success) {
+                progressBar.style.width = '100%';
+                progressText.textContent = 'تم الرفع بنجاح!';
+                
+                resultsDiv.innerHTML = 
+                  '<div class="bg-green-50 border-r-4 border-green-500 p-4 rounded">' +
+                    '<div class="flex items-center">' +
+                      '<i class="fas fa-check-circle text-green-600 text-2xl ml-3"></i>' +
+                      '<div>' +
+                        '<p class="font-bold text-green-800">تم رفع البيانات بنجاح!</p>' +
+                        '<p class="text-sm text-green-700 mt-1">' +
+                          'تم إضافة/تحديث ' + (result.created || 0) + ' سجل جديد و ' + (result.updated || 0) + ' سجل محدث' +
+                        '</p>' +
+                      '</div>' +
+                    '</div>' +
+                  '</div>';
+                resultsDiv.classList.remove('hidden');
+
+                setTimeout(() => {
+                  window.location.reload();
+                }, 2000);
+              } else {
+                throw new Error(result.error || 'حدث خطأ في رفع البيانات');
+              }
+            } catch (error) {
+              console.error('Upload error:', error);
+              const errorMessage = error.message || 'حدث خطأ غير معروف';
+              resultsDiv.innerHTML = 
+                '<div class="bg-red-50 border-r-4 border-red-500 p-4 rounded">' +
+                  '<div class="flex items-center">' +
+                    '<i class="fas fa-exclamation-circle text-red-600 text-2xl ml-3"></i>' +
+                    '<div>' +
+                      '<p class="font-bold text-red-800">حدث خطأ</p>' +
+                      '<p class="text-sm text-red-700 mt-1">' + errorMessage + '</p>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+              resultsDiv.classList.remove('hidden');
+            } finally {
+              uploadBtn.disabled = false;
+            }
           }
         </script>
       </body>
@@ -12438,6 +14268,16 @@ app.get('/admin/rates/new', async (c) => {
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                          placeholder="مثال: 60">
                 </div>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-sticky-note text-gray-600 ml-1"></i>
+                  ملاحظات
+                </label>
+                <textarea name="notes" rows="3"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="أضف ملاحظات اختيارية..."></textarea>
               </div>
               
               <div class="flex gap-4 pt-6 border-t">
@@ -15940,9 +17780,10 @@ app.get('/api/hr/dashboard/stats', async (c) => {
     
     // Attendance Today
     const today = new Date().toISOString().split('T')[0]
+    // Use the correct column name from hr_attendance schema: attendance_date
     const attendanceQuery = tenantId
-      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present' AND tenant_id = ${tenantId}`
-      : `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(date) = ? AND status = 'present'`
+      ? `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${tenantId}`
+      : `SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'`
     
     const attendance = await c.env.DB.prepare(attendanceQuery).bind(today).first()
     
@@ -16054,7 +17895,39 @@ app.get('/api/hr/employees', async (c) => {
 app.get('/api/hr/employees/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    const employee = await c.env.DB.prepare(`SELECT * FROM hr_employees WHERE id = ?`).bind(id).first()
+    // Use the same COALESCE mapping as the list API for consistency
+    const query = `SELECT 
+        id,
+        tenant_id,
+        COALESCE(employee_number, employee_code) AS employee_number,
+        COALESCE(full_name, full_name_ar, full_name_en) AS full_name,
+        full_name_ar,
+        full_name_en,
+        national_id,
+        COALESCE(birthdate, birth_date) AS birthdate,
+        birth_date,
+        gender,
+        email,
+        phone,
+        department,
+        job_title,
+        basic_salary,
+        housing_allowance,
+        transportation_allowance,
+        hire_date,
+        contract_start_date,
+        contract_end_date,
+        direct_manager_id,
+        employment_type,
+        work_schedule,
+        status,
+        notes,
+        created_at,
+        updated_at
+      FROM hr_employees 
+      WHERE id = ?`
+    
+    const employee = await c.env.DB.prepare(query).bind(id).first()
     
     if (!employee) {
       return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
@@ -16209,24 +18082,175 @@ app.get('/api/hr/attendance', async (c) => {
   }
 })
 
+// Helper function to calculate working hours (handles night shifts)
+function calculateWorkingHours(checkInTime: string | null, checkOutTime: string | null, attendanceDate: string): { workingHours: number | null, workHoursFormatted: string | null } {
+  if (!checkInTime || !checkOutTime) {
+    return { workingHours: null, workHoursFormatted: null }
+  }
+
+  try {
+    // Parse times (format: HH:MM)
+    const [checkInHour, checkInMin] = checkInTime.split(':').map(Number)
+    const [checkOutHour, checkOutMin] = checkOutTime.split(':').map(Number)
+    
+    // Convert to minutes since midnight
+    const checkInMinutes = checkInHour * 60 + checkInMin
+    let checkOutMinutes = checkOutHour * 60 + checkOutMin
+    
+    // Handle night shift: if check-out time is earlier than check-in time, it's next day
+    if (checkOutMinutes < checkInMinutes) {
+      // Add 24 hours (1440 minutes) for next day
+      checkOutMinutes += 1440
+    }
+    
+    // Calculate difference in minutes
+    const diffMinutes = checkOutMinutes - checkInMinutes
+    
+    // Convert to hours (decimal) and round to 2 decimal places
+    const workingHours = Math.round((diffMinutes / 60) * 100) / 100
+    
+    // Format as HH:MM string
+    const hours = Math.floor(workingHours)
+    const minutes = Math.round((workingHours - hours) * 60)
+    const workHoursFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`
+    
+    return { workingHours, workHoursFormatted }
+  } catch (error) {
+    console.error('Error calculating working hours:', error)
+    return { workingHours: null, workHoursFormatted: null }
+  }
+}
+
 // Add Attendance Record
 app.post('/api/hr/attendance', async (c) => {
   try {
     const data = await c.req.json()
     const userInfo = await getUserInfo(c)
     const tenantId = userInfo.tenantId
-    
+
+    // Calculate working hours if both check-in and check-out are provided
+    const { workingHours, workHoursFormatted } = calculateWorkingHours(
+      data.check_in_time,
+      data.check_out_time,
+      data.attendance_date
+    )
+
+    // Map incoming form fields from the attendance page to the correct DB columns
+    // Form sends: employee_id, attendance_date, check_in_time, check_out_time, status, notes
     const result = await c.env.DB.prepare(`
       INSERT INTO hr_attendance (
-        employee_id, date, check_in, check_out, status, late_minutes, 
-        overtime_minutes, notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        employee_id,
+        attendance_date,
+        check_in_time,
+        check_out_time,
+        status,
+        late_minutes,
+        overtime_minutes,
+        notes,
+        working_hours,
+        work_hours,
+        tenant_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      data.employee_id, data.date, data.check_in, data.check_out, data.status,
-      data.late_minutes || 0, data.overtime_minutes || 0, data.notes, tenantId
+      data.employee_id,
+      data.attendance_date,
+      data.check_in_time,
+      data.check_out_time || null,
+      data.status || 'present',
+      data.late_minutes || 0,
+      data.overtime_minutes || 0,
+      data.notes || null,
+      workingHours,
+      workHoursFormatted,
+      tenantId
     ).run()
     
     return c.json({ success: true, id: result.meta.last_row_id, message: 'تم تسجيل الحضور بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Update Attendance Record (for adding check-out or updating details)
+app.put('/api/hr/attendance/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const data = await c.req.json()
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
+
+    // Get existing record to preserve check_in_time if not provided
+    const existing = await c.env.DB.prepare(`
+      SELECT check_in_time, attendance_date FROM hr_attendance 
+      WHERE id = ? AND tenant_id = ?
+    `).bind(id, tenantId).first<{ check_in_time: string | null, attendance_date: string }>()
+
+    if (!existing) {
+      return c.json({ success: false, error: 'سجل الحضور غير موجود' }, 404)
+    }
+
+    // Use provided check_out_time or existing, same for check_in_time
+    const checkInTime = data.check_in_time || existing.check_in_time
+    const checkOutTime = data.check_out_time || null
+    const attendanceDate = data.attendance_date || existing.attendance_date
+
+    // Recalculate working hours if check-out is provided or updated
+    const { workingHours, workHoursFormatted } = calculateWorkingHours(
+      checkInTime,
+      checkOutTime,
+      attendanceDate
+    )
+
+    // Build update query dynamically based on provided fields
+    const updates: string[] = []
+    const values: any[] = []
+
+    if (data.check_in_time !== undefined) {
+      updates.push('check_in_time = ?')
+      values.push(data.check_in_time)
+    }
+    if (data.check_out_time !== undefined) {
+      updates.push('check_out_time = ?')
+      values.push(data.check_out_time || null)
+    }
+    if (data.status !== undefined) {
+      updates.push('status = ?')
+      values.push(data.status)
+    }
+    if (data.notes !== undefined) {
+      updates.push('notes = ?')
+      values.push(data.notes || null)
+    }
+    if (data.late_minutes !== undefined) {
+      updates.push('late_minutes = ?')
+      values.push(data.late_minutes || 0)
+    }
+    if (data.overtime_minutes !== undefined) {
+      updates.push('overtime_minutes = ?')
+      values.push(data.overtime_minutes || 0)
+    }
+    
+    // Always update working hours if we can calculate them
+    if (workingHours !== null) {
+      updates.push('working_hours = ?')
+      updates.push('work_hours = ?')
+      values.push(workingHours, workHoursFormatted)
+    }
+    
+    updates.push('updated_at = CURRENT_TIMESTAMP')
+    values.push(id, tenantId)
+
+    if (updates.length === 1) { // Only updated_at
+      return c.json({ success: false, error: 'لا توجد بيانات للتحديث' }, 400)
+    }
+
+    await c.env.DB.prepare(`
+      UPDATE hr_attendance 
+      SET ${updates.join(', ')}
+      WHERE id = ? AND tenant_id = ?
+    `).bind(...values).run()
+    
+    return c.json({ success: true, message: 'تم تحديث سجل الحضور بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }

@@ -154,16 +154,49 @@ export const smartCalculator = `<!DOCTYPE html>
                         <p class="text-sm text-gray-500 mt-1">الحد الأدنى: 3,000 ريال</p>
                     </div>
                     
-                    <!-- الالتزامات الشهرية -->
-                    <div>
+                    <!-- اختيار عميل (عرض عملاء الشركة فقط) -->
+                    <div id="calcClientLookupWrap">
                         <label class="block text-gray-700 font-bold mb-2">
-                            <i class="fas fa-credit-card text-red-600 ml-2"></i>
-                            الالتزامات الشهرية (ريال)
+                            <i class="fas fa-user text-amber-600 ml-2"></i>
+                            اختر العميل (اختياري)
                         </label>
-                        <input type="number" id="obligations" min="0" step="100" value="0"
-                               class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                               placeholder="مثال: 2000">
-                        <p class="text-sm text-gray-500 mt-1">أقساط القروض الحالية أو بطاقات الائتمان</p>
+                        <p class="text-sm text-gray-500 mb-2">لتحميل الراتب والالتزامات المحفوظة</p>
+                        <select id="calcCustomerSelect" class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">-- اختر العميل --</option>
+                        </select>
+                        <p id="calcLookupMessage" class="text-sm mt-2 hidden"></p>
+                    </div>
+                    <!-- الالتزامات المالية (جدول + إجمالي شهري) -->
+                    <div id="calcObligationsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">
+                            <i class="fas fa-credit-card text-red-600 ml-1"></i>
+                            الالتزامات المالية
+                        </h3>
+                        <div class="overflow-x-auto mb-2">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-300 text-right">
+                                        <th class="py-2 px-2">نوع الالتزام</th>
+                                        <th class="py-2 px-2">إجمالي المبلغ</th>
+                                        <th class="py-2 px-2">القسط الشهري</th>
+                                        <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                                        <th class="py-2 px-2 w-16"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="calcObligationsTbody"></tbody>
+                            </table>
+                        </div>
+                        <p class="text-sm font-bold text-red-700 mb-2">
+                            إجمالي الالتزامات الشهرية: <span id="calcObligationsTotal">0</span> ريال
+                        </p>
+                        <div class="flex gap-2 flex-wrap">
+                            <button type="button" id="calcAddAdHocObligation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                <i class="fas fa-plus ml-1"></i> إضافة التزام مؤقت
+                            </button>
+                            <button type="button" id="calcSaveObligationsToClient" class="text-green-600 hover:text-green-800 text-sm font-medium hidden">
+                                <i class="fas fa-save ml-1"></i> حفظ الالتزامات على العميل
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- زر الحساب -->
@@ -522,6 +555,9 @@ export const smartCalculator = `<!DOCTYPE html>
     <script>
         let calculationData = {};
         let customerData = {};
+        let selectedCustomer = null;
+        let savedObligations = [];
+        let adHocObligations = [];
         let selectedBestOffer = null;
         let allBanks = [];
         let financingTypes = [];
@@ -674,16 +710,156 @@ export const smartCalculator = `<!DOCTYPE html>
             }
         }
         
+        function getCalcObligationsTotal() {
+            const saved = (savedObligations || []).reduce((s, o) => s + (Number(o.monthly_installment) || 0), 0);
+            let adhoc = 0;
+            const tbody = document.getElementById('calcObligationsTbody');
+            if (tbody) {
+                tbody.querySelectorAll('tr.calc-adhoc-row').forEach(tr => {
+                    const el = tr.querySelector('.calc-adhoc-monthly');
+                    if (el) adhoc += parseFloat(el.value) || 0;
+                });
+            }
+            return saved + adhoc;
+        }
+        
+        function renderCalcObligationsTable() {
+            const tbody = document.getElementById('calcObligationsTbody');
+            const totalEl = document.getElementById('calcObligationsTotal');
+            const saveBtn = document.getElementById('calcSaveObligationsToClient');
+            if (!tbody || !totalEl) return;
+            tbody.innerHTML = '';
+            (savedObligations || []).forEach(o => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200';
+                tr.innerHTML = \`<td class="py-1 px-2">\${escapeHtml(o.obligation_type || '')}</td><td class="py-1 px-2">\${formatNumber(Number(o.total_amount) || 0)}</td><td class="py-1 px-2">\${formatNumber(Number(o.monthly_installment) || 0)}</td><td class="py-1 px-2">\${o.due_date || '-'}</td><td class="py-1 px-2"></td>\`;
+                tbody.appendChild(tr);
+            });
+            (adHocObligations || []).forEach((o, i) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200 calc-adhoc-row';
+                tr.innerHTML = \`<td class="py-1 px-2"><input type="text" class="calc-adhoc-type w-full px-2 py-1 border rounded" value="\${escapeHtml(o.obligation_type || '')}" placeholder="نوع"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
+                const removeBtn = tr.querySelector('.calc-adhoc-remove');
+                removeBtn.addEventListener('click', () => { adHocObligations.splice(i, 1); renderCalcObligationsTable(); });
+                tbody.appendChild(tr);
+            });
+            const total = getCalcObligationsTotal();
+            totalEl.textContent = total.toLocaleString('ar-SA');
+            if (saveBtn) saveBtn.classList.toggle('hidden', !selectedCustomer);
+        }
+        
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+        
+        function formatNumber(n) {
+            return Number(n).toLocaleString('ar-SA');
+        }
+        
+        const pathParts = window.location.pathname.split('/');
+        const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
+        const showCustomerSelect = typeof window.CALCULATOR_SHOW_CUSTOMER_SELECT !== 'undefined' && window.CALCULATOR_SHOW_CUSTOMER_SELECT;
+        if (tenantSlug && showCustomerSelect) {
+            const selectEl = document.getElementById('calcCustomerSelect');
+            const msgEl = document.getElementById('calcLookupMessage');
+            async function loadCustomers() {
+                try {
+                    const res = await axios.get('/api/calculator/customers', { params: { tenant_slug: tenantSlug } });
+                    if (!res.data.success || !Array.isArray(res.data.customers)) return;
+                    const select = document.getElementById('calcCustomerSelect');
+                    if (!select) return;
+                    select.innerHTML = '<option value="">-- اختر العميل --</option>';
+                    (res.data.customers || []).forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = (c.full_name || '') + (c.phone ? ' - ' + c.phone : '');
+                        select.appendChild(opt);
+                    });
+                } catch (err) {
+                    if (msgEl) { msgEl.textContent = 'تعذر تحميل قائمة العملاء'; msgEl.classList.remove('hidden'); msgEl.className = 'text-sm mt-2 text-red-600'; }
+                }
+            }
+            loadCustomers();
+            selectEl.addEventListener('change', async () => {
+                const customerId = selectEl.value;
+                msgEl.classList.add('hidden');
+                if (!customerId) {
+                    selectedCustomer = null;
+                    savedObligations = [];
+                    renderCalcObligationsTable();
+                    const salaryInput = document.getElementById('salary');
+                    if (salaryInput) salaryInput.value = '';
+                    return;
+                }
+                try {
+                    const res = await axios.get('/api/calculator/customer-by-id', { params: { customer_id: customerId, tenant_slug: tenantSlug } });
+                    if (res.data.success && res.data.customer) {
+                        selectedCustomer = res.data.customer;
+                        savedObligations = res.data.obligations || [];
+                        adHocObligations = adHocObligations || [];
+                        renderCalcObligationsTable();
+                        const salaryInput = document.getElementById('salary');
+                        if (salaryInput) {
+                            const val = selectedCustomer.monthly_salary ?? selectedCustomer.basic_salary;
+                            salaryInput.value = (val != null && val !== '') ? String(val) : '';
+                        }
+                    } else {
+                        selectedCustomer = null;
+                        savedObligations = [];
+                        renderCalcObligationsTable();
+                    }
+                } catch (err) {
+                    if (msgEl) { msgEl.textContent = 'حدث خطأ أثناء تحميل بيانات العميل'; msgEl.classList.remove('hidden'); msgEl.className = 'text-sm mt-2 text-red-600'; }
+                }
+            });
+        } else {
+            document.getElementById('calcClientLookupWrap').classList.add('hidden');
+        }
+        
+        document.getElementById('calcAddAdHocObligation').addEventListener('click', () => {
+            adHocObligations = adHocObligations || [];
+            adHocObligations.push({ obligation_type: '', total_amount: 0, monthly_installment: 0, due_date: null });
+            renderCalcObligationsTable();
+        });
+        
+        document.getElementById('calcSaveObligationsToClient').addEventListener('click', async () => {
+            if (!selectedCustomer || !selectedCustomer.id) return;
+            const rows = [];
+            (savedObligations || []).forEach(o => rows.push({ obligation_type: o.obligation_type || '', total_amount: Number(o.total_amount) || 0, monthly_installment: Number(o.monthly_installment) || 0, due_date: o.due_date || null }));
+            document.querySelectorAll('#calcObligationsTbody tr.calc-adhoc-row').forEach(tr => {
+                const typeEl = tr.querySelector('.calc-adhoc-type');
+                const totalEl = tr.querySelector('.calc-adhoc-total');
+                const monthlyEl = tr.querySelector('.calc-adhoc-monthly');
+                const dueEl = tr.querySelector('.calc-adhoc-due');
+                if (typeEl && totalEl && monthlyEl) rows.push({ obligation_type: typeEl.value || '', total_amount: parseFloat(totalEl.value) || 0, monthly_installment: parseFloat(monthlyEl.value) || 0, due_date: (dueEl && dueEl.value) || null });
+            });
+            try {
+                await axios.post(\`/api/customers/\${selectedCustomer.id}/obligations\`, { obligations: rows }, { withCredentials: true });
+                alert('تم حفظ الالتزامات على العميل بنجاح');
+                savedObligations = rows;
+                adHocObligations = [];
+                renderCalcObligationsTable();
+            } catch (err) {
+                console.error(err);
+                alert(err.response && err.response.data && err.response.data.error ? err.response.data.error : 'فشل حفظ الالتزامات. قد تحتاج لتسجيل الدخول.');
+            }
+        });
+        
+        renderCalcObligationsTable();
+        
         // Step 1: Main form submission
         document.getElementById('calculatorForm').addEventListener('submit', (e) => {
             e.preventDefault();
             
+            const obligationsTotal = getCalcObligationsTotal();
             // Get form data
             calculationData = {
                 financing_type_id: parseInt(document.getElementById('financingType').value, 10),
                 amount: parseFloat(document.getElementById('amount').value),
                 salary: parseFloat(document.getElementById('salary').value),
-                obligations: parseFloat(document.getElementById('obligations').value) || 0
+                obligations: obligationsTotal
             };
             
             // Calculate available income
@@ -1425,7 +1601,11 @@ export const smartCalculator = `<!DOCTYPE html>
             document.getElementById('calculatorForm').reset();
             calculationData = {};
             customerData = {};
+            selectedCustomer = null;
+            savedObligations = [];
+            adHocObligations = [];
             selectedBestOffer = null;
+            if (typeof renderCalcObligationsTable === 'function') renderCalcObligationsTable();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         

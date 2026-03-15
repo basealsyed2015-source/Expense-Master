@@ -230,7 +230,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </a>
 
                 <!-- Settings -->
-                <a href="/admin/settings" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
+                <a href="/admin/settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
                     <i class="fas fa-cog text-xl text-gray-600 group-hover:text-gray-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-gray-700">إعدادات النظام</span>
                 </a>
@@ -419,7 +419,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </a>
                     
                     <!-- زر إعدادات النظام -->
-                    <a href="/admin/settings" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                    <a href="/admin/settings" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">إعدادات النظام</div>
                     </a>
@@ -1195,15 +1195,56 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ الميلاد</label>
-                            <input type="date" name="date_of_birth" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <input type="hidden" name="dob_calendar_type" id="modal_dob_calendar_type" value="gregorian">
+                            <input type="hidden" name="date_of_birth" id="modal_date_of_birth">
+                            <div class="flex gap-2 items-center flex-wrap">
+                                <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                                    <input type="date" id="modal_date_of_birth_gregorian" class="flex-1 min-w-0 px-4 py-2 border-0 focus:ring-2 focus:ring-blue-500">
+                                    <input type="text" id="modal_date_of_birth_hijri" style="display:none" placeholder="1445-01-01 (هـ)" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" class="flex-1 min-w-0 px-4 py-2 border-0 focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div class="flex rounded-lg border border-gray-300 bg-gray-50">
+                                    <button type="button" id="modal_dob_toggle_gregorian" class="px-2 py-1.5 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                                    <button type="button" id="modal_dob_toggle_hijri" class="px-2 py-1.5 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">جهة العمل</label>
                             <input type="text" name="employer_name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">المسمى الوظيفي</label>
-                            <input type="text" name="job_title" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">نوع الوظيفة</label>
+                            <select name="job_type" id="modal_job_type" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="civilian">مدني</option>
+                                <option value="military">عسكري</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div id="modal_job_title_civilian_wrap">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">المسمى الوظيفي</label>
+                                <input type="text" name="job_title" id="modal_job_title_input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div id="modal_military_rank_wrap" style="display:none">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">الرتبة العسكرية</label>
+                                <select name="military_rank" id="modal_military_rank_select" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                    <option value="">-- اختر الرتبة --</option>
+                                    <option value="جندي">جندي</option>
+                                    <option value="عريف">عريف</option>
+                                    <option value="رقيب">رقيب</option>
+                                    <option value="رقيب أول">رقيب أول</option>
+                                    <option value="رئيس رقباء">رئيس رقباء</option>
+                                    <option value="ملازم">ملازم</option>
+                                    <option value="ملازم أول">ملازم أول</option>
+                                    <option value="نقيب">نقيب</option>
+                                    <option value="رائد">رائد</option>
+                                    <option value="مقدم">مقدم</option>
+                                    <option value="عقيد">عقيد</option>
+                                    <option value="عميد">عميد</option>
+                                    <option value="لواء">لواء</option>
+                                    <option value="فريق">فريق</option>
+                                    <option value="فريق أول">فريق أول</option>
+                                </select>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">تاريخ بداية العمل</label>
@@ -1214,8 +1255,36 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <input type="text" name="city" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">الراتب الأساسي</label>
+                            <input type="number" name="basic_salary" step="0.01" min="0" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">الراتب الشهري</label>
                             <input type="number" name="monthly_salary" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="col-span-full border border-gray-200 rounded-lg p-4 bg-gray-50">
+                            <h3 class="text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-credit-card text-red-600 ml-1"></i>
+                                الالتزامات المالية
+                            </h3>
+                            <input type="hidden" name="obligations_json" id="modal_obligations_json" value="[]">
+                            <div class="overflow-x-auto mb-2">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-gray-300 text-right">
+                                            <th class="py-2 px-2">نوع الالتزام</th>
+                                            <th class="py-2 px-2">إجمالي المبلغ</th>
+                                            <th class="py-2 px-2">القسط الشهري</th>
+                                            <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                                            <th class="py-2 px-2 w-16"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="modal_obligations_tbody"></tbody>
+                                </table>
+                            </div>
+                            <button type="button" id="modal_add_obligation_row" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                <i class="fas fa-plus ml-1"></i> إضافة صف
+                            </button>
                         </div>
                     </div>
                     <div class="flex gap-3 mt-6">
@@ -1316,6 +1385,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">الحد الأعلى للمدة (شهر) *</label>
                             <input type="number" name="max_duration" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">ملاحظات</label>
+                            <textarea name="notes" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="أضف ملاحظات اختيارية..."></textarea>
                         </div>
                     </div>
                     <div class="flex gap-3 mt-6">
@@ -1865,7 +1938,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/users',
                         '/admin/hr',
                         '/admin/notifications',
-                        '/admin/settings',
                         '/calculator',
                         '/'
                     ],
@@ -1913,6 +1985,18 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 allButtons.forEach(button => {
                     const href = button.getAttribute('href');
                     const normalizedHref = href ? href.split('?')[0] : href;
+                    
+                    // Check if button has data-superadmin-only attribute
+                    const isSuperAdminOnly = button.hasAttribute('data-superadmin-only') && 
+                                          button.getAttribute('data-superadmin-only') === 'true';
+                    
+                    // If it's superadmin-only and user is not superadmin, hide it
+                    if (isSuperAdminOnly && roleId !== 1) {
+                        button.style.display = 'none';
+                        hiddenCount++;
+                        console.log('🚫 إخفاء زر (superadmin-only):', href);
+                        return;
+                    }
                     
                     // فحص الصلاحية
                     if (!userAllowedLinks.includes(normalizedHref)) {
@@ -2178,7 +2262,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                 </div>
                             </td>
                             <td class="px-4 py-3">\${customer.phone}</td>
-                            <td class="px-4 py-3 text-sm">\${customer.birthdate || '-'}</td>
+                            <td class="px-4 py-3 text-sm">\${customer.birthdate ? customer.birthdate + (customer.dob_calendar_type === 'hijri' ? ' هـ' : ' م') : '-'}</td>
                             <td class="px-4 py-3 font-medium text-green-600">\${customer.monthly_salary ? customer.monthly_salary.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 font-medium text-purple-600">\${customer.financing_amount ? customer.financing_amount.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm text-orange-600">\${customer.monthly_obligations ? customer.monthly_obligations.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
@@ -2353,7 +2437,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     
                                     <div class="bg-blue-50 p-4 rounded-lg">
                                         <p class="text-sm text-blue-600 mb-1">📅 تاريخ الميلاد</p>
-                                        <p class="text-lg font-bold text-blue-800">\${customer.birthdate || 'غير متوفر'}</p>
+                                        <p class="text-lg font-bold text-blue-800">\${customer.birthdate ? customer.birthdate + (customer.dob_calendar_type === 'hijri' ? ' هـ' : ' م') : 'غير متوفر'}</p>
                                     </div>
                                     
                                     <div class="bg-gray-50 p-4 rounded-lg">
@@ -2564,7 +2648,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div class="bg-white rounded-lg p-4">
                                             <p class="text-sm text-gray-600 mb-1">تاريخ الميلاد</p>
-                                            <p class="text-lg font-bold text-gray-800">\${customer.birthdate || '-'}</p>
+                                            <p class="text-lg font-bold text-gray-800">\${customer.birthdate ? customer.birthdate + (customer.dob_calendar_type === 'hijri' ? ' هـ' : ' م') : '-'}</p>
                                         </div>
                                         <div class="bg-white rounded-lg p-4">
                                             <p class="text-sm text-gray-600 mb-1">رقم الجوال</p>
@@ -3551,8 +3635,93 @@ export const fullAdminPanel = `<!DOCTYPE html>
         document.addEventListener('DOMContentLoaded', () => {
             const addCustomerForm = document.getElementById('addCustomerForm');
             if (addCustomerForm) {
+                (function setupDobToggle() {
+                    const g = document.getElementById('modal_date_of_birth_gregorian');
+                    const h = document.getElementById('modal_date_of_birth_hijri');
+                    const type = document.getElementById('modal_dob_calendar_type');
+                    const hidden = document.getElementById('modal_date_of_birth');
+                    const btnG = document.getElementById('modal_dob_toggle_gregorian');
+                    const btnH = document.getElementById('modal_dob_toggle_hijri');
+                    if (!g || !h || !type || !hidden || !btnG || !btnH) return;
+                    function setGregorian() {
+                        g.style.display = ''; h.style.display = 'none'; type.value = 'gregorian';
+                        hidden.value = g.value || ''; btnG.className = 'px-2 py-1.5 text-sm font-medium rounded-r-lg bg-blue-600 text-white'; btnH.className = 'px-2 py-1.5 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
+                    }
+                    function setHijri() {
+                        g.style.display = 'none'; h.style.display = ''; type.value = 'hijri';
+                        hidden.value = h.value || ''; btnG.className = 'px-2 py-1.5 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100'; btnH.className = 'px-2 py-1.5 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
+                    }
+                    btnG.onclick = setGregorian; btnH.onclick = setHijri;
+                    g.onchange = function() { if (type.value === 'gregorian') hidden.value = g.value || ''; };
+                    h.oninput = h.onchange = function() { if (type.value === 'hijri') hidden.value = h.value || ''; };
+                })();
+                (function setupJobTypeToggle() {
+                    const jobTypeEl = document.getElementById('modal_job_type');
+                    const civilianWrap = document.getElementById('modal_job_title_civilian_wrap');
+                    const militaryWrap = document.getElementById('modal_military_rank_wrap');
+                    const jobTitleInput = document.getElementById('modal_job_title_input');
+                    const militarySelect = document.getElementById('modal_military_rank_select');
+                    if (!jobTypeEl || !civilianWrap || !militaryWrap) return;
+                    function update() {
+                        const isMilitary = jobTypeEl.value === 'military';
+                        civilianWrap.style.display = isMilitary ? 'none' : 'block';
+                        militaryWrap.style.display = isMilitary ? 'block' : 'none';
+                        if (jobTitleInput) jobTitleInput.disabled = isMilitary;
+                        if (militarySelect) militarySelect.disabled = !isMilitary;
+                    }
+                    jobTypeEl.addEventListener('change', update);
+                    update();
+                })();
+                (function setupModalObligations() {
+                    const tbody = document.getElementById('modal_obligations_tbody');
+                    const addBtn = document.getElementById('modal_add_obligation_row');
+                    const hidden = document.getElementById('modal_obligations_json');
+                    if (!tbody || !addBtn || !hidden) return;
+                    function addRow(data) {
+                        data = data || {};
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-gray-200';
+                        tr.innerHTML = '<td class="py-1 px-2"><input type="text" class="modal-oblig-type w-full px-2 py-1 border rounded" placeholder="نوع"></td>' +
+                            '<td class="py-1 px-2"><input type="number" class="modal-oblig-total w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
+                            '<td class="py-1 px-2"><input type="number" class="modal-oblig-monthly w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
+                            '<td class="py-1 px-2"><input type="date" class="modal-oblig-due w-full px-2 py-1 border rounded"></td>' +
+                            '<td class="py-1 px-2"><button type="button" class="modal-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+                        if (data.obligation_type) tr.querySelector('.modal-oblig-type').value = data.obligation_type;
+                        if (data.total_amount != null) tr.querySelector('.modal-oblig-total').value = data.total_amount;
+                        if (data.monthly_installment != null) tr.querySelector('.modal-oblig-monthly').value = data.monthly_installment;
+                        if (data.due_date) tr.querySelector('.modal-oblig-due').value = data.due_date;
+                        tr.querySelector('.modal-oblig-remove').onclick = () => tr.remove();
+                        tbody.appendChild(tr);
+                    }
+                    addBtn.onclick = () => addRow();
+                    addRow();
+                })();
                 addCustomerForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    const typeEl = document.getElementById('modal_dob_calendar_type');
+                    const hiddenEl = document.getElementById('modal_date_of_birth');
+                    if (typeEl && hiddenEl) hiddenEl.value = typeEl.value === 'hijri' ? (document.getElementById('modal_date_of_birth_hijri').value || '') : (document.getElementById('modal_date_of_birth_gregorian').value || '');
+                    const jobTypeEl = document.getElementById('modal_job_type');
+                    const jobTitleInput = document.getElementById('modal_job_title_input');
+                    const militarySelect = document.getElementById('modal_military_rank_select');
+                    if (jobTypeEl && jobTypeEl.value === 'military' && militarySelect && jobTitleInput) {
+                        jobTitleInput.value = militarySelect.value || '';
+                        jobTitleInput.disabled = false;
+                    }
+                    const obligationsJsonEl = document.getElementById('modal_obligations_json');
+                    if (obligationsJsonEl) {
+                        const rows = document.querySelectorAll('#modal_obligations_tbody tr');
+                        const arr = [];
+                        rows.forEach(tr => {
+                            const typeEl = tr.querySelector('.modal-oblig-type');
+                            const totalEl = tr.querySelector('.modal-oblig-total');
+                            const monthlyEl = tr.querySelector('.modal-oblig-monthly');
+                            const dueEl = tr.querySelector('.modal-oblig-due');
+                            if (!typeEl || !totalEl || !monthlyEl) return;
+                            arr.push({ obligation_type: typeEl.value || '', total_amount: parseFloat(totalEl.value) || 0, monthly_installment: parseFloat(monthlyEl.value) || 0, due_date: dueEl && dueEl.value ? dueEl.value : null });
+                        });
+                        obligationsJsonEl.value = JSON.stringify(arr);
+                    }
                     const formData = new FormData(e.target);
                     const data = Object.fromEntries(formData.entries());
                     try {

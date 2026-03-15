@@ -638,9 +638,16 @@ export const hrEmployeeViewPage = `<!DOCTYPE html>
                         'suspended': '<span class="badge badge-secondary">موقوف</span>'
                     }[emp.status] || '<span class="badge badge-secondary">غير محدد</span>';
 
+                    // Get employee name with fallback to alternative fields
+                    const employeeName = emp.full_name || emp.full_name_ar || emp.full_name_en || 'غير محدد';
+                    // Get employee number with fallback
+                    const employeeNumber = emp.employee_number || emp.employee_code || '-';
+                    // Get birthdate with fallback
+                    const birthdate = emp.birthdate || emp.birth_date || '-';
+
                     document.getElementById('employeeDetails').innerHTML = \`
                         <div class="flex justify-between items-start mb-6">
-                            <h2 class="text-3xl font-bold text-gray-800">\${emp.full_name || 'غير محدد'}</h2>
+                            <h2 class="text-3xl font-bold text-gray-800">\${employeeName}</h2>
                             <div class="flex gap-3">
                                 <a href="/admin/hr/employees/\${emp.id}/edit" class="btn-primary">
                                     <i class="fas fa-edit ml-2"></i>
@@ -655,7 +662,7 @@ export const hrEmployeeViewPage = `<!DOCTYPE html>
                                 <div class="space-y-3">
                                     <div>
                                         <span class="text-gray-600">رقم الموظف:</span>
-                                        <span class="font-bold text-gray-800 mr-2">\${emp.employee_number || '-'}</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${employeeNumber}</span>
                                     </div>
                                     <div>
                                         <span class="text-gray-600">رقم الهوية:</span>
@@ -671,7 +678,7 @@ export const hrEmployeeViewPage = `<!DOCTYPE html>
                                     </div>
                                     <div>
                                         <span class="text-gray-600">تاريخ الميلاد:</span>
-                                        <span class="font-bold text-gray-800 mr-2">\${emp.birthdate || emp.birth_date || '-'}</span>
+                                        <span class="font-bold text-gray-800 mr-2">\${birthdate}</span>
                                     </div>
                                     <div>
                                         <span class="text-gray-600">الجنس:</span>
@@ -907,13 +914,18 @@ export const hrEmployeeEditPage = `<!DOCTYPE html>
                     const emp = response.data.data;
                     const form = document.getElementById('editEmployeeForm');
                     
+                    // Get values with fallbacks for alternative field names
+                    const employeeNumber = emp.employee_number || emp.employee_code || '';
+                    const fullName = emp.full_name || emp.full_name_ar || emp.full_name_en || '';
+                    const birthdate = emp.birthdate || emp.birth_date || '';
+                    
                     // Fill form fields
-                    form.querySelector('[name="employee_number"]').value = emp.employee_number || '';
-                    form.querySelector('[name="full_name"]').value = emp.full_name || '';
+                    form.querySelector('[name="employee_number"]').value = employeeNumber;
+                    form.querySelector('[name="full_name"]').value = fullName;
                     form.querySelector('[name="national_id"]').value = emp.national_id || '';
                     form.querySelector('[name="email"]').value = emp.email || '';
                     form.querySelector('[name="phone"]').value = emp.phone || '';
-                    form.querySelector('[name="birthdate"]').value = emp.birthdate || emp.birth_date || '';
+                    form.querySelector('[name="birthdate"]').value = birthdate;
                     form.querySelector('[name="department"]').value = emp.department || '';
                     form.querySelector('[name="job_title"]').value = emp.job_title || '';
                     form.querySelector('[name="basic_salary"]').value = emp.basic_salary || '';
