@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة القوالب | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .template-card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transition: var(--transition);
+      border: 2px solid transparent;
+    }
+    .template-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-3px); }
+    .template-card.active-tpl { border-color: var(--primary); }
+    .template-card-header {
+      background: var(--primary);
+      padding: 20px;
+      color: #fff;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .template-card-icon {
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .template-card-name { font-size: 16px; font-weight: 700; }
+    .template-card-type { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    .template-card-body { padding: 18px; }
+    .template-vars {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 14px;
+    }
+    .template-card-footer {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .builder-area {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .builder-toolbar {
+      padding: 14px 20px;
+      background: #f7f9fc;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .builder-toolbar button {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: 'Tajawal', sans-serif;
+      transition: var(--transition);
+    }
+    .builder-toolbar button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .editor-area {
+      min-height: 300px;
+      padding: 20px;
+      outline: none;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px;
+      line-height: 2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item active"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+        <button type="button" id="btnNewTemplate" class="btn btn-primary"><i class="fas fa-plus"></i> قالب جديد</button>
+      </div>
+    </header>
+
+    <div class="page-content">
+
+      <div class="page-header">
+        <div class="page-header-title">
+          <h2>قوالب العقود</h2>
+          <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+        </div>
+      </div>
+
+      <!-- Templates Grid -->
+      <div class="templates-grid" id="templatesGrid">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Modal: New/Edit Template -->
+  <div class="modal-overlay" id="templateModal" aria-hidden="true">
+    <div class="modal-box" style="max-width:820px;" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalTitle"><i class="fas fa-layer-group"></i> إضافة قالب جديد</h3>
+        <button class="modal-close" onclick="closeModal('templateModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="templateForm">
+          <input type="hidden" id="tpl_id" />
+          <div class="form-grid" style="margin-bottom:16px;">
+            <div class="form-group">
+              <label class="form-label">اسم القالب <span class="required">*</span></label>
+              <input type="text" class="form-control" id="tpl_name" placeholder="مثال: عقد وساطة عقارية" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">نوع القالب</label>
+              <select class="form-control" id="tpl_type">
+                <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
+                <option value="عقد إيجار">عقد إيجار</option>
+                <option value="عقد بيع">عقد بيع</option>
+                <option value="عقد مقاولات">عقد مقاولات</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">المحكمة المختصة</label>
+              <input type="text" class="form-control" id="tpl_court" value="الرياض" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">الحالة</label>
+              <select class="form-control" id="tpl_active">
+                <option value="true">مفعّل</option>
+                <option value="false">معطّل</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="form-label">الترويسة</label>
+            <textarea class="form-control" id="tpl_header" rows="2" placeholder="محتوى الترويسة الإضافي"></textarea>
+          </div>
+
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">جسم العقد <small class="text-muted">(استخدم {{variable}} للمتغيرات)</small></label>
+            <div class="builder-area">
+              <div class="builder-toolbar">
+                <button type="button" onclick="insertVar('{{date_gregorian}}')">📅 تاريخ ميلادي</button>
+                <button type="button" onclick="insertVar('{{date_hijri}}')">🗓 تاريخ هجري</button>
+                <button type="button" onclick="insertVar('{{party_two_name}}')">👤 اسم العميل</button>
+                <button type="button" onclick="insertVar('{{party_two_id}}')">🪪 رقم الهوية</button>
+                <button type="button" onclick="insertVar('{{party_two_phone}}')">📱 الجوال</button>
+                <button type="button" onclick="insertVar('{{party_two_address}}')">📍 العنوان</button>
+                <button type="button" onclick="insertVar('{{finance_type}}')">🏦 نوع التمويل</button>
+                <button type="button" onclick="insertVar('{{finance_amount}}')">💰 مبلغ التمويل</button>
+                <button type="button" onclick="insertVar('{{commission_amount}}')">💵 مبلغ السعي</button>
+                <button type="button" onclick="insertVar('{{note_order_number}}')">📋 رقم السند</button>
+                <button type="button" onclick="insertVar('{{bank_name}}')">🏛 اسم البنك</button>
+                <button type="button" onclick="insertVar('{{property_description}}')">🏠 وصف العقار</button>
+                <button type="button" onclick="insertVar('{{contract_number}}')">🔢 رقم العقد</button>
+              </div>
+              <textarea class="form-control editor-area" id="tpl_body" rows="10" placeholder="اكتب بنود العقد هنا...&#10;استخدم المتغيرات من الأزرار أعلاه مثل {{party_two_name}}"></textarea>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label">التذييل (الخاتمة)</label>
+            <input type="text" class="form-control" id="tpl_footer" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save"></i> حفظ القالب</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('templateModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Preview Template -->
+  <div class="modal-overlay" id="previewModal" aria-hidden="true">
+    <div class="modal-box" style="max-width:700px;" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class="fas fa-eye"></i> معاينة القالب</h3>
+        <button class="modal-close" onclick="closeModal('previewModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="previewContent"></div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    let editingId = null;
+
+    function parseTemplateVars(t) {
+      const raw = t.variables_list;
+      if (raw == null || raw === '') return [];
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') {
+        try {
+          const p = JSON.parse(raw);
+          return Array.isArray(p) ? p : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    async function loadTemplates() {
+      const grid = document.getElementById('templatesGrid');
+      try {
+        const data = await API.get('templates', { limit: 50 });
+        const templates = data.data || [];
+        if (templates.length === 0) {
+          grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-layer-group"></i><p>لا توجد قوالب بعد. أضف قالبك الأول!</p></div>`;
+          return;
+        }
+        grid.innerHTML = templates.map(t => buildTemplateCard(t)).join('');
+      } catch (e) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل البيانات</p></div>`;
+      }
+    }
+
+    function buildTemplateCard(t) {
+      const vars = parseTemplateVars(t);
+      const isActive = t.is_active === true || t.is_active === 'true';
+      return `
+        <div class="template-card ${isActive ? 'active-tpl' : ''}">
+          <div class="template-card-header">
+            <div class="template-card-icon"><i class="fas fa-file-contract"></i></div>
+            <div>
+              <div class="template-card-name">${t.template_name}</div>
+              <div class="template-card-type">${t.template_type || '—'}</div>
+            </div>
+            <div style="margin-right:auto;">
+              ${isActive
+                ? '<span class="badge badge-active" style="font-size:11px;">مفعّل</span>'
+                : '<span class="badge badge-archived" style="font-size:11px;">معطّل</span>'}
+            </div>
+          </div>
+          <div class="template-card-body">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+              <i class="fas fa-gavel"></i> المحكمة المختصة: <strong>${t.court_city || 'الرياض'}</strong>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">المتغيرات:</div>
+            <div class="template-vars">
+              ${vars.slice(0, 6).map(v => `<span class="variable-tag">{{${v}}}</span>`).join('')}
+              ${vars.length > 6 ? `<span class="variable-tag">+${vars.length - 6}</span>` : ''}
+            </div>
+          </div>
+          <div class="template-card-footer">
+            <a href="new-contract.html?template=${t.id}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> إنشاء عقد</a>
+            <button class="btn btn-outline btn-sm" onclick="previewTemplate('${t.id}')"><i class="fas fa-eye"></i></button>
+            <button class="btn btn-warning btn-sm" onclick="editTemplate('${t.id}')"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${t.id}')"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      `;
+    }
+
+    function openNewTemplateModal() {
+      editingId = null;
+      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus"></i> إضافة قالب جديد';
+      document.getElementById('templateForm').reset();
+      document.getElementById('tpl_footer').value = 'والله ولي التوفيق';
+      document.getElementById('tpl_court').value = 'الرياض';
+      document.getElementById('tpl_body').value = getDefaultBody();
+      openModal('templateModal');
+    }
+
+    function getDefaultBody() {
+      return `بسم الله الرحمن الرحيم
+
+عقد وساطة عقارية
+
+إنه في يوم {{date_gregorian}} الموافق {{date_hijri}}
+تم الاتفاق بين الطرفين الآتي ذكرهما:
+
+الطرف الأول: شركة الموعد للمقاولات العامة
+السجل التجاري: 3350140062 - الرياض
+
+الطرف الثاني: {{party_two_name}}
+رقم الهوية: {{party_two_id}}
+رقم الجوال: {{party_two_phone}}
+العنوان: {{party_two_address}}
+
+المادة الأولى: موضوع العقد
+وافق الطرف الأول على تقديم خدمات الوساطة العقارية للطرف الثاني للحصول على تمويل عقاري من نوع ({{finance_type}}) بمبلغ ({{finance_amount}}) من {{bank_name}}.
+
+المادة الثانية: أتعاب الوساطة
+يلتزم الطرف الثاني بدفع مبلغ ({{commission_amount}}) كأتعاب وساطة للطرف الأول، ولن يستحق الطرف الأول هذا المبلغ إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني.
+
+المادة الثالثة: سند الأمر
+أصدر الطرف الثاني سند أمر رقم ({{note_order_number}}) بمبلغ أتعاب الوساطة ضماناً للوفاء بالتزاماته المالية.
+
+المادة الرابعة: الاختصاص القضائي
+في حال نشوء أي نزاع بين الطرفين، يكون الاختصاص القضائي لمحاكم مدينة الرياض.`;
+    }
+
+    async function editTemplate(id) {
+      editingId = id;
+      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل القالب';
+      try {
+        const t = await API.getOne('templates', id);
+        document.getElementById('tpl_id').value = t.id;
+        document.getElementById('tpl_name').value = t.template_name || '';
+        document.getElementById('tpl_type').value = t.template_type || 'عقد وساطة عقارية';
+        document.getElementById('tpl_court').value = t.court_city || 'الرياض';
+        document.getElementById('tpl_active').value = t.is_active ? 'true' : 'false';
+        document.getElementById('tpl_header').value = t.header_content || '';
+        document.getElementById('tpl_body').value = t.body_content || '';
+        document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
+        openModal('templateModal');
+      } catch (e) {
+        showToast('خطأ في تحميل القالب', 'error');
+      }
+    }
+
+    function insertVar(v) {
+      const ta = document.getElementById('tpl_body');
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      ta.value = ta.value.substring(0, start) + v + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + v.length;
+      ta.focus();
+    }
+
+    async function saveTemplate() {
+      const name = document.getElementById('tpl_name').value.trim();
+      if (!name) { showToast('يرجى إدخال اسم القالب', 'warning'); return; }
+
+      const body = document.getElementById('tpl_body').value;
+      const vars = [...body.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]);
+      const uniqueVars = [...new Set(vars)];
+
+      const data = {
+        template_name: name,
+        template_type: document.getElementById('tpl_type').value,
+        court_city: document.getElementById('tpl_court').value || 'الرياض',
+        is_active: document.getElementById('tpl_active').value === 'true',
+        header_content: document.getElementById('tpl_header').value,
+        body_content: body,
+        footer_content: document.getElementById('tpl_footer').value,
+        variables_list: uniqueVars
+      };
+
+      try {
+        if (editingId) {
+          await API.update('templates', editingId, data);
+          showToast('تم تحديث القالب بنجاح', 'success');
+        } else {
+          await API.create('templates', data);
+          showToast('تم إضافة القالب بنجاح', 'success');
+        }
+        closeModal('templateModal');
+        loadTemplates();
+      } catch (e) {
+        showToast('خطأ في حفظ القالب', 'error');
+      }
+    }
+
+    async function deleteTemplate(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا القالب؟')) return;
+      try {
+        await API.delete('templates', id);
+        showToast('تم حذف القالب', 'success');
+        loadTemplates();
+      } catch (e) {
+        showToast('خطأ في الحذف', 'error');
+      }
+    }
+
+    async function previewTemplate(id) {
+      try {
+        const t = await API.getOne('templates', id);
+        const preview = (t.body_content || '')
+          .replace(/\{\{party_two_name\}\}/g, 'عقيل بن هريسان العنزي')
+          .replace(/\{\{party_two_id\}\}/g, '1030460636')
+          .replace(/\{\{party_two_phone\}\}/g, '0554456710')
+          .replace(/\{\{party_two_address\}\}/g, 'حائل')
+          .replace(/\{\{date_gregorian\}\}/g, '2025/11/25')
+          .replace(/\{\{date_hijri\}\}/g, '1447/06/04')
+          .replace(/\{\{finance_type\}\}/g, 'رهن عقاري')
+          .replace(/\{\{finance_amount\}\}/g, '810,000 ريال')
+          .replace(/\{\{commission_amount\}\}/g, '24,000 ريال')
+          .replace(/\{\{note_order_number\}\}/g, '3617')
+          .replace(/\{\{bank_name\}\}/g, 'بنك الراجحي')
+          .replace(/\{\{contract_number\}\}/g, 'CNT-2025-001')
+          .replace(/\{\{property_description\}\}/g, 'شقة سكنية')
+          .replace(/\{\{property_location\}\}/g, 'الرياض - حي النرجس');
+
+        document.getElementById('previewContent').innerHTML = `
+          <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:14px;line-height:2;white-space:pre-wrap;">${preview}</div>
+          <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
+            <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
+          </div>
+        `;
+        openModal('previewModal');
+      } catch (e) {
+        showToast('خطأ في المعاينة', 'error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTemplates();
+      const btn = document.getElementById('btnNewTemplate');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          openNewTemplateModal();
+        });
+      }
+      if (typeof globalThis !== 'undefined') {
+        globalThis.openNewTemplateModal = openNewTemplateModal;
+      }
+    });
+  </script>
+</body>
+</html>

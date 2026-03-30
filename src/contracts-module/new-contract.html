@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>عقد جديد | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item active"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1 id="pageTitle"><i class="fas fa-plus-circle"></i> عقد جديد</h1></div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+        <a href="contracts.html" class="btn btn-ghost"><i class="fas fa-arrow-right"></i> العقود</a>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <a href="contracts.html" class="back-link"><i class="fas fa-arrow-right"></i> العودة لقائمة العقود</a>
+
+      <!-- Steps -->
+      <div class="steps-bar">
+        <div class="step active" id="step1-indicator">
+          <div class="step-number">1</div>
+          <div class="step-label">اختيار القالب</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step" id="step2-indicator">
+          <div class="step-number">2</div>
+          <div class="step-label">بيانات العقد</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step" id="step3-indicator">
+          <div class="step-number">3</div>
+          <div class="step-label">المراجعة</div>
+        </div>
+      </div>
+
+      <!-- Step 1: Template Selection -->
+      <div id="step1">
+        <div class="form-section">
+          <div class="form-section-title"><i class="fas fa-layer-group"></i> اختر نوع العقد</div>
+          <div id="templatesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;">
+            <div class="template-select-card" id="tcard_real_estate_lease" onclick="selectTemplate('real_estate_lease', this)"
+              style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+              <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+              <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">عقد إيجار عقاري</div>
+              <div style="font-size:12px;color:var(--text-muted);">عقد إيجار</div>
+            </div>
+            <div class="template-select-card" id="tcard_brokerage_fee" onclick="selectTemplate('brokerage_fee', this)"
+              style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+              <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+              <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">عقد وساطة مقابل أجر (سعي)</div>
+              <div style="font-size:12px;color:var(--text-muted);">عقد وساطة عقارية</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+          <button class="btn btn-primary" id="nextBtn1" onclick="goStep2()" disabled>
+            التالي <i class="fas fa-arrow-left"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Contract Form -->
+      <div id="step2" style="display:none;">
+        <form id="contractForm" novalidate>
+
+          <!-- Party One: Auto -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-building"></i> بيانات الطرف الأول (تلقائية)</div>
+            <div class="form-note" id="partyOneSummary">
+              <i class="fas fa-info-circle text-secondary"></i>
+              <!--CONTRACTS_PARTY_ONE_SUMMARY-->
+            </div>
+          </div>
+
+          <!-- Party Two -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-user"></i> بيانات الطرف الثاني</div>
+
+            <!-- Customer lookup — options injected server-side by GET /admin/contracts/new -->
+            <div class="form-group form-full" style="margin-bottom:16px;">
+              <label class="form-label"><i class="fas fa-users" style="color:var(--secondary);margin-left:6px;"></i> اختيار عميل موجود <span style="font-weight:400;color:var(--text-muted);">(اختياري)</span></label>
+              <select class="form-control" id="customer_lookup" onchange="fillFromCustomer(this.value)">
+                <option value="">— اختر عميلاً لتعبئة الحقول أو أدخل البيانات يدوياً —</option>
+                <!--CONTRACTS_CUSTOMERS_OPTIONS-->
+              </select>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> اختيار عميل يملأ الحقول تلقائياً · تعديل الحقول يدوياً بعد الاختيار يلغي الربط بالعميل</div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">الاسم الكامل <span class="required">*</span></label>
+                <input type="text" class="form-control" id="party_two_name" placeholder="الاسم الرباعي" required />
+                <div class="invalid-feedback">يرجى إدخال اسم العميل</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم الهوية الوطنية <span class="required">*</span></label>
+                <input type="text" class="form-control" id="party_two_id" placeholder="10 أرقام" maxlength="10" required />
+                <div class="invalid-feedback">رقم الهوية يجب أن يكون 10 أرقام</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم الجوال <span class="required">*</span></label>
+                <input type="text" class="form-control" id="party_two_phone" placeholder="05XXXXXXXX" maxlength="10" required />
+                <div class="invalid-feedback">يرجى إدخال رقم جوال صحيح</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">العنوان / المدينة</label>
+                <input type="text" class="form-control" id="party_two_address" placeholder="المدينة / الحي" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Contract Info -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-file-alt"></i> بيانات العقد</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">رقم العقد</label>
+                <input type="text" class="form-control" id="contract_number" readonly style="background:#f7f9fc;" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">التاريخ الميلادي</label>
+                <input type="date" class="form-control" id="date_gregorian" onchange="autoFillDay()" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">اليوم</label>
+                <input type="text" class="form-control" id="day_name" placeholder="مثال: الثلاثاء" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">التاريخ الهجري</label>
+                <input type="text" class="form-control" id="date_hijri" placeholder="1447/06/04" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">المحكمة المختصة</label>
+                <input type="text" class="form-control" id="court_city" value="الرياض" readonly />
+              </div>
+            </div>
+          </div>
+
+          <!-- Finance -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-landmark"></i> تفاصيل التمويل</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">نوع التمويل <span class="required">*</span></label>
+                <select class="form-control" id="finance_type" required>
+                  <option value="">-- اختر نوع التمويل --</option>
+                  <option value="رهن عقاري">رهن عقاري</option>
+                  <option value="تمويل شخصي">تمويل شخصي</option>
+                  <option value="تمويل تجاري">تمويل تجاري</option>
+                  <option value="أخرى">أخرى</option>
+                </select>
+                <div class="invalid-feedback">يرجى اختيار نوع التمويل</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">مبلغ التمويل (ريال) <span class="required">*</span></label>
+                <input type="number" class="form-control" id="finance_amount" placeholder="مثال: 810000" min="0" required />
+                <div class="invalid-feedback">يرجى إدخال مبلغ التمويل</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">اسم البنك / الجهة الممولة</label>
+                <input type="text" class="form-control" id="bank_name" placeholder="مثال: بنك الراجحي" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">وصف العقار</label>
+                <input type="text" class="form-control" id="property_description" placeholder="مثال: شقة سكنية" />
+              </div>
+              <div class="form-group form-full">
+                <label class="form-label">موقع العقار</label>
+                <input type="text" class="form-control" id="property_location" placeholder="مثال: الرياض - حي النرجس" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Commission -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-coins"></i> الشؤون المالية (السعي)</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">نوع العمولة</label>
+                <select class="form-control" id="commission_type" onchange="handleCommissionType()">
+                  <option value="مبلغ مقطوع">مبلغ مقطوع</option>
+                  <option value="نسبة مئوية">نسبة مئوية</option>
+                </select>
+              </div>
+              <div class="form-group" id="commissionRateGroup" style="display:none;">
+                <label class="form-label">نسبة العمولة (%)</label>
+                <input type="number" class="form-control" id="commission_rate" placeholder="مثال: 3" min="0" max="100" step="0.1" onchange="calcCommission()" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">قيمة السعي (ريال) <span class="required">*</span></label>
+                <input type="number" class="form-control" id="commission_amount" placeholder="24000" min="0" required />
+                <div class="invalid-feedback">يرجى إدخال قيمة السعي</div>
+              </div>
+              <div class="form-group" id="commissionPreview" style="display:none;">
+                <label class="form-label">السعي المحسوب</label>
+                <div class="form-note" id="commissionCalcResult">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Promissory Note -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-money-check-alt"></i> سند الأمر</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">رقم سند الأمر <span class="required">*</span></label>
+                <input type="text" class="form-control" id="note_order_number" placeholder="مثال: 3617" required />
+                <div class="invalid-feedback">يرجى إدخال رقم سند الأمر</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">تاريخ استحقاق السند</label>
+                <input type="date" class="form-control" id="note_due_date" />
+              </div>
+            </div>
+            <div class="form-note" style="margin-top:12px;">
+              <i class="fas fa-gavel text-secondary"></i>
+              <strong>ملاحظة قانونية:</strong> يخضع سند الأمر لأحكام نظام الأوراق التجارية استناداً لقرار مجلس الوزراء رقم (692). مكان الدفع: <strong>الرياض</strong>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-info-circle"></i> حالة العقد</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">الحالة الحالية</label>
+                <select class="form-control" id="status">
+                  <option value="نشط">نشط</option>
+                  <option value="بانتظار التمويل" selected>بانتظار التمويل</option>
+                  <option value="مكتمل">مكتمل</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" id="notes" rows="2" placeholder="أي ملاحظات إضافية..."></textarea>
+              </div>
+            </div>
+          </div>
+
+        </form>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;">
+          <button class="btn btn-ghost" onclick="goStep1()"><i class="fas fa-arrow-right"></i> السابق</button>
+          <button class="btn btn-primary" onclick="goStep3()">مراجعة العقد <i class="fas fa-arrow-left"></i></button>
+        </div>
+      </div>
+
+      <!-- Step 3: Review -->
+      <div id="step3" style="display:none;">
+        <div class="form-section">
+          <div class="form-section-title"><i class="fas fa-eye"></i> مراجعة بيانات العقد</div>
+          <div id="reviewContent"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="goStep2()"><i class="fas fa-arrow-right"></i> تعديل</button>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-success" onclick="saveContract()"><i class="fas fa-save"></i> حفظ العقد</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="js/app.js"></script>
+  <script>
+    const HARD_CODED_CONTRACT_TYPES = [
+      {
+        key: 'real_estate_lease',
+        title: 'عقد إيجار عقاري',
+        subtitle: 'عقد إيجار'
+      },
+      {
+        key: 'brokerage_fee',
+        title: 'عقد وساطة مقابل أجر (سعي)',
+        subtitle: 'عقد وساطة عقارية'
+      }
+    ];
+
+    let selectedContractTypeKey = null;
+    let selectedTemplate = null;
+    let editingContractId = null;
+
+    function loadTemplates() {
+      const container = document.getElementById('templatesList');
+      container.innerHTML = HARD_CODED_CONTRACT_TYPES.map(t => `
+        <div class="template-select-card" id="tcard_${t.key}" onclick="selectTemplate('${t.key}', this)"
+          style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+          <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+          <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">${t.title}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${t.subtitle}</div>
+        </div>
+      `).join('');
+
+      // Auto-select first fixed contract type
+      if (!selectedContractTypeKey && HARD_CODED_CONTRACT_TYPES.length > 0) {
+        const first = HARD_CODED_CONTRACT_TYPES[0];
+        const firstEl = document.getElementById('tcard_' + first.key);
+        if (firstEl) selectTemplate(first.key, firstEl);
+      }
+    }
+
+    function selectTemplate(id, el) {
+      selectedContractTypeKey = id;
+      document.querySelectorAll('.template-select-card').forEach(c => {
+        c.style.borderColor = 'var(--border)';
+        c.style.background = '#fff';
+      });
+      el.style.borderColor = 'var(--primary)';
+      el.style.background = 'rgba(26,60,94,0.04)';
+      document.getElementById('nextBtn1').disabled = false;
+      const selectedType = HARD_CODED_CONTRACT_TYPES.find(t => t.key === id);
+      selectedTemplate = {
+        template_name: selectedType?.title || '',
+        template_type: selectedType?.subtitle || ''
+      };
+      document.getElementById('court_city').value = 'الرياض';
+    }
+
+    function goStep2() {
+      if (!selectedTemplate?.template_name) { showToast('اختر نوع العقد أولاً', 'warning'); return; }
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'block';
+      document.getElementById('step3').style.display = 'none';
+      setStepActive(2);
+      if (!document.getElementById('contract_number').value) {
+        document.getElementById('contract_number').value = generateContractNumber();
+      }
+      if (!document.getElementById('date_gregorian').value) {
+        document.getElementById('date_gregorian').value = new Date().toISOString().split('T')[0];
+        autoFillDay();
+      }
+      if (!document.getElementById('date_hijri').value) {
+        document.getElementById('date_hijri').value = getHijriDate();
+      }
+      // options are already in the DOM — nothing to load
+    }
+
+    function fillFromCustomer(customerId) {
+      if (!customerId) return;
+      const select = document.getElementById('customer_lookup');
+      const opt = select.querySelector(`option[value="${customerId}"]`);
+      if (!opt) return;
+      document.getElementById('party_two_name').value = opt.dataset.name || '';
+      document.getElementById('party_two_id').value = opt.dataset.national_id || '';
+      document.getElementById('party_two_phone').value = opt.dataset.phone || '';
+      document.getElementById('party_two_address').value = opt.dataset.city || '';
+      // Clear validation states
+      ['party_two_name','party_two_id','party_two_phone','party_two_address'].forEach(id => {
+        document.getElementById(id)?.classList.remove('is-invalid');
+      });
+      showToast('تم تعبئة بيانات العميل تلقائياً', 'success');
+    }
+
+    function autoFillDay() {
+      const dateVal = document.getElementById('date_gregorian').value;
+      if (!dateVal) return;
+      try {
+        const d = new Date(dateVal);
+        const dayAr = d.toLocaleDateString('ar-SA', { weekday: 'long' });
+        document.getElementById('day_name').value = dayAr;
+      } catch(e) {}
+    }
+
+    function goStep1() {
+      document.getElementById('step1').style.display = 'block';
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'none';
+      setStepActive(1);
+    }
+
+    function goStep3() {
+      if (!validateForm()) return;
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'block';
+      setStepActive(3);
+      buildReview();
+    }
+
+    function setStepActive(n) {
+      [1,2,3].forEach(i => {
+        const el = document.getElementById(`step${i}-indicator`);
+        el.classList.remove('active','done');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+      });
+    }
+
+    function validateForm() {
+      let valid = true;
+      const fields = [
+        { id: 'party_two_name', msg: 'يرجى إدخال اسم العميل', check: v => v.trim().length >= 3 },
+        { id: 'party_two_id', msg: 'رقم الهوية يجب أن يكون 10 أرقام', check: v => /^\d{10}$/.test(v) },
+        { id: 'party_two_phone', msg: 'رقم الجوال يجب أن يبدأ بـ05 ويكون 10 أرقام', check: v => /^05\d{8}$/.test(v) },
+        { id: 'finance_type', msg: 'يرجى اختيار نوع التمويل', check: v => v !== '' },
+        { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
+        { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 },
+        { id: 'note_order_number', msg: 'يرجى إدخال رقم سند الأمر', check: v => v.trim().length > 0 }
+      ];
+      fields.forEach(f => {
+        const el = document.getElementById(f.id);
+        if (!el) return;
+        const ok = f.check(el.value);
+        el.classList.toggle('is-invalid', !ok);
+        if (!ok) valid = false;
+      });
+      if (!valid) showToast('يرجى تصحيح الأخطاء المميزة', 'warning');
+      return valid;
+    }
+
+    function buildReview() {
+      const data = getFormData();
+      document.getElementById('reviewContent').innerHTML = `
+        <div style="display:grid;gap:16px;">
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">بيانات العقد</div>
+            <div class="info-row">
+              <div class="info-item"><label>رقم العقد</label><span><strong>${data.contract_number}</strong></span></div>
+              <div class="info-item"><label>اليوم</label><span>${data.day_name || '—'}</span></div>
+              <div class="info-item"><label>التاريخ الميلادي</label><span>${data.date_gregorian}</span></div>
+              <div class="info-item"><label>التاريخ الهجري</label><span>${data.date_hijri}</span></div>
+              <div class="info-item"><label>نوع القالب</label><span>${selectedTemplate?.template_name || '—'}</span></div>
+            </div>
+          </div>
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">بيانات العميل (الطرف الثاني)</div>
+            <div class="info-row">
+              <div class="info-item"><label>الاسم</label><span>${data.party_two_name}</span></div>
+              <div class="info-item"><label>رقم الهوية</label><span>${data.party_two_id}</span></div>
+              <div class="info-item"><label>الجوال</label><span>${data.party_two_phone}</span></div>
+              <div class="info-item"><label>العنوان</label><span>${data.party_two_address || '—'}</span></div>
+            </div>
+          </div>
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">تفاصيل التمويل</div>
+            <div class="info-row">
+              <div class="info-item"><label>نوع التمويل</label><span>${data.finance_type}</span></div>
+              <div class="info-item"><label>مبلغ التمويل</label><span class="amount-display">${formatMoney(data.finance_amount)}</span></div>
+              <div class="info-item"><label>البنك</label><span>${data.bank_name || '—'}</span></div>
+              <div class="info-item"><label>وصف العقار</label><span>${data.property_description || '—'}</span></div>
+            </div>
+          </div>
+          <div style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--secondary);margin-bottom:10px;text-transform:uppercase;">الشؤون المالية</div>
+            <div class="info-row">
+              <div class="info-item"><label>قيمة السعي</label><span class="amount-display">${formatMoney(data.commission_amount)}</span></div>
+              <div class="info-item"><label>رقم سند الأمر</label><span><strong>${data.note_order_number}</strong></span></div>
+              <div class="info-item"><label>تاريخ الاستحقاق</label><span>${data.note_due_date || '—'}</span></div>
+              <div class="info-item"><label>الحالة</label><span>${getStatusBadge(data.status)}</span></div>
+            </div>
+          </div>
+          <div class="form-note">
+            <i class="fas fa-gavel text-secondary"></i>
+            <strong>الشروط القانونية الثابتة:</strong><br>
+            • المحكمة المختصة: محاكم <strong>الرياض</strong><br>
+            • لا يستحق الطرف الأول أي مستحقات إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني<br>
+            • يخضع سند الأمر لأحكام نظام الأوراق التجارية (قرار مجلس الوزراء رقم 692)
+          </div>
+        </div>
+      `;
+    }
+
+    function getFormData() {
+      const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
+      return {
+        contract_number: document.getElementById('contract_number').value,
+        template_id: null,
+        template_name: selectedTemplate?.template_name || '',
+        customer_id: selectedCustomerId ? Number(selectedCustomerId) : null,
+        date_gregorian: document.getElementById('date_gregorian').value,
+        date_hijri: document.getElementById('date_hijri').value,
+        day_name: document.getElementById('day_name')?.value || '',
+        party_two_name: document.getElementById('party_two_name').value,
+        party_two_id: document.getElementById('party_two_id').value,
+        party_two_phone: document.getElementById('party_two_phone').value,
+        party_two_address: document.getElementById('party_two_address').value,
+        finance_type: document.getElementById('finance_type').value,
+        finance_amount: parseFloat(document.getElementById('finance_amount').value) || 0,
+        bank_name: document.getElementById('bank_name').value,
+        property_description: document.getElementById('property_description').value,
+        property_location: document.getElementById('property_location').value,
+        commission_type: document.getElementById('commission_type').value,
+        commission_rate: parseFloat(document.getElementById('commission_rate').value) || 0,
+        commission_amount: parseFloat(document.getElementById('commission_amount').value) || 0,
+        note_order_number: document.getElementById('note_order_number').value,
+        note_due_date: document.getElementById('note_due_date').value,
+        status: document.getElementById('status').value,
+        notes: document.getElementById('notes').value,
+        is_archived: false
+      };
+    }
+
+    async function saveContract() {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+      try {
+        const data = getFormData();
+        let contract;
+        if (editingContractId) {
+          contract = await API.update('contracts', editingContractId, data);
+          showToast('تم تحديث العقد بنجاح', 'success');
+        } else {
+          contract = await API.create('contracts', data);
+          // Create linked promissory note
+          if (data.note_order_number) {
+            await API.create('promissory_notes', {
+              note_number: data.note_order_number,
+              contract_id: contract.id,
+              debtor_name: data.party_two_name,
+              debtor_id: data.party_two_id,
+              amount: data.commission_amount,
+              due_date: data.note_due_date || '',
+              issue_date: data.date_gregorian,
+              payment_place: 'الرياض',
+              status: 'ساري'
+            });
+          }
+          showToast('تم إنشاء العقد وسند الأمر بنجاح', 'success');
+        }
+        setTimeout(() => { window.location.href = `contract-view.html?id=${contract.id}`; }, 1200);
+      } catch (e) {
+        showToast('خطأ في حفظ العقد', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> حفظ العقد';
+      }
+    }
+
+    function handleCommissionType() {
+      const type = document.getElementById('commission_type').value;
+      const rateGroup = document.getElementById('commissionRateGroup');
+      const preview = document.getElementById('commissionPreview');
+      if (type === 'نسبة مئوية') {
+        rateGroup.style.display = 'flex';
+        preview.style.display = 'flex';
+      } else {
+        rateGroup.style.display = 'none';
+        preview.style.display = 'none';
+      }
+    }
+
+    function calcCommission() {
+      const rate = parseFloat(document.getElementById('commission_rate').value) || 0;
+      const amount = parseFloat(document.getElementById('finance_amount').value) || 0;
+      if (rate > 0 && amount > 0) {
+        const calc = (amount * rate) / 100;
+        document.getElementById('commission_amount').value = calc;
+        document.getElementById('commissionCalcResult').innerHTML =
+          `<strong>${rate}%</strong> من <strong>${formatMoney(amount)}</strong> = <strong class="text-secondary">${formatMoney(calc)}</strong>`;
+      }
+    }
+
+    // Auto-calc commission on amount change
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('finance_amount')?.addEventListener('input', () => {
+        if (document.getElementById('commission_type').value === 'نسبة مئوية') calcCommission();
+      });
+
+      // Manual edits to any Party Two field after autofill → clear dropdown so customer_id becomes null
+      ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach(fieldId => {
+        document.getElementById(fieldId)?.addEventListener('input', () => {
+          const lookup = document.getElementById('customer_lookup');
+          if (lookup && lookup.value) lookup.value = '';
+        });
+      });
+
+      // Check for edit mode
+      const editId = getParam('edit');
+      if (editId) {
+        editingContractId = editId;
+        document.getElementById('pageTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل العقد';
+        loadContractForEdit(editId);
+      }
+
+      loadTemplates();
+    });
+
+    async function loadContractForEdit(id) {
+      try {
+        const c = await API.getOne('contracts', id);
+        selectedContractTypeKey = null;
+        selectedTemplate = { template_name: c.template_name };
+        goStep2();
+        setTimeout(() => {
+          document.getElementById('contract_number').value = c.contract_number || '';
+          document.getElementById('date_gregorian').value = c.date_gregorian || '';
+          document.getElementById('date_hijri').value = c.date_hijri || '';
+          document.getElementById('party_two_name').value = c.party_two_name || '';
+          document.getElementById('party_two_id').value = c.party_two_id || '';
+          document.getElementById('party_two_phone').value = c.party_two_phone || '';
+          document.getElementById('party_two_address').value = c.party_two_address || '';
+          document.getElementById('finance_type').value = c.finance_type || '';
+          document.getElementById('finance_amount').value = c.finance_amount || '';
+          document.getElementById('bank_name').value = c.bank_name || '';
+          document.getElementById('property_description').value = c.property_description || '';
+          document.getElementById('property_location').value = c.property_location || '';
+          document.getElementById('commission_type').value = c.commission_type || 'مبلغ مقطوع';
+          document.getElementById('commission_rate').value = c.commission_rate || '';
+          document.getElementById('commission_amount').value = c.commission_amount || '';
+          document.getElementById('note_order_number').value = c.note_order_number || '';
+          document.getElementById('status').value = c.status || 'نشط';
+          document.getElementById('notes').value = c.notes || '';
+          handleCommissionType();
+          if (c.customer_id) {
+            const customerLookup = document.getElementById('customer_lookup');
+            if (customerLookup) customerLookup.value = String(c.customer_id);
+          }
+        }, 200);
+      } catch (e) { showToast('خطأ في تحميل العقد', 'error'); }
+    }
+  </script>
+</body>
+</html>

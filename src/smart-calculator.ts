@@ -154,18 +154,30 @@ export const smartCalculator = `<!DOCTYPE html>
                         <p class="text-sm text-gray-500 mt-1">الحد الأدنى: 3,000 ريال</p>
                     </div>
                     
-                    <!-- اختيار عميل (عرض عملاء الشركة فقط) -->
-                    <div id="calcClientLookupWrap">
-                        <label class="block text-gray-700 font-bold mb-2">
-                            <i class="fas fa-user text-amber-600 ml-2"></i>
-                            اختر العميل (اختياري)
-                        </label>
-                        <p class="text-sm text-gray-500 mb-2">لتحميل الراتب والالتزامات المحفوظة</p>
-                        <select id="calcCustomerSelect" class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">-- اختر العميل --</option>
-                        </select>
-                        <p id="calcLookupMessage" class="text-sm mt-2 hidden"></p>
+                    <!-- الحلول المقترحة (رقم تلقائي + نص) -->
+                    <div id="calcSolutionsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">
+                            <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
+                            الحلول المقترحة
+                        </h3>
+                        <div class="overflow-x-auto mb-2">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-300 text-right">
+                                        <th class="py-2 px-2 w-20">رقم الحل</th>
+                                        <th class="py-2 px-2">نص الحل</th>
+                                        <th class="py-2 px-2 w-16"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="calcSolutionsTbody"></tbody>
+                            </table>
+                        </div>
+                        <button type="button" id="calcAddSolutionRow" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            <i class="fas fa-plus ml-1"></i>
+                            إضافة صف
+                        </button>
                     </div>
+                    
                     <!-- الالتزامات المالية (جدول + إجمالي شهري) -->
                     <div id="calcObligationsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
                         <h3 class="text-sm font-bold text-gray-700 mb-2">
@@ -191,7 +203,7 @@ export const smartCalculator = `<!DOCTYPE html>
                         </p>
                         <div class="flex gap-2 flex-wrap">
                             <button type="button" id="calcAddAdHocObligation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                <i class="fas fa-plus ml-1"></i> إضافة التزام مؤقت
+                                <i class="fas fa-plus ml-1"></i> إضافة التزام 
                             </button>
                             <button type="button" id="calcSaveObligationsToClient" class="text-green-600 hover:text-green-800 text-sm font-medium hidden">
                                 <i class="fas fa-save ml-1"></i> حفظ الالتزامات على العميل
@@ -558,9 +570,11 @@ export const smartCalculator = `<!DOCTYPE html>
         let selectedCustomer = null;
         let savedObligations = [];
         let adHocObligations = [];
+        let calcSolutionRows = [{ note: '' }];
         let selectedBestOffer = null;
         let allBanks = [];
         let financingTypes = [];
+        let obligationTypeList = [];
         let allRates = [];
         const showFilterDebug = true;
         
@@ -661,11 +675,13 @@ export const smartCalculator = `<!DOCTYPE html>
                 // Build API URLs with tenant_id if available
                 const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}&include_global=0\` : '/api/banks';
                 const ratesUrl = tenantId ? \`/api/rates?tenant_id=\${tenantId}\` : '/api/rates';
+                const obligTypesUrl = tenantId ? \`/api/obligation-types?tenant_id=\${tenantId}\` : '/api/obligation-types';
                 
-                const [banksRes, typesRes, ratesRes] = await Promise.all([
+                const [banksRes, typesRes, ratesRes, obligTypesRes] = await Promise.all([
                     axios.get(banksUrl),
                     axios.get('/api/financing-types'),
-                    axios.get(ratesUrl)
+                    axios.get(ratesUrl),
+                    axios.get(obligTypesUrl)
                 ]);
                 
                 allBanks = (banksRes.data.data || []).map((bank) => ({
@@ -673,6 +689,12 @@ export const smartCalculator = `<!DOCTYPE html>
                     id: toNumber(bank.id, bank.id)
                 }));
                 financingTypes = typesRes.data.data || [];
+                obligationTypeList = (obligTypesRes.data && obligTypesRes.data.success && Array.isArray(obligTypesRes.data.data))
+                    ? obligTypesRes.data.data.map((row) => row.type_name).filter(Boolean)
+                    : [];
+                if (!obligationTypeList.length) {
+                    obligationTypeList = ['قرض شخصي', 'قرض عقاري', 'تمويل سيارة قائم', 'بطاقة ائتمان', 'تمويل تعاوني', 'تقسيط / شراء بالأقساط', 'سلفة راتب', 'التزامات أخرى'];
+                }
                 allRates = (ratesRes.data.data || []).map((rate) => ({
                     ...rate,
                     bank_id: toNumber(rate.bank_id, rate.bank_id),
@@ -710,6 +732,43 @@ export const smartCalculator = `<!DOCTYPE html>
             }
         }
         
+        function syncCalcSolutionRowsFromDom() {
+            const tbody = document.getElementById('calcSolutionsTbody');
+            if (!tbody) return;
+            const next = [];
+            tbody.querySelectorAll('tr').forEach((tr) => {
+                const el = tr.querySelector('.calc-sol-note');
+                next.push({ note: el ? el.value : '' });
+            });
+            calcSolutionRows = next.length ? next : [{ note: '' }];
+        }
+        
+        function renderCalcSolutionsTable() {
+            const tbody = document.getElementById('calcSolutionsTbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            (calcSolutionRows || []).forEach((row, i) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200';
+                tr.innerHTML = '<td class="py-1 px-2 text-center text-gray-700 font-medium w-20">' + (i + 1) + '</td>' +
+                    '<td class="py-1 px-2"><input type="text" class="calc-sol-note w-full px-2 py-1.5 border rounded"></td>' +
+                    '<td class="py-1 px-2"><button type="button" class="calc-sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+                tr.querySelector('.calc-sol-note').value = row.note || '';
+                tr.querySelector('.calc-sol-remove').addEventListener('click', () => {
+                    syncCalcSolutionRowsFromDom();
+                    calcSolutionRows.splice(i, 1);
+                    if (!calcSolutionRows.length) calcSolutionRows.push({ note: '' });
+                    renderCalcSolutionsTable();
+                });
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function getCalcSolutionsForSave() {
+            syncCalcSolutionRowsFromDom();
+            return calcSolutionRows.map((r) => ({ note: (r.note || '').trim() }));
+        }
+        
         function getCalcObligationsTotal() {
             const saved = (savedObligations || []).reduce((s, o) => s + (Number(o.monthly_installment) || 0), 0);
             let adhoc = 0;
@@ -738,7 +797,7 @@ export const smartCalculator = `<!DOCTYPE html>
             (adHocObligations || []).forEach((o, i) => {
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-200 calc-adhoc-row';
-                tr.innerHTML = \`<td class="py-1 px-2"><input type="text" class="calc-adhoc-type w-full px-2 py-1 border rounded" value="\${escapeHtml(o.obligation_type || '')}" placeholder="نوع"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
+                tr.innerHTML = \`<td class="py-1 px-2">\${buildCalcObligSelectHtml(o.obligation_type || '')}</td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
                 const removeBtn = tr.querySelector('.calc-adhoc-remove');
                 removeBtn.addEventListener('click', () => { adHocObligations.splice(i, 1); renderCalcObligationsTable(); });
                 tbody.appendChild(tr);
@@ -754,69 +813,29 @@ export const smartCalculator = `<!DOCTYPE html>
             return div.innerHTML;
         }
         
+        function buildCalcObligSelectHtml(selectedValue) {
+            const sel = selectedValue == null ? '' : String(selectedValue);
+            let opts = '<option value="">— اختر النوع —</option>';
+            obligationTypeList.forEach(function (name) {
+                const e = escapeHtml(name);
+                opts += '<option value="' + e.replace(/"/g, '&quot;') + '"' + (sel === name ? ' selected' : '') + '>' + e + '</option>';
+            });
+            if (sel && obligationTypeList.indexOf(sel) === -1) {
+                const e = escapeHtml(sel);
+                opts += '<option value="' + e.replace(/"/g, '&quot;') + '" selected>' + e + '</option>';
+            }
+            return '<select class="calc-adhoc-type w-full px-2 py-1 border rounded">' + opts + '</select>';
+        }
+        
         function formatNumber(n) {
             return Number(n).toLocaleString('ar-SA');
         }
         
-        const pathParts = window.location.pathname.split('/');
-        const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
-        const showCustomerSelect = typeof window.CALCULATOR_SHOW_CUSTOMER_SELECT !== 'undefined' && window.CALCULATOR_SHOW_CUSTOMER_SELECT;
-        if (tenantSlug && showCustomerSelect) {
-            const selectEl = document.getElementById('calcCustomerSelect');
-            const msgEl = document.getElementById('calcLookupMessage');
-            async function loadCustomers() {
-                try {
-                    const res = await axios.get('/api/calculator/customers', { params: { tenant_slug: tenantSlug } });
-                    if (!res.data.success || !Array.isArray(res.data.customers)) return;
-                    const select = document.getElementById('calcCustomerSelect');
-                    if (!select) return;
-                    select.innerHTML = '<option value="">-- اختر العميل --</option>';
-                    (res.data.customers || []).forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c.id;
-                        opt.textContent = (c.full_name || '') + (c.phone ? ' - ' + c.phone : '');
-                        select.appendChild(opt);
-                    });
-                } catch (err) {
-                    if (msgEl) { msgEl.textContent = 'تعذر تحميل قائمة العملاء'; msgEl.classList.remove('hidden'); msgEl.className = 'text-sm mt-2 text-red-600'; }
-                }
-            }
-            loadCustomers();
-            selectEl.addEventListener('change', async () => {
-                const customerId = selectEl.value;
-                msgEl.classList.add('hidden');
-                if (!customerId) {
-                    selectedCustomer = null;
-                    savedObligations = [];
-                    renderCalcObligationsTable();
-                    const salaryInput = document.getElementById('salary');
-                    if (salaryInput) salaryInput.value = '';
-                    return;
-                }
-                try {
-                    const res = await axios.get('/api/calculator/customer-by-id', { params: { customer_id: customerId, tenant_slug: tenantSlug } });
-                    if (res.data.success && res.data.customer) {
-                        selectedCustomer = res.data.customer;
-                        savedObligations = res.data.obligations || [];
-                        adHocObligations = adHocObligations || [];
-                        renderCalcObligationsTable();
-                        const salaryInput = document.getElementById('salary');
-                        if (salaryInput) {
-                            const val = selectedCustomer.monthly_salary ?? selectedCustomer.basic_salary;
-                            salaryInput.value = (val != null && val !== '') ? String(val) : '';
-                        }
-                    } else {
-                        selectedCustomer = null;
-                        savedObligations = [];
-                        renderCalcObligationsTable();
-                    }
-                } catch (err) {
-                    if (msgEl) { msgEl.textContent = 'حدث خطأ أثناء تحميل بيانات العميل'; msgEl.classList.remove('hidden'); msgEl.className = 'text-sm mt-2 text-red-600'; }
-                }
-            });
-        } else {
-            document.getElementById('calcClientLookupWrap').classList.add('hidden');
-        }
+        document.getElementById('calcAddSolutionRow').addEventListener('click', () => {
+            syncCalcSolutionRowsFromDom();
+            calcSolutionRows.push({ note: '' });
+            renderCalcSolutionsTable();
+        });
         
         document.getElementById('calcAddAdHocObligation').addEventListener('click', () => {
             adHocObligations = adHocObligations || [];
@@ -848,6 +867,7 @@ export const smartCalculator = `<!DOCTYPE html>
         });
         
         renderCalcObligationsTable();
+        renderCalcSolutionsTable();
         
         // Step 1: Main form submission
         document.getElementById('calculatorForm').addEventListener('submit', (e) => {
@@ -912,7 +932,8 @@ export const smartCalculator = `<!DOCTYPE html>
                     amount: calculationData.amount,
                     obligations: calculationData.obligations,
                     financing_type_id: calculationData.financing_type_id,
-                    tenant_slug: tenantSlug
+                    tenant_slug: tenantSlug,
+                    solutions: getCalcSolutionsForSave()
                 });
                 
                 console.log('✅ تم حفظ بيانات العميل في قاعدة البيانات:', response.data);
@@ -1604,8 +1625,10 @@ export const smartCalculator = `<!DOCTYPE html>
             selectedCustomer = null;
             savedObligations = [];
             adHocObligations = [];
+            calcSolutionRows = [{ note: '' }];
             selectedBestOffer = null;
             if (typeof renderCalcObligationsTable === 'function') renderCalcObligationsTable();
+            if (typeof renderCalcSolutionsTable === 'function') renderCalcSolutionsTable();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         

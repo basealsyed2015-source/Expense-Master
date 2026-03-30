@@ -31,6 +31,18 @@ import {
   hrDocumentsPage,
   hrReportsPage
 } from './hr-pages'
+import {
+  contractsDashboardPage,
+  contractsListPage,
+  contractsNewPage,
+  contractsViewPage,
+  contractsTemplatesPage,
+  contractsNotesPage,
+  contractsArchivePage,
+  contractsSettingsPage
+} from './contracts-module-pages'
+import { registerContractsModuleApi } from './contracts-module-api'
+import { registerContractsStaticRoutes } from './contracts-module-static-routes'
 
 type Bindings = {
   DB: D1Database;
@@ -42,7 +54,60 @@ type Variables = {
   tenantId: number | null;
 }
 
+function normalizeCustomerSolutionsJson(raw: string | null | undefined): string | null {
+  if (raw == null || String(raw).trim() === '') return null
+  try {
+    const arr = JSON.parse(String(raw))
+    if (!Array.isArray(arr)) return '[]'
+    const out = arr.map((item: unknown) => ({
+      note: typeof item === 'string' ? item : String((item as { note?: string })?.note ?? '')
+    }))
+    return JSON.stringify(out)
+  } catch {
+    return '[]'
+  }
+}
+
+/** D1 returns this until migration 0032 is applied on the target database (use wrangler d1 migrations apply ... --remote). */
+function isMissingCustomerSolutionsColumnError(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? e ?? '')
+  return m.includes('solutions_json') && (m.includes('no such column') || m.includes('no column named'))
+}
+
+/** Schema has no ON DELETE CASCADE from banks; clear dependents so DELETE FROM banks succeeds. */
+async function deleteBankAndDependents(db: D1Database, bankId: string | number) {
+  await db.batch([
+    db.prepare('DELETE FROM bank_financing_rates WHERE bank_id = ?').bind(bankId),
+    db.prepare('UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?').bind(bankId),
+    db.prepare('UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?').bind(bankId),
+    db.prepare('DELETE FROM calculations WHERE bank_id = ?').bind(bankId),
+    db.prepare('DELETE FROM banks WHERE id = ?').bind(bankId),
+  ])
+}
+
+/** Same as deleteBankAndDependents for all banks with tenant_id IS NULL (super-admin bulk delete). */
+async function deleteGlobalBanksAndDependents(db: D1Database) {
+  return db.batch([
+    db.prepare(
+      'DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
+    ),
+    db.prepare(
+      'UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
+    ),
+    db.prepare(
+      'UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
+    ),
+    db.prepare(
+      'DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
+    ),
+    db.prepare('DELETE FROM banks WHERE tenant_id IS NULL'),
+  ])
+}
+
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
+
+// Contracts module static assets (JS; CSS is inlined in HTML). Register early so routes are matched.
+registerContractsStaticRoutes(app)
 
 // Helper: Mobile-Responsive CSS Styles
 const getMobileResponsiveCSS = () => `
@@ -340,6 +405,46 @@ function parseOptionalInt(value?: string): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+const DEFAULT_OBLIGATION_TYPE_NAMES = [
+  'قرض شخصي',
+  'قرض عقاري',
+  'تمويل سيارة قائم',
+  'بطاقة ائتمان',
+  'تمويل تعاوني',
+  'تقسيط / شراء بالأقساط',
+  'سلفة راتب',
+  'التزامات أخرى',
+] as const
+
+async function fetchObligationTypeNamesForTenant(
+  db: Bindings['DB'],
+  tenantId: number | null
+): Promise<string[]> {
+  try {
+    let rows: { type_name?: string }[]
+    if (tenantId != null) {
+      const r = await db
+        .prepare(
+          'SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC'
+        )
+        .bind(tenantId)
+        .all()
+      rows = (r.results || []) as { type_name?: string }[]
+    } else {
+      const r = await db
+        .prepare(
+          'SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC'
+        )
+        .all()
+      rows = (r.results || []) as { type_name?: string }[]
+    }
+    const names = rows.map((row) => row.type_name).filter((n): n is string => typeof n === 'string' && n.length > 0)
+    return names.length > 0 ? names : [...DEFAULT_OBLIGATION_TYPE_NAMES]
+  } catch {
+    return [...DEFAULT_OBLIGATION_TYPE_NAMES]
+  }
+}
+
 function normalizeRoleId(roleId: number | null): number | null {
   if (roleId === null) {
     return null
@@ -371,7 +476,10 @@ async function getUserInfo(
         const cookies = cookieHeader.split(';').map((cookie: string) => cookie.trim())
         const authCookie = cookies.find((cookie: string) => cookie.startsWith('authToken='))
         if (authCookie) {
-          token = authCookie.split('=')[1]
+          // Do not use split('=')[1] — base64 tokens often contain '=' padding; that truncates the value.
+          token = authCookie.startsWith('authToken=')
+            ? authCookie.slice('authToken='.length)
+            : ''
           console.log('✅ [getUserInfo] Token found in cookie')
         } else {
           console.log('❌ [getUserInfo] No authToken cookie found')
@@ -442,10 +550,12 @@ async function getUserInfo(
       return result
     }
     
-    // For other roles, return their tenant_id
+    // For other roles: DB is source of truth for which company (tenant) this user belongs to.
+    // Stale JWT tenant segments must not override users.tenant_id (fixes customer/contract scoping).
+    const dbTenantId = (user as { tenant_id?: number | null }).tenant_id
     const result = {
       userId: user.id,
-      tenantId: tenantIdFromToken || user.tenant_id,
+      tenantId: dbTenantId != null ? dbTenantId : tenantIdFromToken,
       roleId: normalizedRoleId,
       tokenRoleId
     }
@@ -475,6 +585,65 @@ async function getUserInfo(
 async function getUserTenantId(c: any): Promise<number | null> {
   const info = await getUserInfo(c)
   return info.tenantId
+}
+
+/**
+ * Same customer scope as `/admin/requests/new` (role + tenant + assigned_to).
+ * Used server-side so lists match without a separate API round-trip.
+ *
+ * `scopeSuperAdminToTenant`: when true (contracts new form), super-admins are limited to
+ * `?tenant_id=` or `users.tenant_id` so the dropdown never lists every company at once.
+ */
+async function loadCustomersForAdminForms(
+  c: any,
+  userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
+  opts?: { scopeSuperAdminToTenant?: boolean }
+): Promise<{ results: any[] }> {
+  let customersQuery = 'SELECT id, full_name, phone, national_id, city FROM customers'
+  const customersParams: any[] = []
+
+  if (userInfo.roleId === 1) {
+    if (opts?.scopeSuperAdminToTenant) {
+      let tid: number | null = null
+      const q = c.req.query('tenant_id')
+      if (q != null && /^\d+$/.test(String(q))) {
+        tid = parseInt(String(q), 10)
+      }
+      if (tid == null && userInfo.userId) {
+        const row = (await c.env.DB.prepare('SELECT tenant_id FROM users WHERE id = ?').bind(userInfo.userId).first()) as {
+          tenant_id: number | null
+        } | null
+        if (row?.tenant_id != null) tid = row.tenant_id
+      }
+      if (tid == null) {
+        return { results: [] }
+      }
+      customersQuery += ' WHERE tenant_id = ?'
+      customersParams.push(tid)
+    }
+    // else: legacy — SaaS super-admin sees all customers (e.g. financing request form)
+  } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    if (!userInfo.tenantId) {
+      return { results: [] }
+    }
+    customersQuery += ' WHERE tenant_id = ?'
+    customersParams.push(userInfo.tenantId)
+  } else if (userInfo.roleId === 4) {
+    if (userInfo.tenantId) {
+      customersQuery += ' WHERE tenant_id = ? AND assigned_to = ?'
+      customersParams.push(userInfo.tenantId, userInfo.userId!)
+    } else {
+      customersQuery += ' WHERE assigned_to = ?'
+      customersParams.push(userInfo.userId!)
+    }
+  } else {
+    customersQuery += ' WHERE 1 = 0'
+  }
+  customersQuery += ' ORDER BY full_name'
+  const customers = customersParams.length
+    ? await c.env.DB.prepare(customersQuery).bind(...customersParams).all()
+    : await c.env.DB.prepare(customersQuery).all()
+  return { results: (customers.results || []) as any[] }
 }
 
 function isSuperAdminUser(info: { roleId: number | null; tokenRoleId: number | null }): boolean {
@@ -1373,10 +1542,9 @@ app.delete('/api/banks/:id', async (c) => {
       }
     }
     
-    // Delete bank (will also delete related rates due to foreign key)
-    await c.env.DB.prepare(`DELETE FROM banks WHERE id = ?`).bind(id).run()
+    await deleteBankAndDependents(c.env.DB, id)
     
-    return c.json({ success: true })
+    return c.json({ success: true, message: 'تم حذف البنك بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -1404,13 +1572,13 @@ app.delete('/api/banks/global/all', async (c) => {
       return c.json({ success: false, error: 'غير مصرح لك بحذف البنوك العامة' }, 403)
     }
     
-    // Delete all global banks (tenant_id IS NULL)
-    const result = await c.env.DB.prepare(`DELETE FROM banks WHERE tenant_id IS NULL`).run()
+    const batchResults = await deleteGlobalBanksAndDependents(c.env.DB)
+    const deletedBanks = batchResults[batchResults.length - 1]?.meta?.changes ?? 0
     
     return c.json({ 
       success: true, 
-      message: `تم حذف ${result.meta.changes || 0} بنك عام`,
-      deleted_count: result.meta.changes || 0
+      message: `تم حذف ${deletedBanks} بنك عام`,
+      deleted_count: deletedBanks
     })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -1436,6 +1604,21 @@ app.get('/api/financing-types', async (c) => {
       results = (await c.env.DB.prepare(query).all()).results;
     }
     return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Obligation types (for customer monthly commitments dropdown)
+app.get('/api/obligation-types', async (c) => {
+  try {
+    const tenantIdRaw = c.req.query('tenant_id')
+    const parsedQuery = tenantIdRaw ? parseInt(tenantIdRaw, 10) : NaN
+    const userInfo = await getUserInfo(c)
+    const effectiveTenant = Number.isFinite(parsedQuery) ? parsedQuery : userInfo.tenantId
+    const names = await fetchObligationTypeNamesForTenant(c.env.DB, effectiveTenant)
+    const data = names.map((type_name, i) => ({ id: i + 1, type_name }))
+    return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -2449,11 +2632,32 @@ app.post('/api/customers', async (c) => {
     const city = formData.get('city') as string || null
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
+    const notes = (formData.get('notes') as string)?.trim() || null
+    const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
     
     // Resolve tenant from authenticated user (supports both cookie + bearer flows).
     const userInfo = await getUserInfo(c)
     let tenant_id = userInfo.tenantId
-    if (userInfo.roleId && userInfo.roleId !== 1 && !tenant_id) {
+
+    // Super admin may not have a fixed tenant on account; accept form tenant first.
+    if (!tenant_id && userInfo.roleId === 1) {
+      const tenantIdFromForm = Number.parseInt(String(formData.get('tenant_id') ?? ''), 10)
+      if (!Number.isNaN(tenantIdFromForm) && tenantIdFromForm > 0) {
+        tenant_id = tenantIdFromForm
+      }
+    }
+
+    // Final fallback: first active tenant to satisfy NOT NULL tenant_id constraints.
+    if (!tenant_id) {
+      const defaultTenant = await c.env.DB.prepare(`
+        SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
+      `).first<{ id: number }>()
+      if (defaultTenant?.id) {
+        tenant_id = defaultTenant.id
+      }
+    }
+
+    if (!tenant_id) {
       throw new Error('Missing tenant context for customer creation')
     }
     
@@ -2571,11 +2775,38 @@ app.post('/api/customers', async (c) => {
       `)
     }
     
-    const result = await c.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(full_name, phone, email, national_id, date_of_birth, dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian', employer_name, job_type === 'military' ? 'military' : 'civilian', job_title, job_type === 'military' ? military_rank : null, work_start_date, city, basic_salary, monthly_salary, tenant_id).run()
-    const newId = (result as { meta?: { last_row_id?: number } }).meta?.last_row_id
+    const insertBind = [
+      full_name,
+      phone,
+      email,
+      national_id,
+      date_of_birth,
+      dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian',
+      employer_name,
+      job_type === 'military' ? 'military' : 'civilian',
+      job_title,
+      job_type === 'military' ? military_rank : null,
+      work_start_date,
+      city,
+      basic_salary,
+      monthly_salary,
+      tenant_id,
+      notes
+    ] as const
+    let result: { meta?: { last_row_id?: number } }
+    try {
+      result = await c.env.DB.prepare(`
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...insertBind, solutions_json).run() as { meta?: { last_row_id?: number } }
+    } catch (e: unknown) {
+      if (!isMissingCustomerSolutionsColumnError(e)) throw e
+      result = await c.env.DB.prepare(`
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...insertBind).run() as { meta?: { last_row_id?: number } }
+    }
+    const newId = result.meta?.last_row_id
     const obligationsJson = formData.get('obligations_json') as string | null
     if (newId && obligationsJson) {
       try {
@@ -2650,13 +2881,42 @@ app.post('/api/customers/:id', async (c) => {
     const city = formData.get('city') as string || null
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
+    const notes = (formData.get('notes') as string)?.trim() || null
+    const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
     
-    await c.env.DB.prepare(`
+    const updateBind = [
+      full_name,
+      phone,
+      email,
+      national_id,
+      date_of_birth,
+      dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian',
+      employer_name,
+      job_type === 'military' ? 'military' : 'civilian',
+      job_title,
+      job_type === 'military' ? military_rank : null,
+      work_start_date,
+      city,
+      basic_salary,
+      monthly_salary,
+      notes
+    ] as const
+    try {
+      await c.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
-          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
       WHERE id = ?
-    `).bind(full_name, phone, email, national_id, date_of_birth, dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian', employer_name, job_type === 'military' ? 'military' : 'civilian', job_title, job_type === 'military' ? military_rank : null, work_start_date, city, basic_salary, monthly_salary, id).run()
+    `).bind(...updateBind, solutions_json, id).run()
+    } catch (e: unknown) {
+      if (!isMissingCustomerSolutionsColumnError(e)) throw e
+      await c.env.DB.prepare(`
+      UPDATE customers 
+      SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
+      WHERE id = ?
+    `).bind(...updateBind, id).run()
+    }
     const obligationsJson = formData.get('obligations_json') as string | null
     if (obligationsJson) {
       try {
@@ -2714,14 +2974,34 @@ app.get('/api/calculator/customer-by-id', async (c) => {
       return c.json({ success: false, error: 'customer_id and tenant_slug required' }, 400)
     }
     const t = await c.env.DB.prepare('SELECT id FROM tenants WHERE slug = ?').bind(tenant_slug).first() as { id: number } | null
-    if (!t) return c.json({ success: false, customer: null, obligations: [] })
-    const customer = await c.env.DB.prepare(
-      'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?'
-    ).bind(customer_id, t.id).first()
-    if (!customer) return c.json({ success: false, customer: null, obligations: [] })
+    if (!t) return c.json({ success: false, customer: null, obligations: [], solutions: [] })
+    let customer: Record<string, unknown> | null = null
+    try {
+      customer = (await c.env.DB.prepare(
+        'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?'
+      ).bind(customer_id, t.id).first()) as Record<string, unknown> | null
+    } catch (e: unknown) {
+      if (!isMissingCustomerSolutionsColumnError(e)) throw e
+      customer = (await c.env.DB.prepare(
+        'SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?'
+      ).bind(customer_id, t.id).first()) as Record<string, unknown> | null
+    }
+    if (!customer) return c.json({ success: false, customer: null, obligations: [], solutions: [] })
     const obligationsResult = await c.env.DB.prepare('SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(customer_id).all()
     const obligations = (obligationsResult.results || []) as Array<{ id?: number; obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
-    return c.json({ success: true, customer, obligations })
+    let solutions: Array<{ note: string }> = []
+    try {
+      const sj = (customer as { solutions_json?: string | null }).solutions_json
+      if (sj) {
+        const parsed = JSON.parse(sj)
+        if (Array.isArray(parsed)) {
+          solutions = parsed.map((item: unknown) => ({
+            note: typeof item === 'string' ? item : String((item as { note?: string })?.note ?? '')
+          }))
+        }
+      }
+    } catch (_) {}
+    return c.json({ success: true, customer, obligations, solutions })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -3461,12 +3741,58 @@ app.post('/api/calculator/save-customer', async (c) => {
     `).bind(data.phone).first()
     
     let customer_id
+
+    const solutionsEncoded =
+      Array.isArray(data.solutions)
+        ? JSON.stringify(
+            data.solutions.map((x: { note?: string } | string) => ({
+              note: String(typeof x === 'string' ? x : x?.note ?? '').trim()
+            }))
+          )
+        : null
     
     if (customer) {
       // Update existing customer with calculator data
       customer_id = customer.id
-      
-      await c.env.DB.prepare(`
+
+      const saveCustUpdateBind = [
+        data.name,
+        data.birthdate,
+        data.salary,
+        data.amount,
+        data.obligations || 0,
+        data.financing_type_id,
+        data.duration_months || null,
+        data.best_bank_id || null,
+        data.best_rate || null,
+        data.monthly_payment || null,
+        data.total_payment || null,
+        tenant_id,
+        solutionsEncoded,
+        customer_id
+      ] as const
+      try {
+        await c.env.DB.prepare(`
+        UPDATE customers 
+        SET full_name = ?, 
+            birthdate = ?, 
+            monthly_salary = ?,
+            financing_amount = ?,
+            monthly_obligations = ?,
+            financing_type_id = ?,
+            financing_duration_months = ?,
+            best_bank_id = ?,
+            best_rate = ?,
+            monthly_payment = ?,
+            total_payment = ?,
+            calculation_date = CURRENT_TIMESTAMP,
+            tenant_id = COALESCE(?, tenant_id),
+            solutions_json = IFNULL(?, solutions_json)
+        WHERE id = ?
+      `).bind(...saveCustUpdateBind).run()
+      } catch (e: unknown) {
+        if (!isMissingCustomerSolutionsColumnError(e)) throw e
+        await c.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, 
             birthdate = ?, 
@@ -3483,34 +3809,27 @@ app.post('/api/calculator/save-customer', async (c) => {
             tenant_id = COALESCE(?, tenant_id)
         WHERE id = ?
       `).bind(
-        data.name,
-        data.birthdate,
-        data.salary,
-        data.amount,
-        data.obligations || 0,
-        data.financing_type_id,
-        data.duration_months || null,
-        data.best_bank_id || null,
-        data.best_rate || null,
-        data.monthly_payment || null,
-        data.total_payment || null,
-        tenant_id,
-        customer_id
-      ).run()
+          data.name,
+          data.birthdate,
+          data.salary,
+          data.amount,
+          data.obligations || 0,
+          data.financing_type_id,
+          data.duration_months || null,
+          data.best_bank_id || null,
+          data.best_rate || null,
+          data.monthly_payment || null,
+          data.total_payment || null,
+          tenant_id,
+          customer_id
+        ).run()
+      }
     } else {
       // Create new customer with initial calculator data
       // Generate temporary unique national_id to avoid UNIQUE constraint error
       const tempNationalId = `TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      
-      const result = await c.env.DB.prepare(`
-        INSERT INTO customers (
-          full_name, phone, birthdate, monthly_salary,
-          financing_amount, monthly_obligations, financing_type_id,
-          financing_duration_months, best_bank_id, best_rate,
-          monthly_payment, total_payment, calculation_date,
-          national_id, tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-      `).bind(
+
+      const saveCustInsertBind = [
         data.name,
         data.phone,
         data.birthdate,
@@ -3523,10 +3842,33 @@ app.post('/api/calculator/save-customer', async (c) => {
         data.best_rate || null,
         data.monthly_payment || null,
         data.total_payment || null,
-        tempNationalId, // temporary unique national_id
+        tempNationalId,
         tenant_id
-      ).run()
-      
+      ] as const
+      let result: { meta: { last_row_id: number } }
+      try {
+        result = await c.env.DB.prepare(`
+        INSERT INTO customers (
+          full_name, phone, birthdate, monthly_salary,
+          financing_amount, monthly_obligations, financing_type_id,
+          financing_duration_months, best_bank_id, best_rate,
+          monthly_payment, total_payment, calculation_date,
+          national_id, tenant_id, solutions_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+      `).bind(...saveCustInsertBind, solutionsEncoded ?? '[]').run() as { meta: { last_row_id: number } }
+      } catch (e: unknown) {
+        if (!isMissingCustomerSolutionsColumnError(e)) throw e
+        result = await c.env.DB.prepare(`
+        INSERT INTO customers (
+          full_name, phone, birthdate, monthly_salary,
+          financing_amount, monthly_obligations, financing_type_id,
+          financing_duration_months, best_bank_id, best_rate,
+          monthly_payment, total_payment, calculation_date,
+          national_id, tenant_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+      `).bind(...saveCustInsertBind).run() as { meta: { last_row_id: number } }
+      }
+
       customer_id = result.meta.last_row_id
     }
     
@@ -4446,17 +4788,6 @@ app.delete('/api/financing-requests/:id', async (c) => {
   }
 })
 
-// Delete bank
-app.delete('/api/banks/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    await c.env.DB.prepare('DELETE FROM banks WHERE id = ?').bind(id).run()
-    return c.json({ success: true, message: 'تم حذف البنك بنجاح' })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
 // Delete rate
 app.delete('/api/rates/:id', async (c) => {
   try {
@@ -4852,16 +5183,12 @@ app.get('/c/:tenant/calculator', async (c) => {
     `)
   }
   
-  // Only show customer selection dropdown to high-access users (staff roles 1–4), not to regular customers
-  const userInfo = await getUserInfo(c)
-  const showCustomerSelect = [1, 2, 3, 4].includes(Number(userInfo.roleId ?? 0))
-
   // Return calculator page with tenant context
   // Add tenant info as JavaScript variable and update messages
   return c.html(smartCalculator
     .replace(/حاسبة التمويل الذكية/g, `حاسبة تمويل ${tenant.company_name}`)
     .replace('/api/calculator/submit-request', `/api/c/${tenantSlug}/calculator/submit-request`)
-    .replace('<script>', `<script>\n        // Tenant information for company-specific calculator\n        window.TENANT_NAME = '${tenant.company_name.replace(/'/g, "\\'")}';\n        window.CALCULATOR_SHOW_CUSTOMER_SELECT = ${showCustomerSelect};\n    `)
+    .replace('<script>', `<script>\n        // Tenant information for company-specific calculator\n        window.TENANT_NAME = '${tenant.company_name.replace(/'/g, "\\'")}';\n    `)
     .replace('سيتم التواصل معك قريباً من \' + selectedBestOffer.bank.bank_name', `سيتم المراجعة من شركة ${tenant.company_name.replace(/'/g, "\\'")} وسوف يتم التواصل معك قريباً'`)
   )
 })
@@ -7395,6 +7722,8 @@ app.get('/admin/dashboard', async (c) => {
 
 // صفحة إضافة عميل جديد - يجب أن تكون قبل /:id
 app.get('/admin/customers/add', async (c) => {
+  const userInfo = await getUserInfo(c)
+  const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
   return c.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -7474,9 +7803,12 @@ app.get('/admin/customers/add', async (c) => {
                   <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                     <input type="date" id="date_of_birth_gregorian"
                            class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                    <input type="text" id="date_of_birth_hijri" style="display:none"
-                           placeholder="1445-01-01 (هـ)" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}"
-                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <div id="hijri_dob_wrap" style="display:none" class="flex flex-1 min-w-0 items-stretch divide-x divide-gray-200 rtl:divide-x-reverse">
+                      <select id="hijri_dob_year" aria-label="السنة الهجرية" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
+                      <select id="hijri_dob_month" aria-label="الشهر الهجري" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
+                      <select id="hijri_dob_day" aria-label="اليوم الهجري" class="w-[4.5rem] shrink-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
+                    </div>
+                    <input type="hidden" id="date_of_birth_hijri" value="">
                   </div>
                   <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
                     <button type="button" id="dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
@@ -7484,16 +7816,138 @@ app.get('/admin/customers/add', async (c) => {
                   </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1"><span id="dob_calendar_label">ميلادي</span></p>
+                <script type="module">
+                  import umalqura from 'https://esm.sh/@umalqura/core@0.0.7';
+                  const U = umalqura.$;
+                  try { umalqura.locale('ar'); } catch (e) {}
+                  const monthNames = umalqura.months();
+                  const yearSel = document.getElementById('hijri_dob_year');
+                  const monthSel = document.getElementById('hijri_dob_month');
+                  const daySel = document.getElementById('hijri_dob_day');
+                  const hHidden = document.getElementById('date_of_birth_hijri');
+                  if (!yearSel || !monthSel || !daySel || !hHidden) {
+                    window.syncHijriDobFromSelects = function () {};
+                  } else {
+                    function pad(n) { return String(n).padStart(2, '0'); }
+                    function clearSelect(el) {
+                      while (el.firstChild) el.removeChild(el.firstChild);
+                    }
+                    function fillDays() {
+                      const y = parseInt(yearSel.value, 10);
+                      const m = parseInt(monthSel.value, 10);
+                      const prev = daySel.value;
+                      clearSelect(daySel);
+                      const ph = document.createElement('option');
+                      ph.value = '';
+                      ph.textContent = 'اليوم';
+                      daySel.appendChild(ph);
+                      if (!y || !m || y !== y || m !== m) return;
+                      let dim = 30;
+                      try {
+                        dim = U.getDaysInMonth(y, m);
+                      } catch (e) {
+                        console.warn('[hijri dob] getDaysInMonth', e);
+                      }
+                      if (dim !== 29 && dim !== 30) dim = 30;
+                      for (let d = 1; d <= dim; d++) {
+                        const opt = document.createElement('option');
+                        opt.value = String(d);
+                        opt.textContent = String(d);
+                        daySel.appendChild(opt);
+                      }
+                      const prevN = parseInt(prev, 10);
+                      if (prev && !isNaN(prevN) && prevN >= 1 && prevN <= dim) daySel.value = String(prevN);
+                    }
+                    function syncHijriDobFromSelects() {
+                      fillDays();
+                      const y = yearSel.value;
+                      const m = monthSel.value;
+                      const d = daySel.value;
+                      if (!y || !m || !d) {
+                        hHidden.value = '';
+                      } else {
+                        hHidden.value = y + '-' + pad(parseInt(m, 10)) + '-' + pad(parseInt(d, 10));
+                      }
+                      const type = document.getElementById('dob_calendar_type');
+                      const mainHidden = document.getElementById('date_of_birth');
+                      if (type && type.value === 'hijri' && mainHidden) mainHidden.value = hHidden.value;
+                    }
+                    window.syncHijriDobFromSelects = syncHijriDobFromSelects;
+                    const nowH = U.gregorianToHijri(new Date());
+                    const maxY = nowH.hy;
+                    const minY = Math.max(U.minCalendarYear, nowH.hy - 120);
+                    clearSelect(yearSel);
+                    const yPh = document.createElement('option');
+                    yPh.value = '';
+                    yPh.textContent = 'السنة';
+                    yearSel.appendChild(yPh);
+                    for (let y = maxY; y >= minY; y--) {
+                      const opt = document.createElement('option');
+                      opt.value = String(y);
+                      opt.textContent = String(y);
+                      yearSel.appendChild(opt);
+                    }
+                    clearSelect(monthSel);
+                    const mPh = document.createElement('option');
+                    mPh.value = '';
+                    mPh.textContent = 'الشهر';
+                    monthSel.appendChild(mPh);
+                    for (let m = 1; m <= 12; m++) {
+                      const opt = document.createElement('option');
+                      opt.value = String(m);
+                      opt.textContent = monthNames[m - 1] || String(m);
+                      monthSel.appendChild(opt);
+                    }
+                    clearSelect(daySel);
+                    const dPh = document.createElement('option');
+                    dPh.value = '';
+                    dPh.textContent = 'اليوم';
+                    daySel.appendChild(dPh);
+                    function onYearOrMonth() {
+                      syncHijriDobFromSelects();
+                    }
+                    yearSel.addEventListener('change', onYearOrMonth);
+                    monthSel.addEventListener('change', onYearOrMonth);
+                    yearSel.addEventListener('input', onYearOrMonth);
+                    monthSel.addEventListener('input', onYearOrMonth);
+                    daySel.addEventListener('change', syncHijriDobFromSelects);
+                  }
+                </script>
                 <script>
-                  (function(){
-                    var g=document.getElementById('date_of_birth_gregorian'),h=document.getElementById('date_of_birth_hijri'),hidden=document.getElementById('date_of_birth'),type=document.getElementById('dob_calendar_type'),lbl=document.getElementById('dob_calendar_label'),btnG=document.getElementById('dob_toggle_gregorian'),btnH=document.getElementById('dob_toggle_hijri');
-                    function setGregorian(){ g.style.display=''; h.style.display='none'; type.value='gregorian'; lbl.textContent='ميلادي'; hidden.value=g.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100'; }
-                    function setHijri(){ g.style.display='none'; h.style.display=''; type.value='hijri'; lbl.textContent='هجري'; hidden.value=h.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white'; }
-                    btnG.onclick=setGregorian; btnH.onclick=setHijri;
-                    g.onchange=function(){ if(type.value==='gregorian') hidden.value=g.value||''; };
-                    h.oninput=h.onchange=function(){ if(type.value==='hijri') hidden.value=h.value||''; };
-                    hidden.value = type.value==='hijri' ? (h.value||'') : (g.value||'');
-                  })();
+                  document.addEventListener('DOMContentLoaded', function () {
+                    var g = document.getElementById('date_of_birth_gregorian');
+                    var hWrap = document.getElementById('hijri_dob_wrap');
+                    var hHidden = document.getElementById('date_of_birth_hijri');
+                    var hidden = document.getElementById('date_of_birth');
+                    var type = document.getElementById('dob_calendar_type');
+                    var lbl = document.getElementById('dob_calendar_label');
+                    var btnG = document.getElementById('dob_toggle_gregorian');
+                    var btnH = document.getElementById('dob_toggle_hijri');
+                    if (!g || !hWrap || !hHidden || !hidden || !type || !lbl || !btnG || !btnH) return;
+                    function setGregorian() {
+                      g.style.display = '';
+                      hWrap.style.display = 'none';
+                      type.value = 'gregorian';
+                      lbl.textContent = 'ميلادي';
+                      hidden.value = g.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
+                    }
+                    function setHijri() {
+                      g.style.display = 'none';
+                      hWrap.style.display = 'flex';
+                      type.value = 'hijri';
+                      lbl.textContent = 'هجري';
+                      if (typeof window.syncHijriDobFromSelects === 'function') window.syncHijriDobFromSelects();
+                      hidden.value = hHidden.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
+                    }
+                    btnG.onclick = setGregorian;
+                    btnH.onclick = setHijri;
+                    g.onchange = function () { if (type.value === 'gregorian') hidden.value = g.value || ''; };
+                    hidden.value = type.value === 'hijri' ? (hHidden.value || '') : (g.value || '');
+                  });
                 </script>
               </div>
               
@@ -7594,6 +8048,40 @@ app.get('/admin/customers/add', async (c) => {
               </div>
             </div>
 
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-2">
+                <i class="fas fa-sticky-note text-gray-600 ml-1"></i>
+                ملاحظات
+              </label>
+              <textarea name="notes" rows="2"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                        placeholder="أي ملاحظات إضافية عن العميل (اختياري)"></textarea>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
+              <h3 class="text-sm font-bold text-gray-700 mb-3">
+                <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
+                الحلول المقترحة
+              </h3>
+              <input type="hidden" name="solutions_json" id="solutions_json" value="[]">
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-300 text-right">
+                      <th class="py-2 px-2 w-20">رقم الحل</th>
+                      <th class="py-2 px-2">نص الحل</th>
+                      <th class="py-2 px-2 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="add-solutions-tbody"></tbody>
+                </table>
+              </div>
+              <button type="button" id="add-solution-row" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                <i class="fas fa-plus ml-1"></i>
+                إضافة صف
+              </button>
+            </div>
+
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
               <h3 class="text-sm font-bold text-gray-700 mb-3">
                 <i class="fas fa-credit-card text-red-600 ml-1"></i>
@@ -7656,21 +8144,64 @@ app.get('/admin/customers/add', async (c) => {
             updateJobTypeVisibility();
           })();
 
+          (function solutionsTable() {
+            var tbody = document.getElementById('add-solutions-tbody');
+            var addBtn = document.getElementById('add-solution-row');
+            var hidden = document.getElementById('solutions_json');
+            if (!tbody || !addBtn || !hidden) return;
+            function refreshNumbers() {
+              var rows = tbody.querySelectorAll('tr');
+              for (var r = 0; r < rows.length; r++) {
+                var cell = rows[r].querySelector('.sol-num-cell');
+                if (cell) cell.textContent = String(r + 1);
+              }
+            }
+            function addRow(data) {
+              data = data || {};
+              var tr = document.createElement('tr');
+              tr.className = 'border-b border-gray-200';
+              tr.innerHTML = '<td class="py-1 px-2 sol-num-cell text-center text-gray-700 font-medium w-20">1</td>' +
+                '<td class="py-1 px-2"><input type="text" class="sol-note w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder=""></td>' +
+                '<td class="py-1 px-2"><button type="button" class="sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+              if (data.note) tr.querySelector('.sol-note').value = data.note;
+              tr.querySelector('.sol-remove').onclick = function() { tr.remove(); refreshNumbers(); };
+              tbody.appendChild(tr);
+              refreshNumbers();
+            }
+            addBtn.onclick = function() { addRow(); };
+            addRow();
+          })();
+
           (function obligationsTable() {
             var tbody = document.getElementById('add-obligations-tbody');
             var addBtn = document.getElementById('add-obligation-row');
             var hidden = document.getElementById('obligations_json');
             if (!tbody || !addBtn || !hidden) return;
+            var obligationTypeNames = ${JSON.stringify(obligationTypeNames)};
+            function esc(s) {
+              return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            }
+            function buildObligTypeSelect(selectedValue) {
+              var sel = selectedValue == null ? '' : String(selectedValue);
+              var opts = '<option value="">— اختر نوع الالتزام —</option>';
+              for (var i = 0; i < obligationTypeNames.length; i++) {
+                var name = obligationTypeNames[i];
+                opts += '<option value="' + esc(name) + '"' + (sel === name ? ' selected' : '') + '>' + esc(name) + '</option>';
+              }
+              if (sel && obligationTypeNames.indexOf(sel) === -1) {
+                opts += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
+              }
+              return '<select class="oblig-type w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>';
+            }
             function addRow(data) {
               data = data || {};
               var tr = document.createElement('tr');
               tr.className = 'border-b border-gray-200';
-              tr.innerHTML = '<td class="py-1 px-2"><input type="text" class="oblig-type w-full px-2 py-1.5 border rounded" placeholder="مثال: قرض شخصي"></td>' +
+              tr.innerHTML = '<td class="py-1 px-2">' + buildObligTypeSelect(data.obligation_type || '') + '</td>' +
                 '<td class="py-1 px-2"><input type="number" class="oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                 '<td class="py-1 px-2"><input type="number" class="oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                 '<td class="py-1 px-2"><input type="date" class="oblig-due w-full px-2 py-1.5 border rounded" placeholder=""></td>' +
                 '<td class="py-1 px-2"><button type="button" class="oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-              if (data.obligation_type) tr.querySelector('.oblig-type').value = data.obligation_type;
               if (data.total_amount != null) tr.querySelector('.oblig-total').value = data.total_amount;
               if (data.monthly_installment != null) tr.querySelector('.oblig-monthly').value = data.monthly_installment;
               if (data.due_date) tr.querySelector('.oblig-due').value = data.due_date;
@@ -7712,6 +8243,17 @@ app.get('/admin/customers/add', async (c) => {
                 arr.push({ obligation_type: typeEl.value || '', total_amount: total, monthly_installment: monthly, due_date: dueEl ? (dueEl.value || null) : null });
               });
               obligationsJsonEl.value = JSON.stringify(arr);
+            }
+            var solutionsJsonEl = document.getElementById('solutions_json');
+            if (solutionsJsonEl) {
+              var solRows = document.querySelectorAll('#add-solutions-tbody tr');
+              var solArr = [];
+              solRows.forEach(function(tr) {
+                var noteEl = tr.querySelector('.sol-note');
+                if (!noteEl) return;
+                solArr.push({ note: (noteEl.value || '').trim() });
+              });
+              solutionsJsonEl.value = JSON.stringify(solArr);
             }
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
@@ -7768,14 +8310,17 @@ app.get('/admin/customer-assignment', async (c) => {
   const canManageCompany = userInfo.roleId === 1 || userInfo.roleId === 2;
   const canAccessHr = userInfo.roleId === 1 || userInfo.roleId === 2 || userInfo.roleId === 3;
   
-  // Temporary: Get tenant_id from query or default to 1
-  const tenantId = c.req.query('tenant_id') || 1;
+  // Tenant scoping:
+  // - Normal users: always use their own tenantId
+  // - Super admin: allow overriding via query parameter
+  const requestedTenantId = parseOptionalInt(c.req.query('tenant_id')) ?? null;
+  const tenantId = isSuperAdmin ? (requestedTenantId ?? 1) : (userInfo.tenantId ?? 1);
   
   // Get employees of THIS tenant only
   const employees = await c.env.DB.prepare(`
     SELECT id, username, full_name, email
     FROM users 
-    WHERE role_id = 4 AND tenant_id = ?
+    WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
     ORDER BY full_name
   `).bind(tenantId).all();
 
@@ -7802,7 +8347,7 @@ app.get('/admin/customer-assignment', async (c) => {
     FROM users u
     LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
     LEFT JOIN customers c ON ca.customer_id = c.id AND c.tenant_id = ?
-    WHERE u.role_id = 4 AND u.tenant_id = ?
+    WHERE u.role_id IN (3, 4, 13, 14) AND u.tenant_id = ?
     GROUP BY u.id
     ORDER BY customer_count DESC
   `).bind(tenantId, tenantId).all();
@@ -8459,15 +9004,39 @@ app.get('/admin/customer-assignment', async (c) => {
 app.post('/api/customer-assignment', async (c) => {
   try {
     const { customer_id, employee_id, notes } = await c.req.json();
+    const userInfo = await getUserInfo(c)
+    const isSuperAdmin = userInfo.roleId === 1
+    const tenantId = isSuperAdmin
+      ? (parseOptionalInt(c.req.query('tenant_id')) ?? userInfo.tenantId ?? 1)
+      : (userInfo.tenantId ?? 1)
     
     // If employee_id is null, delete the assignment
     if (!employee_id) {
+      const customer = await c.env.DB.prepare(`SELECT id, tenant_id FROM customers WHERE id = ?`)
+        .bind(customer_id)
+        .first()
+      if (!customer) return c.json({ success: false, error: 'العميل غير موجود' }, 404)
+      if (!isSuperAdmin && customer.tenant_id !== tenantId) return c.json({ success: false, error: 'غير مصرح' }, 403)
+
       await c.env.DB.prepare(`
         DELETE FROM customer_assignments WHERE customer_id = ?
       `).bind(customer_id).run();
       
       return c.json({ success: true, message: 'تم إلغاء التخصيص' });
     }
+
+    const employee = await c.env.DB.prepare(`SELECT id, tenant_id, role_id FROM users WHERE id = ?`)
+      .bind(employee_id)
+      .first()
+    if (!employee) return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
+    const empRole = normalizeRoleId(employee.role_id); if (empRole !== 3 && empRole !== 4) return c.json({ success: false, error: 'المستخدم المحدد ليس موظفًا' }, 400)
+    if (!isSuperAdmin && employee.tenant_id !== tenantId) return c.json({ success: false, error: 'غير مصرح' }, 403)
+
+    const customer = await c.env.DB.prepare(`SELECT id, tenant_id FROM customers WHERE id = ?`)
+      .bind(customer_id)
+      .first()
+    if (!customer) return c.json({ success: false, error: 'العميل غير موجود' }, 404)
+    if (!isSuperAdmin && customer.tenant_id !== tenantId) return c.json({ success: false, error: 'غير مصرح' }, 403)
     
     // Check if assignment already exists
     const existing = await c.env.DB.prepare(`
@@ -8510,14 +9079,19 @@ app.post('/api/customer-assignment', async (c) => {
 // API: Auto distribute customers equally
 app.post('/api/customer-assignment/auto-distribute', async (c) => {
   try {
-    // Get tenant_id from query or body
-    const body = await c.req.json().catch(() => ({}));
-    const tenantId = body.tenant_id || c.req.query('tenant_id') || 1;
+    const userInfo = await getUserInfo(c)
+    const isSuperAdmin = userInfo.roleId === 1
+    const body = await c.req.json().catch(() => ({} as any));
+    const requestedTenantId =
+      parseOptionalInt(body?.tenant_id?.toString?.()) ??
+      parseOptionalInt(c.req.query('tenant_id')) ??
+      null
+    const tenantId = isSuperAdmin ? (requestedTenantId ?? 1) : (userInfo.tenantId ?? 1)
     
     // Get employees of THIS tenant only
     const employees = await c.env.DB.prepare(`
       SELECT id FROM users 
-      WHERE role_id = 4 AND tenant_id = ?
+      WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
       ORDER BY id
     `).bind(tenantId).all();
     
@@ -8580,9 +9154,28 @@ app.post('/api/customer-assignment/clear-all', async (c) => {
 app.post('/api/customer-assignment/bulk', async (c) => {
   try {
     const { customer_ids, employee_id } = await c.req.json();
+
+    const userInfo = await getUserInfo(c)
+    const isSuperAdmin = userInfo.roleId === 1
+    const tenantId = isSuperAdmin
+      ? (parseOptionalInt(c.req.query('tenant_id')) ?? userInfo.tenantId ?? 1)
+      : (userInfo.tenantId ?? 1)
+
+    const employee = await c.env.DB.prepare(`SELECT id, tenant_id, role_id FROM users WHERE id = ?`)
+      .bind(employee_id)
+      .first()
+    if (!employee) return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
+    const empRole = normalizeRoleId(employee.role_id); if (empRole !== 3 && empRole !== 4) return c.json({ success: false, error: 'المستخدم المحدد ليس موظفًا' }, 400)
+    if (!isSuperAdmin && employee.tenant_id !== tenantId) return c.json({ success: false, error: 'غير مصرح' }, 403)
     
     let assignedCount = 0;
     for (const customerId of customer_ids) {
+      const customer = await c.env.DB.prepare(`SELECT id, tenant_id FROM customers WHERE id = ?`)
+        .bind(customerId)
+        .first()
+      if (!customer) continue
+      if (!isSuperAdmin && customer.tenant_id !== tenantId) continue
+
       // Check if exists
       const existing = await c.env.DB.prepare(`
         SELECT * FROM customer_assignments WHERE customer_id = ?
@@ -8630,7 +9223,7 @@ app.get('/admin/banks', async (c) => {
         try {
           const decoded = atob(token)
           const parts = decoded.split(':')
-          tenantId = parts[1] !== 'null' ? parts[1] : null
+              tenantId = parts[1] !== 'null' ? parts[1] : undefined
         } catch (e) {
           // Token parsing failed, continue without tenant_id
         }
@@ -11475,27 +12068,12 @@ app.get('/admin/requests/new', async (c) => {
       return c.redirect('/login')
     }
 
-    // Get customers scoped by role/tenant
-    let customersQuery = 'SELECT id, full_name, phone FROM customers'
-    const customersParams: any[] = []
-    if (userInfo.roleId === 1) {
-      // Super Admin - no filter
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       if (!userInfo.tenantId) {
         return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
       }
-      customersQuery += ' WHERE tenant_id = ?'
-      customersParams.push(userInfo.tenantId)
-    } else if (userInfo.roleId === 4) {
-      customersQuery += ' WHERE assigned_to = ?'
-      customersParams.push(userInfo.userId)
-    } else {
-      customersQuery += ' WHERE 1 = 0'
     }
-    customersQuery += ' ORDER BY full_name'
-    const customers = customersParams.length
-      ? await c.env.DB.prepare(customersQuery).bind(...customersParams).all()
-      : await c.env.DB.prepare(customersQuery).all()
+    const { results: customerRows } = await loadCustomersForAdminForms(c, userInfo)
 
     // Get banks scoped by tenant (allow global banks if tenant_id is NULL)
     let banksQuery = 'SELECT id, bank_name FROM banks WHERE is_active = 1'
@@ -11521,7 +12099,15 @@ app.get('/admin/requests/new', async (c) => {
 
     // Get financing types - same query as "إضافة نسبة تمويل جديدة" so both dropdowns show the same options
     const financingTypes = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all()
-    
+
+    const newRequestCustomersJson = JSON.stringify(
+      customerRows.map((cust: any) => ({
+        id: cust.id,
+        name: cust.full_name || '',
+        text: `${cust.full_name} - ${cust.phone}`,
+      }))
+    ).replace(/</g, '\\u003c')
+
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -11549,18 +12135,32 @@ app.get('/admin/requests/new', async (c) => {
             
             <form id="newRequestForm" action="/api/requests" method="POST" enctype="application/x-www-form-urlencoded" class="space-y-6">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- اختيار العميل -->
+                <!-- اختيار العميل (قائمة منسدلة مع بحث في الصف الأول) -->
                 <div class="md:col-span-2">
-                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <label class="block text-sm font-bold text-gray-700 mb-2" id="newRequestCustomerLabel">
                     <i class="fas fa-user text-blue-600 ml-1"></i>
                     العميل *
                   </label>
-                  <select name="customer_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">-- اختر العميل --</option>
-                    ${customers.results.map((cust: any) => `
-                      <option value="${cust.id}">${cust.full_name} - ${cust.phone}</option>
-                    `).join('')}
-                  </select>
+                  <div class="relative" id="newRequestCustomerCombo">
+                    <input type="hidden" name="customer_id" id="newRequestCustomerId" value="" required>
+                    <button type="button" id="newRequestCustomerTrigger"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg text-right flex items-center justify-between gap-2 bg-white hover:border-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                            aria-expanded="false" aria-haspopup="listbox" aria-labelledby="newRequestCustomerLabel newRequestCustomerTriggerLabel">
+                      <span id="newRequestCustomerTriggerLabel" class="truncate text-gray-500">-- اختر العميل --</span>
+                      <i class="fas fa-chevron-down text-gray-400 shrink-0 text-sm transition-transform" id="newRequestCustomerChevron"></i>
+                    </button>
+                    <div id="newRequestCustomerPanel" class="hidden absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg flex flex-col max-h-72 overflow-hidden" role="presentation">
+                      <div class="p-2 border-b border-gray-200 shrink-0 bg-gray-50">
+                        <div class="relative">
+                          <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-sm"></i>
+                          <input type="text" id="newRequestCustomerFilter" autocomplete="off" role="combobox" aria-autocomplete="list"
+                                 class="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm bg-white"
+                                 placeholder="بحث بالاسم...">
+                        </div>
+                      </div>
+                      <ul id="newRequestCustomerOptions" class="overflow-y-auto py-1 min-h-0 flex-1" role="listbox"></ul>
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- نوع التمويل -->
@@ -11601,8 +12201,31 @@ app.get('/admin/requests/new', async (c) => {
                     <option value="36">36 شهر (3 سنوات)</option>
                     <option value="48">48 شهر (4 سنوات)</option>
                     <option value="60">60 شهر (5 سنوات)</option>
+                    <option value="72">72 شهر (6 سنوات)</option>
                     <option value="84">84 شهر (7 سنوات)</option>
+                    <option value="96">96 شهر (8 سنوات)</option>
+                    <option value="108">108 شهر (9 سنوات)</option>
                     <option value="120">120 شهر (10 سنوات)</option>
+                    <option value="132">132 شهر (11 سنوات)</option>
+                    <option value="144">144 شهر (12 سنوات)</option>
+                    <option value="156">156 شهر (13 سنوات)</option>
+                    <option value="168">168 شهر (14 سنوات)</option>
+                    <option value="180">180 شهر (15 سنوات)</option>
+                    <option value="192">192 شهر (16 سنوات)</option>
+                    <option value="204">204 شهر (17 سنوات)</option>
+                    <option value="216">216 شهر (18 سنوات)</option>
+                    <option value="228">228 شهر (19 سنوات)</option>
+                    <option value="240">240 شهر (20 سنوات)</option>
+                    <option value="252">252 شهر (21 سنوات)</option>
+                    <option value="264">264 شهر (22 سنوات)</option>
+                    <option value="276">276 شهر (23 سنوات)</option>
+                    <option value="288">288 شهر (24 سنوات)</option>
+                    <option value="300">300 شهر (25 سنوات)</option>
+                    <option value="312">312 شهر (26 سنوات)</option>
+                    <option value="324">324 شهر (27 سنوات)</option>
+                    <option value="336">336 شهر (28 سنوات)</option>
+                    <option value="348">348 شهر (29 سنوات)</option>
+                    <option value="360">360 شهر (30 سنوات)</option>
                   </select>
                 </div>
                 
@@ -11667,32 +12290,94 @@ app.get('/admin/requests/new', async (c) => {
                 </a>
               </div>
             </form>
-            <div class="mt-6 border-t pt-6">
-              <h2 class="text-lg font-bold text-gray-800 mb-3">
-                <i class="fas fa-terminal text-indigo-600 ml-2"></i>
-                سجلات المتصفح واستجابة الـ API
-              </h2>
-              <div id="browserLogs" class="bg-gray-900 text-green-200 text-sm rounded-lg p-4 max-h-64 overflow-auto whitespace-pre-wrap"></div>
-            </div>
           </div>
         </div>
+        <script type="application/json" id="newRequestCustomersJSON">${newRequestCustomersJson}</script>
         <script>
           (function() {
-            const logsEl = document.getElementById('browserLogs');
             const form = document.getElementById('newRequestForm');
-
-            function writeLog(label, data) {
-              const timestamp = new Date().toLocaleTimeString('ar-SA');
-              const payload = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-              logsEl.textContent += '[' + timestamp + '] ' + label + '\\n' + payload + '\\n\\n';
-              logsEl.scrollTop = logsEl.scrollHeight;
+            const combo = document.getElementById('newRequestCustomerCombo');
+            const hidden = document.getElementById('newRequestCustomerId');
+            const trigger = document.getElementById('newRequestCustomerTrigger');
+            const triggerLabel = document.getElementById('newRequestCustomerTriggerLabel');
+            const chevron = document.getElementById('newRequestCustomerChevron');
+            const panel = document.getElementById('newRequestCustomerPanel');
+            const filterInput = document.getElementById('newRequestCustomerFilter');
+            const listEl = document.getElementById('newRequestCustomerOptions');
+            const jsonEl = document.getElementById('newRequestCustomersJSON');
+            var customerRows = [];
+            if (jsonEl && jsonEl.textContent) {
+              try { customerRows = JSON.parse(jsonEl.textContent); } catch (e) { customerRows = []; }
             }
-
+            function isOpen() { return panel && !panel.classList.contains('hidden'); }
+            function setOpen(open) {
+              if (!panel || !trigger || !chevron) return;
+              panel.classList.toggle('hidden', !open);
+              trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+              chevron.classList.toggle('rotate-180', open);
+              if (open && filterInput) {
+                filterInput.value = '';
+                renderCustomerList('');
+                setTimeout(function () { filterInput.focus(); }, 0);
+              }
+            }
+            function renderCustomerList(q) {
+              if (!listEl) return;
+              q = (q || '').toLowerCase().replace(/\\s+/g, ' ').trim();
+              var sel = hidden ? String(hidden.value) : '';
+              listEl.innerHTML = '';
+              var any = false;
+              customerRows.forEach(function (row) {
+                var idStr = String(row.id);
+                var text = String(row.text || '');
+                var nameOnly = String(row.name != null ? row.name : '').toLowerCase();
+                var match = !q || nameOnly.indexOf(q) !== -1;
+                var isSel = sel && idStr === sel;
+                if (!match && !isSel) return;
+                any = true;
+                var li = document.createElement('li');
+                li.setAttribute('role', 'option');
+                li.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                li.setAttribute('data-id', idStr);
+                li.className = 'px-4 py-2.5 cursor-pointer hover:bg-purple-50 text-right text-sm' + (isSel ? ' bg-purple-100 font-semibold' : '');
+                li.textContent = text;
+                li.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+                li.addEventListener('click', function () {
+                  if (hidden) hidden.value = idStr;
+                  if (triggerLabel) {
+                    triggerLabel.textContent = text;
+                    triggerLabel.classList.remove('text-gray-500');
+                    triggerLabel.classList.add('text-gray-900');
+                  }
+                  setOpen(false);
+                });
+                listEl.appendChild(li);
+              });
+              if (!any) {
+                var empty = document.createElement('li');
+                empty.className = 'px-4 py-3 text-center text-gray-500 text-sm';
+                empty.textContent = 'لا توجد نتائج';
+                empty.setAttribute('role', 'presentation');
+                listEl.appendChild(empty);
+              }
+            }
+            if (combo && trigger && panel && filterInput && hidden) {
+              trigger.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                setOpen(!isOpen());
+              });
+              filterInput.addEventListener('input', function () {
+                renderCustomerList(filterInput.value);
+              });
+              filterInput.addEventListener('click', function (ev) { ev.stopPropagation(); });
+              combo.addEventListener('click', function (ev) { ev.stopPropagation(); });
+              document.addEventListener('click', function () { setOpen(false); });
+              document.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Escape') setOpen(false);
+              });
+            }
             form.addEventListener('submit', async (event) => {
               event.preventDefault();
-              logsEl.textContent = '';
-              writeLog('بدء إرسال الطلب...', 'POST /api/requests');
-
               try {
                 const formData = new FormData(form);
                 const response = await fetch('/api/requests', {
@@ -11703,7 +12388,6 @@ app.get('/admin/requests/new', async (c) => {
                     'X-Requested-With': 'fetch'
                   }
                 });
-
                 const contentType = response.headers.get('content-type') || '';
                 let body;
                 if (contentType.includes('application/json')) {
@@ -11711,21 +12395,11 @@ app.get('/admin/requests/new', async (c) => {
                 } else {
                   body = await response.text();
                 }
-
-                writeLog('استجابة API:', {
-                  status: response.status,
-                  ok: response.ok,
-                  body
-                });
-
                 if (response.ok && body && body.success) {
-                  writeLog('تم الحفظ بنجاح', body);
-                  setTimeout(() => {
-                    window.location.href = '/admin/requests';
-                  }, 800);
+                  window.location.href = '/admin/requests';
                 }
               } catch (error) {
-                writeLog('خطأ في الطلب', { message: error?.message || String(error) });
+                console.error('Request error:', error);
               }
             });
           })();
@@ -12157,7 +12831,21 @@ app.get('/admin/customers/:id/edit', async (c) => {
     }
     const obligationsResult = await c.env.DB.prepare('SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(id).all()
     const obligations = (obligationsResult.results || []) as Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
-    
+    const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, (customer as any).tenant_id ?? null)
+
+    let editSolutionsInitial: Array<{ note?: string }> = []
+    try {
+      const sj = (customer as any).solutions_json as string | null | undefined
+      if (sj) {
+        const p = JSON.parse(sj)
+        if (Array.isArray(p)) {
+          editSolutionsInitial = p.map((item: unknown) => ({
+            note: typeof item === 'string' ? item : String((item as { note?: string })?.note ?? '')
+          }))
+        }
+      }
+    } catch (_) {}
+
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -12276,6 +12964,36 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <input type="number" name="monthly_salary" step="0.01" value="${(customer as any).monthly_salary ?? ''}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 </div>
               </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-sticky-note text-gray-600 ml-1"></i>
+                  ملاحظات
+                </label>
+                <textarea name="notes" rows="2" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="أي ملاحظات إضافية (اختياري)">${((customer as any).notes || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
+              </div>
+              <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">
+                  <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
+                  الحلول المقترحة
+                </h3>
+                <input type="hidden" name="solutions_json" id="edit_solutions_json" value="[]">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="border-b border-gray-300 text-right">
+                        <th class="py-2 px-2 w-20">رقم الحل</th>
+                        <th class="py-2 px-2">نص الحل</th>
+                        <th class="py-2 px-2 w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="edit-solutions-tbody"></tbody>
+                  </table>
+                </div>
+                <button type="button" id="edit-add-solution-row" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                  <i class="fas fa-plus ml-1"></i>
+                  إضافة صف
+                </button>
+              </div>
               <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <h3 class="text-sm font-bold text-gray-700 mb-3">
                   <i class="fas fa-credit-card text-red-600 ml-1"></i>
@@ -12333,17 +13051,58 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   updateEditJobType();
                   document.getElementById('edit-customer-form').addEventListener('submit',function(){ if(jobTypeEl.value==='military'&&militarySelect&&jobTitleInput){ jobTitleInput.value=militarySelect.value||''; jobTitleInput.disabled=false; } });
                 }
+                var editSolutionsInitial = ${JSON.stringify(editSolutionsInitial)};
+                var editSolTbody = document.getElementById('edit-solutions-tbody');
+                var editSolAddBtn = document.getElementById('edit-add-solution-row');
+                var editSolHidden = document.getElementById('edit_solutions_json');
+                if(editSolTbody&&editSolAddBtn&&editSolHidden){
+                  function editSolRefreshNumbers(){
+                    var rows = editSolTbody.querySelectorAll('tr');
+                    for(var si = 0; si < rows.length; si++){
+                      var c = rows[si].querySelector('.edit-sol-num-cell');
+                      if(c) c.textContent = String(si + 1);
+                    }
+                  }
+                  function addEditSolRow(data){
+                    data = data || {};
+                    var tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-200';
+                    tr.innerHTML = '<td class="py-1 px-2 edit-sol-num-cell text-center text-gray-700 font-medium w-20">1</td>'+
+                      '<td class="py-1 px-2"><input type="text" class="edit-sol-note w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></td>'+
+                      '<td class="py-1 px-2"><button type="button" class="edit-sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+                    if(data.note) tr.querySelector('.edit-sol-note').value = data.note;
+                    tr.querySelector('.edit-sol-remove').onclick = function(){ tr.remove(); editSolRefreshNumbers(); };
+                    editSolTbody.appendChild(tr);
+                    editSolRefreshNumbers();
+                  }
+                  editSolutionsInitial.forEach(function(s){ addEditSolRow(s); });
+                  if(editSolutionsInitial.length === 0) addEditSolRow();
+                  editSolAddBtn.onclick = function(){ addEditSolRow(); };
+                }
                 var editObligationsInitial = ${JSON.stringify(obligations)};
                 var editTbody = document.getElementById('edit-obligations-tbody');
                 var editAddBtn = document.getElementById('edit-add-obligation-row');
                 var editHidden = document.getElementById('edit_obligations_json');
                 if(editTbody&&editAddBtn&&editHidden){
+                  var editObligationTypeNames=${JSON.stringify(obligationTypeNames)};
+                  function editEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+                  function buildEditObligSelect(selectedValue){
+                    var sel=selectedValue==null?'':String(selectedValue);
+                    var opts='<option value="">— اختر نوع الالتزام —</option>';
+                    for(var i=0;i<editObligationTypeNames.length;i++){
+                      var name=editObligationTypeNames[i];
+                      opts+='<option value="'+editEsc(name)+'"'+(sel===name?' selected':'')+'>'+editEsc(name)+'</option>';
+                    }
+                    if(sel&&editObligationTypeNames.indexOf(sel)===-1){
+                      opts+='<option value="'+editEsc(sel)+'" selected>'+editEsc(sel)+'</option>';
+                    }
+                    return '<select class="edit-oblig-type w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">'+opts+'</select>';
+                  }
                   function addEditRow(data){
                     data=data||{};
                     var tr=document.createElement('tr');
                     tr.className='border-b border-gray-200';
-                    tr.innerHTML='<td class="py-1 px-2"><input type="text" class="edit-oblig-type w-full px-2 py-1.5 border rounded" placeholder="نوع الالتزام"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="date" class="edit-oblig-due w-full px-2 py-1.5 border rounded"></td><td class="py-1 px-2"><button type="button" class="edit-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                    if(data.obligation_type) tr.querySelector('.edit-oblig-type').value=data.obligation_type;
+                    tr.innerHTML='<td class="py-1 px-2">'+buildEditObligSelect(data.obligation_type||'')+'</td><td class="py-1 px-2"><input type="number" class="edit-oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="date" class="edit-oblig-due w-full px-2 py-1.5 border rounded"></td><td class="py-1 px-2"><button type="button" class="edit-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
                     if(data.total_amount!=null) tr.querySelector('.edit-oblig-total').value=data.total_amount;
                     if(data.monthly_installment!=null) tr.querySelector('.edit-oblig-monthly').value=data.monthly_installment;
                     if(data.due_date) tr.querySelector('.edit-oblig-due').value=data.due_date;
@@ -12365,6 +13124,17 @@ app.get('/admin/customers/:id/edit', async (c) => {
                       arr.push({ obligation_type: typeEl.value||'', total_amount: parseFloat(totalEl.value)||0, monthly_installment: parseFloat(monthlyEl.value)||0, due_date: dueEl&&dueEl.value?dueEl.value:null });
                     });
                     editHidden.value=JSON.stringify(arr);
+                    var esh=document.getElementById('edit_solutions_json');
+                    if(esh&&editSolTbody){
+                      var srows=editSolTbody.querySelectorAll('tr');
+                      var sarr=[];
+                      srows.forEach(function(tr){
+                        var ne=tr.querySelector('.edit-sol-note');
+                        if(!ne) return;
+                        sarr.push({ note: (ne.value||'').trim() });
+                      });
+                      esh.value=JSON.stringify(sarr);
+                    }
                   });
                 }
               })();
@@ -13370,7 +14140,7 @@ app.post('/api/banks/:id', async (c) => {
 app.get('/admin/banks/:id/delete', async (c) => {
   try {
     const id = c.req.param('id')
-    await c.env.DB.prepare('DELETE FROM banks WHERE id = ?').bind(id).run()
+    await deleteBankAndDependents(c.env.DB, id)
     return c.redirect('/admin/banks')
   } catch (error) {
     return c.html('<h1>خطأ في حذف البنك</h1>')
@@ -17707,6 +18477,64 @@ app.get('/api/hr/reports/:type', async (c) => {
   }
 });
 
+// CONTRACTS MODULE (brokerage contracts — reference UI + D1 API)
+// ===============================================
+registerContractsModuleApi(app, getUserInfo)
+
+app.get('/admin/contracts', (c) => c.html(contractsDashboardPage))
+app.get('/admin/contracts/list', (c) => c.html(contractsListPage))
+app.get('/admin/contracts/new', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId || !userInfo.roleId) {
+    return c.redirect('/login')
+  }
+  if ((userInfo.roleId === 2 || userInfo.roleId === 3) && !userInfo.tenantId) {
+    return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
+  }
+  const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true })
+  const escAttr = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const escText = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const optionsHtml = (results as any[]).map((cust: any) => {
+    const natId = (cust.national_id && !String(cust.national_id).startsWith('TEMP-')) ? String(cust.national_id) : ''
+    const label = escText(cust.full_name || '')
+      + (cust.phone ? ' — ' + escText(cust.phone) : '')
+      + (natId ? ' (' + escText(natId) + ')' : '')
+    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national_id="${escAttr(natId)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}">${label}</option>`
+  }).join('\n')
+
+  let partyOneSummaryHtml = ''
+  const tid = userInfo.tenantId
+  if (tid) {
+    const trow = await c.env.DB.prepare(
+      'SELECT company_name, contact_phone FROM tenants WHERE id = ?'
+    )
+      .bind(tid)
+      .first<{ company_name: string | null; contact_phone: string | null }>()
+    if (trow?.company_name) {
+      const phone = (trow.contact_phone || '').trim()
+      partyOneSummaryHtml = `<strong>${escText(trow.company_name)}</strong>${
+        phone ? ` — الجوال: ${escText(phone)}` : ''
+      }`
+    }
+  }
+  if (!partyOneSummaryHtml) {
+    partyOneSummaryHtml =
+      userInfo.roleId === 1
+        ? '<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>'
+        : '<span class="text-muted">تعذر تحميل بيانات الشركة.</span>'
+  }
+
+  const html = contractsNewPage
+    .replace('<!--CONTRACTS_CUSTOMERS_OPTIONS-->', optionsHtml)
+    .replace('<!--CONTRACTS_PARTY_ONE_SUMMARY-->', partyOneSummaryHtml)
+  return c.html(html)
+})
+app.get('/admin/contracts/view', (c) => c.html(contractsViewPage))
+app.get('/admin/contracts/templates', (c) => c.html(contractsTemplatesPage))
+app.get('/admin/contracts/notes', (c) => c.html(contractsNotesPage))
+app.get('/admin/contracts/archive', (c) => c.html(contractsArchivePage))
+app.get('/admin/contracts/settings', (c) => c.html(contractsSettingsPage))
+
 // HR SYSTEM ROUTES & APIs
 // ===============================================
 
@@ -18395,3 +19223,5 @@ app.get('/api/test/bindings', async (c) => {
 })
 
 export default app
+
+

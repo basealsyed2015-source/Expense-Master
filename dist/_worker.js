@@ -1,4 +1,4 @@
-var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw new Error("next() called multiple times");o=i;let n,d=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&r||void 0,p)try{n=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,n=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(n=await a(s));return n&&(s.finalized===!1||d)&&(s.res=n),s}},Te=Symbol(),De=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,o=(e instanceof de?e.raw.headers:e.headers).get("Content-Type");return o?.startsWith("multipart/form-data")||o?.startsWith("application/x-www-form-urlencoded")?Re(e,{all:a,dot:s}):{}};async function Re(e,t){const a=await e.formData();return a?Ce(a,t):{}}function Ce(e,t){const a=Object.create(null);return e.forEach((s,r)=>{t.all||r.endsWith("[]")?Be(a,r,s):a[r]=s}),t.dot&&Object.entries(a).forEach(([s,r])=>{s.includes(".")&&(Le(a,s,r),delete a[s])}),a}var Be=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Le=(e,t,a)=>{let s=e;const r=t.split(".");r.forEach((o,l)=>{l===r.length-1?s[o]=a:((!s[o]||typeof s[o]!="object"||Array.isArray(s[o])||s[o]instanceof File)&&(s[o]=Object.create(null)),s=s[o])})},re=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},$e=e=>{const{groups:t,path:a}=je(e),s=re(a);return Oe(s,t)},je=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const r=`@${s}`;return t.push([r,a]),r}),{groups:t,path:e}},Oe=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let r=e.length-1;r>=0;r--)if(e[r].includes(s)){e[r]=e[r].replace(s,t[a][1]);break}}return e},N={},qe=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return N[s]||(a[2]?N[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:N[s]=[e,a[1],!0]),N[s]}return null},X=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Me=e=>X(e,decodeURI),oe=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const r=t.charCodeAt(s);if(r===37){const o=t.indexOf("?",s),l=t.slice(a,o===-1?void 0:o);return Me(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63)break}return t.slice(a,s)},Ae=e=>{const t=oe(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},$=(e,t,...a)=>(a.length&&(t=$(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),le=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(r=>{if(r!==""&&!/\:/.test(r))s+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){a.length===0&&s===""?a.push("/"):a.push(s);const o=r.replace("?","");s+="/"+o,a.push(s)}else s+="/"+r}),a.filter((r,o,l)=>l.indexOf(r)===o)},J=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?X(e,ie):e):e,ne=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const n=l+t.length+2,d=e.indexOf("&",n);return J(e.slice(n,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const r={};s??=/[%+]/.test(e);let o=e.indexOf("?",8);for(;o!==-1;){const l=e.indexOf("&",o+1);let i=e.indexOf("=",o);i>l&&l!==-1&&(i=-1);let n=e.slice(o+1,i===-1?l===-1?void 0:l:i);if(s&&(n=J(n)),o=l,n==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=J(d))),a?(r[n]&&Array.isArray(r[n])||(r[n]=[]),r[n].push(d)):r[n]??=d}return t?r[t]:r},Ne=ne,Fe=(e,t)=>ne(e,t,!0),ie=decodeURIComponent,te=e=>X(e,ie),de=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#o()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#r(t);return a&&/\%/.test(a)?te(a):a}#o(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#r(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?te(s):s)}return e}#r(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Ne(this.url,e)}queries(e){return Fe(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await De(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const r=Object.keys(t)[0];return r?t[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[Te](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},He={Stringify:1},ce=async(e,t,a,s,r)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const o=e.callbacks;return o?.length?(r?r[0]+=e:r=[e],Promise.all(o.map(i=>i({phase:t,buffer:r,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(n=>ce(n,t,!1,s,r))).then(()=>r[0]))):Promise.resolve(e)},Pe="text/plain; charset=UTF-8",V=(e,t)=>({"Content-Type":e,...t}),Ue=class{#t;#e;env={};#a;finalized=!1;error;#o;#r;#s;#c;#i;#d;#n;#p;#u;constructor(e,t){this.#t=e,t&&(this.#r=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new de(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#r&&"respondWith"in this.#r)return this.#r;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#r)return this.#r;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#n??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const r of s)e.headers.append("set-cookie",r)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#n??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#o=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#l(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#n??new Headers;if(typeof t=="object"&&"headers"in t){const o=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of o)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[o,l]of Object.entries(a))if(typeof l=="string")s.set(o,l);else{s.delete(o);for(const i of l)s.append(o,i)}const r=typeof t=="number"?t:t?.status??this.#o;return new Response(e,{status:r,headers:s})}newResponse=(...e)=>this.#l(...e);body=(e,t,a)=>this.#l(e,t,a);text=(e,t,a)=>!this.#n&&!this.#o&&!t&&!a&&!this.finalized?new Response(e):this.#l(e,t,V(Pe,a));json=(e,t,a)=>this.#l(JSON.stringify(e),t,V("application/json",a));html=(e,t,a)=>{const s=r=>this.#l(r,t,V("text/html; charset=UTF-8",a));return typeof e=="object"?ce(e,He.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},I="ALL",We="all",ze=["get","post","put","delete","options","patch"],pe="Can not add a route since the matcher is already built.",ue=class extends Error{},Ye="__COMPOSED_HANDLER",Je=e=>e.text("404 Not Found",404),ae=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ve=class me{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...ze,We].forEach(o=>{this[o]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#o(o,this.#t,l),i.forEach(n=>{this.#o(o,this.#t,n)}),this)}),this.on=(o,l,...i)=>{for(const n of[l].flat()){this.#t=n;for(const d of[o].flat())i.map(p=>{this.#o(d.toUpperCase(),this.#t,p)})}return this},this.use=(o,...l)=>(typeof o=="string"?this.#t=o:(this.#t="*",l.unshift(o)),l.forEach(i=>{this.#o(I,this.#t,i)}),this);const{strict:s,...r}=t;Object.assign(this,r),this.getPath=s??!0?t.getPath??oe:Ae}#e(){const t=new me({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Je;errorHandler=ae;route(t,a){const s=this.basePath(t);return a.routes.map(r=>{let o;a.errorHandler===ae?o=r.handler:(o=async(l,i)=>(await ee([],a.errorHandler)(l,()=>r.handler(l,i))).res,o[Ye]=r.handler),s.#o(r.method,r.path,o)}),this}basePath(t){const a=this.#e();return a._basePath=$(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let r,o;s&&(typeof s=="function"?o=s:(o=s.optionHandler,s.replaceRequest===!1?r=n=>n:r=s.replaceRequest));const l=o?n=>{const d=o(n);return Array.isArray(d)?d:[d]}:n=>{let d;try{d=n.executionCtx}catch{}return[n.env,d]};r||=(()=>{const n=$(this._basePath,t),d=n==="/"?0:n.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,p)}})();const i=async(n,d)=>{const p=await a(r(n.req.raw),...l(n));if(p)return p;await d()};return this.#o(I,$(t,"*"),i),this}#o(t,a,s){t=t.toUpperCase(),a=$(this._basePath,a);const r={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,r]),this.routes.push(r)}#r(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,r){if(r==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const o=this.getPath(t,{env:s}),l=this.router.match(r,o),i=new Ue(t,{path:o,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#r(p,i)}return d instanceof Promise?d.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#r(p,i)):d??this.#a(i)}const n=ee(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await n(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#r(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,r)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,r):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${$("/",t)}`,a),s,r));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},ge=[];function Ge(e,t){const a=this.buildAllMatchers(),s=((r,o)=>{const l=a[r]||a[I],i=l[2][o];if(i)return i;const n=o.match(l[0]);if(!n)return[[],ge];const d=n.indexOf("",1);return[l[1][d],n]});return this.match=s,s(e,t)}var F="[^/]+",q=".*",M="(?:|/.*)",j=Symbol(),Qe=new Set(".\\+*[^]$()");function Xe(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===q||e===M?1:t===q||t===M?-1:e===F?1:t===F?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Ke=class Q{#t;#e;#a=Object.create(null);insert(t,a,s,r,o){if(t.length===0){if(this.#t!==void 0)throw j;if(o)return;this.#t=a;return}const[l,...i]=t,n=l==="*"?i.length===0?["","",q]:["","",F]:l==="/*"?["","",M]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(n){const p=n[1];let u=n[2]||F;if(p&&n[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw j;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==q&&m!==M))throw j;if(o)return;d=this.#a[u]=new Q,p!==""&&(d.#e=r.varIndex++)}!o&&p!==""&&s.push([p,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(p=>p.length>1&&p!==q&&p!==M))throw j;if(o)return;d=this.#a[l]=new Q}d.insert(i,a,s,r,o)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Xe).map(s=>{const r=this.#a[s];return(typeof r.#e=="number"?`(${s})@${r.#e}`:Qe.has(s)?`\\${s}`:s)+r.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Ze=class{#t={varIndex:0};#e=new Ke;insert(e,t,a){const s=[],r=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,n=>{const d=`@\\${l}`;return r[l]=[d,n],l++,i=!0,d}),!i)break}const o=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=r.length-1;l>=0;l--){const[i]=r[l];for(let n=o.length-1;n>=0;n--)if(o[n].indexOf(i)!==-1){o[n]=o[n].replace(i,r[l][1]);break}}return this.#e.insert(o,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,l)=>o!==void 0?(a[++t]=Number(o),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},et=[/^$/,[],Object.create(null)],be=Object.create(null);function fe(e){return be[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function tt(){be=Object.create(null)}function at(e){const t=new Ze,a=[];if(e.length===0)return et;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,p],[u,m])=>d?1:u?-1:p.length-m.length),r=Object.create(null);for(let d=0,p=-1,u=s.length;d<u;d++){const[m,g,b]=s[d];m?r[g]=[b.map(([h])=>[h,Object.create(null)]),ge]:p++;let f;try{f=t.insert(g,p,m)}catch(h){throw h===j?new ue(g):h}m||(a[p]=b.map(([h,y])=>{const _=Object.create(null);for(y-=1;y>=0;y--){const[v,w]=f[y];_[v]=w}return[h,_]}))}const[o,l,i]=t.buildRegExp();for(let d=0,p=a.length;d<p;d++)for(let u=0,m=a[d].length;u<m;u++){const g=a[d][u]?.[1];if(!g)continue;const b=Object.keys(g);for(let f=0,h=b.length;f<h;f++)g[b[f]]=i[g[b[f]]]}const n=[];for(const d in l)n[d]=a[l[d]];return[o,n,r]}function L(e,t){if(e){for(const a of Object.keys(e).sort((s,r)=>r.length-s.length))if(fe(a).test(t))return[...e[a]]}}var st=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[I]:Object.create(null)},this.#e={[I]:Object.create(null)}}add(e,t,a){const s=this.#t,r=this.#e;if(!s||!r)throw new Error(pe);s[e]||[s,r].forEach(i=>{i[e]=Object.create(null),Object.keys(i[I]).forEach(n=>{i[e][n]=[...i[I][n]]})}),t==="/*"&&(t="*");const o=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=fe(t);e===I?Object.keys(s).forEach(n=>{s[n][t]||=L(s[n],t)||L(s[I],t)||[]}):s[e][t]||=L(s[e],t)||L(s[I],t)||[],Object.keys(s).forEach(n=>{(e===I||e===n)&&Object.keys(s[n]).forEach(d=>{i.test(d)&&s[n][d].push([a,o])})}),Object.keys(r).forEach(n=>{(e===I||e===n)&&Object.keys(r[n]).forEach(d=>i.test(d)&&r[n][d].push([a,o]))});return}const l=le(t)||[t];for(let i=0,n=l.length;i<n;i++){const d=l[i];Object.keys(r).forEach(p=>{(e===I||e===p)&&(r[p][d]||=[...L(s[p],d)||L(s[I],d)||[]],r[p][d].push([a,o-n+i+1]))})}}match=Ge;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,tt(),e}#a(e){const t=[];let a=e===I;return[this.#t,this.#e].forEach(s=>{const r=s[e]?Object.keys(s[e]).map(o=>[o,s[e][o]]):[];r.length!==0?(a||=!0,t.push(...r)):e!==I&&t.push(...Object.keys(s[I]).map(o=>[o,s[I][o]]))}),a?at(t):null}},rt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(pe);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,r=a.length;let o=0,l;for(;o<r;o++){const i=a[o];try{for(let n=0,d=s.length;n<d;n++)i.add(...s[n]);l=i.match(e,t)}catch(n){if(n instanceof ue)continue;throw n}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},O=Object.create(null),ot=class xe{#t;#e;#a;#o=0;#r=O;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const r=Object.create(null);r[t]={handler:a,possibleKeys:[],score:0},this.#t=[r]}this.#a=[]}insert(t,a,s){this.#o=++this.#o;let r=this;const o=$e(a),l=[];for(let i=0,n=o.length;i<n;i++){const d=o[i],p=o[i+1],u=qe(d,p),m=Array.isArray(u)?u[0]:d;if(m in r.#e){r=r.#e[m],u&&l.push(u[1]);continue}r.#e[m]=new xe,u&&(r.#a.push(u),l.push(u[1])),r=r.#e[m]}return r.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,n,d)=>d.indexOf(i)===n),score:this.#o}}),r}#s(t,a,s,r){const o=[];for(let l=0,i=t.#t.length;l<i;l++){const n=t.#t[l],d=n[a]||n[I],p={};if(d!==void 0&&(d.params=Object.create(null),o.push(d),s!==O||r&&r!==O))for(let u=0,m=d.possibleKeys.length;u<m;u++){const g=d.possibleKeys[u],b=p[d.score];d.params[g]=r?.[g]&&!b?r[g]:s[g]??r?.[g],p[d.score]=!0}}return o}search(t,a){const s=[];this.#r=O;let o=[this];const l=re(a),i=[];for(let n=0,d=l.length;n<d;n++){const p=l[n],u=n===d-1,m=[];for(let g=0,b=o.length;g<b;g++){const f=o[g],h=f.#e[p];h&&(h.#r=f.#r,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,f.#r)),s.push(...this.#s(h,t,f.#r))):m.push(h));for(let y=0,_=f.#a.length;y<_;y++){const v=f.#a[y],w=f.#r===O?{}:{...f.#r};if(v==="*"){const E=f.#e["*"];E&&(s.push(...this.#s(E,t,f.#r)),E.#r=w,m.push(E));continue}const[B,S,D]=v;if(!p&&!(D instanceof RegExp))continue;const k=f.#e[B],R=l.slice(n).join("/");if(D instanceof RegExp){const E=D.exec(R);if(E){if(w[S]=E[0],s.push(...this.#s(k,t,f.#r,w)),Object.keys(k.#e).length){k.#r=w;const Y=E[0].match(/\//)?.length??0;(i[Y]||=[]).push(k)}continue}}(D===!0||D.test(p))&&(w[S]=p,u?(s.push(...this.#s(k,t,w,f.#r)),k.#e["*"]&&s.push(...this.#s(k.#e["*"],t,w,f.#r))):(k.#r=w,m.push(k)))}}o=m.concat(i.shift()??[])}return s.length>1&&s.sort((n,d)=>n.score-d.score),[s.map(({handler:n,params:d})=>[n,d])]}},lt=class{name="TrieRouter";#t;constructor(){this.#t=new ot}add(e,t,a){const s=le(t);if(s){for(let r=0,o=s.length;r<o;r++)this.#t.insert(e,s[r],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ye=class extends Ve{constructor(e={}){super(e),this.router=e.router??new rt({routers:[new st,new lt]})}},nt=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(o=>typeof o=="string"?o==="*"?()=>o:l=>o===l?l:null:typeof o=="function"?o:l=>o.includes(l)?l:null)(a.origin),r=(o=>typeof o=="function"?o:Array.isArray(o)?()=>o:()=>[])(a.allowMethods);return async function(l,i){function n(p,u){l.res.headers.set(p,u)}const d=await s(l.req.header("origin")||"",l);if(d&&n("Access-Control-Allow-Origin",d),a.credentials&&n("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&n("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&n("Vary","Origin"),a.maxAge!=null&&n("Access-Control-Max-Age",a.maxAge.toString());const p=await r(l.req.header("origin")||"",l);p.length&&n("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(n("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const it=`<!DOCTYPE html>
+var le=(e,t,a)=>(s,n)=>{let l=-1;return r(0);async function r(i){if(i<=l)throw new Error("next() called multiple times");l=i;let o,d=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&n||void 0,p)try{o=await p(s,()=>r(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},He=Symbol(),Ue=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,l=(e instanceof ye?e.raw.headers:e.headers).get("Content-Type");return l?.startsWith("multipart/form-data")||l?.startsWith("application/x-www-form-urlencoded")?ze(e,{all:a,dot:s}):{}};async function ze(e,t){const a=await e.formData();return a?We(a,t):{}}function We(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?Ve(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(Ye(a,s,n),delete a[s])}),a}var Ve=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Ye=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((l,r)=>{r===n.length-1?s[l]=a:((!s[l]||typeof s[l]!="object"||Array.isArray(s[l])||s[l]instanceof File)&&(s[l]=Object.create(null)),s=s[l])})},ge=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Je=e=>{const{groups:t,path:a}=Ge(e),s=ge(a);return Xe(s,t)},Ge=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},Xe=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},J={},Qe=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return J[s]||(a[2]?J[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:J[s]=[e,a[1],!0]),J[s]}return null},ne=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Ke=e=>ne(e,decodeURI),fe=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const l=t.indexOf("?",s),r=t.slice(a,l===-1?void 0:l);return Ke(r.includes("%25")?r.replace(/%25/g,"%2525"):r)}else if(n===63)break}return t.slice(a,s)},Ze=e=>{const t=fe(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},P=(e,t,...a)=>(a.length&&(t=P(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),be=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const l=n.replace("?","");s+="/"+l,a.push(s)}else s+="/"+n}),a.filter((n,l,r)=>r.indexOf(n)===l)},te=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?ne(e,he):e):e,xe=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let r=e.indexOf("?",8);if(r===-1)return;for(e.startsWith(t,r+1)||(r=e.indexOf(`&${t}`,r+1));r!==-1;){const i=e.charCodeAt(r+t.length+1);if(i===61){const o=r+t.length+2,d=e.indexOf("&",o);return te(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";r=e.indexOf(`&${t}`,r+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let l=e.indexOf("?",8);for(;l!==-1;){const r=e.indexOf("&",l+1);let i=e.indexOf("=",l);i>r&&r!==-1&&(i=-1);let o=e.slice(l+1,i===-1?r===-1?void 0:r:i);if(s&&(o=te(o)),l=r,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,r===-1?void 0:r),s&&(d=te(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},et=xe,tt=(e,t)=>xe(e,t,!0),he=decodeURIComponent,ie=e=>ne(e,he),ye=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?ie(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?ie(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return et(this.url,e)}queries(e){return tt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await Ue(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(l=>(n==="json"&&(l=JSON.stringify(l)),new Response(l)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[He](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},at={Stringify:1},ve=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const l=e.callbacks;return l?.length?(n?n[0]+=e:n=[e],Promise.all(l.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>ve(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},st="text/plain; charset=UTF-8",ae=(e,t)=>({"Content-Type":e,...t}),nt=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#i;#d;#l;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new ye(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#l??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#i??=t=>this.html(t),this.#i(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#i=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#l??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#l??new Headers;if(typeof t=="object"&&"headers"in t){const l=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[r,i]of l)r.toLowerCase()==="set-cookie"?s.append(r,i):s.set(r,i)}if(a)for(const[l,r]of Object.entries(a))if(typeof r=="string")s.set(l,r);else{s.delete(l);for(const i of r)s.append(l,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#l&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,ae(st,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,ae("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,ae("text/html; charset=UTF-8",a));return typeof e=="object"?ve(e,at.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},k="ALL",rt="all",ot=["get","post","put","delete","options","patch"],we="Can not add a route since the matcher is already built.",_e=class extends Error{},lt="__COMPOSED_HANDLER",it=e=>e.text("404 Not Found",404),de=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},dt=class Ee{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...ot,rt].forEach(l=>{this[l]=(r,...i)=>(typeof r=="string"?this.#t=r:this.#r(l,this.#t,r),i.forEach(o=>{this.#r(l,this.#t,o)}),this)}),this.on=(l,r,...i)=>{for(const o of[r].flat()){this.#t=o;for(const d of[l].flat())i.map(p=>{this.#r(d.toUpperCase(),this.#t,p)})}return this},this.use=(l,...r)=>(typeof l=="string"?this.#t=l:(this.#t="*",r.unshift(l)),r.forEach(i=>{this.#r(k,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??fe:Ze}#e(){const t=new Ee({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=it;errorHandler=de;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let l;a.errorHandler===de?l=n.handler:(l=async(r,i)=>(await le([],a.errorHandler)(r,()=>n.handler(r,i))).res,l[lt]=n.handler),s.#r(n.method,n.path,l)}),this}basePath(t){const a=this.#e();return a._basePath=P(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,l;s&&(typeof s=="function"?l=s:(l=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const r=l?o=>{const d=l(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=P(this._basePath,t),d=o==="/"?0:o.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,p)}})();const i=async(o,d)=>{const p=await a(n(o.req.raw),...r(o));if(p)return p;await d()};return this.#r(k,P(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=P(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const l=this.getPath(t,{env:s}),r=this.router.match(n,l),i=new nt(t,{path:l,matchResult:r,env:s,executionCtx:a,notFoundHandler:this.#a});if(r[0].length===1){let d;try{d=r[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#n(p,i)}return d instanceof Promise?d.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#n(p,i)):d??this.#a(i)}const o=le(r[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${P("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},ke=[];function ct(e,t){const a=this.buildAllMatchers(),s=((n,l)=>{const r=a[n]||a[k],i=r[2][l];if(i)return i;const o=l.match(r[0]);if(!o)return[[],ke];const d=o.indexOf("",1);return[r[1][d],o]});return this.match=s,s(e,t)}var G="[^/]+",W=".*",V="(?:|/.*)",H=Symbol(),pt=new Set(".\\+*[^]$()");function ut(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===W||e===V?1:t===W||t===V?-1:e===G?1:t===G?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var mt=class se{#t;#e;#a=Object.create(null);insert(t,a,s,n,l){if(t.length===0){if(this.#t!==void 0)throw H;if(l)return;this.#t=a;return}const[r,...i]=t,o=r==="*"?i.length===0?["","",W]:["","",G]:r==="/*"?["","",V]:r.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const p=o[1];let u=o[2]||G;if(p&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw H;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==W&&m!==V))throw H;if(l)return;d=this.#a[u]=new se,p!==""&&(d.#e=n.varIndex++)}!l&&p!==""&&s.push([p,d.#e])}else if(d=this.#a[r],!d){if(Object.keys(this.#a).some(p=>p.length>1&&p!==W&&p!==V))throw H;if(l)return;d=this.#a[r]=new se}d.insert(i,a,s,n,l)}buildRegExpStr(){const a=Object.keys(this.#a).sort(ut).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:pt.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},gt=class{#t={varIndex:0};#e=new mt;insert(e,t,a){const s=[],n=[];for(let r=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${r}`;return n[r]=[d,o],r++,i=!0,d}),!i)break}const l=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let r=n.length-1;r>=0;r--){const[i]=n[r];for(let o=l.length-1;o>=0;o--)if(l[o].indexOf(i)!==-1){l[o]=l[o].replace(i,n[r][1]);break}}return this.#e.insert(l,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,l,r)=>l!==void 0?(a[++t]=Number(l),"$()"):(r!==void 0&&(s[Number(r)]=++t),"")),[new RegExp(`^${e}`),a,s]}},ft=[/^$/,[],Object.create(null)],Se=Object.create(null);function Ie(e){return Se[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function bt(){Se=Object.create(null)}function xt(e){const t=new gt,a=[];if(e.length===0)return ft;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,p],[u,m])=>d?1:u?-1:p.length-m.length),n=Object.create(null);for(let d=0,p=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?n[f]=[g.map(([y])=>[y,Object.create(null)]),ke]:p++;let b;try{b=t.insert(f,p,m)}catch(y){throw y===H?new _e(f):y}m||(a[p]=g.map(([y,h])=>{const w=Object.create(null);for(h-=1;h>=0;h--){const[v,_]=b[h];w[v]=_}return[y,w]}))}const[l,r,i]=t.buildRegExp();for(let d=0,p=a.length;d<p;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,y=g.length;b<y;b++)f[g[b]]=i[f[g[b]]]}const o=[];for(const d in r)o[d]=a[r[d]];return[l,o,n]}function N(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if(Ie(a).test(t))return[...e[a]]}}var ht=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[k]:Object.create(null)},this.#e={[k]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(we);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[k]).forEach(o=>{i[e][o]=[...i[k][o]]})}),t==="/*"&&(t="*");const l=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=Ie(t);e===k?Object.keys(s).forEach(o=>{s[o][t]||=N(s[o],t)||N(s[k],t)||[]}):s[e][t]||=N(s[e],t)||N(s[k],t)||[],Object.keys(s).forEach(o=>{(e===k||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,l])})}),Object.keys(n).forEach(o=>{(e===k||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,l]))});return}const r=be(t)||[t];for(let i=0,o=r.length;i<o;i++){const d=r[i];Object.keys(n).forEach(p=>{(e===k||e===p)&&(n[p][d]||=[...N(s[p],d)||N(s[k],d)||[]],n[p][d].push([a,l-o+i+1]))})}}match=ct;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,bt(),e}#a(e){const t=[];let a=e===k;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(l=>[l,s[e][l]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==k&&t.push(...Object.keys(s[k]).map(l=>[l,s[k][l]]))}),a?xt(t):null}},yt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(we);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let l=0,r;for(;l<n;l++){const i=a[l];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);r=i.match(e,t)}catch(o){if(o instanceof _e)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(l===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,r}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},U=Object.create(null),vt=class Te{#t;#e;#a;#r=0;#n=U;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const l=Je(a),r=[];for(let i=0,o=l.length;i<o;i++){const d=l[i],p=l[i+1],u=Qe(d,p),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&r.push(u[1]);continue}n.#e[m]=new Te,u&&(n.#a.push(u),r.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:r.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const l=[];for(let r=0,i=t.#t.length;r<i;r++){const o=t.#t[r],d=o[a]||o[k],p={};if(d!==void 0&&(d.params=Object.create(null),l.push(d),s!==U||n&&n!==U))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=p[d.score];d.params[f]=n?.[f]&&!g?n[f]:s[f]??n?.[f],p[d.score]=!0}}return l}search(t,a){const s=[];this.#n=U;let l=[this];const r=ge(a),i=[];for(let o=0,d=r.length;o<d;o++){const p=r[o],u=o===d-1,m=[];for(let f=0,g=l.length;f<g;f++){const b=l[f],y=b.#e[p];y&&(y.#n=b.#n,u?(y.#e["*"]&&s.push(...this.#s(y.#e["*"],t,b.#n)),s.push(...this.#s(y,t,b.#n))):m.push(y));for(let h=0,w=b.#a.length;h<w;h++){const v=b.#a[h],_=b.#n===U?{}:{...b.#n};if(v==="*"){const I=b.#e["*"];I&&(s.push(...this.#s(I,t,b.#n)),I.#n=_,m.push(I));continue}const[C,D,B]=v;if(!p&&!(B instanceof RegExp))continue;const S=b.#e[C],L=r.slice(o).join("/");if(B instanceof RegExp){const I=B.exec(L);if(I){if(_[D]=I[0],s.push(...this.#s(S,t,b.#n,_)),Object.keys(S.#e).length){S.#n=_;const E=I[0].match(/\//)?.length??0;(i[E]||=[]).push(S)}continue}}(B===!0||B.test(p))&&(_[D]=p,u?(s.push(...this.#s(S,t,_,b.#n)),S.#e["*"]&&s.push(...this.#s(S.#e["*"],t,_,b.#n))):(S.#n=_,m.push(S)))}}l=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},wt=class{name="TrieRouter";#t;constructor(){this.#t=new vt}add(e,t,a){const s=be(t);if(s){for(let n=0,l=s.length;n<l;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},Ce=class extends dt{constructor(e={}){super(e),this.router=e.router??new yt({routers:[new ht,new wt]})}},_t=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(l=>typeof l=="string"?l==="*"?()=>l:r=>l===r?r:null:typeof l=="function"?l:r=>l.includes(r)?r:null)(a.origin),n=(l=>typeof l=="function"?l:Array.isArray(l)?()=>l:()=>[])(a.allowMethods);return async function(r,i){function o(p,u){r.res.headers.set(p,u)}const d=await s(r.req.header("origin")||"",r);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),r.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const p=await n(r.req.header("origin")||"",r);p.length&&o("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=r.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),r.res.headers.append("Vary","Access-Control-Request-Headers")),r.res.headers.delete("Content-Length"),r.res.headers.delete("Content-Type"),new Response(null,{headers:r.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&r.header("Vary","Origin",{append:!0})}};const Et=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,dt=`<!DOCTYPE html>
+`,kt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,he=`<!DOCTYPE html>
+`,De=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -568,18 +568,30 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         <p class="text-sm text-gray-500 mt-1">الحد الأدنى: 3,000 ريال</p>
                     </div>
                     
-                    <!-- اختيار عميل (عرض عملاء الشركة فقط) -->
-                    <div id="calcClientLookupWrap">
-                        <label class="block text-gray-700 font-bold mb-2">
-                            <i class="fas fa-user text-amber-600 ml-2"></i>
-                            اختر العميل (اختياري)
-                        </label>
-                        <p class="text-sm text-gray-500 mb-2">لتحميل الراتب والالتزامات المحفوظة</p>
-                        <select id="calcCustomerSelect" class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">-- اختر العميل --</option>
-                        </select>
-                        <p id="calcLookupMessage" class="text-sm mt-2 hidden"></p>
+                    <!-- الحلول المقترحة (رقم تلقائي + نص) -->
+                    <div id="calcSolutionsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">
+                            <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
+                            الحلول المقترحة
+                        </h3>
+                        <div class="overflow-x-auto mb-2">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-300 text-right">
+                                        <th class="py-2 px-2 w-20">رقم الحل</th>
+                                        <th class="py-2 px-2">نص الحل</th>
+                                        <th class="py-2 px-2 w-16"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="calcSolutionsTbody"></tbody>
+                            </table>
+                        </div>
+                        <button type="button" id="calcAddSolutionRow" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            <i class="fas fa-plus ml-1"></i>
+                            إضافة صف
+                        </button>
                     </div>
+                    
                     <!-- الالتزامات المالية (جدول + إجمالي شهري) -->
                     <div id="calcObligationsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
                         <h3 class="text-sm font-bold text-gray-700 mb-2">
@@ -605,7 +617,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         </p>
                         <div class="flex gap-2 flex-wrap">
                             <button type="button" id="calcAddAdHocObligation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                <i class="fas fa-plus ml-1"></i> إضافة التزام مؤقت
+                                <i class="fas fa-plus ml-1"></i> إضافة التزام 
                             </button>
                             <button type="button" id="calcSaveObligationsToClient" class="text-green-600 hover:text-green-800 text-sm font-medium hidden">
                                 <i class="fas fa-save ml-1"></i> حفظ الالتزامات على العميل
@@ -972,9 +984,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         let selectedCustomer = null;
         let savedObligations = [];
         let adHocObligations = [];
+        let calcSolutionRows = [{ note: '' }];
         let selectedBestOffer = null;
         let allBanks = [];
         let financingTypes = [];
+        let obligationTypeList = [];
         let allRates = [];
         const showFilterDebug = true;
         
@@ -1075,11 +1089,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 // Build API URLs with tenant_id if available
                 const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}&include_global=0\` : '/api/banks';
                 const ratesUrl = tenantId ? \`/api/rates?tenant_id=\${tenantId}\` : '/api/rates';
+                const obligTypesUrl = tenantId ? \`/api/obligation-types?tenant_id=\${tenantId}\` : '/api/obligation-types';
                 
-                const [banksRes, typesRes, ratesRes] = await Promise.all([
+                const [banksRes, typesRes, ratesRes, obligTypesRes] = await Promise.all([
                     axios.get(banksUrl),
                     axios.get('/api/financing-types'),
-                    axios.get(ratesUrl)
+                    axios.get(ratesUrl),
+                    axios.get(obligTypesUrl)
                 ]);
                 
                 allBanks = (banksRes.data.data || []).map((bank) => ({
@@ -1087,6 +1103,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     id: toNumber(bank.id, bank.id)
                 }));
                 financingTypes = typesRes.data.data || [];
+                obligationTypeList = (obligTypesRes.data && obligTypesRes.data.success && Array.isArray(obligTypesRes.data.data))
+                    ? obligTypesRes.data.data.map((row) => row.type_name).filter(Boolean)
+                    : [];
+                if (!obligationTypeList.length) {
+                    obligationTypeList = ['قرض شخصي', 'قرض عقاري', 'تمويل سيارة قائم', 'بطاقة ائتمان', 'تمويل تعاوني', 'تقسيط / شراء بالأقساط', 'سلفة راتب', 'التزامات أخرى'];
+                }
                 allRates = (ratesRes.data.data || []).map((rate) => ({
                     ...rate,
                     bank_id: toNumber(rate.bank_id, rate.bank_id),
@@ -1124,6 +1146,43 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             }
         }
         
+        function syncCalcSolutionRowsFromDom() {
+            const tbody = document.getElementById('calcSolutionsTbody');
+            if (!tbody) return;
+            const next = [];
+            tbody.querySelectorAll('tr').forEach((tr) => {
+                const el = tr.querySelector('.calc-sol-note');
+                next.push({ note: el ? el.value : '' });
+            });
+            calcSolutionRows = next.length ? next : [{ note: '' }];
+        }
+        
+        function renderCalcSolutionsTable() {
+            const tbody = document.getElementById('calcSolutionsTbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            (calcSolutionRows || []).forEach((row, i) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200';
+                tr.innerHTML = '<td class="py-1 px-2 text-center text-gray-700 font-medium w-20">' + (i + 1) + '</td>' +
+                    '<td class="py-1 px-2"><input type="text" class="calc-sol-note w-full px-2 py-1.5 border rounded"></td>' +
+                    '<td class="py-1 px-2"><button type="button" class="calc-sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+                tr.querySelector('.calc-sol-note').value = row.note || '';
+                tr.querySelector('.calc-sol-remove').addEventListener('click', () => {
+                    syncCalcSolutionRowsFromDom();
+                    calcSolutionRows.splice(i, 1);
+                    if (!calcSolutionRows.length) calcSolutionRows.push({ note: '' });
+                    renderCalcSolutionsTable();
+                });
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function getCalcSolutionsForSave() {
+            syncCalcSolutionRowsFromDom();
+            return calcSolutionRows.map((r) => ({ note: (r.note || '').trim() }));
+        }
+        
         function getCalcObligationsTotal() {
             const saved = (savedObligations || []).reduce((s, o) => s + (Number(o.monthly_installment) || 0), 0);
             let adhoc = 0;
@@ -1152,7 +1211,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             (adHocObligations || []).forEach((o, i) => {
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-gray-200 calc-adhoc-row';
-                tr.innerHTML = \`<td class="py-1 px-2"><input type="text" class="calc-adhoc-type w-full px-2 py-1 border rounded" value="\${escapeHtml(o.obligation_type || '')}" placeholder="نوع"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
+                tr.innerHTML = \`<td class="py-1 px-2">\${buildCalcObligSelectHtml(o.obligation_type || '')}</td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
                 const removeBtn = tr.querySelector('.calc-adhoc-remove');
                 removeBtn.addEventListener('click', () => { adHocObligations.splice(i, 1); renderCalcObligationsTable(); });
                 tbody.appendChild(tr);
@@ -1168,69 +1227,29 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             return div.innerHTML;
         }
         
+        function buildCalcObligSelectHtml(selectedValue) {
+            const sel = selectedValue == null ? '' : String(selectedValue);
+            let opts = '<option value="">— اختر النوع —</option>';
+            obligationTypeList.forEach(function (name) {
+                const e = escapeHtml(name);
+                opts += '<option value="' + e.replace(/"/g, '&quot;') + '"' + (sel === name ? ' selected' : '') + '>' + e + '</option>';
+            });
+            if (sel && obligationTypeList.indexOf(sel) === -1) {
+                const e = escapeHtml(sel);
+                opts += '<option value="' + e.replace(/"/g, '&quot;') + '" selected>' + e + '</option>';
+            }
+            return '<select class="calc-adhoc-type w-full px-2 py-1 border rounded">' + opts + '</select>';
+        }
+        
         function formatNumber(n) {
             return Number(n).toLocaleString('ar-SA');
         }
         
-        const pathParts = window.location.pathname.split('/');
-        const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
-        const showCustomerSelect = typeof window.CALCULATOR_SHOW_CUSTOMER_SELECT !== 'undefined' && window.CALCULATOR_SHOW_CUSTOMER_SELECT;
-        if (tenantSlug && showCustomerSelect) {
-            const selectEl = document.getElementById('calcCustomerSelect');
-            const msgEl = document.getElementById('calcLookupMessage');
-            async function loadCustomers() {
-                try {
-                    const res = await axios.get('/api/calculator/customers', { params: { tenant_slug: tenantSlug } });
-                    if (!res.data.success || !Array.isArray(res.data.customers)) return;
-                    const select = document.getElementById('calcCustomerSelect');
-                    if (!select) return;
-                    select.innerHTML = '<option value="">-- اختر العميل --</option>';
-                    (res.data.customers || []).forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c.id;
-                        opt.textContent = (c.full_name || '') + (c.phone ? ' - ' + c.phone : '');
-                        select.appendChild(opt);
-                    });
-                } catch (err) {
-                    if (msgEl) { msgEl.textContent = 'تعذر تحميل قائمة العملاء'; msgEl.classList.remove('hidden'); msgEl.className = 'text-sm mt-2 text-red-600'; }
-                }
-            }
-            loadCustomers();
-            selectEl.addEventListener('change', async () => {
-                const customerId = selectEl.value;
-                msgEl.classList.add('hidden');
-                if (!customerId) {
-                    selectedCustomer = null;
-                    savedObligations = [];
-                    renderCalcObligationsTable();
-                    const salaryInput = document.getElementById('salary');
-                    if (salaryInput) salaryInput.value = '';
-                    return;
-                }
-                try {
-                    const res = await axios.get('/api/calculator/customer-by-id', { params: { customer_id: customerId, tenant_slug: tenantSlug } });
-                    if (res.data.success && res.data.customer) {
-                        selectedCustomer = res.data.customer;
-                        savedObligations = res.data.obligations || [];
-                        adHocObligations = adHocObligations || [];
-                        renderCalcObligationsTable();
-                        const salaryInput = document.getElementById('salary');
-                        if (salaryInput) {
-                            const val = selectedCustomer.monthly_salary ?? selectedCustomer.basic_salary;
-                            salaryInput.value = (val != null && val !== '') ? String(val) : '';
-                        }
-                    } else {
-                        selectedCustomer = null;
-                        savedObligations = [];
-                        renderCalcObligationsTable();
-                    }
-                } catch (err) {
-                    if (msgEl) { msgEl.textContent = 'حدث خطأ أثناء تحميل بيانات العميل'; msgEl.classList.remove('hidden'); msgEl.className = 'text-sm mt-2 text-red-600'; }
-                }
-            });
-        } else {
-            document.getElementById('calcClientLookupWrap').classList.add('hidden');
-        }
+        document.getElementById('calcAddSolutionRow').addEventListener('click', () => {
+            syncCalcSolutionRowsFromDom();
+            calcSolutionRows.push({ note: '' });
+            renderCalcSolutionsTable();
+        });
         
         document.getElementById('calcAddAdHocObligation').addEventListener('click', () => {
             adHocObligations = adHocObligations || [];
@@ -1262,6 +1281,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         });
         
         renderCalcObligationsTable();
+        renderCalcSolutionsTable();
         
         // Step 1: Main form submission
         document.getElementById('calculatorForm').addEventListener('submit', (e) => {
@@ -1326,7 +1346,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     amount: calculationData.amount,
                     obligations: calculationData.obligations,
                     financing_type_id: calculationData.financing_type_id,
-                    tenant_slug: tenantSlug
+                    tenant_slug: tenantSlug,
+                    solutions: getCalcSolutionsForSave()
                 });
                 
                 console.log('✅ تم حفظ بيانات العميل في قاعدة البيانات:', response.data);
@@ -2018,8 +2039,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             selectedCustomer = null;
             savedObligations = [];
             adHocObligations = [];
+            calcSolutionRows = [{ note: '' }];
             selectedBestOffer = null;
             if (typeof renderCalcObligationsTable === 'function') renderCalcObligationsTable();
+            if (typeof renderCalcSolutionsTable === 'function') renderCalcSolutionsTable();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         
@@ -2070,7 +2093,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,ct=`<!DOCTYPE html>
+`,St=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2321,7 +2344,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,pt=`<!DOCTYPE html>
+`,It=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2657,7 +2680,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,ut=`<!DOCTYPE html>
+`,Tt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2956,7 +2979,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,mt=`<!DOCTYPE html>
+`,Ct=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3445,7 +3468,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,ve=`<!DOCTYPE html>
+`,Be=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3688,6 +3711,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
                 </a>
 
+                <!-- Contracts (brokerage) -->
+                <a href="/admin/contracts" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-file-contract text-xl text-amber-700 group-hover:text-amber-800"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-800">إدارة العقود</span>
+                </a>
+
                 <hr class="my-4">
 
                 <!-- Users -->
@@ -3833,6 +3862,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         <i class="fas fa-users-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الموارد البشرية HR</div>
                         <div class="text-xs mt-1 opacity-90">إدارة الموظفين</div>
+                    </a>
+                    
+                    <a href="/admin/contracts" class="quick-access-btn bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-file-contract text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">إدارة العقود</div>
+                        <div class="text-xs mt-1 opacity-90">عقود وسندات</div>
                     </a>
                     
                     <!-- زر الإشعارات -->
@@ -5372,7 +5407,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         '/admin/reports',
                         '/admin/payments',
                         '/admin/settings',
-                        '/admin/hr'
+                        '/admin/hr',
+                        '/admin/contracts'
                     ],
                     '2': [ // Company Admin (companyadmin)
                         '/admin/dashboard',
@@ -5384,6 +5420,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         '/admin/payments',
                         '/admin/users',
                         '/admin/hr',
+                        '/admin/contracts',
                         '/admin/notifications',
                         '/calculator',
                         '/'
@@ -5395,6 +5432,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         '/admin/reports',
                         '/admin/banks',
                         '/admin/rates',
+                        '/admin/contracts',
                         '/calculator',
                         '/'
                     ],
@@ -5402,6 +5440,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
+                        '/admin/contracts',
                         '/calculator',
                         '/'
                     ]
@@ -7079,9 +7118,27 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         }
         
         // Form Submissions
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const addCustomerForm = document.getElementById('addCustomerForm');
             if (addCustomerForm) {
+                let modalObligationTypeNames = [];
+                try {
+                    let q = '';
+                    const userStr = localStorage.getItem('userData') || localStorage.getItem('user');
+                    if (userStr) {
+                        const u = JSON.parse(userStr);
+                        if (u.tenant_id) q = '?tenant_id=' + encodeURIComponent(String(u.tenant_id));
+                    }
+                    const otRes = await axios.get('/api/obligation-types' + q);
+                    if (otRes.data && otRes.data.success && Array.isArray(otRes.data.data)) {
+                        modalObligationTypeNames = otRes.data.data.map(function (x) { return x.type_name; });
+                    }
+                } catch (e) {
+                    console.warn('obligation-types:', e);
+                }
+                if (!modalObligationTypeNames.length) {
+                    modalObligationTypeNames = ['قرض شخصي', 'قرض عقاري', 'تمويل سيارة قائم', 'بطاقة ائتمان', 'تمويل تعاوني', 'تقسيط / شراء بالأقساط', 'سلفة راتب', 'التزامات أخرى'];
+                }
                 (function setupDobToggle() {
                     const g = document.getElementById('modal_date_of_birth_gregorian');
                     const h = document.getElementById('modal_date_of_birth_hijri');
@@ -7124,16 +7181,29 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     const addBtn = document.getElementById('modal_add_obligation_row');
                     const hidden = document.getElementById('modal_obligations_json');
                     if (!tbody || !addBtn || !hidden) return;
+                    function escAttr(s) {
+                        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                    }
+                    function buildModalObligSelect(selectedValue) {
+                        const sel = selectedValue == null ? '' : String(selectedValue);
+                        let opts = '<option value="">— اختر نوع الالتزام —</option>';
+                        modalObligationTypeNames.forEach(function (name) {
+                            opts += '<option value="' + escAttr(name) + '"' + (sel === name ? ' selected' : '') + '>' + escAttr(name) + '</option>';
+                        });
+                        if (sel && modalObligationTypeNames.indexOf(sel) === -1) {
+                            opts += '<option value="' + escAttr(sel) + '" selected>' + escAttr(sel) + '</option>';
+                        }
+                        return '<select class="modal-oblig-type w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>';
+                    }
                     function addRow(data) {
                         data = data || {};
                         const tr = document.createElement('tr');
                         tr.className = 'border-b border-gray-200';
-                        tr.innerHTML = '<td class="py-1 px-2"><input type="text" class="modal-oblig-type w-full px-2 py-1 border rounded" placeholder="نوع"></td>' +
+                        tr.innerHTML = '<td class="py-1 px-2">' + buildModalObligSelect(data.obligation_type || '') + '</td>' +
                             '<td class="py-1 px-2"><input type="number" class="modal-oblig-total w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                             '<td class="py-1 px-2"><input type="number" class="modal-oblig-monthly w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                             '<td class="py-1 px-2"><input type="date" class="modal-oblig-due w-full px-2 py-1 border rounded"></td>' +
                             '<td class="py-1 px-2"><button type="button" class="modal-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                        if (data.obligation_type) tr.querySelector('.modal-oblig-type').value = data.obligation_type;
                         if (data.total_amount != null) tr.querySelector('.modal-oblig-total').value = data.total_amount;
                         if (data.monthly_installment != null) tr.querySelector('.modal-oblig-monthly').value = data.monthly_installment;
                         if (data.due_date) tr.querySelector('.modal-oblig-due').value = data.due_date;
@@ -7712,7 +7782,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <div id="sidebar-overlay"></div>
 </body>
 </html>
-`,gt=`<!DOCTYPE html>
+`,Dt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7924,7 +7994,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,bt=`<!DOCTYPE html>
+`,Bt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7992,7 +8062,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,we=`<!DOCTYPE html>
+`,Re=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8229,7 +8299,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,ft=`<!DOCTYPE html>
+`,Rt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8513,7 +8583,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,_e=()=>`
+`,Le=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -8572,7 +8642,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,xt=`<!DOCTYPE html>
+`,Lt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8623,7 +8693,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
         }
         
-        ${_e()}
+        ${Le()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -8763,7 +8833,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,yt=`<!DOCTYPE html>
+</html>`,$t=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8815,7 +8885,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
         }
         
-        ${_e()}
+        ${Le()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9029,7 +9099,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ht=`<!DOCTYPE html>
+</html>`,jt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9157,7 +9227,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,vt=()=>`
+</html>`,Ot=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -9204,7 +9274,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,wt=`<!DOCTYPE html>
+`,At=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9255,7 +9325,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
         }
         
-        ${vt()}
+        ${Ot()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9700,7 +9770,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,_t=`<!DOCTYPE html>
+</html>`,qt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -10065,7 +10135,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Ee=()=>`
+`,$e=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -10096,7 +10166,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function Et(e,t,a){return`
+`;function Mt(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10106,7 +10176,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${Ee()}
+        ${$e()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10265,7 +10335,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <\/script>
     </body>
     </html>
-  `}function kt(e,t,a,s){return`
+  `}function Nt(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10275,7 +10345,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${Ee()}
+        ${$e()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10302,7 +10372,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </label>
                 <select name="bank_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                   <option value="">اختر البنك</option>
-                  ${a.map(r=>`<option value="${r.id}" ${r.id==t.bank_id?"selected":""}>${r.bank_name}</option>`).join("")}
+                  ${a.map(n=>`<option value="${n.id}" ${n.id==t.bank_id?"selected":""}>${n.bank_name}</option>`).join("")}
                 </select>
               </div>
               
@@ -10313,7 +10383,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </label>
                 <select name="financing_type_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                   <option value="">اختر نوع التمويل</option>
-                  ${s.map(r=>`<option value="${r.id}" ${r.id==t.financing_type_id?"selected":""}>${r.type_name}</option>`).join("")}
+                  ${s.map(n=>`<option value="${n.id}" ${n.id==t.financing_type_id?"selected":""}>${n.type_name}</option>`).join("")}
                 </select>
               </div>
               
@@ -10418,7 +10488,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <\/script>
     </body>
     </html>
-  `}function It(e,t,a,s){const{transitions:r=[],actions:o=[],tasks:l=[]}=s,i=(n,d)=>{const p=new Date(n),m=new Date(d).getTime()-p.getTime(),g=Math.floor(m/(1e3*60*60)),b=Math.floor(g/24);return b>0?`${b} يوم`:`${g} ساعة`};return`
+  `}function Ft(e,t,a,s){const{transitions:n=[],actions:l=[],tasks:r=[]}=s,i=(o,d)=>{const p=new Date(o),m=new Date(d).getTime()-p.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10591,28 +10661,28 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <div class="timeline-container">
         <div class="timeline-line"></div>
         
-        ${r.length===0?`
+        ${n.length===0?`
           <div class="text-center py-12 text-gray-500">
             <i class="fas fa-inbox fa-3x mb-4 text-gray-300"></i>
             <p class="text-lg">لم يتم تسجيل أي مراحل بعد</p>
           </div>
         `:""}
         
-        ${r.map((n,d)=>{const p=d===r.length-1,u=d>0?i(r[d-1].created_at,n.created_at):null,m=o.filter(b=>b.stage_id===n.to_stage_id),g=l.filter(b=>b.stage_id===n.to_stage_id);return`
+        ${n.map((o,d)=>{const p=d===n.length-1,u=d>0?i(n[d-1].created_at,o.created_at):null,m=l.filter(g=>g.stage_id===o.to_stage_id),f=r.filter(g=>g.stage_id===o.to_stage_id);return`
             <div class="timeline-item">
-              <div class="timeline-dot ${p?"current":""}" style="background-color: ${n.to_stage_color}">
-                <i class="fas ${n.to_stage_icon}"></i>
+              <div class="timeline-dot ${p?"current":""}" style="background-color: ${o.to_stage_color}">
+                <i class="fas ${o.to_stage_icon}"></i>
               </div>
               
-              <div class="stage-card" style="border-right-color: ${n.to_stage_color}">
+              <div class="stage-card" style="border-right-color: ${o.to_stage_color}">
                 <div class="flex justify-between items-start mb-4">
                   <div>
                     <h3 class="text-xl font-bold text-gray-800 mb-1">
-                      ${d+1}. ${n.to_stage_name}
+                      ${d+1}. ${o.to_stage_name}
                     </h3>
                     <p class="text-sm text-gray-500">
                       <i class="fas fa-clock ml-1"></i>
-                      ${new Date(n.created_at).toLocaleString("ar-SA",{year:"numeric",month:"long",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+                      ${new Date(o.created_at).toLocaleString("ar-SA",{year:"numeric",month:"long",day:"numeric",hour:"2-digit",minute:"2-digit"})}
                     </p>
                   </div>
                   
@@ -10624,18 +10694,18 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   `:""}
                 </div>
                 
-                ${n.transitioned_by_name?`
+                ${o.transitioned_by_name?`
                   <div class="text-sm text-gray-600 mb-3">
                     <i class="fas fa-user ml-1 text-gray-400"></i>
-                    بواسطة: <span class="font-medium">${n.transitioned_by_name}</span>
+                    بواسطة: <span class="font-medium">${o.transitioned_by_name}</span>
                   </div>
                 `:""}
                 
-                ${n.notes?`
+                ${o.notes?`
                   <div class="bg-yellow-50 border-r-3 border-yellow-400 p-3 rounded mb-3">
                     <p class="text-sm text-gray-700">
                       <i class="fas fa-sticky-note ml-1 text-yellow-600"></i>
-                      ${n.notes}
+                      ${o.notes}
                     </p>
                   </div>
                 `:""}
@@ -10646,37 +10716,37 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                       <i class="fas fa-tasks ml-1"></i>
                       الإجراءات المتخذة:
                     </h4>
-                    ${m.map(b=>`
+                    ${m.map(g=>`
                       <div class="action-badge bg-green-50 text-green-700 border border-green-200">
                         <i class="fas fa-check-circle"></i>
-                        <span>${b.action_data||b.action_type}</span>
-                        ${b.performed_by_name?`<span class="text-xs text-green-600">- ${b.performed_by_name}</span>`:""}
+                        <span>${g.action_data||g.action_type}</span>
+                        ${g.performed_by_name?`<span class="text-xs text-green-600">- ${g.performed_by_name}</span>`:""}
                       </div>
                     `).join("")}
                   </div>
                 `:""}
                 
-                ${g.length>0?`
+                ${f.length>0?`
                   <div>
                     <h4 class="text-sm font-bold text-gray-700 mb-2">
                       <i class="fas fa-list-check ml-1"></i>
                       المهام:
                     </h4>
-                    ${g.map(b=>`
-                      <div class="task-item ${b.status}">
+                    ${f.map(g=>`
+                      <div class="task-item ${g.status}">
                         <div class="flex justify-between items-start">
                           <div class="flex-1">
-                            <div class="font-medium text-gray-800">${b.task_title}</div>
-                            ${b.task_description?`<div class="text-sm text-gray-600 mt-1">${b.task_description}</div>`:""}
-                            ${b.assigned_to_name?`
+                            <div class="font-medium text-gray-800">${g.task_title}</div>
+                            ${g.task_description?`<div class="text-sm text-gray-600 mt-1">${g.task_description}</div>`:""}
+                            ${g.assigned_to_name?`
                               <div class="text-xs text-gray-500 mt-1">
                                 <i class="fas fa-user ml-1"></i>
-                                ${b.assigned_to_name}
+                                ${g.assigned_to_name}
                               </div>
                             `:""}
                           </div>
                           <div class="text-sm">
-                            ${b.status==="completed"?`
+                            ${g.status==="completed"?`
                               <span class="text-green-600">
                                 <i class="fas fa-check-circle ml-1"></i>
                                 مكتمل
@@ -10918,7 +10988,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   
 </body>
 </html>
-  `}const St=`
+  `}const Pt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11228,7 +11298,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Tt=`
+`,Ht=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11642,7 +11712,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Dt=`
+`,Ut=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12086,7 +12156,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Rt=`
+`,zt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12312,7 +12382,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Ct=`
+`,Wt=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12552,7 +12622,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Bt=`<!DOCTYPE html>
+`,Vt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13020,7 +13090,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,H=`
+`,X=`
 <style>
     .stat-card {
         transition: all 0.3s ease;
@@ -13079,7 +13149,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         overflow-y: auto;
     }
 </style>
-`;function P(e,t,a){return`
+`;function Q(e,t,a){return`
     <nav class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -13108,7 +13178,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             </div>
         </div>
     </nav>
-    `}function U(e){return`
+    `}function K(e){return`
     <div id="sidebar" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
         <div class="p-6">
             <button onclick="toggleSidebar()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
@@ -13131,10 +13201,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     <span class="font-medium text-gray-700 group-hover:text-blue-600">لوحة التحكم الرئيسية</span>
                 </a>
                 
-                ${[{id:"dashboard",title:"لوحة المعلومات",icon:"fa-chart-line",link:"/admin/hr"},{id:"employees",title:"إدارة الموظفين",icon:"fa-users",link:"/admin/hr/employees"},{id:"attendance",title:"الحضور والغياب",icon:"fa-user-check",link:"/admin/hr/attendance"},{id:"leaves",title:"إدارة الإجازات",icon:"fa-calendar-alt",link:"/admin/hr/leaves"},{id:"salaries",title:"إدارة الرواتب",icon:"fa-money-bill-wave",link:"/admin/hr/salaries"},{id:"performance",title:"تقييم الأداء",icon:"fa-star",link:"/admin/hr/performance"},{id:"promotions",title:"الترقيات والنقل",icon:"fa-level-up-alt",link:"/admin/hr/promotions"},{id:"documents",title:"تنبيهات المستندات",icon:"fa-bell",link:"/admin/hr/documents"},{id:"reports",title:"التقارير",icon:"fa-file-alt",link:"/admin/hr/reports"}].map(s=>{const r=s.id===e;return`
-        <a href="${s.link}" class="flex items-center space-x-3 space-x-reverse p-4 ${r?"bg-blue-50":"hover:bg-blue-50"} rounded-lg transition-all group">
-            <i class="fas ${s.icon} text-xl ${r?"text-blue-600":"text-gray-600 group-hover:text-blue-600"}"></i>
-            <span class="font-medium ${r?"text-blue-600":"text-gray-700 group-hover:text-blue-600"}">${s.title}</span>
+                ${[{id:"dashboard",title:"لوحة المعلومات",icon:"fa-chart-line",link:"/admin/hr"},{id:"employees",title:"إدارة الموظفين",icon:"fa-users",link:"/admin/hr/employees"},{id:"attendance",title:"الحضور والغياب",icon:"fa-user-check",link:"/admin/hr/attendance"},{id:"leaves",title:"إدارة الإجازات",icon:"fa-calendar-alt",link:"/admin/hr/leaves"},{id:"salaries",title:"إدارة الرواتب",icon:"fa-money-bill-wave",link:"/admin/hr/salaries"},{id:"performance",title:"تقييم الأداء",icon:"fa-star",link:"/admin/hr/performance"},{id:"promotions",title:"الترقيات والنقل",icon:"fa-level-up-alt",link:"/admin/hr/promotions"},{id:"documents",title:"تنبيهات المستندات",icon:"fa-bell",link:"/admin/hr/documents"},{id:"reports",title:"التقارير",icon:"fa-file-alt",link:"/admin/hr/reports"}].map(s=>{const n=s.id===e;return`
+        <a href="${s.link}" class="flex items-center space-x-3 space-x-reverse p-4 ${n?"bg-blue-50":"hover:bg-blue-50"} rounded-lg transition-all group">
+            <i class="fas ${s.icon} text-xl ${n?"text-blue-600":"text-gray-600 group-hover:text-blue-600"}"></i>
+            <span class="font-medium ${n?"text-blue-600":"text-gray-700 group-hover:text-blue-600"}">${s.title}</span>
         </a>
         `}).join("")}
 
@@ -13148,7 +13218,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
     </div>
     <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleSidebar()"></div>
-    `}const W=`
+    `}const Z=`
 <script>
     const token = localStorage.getItem('authToken') || getCookie('authToken');
     if (!token) {
@@ -13198,7 +13268,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         alert('❌ ' + message);
     }
 <\/script>
-`,Lt=`<!DOCTYPE html>
+`,Yt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13207,11 +13277,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${H}
+    ${X}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${P("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
-    ${U("employees")}
+    ${Q("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
+    ${K("employees")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics Cards -->
@@ -13427,7 +13497,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
     </div>
 
-    ${W}
+    ${Z}
     <script>
         async function loadEmployees() {
             try {
@@ -13558,7 +13628,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,$t=`<!DOCTYPE html>
+`,Jt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13567,11 +13637,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${H}
+    ${X}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${P("تفاصيل الموظف","عرض معلومات الموظف الكاملة","fas fa-user")}
-    ${U("employees")}
+    ${Q("تفاصيل الموظف","عرض معلومات الموظف الكاملة","fas fa-user")}
+    ${K("employees")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-6">
@@ -13589,7 +13659,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
     </div>
 
-    ${W}
+    ${Z}
     <script>
         const employeeId = window.location.pathname.split('/').pop();
         
@@ -13742,7 +13812,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,jt=`<!DOCTYPE html>
+`,Gt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13751,11 +13821,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${H}
+    ${X}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${P("تعديل الموظف","تعديل بيانات الموظف","fas fa-user-edit")}
-    ${U("employees")}
+    ${Q("تعديل الموظف","تعديل بيانات الموظف","fas fa-user-edit")}
+    ${K("employees")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-6">
@@ -13865,7 +13935,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
     </div>
 
-    ${W}
+    ${Z}
     <script>
         const employeeId = window.location.pathname.split('/').slice(0, -1).pop();
         
@@ -13951,7 +14021,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,Ot=`<!DOCTYPE html>
+`,Xt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13960,11 +14030,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${H}
+    ${X}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${P("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
-    ${U("attendance")}
+    ${Q("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
+    ${K("attendance")}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics -->
@@ -14152,7 +14222,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
     </div>
 
-    ${W}
+    ${Z}
     <script>
         // Set today's date as default
         document.getElementById('dateFilter').valueAsDate = new Date();
@@ -14282,7 +14352,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     <\/script>
 </body>
 </html>
-`,qt=`
+`,Qt=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14668,7 +14738,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   <\/script>
 </body>
 </html>
-`,Mt=`
+`,Kt=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14969,7 +15039,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   <\/script>
 </body>
 </html>
-`,At=`
+`,Zt=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15215,7 +15285,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   <\/script>
 </body>
 </html>
-`,Nt=`
+`,ea=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15472,7 +15542,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   <\/script>
 </body>
 </html>
-`,Ft=`
+`,ta=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -15958,7 +16028,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   <\/script>
 </body>
 </html>
-`,Ht=`
+`,aa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16337,7 +16407,6832 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   <\/script>
 </body>
 </html>
-`,c=new ye,C=()=>`
+`,sa=`/* =============================================
+   نظام إدارة العقود - شركة الموعد للمقاولات العامة
+   ============================================= */
+
+:root {
+  --primary: #1a3c5e;
+  --primary-light: #245080;
+  --primary-dark: #0f2540;
+  --secondary: #c8a84b;
+  --secondary-light: #d4bc72;
+  --accent: #2ecc71;
+  --danger: #e74c3c;
+  --warning: #f39c12;
+  --info: #3498db;
+  --success: #27ae60;
+  --bg: #f0f4f8;
+  --bg-card: #ffffff;
+  --text: #1e2d3d;
+  --text-muted: #6b7c93;
+  --border: #dde3ec;
+  --sidebar-w: 260px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 20px rgba(26,60,94,0.08);
+  --shadow-hover: 0 8px 30px rgba(26,60,94,0.14);
+  --transition: all 0.25s ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Tajawal', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+  direction: rtl;
+  font-size: 15px;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f0f4f8; }
+::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 4px; }
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--primary);
+  min-height: 100vh;
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  transition: var(--transition);
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 20px;
+  background: var(--primary-dark);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.logo-icon {
+  width: 44px; height: 44px;
+  background: var(--secondary);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: #fff;
+  flex-shrink: 0;
+}
+
+.logo-text { display: flex; flex-direction: column; }
+.company-name { color: #fff; font-size: 16px; font-weight: 800; line-height: 1.2; }
+.company-sub { color: rgba(255,255,255,0.6); font-size: 11px; }
+
+.sidebar-nav { flex: 1; padding: 16px 0; overflow-y: auto; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 20px;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  font-size: 14px; font-weight: 500;
+  border-right: 3px solid transparent;
+  transition: var(--transition);
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border-right-color: var(--secondary);
+}
+.nav-item.active {
+  background: rgba(200,168,75,0.15);
+  color: var(--secondary);
+  border-right-color: var(--secondary);
+}
+.nav-item i { font-size: 16px; width: 20px; text-align: center; }
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.cr-number { color: rgba(255,255,255,0.45); font-size: 11px; }
+.cr-number i { color: var(--secondary); margin-left: 4px; }
+
+/* ===== MAIN CONTENT ===== */
+.main-content {
+  margin-right: var(--sidebar-w);
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* ===== TOPBAR ===== */
+.topbar {
+  background: #fff;
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  position: sticky; top: 0; z-index: 100;
+}
+.menu-toggle {
+  display: none;
+  background: none; border: none;
+  font-size: 20px; color: var(--primary);
+  cursor: pointer;
+}
+.topbar-title { flex: 1; }
+.topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
+.topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.contracts-home-btn { flex-shrink: 0; }
+
+/* ===== PAGE CONTENT ===== */
+.page-content { padding: 28px; flex: 1; }
+
+/* ===== STATS GRID ===== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border-right: 4px solid transparent;
+}
+.stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+
+.stat-total { border-right-color: var(--primary); }
+.stat-active { border-right-color: var(--success); }
+.stat-pending { border-right-color: var(--warning); }
+.stat-completed { border-right-color: var(--info); }
+.stat-commission { border-right-color: var(--secondary); }
+.stat-pending-commission { border-right-color: var(--danger); }
+
+.stat-icon {
+  width: 54px; height: 54px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.stat-total .stat-icon { background: rgba(26,60,94,0.1); color: var(--primary); }
+.stat-active .stat-icon { background: rgba(39,174,96,0.1); color: var(--success); }
+.stat-pending .stat-icon { background: rgba(243,156,18,0.1); color: var(--warning); }
+.stat-completed .stat-icon { background: rgba(52,152,219,0.1); color: var(--info); }
+.stat-commission .stat-icon { background: rgba(200,168,75,0.1); color: var(--secondary); }
+.stat-pending-commission .stat-icon { background: rgba(231,76,60,0.1); color: var(--danger); }
+
+.stat-number {
+  font-size: 26px; font-weight: 800;
+  color: var(--text); line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-label { font-size: 13px; color: var(--text-muted); }
+
+/* ===== DASHBOARD ROW ===== */
+.dashboard-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+/* ===== CARDS ===== */
+.dashboard-card {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.full-card { margin-bottom: 24px; }
+
+.card-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-header h3 { font-size: 16px; font-weight: 700; color: var(--primary); }
+.card-header h3 i { margin-left: 8px; }
+.card-body { padding: 20px 22px; }
+
+/* ===== ALERTS ===== */
+.alert-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.alert-item:last-child { border-bottom: none; }
+.alert-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.alert-warning .alert-icon { background: rgba(243,156,18,0.1); color: var(--warning); }
+.alert-danger .alert-icon { background: rgba(231,76,60,0.1); color: var(--danger); }
+.alert-info .alert-icon { background: rgba(52,152,219,0.1); color: var(--info); }
+.alert-text strong { display: block; font-size: 13px; color: var(--text); margin-bottom: 2px; }
+.alert-text span { font-size: 12px; color: var(--text-muted); }
+
+/* ===== TABLE ===== */
+.table-responsive { overflow-x: auto; padding: 0; }
+.data-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 14px;
+}
+.data-table thead tr { background: #f7f9fc; }
+.data-table th {
+  padding: 13px 16px; text-align: right;
+  font-weight: 700; color: var(--text-muted);
+  font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.data-table tbody tr:hover { background: #f7fafd; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+
+/* ===== STATUS BADGES ===== */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  white-space: nowrap;
+}
+.badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badge-active { background: rgba(39,174,96,0.1); color: var(--success); }
+.badge-pending { background: rgba(243,156,18,0.1); color: var(--warning); }
+.badge-completed { background: rgba(52,152,219,0.1); color: var(--info); }
+.badge-archived { background: rgba(107,124,147,0.1); color: var(--text-muted); }
+.badge-cancelled { background: rgba(231,76,60,0.1); color: var(--danger); }
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none;
+  text-decoration: none;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-light); }
+.btn-secondary { background: var(--secondary); color: #fff; }
+.btn-secondary:hover { background: var(--secondary-light); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #219a52; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #c0392b; }
+.btn-warning { background: var(--warning); color: #fff; }
+.btn-warning:hover { background: #e67e22; }
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--primary);
+  color: var(--primary);
+}
+.btn-outline:hover { background: var(--primary); color: #fff; }
+.btn-sm { padding: 7px 14px; font-size: 13px; }
+.btn-icon { padding: 8px 10px; }
+.btn-ghost { background: transparent; color: var(--text-muted); }
+.btn-ghost:hover { background: var(--bg); color: var(--primary); }
+
+/* ===== FORMS ===== */
+.form-section {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+.form-section-title {
+  font-size: 16px; font-weight: 700;
+  color: var(--primary);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.form-section-title i { color: var(--secondary); }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-full { grid-column: 1 / -1; }
+
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-label {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-muted);
+}
+.form-label .required { color: var(--danger); margin-right: 2px; }
+
+.form-control {
+  padding: 11px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px; color: var(--text);
+  background: #fff;
+  transition: var(--transition);
+  width: 100%;
+}
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26,60,94,0.08);
+}
+.form-control:disabled {
+  background: #f7f9fc;
+  color: var(--text-muted);
+}
+.form-control.is-invalid { border-color: var(--danger); }
+.invalid-feedback { font-size: 12px; color: var(--danger); display: none; }
+.form-control.is-invalid ~ .invalid-feedback { display: block; }
+
+.form-note {
+  padding: 12px 16px;
+  background: rgba(200,168,75,0.08);
+  border: 1px solid rgba(200,168,75,0.2);
+  border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text);
+}
+.form-note strong { color: var(--secondary); }
+
+/* ===== PAGE HEADER ===== */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px;
+}
+.page-header-title h2 { font-size: 22px; font-weight: 800; color: var(--primary); }
+.page-header-title p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.page-header-actions { display: flex; gap: 10px; }
+
+/* ===== SEARCH & FILTERS ===== */
+.filters-bar {
+  background: #fff;
+  padding: 16px 22px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.search-input-wrap { position: relative; flex: 1; min-width: 200px; }
+.search-input-wrap i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+.search-input-wrap .form-control { padding-right: 38px; }
+
+/* ===== CONTRACT PREVIEW ===== */
+.contract-preview {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: var(--radius-sm);
+  padding: 60px;
+  max-width: 800px;
+  margin: 0 auto;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px;
+  line-height: 2;
+  color: #000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.contract-header {
+  text-align: center;
+  border-bottom: 3px double #1a3c5e;
+  padding-bottom: 20px;
+  margin-bottom: 28px;
+}
+.contract-logo-area { margin-bottom: 12px; }
+.contract-company-name { font-size: 22px; font-weight: 800; color: #1a3c5e; }
+.contract-company-info { font-size: 12px; color: #555; margin-top: 4px; }
+.contract-title {
+  font-size: 20px; font-weight: 800;
+  color: #1a3c5e;
+  margin: 20px 0 10px;
+  border: 2px solid #1a3c5e;
+  display: inline-block;
+  padding: 6px 40px;
+  border-radius: 4px;
+}
+.contract-date { font-size: 13px; color: #444; }
+
+.contract-body { margin-bottom: 30px; }
+.contract-body p { margin-bottom: 16px; text-align: justify; }
+.contract-body h4 {
+  font-size: 15px; font-weight: 700;
+  color: #1a3c5e;
+  margin: 20px 0 8px;
+  padding-right: 10px;
+  border-right: 3px solid #c8a84b;
+}
+
+.contract-parties {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 20px; margin: 20px 0;
+  border: 1px solid #ccc; border-radius: 8px; overflow: hidden;
+}
+.party-box { padding: 16px; }
+.party-box:first-child { border-left: 1px solid #ccc; background: #fafafa; }
+.party-box h5 {
+  font-size: 13px; font-weight: 700;
+  color: #1a3c5e; margin-bottom: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid #eee;
+}
+.party-box p { font-size: 13px; margin-bottom: 6px; }
+.party-box strong { color: #1a3c5e; }
+
+.contract-articles { margin: 20px 0; }
+.article {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #fafafa;
+  border: 1px solid #eee;
+}
+.article-title {
+  font-size: 14px; font-weight: 700;
+  color: #1a3c5e; margin-bottom: 8px;
+}
+.article-content { font-size: 13px; line-height: 1.9; }
+
+.contract-footer {
+  border-top: 2px solid #1a3c5e;
+  padding-top: 30px; margin-top: 40px;
+}
+.signatures-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 40px; margin-top: 20px;
+}
+.signature-box { text-align: center; }
+.signature-box h5 { font-size: 14px; font-weight: 700; color: #1a3c5e; margin-bottom: 8px; }
+.signature-area {
+  height: 80px; border-bottom: 1px solid #999;
+  margin-bottom: 8px;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 8px;
+}
+.signature-area canvas { cursor: crosshair; }
+.signature-box p { font-size: 12px; color: #555; }
+
+.contract-closing {
+  text-align: center; margin-top: 24px;
+  font-size: 15px; font-weight: 600; color: #1a3c5e;
+}
+
+/* ===== PROMISSORY NOTE ===== */
+.note-preview {
+  border: 2px solid #1a3c5e;
+  border-radius: var(--radius-sm);
+  padding: 40px 50px;
+  max-width: 750px; margin: 0 auto;
+  font-family: 'Tajawal', sans-serif;
+  background: #fff;
+}
+.note-header {
+  text-align: center; margin-bottom: 24px;
+  border-bottom: 2px solid #c8a84b; padding-bottom: 16px;
+}
+.note-title { font-size: 22px; font-weight: 800; color: #1a3c5e; }
+.note-subtitle { font-size: 13px; color: #555; margin-top: 4px; }
+.note-number-badge {
+  display: inline-block;
+  background: #1a3c5e; color: #fff;
+  padding: 6px 24px;
+  border-radius: 4px; font-size: 14px;
+  font-weight: 700; margin-top: 10px;
+}
+.note-body { font-size: 15px; line-height: 2.2; }
+.note-amount-box {
+  border: 2px solid #c8a84b;
+  border-radius: 8px; padding: 16px 20px;
+  margin: 20px 0; text-align: center;
+}
+.note-amount-label { font-size: 13px; color: #555; }
+.note-amount-value { font-size: 24px; font-weight: 800; color: #1a3c5e; }
+.note-amount-words { font-size: 14px; color: #333; margin-top: 4px; }
+
+/* ===== TEMPLATE BUILDER ===== */
+.builder-layout {
+  display: grid; grid-template-columns: 300px 1fr;
+  gap: 20px; align-items: start;
+}
+.builder-sidebar {
+  background: #fff; border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+  position: sticky; top: 90px;
+}
+.builder-sidebar-header {
+  padding: 16px 20px; background: var(--primary);
+  color: #fff; font-size: 14px; font-weight: 700;
+}
+.builder-elements { padding: 16px; }
+.element-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--border);
+  margin-bottom: 8px; cursor: grab;
+  font-size: 13px; font-weight: 500;
+  color: var(--text); background: #fafafa;
+  transition: var(--transition);
+}
+.element-item:hover { border-color: var(--primary); background: rgba(26,60,94,0.05); }
+.element-item i { color: var(--secondary); }
+
+.variables-list { padding: 16px; }
+.variable-tag {
+  display: inline-block;
+  padding: 4px 10px; margin: 4px;
+  background: rgba(26,60,94,0.08);
+  border: 1px solid rgba(26,60,94,0.15);
+  border-radius: 4px; font-size: 12px;
+  color: var(--primary); cursor: pointer;
+  font-family: monospace;
+  transition: var(--transition);
+}
+.variable-tag:hover { background: var(--primary); color: #fff; }
+
+/* ===== LOADING ===== */
+.loading-spinner {
+  text-align: center; padding: 30px;
+  color: var(--text-muted); font-size: 14px;
+}
+.loading-spinner i { margin-left: 8px; }
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+  text-align: center; padding: 40px 20px;
+  color: var(--text-muted);
+}
+.empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+.empty-state p { font-size: 14px; }
+
+/* ===== ACTION BUTTONS IN TABLE ===== */
+.action-btns { display: flex; gap: 6px; }
+.action-btn {
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer;
+  font-size: 13px; transition: var(--transition);
+  text-decoration: none;
+}
+.action-view { background: rgba(52,152,219,0.1); color: var(--info); }
+.action-view:hover { background: var(--info); color: #fff; }
+.action-edit { background: rgba(243,156,18,0.1); color: var(--warning); }
+.action-edit:hover { background: var(--warning); color: #fff; }
+.action-delete { background: rgba(231,76,60,0.1); color: var(--danger); }
+.action-delete:hover { background: var(--danger); color: #fff; }
+.action-pdf { background: rgba(39,174,96,0.1); color: var(--success); }
+.action-pdf:hover { background: var(--success); color: #fff; }
+.action-whatsapp { background: rgba(37,211,102,0.1); color: #25d366; }
+.action-whatsapp:hover { background: #25d366; color: #fff; }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 2147483000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.modal-box {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  width: 90%; max-width: 600px;
+  max-height: 90vh; overflow-y: auto;
+  transform: scale(0.96);
+  transition: var(--transition);
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+.modal-overlay.active .modal-box { transform: scale(1); }
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-header h3 { font-size: 17px; font-weight: 700; color: var(--primary); }
+.modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); }
+.modal-body { padding: 24px; }
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+  .sidebar, .topbar, .page-header, .filters-bar,
+  .btn, .action-btns, .no-print { display: none !important; }
+  .main-content { margin: 0 !important; }
+  .contract-preview, .note-preview {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  body { background: #fff; }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1100px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .dashboard-row { grid-template-columns: 1fr; }
+  .form-grid-3 { grid-template-columns: 1fr 1fr; }
+  .builder-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { transform: translateX(100%); width: 260px; }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-right: 0; }
+  .menu-toggle { display: block; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .page-content { padding: 16px; }
+  .topbar { padding: 14px 16px; }
+  .topbar-title { min-width: 100%; }
+  .topbar-actions { width: 100%; }
+  .current-date { display: none; }
+  .contract-preview { padding: 30px 20px; }
+  .contract-parties { grid-template-columns: 1fr; }
+  .signatures-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== UTILITIES ===== */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-muted { color: var(--text-muted); }
+.text-primary { color: var(--primary); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+.text-secondary { color: var(--secondary); }
+.fw-bold { font-weight: 700; }
+.mb-0 { margin-bottom: 0; }
+.mt-16 { margin-top: 16px; }
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+
+/* ===== DIVIDER ===== */
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* ===== TABS ===== */
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 24px; }
+.tab-btn {
+  padding: 10px 20px;
+  border: none; background: none;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px; font-weight: 600;
+  color: var(--text-muted); cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: var(--transition);
+}
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ===== PAGINATION ===== */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; margin-top: 20px;
+}
+.page-btn {
+  width: 36px; height: 36px;
+  border-radius: 8px; border: 1.5px solid var(--border);
+  background: #fff; cursor: pointer;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px; color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.page-btn:hover, .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== TOAST NOTIFICATIONS ===== */
+.toast-container {
+  position: fixed; bottom: 24px; left: 24px;
+  z-index: 9999; display: flex; flex-direction: column; gap: 10px;
+}
+.toast {
+  padding: 14px 20px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: flex; align-items: center; gap: 12px;
+  font-size: 14px; min-width: 280px;
+  animation: slideIn 0.3s ease;
+  border-right: 4px solid var(--primary);
+}
+.toast-success { border-right-color: var(--success); }
+.toast-error { border-right-color: var(--danger); }
+.toast-warning { border-right-color: var(--warning); }
+.toast i { font-size: 18px; }
+.toast-success i { color: var(--success); }
+.toast-error i { color: var(--danger); }
+.toast-warning i { color: var(--warning); }
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ===== AMOUNT DISPLAY ===== */
+.amount-display {
+  font-size: 18px; font-weight: 700;
+  color: var(--secondary);
+}
+
+/* ===== INFO CARDS ===== */
+.info-row { display: flex; flex-wrap: wrap; gap: 16px; }
+.info-item { flex: 1; min-width: 160px; }
+.info-item label { display: block; font-size: 11px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; text-transform: uppercase; }
+.info-item span { font-size: 14px; color: var(--text); font-weight: 500; }
+
+/* ===== BACK BUTTON ===== */
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text-muted); font-size: 13px;
+  text-decoration: none; margin-bottom: 16px;
+  transition: var(--transition);
+}
+.back-link:hover { color: var(--primary); }
+
+/* ===== STEP INDICATOR ===== */
+.steps-bar {
+  display: flex; align-items: center;
+  margin-bottom: 28px; gap: 0;
+}
+.step {
+  display: flex; align-items: center; flex: 1;
+}
+.step-number {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--text-muted);
+  flex-shrink: 0;
+}
+.step.active .step-number { background: var(--primary); border-color: var(--primary); color: #fff; }
+.step.done .step-number { background: var(--success); border-color: var(--success); color: #fff; }
+.step-label { font-size: 12px; color: var(--text-muted); margin-right: 8px; white-space: nowrap; }
+.step.active .step-label { color: var(--primary); font-weight: 600; }
+.step-line { flex: 1; height: 2px; background: var(--border); margin: 0 8px; }
+.step.done .step-line { background: var(--success); }
+`,na=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نظام إدارة العقود | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item active" data-page="dashboard">
+        <i class="fas fa-chart-pie"></i><span>لوحة التحكم</span>
+      </a>
+      <a href="contracts.html" class="nav-item" data-page="contracts">
+        <i class="fas fa-file-alt"></i><span>العقود</span>
+      </a>
+      <a href="new-contract.html" class="nav-item" data-page="new-contract">
+        <i class="fas fa-plus-circle"></i><span>عقد جديد</span>
+      </a>
+      <a href="templates.html" class="nav-item" data-page="templates">
+        <i class="fas fa-layer-group"></i><span>القوالب</span>
+      </a>
+      <a href="notes.html" class="nav-item" data-page="notes">
+        <i class="fas fa-money-check-alt"></i><span>سندات الأمر</span>
+      </a>
+      <a href="archive.html" class="nav-item" data-page="archive">
+        <i class="fas fa-archive"></i><span>الأرشيف</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title">
+        <h1><i class="fas fa-chart-pie"></i> لوحة التحكم</h1>
+      </div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+        <a href="new-contract.html" class="btn btn-primary"><i class="fas fa-plus"></i> عقد جديد</a>
+      </div>
+    </header>
+
+    <!-- Dashboard Content -->
+    <div class="page-content">
+
+      <!-- Stats Cards -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card stat-total">
+          <div class="stat-icon"><i class="fas fa-file-contract"></i></div>
+          <div class="stat-info">
+            <div class="stat-number" id="totalContracts">--</div>
+            <div class="stat-label">إجمالي العقود</div>
+          </div>
+        </div>
+        <div class="stat-card stat-active">
+          <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info">
+            <div class="stat-number" id="activeContracts">--</div>
+            <div class="stat-label">العقود النشطة</div>
+          </div>
+        </div>
+        <div class="stat-card stat-pending">
+          <div class="stat-icon"><i class="fas fa-clock"></i></div>
+          <div class="stat-info">
+            <div class="stat-number" id="pendingContracts">--</div>
+            <div class="stat-label">بانتظار التمويل</div>
+          </div>
+        </div>
+        <div class="stat-card stat-completed">
+          <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+          <div class="stat-info">
+            <div class="stat-number" id="completedContracts">--</div>
+            <div class="stat-label">العقود المكتملة</div>
+          </div>
+        </div>
+        <div class="stat-card stat-commission">
+          <div class="stat-icon"><i class="fas fa-coins"></i></div>
+          <div class="stat-info">
+            <div class="stat-number" id="totalCommission">--</div>
+            <div class="stat-label">إجمالي السعي (ريال)</div>
+          </div>
+        </div>
+        <div class="stat-card stat-pending-commission">
+          <div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
+          <div class="stat-info">
+            <div class="stat-number" id="pendingCommission">--</div>
+            <div class="stat-label">سعي معلق (ريال)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts & Charts Row -->
+      <div class="dashboard-row">
+        <!-- Alerts -->
+        <div class="dashboard-card alerts-card">
+          <div class="card-header">
+            <h3><i class="fas fa-bell text-warning"></i> التنبيهات</h3>
+          </div>
+          <div class="card-body" id="alertsList">
+            <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="dashboard-card chart-card">
+          <div class="card-header">
+            <h3><i class="fas fa-chart-donut"></i> توزيع حالات العقود</h3>
+          </div>
+          <div class="card-body">
+            <div style="height:260px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="contractsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Contracts Table -->
+      <div class="dashboard-card full-card">
+        <div class="card-header">
+          <h3><i class="fas fa-list-alt"></i> آخر العقود</h3>
+          <a href="contracts.html" class="btn btn-sm btn-outline">عرض الكل <i class="fas fa-arrow-left"></i></a>
+        </div>
+        <div class="card-body table-responsive">
+          <table class="data-table" id="recentContractsTable">
+            <thead>
+              <tr>
+                <th>رقم العقد</th>
+                <th>اسم العميل</th>
+                <th>نوع العقد</th>
+                <th>مبلغ التمويل</th>
+                <th>السعي</th>
+                <th>الحالة</th>
+                <th>رقم السند</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="recentContractsBody">
+              <tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+  <script src="js/app.js"><\/script>
+  <script src="js/dashboard.js"><\/script>
+</body>
+</html>
+`,ra=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>العقود | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item active"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1><i class="fas fa-file-alt"></i> قائمة العقود</h1></div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+        <a href="new-contract.html" class="btn btn-primary"><i class="fas fa-plus"></i> عقد جديد</a>
+      </div>
+    </header>
+
+    <div class="page-content">
+
+      <!-- Filters Bar -->
+      <div class="filters-bar">
+        <div class="search-input-wrap">
+          <i class="fas fa-search"></i>
+          <input type="text" class="form-control" id="searchInput"
+            placeholder="ابحث باسم العميل، رقم العقد، رقم السند..." oninput="filterContracts()" />
+        </div>
+        <select class="form-control" id="statusFilter" style="width:auto;" onchange="filterContracts()">
+          <option value="">جميع الحالات</option>
+          <option value="نشط">نشط</option>
+          <option value="بانتظار التمويل">بانتظار التمويل</option>
+          <option value="مكتمل">مكتمل</option>
+          <option value="ملغي">ملغي</option>
+        </select>
+        <select class="form-control" id="typeFilter" style="width:auto;" onchange="filterContracts()">
+          <option value="">جميع الأنواع</option>
+          <option value="عقد وساطة عقارية">وساطة عقارية</option>
+          <option value="عقد إيجار">إيجار</option>
+          <option value="عقد بيع">بيع</option>
+          <option value="عقد مقاولات">مقاولات</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="resetFilters()">
+          <i class="fas fa-undo"></i> إعادة ضبط
+        </button>
+      </div>
+
+      <!-- Contracts Table -->
+      <div class="dashboard-card full-card">
+        <div class="card-header">
+          <h3><i class="fas fa-list-alt"></i> العقود</h3>
+          <span id="contractsCount" class="text-muted" style="font-size:13px;"></span>
+        </div>
+        <div class="card-body table-responsive" style="padding:0;">
+          <table class="data-table" id="contractsTable">
+            <thead>
+              <tr>
+                <th>رقم العقد</th>
+                <th>نوع العقد</th>
+                <th>العميل</th>
+                <th>الجوال</th>
+                <th>مبلغ التمويل</th>
+                <th>السعي</th>
+                <th>نوع التمويل</th>
+                <th>الحالة</th>
+                <th>رقم السند</th>
+                <th>التاريخ</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="contractsBody">
+              <tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:16px 22px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);">
+          <div id="paginationInfo" style="font-size:13px;color:var(--text-muted);"></div>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Modal: Confirm Archive -->
+  <div class="modal-overlay" id="archiveModal">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-header">
+        <h3><i class="fas fa-archive text-warning"></i> تأكيد الأرشفة</h3>
+        <button class="modal-close" onclick="closeModal('archiveModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <p>هل تريد أرشفة هذا العقد؟ سيتم نقله لصفحة الأرشيف ولن يظهر في القائمة الرئيسية.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:8px;">يمكنك استرجاعه لاحقاً من صفحة الأرشيف.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-warning" id="confirmArchiveBtn">أرشفة <i class="fas fa-archive"></i></button>
+        <button class="btn btn-ghost" onclick="closeModal('archiveModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"><\/script>
+  <script>
+    let allContracts = [];
+    let filteredContracts = [];
+    let currentPage = 1;
+    const PER_PAGE = 10;
+
+    async function loadContracts() {
+      try {
+        const data = await API.get('contracts', { limit: 200 });
+        allContracts = (data.data || []).filter(c => !c.is_archived);
+        filteredContracts = [...allContracts];
+        renderContracts();
+      } catch (e) {
+        showToast('خطأ في تحميل العقود', 'error');
+        const tbody = document.getElementById('contractsBody');
+        const count = document.getElementById('contractsCount');
+        const paginationInfo = document.getElementById('paginationInfo');
+        const pagination = document.getElementById('pagination');
+        if (tbody) {
+          tbody.innerHTML = \`
+            <tr>
+              <td colspan="11">
+                <div class="empty-state">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <p>تعذر تحميل العقود. تحقق من تسجيل الدخول وصحة اتصال API.</p>
+                </div>
+              </td>
+            </tr>
+          \`;
+        }
+        if (count) count.textContent = '(0 عقد)';
+        if (paginationInfo) paginationInfo.textContent = 'تعذر تحميل البيانات';
+        if (pagination) pagination.innerHTML = '';
+      }
+    }
+
+    function filterContracts() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const st = document.getElementById('statusFilter').value;
+      const tp = document.getElementById('typeFilter').value;
+
+      filteredContracts = allContracts.filter(c => {
+        const matchQ = !q ||
+          (c.contract_number || '').toLowerCase().includes(q) ||
+          (c.party_two_name || '').toLowerCase().includes(q) ||
+          (c.note_order_number || '').toLowerCase().includes(q) ||
+          (c.party_two_id || '').toLowerCase().includes(q);
+        const matchSt = !st || c.status === st;
+        const matchTp = !tp || c.template_name?.includes(tp);
+        return matchQ && matchSt && matchTp;
+      });
+      currentPage = 1;
+      renderContracts();
+    }
+
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('statusFilter').value = '';
+      document.getElementById('typeFilter').value = '';
+      filteredContracts = [...allContracts];
+      currentPage = 1;
+      renderContracts();
+    }
+
+    function renderContracts() {
+      const tbody = document.getElementById('contractsBody');
+      const total = filteredContracts.length;
+      document.getElementById('contractsCount').textContent = \`(\${total} عقد)\`;
+
+      const start = (currentPage - 1) * PER_PAGE;
+      const end = start + PER_PAGE;
+      const page = filteredContracts.slice(start, end);
+
+      document.getElementById('paginationInfo').textContent =
+        \`عرض \${Math.min(start+1, total)} - \${Math.min(end, total)} من \${total}\`;
+
+      if (page.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد عقود مطابقة</p></div></td></tr>\`;
+        buildPagination(total);
+        return;
+      }
+
+      tbody.innerHTML = page.map(c => \`
+        <tr>
+          <td><a href="contract-view.html?id=\${c.id}" style="color:var(--primary);font-weight:700;text-decoration:none;">\${c.contract_number || '—'}</a></td>
+          <td><small style="background:rgba(26,60,94,0.08);padding:3px 8px;border-radius:4px;color:var(--primary);">\${c.template_name || '—'}</small></td>
+          <td>
+            <div style="font-weight:600;">\${c.party_two_name || '—'}</div>
+            <div style="font-size:11px;color:var(--text-muted);">\${c.party_two_id || ''}</div>
+          </td>
+          <td style="direction:ltr;text-align:right;">\${c.party_two_phone || '—'}</td>
+          <td><span class="amount-display" style="font-size:14px;">\${formatMoney(c.finance_amount)}</span></td>
+          <td><strong class="text-secondary">\${formatMoney(c.commission_amount)}</strong></td>
+          <td>\${c.finance_type || '—'}</td>
+          <td>\${getStatusBadge(c.status)}</td>
+          <td>\${c.note_order_number ? \`<a href="notes.html?search=\${c.note_order_number}" style="color:var(--primary);"><code>\${c.note_order_number}</code></a>\` : '—'}</td>
+          <td style="font-size:12px;color:var(--text-muted);">\${c.date_gregorian || '—'}</td>
+          <td>
+            <div class="action-btns">
+              <a href="contract-view.html?id=\${c.id}" class="action-btn action-view" title="عرض"><i class="fas fa-eye"></i></a>
+              <a href="new-contract.html?edit=\${c.id}" class="action-btn action-edit" title="تعديل"><i class="fas fa-edit"></i></a>
+              <a href="contract-view.html?id=\${c.id}&print=1" class="action-btn action-pdf" title="طباعة"><i class="fas fa-print"></i></a>
+              \${c.party_two_phone ? \`<button class="action-btn action-whatsapp" onclick="sendWA('\${c.party_two_phone}','\${c.party_two_name}','\${c.contract_number}')" title="واتساب"><i class="fab fa-whatsapp"></i></button>\` : ''}
+              <button class="action-btn action-delete" onclick="archiveContract('\${c.id}')" title="أرشفة"><i class="fas fa-archive"></i></button>
+            </div>
+          </td>
+        </tr>
+      \`).join('');
+
+      buildPagination(total);
+    }
+
+    function buildPagination(total) {
+      const pages = Math.ceil(total / PER_PAGE);
+      const pg = document.getElementById('pagination');
+      if (pages <= 1) { pg.innerHTML = ''; return; }
+
+      let html = '';
+      html += \`<button class="page-btn" onclick="goPage(\${currentPage-1})" \${currentPage===1?'disabled':''}><i class="fas fa-chevron-right"></i></button>\`;
+      for (let i = 1; i <= pages; i++) {
+        html += \`<button class="page-btn \${i===currentPage?'active':''}" onclick="goPage(\${i})">\${i}</button>\`;
+      }
+      html += \`<button class="page-btn" onclick="goPage(\${currentPage+1})" \${currentPage===pages?'disabled':''}><i class="fas fa-chevron-left"></i></button>\`;
+      pg.innerHTML = html;
+    }
+
+    function goPage(p) {
+      const pages = Math.ceil(filteredContracts.length / PER_PAGE);
+      if (p < 1 || p > pages) return;
+      currentPage = p;
+      renderContracts();
+    }
+
+    let archivingId = null;
+    function archiveContract(id) {
+      archivingId = id;
+      openModal('archiveModal');
+      document.getElementById('confirmArchiveBtn').onclick = async () => {
+        try {
+          await API.patch('contracts', archivingId, { status: 'مؤرشف', is_archived: true });
+          showToast('تم أرشفة العقد', 'success');
+          closeModal('archiveModal');
+          loadContracts();
+        } catch (e) { showToast('خطأ في الأرشفة', 'error'); }
+      };
+    }
+
+    function sendWA(phone, name, num) {
+      const msg = \`السلام عليكم \${name}،\\nبخصوص عقد الوساطة رقم \${num}، نرجو التواصل معنا لمتابعة إجراءات التمويل.\\nشركة الموعد للمقاولات العامة\`;
+      sendWhatsApp(phone, msg);
+    }
+
+    document.addEventListener('DOMContentLoaded', loadContracts);
+  <\/script>
+</body>
+</html>
+`,oa=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>عقد جديد | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item active"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1 id="pageTitle"><i class="fas fa-plus-circle"></i> عقد جديد</h1></div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+        <a href="contracts.html" class="btn btn-ghost"><i class="fas fa-arrow-right"></i> العقود</a>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <a href="contracts.html" class="back-link"><i class="fas fa-arrow-right"></i> العودة لقائمة العقود</a>
+
+      <!-- Steps -->
+      <div class="steps-bar">
+        <div class="step active" id="step1-indicator">
+          <div class="step-number">1</div>
+          <div class="step-label">اختيار القالب</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step" id="step2-indicator">
+          <div class="step-number">2</div>
+          <div class="step-label">بيانات العقد</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step" id="step3-indicator">
+          <div class="step-number">3</div>
+          <div class="step-label">المراجعة</div>
+        </div>
+      </div>
+
+      <!-- Step 1: Template Selection -->
+      <div id="step1">
+        <div class="form-section">
+          <div class="form-section-title"><i class="fas fa-layer-group"></i> اختر نوع العقد</div>
+          <div id="templatesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;">
+            <div class="template-select-card" id="tcard_real_estate_lease" onclick="selectTemplate('real_estate_lease', this)"
+              style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+              <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+              <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">عقد إيجار عقاري</div>
+              <div style="font-size:12px;color:var(--text-muted);">عقد إيجار</div>
+            </div>
+            <div class="template-select-card" id="tcard_brokerage_fee" onclick="selectTemplate('brokerage_fee', this)"
+              style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+              <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+              <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">عقد وساطة مقابل أجر (سعي)</div>
+              <div style="font-size:12px;color:var(--text-muted);">عقد وساطة عقارية</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+          <button class="btn btn-primary" id="nextBtn1" onclick="goStep2()" disabled>
+            التالي <i class="fas fa-arrow-left"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Contract Form -->
+      <div id="step2" style="display:none;">
+        <form id="contractForm" novalidate>
+
+          <!-- Party One: Auto -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-building"></i> بيانات الطرف الأول (تلقائية)</div>
+            <div class="form-note" id="partyOneSummary">
+              <i class="fas fa-info-circle text-secondary"></i>
+              <!--CONTRACTS_PARTY_ONE_SUMMARY-->
+            </div>
+          </div>
+
+          <!-- Party Two -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-user"></i> بيانات الطرف الثاني</div>
+
+            <!-- Customer lookup — options injected server-side by GET /admin/contracts/new -->
+            <div class="form-group form-full" style="margin-bottom:16px;">
+              <label class="form-label"><i class="fas fa-users" style="color:var(--secondary);margin-left:6px;"></i> اختيار عميل موجود <span style="font-weight:400;color:var(--text-muted);">(اختياري)</span></label>
+              <select class="form-control" id="customer_lookup" onchange="fillFromCustomer(this.value)">
+                <option value="">— اختر عميلاً لتعبئة الحقول أو أدخل البيانات يدوياً —</option>
+                <!--CONTRACTS_CUSTOMERS_OPTIONS-->
+              </select>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> اختيار عميل يملأ الحقول تلقائياً · تعديل الحقول يدوياً بعد الاختيار يلغي الربط بالعميل</div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">الاسم الكامل <span class="required">*</span></label>
+                <input type="text" class="form-control" id="party_two_name" placeholder="الاسم الرباعي" required />
+                <div class="invalid-feedback">يرجى إدخال اسم العميل</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم الهوية الوطنية <span class="required">*</span></label>
+                <input type="text" class="form-control" id="party_two_id" placeholder="10 أرقام" maxlength="10" required />
+                <div class="invalid-feedback">رقم الهوية يجب أن يكون 10 أرقام</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم الجوال <span class="required">*</span></label>
+                <input type="text" class="form-control" id="party_two_phone" placeholder="05XXXXXXXX" maxlength="10" required />
+                <div class="invalid-feedback">يرجى إدخال رقم جوال صحيح</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">العنوان / المدينة</label>
+                <input type="text" class="form-control" id="party_two_address" placeholder="المدينة / الحي" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Contract Info -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-file-alt"></i> بيانات العقد</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">رقم العقد</label>
+                <input type="text" class="form-control" id="contract_number" readonly style="background:#f7f9fc;" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">التاريخ الميلادي</label>
+                <input type="date" class="form-control" id="date_gregorian" onchange="autoFillDay()" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">اليوم</label>
+                <input type="text" class="form-control" id="day_name" placeholder="مثال: الثلاثاء" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">التاريخ الهجري</label>
+                <input type="text" class="form-control" id="date_hijri" placeholder="1447/06/04" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">المحكمة المختصة</label>
+                <input type="text" class="form-control" id="court_city" value="الرياض" readonly />
+              </div>
+            </div>
+          </div>
+
+          <!-- Finance -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-landmark"></i> تفاصيل التمويل</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">نوع التمويل <span class="required">*</span></label>
+                <select class="form-control" id="finance_type" required>
+                  <option value="">-- اختر نوع التمويل --</option>
+                  <option value="رهن عقاري">رهن عقاري</option>
+                  <option value="تمويل شخصي">تمويل شخصي</option>
+                  <option value="تمويل تجاري">تمويل تجاري</option>
+                  <option value="أخرى">أخرى</option>
+                </select>
+                <div class="invalid-feedback">يرجى اختيار نوع التمويل</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">مبلغ التمويل (ريال) <span class="required">*</span></label>
+                <input type="number" class="form-control" id="finance_amount" placeholder="مثال: 810000" min="0" required />
+                <div class="invalid-feedback">يرجى إدخال مبلغ التمويل</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">اسم البنك / الجهة الممولة</label>
+                <input type="text" class="form-control" id="bank_name" placeholder="مثال: بنك الراجحي" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">وصف العقار</label>
+                <input type="text" class="form-control" id="property_description" placeholder="مثال: شقة سكنية" />
+              </div>
+              <div class="form-group form-full">
+                <label class="form-label">موقع العقار</label>
+                <input type="text" class="form-control" id="property_location" placeholder="مثال: الرياض - حي النرجس" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Commission -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-coins"></i> الشؤون المالية (السعي)</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">نوع العمولة</label>
+                <select class="form-control" id="commission_type" onchange="handleCommissionType()">
+                  <option value="مبلغ مقطوع">مبلغ مقطوع</option>
+                  <option value="نسبة مئوية">نسبة مئوية</option>
+                </select>
+              </div>
+              <div class="form-group" id="commissionRateGroup" style="display:none;">
+                <label class="form-label">نسبة العمولة (%)</label>
+                <input type="number" class="form-control" id="commission_rate" placeholder="مثال: 3" min="0" max="100" step="0.1" onchange="calcCommission()" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">قيمة السعي (ريال) <span class="required">*</span></label>
+                <input type="number" class="form-control" id="commission_amount" placeholder="24000" min="0" required />
+                <div class="invalid-feedback">يرجى إدخال قيمة السعي</div>
+              </div>
+              <div class="form-group" id="commissionPreview" style="display:none;">
+                <label class="form-label">السعي المحسوب</label>
+                <div class="form-note" id="commissionCalcResult">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Promissory Note -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-money-check-alt"></i> سند الأمر</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">رقم سند الأمر <span class="required">*</span></label>
+                <input type="text" class="form-control" id="note_order_number" placeholder="مثال: 3617" required />
+                <div class="invalid-feedback">يرجى إدخال رقم سند الأمر</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">تاريخ استحقاق السند</label>
+                <input type="date" class="form-control" id="note_due_date" />
+              </div>
+            </div>
+            <div class="form-note" style="margin-top:12px;">
+              <i class="fas fa-gavel text-secondary"></i>
+              <strong>ملاحظة قانونية:</strong> يخضع سند الأمر لأحكام نظام الأوراق التجارية استناداً لقرار مجلس الوزراء رقم (692). مكان الدفع: <strong>الرياض</strong>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="form-section">
+            <div class="form-section-title"><i class="fas fa-info-circle"></i> حالة العقد</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">الحالة الحالية</label>
+                <select class="form-control" id="status">
+                  <option value="نشط">نشط</option>
+                  <option value="بانتظار التمويل" selected>بانتظار التمويل</option>
+                  <option value="مكتمل">مكتمل</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" id="notes" rows="2" placeholder="أي ملاحظات إضافية..."></textarea>
+              </div>
+            </div>
+          </div>
+
+        </form>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;">
+          <button class="btn btn-ghost" onclick="goStep1()"><i class="fas fa-arrow-right"></i> السابق</button>
+          <button class="btn btn-primary" onclick="goStep3()">مراجعة العقد <i class="fas fa-arrow-left"></i></button>
+        </div>
+      </div>
+
+      <!-- Step 3: Review -->
+      <div id="step3" style="display:none;">
+        <div class="form-section">
+          <div class="form-section-title"><i class="fas fa-eye"></i> مراجعة بيانات العقد</div>
+          <div id="reviewContent"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="goStep2()"><i class="fas fa-arrow-right"></i> تعديل</button>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-success" onclick="saveContract()"><i class="fas fa-save"></i> حفظ العقد</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="js/app.js"><\/script>
+  <script>
+    const HARD_CODED_CONTRACT_TYPES = [
+      {
+        key: 'real_estate_lease',
+        title: 'عقد إيجار عقاري',
+        subtitle: 'عقد إيجار'
+      },
+      {
+        key: 'brokerage_fee',
+        title: 'عقد وساطة مقابل أجر (سعي)',
+        subtitle: 'عقد وساطة عقارية'
+      }
+    ];
+
+    let selectedContractTypeKey = null;
+    let selectedTemplate = null;
+    let editingContractId = null;
+
+    function loadTemplates() {
+      const container = document.getElementById('templatesList');
+      container.innerHTML = HARD_CODED_CONTRACT_TYPES.map(t => \`
+        <div class="template-select-card" id="tcard_\${t.key}" onclick="selectTemplate('\${t.key}', this)"
+          style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+          <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+          <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">\${t.title}</div>
+          <div style="font-size:12px;color:var(--text-muted);">\${t.subtitle}</div>
+        </div>
+      \`).join('');
+
+      // Auto-select first fixed contract type
+      if (!selectedContractTypeKey && HARD_CODED_CONTRACT_TYPES.length > 0) {
+        const first = HARD_CODED_CONTRACT_TYPES[0];
+        const firstEl = document.getElementById('tcard_' + first.key);
+        if (firstEl) selectTemplate(first.key, firstEl);
+      }
+    }
+
+    function selectTemplate(id, el) {
+      selectedContractTypeKey = id;
+      document.querySelectorAll('.template-select-card').forEach(c => {
+        c.style.borderColor = 'var(--border)';
+        c.style.background = '#fff';
+      });
+      el.style.borderColor = 'var(--primary)';
+      el.style.background = 'rgba(26,60,94,0.04)';
+      document.getElementById('nextBtn1').disabled = false;
+      const selectedType = HARD_CODED_CONTRACT_TYPES.find(t => t.key === id);
+      selectedTemplate = {
+        template_name: selectedType?.title || '',
+        template_type: selectedType?.subtitle || ''
+      };
+      document.getElementById('court_city').value = 'الرياض';
+    }
+
+    function goStep2() {
+      if (!selectedTemplate?.template_name) { showToast('اختر نوع العقد أولاً', 'warning'); return; }
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'block';
+      document.getElementById('step3').style.display = 'none';
+      setStepActive(2);
+      if (!document.getElementById('contract_number').value) {
+        document.getElementById('contract_number').value = generateContractNumber();
+      }
+      if (!document.getElementById('date_gregorian').value) {
+        document.getElementById('date_gregorian').value = new Date().toISOString().split('T')[0];
+        autoFillDay();
+      }
+      if (!document.getElementById('date_hijri').value) {
+        document.getElementById('date_hijri').value = getHijriDate();
+      }
+      // options are already in the DOM — nothing to load
+    }
+
+    function fillFromCustomer(customerId) {
+      if (!customerId) return;
+      const select = document.getElementById('customer_lookup');
+      const opt = select.querySelector(\`option[value="\${customerId}"]\`);
+      if (!opt) return;
+      document.getElementById('party_two_name').value = opt.dataset.name || '';
+      document.getElementById('party_two_id').value = opt.dataset.national_id || '';
+      document.getElementById('party_two_phone').value = opt.dataset.phone || '';
+      document.getElementById('party_two_address').value = opt.dataset.city || '';
+      // Clear validation states
+      ['party_two_name','party_two_id','party_two_phone','party_two_address'].forEach(id => {
+        document.getElementById(id)?.classList.remove('is-invalid');
+      });
+      showToast('تم تعبئة بيانات العميل تلقائياً', 'success');
+    }
+
+    function autoFillDay() {
+      const dateVal = document.getElementById('date_gregorian').value;
+      if (!dateVal) return;
+      try {
+        const d = new Date(dateVal);
+        const dayAr = d.toLocaleDateString('ar-SA', { weekday: 'long' });
+        document.getElementById('day_name').value = dayAr;
+      } catch(e) {}
+    }
+
+    function goStep1() {
+      document.getElementById('step1').style.display = 'block';
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'none';
+      setStepActive(1);
+    }
+
+    function goStep3() {
+      if (!validateForm()) return;
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'block';
+      setStepActive(3);
+      buildReview();
+    }
+
+    function setStepActive(n) {
+      [1,2,3].forEach(i => {
+        const el = document.getElementById(\`step\${i}-indicator\`);
+        el.classList.remove('active','done');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+      });
+    }
+
+    function validateForm() {
+      let valid = true;
+      const fields = [
+        { id: 'party_two_name', msg: 'يرجى إدخال اسم العميل', check: v => v.trim().length >= 3 },
+        { id: 'party_two_id', msg: 'رقم الهوية يجب أن يكون 10 أرقام', check: v => /^\\d{10}$/.test(v) },
+        { id: 'party_two_phone', msg: 'رقم الجوال يجب أن يبدأ بـ05 ويكون 10 أرقام', check: v => /^05\\d{8}$/.test(v) },
+        { id: 'finance_type', msg: 'يرجى اختيار نوع التمويل', check: v => v !== '' },
+        { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
+        { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 },
+        { id: 'note_order_number', msg: 'يرجى إدخال رقم سند الأمر', check: v => v.trim().length > 0 }
+      ];
+      fields.forEach(f => {
+        const el = document.getElementById(f.id);
+        if (!el) return;
+        const ok = f.check(el.value);
+        el.classList.toggle('is-invalid', !ok);
+        if (!ok) valid = false;
+      });
+      if (!valid) showToast('يرجى تصحيح الأخطاء المميزة', 'warning');
+      return valid;
+    }
+
+    function buildReview() {
+      const data = getFormData();
+      document.getElementById('reviewContent').innerHTML = \`
+        <div style="display:grid;gap:16px;">
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">بيانات العقد</div>
+            <div class="info-row">
+              <div class="info-item"><label>رقم العقد</label><span><strong>\${data.contract_number}</strong></span></div>
+              <div class="info-item"><label>اليوم</label><span>\${data.day_name || '—'}</span></div>
+              <div class="info-item"><label>التاريخ الميلادي</label><span>\${data.date_gregorian}</span></div>
+              <div class="info-item"><label>التاريخ الهجري</label><span>\${data.date_hijri}</span></div>
+              <div class="info-item"><label>نوع القالب</label><span>\${selectedTemplate?.template_name || '—'}</span></div>
+            </div>
+          </div>
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">بيانات العميل (الطرف الثاني)</div>
+            <div class="info-row">
+              <div class="info-item"><label>الاسم</label><span>\${data.party_two_name}</span></div>
+              <div class="info-item"><label>رقم الهوية</label><span>\${data.party_two_id}</span></div>
+              <div class="info-item"><label>الجوال</label><span>\${data.party_two_phone}</span></div>
+              <div class="info-item"><label>العنوان</label><span>\${data.party_two_address || '—'}</span></div>
+            </div>
+          </div>
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">تفاصيل التمويل</div>
+            <div class="info-row">
+              <div class="info-item"><label>نوع التمويل</label><span>\${data.finance_type}</span></div>
+              <div class="info-item"><label>مبلغ التمويل</label><span class="amount-display">\${formatMoney(data.finance_amount)}</span></div>
+              <div class="info-item"><label>البنك</label><span>\${data.bank_name || '—'}</span></div>
+              <div class="info-item"><label>وصف العقار</label><span>\${data.property_description || '—'}</span></div>
+            </div>
+          </div>
+          <div style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--secondary);margin-bottom:10px;text-transform:uppercase;">الشؤون المالية</div>
+            <div class="info-row">
+              <div class="info-item"><label>قيمة السعي</label><span class="amount-display">\${formatMoney(data.commission_amount)}</span></div>
+              <div class="info-item"><label>رقم سند الأمر</label><span><strong>\${data.note_order_number}</strong></span></div>
+              <div class="info-item"><label>تاريخ الاستحقاق</label><span>\${data.note_due_date || '—'}</span></div>
+              <div class="info-item"><label>الحالة</label><span>\${getStatusBadge(data.status)}</span></div>
+            </div>
+          </div>
+          <div class="form-note">
+            <i class="fas fa-gavel text-secondary"></i>
+            <strong>الشروط القانونية الثابتة:</strong><br>
+            • المحكمة المختصة: محاكم <strong>الرياض</strong><br>
+            • لا يستحق الطرف الأول أي مستحقات إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني<br>
+            • يخضع سند الأمر لأحكام نظام الأوراق التجارية (قرار مجلس الوزراء رقم 692)
+          </div>
+        </div>
+      \`;
+    }
+
+    function getFormData() {
+      const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
+      return {
+        contract_number: document.getElementById('contract_number').value,
+        template_id: null,
+        template_name: selectedTemplate?.template_name || '',
+        customer_id: selectedCustomerId ? Number(selectedCustomerId) : null,
+        date_gregorian: document.getElementById('date_gregorian').value,
+        date_hijri: document.getElementById('date_hijri').value,
+        day_name: document.getElementById('day_name')?.value || '',
+        party_two_name: document.getElementById('party_two_name').value,
+        party_two_id: document.getElementById('party_two_id').value,
+        party_two_phone: document.getElementById('party_two_phone').value,
+        party_two_address: document.getElementById('party_two_address').value,
+        finance_type: document.getElementById('finance_type').value,
+        finance_amount: parseFloat(document.getElementById('finance_amount').value) || 0,
+        bank_name: document.getElementById('bank_name').value,
+        property_description: document.getElementById('property_description').value,
+        property_location: document.getElementById('property_location').value,
+        commission_type: document.getElementById('commission_type').value,
+        commission_rate: parseFloat(document.getElementById('commission_rate').value) || 0,
+        commission_amount: parseFloat(document.getElementById('commission_amount').value) || 0,
+        note_order_number: document.getElementById('note_order_number').value,
+        note_due_date: document.getElementById('note_due_date').value,
+        status: document.getElementById('status').value,
+        notes: document.getElementById('notes').value,
+        is_archived: false
+      };
+    }
+
+    async function saveContract() {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+      try {
+        const data = getFormData();
+        let contract;
+        if (editingContractId) {
+          contract = await API.update('contracts', editingContractId, data);
+          showToast('تم تحديث العقد بنجاح', 'success');
+        } else {
+          contract = await API.create('contracts', data);
+          // Create linked promissory note
+          if (data.note_order_number) {
+            await API.create('promissory_notes', {
+              note_number: data.note_order_number,
+              contract_id: contract.id,
+              debtor_name: data.party_two_name,
+              debtor_id: data.party_two_id,
+              amount: data.commission_amount,
+              due_date: data.note_due_date || '',
+              issue_date: data.date_gregorian,
+              payment_place: 'الرياض',
+              status: 'ساري'
+            });
+          }
+          showToast('تم إنشاء العقد وسند الأمر بنجاح', 'success');
+        }
+        setTimeout(() => { window.location.href = \`contract-view.html?id=\${contract.id}\`; }, 1200);
+      } catch (e) {
+        showToast('خطأ في حفظ العقد', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> حفظ العقد';
+      }
+    }
+
+    function handleCommissionType() {
+      const type = document.getElementById('commission_type').value;
+      const rateGroup = document.getElementById('commissionRateGroup');
+      const preview = document.getElementById('commissionPreview');
+      if (type === 'نسبة مئوية') {
+        rateGroup.style.display = 'flex';
+        preview.style.display = 'flex';
+      } else {
+        rateGroup.style.display = 'none';
+        preview.style.display = 'none';
+      }
+    }
+
+    function calcCommission() {
+      const rate = parseFloat(document.getElementById('commission_rate').value) || 0;
+      const amount = parseFloat(document.getElementById('finance_amount').value) || 0;
+      if (rate > 0 && amount > 0) {
+        const calc = (amount * rate) / 100;
+        document.getElementById('commission_amount').value = calc;
+        document.getElementById('commissionCalcResult').innerHTML =
+          \`<strong>\${rate}%</strong> من <strong>\${formatMoney(amount)}</strong> = <strong class="text-secondary">\${formatMoney(calc)}</strong>\`;
+      }
+    }
+
+    // Auto-calc commission on amount change
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('finance_amount')?.addEventListener('input', () => {
+        if (document.getElementById('commission_type').value === 'نسبة مئوية') calcCommission();
+      });
+
+      // Manual edits to any Party Two field after autofill → clear dropdown so customer_id becomes null
+      ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach(fieldId => {
+        document.getElementById(fieldId)?.addEventListener('input', () => {
+          const lookup = document.getElementById('customer_lookup');
+          if (lookup && lookup.value) lookup.value = '';
+        });
+      });
+
+      // Check for edit mode
+      const editId = getParam('edit');
+      if (editId) {
+        editingContractId = editId;
+        document.getElementById('pageTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل العقد';
+        loadContractForEdit(editId);
+      }
+
+      loadTemplates();
+    });
+
+    async function loadContractForEdit(id) {
+      try {
+        const c = await API.getOne('contracts', id);
+        selectedContractTypeKey = null;
+        selectedTemplate = { template_name: c.template_name };
+        goStep2();
+        setTimeout(() => {
+          document.getElementById('contract_number').value = c.contract_number || '';
+          document.getElementById('date_gregorian').value = c.date_gregorian || '';
+          document.getElementById('date_hijri').value = c.date_hijri || '';
+          document.getElementById('party_two_name').value = c.party_two_name || '';
+          document.getElementById('party_two_id').value = c.party_two_id || '';
+          document.getElementById('party_two_phone').value = c.party_two_phone || '';
+          document.getElementById('party_two_address').value = c.party_two_address || '';
+          document.getElementById('finance_type').value = c.finance_type || '';
+          document.getElementById('finance_amount').value = c.finance_amount || '';
+          document.getElementById('bank_name').value = c.bank_name || '';
+          document.getElementById('property_description').value = c.property_description || '';
+          document.getElementById('property_location').value = c.property_location || '';
+          document.getElementById('commission_type').value = c.commission_type || 'مبلغ مقطوع';
+          document.getElementById('commission_rate').value = c.commission_rate || '';
+          document.getElementById('commission_amount').value = c.commission_amount || '';
+          document.getElementById('note_order_number').value = c.note_order_number || '';
+          document.getElementById('status').value = c.status || 'نشط';
+          document.getElementById('notes').value = c.notes || '';
+          handleCommissionType();
+          if (c.customer_id) {
+            const customerLookup = document.getElementById('customer_lookup');
+            if (customerLookup) customerLookup.value = String(c.customer_id);
+          }
+        }, 200);
+      } catch (e) { showToast('خطأ في تحميل العقد', 'error'); }
+    }
+  <\/script>
+</body>
+</html>
+`,la=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>عرض العقد | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ===== ACTIONS BAR ===== */
+    .contract-actions-bar {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 16px 22px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: var(--shadow); margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .contract-actions-bar .btn { min-width: 120px; justify-content: center; }
+    .status-change-wrap { margin-right: auto; display: flex; align-items: center; gap: 10px; }
+
+    /* ===== CONTRACT DOCUMENT — Word-style ===== */
+    .contract-doc {
+      background: #fff;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 60px 70px;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14.5px;
+      line-height: 2.1;
+      color: #000;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.10);
+      border: 1px solid #ddd;
+      position: relative;
+    }
+
+    /* ===== HEADER ===== */
+    .doc-header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 18px;
+      border-bottom: 3px double #1a3c5e;
+    }
+    .doc-logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 6px;
+    }
+    .doc-logo-icon {
+      width: 64px; height: 64px;
+      background: #1a3c5e;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      color: #c8a84b; font-size: 28px;
+      flex-shrink: 0;
+    }
+    .doc-company-block { text-align: right; }
+    .doc-company-name { font-size: 20px; font-weight: 800; color: #1a3c5e; line-height: 1.3; }
+    .doc-company-sub { font-size: 12px; color: #555; }
+    .doc-contract-title {
+      font-size: 20px; font-weight: 800;
+      color: #1a3c5e;
+      border: 2px solid #1a3c5e;
+      display: inline-block;
+      padding: 7px 50px;
+      margin: 14px 0 6px;
+      letter-spacing: 1px;
+    }
+    .doc-contract-meta {
+      font-size: 13px; color: #444;
+    }
+    .doc-contract-meta span { margin: 0 8px; }
+
+    /* ===== BISMILLAH ===== */
+    .doc-bismillah {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a3c5e;
+      margin: 18px 0 14px;
+    }
+
+    /* ===== INTRO PARAGRAPH ===== */
+    .doc-intro {
+      margin-bottom: 14px;
+      text-align: justify;
+    }
+
+    /* ===== PARTIES BOX ===== */
+    .doc-parties {
+      border: 1.5px solid #b0b8c1;
+      border-radius: 6px;
+      margin: 16px 0;
+      overflow: hidden;
+    }
+    .doc-parties-title {
+      background: #1a3c5e;
+      color: #fff;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .doc-party-row {
+      display: flex;
+      border-bottom: 1px solid #dde3ec;
+    }
+    .doc-party-row:last-child { border-bottom: none; }
+    .doc-party-label {
+      background: #f4f7fb;
+      padding: 10px 16px;
+      font-weight: 700;
+      font-size: 13px;
+      color: #1a3c5e;
+      min-width: 130px;
+      display: flex; align-items: center;
+      border-left: 1px solid #dde3ec;
+    }
+    .doc-party-value {
+      padding: 10px 16px;
+      font-size: 13.5px;
+      flex: 1;
+      line-height: 1.7;
+    }
+
+    /* ===== PREAMBLE ===== */
+    .doc-preamble {
+      background: #f9f9f9;
+      border-right: 4px solid #c8a84b;
+      padding: 14px 16px;
+      margin: 18px 0;
+      font-size: 13.5px;
+      line-height: 1.9;
+      border-radius: 0 6px 6px 0;
+    }
+    .doc-preamble-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1a3c5e;
+      margin-bottom: 6px;
+      text-decoration: underline;
+    }
+
+    /* ===== ARTICLES ===== */
+    .doc-articles { margin: 10px 0; }
+    .doc-article {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid #e8ecf0;
+      background: #fafbfc;
+    }
+    .doc-article-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1a3c5e;
+      margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doc-article-num {
+      background: #1a3c5e;
+      color: #fff;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; flex-shrink: 0;
+    }
+    .doc-article-body {
+      font-size: 13.5px;
+      line-height: 2;
+      padding-right: 34px;
+    }
+    .doc-article-body .highlight-amount {
+      font-size: 16px;
+      font-weight: 800;
+      color: #c8a84b;
+      border-bottom: 2px solid #c8a84b;
+    }
+    .doc-article-body .highlight-legal {
+      font-weight: 700;
+      color: #1a3c5e;
+    }
+
+    /* ===== NOTE BOX inside article ===== */
+    .doc-note-box {
+      border: 2px solid #1a3c5e;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 14px 0 4px;
+      background: #f0f4f8;
+      text-align: center;
+    }
+    .doc-note-box .note-label { font-size: 12px; color: #555; margin-bottom: 4px; }
+    .doc-note-box .note-number { font-size: 22px; font-weight: 800; color: #1a3c5e; }
+    .doc-note-box .note-amount { font-size: 16px; font-weight: 700; color: #c8a84b; margin-top: 4px; }
+    .doc-note-box .note-words { font-size: 13px; color: #444; margin-top: 4px; }
+
+    /* ===== FOOTER ===== */
+    .doc-footer {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 2px solid #1a3c5e;
+    }
+    .doc-closing {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a3c5e;
+      margin-bottom: 30px;
+    }
+    .doc-signatures {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 50px;
+    }
+    .doc-sig-box { text-align: center; }
+    .doc-sig-title {
+      font-size: 14px; font-weight: 800;
+      color: #1a3c5e; margin-bottom: 4px;
+    }
+    .doc-sig-name {
+      font-size: 13px; color: #333; margin-bottom: 4px;
+    }
+    .doc-sig-detail {
+      font-size: 12px; color: #666; margin-bottom: 16px;
+    }
+    .doc-sig-area {
+      height: 90px;
+      border-bottom: 1.5px solid #666;
+      position: relative;
+      margin-bottom: 6px;
+      cursor: crosshair;
+    }
+    .doc-sig-area canvas {
+      width: 100%; height: 100%;
+    }
+    .doc-sig-area-label {
+      font-size: 12px; color: #888;
+    }
+    .doc-sig-clear {
+      background: none; border: 1px solid #ddd;
+      border-radius: 4px; padding: 3px 10px;
+      font-size: 11px; cursor: pointer;
+      margin-top: 4px; font-family: 'Tajawal', sans-serif;
+      color: #888;
+    }
+    .doc-sig-clear:hover { border-color: #e74c3c; color: #e74c3c; }
+
+    .doc-city-date {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px; color: #777;
+    }
+
+    /* ===== PRINT ===== */
+    @media print {
+      .sidebar, .topbar, .contract-actions-bar, .no-print { display: none !important; }
+      .main-content { margin: 0 !important; }
+      .page-content { padding: 0 !important; background: #fff; }
+      .contract-doc {
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+        padding: 20px 40px !important;
+      }
+      .doc-sig-clear, .no-print { display: none !important; }
+      body { background: #fff; }
+      @page { size: A4; margin: 15mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar no-print">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1 id="topbarTitle"><i class="fas fa-file-contract"></i> عرض العقد</h1></div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn no-print"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <a href="contracts.html" class="back-link no-print"><i class="fas fa-arrow-right"></i> العودة لقائمة العقود</a>
+
+      <!-- Actions Bar -->
+      <div class="contract-actions-bar no-print" id="actionsBar">
+        <button class="btn btn-primary" onclick="printPage()">
+          <i class="fas fa-print"></i> طباعة / PDF
+        </button>
+        <button class="btn btn-outline" onclick="editContract()">
+          <i class="fas fa-edit"></i> تعديل العقد
+        </button>
+        <button class="btn btn-success" id="whatsappBtn" onclick="sendContractWhatsApp()">
+          <i class="fab fa-whatsapp"></i> إرسال واتساب
+        </button>
+        <a id="noteLink" href="#" class="btn btn-secondary" style="display:none;">
+          <i class="fas fa-money-check-alt"></i> عرض سند الأمر
+        </a>
+        <div class="status-change-wrap">
+          <label style="font-size:13px;color:var(--text-muted);">تغيير الحالة:</label>
+          <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
+            <option value="نشط">نشط</option>
+            <option value="بانتظار التمويل">بانتظار التمويل</option>
+            <option value="مكتمل">مكتمل ✓</option>
+            <option value="مؤرشف">مؤرشف</option>
+            <option value="ملغي">ملغي</option>
+          </select>
+          <button class="btn btn-warning btn-sm" onclick="archiveContract()">
+            <i class="fas fa-archive"></i> أرشفة
+          </button>
+        </div>
+      </div>
+
+      <!-- Contract Document -->
+      <div id="contractDoc">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري تحميل العقد...</div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="js/app.js"><\/script>
+  <script>
+    let currentContract = null;
+
+    // ======= LOAD =======
+    async function loadContract() {
+      const id = getParam('id');
+      if (!id) { window.location.href = 'contracts.html'; return; }
+      try {
+        currentContract = await API.getOne('contracts', id);
+        document.getElementById('topbarTitle').innerHTML =
+          \`<i class="fas fa-file-contract"></i> \${currentContract.contract_number || 'عرض العقد'}\`;
+        document.getElementById('statusSelect').value = currentContract.status || 'نشط';
+        if (currentContract.note_order_number) {
+          const nl = document.getElementById('noteLink');
+          nl.href = \`notes.html?search=\${currentContract.note_order_number}\`;
+          nl.style.display = 'inline-flex';
+        }
+        renderContractDoc(currentContract);
+        if (getParam('print') === '1') setTimeout(printPage, 1200);
+      } catch (e) {
+        document.getElementById('contractDoc').innerHTML =
+          \`<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل العقد</p></div>\`;
+      }
+    }
+
+    // ======= RENDER — Word-style =======
+    function renderContractDoc(c) {
+      const dayName = getDayName(c.date_gregorian);
+      const financeAmountFormatted = formatMoney(c.finance_amount);
+      const commissionFormatted = formatMoney(c.commission_amount);
+      const commissionWords = numberToArabicWords(c.commission_amount);
+
+      document.getElementById('contractDoc').innerHTML = \`
+      <div class="contract-doc" id="printArea">
+
+        <!-- ===== HEADER ===== -->
+        <div class="doc-header">
+          <div class="doc-logo-row">
+            <div class="doc-logo-icon"><i class="fas fa-building"></i></div>
+            <div class="doc-company-block">
+              <div class="doc-company-name">شركة الموعد للمقاولات العامة</div>
+              <div class="doc-company-sub">
+                سجل تجاري: 3350140062 &nbsp;|&nbsp; هاتف: 920012979 &nbsp;|&nbsp;
+                طريق الإمام سعود الفرعي، حي التعاون، الرياض
+              </div>
+            </div>
+          </div>
+          <div class="doc-contract-title">\${c.template_name || 'عقد وساطة مقابل أجر (سعي)'}</div>
+          <div class="doc-contract-meta">
+            <span><i class="fas fa-calendar-alt" style="color:#c8a84b;"></i> \${c.date_gregorian || '—'} م</span>
+            <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> \${c.date_hijri || '—'} هـ</span>
+            <span><i class="fas fa-hashtag" style="color:#888;"></i> \${c.contract_number || '—'}</span>
+          </div>
+        </div>
+
+        <!-- ===== BISMILLAH ===== -->
+        <div class="doc-bismillah">بسم الله الرحمن الرحيم</div>
+
+        <!-- ===== INTRO ===== -->
+        <div class="doc-intro">
+          بعون الله وتوفيقه أنه في يوم <strong>\${dayName}</strong> - بتاريخ:
+          <strong>\${c.date_hijri || '—'} هـ</strong> الموافق:
+          <strong>\${c.date_gregorian || '—'} م</strong>
+          تم الاتفاق بين كلا من: -
+        </div>
+
+        <!-- ===== PARTIES ===== -->
+        <div class="doc-parties">
+          <div class="doc-parties-title">أطراف العقد</div>
+
+          <div class="doc-party-row">
+            <div class="doc-party-label">الطرف الأول</div>
+            <div class="doc-party-value">
+              شركة الموعد للمقاولات العامة — سجل تجاري رقم <strong>(3350140062)</strong><br>
+              عنوانها: مدينة الرياض، طريق الإمام سعود الفرعي، حي التعاون<br>
+              هاتف: <strong>(920012979)</strong>
+            </div>
+          </div>
+
+          <div class="doc-party-row">
+            <div class="doc-party-label">الطرف الثاني</div>
+            <div class="doc-party-value">
+              السيد/ <strong>\${c.party_two_name || '—'}</strong><br>
+              الهوية الوطنية رقم: <strong>(\${c.party_two_id || '—'})</strong> &nbsp;|&nbsp;
+              العنوان: <strong>(\${c.party_two_address || '—'})</strong><br>
+              رقم الهاتف: <strong>\${c.party_two_phone || '—'}</strong> &nbsp;|&nbsp;
+              نوع التمويل: <strong>(\${c.finance_type || '—'})</strong><br>
+              مبلغ التمويل: <strong class="highlight-amount">\${financeAmountFormatted}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="doc-intro" style="margin-top:14px;">
+          وبعد أن أقر الطرفان وهما بكامل الأهلية المعتبرة شرعاً ونظاماً على إبرام هذا العقد وفقاً للبنود والشروط التالية: -
+        </div>
+
+        <!-- ===== PREAMBLE ===== -->
+        <div class="doc-preamble">
+          <div class="doc-preamble-title">التمهيد</div>
+          حيث أن الطرف الأول شركة وساطة عقارية مقابل عمولة وتقدم خدماتها بوصفها وسيط عقاري، وحيث أن الطرف الثاني يرغب بالتقسيط عن طريق أحد البنوك أو أحد الجهات التمويلية وفق أحكام وقواعد الشريعة الإسلامية ودور الطرف الأول الوساطة.
+        </div>
+
+        <!-- ===== ARTICLES ===== -->
+        <div class="doc-articles">
+
+          <!-- المادة الأولى -->
+          <div class="doc-article">
+            <div class="doc-article-title">
+              <span class="doc-article-num">١</span>
+              البند الأول: التزامات الطرف الثاني (المستندات)
+            </div>
+            <div class="doc-article-body">
+              أتعهد الطرف الثاني بإحضار جميع المستندات والوثائق اللازمة لإتمام عملية التمويل العقاري وما يطلبه منه البنك أو جهة التمويل.
+            </div>
+          </div>
+
+          <!-- المادة الثانية -->
+          <div class="doc-article">
+            <div class="doc-article-title">
+              <span class="doc-article-num">٢</span>
+              البند الثاني: عدم التقدم لجهة تمويل أخرى
+            </div>
+            <div class="doc-article-body">
+              أتعهد الطرف الثاني بعدم التقدم بطلب تمويل آخر لدى جهة تمويل أخرى خلال فترة سريان هذا العقد.
+            </div>
+          </div>
+
+          <!-- المادة الثالثة -->
+          <div class="doc-article">
+            <div class="doc-article-title">
+              <span class="doc-article-num">٣</span>
+              البند الثالث: قيمة عمولة الوساطة (السعي)
+            </div>
+            <div class="doc-article-body">
+              يلتزم الطرف الثاني بدفع مبلغ السعي (العمولة) المتفق عليه والبالغ:
+              <div class="doc-note-box">
+                <div class="note-label">مبلغ العمولة المستحقة</div>
+                <div class="note-amount">\${commissionFormatted}</div>
+                <div class="note-words">(\${commissionWords})</div>
+              </div>
+              <span class="highlight-legal">عند صرف مبلغ التمويل لصالح الطرف الثاني</span>، ويحق للطرف الأول طلب مستحقاته فور تحويل مبلغ التمويل من البنك لحساب الطرف الثاني.
+            </div>
+          </div>
+
+          <!-- المادة الرابعة -->
+          <div class="doc-article">
+            <div class="doc-article-title">
+              <span class="doc-article-num">٤</span>
+              البند الرابع: سند لأمر
+            </div>
+            <div class="doc-article-body">
+              أصدر الطرف الثاني سنداً لأمر رقم
+              <strong style="font-size:16px;color:#1a3c5e;">(\${c.note_order_number || '—'})</strong>
+              بمبلغ <strong class="highlight-amount">\${commissionFormatted}</strong>
+              مستحق عند صرف التمويل.
+              <br>
+              يخضع هذا السند لأحكام المرسوم بقرار مجلس الوزراء رقم <strong>(692)</strong>
+              الخاص بنظام الأوراق التجارية في المملكة العربية السعودية.
+              ويتعهد الطرف الثاني بموجب هذا السند بأن يدفع
+              <span class="highlight-legal">بدون قيد أو شرط</span>
+              مبلغ العمولة المذكور في مكان الدفع: مدينة <strong>الرياض</strong>.
+            </div>
+          </div>
+
+          <!-- المادة الخامسة -->
+          <div class="doc-article">
+            <div class="doc-article-title">
+              <span class="doc-article-num">٥</span>
+              البند الخامس: الاختصاص القضائي
+            </div>
+            <div class="doc-article-body">
+              في حال نشوب أي خلاف بين طرفي هذا العقد حول تفسيره أو تنفيذه، يكون الفصل فيه
+              لمحاكم مدينة <strong>الرياض</strong> وتحتكم هذا العقد أحكام الشريعة الإسلامية والأنظمة السعودية.
+            </div>
+          </div>
+
+          \${c.bank_name || c.property_description ? \`
+          <!-- المادة السادسة -->
+          <div class="doc-article">
+            <div class="doc-article-title">
+              <span class="doc-article-num">٦</span>
+              البند السادس: تفاصيل العقار والتمويل
+            </div>
+            <div class="doc-article-body">
+              \${c.bank_name ? \`الجهة الممولة: <strong>\${c.bank_name}</strong><br>\` : ''}
+              \${c.property_description ? \`وصف العقار: <strong>\${c.property_description}</strong><br>\` : ''}
+              \${c.property_location ? \`الموقع: <strong>\${c.property_location}</strong>\` : ''}
+            </div>
+          </div>\` : ''}
+
+        </div>
+
+        <!-- ===== FOOTER ===== -->
+        <div class="doc-footer">
+          <div class="doc-closing">والله ولي التوفيق</div>
+
+          <div class="doc-signatures">
+            <!-- Party One -->
+            <div class="doc-sig-box">
+              <div class="doc-sig-title">الطرف الأول</div>
+              <div class="doc-sig-name">شركة الموعد للمقاولات العامة</div>
+              <div class="doc-sig-detail">س.ت: 3350140062 | الرياض</div>
+              <div class="doc-sig-area">
+                <canvas id="sig1Canvas"></canvas>
+              </div>
+              <div class="doc-sig-area-label">التوقيع والختم</div>
+              <button class="doc-sig-clear no-print" onclick="clearCanvas('sig1Canvas')">
+                <i class="fas fa-eraser"></i> مسح
+              </button>
+            </div>
+
+            <!-- Party Two -->
+            <div class="doc-sig-box">
+              <div class="doc-sig-title">الطرف الثاني</div>
+              <div class="doc-sig-name">\${c.party_two_name || '—'}</div>
+              <div class="doc-sig-detail">هوية: \${c.party_two_id || '—'}</div>
+              <div class="doc-sig-area">
+                <canvas id="sig2Canvas"></canvas>
+              </div>
+              <div class="doc-sig-area-label">التوقيع</div>
+              <button class="doc-sig-clear no-print" onclick="clearCanvas('sig2Canvas')">
+                <i class="fas fa-eraser"></i> مسح
+              </button>
+            </div>
+          </div>
+
+          <div class="doc-city-date">
+            حُرِّر في مدينة الرياض بتاريخ \${c.date_gregorian || '——/——/——'} م
+            الموافق \${c.date_hijri || '——/——/——'} هـ
+          </div>
+        </div>
+
+      </div><!-- /contract-doc -->
+      \`;
+
+      initSignaturePads();
+    }
+
+    // ======= HELPERS =======
+    function getDayName(dateStr) {
+      if (!dateStr) return '—';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('ar-SA', { weekday: 'long' });
+      } catch { return '—'; }
+    }
+
+    // ======= SIGNATURE PADS =======
+    function initSignaturePads() {
+      ['sig1Canvas', 'sig2Canvas'].forEach(id => {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const parent = canvas.parentElement;
+        canvas.width = parent.offsetWidth || 280;
+        canvas.height = 86;
+        const ctx = canvas.getContext('2d');
+        let drawing = false, lx = 0, ly = 0;
+
+        const getPos = (e) => {
+          const r = canvas.getBoundingClientRect();
+          const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+          const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+          return [cx - r.left, cy - r.top];
+        };
+
+        canvas.addEventListener('mousedown', e => { drawing = true; [lx,ly] = getPos(e); });
+        canvas.addEventListener('mousemove', e => {
+          if (!drawing) return;
+          const [x,y] = getPos(e);
+          ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(x,y);
+          ctx.strokeStyle = '#1a3c5e'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke();
+          [lx,ly] = [x,y];
+        });
+        canvas.addEventListener('mouseup', () => drawing = false);
+        canvas.addEventListener('mouseleave', () => drawing = false);
+        canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; [lx,ly] = getPos(e); }, {passive:false});
+        canvas.addEventListener('touchmove', e => {
+          e.preventDefault(); if (!drawing) return;
+          const [x,y] = getPos(e);
+          ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(x,y);
+          ctx.strokeStyle = '#1a3c5e'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke();
+          [lx,ly] = [x,y];
+        }, {passive:false});
+        canvas.addEventListener('touchend', () => drawing = false);
+      });
+    }
+
+    function clearCanvas(id) {
+      const c = document.getElementById(id);
+      if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    }
+
+    // ======= ACTIONS =======
+    function editContract() {
+      window.location.href = \`new-contract.html?edit=\${currentContract.id}\`;
+    }
+
+    function sendContractWhatsApp() {
+      if (!currentContract || !currentContract.party_two_phone) {
+        showToast('رقم الجوال غير متوفر', 'warning'); return;
+      }
+      const msg =
+\`السلام عليكم \${currentContract.party_two_name}،
+
+نود إحاطتكم علماً بأنه تم إعداد \${currentContract.template_name || 'عقد الوساطة العقارية'} رقم (\${currentContract.contract_number}).
+
+📋 تفاصيل العقد:
+• نوع التمويل: \${currentContract.finance_type}
+• مبلغ التمويل: \${formatMoney(currentContract.finance_amount)}
+• قيمة السعي: \${formatMoney(currentContract.commission_amount)}
+• رقم سند الأمر: \${currentContract.note_order_number}
+
+⚠️ تنبيه: لن يُستحق مبلغ السعي إلا بعد نزول التمويل في حسابكم مباشرةً.
+
+للتواصل والاستفسار:
+شركة الموعد للمقاولات العامة
+📞 920012979\`;
+      sendWhatsApp(currentContract.party_two_phone, msg);
+    }
+
+    async function updateStatus() {
+      const newStatus = document.getElementById('statusSelect').value;
+      try {
+        await API.patch('contracts', currentContract.id, { status: newStatus });
+        currentContract.status = newStatus;
+        showToast(\`✓ تم تغيير الحالة إلى: \${newStatus}\`, 'success');
+      } catch (e) { showToast('خطأ في تحديث الحالة', 'error'); }
+    }
+
+    async function archiveContract() {
+      if (!confirm('هل تريد أرشفة هذا العقد بعد اكتمال معاملاته؟\\n\\nسيتم نقله للأرشيف ويمكن استرجاعه لاحقاً.')) return;
+      try {
+        await API.patch('contracts', currentContract.id, { status: 'مؤرشف', is_archived: true });
+        showToast('تم أرشفة العقد بنجاح', 'success');
+        setTimeout(() => window.location.href = 'contracts.html', 1500);
+      } catch (e) { showToast('خطأ في الأرشفة', 'error'); }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadContract);
+  <\/script>
+</body>
+</html>
+`,ia=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة القوالب | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .template-card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transition: var(--transition);
+      border: 2px solid transparent;
+    }
+    .template-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-3px); }
+    .template-card.active-tpl { border-color: var(--primary); }
+    .template-card-header {
+      background: var(--primary);
+      padding: 20px;
+      color: #fff;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .template-card-icon {
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .template-card-name { font-size: 16px; font-weight: 700; }
+    .template-card-type { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    .template-card-body { padding: 18px; }
+    .template-vars {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 14px;
+    }
+    .template-card-footer {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .builder-area {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .builder-toolbar {
+      padding: 14px 20px;
+      background: #f7f9fc;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .builder-toolbar button {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: 'Tajawal', sans-serif;
+      transition: var(--transition);
+    }
+    .builder-toolbar button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .editor-area {
+      min-height: 300px;
+      padding: 20px;
+      outline: none;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px;
+      line-height: 2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item active"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
+      <div class="topbar-actions">
+        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+        <div class="current-date" id="currentDate"></div>
+        <button type="button" id="btnNewTemplate" class="btn btn-primary"><i class="fas fa-plus"></i> قالب جديد</button>
+      </div>
+    </header>
+
+    <div class="page-content">
+
+      <div class="page-header">
+        <div class="page-header-title">
+          <h2>قوالب العقود</h2>
+          <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+        </div>
+      </div>
+
+      <!-- Templates Grid -->
+      <div class="templates-grid" id="templatesGrid">
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Modal: New/Edit Template -->
+  <div class="modal-overlay" id="templateModal" aria-hidden="true">
+    <div class="modal-box" style="max-width:820px;" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalTitle"><i class="fas fa-layer-group"></i> إضافة قالب جديد</h3>
+        <button class="modal-close" onclick="closeModal('templateModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="templateForm">
+          <input type="hidden" id="tpl_id" />
+          <div class="form-grid" style="margin-bottom:16px;">
+            <div class="form-group">
+              <label class="form-label">اسم القالب <span class="required">*</span></label>
+              <input type="text" class="form-control" id="tpl_name" placeholder="مثال: عقد وساطة عقارية" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">نوع القالب</label>
+              <select class="form-control" id="tpl_type">
+                <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
+                <option value="عقد إيجار">عقد إيجار</option>
+                <option value="عقد بيع">عقد بيع</option>
+                <option value="عقد مقاولات">عقد مقاولات</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">المحكمة المختصة</label>
+              <input type="text" class="form-control" id="tpl_court" value="الرياض" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">الحالة</label>
+              <select class="form-control" id="tpl_active">
+                <option value="true">مفعّل</option>
+                <option value="false">معطّل</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="form-label">الترويسة</label>
+            <textarea class="form-control" id="tpl_header" rows="2" placeholder="محتوى الترويسة الإضافي"></textarea>
+          </div>
+
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">جسم العقد <small class="text-muted">(استخدم {{variable}} للمتغيرات)</small></label>
+            <div class="builder-area">
+              <div class="builder-toolbar">
+                <button type="button" onclick="insertVar('{{date_gregorian}}')">📅 تاريخ ميلادي</button>
+                <button type="button" onclick="insertVar('{{date_hijri}}')">🗓 تاريخ هجري</button>
+                <button type="button" onclick="insertVar('{{party_two_name}}')">👤 اسم العميل</button>
+                <button type="button" onclick="insertVar('{{party_two_id}}')">🪪 رقم الهوية</button>
+                <button type="button" onclick="insertVar('{{party_two_phone}}')">📱 الجوال</button>
+                <button type="button" onclick="insertVar('{{party_two_address}}')">📍 العنوان</button>
+                <button type="button" onclick="insertVar('{{finance_type}}')">🏦 نوع التمويل</button>
+                <button type="button" onclick="insertVar('{{finance_amount}}')">💰 مبلغ التمويل</button>
+                <button type="button" onclick="insertVar('{{commission_amount}}')">💵 مبلغ السعي</button>
+                <button type="button" onclick="insertVar('{{note_order_number}}')">📋 رقم السند</button>
+                <button type="button" onclick="insertVar('{{bank_name}}')">🏛 اسم البنك</button>
+                <button type="button" onclick="insertVar('{{property_description}}')">🏠 وصف العقار</button>
+                <button type="button" onclick="insertVar('{{contract_number}}')">🔢 رقم العقد</button>
+              </div>
+              <textarea class="form-control editor-area" id="tpl_body" rows="10" placeholder="اكتب بنود العقد هنا...&#10;استخدم المتغيرات من الأزرار أعلاه مثل {{party_two_name}}"></textarea>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label">التذييل (الخاتمة)</label>
+            <input type="text" class="form-control" id="tpl_footer" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save"></i> حفظ القالب</button>
+        <button type="button" class="btn btn-ghost" onclick="closeModal('templateModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Preview Template -->
+  <div class="modal-overlay" id="previewModal" aria-hidden="true">
+    <div class="modal-box" style="max-width:700px;" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class="fas fa-eye"></i> معاينة القالب</h3>
+        <button class="modal-close" onclick="closeModal('previewModal')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="previewContent"></div>
+    </div>
+  </div>
+
+  <script src="js/app.js"><\/script>
+  <script>
+    let editingId = null;
+
+    function parseTemplateVars(t) {
+      const raw = t.variables_list;
+      if (raw == null || raw === '') return [];
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') {
+        try {
+          const p = JSON.parse(raw);
+          return Array.isArray(p) ? p : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    async function loadTemplates() {
+      const grid = document.getElementById('templatesGrid');
+      try {
+        const data = await API.get('templates', { limit: 50 });
+        const templates = data.data || [];
+        if (templates.length === 0) {
+          grid.innerHTML = \`<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-layer-group"></i><p>لا توجد قوالب بعد. أضف قالبك الأول!</p></div>\`;
+          return;
+        }
+        grid.innerHTML = templates.map(t => buildTemplateCard(t)).join('');
+      } catch (e) {
+        grid.innerHTML = \`<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل البيانات</p></div>\`;
+      }
+    }
+
+    function buildTemplateCard(t) {
+      const vars = parseTemplateVars(t);
+      const isActive = t.is_active === true || t.is_active === 'true';
+      return \`
+        <div class="template-card \${isActive ? 'active-tpl' : ''}">
+          <div class="template-card-header">
+            <div class="template-card-icon"><i class="fas fa-file-contract"></i></div>
+            <div>
+              <div class="template-card-name">\${t.template_name}</div>
+              <div class="template-card-type">\${t.template_type || '—'}</div>
+            </div>
+            <div style="margin-right:auto;">
+              \${isActive
+                ? '<span class="badge badge-active" style="font-size:11px;">مفعّل</span>'
+                : '<span class="badge badge-archived" style="font-size:11px;">معطّل</span>'}
+            </div>
+          </div>
+          <div class="template-card-body">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+              <i class="fas fa-gavel"></i> المحكمة المختصة: <strong>\${t.court_city || 'الرياض'}</strong>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">المتغيرات:</div>
+            <div class="template-vars">
+              \${vars.slice(0, 6).map(v => \`<span class="variable-tag">{{\${v}}}</span>\`).join('')}
+              \${vars.length > 6 ? \`<span class="variable-tag">+\${vars.length - 6}</span>\` : ''}
+            </div>
+          </div>
+          <div class="template-card-footer">
+            <a href="new-contract.html?template=\${t.id}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> إنشاء عقد</a>
+            <button class="btn btn-outline btn-sm" onclick="previewTemplate('\${t.id}')"><i class="fas fa-eye"></i></button>
+            <button class="btn btn-warning btn-sm" onclick="editTemplate('\${t.id}')"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTemplate('\${t.id}')"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      \`;
+    }
+
+    function openNewTemplateModal() {
+      editingId = null;
+      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus"></i> إضافة قالب جديد';
+      document.getElementById('templateForm').reset();
+      document.getElementById('tpl_footer').value = 'والله ولي التوفيق';
+      document.getElementById('tpl_court').value = 'الرياض';
+      document.getElementById('tpl_body').value = getDefaultBody();
+      openModal('templateModal');
+    }
+
+    function getDefaultBody() {
+      return \`بسم الله الرحمن الرحيم
+
+عقد وساطة عقارية
+
+إنه في يوم {{date_gregorian}} الموافق {{date_hijri}}
+تم الاتفاق بين الطرفين الآتي ذكرهما:
+
+الطرف الأول: شركة الموعد للمقاولات العامة
+السجل التجاري: 3350140062 - الرياض
+
+الطرف الثاني: {{party_two_name}}
+رقم الهوية: {{party_two_id}}
+رقم الجوال: {{party_two_phone}}
+العنوان: {{party_two_address}}
+
+المادة الأولى: موضوع العقد
+وافق الطرف الأول على تقديم خدمات الوساطة العقارية للطرف الثاني للحصول على تمويل عقاري من نوع ({{finance_type}}) بمبلغ ({{finance_amount}}) من {{bank_name}}.
+
+المادة الثانية: أتعاب الوساطة
+يلتزم الطرف الثاني بدفع مبلغ ({{commission_amount}}) كأتعاب وساطة للطرف الأول، ولن يستحق الطرف الأول هذا المبلغ إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني.
+
+المادة الثالثة: سند الأمر
+أصدر الطرف الثاني سند أمر رقم ({{note_order_number}}) بمبلغ أتعاب الوساطة ضماناً للوفاء بالتزاماته المالية.
+
+المادة الرابعة: الاختصاص القضائي
+في حال نشوء أي نزاع بين الطرفين، يكون الاختصاص القضائي لمحاكم مدينة الرياض.\`;
+    }
+
+    async function editTemplate(id) {
+      editingId = id;
+      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل القالب';
+      try {
+        const t = await API.getOne('templates', id);
+        document.getElementById('tpl_id').value = t.id;
+        document.getElementById('tpl_name').value = t.template_name || '';
+        document.getElementById('tpl_type').value = t.template_type || 'عقد وساطة عقارية';
+        document.getElementById('tpl_court').value = t.court_city || 'الرياض';
+        document.getElementById('tpl_active').value = t.is_active ? 'true' : 'false';
+        document.getElementById('tpl_header').value = t.header_content || '';
+        document.getElementById('tpl_body').value = t.body_content || '';
+        document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
+        openModal('templateModal');
+      } catch (e) {
+        showToast('خطأ في تحميل القالب', 'error');
+      }
+    }
+
+    function insertVar(v) {
+      const ta = document.getElementById('tpl_body');
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      ta.value = ta.value.substring(0, start) + v + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + v.length;
+      ta.focus();
+    }
+
+    async function saveTemplate() {
+      const name = document.getElementById('tpl_name').value.trim();
+      if (!name) { showToast('يرجى إدخال اسم القالب', 'warning'); return; }
+
+      const body = document.getElementById('tpl_body').value;
+      const vars = [...body.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);
+      const uniqueVars = [...new Set(vars)];
+
+      const data = {
+        template_name: name,
+        template_type: document.getElementById('tpl_type').value,
+        court_city: document.getElementById('tpl_court').value || 'الرياض',
+        is_active: document.getElementById('tpl_active').value === 'true',
+        header_content: document.getElementById('tpl_header').value,
+        body_content: body,
+        footer_content: document.getElementById('tpl_footer').value,
+        variables_list: uniqueVars
+      };
+
+      try {
+        if (editingId) {
+          await API.update('templates', editingId, data);
+          showToast('تم تحديث القالب بنجاح', 'success');
+        } else {
+          await API.create('templates', data);
+          showToast('تم إضافة القالب بنجاح', 'success');
+        }
+        closeModal('templateModal');
+        loadTemplates();
+      } catch (e) {
+        showToast('خطأ في حفظ القالب', 'error');
+      }
+    }
+
+    async function deleteTemplate(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا القالب؟')) return;
+      try {
+        await API.delete('templates', id);
+        showToast('تم حذف القالب', 'success');
+        loadTemplates();
+      } catch (e) {
+        showToast('خطأ في الحذف', 'error');
+      }
+    }
+
+    async function previewTemplate(id) {
+      try {
+        const t = await API.getOne('templates', id);
+        const preview = (t.body_content || '')
+          .replace(/\\{\\{party_two_name\\}\\}/g, 'عقيل بن هريسان العنزي')
+          .replace(/\\{\\{party_two_id\\}\\}/g, '1030460636')
+          .replace(/\\{\\{party_two_phone\\}\\}/g, '0554456710')
+          .replace(/\\{\\{party_two_address\\}\\}/g, 'حائل')
+          .replace(/\\{\\{date_gregorian\\}\\}/g, '2025/11/25')
+          .replace(/\\{\\{date_hijri\\}\\}/g, '1447/06/04')
+          .replace(/\\{\\{finance_type\\}\\}/g, 'رهن عقاري')
+          .replace(/\\{\\{finance_amount\\}\\}/g, '810,000 ريال')
+          .replace(/\\{\\{commission_amount\\}\\}/g, '24,000 ريال')
+          .replace(/\\{\\{note_order_number\\}\\}/g, '3617')
+          .replace(/\\{\\{bank_name\\}\\}/g, 'بنك الراجحي')
+          .replace(/\\{\\{contract_number\\}\\}/g, 'CNT-2025-001')
+          .replace(/\\{\\{property_description\\}\\}/g, 'شقة سكنية')
+          .replace(/\\{\\{property_location\\}\\}/g, 'الرياض - حي النرجس');
+
+        document.getElementById('previewContent').innerHTML = \`
+          <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:14px;line-height:2;white-space:pre-wrap;">\${preview}</div>
+          <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
+            <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
+          </div>
+        \`;
+        openModal('previewModal');
+      } catch (e) {
+        showToast('خطأ في المعاينة', 'error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTemplates();
+      const btn = document.getElementById('btnNewTemplate');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          openNewTemplateModal();
+        });
+      }
+      if (typeof globalThis !== 'undefined') {
+        globalThis.openNewTemplateModal = openNewTemplateModal;
+      }
+    });
+  <\/script>
+</body>
+</html>
+`,da=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سندات الأمر | شركة الموعد للمقاولات العامة</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* ══════════════════════════════════════════
+   بطاقات الإحصاء
+══════════════════════════════════════════ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--shadow);
+  border-right: 4px solid var(--primary);
+  transition: var(--transition);
+}
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card.gold  { border-right-color: #c8a84b; }
+.stat-card.green { border-right-color: var(--success); }
+.stat-card.red   { border-right-color: var(--danger); }
+.stat-icon {
+  width: 50px; height: 50px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.ic-b { background: rgba(26,60,94,.1);   color: var(--primary); }
+.ic-g { background: rgba(200,168,75,.1); color: #c8a84b; }
+.ic-s { background: rgba(39,174,96,.1);  color: var(--success); }
+.ic-r { background: rgba(231,76,60,.1);  color: var(--danger); }
+.stat-val { font-size: 28px; font-weight: 800; color: var(--primary); line-height: 1; }
+.stat-lbl { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* شريط التنبيه */
+.warn-bar {
+  display: none;
+  align-items: center; gap: 12px;
+  background: #fff8e1; border: 1px solid #ffe082;
+  border-radius: 10px; padding: 12px 18px;
+  margin-bottom: 18px; font-size: 13px;
+}
+.warn-bar.on { display: flex; }
+.warn-bar i { color: #f39c12; font-size: 18px; flex-shrink: 0; }
+.warn-bar a { color: #c8a84b; font-weight: 700; text-decoration: none; margin-right: 8px; }
+
+/* حبات الحالة */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; border: none;
+  font-family: 'Tajawal', sans-serif;
+  transition: all .2s; white-space: nowrap;
+}
+.pill-b { background: rgba(52,152,219,.13); color: #2980b9; }
+.pill-b:hover { background: #2980b9; color: #fff; }
+.pill-g { background: rgba(39,174,96,.13);  color: #27ae60; }
+.pill-g:hover { background: #27ae60; color: #fff; }
+.pill-r { background: rgba(231,76,60,.13);  color: #e74c3c; }
+.pill-r:hover { background: #e74c3c; color: #fff; }
+.b-late { display:inline-block; background:#ffedef; color:#e74c3c; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700; margin-right:4px; }
+.b-near { display:inline-block; background:#fff3cd; color:#e67e22; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700; margin-right:4px; }
+
+/* ══════════════════════════════════════════
+   وثيقة السند
+══════════════════════════════════════════ */
+.note-doc {
+  font-family: 'Tajawal', sans-serif;
+  border: 2px solid #1a3c5e; border-radius: 12px;
+  padding: 44px 52px; background: #fff;
+  max-width: 720px; margin: 0 auto;
+  font-size: 14px; line-height: 2; color: #000;
+  position: relative; box-shadow: 0 4px 24px rgba(0,0,0,.1);
+}
+.n-wm {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%) rotate(-30deg);
+  font-size: 72px; font-weight: 800;
+  color: rgba(26,60,94,.04); white-space: nowrap;
+  pointer-events: none; z-index: 0;
+}
+.note-doc > *:not(.n-wm) { position: relative; z-index: 1; }
+.n-hd {
+  text-align: center;
+  border-bottom: 3px double #1a3c5e;
+  padding-bottom: 16px; margin-bottom: 20px;
+}
+.n-logo-img  { max-height: 65px; max-width: 160px; object-fit: contain; }
+.n-logo-ico  { font-size: 38px; color: #c8a84b; }
+.n-co   { font-size: 20px; font-weight: 800; color: #1a3c5e; margin-top: 4px; }
+.n-sub  { font-size: 12px; color: #666; margin-top: 3px; }
+.n-bdg  {
+  display: inline-block;
+  background: linear-gradient(135deg,#1a3c5e,#2d6a9f);
+  color: #fff; padding: 7px 44px;
+  border-radius: 6px; font-size: 18px;
+  font-weight: 800; margin-top: 12px; letter-spacing: 2px;
+}
+.n-meta {
+  margin-top: 10px; font-size: 13px; color: #444;
+  display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+}
+.n-meta span { display: flex; align-items: center; gap: 5px; }
+.n-ref {
+  background: #f0f4f8; border-radius: 8px;
+  padding: 8px 16px; margin-bottom: 14px;
+  font-size: 13px; color: #555;
+  display: flex; gap: 20px; flex-wrap: wrap;
+}
+.n-ref strong { color: #1a3c5e; }
+.n-amt-box {
+  border: 2px solid #c8a84b; border-radius: 12px;
+  padding: 18px; text-align: center; margin: 16px 0;
+  background: linear-gradient(135deg,#fffdf5,#fff9e6);
+}
+.n-amt-lbl   { font-size: 11px; color: #888; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px; }
+.n-amt-val   { font-size: 30px; font-weight: 800; color: #c8a84b; }
+.n-amt-wrd   { font-size: 13px; color: #333; margin-top: 5px; font-style: italic; }
+.n-body      { margin: 14px 0; }
+.n-body p    { margin-bottom: 12px; text-align: justify; }
+.n-body p strong { color: #1a3c5e; }
+.n-tbl       { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.n-tbl th    { background: #1a3c5e; color: #fff; padding: 7px 12px; text-align: right; }
+.n-tbl td    { padding: 7px 12px; border-bottom: 1px solid #eee; }
+.n-tbl tr:nth-child(even) td { background: #f7f9fc; }
+.n-law {
+  font-size: 13px; color: #444;
+  background: #f0f4f8;
+  border-right: 4px solid #1a3c5e;
+  padding: 12px 16px; border-radius: 0 8px 8px 0;
+  margin: 12px 0; line-height: 1.9;
+}
+.n-sigs {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 40px; margin-top: 32px;
+  border-top: 2px solid #1a3c5e; padding-top: 24px;
+}
+.n-sig { text-align: center; }
+.n-sig-role { font-weight: 800; color: #1a3c5e; font-size: 14px; margin-bottom: 3px; }
+.n-sig-name { font-size: 13px; color: #444; margin-bottom: 16px; }
+.n-sig-line { height: 75px; border-bottom: 1.5px solid #888; margin-bottom: 5px; }
+.n-sig-hint { font-size: 11px; color: #999; }
+.n-foot {
+  text-align: center; margin-top: 16px;
+  font-size: 12px; color: #888;
+  border-top: 1px solid #eee; padding-top: 10px;
+}
+
+/* كفيل غارم */
+.n-guarantor {
+  border: 1.5px dashed #c8a84b; border-radius: 10px;
+  padding: 14px 18px; margin-top: 16px; font-size: 13px;
+}
+.n-guarantor-title {
+  font-weight: 800; color: #c8a84b; font-size: 14px;
+  border-bottom: 1px dashed #c8a84b; padding-bottom: 6px; margin-bottom: 10px;
+}
+.n-gt-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.n-gt-item { font-size: 12px; color: #555; }
+.n-gt-item strong { color: #1a3c5e; }
+.n-gt-line { height: 55px; border-bottom: 1.5px solid #888; margin: 8px 0 3px; }
+
+/* ══════════════════════════════════════════
+   مودال الإعدادات
+══════════════════════════════════════════ */
+.cfg-body {
+  display: flex; height: 100%; min-height: 0;
+}
+.cfg-nav {
+  width: 190px; background: #f5f7fa;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0; overflow-y: auto; padding: 8px 0;
+}
+.cfg-nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px; font-size: 13px; font-weight: 500;
+  color: var(--text-muted); cursor: pointer;
+  border-right: 3px solid transparent;
+  transition: all .18s; user-select: none;
+}
+.cfg-nav-item i { width: 18px; text-align: center; }
+.cfg-nav-item:hover { background: rgba(26,60,94,.05); color: var(--primary); }
+.cfg-nav-item.on {
+  background: #fff; color: var(--primary);
+  font-weight: 700; border-right-color: var(--primary);
+}
+.cfg-panels { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.cfg-pane { display: none; }
+.cfg-pane.on { display: block; }
+.cfg-sec { margin-bottom: 26px; }
+.cfg-stitle {
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 8px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
+.g1 { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 12px; }
+.ff label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 5px;
+}
+.ff input, .ff select, .ff textarea {
+  width: 100%; padding: 8px 12px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  font-family: 'Tajawal',sans-serif; font-size: 13px;
+  color: var(--text); background: #fff;
+  transition: border .2s; outline: none; box-sizing: border-box;
+}
+.ff input:focus, .ff select:focus, .ff textarea:focus {
+  border-color: var(--primary);
+}
+.tgl-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px; background: #f7f9fc;
+  border-radius: 8px; margin-bottom: 8px;
+}
+.tgl-lbl { font-size: 13px; font-weight: 600; color: var(--text); }
+.tgl-dsc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.tgl { position: relative; width: 42px; height: 23px; flex-shrink: 0; }
+.tgl input { opacity: 0; width: 0; height: 0; }
+.tgl-sl {
+  position: absolute; inset: 0;
+  background: #ccc; border-radius: 23px;
+  cursor: pointer; transition: .3s;
+}
+.tgl-sl:before {
+  content: '';
+  position: absolute;
+  height: 17px; width: 17px;
+  left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%;
+  transition: .3s;
+}
+.tgl input:checked + .tgl-sl { background: var(--primary); }
+.tgl input:checked + .tgl-sl:before { transform: translateX(19px); }
+
+/* ══════════════════════════════════════════
+   طباعة رسمية A4
+══════════════════════════════════════════ */
+@media print {
+  .sidebar, .topbar, .no-print,
+  .stat-grid, .filters-bar, .warn-bar,
+  .dashboard-card, .modal-footer,
+  button, a.btn, .action-btns,
+  .modal-overlay { display: none !important; }
+
+  body {
+    background: #fff !important;
+    font-family: 'Tajawal', sans-serif !important;
+    font-size: 13px !important;
+    direction: rtl;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 18mm 14mm 14mm 14mm;
+  }
+
+  .note-doc {
+    box-shadow: none !important;
+    border: 2px solid #1a3c5e !important;
+    padding: 24px 32px !important;
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  .n-sigs { page-break-inside: avoid; }
+  .n-guarantor { page-break-inside: avoid; }
+}
+
+@media (max-width: 768px) {
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+  .cfg-body  { flex-direction: column; }
+  .cfg-nav {
+    width: 100%; border-left: none;
+    border-bottom: 1px solid var(--border);
+    display: flex; overflow-x: auto; padding: 0;
+  }
+  .cfg-nav-item {
+    flex-direction: column; gap: 3px;
+    padding: 10px 12px; font-size: 11px;
+    border-right: none; border-bottom: 3px solid transparent;
+    white-space: nowrap; min-width: 70px; text-align: center;
+  }
+  .cfg-nav-item.on {
+    border-bottom-color: var(--primary); border-right: none;
+  }
+  .g2 { grid-template-columns: 1fr; }
+  .cfg-panels { padding: 16px; }
+  .n-gt-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════ SIDEBAR ════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+    <div class="logo-text">
+      <span class="company-name" id="sbName">الموعد</span>
+      <span class="company-sub">للمقاولات العامة</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="index.html"        class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+    <a href="contracts.html"    class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+    <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+    <a href="templates.html"    class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+    <a href="notes.html"        class="nav-item active"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+    <a href="archive.html"      class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    <a href="settings.html"     class="nav-item"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="cr-number">
+      <i class="fas fa-registered"></i> س.ت: <span id="sbCR">3350140062</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<main class="main-content">
+
+  <header class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <div class="topbar-title">
+      <h1><i class="fas fa-money-check-alt"></i> سندات الأمر</h1>
+    </div>
+    <div class="topbar-actions">
+      <a href="/admin/panel" class="btn btn-ghost contracts-home-btn no-print"><i class="fas fa-home"></i> الرئيسية</a>
+      <div class="current-date" id="currentDate"></div>
+      <button class="btn btn-outline btn-sm no-print" onclick="doExportCSV()" title="تصدير CSV">
+        <i class="fas fa-file-csv"></i> CSV
+      </button>
+      <button class="btn btn-secondary btn-sm no-print" onclick="openSettings()" style="margin-right:6px;" title="الإعدادات">
+        <i class="fas fa-cog"></i> الإعدادات
+      </button>
+      <button class="btn btn-primary no-print" onclick="openAdd()">
+        <i class="fas fa-plus"></i> سند جديد
+      </button>
+    </div>
+  </header>
+
+  <div class="page-content">
+
+    <div class="page-header">
+      <div class="page-header-title">
+        <h2>إدارة سندات الأمر</h2>
+        <p>وفقاً لنظام الأوراق التجارية — قرار مجلس الوزراء رقم (<span id="hdDecree">692</span>)</p>
+      </div>
+    </div>
+
+    <!-- تنبيه -->
+    <div class="warn-bar no-print" id="warnBar">
+      <i class="fas fa-exclamation-triangle"></i>
+      <div>
+        <strong>تنبيه:</strong> يوجد <strong id="warnCount">0</strong> سند متأخر أو يقترب موعد استحقاقه.
+        <a href="#" onclick="doFilter('متأخر');return false;">عرض المتأخرة</a>
+      </div>
+    </div>
+
+    <!-- إحصاءات -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon ic-b"><i class="fas fa-money-check-alt"></i></div>
+        <div><div class="stat-val" id="stAll">0</div><div class="stat-lbl">إجمالي السندات</div></div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-icon ic-g"><i class="fas fa-clock"></i></div>
+        <div><div class="stat-val" id="stSari">0</div><div class="stat-lbl">ساري / نشط</div></div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-icon ic-s"><i class="fas fa-check-double"></i></div>
+        <div><div class="stat-val" id="stColl">0</div><div class="stat-lbl">محصّل</div></div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-icon ic-r"><i class="fas fa-coins"></i></div>
+        <div><div class="stat-val" id="stAmt">—</div><div class="stat-lbl">إجمالي المبالغ (ريال)</div></div>
+      </div>
+    </div>
+
+    <!-- فلاتر -->
+    <div class="filters-bar no-print" style="margin-bottom:18px;">
+      <div class="search-input-wrap" style="flex:1;min-width:200px;">
+        <i class="fas fa-search"></i>
+        <input type="text" class="form-control" id="fQ"
+               placeholder="بحث بالرقم، الاسم، الهوية، الجوال…"
+               oninput="render()">
+      </div>
+      <select class="form-control" id="fSt" style="min-width:140px;" onchange="render()">
+        <option value="">كل الحالات</option>
+        <option value="ساري">ساري</option>
+        <option value="محصل">محصل</option>
+        <option value="متأخر">متأخر</option>
+      </select>
+      <select class="form-control" id="fOr" style="min-width:155px;" onchange="render()">
+        <option value="new">الأحدث أولاً</option>
+        <option value="old">الأقدم أولاً</option>
+        <option value="hi">الأعلى مبلغاً</option>
+        <option value="lo">الأقل مبلغاً</option>
+        <option value="due">أقرب استحقاق</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="resetFilters()">
+        <i class="fas fa-undo"></i> إعادة ضبط
+      </button>
+    </div>
+
+    <!-- الجدول -->
+    <div class="dashboard-card full-card">
+      <div class="card-header">
+        <h3><i class="fas fa-list-ul"></i> قائمة سندات الأمر</h3>
+        <span id="rowCount" style="font-size:13px;color:var(--text-muted);"></span>
+      </div>
+      <div class="table-responsive" style="padding:0;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:38px;">#</th>
+              <th>رقم السند</th>
+              <th>المدين</th>
+              <th>الهوية</th>
+              <th>الجوال</th>
+              <th>المبلغ</th>
+              <th>الإصدار</th>
+              <th>الاستحقاق</th>
+              <th>مكان الدفع</th>
+              <th>الحالة</th>
+              <th style="min-width:168px;">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr>
+              <td colspan="11" style="text-align:center;padding:50px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:28px;color:var(--primary);"></i>
+                <div style="margin-top:12px;color:var(--text-muted);">جاري التحميل…</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+
+<!-- ══════════════════════════════════════════
+     مودال الإعدادات الشامل
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="mCfg">
+  <div class="modal-box" style="max-width:870px;height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header" style="flex-shrink:0;">
+      <h3><i class="fas fa-cog" style="color:#c8a84b;"></i> &nbsp;إعدادات سندات الأمر</h3>
+      <button class="modal-close" onclick="closeModal('mCfg')"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="modal-body" style="flex:1;overflow:hidden;padding:0;">
+      <div class="cfg-body">
+
+        <!-- قائمة التبويبات -->
+        <div class="cfg-nav" id="cfgNav">
+          <div class="cfg-nav-item on" data-pane="pCompany">
+            <i class="fas fa-building"></i> بيانات الشركة
+          </div>
+          <div class="cfg-nav-item" data-pane="pNote">
+            <i class="fas fa-sliders-h"></i> إعدادات السند
+          </div>
+          <div class="cfg-nav-item" data-pane="pDisplay">
+            <i class="fas fa-toggle-on"></i> خيارات العرض
+          </div>
+          <div class="cfg-nav-item" data-pane="pLegal">
+            <i class="fas fa-gavel"></i> البنود القانونية
+          </div>
+          <div class="cfg-nav-item" data-pane="pAlerts">
+            <i class="fas fa-bell"></i> التنبيهات
+          </div>
+          <div class="cfg-nav-item" data-pane="pWA">
+            <i class="fab fa-whatsapp"></i> واتساب
+          </div>
+          <div class="cfg-nav-item" data-pane="pPreview">
+            <i class="fas fa-eye"></i> معاينة السند
+          </div>
+        </div>
+
+        <!-- الألواح -->
+        <div class="cfg-panels">
+
+          <!-- لوح: بيانات الشركة -->
+          <div class="cfg-pane on" id="pCompany">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-building"></i> بيانات الشركة المُصدِرة للسند</div>
+              <div class="g2">
+                <div class="ff"><label>اسم الشركة الرسمي</label>
+                  <input type="text" id="cName" placeholder="شركة الموعد للمقاولات العامة"></div>
+                <div class="ff"><label>رقم السجل التجاري</label>
+                  <input type="text" id="cCR" placeholder="3350140062"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>رقم الهاتف / الجوال</label>
+                  <input type="text" id="cPhone" placeholder="920012979"></div>
+                <div class="ff"><label>رقم الفاكس (اختياري)</label>
+                  <input type="text" id="cFax" placeholder="011XXXXXXX"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>المدينة</label>
+                  <input type="text" id="cCity" placeholder="الرياض"></div>
+                <div class="ff"><label>الرمز البريدي</label>
+                  <input type="text" id="cZip" placeholder="12345"></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>العنوان التفصيلي</label>
+                  <input type="text" id="cAddr" placeholder="طريق الإمام سعود الفرعي، حي التعاون"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>الرقم الضريبي (VAT)</label>
+                  <input type="text" id="cVAT" placeholder="310XXXXXXXXX"></div>
+                <div class="ff"><label>البريد الإلكتروني</label>
+                  <input type="email" id="cEmail" placeholder="info@almaw3d.com"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: إعدادات السند -->
+          <div class="cfg-pane" id="pNote">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-file-signature"></i> الإعدادات الافتراضية</div>
+              <div class="g2">
+                <div class="ff"><label>رقم قرار مجلس الوزراء</label>
+                  <input type="text" id="nDecree" placeholder="692"></div>
+                <div class="ff"><label>مدة السند الافتراضية (أشهر)</label>
+                  <input type="number" id="nDur" placeholder="6" min="1" max="120"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>مكان الدفع الافتراضي</label>
+                  <input type="text" id="nPlace" placeholder="الرياض"></div>
+                <div class="ff"><label>المحكمة المختصة</label>
+                  <input type="text" id="nCourt" placeholder="الرياض"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>الحالة الافتراضية للسند الجديد</label>
+                  <select id="nDefSt">
+                    <option value="ساري">ساري</option>
+                    <option value="متأخر">متأخر</option>
+                  </select>
+                </div>
+                <div class="ff"><label>بادئة ترقيم السند</label>
+                  <input type="text" id="nPfx" placeholder="SND- (اختياري)"></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>نص ختام السند</label>
+                  <input type="text" id="nClose" placeholder="والله ولي التوفيق"></div>
+              </div>
+            </div>
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-percentage"></i> العمولة والضريبة</div>
+              <div class="g2">
+                <div class="ff"><label>نسبة العمولة الافتراضية (%)</label>
+                  <input type="number" id="nComm" placeholder="3" min="0" max="100" step="0.5"></div>
+                <div class="ff"><label>ضريبة القيمة المضافة (%)</label>
+                  <input type="number" id="nVAT" placeholder="15" min="0" max="100" step="0.5"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>نوع العمولة الافتراضي</label>
+                  <select id="nCommType">
+                    <option value="مبلغ مقطوع">مبلغ مقطوع</option>
+                    <option value="نسبة مئوية">نسبة مئوية</option>
+                  </select>
+                </div>
+                <div class="ff"><label>الحد الأدنى للمبلغ (ريال)</label>
+                  <input type="number" id="nMin" placeholder="1000" min="0"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: خيارات العرض -->
+          <div class="cfg-pane" id="pDisplay">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-toggle-on"></i> محتوى وثيقة السند</div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">عبارة "بدون قيد أو شرط"</div><div class="tgl-dsc">تُضاف في صياغة التعهد</div></div>
+                <label class="tgl"><input type="checkbox" id="dUncond"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">المبلغ كتابةً بالحروف</div><div class="tgl-dsc">كتابة المبلغ بالعربية أسفل الأرقام</div></div>
+                <label class="tgl"><input type="checkbox" id="dWords"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">جدول بيانات الطرفين</div><div class="tgl-dsc">جدول المستفيد والمدين</div></div>
+                <label class="tgl"><input type="checkbox" id="dTable"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">البند القانوني</div><div class="tgl-dsc">استناد السند لقرار 692</div></div>
+                <label class="tgl"><input type="checkbox" id="dDecree"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">الكفيل الغارم</div><div class="tgl-dsc">إظهار حقول الكفيل في السند</div></div>
+                <label class="tgl"><input type="checkbox" id="dGuarantor"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">العلامة المائية</div><div class="tgl-dsc">اسم الشركة كخلفية شفافة</div></div>
+                <label class="tgl"><input type="checkbox" id="dWM"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">خطوط التوقيع والختم</div><div class="tgl-dsc">حقلا توقيع الطرفين</div></div>
+                <label class="tgl"><input type="checkbox" id="dSigs"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">التظهير</div><div class="tgl-dsc">إضافة بند حق التظهير لطرف ثالث</div></div>
+                <label class="tgl"><input type="checkbox" id="dEndorse"><span class="tgl-sl"></span></label>
+              </div>
+            </div>
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-text-height"></i> حجم الخط</div>
+              <div class="g2">
+                <div class="ff"><label>حجم خط الواجهة (px)</label>
+                  <select id="dFont">
+                    <option value="13">13px</option>
+                    <option value="14">14px</option>
+                    <option value="15">15px</option>
+                    <option value="16">16px</option>
+                  </select>
+                </div>
+                <div class="ff"><label>حجم خط الطباعة (px)</label>
+                  <select id="dPrint">
+                    <option value="12">12px</option>
+                    <option value="13">13px</option>
+                    <option value="14">14px</option>
+                    <option value="15">15px</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: البنود القانونية -->
+          <div class="cfg-pane" id="pLegal">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-gavel"></i> نصوص البنود القانونية</div>
+              <div class="g1">
+                <div class="ff"><label>النص القانوني الرئيسي (يُطبع في السند)</label>
+                  <textarea id="lMain" rows="4"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند الاختصاص القضائي</label>
+                  <textarea id="lCourt" rows="3"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند الاستحقاق والعمولة</label>
+                  <textarea id="lComm" rows="3"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند الأهلية القانونية</label>
+                  <textarea id="lCap" rows="2"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند التظهير</label>
+                  <textarea id="lEndorse" rows="2" placeholder="يحق للمستفيد تظهير هذا السند لأي طرف ثالث دون الحاجة لموافقة المدين…"></textarea></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: التنبيهات -->
+          <div class="cfg-pane" id="pAlerts">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-bell"></i> ضبط التنبيهات</div>
+              <div class="g2">
+                <div class="ff"><label>التنبيه المبكر قبل الاستحقاق (أيام)</label>
+                  <input type="number" id="aDays" placeholder="7" min="1" max="90"></div>
+                <div class="ff"><label>تكرار التنبيه</label>
+                  <select id="aRepeat">
+                    <option value="daily">يومياً</option>
+                    <option value="once">مرة واحدة</option>
+                    <option value="weekly">أسبوعياً</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-toggle-on"></i> أنواع التنبيهات</div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تنبيه السندات المتأخرة</div><div class="tgl-dsc">شريط تحذير للسندات التي تجاوزت تاريخ الاستحقاق</div></div>
+                <label class="tgl"><input type="checkbox" id="aOvr"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تنبيه القادمة للاستحقاق</div><div class="tgl-dsc">تحذير عند الاقتراب من الاستحقاق ضمن المدة المحددة</div></div>
+                <label class="tgl"><input type="checkbox" id="aNear"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تنبيه عقود بدون سند</div><div class="tgl-dsc">تحذير للعقود النشطة التي لا تحتوي سند أمر</div></div>
+                <label class="tgl"><input type="checkbox" id="aMiss"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تحديث تلقائي للحالة إلى "متأخر"</div><div class="tgl-dsc">يُغيَّر تلقائياً عند تجاوز تاريخ الاستحقاق عند التحميل</div></div>
+                <label class="tgl"><input type="checkbox" id="aAuto"><span class="tgl-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: واتساب -->
+          <div class="cfg-pane" id="pWA">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fab fa-whatsapp"></i> نماذج رسائل واتساب</div>
+              <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+                المتغيرات: <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{client_name}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{note_number}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{due_date}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{amount}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{company_name}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{company_phone}}</code>
+              </p>
+              <div class="g1">
+                <div class="ff"><label>رسالة تذكير بالاستحقاق</label>
+                  <textarea id="waTmpl" rows="5"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>رسالة تأكيد التحصيل</label>
+                  <textarea id="waCol" rows="4"></textarea></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: معاينة -->
+          <div class="cfg-pane" id="pPreview">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-eye"></i> معاينة حية لوثيقة السند</div>
+              <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+                تعكس الإعدادات الحالية في النماذج. اضغط "تحديث" بعد تغيير أي خيار.
+              </p>
+              <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="refreshPreview()">
+                  <i class="fas fa-sync-alt"></i> تحديث المعاينة
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="printPreview()">
+                  <i class="fas fa-print"></i> طباعة النموذج
+                </button>
+              </div>
+              <div id="pvArea" style="transform:scale(0.78);transform-origin:top right;pointer-events:none;"></div>
+            </div>
+          </div>
+
+        </div><!-- end cfg-panels -->
+      </div><!-- end cfg-body -->
+    </div><!-- end modal-body -->
+
+    <div class="modal-footer" style="flex-shrink:0;">
+      <button class="btn btn-primary" onclick="saveCfg()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+      <button class="btn btn-outline btn-sm" onclick="resetCfg()"><i class="fas fa-undo"></i> استعادة الافتراضي</button>
+      <button class="btn btn-ghost" onclick="closeModal('mCfg')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     مودال عرض السند
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="mView">
+  <div class="modal-box" style="max-width:780px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3><i class="fas fa-money-check-alt" style="color:#c8a84b;"></i> &nbsp;عرض سند الأمر</h3>
+      <button class="modal-close" onclick="closeModal('mView')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="mViewBody" style="padding:14px 18px;"></div>
+    <div class="modal-footer no-print" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-primary"  onclick="doPrint()"><i class="fas fa-print"></i> طباعة A4</button>
+      <button class="btn btn-success"  id="btnCollect" onclick="doCollect()" style="display:none;"><i class="fas fa-check"></i> تحصيل</button>
+      <button class="btn btn-outline"  onclick="doEditCurrent()"><i class="fas fa-edit"></i> تعديل</button>
+      <button class="btn btn-whatsapp" id="btnWA" onclick="doViewWA()" style="display:none;background:#25d366;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;"><i class="fab fa-whatsapp"></i> واتساب</button>
+      <button class="btn btn-ghost"    onclick="closeModal('mView')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     مودال إضافة / تعديل سند
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="mForm">
+  <div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3 id="mFormTitle"><i class="fas fa-plus-circle"></i> &nbsp;إضافة سند جديد</h3>
+      <button class="modal-close" onclick="closeModal('mForm')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="noteForm" novalidate autocomplete="off">
+        <input type="hidden" id="fID">
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label class="form-label">رقم السند <span class="required">*</span></label>
+            <input type="text" class="form-control" id="fNum" placeholder="مثال: 3617" required>
+            <div class="invalid-feedback">أدخل رقم السند</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ربط بعقد <small style="color:var(--text-muted);">(اختياري)</small></label>
+            <select class="form-control" id="fCon" onchange="onContractChange()">
+              <option value="">— بدون ربط —</option>
+            </select>
+          </div>
+
+          <div class="form-group form-full">
+            <label class="form-label">اسم المدين <span class="required">*</span></label>
+            <input type="text" class="form-control" id="fName"
+                   placeholder="الاسم الكامل كما في الهوية الوطنية" required>
+            <div class="invalid-feedback">أدخل الاسم الكامل</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">رقم الهوية الوطنية <span class="required">*</span></label>
+            <input type="text" class="form-control" id="fNatID"
+                   placeholder="10 أرقام" maxlength="10" required>
+            <div class="invalid-feedback">يجب إدخال 10 أرقام</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">رقم الجوال</label>
+            <input type="tel" class="form-control" id="fPhone" placeholder="05XXXXXXXX" maxlength="10">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">مبلغ السند (ريال) <span class="required">*</span></label>
+            <input type="number" class="form-control" id="fAmt"
+                   placeholder="مثال: 24000" min="1" oninput="onAmtInput()" required>
+            <div class="invalid-feedback">أدخل مبلغاً صحيحاً</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">مكان الدفع</label>
+            <input type="text" class="form-control" id="fPlace" value="الرياض">
+          </div>
+
+          <div class="form-group form-full" id="wordsRow" style="display:none;">
+            <div style="background:#f0f4f8;border-radius:8px;padding:9px 14px;font-size:13px;color:#555;">
+              <i class="fas fa-font" style="color:#c8a84b;margin-left:7px;"></i>
+              المبلغ كتابةً: <span id="wordsSpan" style="font-weight:700;color:var(--primary);"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">تاريخ الإصدار</label>
+            <input type="date" class="form-control" id="fIssue">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">تاريخ الاستحقاق</label>
+            <input type="date" class="form-control" id="fDue">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">الحالة</label>
+            <select class="form-control" id="fStat">
+              <option value="ساري">ساري</option>
+              <option value="محصل">محصل</option>
+              <option value="متأخر">متأخر</option>
+            </select>
+          </div>
+
+          <div class="form-group form-full">
+            <label class="form-label">ملاحظات</label>
+            <textarea class="form-control" id="fNotes" rows="2" placeholder="ملاحظات إضافية…"></textarea>
+          </div>
+
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="btnSave" onclick="saveNote()"><i class="fas fa-save"></i> حفظ السند</button>
+      <button class="btn btn-ghost" onclick="closeModal('mForm')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- مودال الحذف -->
+<div class="modal-overlay" id="mDel">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3><i class="fas fa-trash" style="color:var(--danger);"></i> &nbsp;تأكيد الحذف</h3>
+      <button class="modal-close" onclick="closeModal('mDel')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>هل أنت متأكد من حذف هذا السند؟ <strong>لا يمكن التراجع.</strong></p>
+      <div id="delInfo" style="margin-top:12px;padding:10px 14px;background:#ffedef;border-radius:8px;color:#c0392b;font-weight:700;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btnDel"><i class="fas fa-trash"></i> حذف نهائياً</button>
+      <button class="btn btn-ghost" onclick="closeModal('mDel')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════ SCRIPTS ════════════════ -->
+<script src="js/app.js"><\/script>
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════
+   سندات الأمر — مودول مُعاد بناؤه بالكامل
+   ════════════════════════════════════════════════════════════ */
+
+var SK = 'mawid_settings';
+
+/* ── القيم الافتراضية ── */
+var DEF = {
+  company_name:    'شركة الموعد للمقاولات العامة',
+  company_cr:      '3350140062',
+  company_phone:   '920012979',
+  company_fax:     '',
+  company_city:    'الرياض',
+  company_zip:     '',
+  company_address: 'طريق الإمام سعود الفرعي، حي التعاون',
+  company_vat:     '310XXXXXXXXX',
+  company_email:   'info@almaw3d.com',
+  company_logo:    '',
+  note_decree:     '692',
+  note_dur:        6,
+  note_place:      'الرياض',
+  note_court:      'الرياض',
+  note_def_st:     'ساري',
+  note_pfx:        '',
+  note_close:      'والله ولي التوفيق',
+  comm_rate:       3,
+  vat_rate:        15,
+  comm_type:       'مبلغ مقطوع',
+  min_amt:         1000,
+  d_uncond:        true,
+  d_words:         true,
+  d_table:         true,
+  d_decree:        true,
+  d_guarantor:     false,
+  d_wm:            true,
+  d_sigs:          true,
+  d_endorse:       false,
+  font_sz:         14,
+  print_sz:        13,
+  legal_main:      'يخضع هذا السند لأحكام نظام الأوراق التجارية في المملكة العربية السعودية، استناداً لقرار مجلس الوزراء رقم (692) وتعديلاته.',
+  legal_court:     'يختص بالنظر في أي نزاع يتعلق بهذا السند محاكم مدينة الرياض وفق أحكام الشريعة الإسلامية.',
+  legal_comm:      'لا تستحق العمولة إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني. وفي حال تعامل الطرف الثاني مع الجهة الممولة من خارج نطاق هذه الشركة تُستحق العمولة كاملةً.',
+  legal_cap:       'يُقر الموقِّع بأهليته القانونية الكاملة وعدم وجود أي موانع شرعية أو نظامية تحول دون توقيعه على هذا السند.',
+  legal_endorse:   'يحق للمستفيد (شركة الموعد) تظهير هذا السند لأي طرف ثالث دون الحاجة إلى إخطار المدين أو الحصول على موافقته المسبقة.',
+  alert_days:      7,
+  alert_repeat:    'daily',
+  alert_ovr:       true,
+  alert_near:      true,
+  alert_miss:      true,
+  alert_auto:      true,
+  wa_tmpl:  'السلام عليكم {{client_name}}، تذكير بسند الأمر رقم {{note_number}} المستحق بتاريخ {{due_date}} بمبلغ {{amount}} ريال. {{company_name}} — {{company_phone}}',
+  wa_col:   'السلام عليكم {{client_name}}، تم استلام سند الأمر رقم {{note_number}}. شكراً لتعاملكم. {{company_name}}'
+};
+
+/* ── قراءة الإعدادات ── */
+function getS() {
+  try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(SK) || '{}')); }
+  catch(e) { return Object.assign({}, DEF); }
+}
+function putS(obj) { localStorage.setItem(SK, JSON.stringify(obj)); }
+
+/* ── حالة التطبيق ── */
+var DB = [];          /* كل السندات */
+var curView = null;   /* id السند المفتوح */
+var curEdit = null;   /* id السند قيد التعديل */
+
+/* ════════════════════════════════════════════
+   التهيئة
+════════════════════════════════════════════ */
+function boot() {
+  applyTheme();
+  syncHeader();
+  initCfgNav();
+  load();
+}
+
+function applyTheme() {
+  document.body.style.fontSize = (getS().font_sz || 14) + 'px';
+}
+
+function syncHeader() {
+  var s = getS();
+  var parts = (s.company_name || '').split(' ');
+  q('sbName')    && (q('sbName').textContent    = parts[1] || 'الموعد');
+  q('sbCR')      && (q('sbCR').textContent      = s.company_cr   || '3350140062');
+  q('hdDecree')  && (q('hdDecree').textContent  = s.note_decree  || '692');
+}
+
+/* ════════════════════════════════════════════
+   تحميل السندات
+════════════════════════════════════════════ */
+function load() {
+  tb('<tr><td colspan="11" style="text-align:center;padding:50px;">' +
+     '<i class="fas fa-spinner fa-spin" style="font-size:28px;color:var(--primary);"></i>' +
+     '<div style="margin-top:12px;color:var(--text-muted);">جاري التحميل…</div></td></tr>');
+
+  API.get('promissory_notes', { limit: 500 })
+    .then(function(res) {
+      var s = getS();
+      var today = new Date(); today.setHours(0,0,0,0);
+      DB = (res.data || []).map(function(n) {
+        if (n.status === 'سار') n.status = 'ساري';
+        if (s.alert_auto && n.status === 'ساري' && n.due_date) {
+          var d = new Date(n.due_date); d.setHours(0,0,0,0);
+          if (d < today) n.status = 'متأخر';
+        }
+        return n;
+      });
+      stats(); alerts(); render();
+      var op = getParam('open');
+      if (op) {
+        var f = DB.find(function(n) { return n.id === op || n.note_number === op; });
+        if (f) setTimeout(function() { openView(f.id); }, 350);
+      }
+    })
+    .catch(function(e) {
+      console.error(e);
+      tb('<tr><td colspan="11" style="text-align:center;padding:52px;">' +
+         '<i class="fas fa-exclamation-circle" style="font-size:32px;color:var(--danger);"></i>' +
+         '<div style="margin-top:12px;font-weight:700;color:var(--danger);">تعذّر تحميل البيانات</div>' +
+         '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">تحقق من الاتصال ثم أعد المحاولة</div>' +
+         '<button class="btn btn-primary btn-sm" style="margin-top:14px;" onclick="load()">' +
+         '<i class="fas fa-redo"></i> إعادة المحاولة</button></td></tr>');
+      showToast('تعذّر تحميل السندات', 'error');
+    });
+}
+
+/* ════════════════════════════════════════════
+   الإحصاءات والتنبيهات
+════════════════════════════════════════════ */
+function stats() {
+  var tot = DB.length, sari = 0, coll = 0, amt = 0;
+  DB.forEach(function(n) {
+    if (n.status === 'ساري') sari++;
+    if (n.status === 'محصل') coll++;
+    amt += parseFloat(n.amount) || 0;
+  });
+  setT('stAll', tot); setT('stSari', sari);
+  setT('stColl', coll); setT('stAmt', amt.toLocaleString('ar-SA'));
+}
+
+function alerts() {
+  var s = getS();
+  if (!s.alert_ovr && !s.alert_near) { warnOff(); return; }
+  var days = parseInt(s.alert_days) || 7;
+  var today = new Date(); today.setHours(0,0,0,0);
+  var cnt = 0;
+  DB.forEach(function(n) {
+    if (n.status === 'محصل' || !n.due_date) return;
+    var d = new Date(n.due_date); d.setHours(0,0,0,0);
+    if ((d - today) / 86400000 < days || d < today) cnt++;
+  });
+  if (cnt > 0) { setT('warnCount', cnt); warnOn(); } else { warnOff(); }
+}
+function warnOn()  { q('warnBar') && q('warnBar').classList.add('on'); }
+function warnOff() { q('warnBar') && q('warnBar').classList.remove('on'); }
+
+/* ════════════════════════════════════════════
+   الفلترة والرسم
+════════════════════════════════════════════ */
+function render() {
+  var qv = (val('fQ') || '').trim().toLowerCase();
+  var sv = val('fSt');
+  var ov = val('fOr');
+
+  var list = DB.filter(function(n) {
+    var m = !qv ||
+      (n.note_number || '').toLowerCase().indexOf(qv) > -1 ||
+      (n.debtor_name || '').toLowerCase().indexOf(qv) > -1 ||
+      (n.debtor_id   || '').toLowerCase().indexOf(qv) > -1 ||
+      (n.phone       || '').toLowerCase().indexOf(qv) > -1;
+    return m && (!sv || n.status === sv);
+  });
+
+  list.sort(function(a, b) {
+    switch(ov) {
+      case 'old': return (a.issue_date||'') > (b.issue_date||'') ? 1 : -1;
+      case 'hi':  return (parseFloat(b.amount)||0) - (parseFloat(a.amount)||0);
+      case 'lo':  return (parseFloat(a.amount)||0) - (parseFloat(b.amount)||0);
+      case 'due': return (a.due_date||'') > (b.due_date||'') ? 1 : -1;
+      default:    return (a.issue_date||'') < (b.issue_date||'') ? 1 : -1;
+    }
+  });
+
+  setT('rowCount', '(' + list.length + ' سند)');
+  drawTable(list);
+}
+
+function resetFilters() {
+  setV('fQ',''); setV('fSt',''); setV('fOr','new'); render();
+}
+
+function doFilter(st) { setV('fSt', st); render(); }
+
+function drawTable(list) {
+  if (!list.length) {
+    tb('<tr><td colspan="11"><div class="empty-state">' +
+       '<i class="fas fa-money-check-alt"></i>' +
+       '<p>لا توجد سندات مطابقة &mdash; ' +
+       '<a href="#" onclick="resetFilters();return false;">إعادة الضبط</a></p>' +
+       '</div></td></tr>');
+    return;
+  }
+
+  var s    = getS();
+  var days = parseInt(s.alert_days) || 7;
+  var now  = new Date(); now.setHours(0,0,0,0);
+  var rows = '';
+
+  list.forEach(function(n, i) {
+    var dd = n.due_date ? new Date(n.due_date) : null;
+    if (dd) dd.setHours(0,0,0,0);
+    var late = dd && dd < now && n.status !== 'محصل';
+    var near = !late && dd && n.status !== 'محصل' && (dd - now)/86400000 < days;
+
+    var rowCss = n.status === 'محصل' ? 'opacity:.62;' : late ? 'background:rgba(231,76,60,.03);' : '';
+
+    var pc = 'pill pill-b', pi = 'fa-clock';
+    if (n.status === 'محصل') { pc = 'pill pill-g'; pi = 'fa-check-double'; }
+    if (n.status === 'متأخر') { pc = 'pill pill-r'; pi = 'fa-exclamation-triangle'; }
+
+    var dstr  = n.due_date || '—';
+    var dbdg  = late ? '<span class="b-late"><i class="fas fa-exclamation-circle"></i> متأخر</span>'
+              : near ? '<span class="b-near"><i class="fas fa-clock"></i> يقترب</span>' : '';
+    var dcss  = late ? 'color:var(--danger);font-weight:700;' : near ? 'color:#e67e22;font-weight:700;' : '';
+
+    /* أزرار */
+    var ab = '';
+    ab += ab_('action-view',   'عرض',    'fa-eye',            'openView(\\'' + n.id + '\\')');
+    ab += ab_('action-edit',   'تعديل',  'fa-edit',           'openEdit(\\'' + n.id + '\\')');
+    ab += ab_('action-pdf',    'طباعة',  'fa-print',          'printById(\\'' + n.id + '\\')');
+    if (n.status !== 'محصل') {
+      ab += '<button class="action-btn" style="background:rgba(39,174,96,.12);color:#27ae60;" ' +
+            'onclick="collectById(\\'' + n.id + '\\')" title="تحصيل"><i class="fas fa-check"></i></button>';
+    }
+    if (n.contract_id) {
+      ab += '<a class="action-btn" href="contract-view.html?id=' + n.contract_id + '" ' +
+            'style="background:rgba(26,60,94,.1);color:var(--primary);" title="عرض العقد">' +
+            '<i class="fas fa-file-contract"></i></a>';
+    }
+    if (n.phone) {
+      var wm = buildWA(n, 'remind');
+      ab += '<button class="action-btn action-whatsapp" ' +
+            'onclick="sendWhatsApp(\\'' + esc(n.phone) + '\\',\\'' + esc(wm) + '\\')" title="واتساب">' +
+            '<i class="fab fa-whatsapp"></i></button>';
+    }
+    ab += ab_('action-delete', 'حذف', 'fa-trash', 'openDel(\\'' + n.id + '\\')');
+
+    rows += '<tr style="' + rowCss + '">';
+    rows += '<td style="color:var(--text-muted);font-size:12px;">' + (i+1) + '</td>';
+    rows += '<td><strong style="color:var(--primary);font-size:15px;cursor:pointer;" ' +
+            'onclick="openView(\\'' + n.id + '\\')">' + (n.note_number||'—') + '</strong>';
+    if (n.contract_id) rows += '<br><small style="color:var(--text-muted);font-size:11px;"><i class="fas fa-link"></i> مرتبط بعقد</small>';
+    rows += '</td>';
+    rows += '<td><div style="font-weight:600;">' + (n.debtor_name||'—') + '</div></td>';
+    rows += '<td><code style="font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px;">' + (n.debtor_id||'—') + '</code></td>';
+    rows += '<td style="font-size:12px;color:var(--text-muted);">' + (n.phone||'—') + '</td>';
+    rows += '<td><strong style="font-size:15px;color:#c8a84b;">' + formatMoney(n.amount) + '</strong></td>';
+    rows += '<td style="font-size:13px;">' + (n.issue_date||'—') + '</td>';
+    rows += '<td style="font-size:13px;' + dcss + '">' + dstr + dbdg + '</td>';
+    rows += '<td style="font-size:13px;">' + (n.payment_place||'الرياض') + '</td>';
+    rows += '<td><button class="' + pc + '" onclick="toggleSt(\\'' + n.id + '\\',\\'' + (n.status||'ساري') + '\\')" title="تبديل الحالة"><i class="fas ' + pi + '"></i> ' + (n.status||'ساري') + '</button></td>';
+    rows += '<td><div class="action-btns">' + ab + '</div></td>';
+    rows += '</tr>';
+  });
+
+  tb(rows);
+}
+
+function ab_(cls, ttl, ico, fn) {
+  return '<button class="action-btn ' + cls + '" onclick="' + fn + '" title="' + ttl + '">' +
+         '<i class="fas ' + ico + '"></i></button>';
+}
+function esc(s) {
+  return String(s||'').replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'").replace(/\\n/g,' ');
+}
+
+/* ════════════════════════════════════════════
+   بناء وثيقة السند
+════════════════════════════════════════════ */
+function buildDoc(n, ov) {
+  var s = ov || getS();
+  var coName  = s.company_name    || DEF.company_name;
+  var coCR    = s.company_cr      || DEF.company_cr;
+  var coPhone = s.company_phone   || DEF.company_phone;
+  var coVAT   = s.company_vat     || '';
+  var coCity  = s.company_city    || DEF.company_city;
+  var coAddr  = s.company_address || DEF.company_address;
+  var coLogo  = s.company_logo    || '';
+  var court   = s.note_court      || DEF.note_court;
+  var decree  = s.note_decree     || DEF.note_decree;
+  var closing = s.note_close      || DEF.note_close;
+  var payPlc  = n.payment_place   || s.note_place || 'الرياض';
+  var legal   = s.legal_main      || DEF.legal_main;
+
+  var uncond  = s.d_uncond      !== false;
+  var words   = s.d_words       !== false;
+  var tbl     = s.d_table       !== false;
+  var dec     = s.d_decree      !== false;
+  var guar    = !!s.d_guarantor;
+  var wm      = s.d_wm          !== false;
+  var sigs    = s.d_sigs        !== false;
+  var endorse = !!s.d_endorse;
+
+  var amt  = parseFloat(n.amount) || 0;
+  var amtF = amt.toLocaleString('ar-SA') + ' ريال';
+  var amtW = numberToArabicWords(amt);
+
+  var logo = coLogo
+    ? '<img src="' + coLogo + '" class="n-logo-img" alt="شعار">'
+    : '<div class="n-logo-ico"><i class="fas fa-building"></i></div>';
+
+  var h = '<div class="note-doc" id="printArea">';
+
+  /* علامة مائية */
+  if (wm) h += '<div class="n-wm">' + coName + '</div>';
+
+  /* الرأس */
+  h += '<div class="n-hd">' + logo;
+  h += '<div class="n-co">' + coName + '</div>';
+  h += '<div class="n-sub">السجل التجاري: ' + coCR;
+  h += ' &nbsp;|&nbsp; هاتف: ' + coPhone;
+  if (coVAT) h += ' &nbsp;|&nbsp; الرقم الضريبي: ' + coVAT;
+  h += ' &nbsp;|&nbsp; ' + coCity + '</div>';
+  h += '<div><span class="n-bdg">سند لأمر</span></div>';
+  h += '<div class="n-meta">';
+  h += '<span><i class="fas fa-hashtag" style="color:#c8a84b;"></i>';
+  h += ' رقم السند: <strong style="font-size:16px;color:#1a3c5e;">' + (n.note_number||'—') + '</strong></span>';
+  h += '<span><i class="fas fa-calendar-alt" style="color:#1a3c5e;"></i>';
+  h += ' تاريخ الإصدار: <strong>' + (n.issue_date||'—') + '</strong></span>';
+  h += '</div></div>';
+
+  /* ربط عقد */
+  if (n.contract_id) {
+    h += '<div class="n-ref">';
+    h += '<span><i class="fas fa-link" style="color:#c8a84b;margin-left:4px;"></i>';
+    h += ' العقد المرتبط: <strong>' + n.contract_id + '</strong></span>';
+    h += '<span><i class="fas fa-map-marker-alt" style="color:#1a3c5e;margin-left:4px;"></i>';
+    h += ' مكان الدفع: <strong>' + payPlc + '</strong></span>';
+    h += '</div>';
+  }
+
+  /* المبلغ */
+  h += '<div class="n-amt-box">';
+  h += '<div class="n-amt-lbl">المبلغ المستحق</div>';
+  h += '<div class="n-amt-val">' + amtF + '</div>';
+  if (words) h += '<div class="n-amt-wrd">(' + amtW + ')</div>';
+  h += '</div>';
+
+  /* المتن */
+  h += '<div class="n-body"><p>';
+  h += 'أنا الموقّع أدناه السيد/ <strong>' + (n.debtor_name||'—') + '</strong>';
+  h += ' حامل الهوية الوطنية رقم (<strong>' + (n.debtor_id||'—') + '</strong>)';
+  if (n.phone) h += ' رقم الجوال: <strong>' + n.phone + '</strong>';
+  h += '، أتعهد بموجب هذا السند بأن أدفع';
+  if (uncond) h += ' <strong>بدون قيد أو شرط</strong>';
+  h += ' لأمر <strong>' + coName + '</strong> (أو لأمر من تُنيبه)';
+  h += ' مبلغاً وقدره <strong style="color:#c8a84b;">' + amtF + '</strong>';
+  if (words) h += ' (<em>' + amtW + '</em>)';
+  h += '.</p>';
+  h += '<p>يستحق هذا المبلغ السداد في تاريخ';
+  h += ' <strong>' + (n.due_date||'——/——/——') + '</strong>';
+  h += ' في مكان الدفع: مدينة <strong>' + payPlc + '</strong>.</p>';
+
+  /* جدول الأطراف */
+  if (tbl) {
+    h += '<table class="n-tbl"><thead><tr>';
+    h += '<th>البيان</th><th>المستفيد (الدائن)</th><th>المدين (الموقّع)</th>';
+    h += '</tr></thead><tbody>';
+    h += '<tr><td>الاسم الكامل</td><td>' + coName + '</td><td>' + (n.debtor_name||'—') + '</td></tr>';
+    h += '<tr><td>الرقم المرجعي</td><td>س.ت: ' + coCR + '</td><td>هوية: ' + (n.debtor_id||'—') + '</td></tr>';
+    h += '<tr><td>العنوان</td><td>' + (coAddr||coCity) + '</td><td>' + payPlc + '</td></tr>';
+    h += '<tr><td>الهاتف</td><td>' + coPhone + '</td><td>' + (n.phone||'—') + '</td></tr>';
+    h += '</tbody></table>';
+  }
+
+  /* البند القانوني */
+  if (dec) {
+    h += '<div class="n-law">';
+    h += '<i class="fas fa-gavel" style="color:#1a3c5e;margin-left:7px;"></i>';
+    h += legal.replace('(692)', '(' + decree + ')');
+    h += ' المحكمة المختصة: محاكم مدينة <strong>' + court + '</strong>.';
+    h += '</div>';
+  }
+
+  /* بند التظهير */
+  if (endorse && s.legal_endorse) {
+    h += '<div class="n-law" style="border-right-color:#c8a84b;">';
+    h += '<i class="fas fa-exchange-alt" style="color:#c8a84b;margin-left:7px;"></i>';
+    h += s.legal_endorse;
+    h += '</div>';
+  }
+
+  /* ملاحظات */
+  if (n.notes) {
+    h += '<div style="background:#f9f9f9;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:10px;">';
+    h += '<i class="fas fa-sticky-note" style="color:#c8a84b;margin-left:7px;"></i>';
+    h += '<strong>ملاحظات: </strong>' + n.notes;
+    h += '</div>';
+  }
+
+  h += '</div>';/* end n-body */
+
+  /* التوقيعات */
+  if (sigs) {
+    h += '<div class="n-sigs">';
+    h += '<div class="n-sig"><div class="n-sig-role">المستفيد (الدائن)</div>';
+    h += '<div class="n-sig-name">' + coName + '</div>';
+    h += '<div class="n-sig-line"></div><div class="n-sig-hint">التوقيع والختم الرسمي</div></div>';
+    h += '<div class="n-sig"><div class="n-sig-role">المدين (الموقّع)</div>';
+    h += '<div class="n-sig-name">' + (n.debtor_name||'—') + '</div>';
+    h += '<div class="n-sig-line"></div><div class="n-sig-hint">التوقيع</div></div>';
+    h += '</div>';
+  }
+
+  /* الكفيل الغارم */
+  if (guar) {
+    h += '<div class="n-guarantor">';
+    h += '<div class="n-guarantor-title"><i class="fas fa-user-shield" style="margin-left:7px;"></i>الكفيل الغارم</div>';
+    h += '<div class="n-gt-grid">';
+    h += '<div class="n-gt-item"><strong>الاسم الكامل:</strong> ………………………………………………</div>';
+    h += '<div class="n-gt-item"><strong>رقم الهوية:</strong> ………………………………………………</div>';
+    h += '<div class="n-gt-item"><strong>رقم الجوال:</strong> ………………………………………………</div>';
+    h += '<div class="n-gt-item"><strong>العنوان:</strong> ………………………………………………</div>';
+    h += '</div>';
+    h += '<div class="n-gt-line"></div>';
+    h += '<div style="text-align:center;font-size:11px;color:#999;">توقيع الكفيل الغارم</div>';
+    h += '</div>';
+  }
+
+  /* التذييل */
+  var sc = n.status==='محصل'?'#27ae60': n.status==='متأخر'?'#e74c3c':'#2980b9';
+  h += '<div class="n-foot">';
+  h += 'حُرِّر في مدينة ' + court + ' بتاريخ ' + (n.issue_date||'—');
+  h += ' &nbsp;|&nbsp; ' + closing;
+  h += ' &nbsp;|&nbsp; الحالة: <strong style="color:' + sc + ';">' + (n.status||'—') + '</strong>';
+  h += '</div>';
+
+  h += '</div>';/* end note-doc */
+  return h;
+}
+
+/* ════════════════════════════════════════════
+   الطباعة الرسمية A4
+════════════════════════════════════════════ */
+var PRINT_CSS = [
+  '*{box-sizing:border-box;margin:0;padding:0;}',
+  'body{font-family:"Tajawal",sans-serif;background:#fff;direction:rtl;color:#000;font-size:FONT_SIZEpx;}',
+  '@page{size:A4 portrait;margin:15mm 12mm 12mm 12mm;}',
+  '@media print{body{background:#fff!important;}}',
+  '.note-doc{border:2px solid #1a3c5e;border-radius:10px;padding:30px 44px;',
+  '  max-width:100%;margin:0 auto;line-height:1.9;color:#000;position:relative;',
+  '  page-break-inside:avoid;}',
+  '.n-wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);',
+  '  font-size:64px;font-weight:800;color:rgba(26,60,94,.035);white-space:nowrap;pointer-events:none;z-index:0;}',
+  '.note-doc>*:not(.n-wm){position:relative;z-index:1;}',
+  '.n-hd{text-align:center;border-bottom:3px double #1a3c5e;padding-bottom:14px;margin-bottom:18px;}',
+  '.n-logo-img{max-height:60px;max-width:150px;object-fit:contain;}',
+  '.n-logo-ico{font-size:32px;color:#c8a84b;}',
+  '.n-co{font-size:18px;font-weight:800;color:#1a3c5e;margin-top:5px;}',
+  '.n-sub{font-size:11px;color:#555;margin-top:3px;}',
+  '.n-bdg{display:inline-block;background:linear-gradient(135deg,#1a3c5e,#2d6a9f);color:#fff;',
+  '  padding:6px 38px;border-radius:5px;font-size:16px;font-weight:800;margin-top:10px;letter-spacing:2px;}',
+  '.n-meta{margin-top:9px;font-size:12px;color:#444;display:flex;justify-content:center;gap:20px;flex-wrap:wrap;}',
+  '.n-meta span{display:flex;align-items:center;gap:4px;}',
+  '.n-ref{background:#f0f4f8;border-radius:7px;padding:7px 14px;margin-bottom:12px;',
+  '  font-size:12px;color:#555;display:flex;gap:18px;flex-wrap:wrap;}',
+  '.n-ref strong{color:#1a3c5e;}',
+  '.n-amt-box{border:2px solid #c8a84b;border-radius:10px;padding:14px;text-align:center;',
+  '  margin:14px 0;background:linear-gradient(135deg,#fffdf5,#fff9e6);}',
+  '.n-amt-lbl{font-size:10px;color:#888;font-weight:600;letter-spacing:1px;margin-bottom:4px;}',
+  '.n-amt-val{font-size:26px;font-weight:800;color:#c8a84b;}',
+  '.n-amt-wrd{font-size:11px;color:#333;margin-top:4px;font-style:italic;}',
+  '.n-body{margin:12px 0;line-height:2;}',
+  '.n-body p{margin-bottom:10px;text-align:justify;}',
+  '.n-body p strong{color:#1a3c5e;}',
+  '.n-tbl{width:100%;border-collapse:collapse;margin:11px 0;font-size:12px;}',
+  '.n-tbl th{background:#1a3c5e;color:#fff;padding:6px 10px;text-align:right;}',
+  '.n-tbl td{padding:6px 10px;border-bottom:1px solid #eee;}',
+  '.n-tbl tr:nth-child(even) td{background:#f7f9fc;}',
+  '.n-law{font-size:11.5px;color:#444;background:#f0f4f8;border-right:4px solid #1a3c5e;',
+  '  padding:10px 14px;border-radius:0 8px 8px 0;margin:11px 0;line-height:1.85;}',
+  '.n-sigs{display:grid;grid-template-columns:1fr 1fr;gap:36px;',
+  '  margin-top:28px;border-top:2px solid #1a3c5e;padding-top:20px;page-break-inside:avoid;}',
+  '.n-sig{text-align:center;}',
+  '.n-sig-role{font-weight:800;color:#1a3c5e;font-size:13px;margin-bottom:3px;}',
+  '.n-sig-name{font-size:12px;color:#444;margin-bottom:14px;}',
+  '.n-sig-line{height:70px;border-bottom:1.5px solid #888;margin-bottom:5px;}',
+  '.n-sig-hint{font-size:10px;color:#999;}',
+  '.n-guarantor{border:1.5px dashed #c8a84b;border-radius:9px;padding:12px 16px;',
+  '  margin-top:14px;font-size:12px;page-break-inside:avoid;}',
+  '.n-guarantor-title{font-weight:800;color:#c8a84b;font-size:13px;',
+  '  border-bottom:1px dashed #c8a84b;padding-bottom:5px;margin-bottom:9px;}',
+  '.n-gt-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}',
+  '.n-gt-item{font-size:11px;color:#555;}',
+  '.n-gt-item strong{color:#1a3c5e;}',
+  '.n-gt-line{height:50px;border-bottom:1.5px solid #888;margin:7px 0 3px;}',
+  '.n-foot{text-align:center;margin-top:14px;font-size:11px;color:#777;',
+  '  border-top:1px solid #ddd;padding-top:10px;}'
+].join('\\n');
+
+function buildPrintWindow(htmlContent, fontSize) {
+  var ps = fontSize || getS().print_sz || 13;
+  var css = PRINT_CSS.replace('FONT_SIZE', ps);
+  var w = window.open('', '_blank', 'width=820,height=700');
+  if (!w) { showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning'); return null; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head>');
+  w.document.write('<meta charset="UTF-8">');
+  w.document.write('<meta name="viewport" content="width=device-width,initial-scale=1">');
+  w.document.write('<title>سند لأمر — شركة الموعد للمقاولات العامة</title>');
+  w.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">');
+  w.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">');
+  w.document.write('<style>' + css + '</style>');
+  w.document.write('</head><body>');
+  w.document.write(htmlContent);
+  w.document.write('<script>');
+  w.document.write('window.onload=function(){setTimeout(function(){window.print();},600);};');
+  w.document.write('<\\/script>');
+  w.document.write('</body></html>');
+  w.document.close();
+  return w;
+}
+
+function doPrint() {
+  var el = document.getElementById('printArea');
+  if (!el) { showToast('السند غير محمّل', 'error'); return; }
+  buildPrintWindow(el.outerHTML);
+}
+
+function printById(id) {
+  var n = find(id); if (!n) return;
+  var html = buildDoc(n);
+  buildPrintWindow(html);
+}
+
+/* ════════════════════════════════════════════
+   عرض السند
+════════════════════════════════════════════ */
+function openView(id) {
+  var n = find(id); if (!n) { showToast('السند غير موجود','error'); return; }
+  curView = id;
+  var cb  = document.getElementById('btnCollect');
+  var wab = document.getElementById('btnWA');
+  if (cb)  cb.style.display  = n.status !== 'محصل' ? 'inline-flex' : 'none';
+  if (wab) wab.style.display = n.phone ? 'inline-flex' : 'none';
+  document.getElementById('mViewBody').innerHTML = buildDoc(n);
+  openModal('mView');
+}
+function doViewWA() {
+  var n = find(curView); if (!n || !n.phone) return;
+  var msg = buildWA(n, 'remind');
+  sendWhatsApp(n.phone, msg);
+}
+function doEditCurrent() {
+  if (!curView) return;
+  closeModal('mView');
+  setTimeout(function() { openEdit(curView); }, 200);
+}
+function doCollect() {
+  if (!curView) return;
+  var n = find(curView); if (!n) return;
+  if (!confirm('تأكيد تحصيل ' + formatMoney(n.amount) + ' من ' + n.debtor_name + '؟')) return;
+  closeModal('mView');
+  setStatus(curView, 'محصل');
+}
+
+/* ════════════════════════════════════════════
+   تغيير الحالة
+════════════════════════════════════════════ */
+function toggleSt(id, cur) {
+  var cyc = {'ساري':'محصل','محصل':'متأخر','متأخر':'ساري'};
+  var nx  = cyc[cur] || 'ساري';
+  if (!confirm('تغيير الحالة إلى "' + nx + '"؟')) return;
+  setStatus(id, nx);
+}
+function collectById(id) {
+  var n = find(id); if (!n) return;
+  if (!confirm('تأكيد تحصيل ' + formatMoney(n.amount) + ' من ' + n.debtor_name + '؟')) return;
+  setStatus(id, 'محصل');
+}
+function setStatus(id, ns) {
+  API.patch('promissory_notes', id, { status: ns })
+    .then(function() {
+      var idx = DB.findIndex(function(n) { return n.id === id; });
+      if (idx > -1) DB[idx].status = ns;
+      stats(); alerts(); render();
+      showToast('✓ الحالة: ' + ns, 'success');
+    })
+    .catch(function() { showToast('خطأ في تحديث الحالة','error'); });
+}
+
+/* ════════════════════════════════════════════
+   نموذج إضافة / تعديل سند
+════════════════════════════════════════════ */
+function openAdd() {
+  curEdit = null;
+  var s = getS();
+  setT('mFormTitle', ''); q('mFormTitle').innerHTML = '<i class="fas fa-plus-circle"></i> &nbsp;إضافة سند جديد';
+  document.getElementById('noteForm').reset();
+  setV('fID',''); hideWords();
+  setV('fPlace', s.note_place  || 'الرياض');
+  setV('fStat',  s.note_def_st || 'ساري');
+  setV('fIssue', today());
+  var dd = new Date(); dd.setMonth(dd.getMonth() + (parseInt(s.note_dur)||6));
+  setV('fDue', dd.toISOString().split('T')[0]);
+  /* ترقيم تلقائي تسلسلي */
+  var nextNum = genNextNum(s.note_pfx || '');
+  setV('fNum', nextNum);
+  fillContracts('');
+  openModal('mForm');
+}
+
+function openEdit(id) {
+  var n = find(id); if (!n) return;
+  curEdit = id;
+  q('mFormTitle').innerHTML = '<i class="fas fa-edit"></i> &nbsp;تعديل السند — ' + (n.note_number||'');
+  setV('fID',    n.id);           setV('fNum',   n.note_number   || '');
+  setV('fName',  n.debtor_name  || ''); setV('fNatID', n.debtor_id    || '');
+  setV('fPhone', n.phone        || ''); setV('fAmt',   n.amount       || '');
+  setV('fPlace', n.payment_place|| 'الرياض');
+  setV('fIssue', n.issue_date   || ''); setV('fDue',   n.due_date     || '');
+  setV('fStat',  n.status       || 'ساري');
+  setV('fNotes', n.notes        || '');
+  if (n.amount) { showWords(numberToArabicWords(parseFloat(n.amount))); } else { hideWords(); }
+  fillContracts(n.contract_id || '');
+  openModal('mForm');
+}
+
+/* سحب بيانات العقد تلقائياً عند الاختيار */
+function onContractChange() {
+  var cid = val('fCon');
+  if (!cid) return;
+  API.getOne('contracts', cid)
+    .then(function(c) {
+      if (!c || c.error) return;
+      /* اسم المدين (الطرف الثاني) */
+      var name = c.party_two_name || c.secondPartyName || c.second_party_name || '';
+      var nid  = c.party_two_id   || c.secondPartyId   || c.second_party_id   || '';
+      var ph   = c.party_two_phone|| c.secondPartyPhone|| c.second_party_phone || '';
+      var comm = c.commission_amount || c.commissionAmount || c.total_amount || '';
+
+      if (name)  { setV('fName',  name);  document.getElementById('fName').classList.remove('is-invalid'); }
+      if (nid)   { setV('fNatID', nid);   document.getElementById('fNatID').classList.remove('is-invalid'); }
+      if (ph)    { setV('fPhone', ph); }
+      if (comm)  { setV('fAmt',   comm);  onAmtInput(); }
+
+      /* توليد رقم سند مرتبط بالعقد */
+      var s = getS();
+      var cnum = c.contract_number || c.contractNumber || '';
+      if (cnum && !val('fNum')) {
+        setV('fNum', (s.note_pfx||'SND-') + cnum + '-' + (DB.filter(function(n){return n.contract_id===cid;}).length + 1));
+      }
+
+      showToast('✓ تم سحب بيانات العقد: ' + (name||cnum||cid), 'success');
+    })
+    .catch(function(e) { console.warn('خطأ سحب العقد:', e); });
+}
+
+function onAmtInput() {
+  var v = parseFloat(val('fAmt'));
+  if (v > 0) { showWords(numberToArabicWords(v)); } else { hideWords(); }
+}
+function showWords(t) {
+  var wr = q('wordsRow'), ws = q('wordsSpan');
+  if (ws) ws.textContent = t;
+  if (wr) wr.style.display = 'block';
+}
+function hideWords() {
+  var wr = q('wordsRow');
+  if (wr) wr.style.display = 'none';
+}
+
+function fillContracts(selId) {
+  var sel = document.getElementById('fCon');
+  sel.innerHTML = '<option value="">— بدون ربط —</option>';
+  API.get('contracts', { limit: 300 })
+    .then(function(res) {
+      (res.data||[]).forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c.id;
+        o.textContent = (c.contract_number||c.id) + ' — ' + (c.party_two_name||'');
+        if (c.id === selId) o.selected = true;
+        sel.appendChild(o);
+      });
+    }).catch(function() {});
+}
+
+/* ════════════════════════════════════════════
+   توليد رقم السند التسلسلي
+════════════════════════════════════════════ */
+function genNextNum(pfx) {
+  if (!DB.length) return pfx + '1';
+  var nums = DB.map(function(n) {
+    var raw = (n.note_number || '').replace(pfx, '').trim();
+    var m   = raw.match(/(\\d+)/);
+    return m ? parseInt(m[1]) : 0;
+  });
+  var maxN = Math.max.apply(null, nums);
+  return pfx + (maxN + 1);
+}
+
+/* ════════════════════════════════════════════
+   حفظ السند
+════════════════════════════════════════════ */
+function saveNote() {
+  var rules = [
+    { id:'fNum',   ok: function(v) { return v.trim().length > 0; } },
+    { id:'fName',  ok: function(v) { return v.trim().length >= 2; } },
+    { id:'fNatID', ok: function(v) { return /^\\d{10}$/.test(v.trim()); } },
+    { id:'fAmt',   ok: function(v) { return parseFloat(v) > 0; } }
+  ];
+  var valid = true;
+  rules.forEach(function(r) {
+    var el = document.getElementById(r.id);
+    var ok = r.ok(el.value);
+    el.classList.toggle('is-invalid', !ok);
+    if (!ok) valid = false;
+  });
+  if (!valid) { showToast('يرجى تصحيح الحقول المطلوبة','warning'); return; }
+
+  /* التحقق من تعارض رقم السند */
+  if (!curEdit) {
+    var numInput = val('fNum').trim();
+    var dup = DB.find(function(n) { return n.note_number === numInput; });
+    if (dup) {
+      document.getElementById('fNum').classList.add('is-invalid');
+      showToast('رقم السند ' + numInput + ' مستخدم مسبقاً — يرجى تغييره', 'error');
+      return;
+    }
+  }
+
+  var data = {
+    note_number:   val('fNum').trim(),
+    contract_id:   val('fCon') || '',
+    debtor_name:   val('fName').trim(),
+    debtor_id:     val('fNatID').trim(),
+    phone:         val('fPhone').trim(),
+    amount:        parseFloat(val('fAmt')),
+    payment_place: val('fPlace') || 'الرياض',
+    issue_date:    val('fIssue'),
+    due_date:      val('fDue'),
+    status:        val('fStat'),
+    notes:         val('fNotes').trim()
+  };
+
+  var btn = document.getElementById('btnSave');
+  function lock()   { if(btn){btn.disabled=true;  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> جاري الحفظ…';} }
+  function unlock() { if(btn){btn.disabled=false; btn.innerHTML='<i class="fas fa-save"></i> حفظ السند';} }
+  lock();
+
+  if (curEdit) {
+    API.update('promissory_notes', curEdit, data)
+      .then(function(up) {
+        var i = DB.findIndex(function(n) { return n.id === curEdit; });
+        if (i>-1) DB[i] = Object.assign(DB[i], up);
+        closeModal('mForm'); stats(); render();
+        showToast('✓ تم تحديث السند','success'); unlock();
+      })
+      .catch(function(e) { console.error(e); showToast('خطأ في الحفظ','error'); unlock(); });
+  } else {
+    API.create('promissory_notes', data)
+      .then(function(cr) {
+        DB.unshift(cr); closeModal('mForm'); stats(); render();
+        showToast('✓ تم إضافة السند بنجاح','success'); unlock();
+      })
+      .catch(function(e) { console.error(e); showToast('خطأ في الحفظ','error'); unlock(); });
+  }
+}
+
+/* ════════════════════════════════════════════
+   حذف السند
+════════════════════════════════════════════ */
+function openDel(id) {
+  var n = find(id);
+  q('delInfo').textContent = n ? 'سند رقم ' + n.note_number + ' — ' + n.debtor_name : '';
+  openModal('mDel');
+  document.getElementById('btnDel').onclick = function() {
+    API.delete('promissory_notes', id)
+      .then(function() {
+        DB = DB.filter(function(x) { return x.id !== id; });
+        closeModal('mDel'); stats(); render();
+        showToast('تم الحذف','success');
+      })
+      .catch(function() { showToast('خطأ في الحذف','error'); });
+  };
+}
+
+/* ════════════════════════════════════════════
+   تصدير CSV
+════════════════════════════════════════════ */
+function doExportCSV() {
+  if (!DB.length) { showToast('لا توجد سندات','warning'); return; }
+  var hd = ['رقم السند','اسم المدين','رقم الهوية','الجوال','المبلغ','تاريخ الإصدار','تاريخ الاستحقاق','مكان الدفع','الحالة','ملاحظات'];
+  var rows = DB.map(function(n) {
+    return [n.note_number,n.debtor_name,n.debtor_id,n.phone||'',
+      n.amount,n.issue_date,n.due_date,n.payment_place,n.status,n.notes||'']
+      .map(function(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }).join(',');
+  });
+  var csv  = '\\uFEFF' + hd.join(',') + '\\n' + rows.join('\\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url; a.download = 'سندات_' + new Date().toLocaleDateString('en') + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✓ تم التصدير — ' + DB.length + ' سند','success');
+}
+
+/* ════════════════════════════════════════════
+   واتساب
+════════════════════════════════════════════ */
+function buildWA(n, type) {
+  var s = getS();
+  var t = type === 'col' ? (s.wa_col||'') : (s.wa_tmpl||'');
+  return t
+    .replace('{{client_name}}',   n.debtor_name  || '')
+    .replace('{{note_number}}',   n.note_number  || '')
+    .replace('{{due_date}}',      n.due_date     || '')
+    .replace('{{amount}}',        (parseFloat(n.amount)||0).toLocaleString('ar-SA'))
+    .replace('{{company_name}}',  s.company_name  || DEF.company_name)
+    .replace('{{company_phone}}', s.company_phone || DEF.company_phone);
+}
+
+/* ════════════════════════════════════════════
+   الإعدادات
+════════════════════════════════════════════ */
+function initCfgNav() {
+  document.querySelectorAll('#cfgNav .cfg-nav-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var pid = this.getAttribute('data-pane');
+      document.querySelectorAll('#cfgNav .cfg-nav-item').forEach(function(x){x.classList.remove('on');});
+      document.querySelectorAll('.cfg-pane').forEach(function(x){x.classList.remove('on');});
+      this.classList.add('on');
+      var p = document.getElementById(pid); if(p) p.classList.add('on');
+      if (pid === 'pPreview') refreshPreview();
+    });
+  });
+}
+
+function openSettings() {
+  fillCfg();
+  openModal('mCfg');
+  /* إعادة تفعيل أول تبويب */
+  document.querySelectorAll('#cfgNav .cfg-nav-item').forEach(function(x){x.classList.remove('on');});
+  document.querySelectorAll('.cfg-pane').forEach(function(x){x.classList.remove('on');});
+  var fi = document.querySelector('#cfgNav .cfg-nav-item');
+  var fp = document.getElementById('pCompany');
+  if(fi) fi.classList.add('on'); if(fp) fp.classList.add('on');
+}
+
+function fillCfg() {
+  var s = getS();
+  /* شركة */
+  sv('cName',s.company_name);sv('cCR',s.company_cr);sv('cPhone',s.company_phone);sv('cFax',s.company_fax);
+  sv('cCity',s.company_city);sv('cZip',s.company_zip);sv('cAddr',s.company_address);
+  sv('cVAT',s.company_vat);sv('cEmail',s.company_email);
+  /* سند */
+  sv('nDecree',s.note_decree);sv('nDur',s.note_dur);sv('nPlace',s.note_place);sv('nCourt',s.note_court);
+  sv('nDefSt',s.note_def_st);sv('nPfx',s.note_pfx);sv('nClose',s.note_close);
+  sv('nComm',s.comm_rate);sv('nVAT',s.vat_rate);sv('nCommType',s.comm_type);sv('nMin',s.min_amt);
+  /* عرض */
+  sc('dUncond',  s.d_uncond   !==false);sc('dWords',s.d_words!==false);
+  sc('dTable',   s.d_table    !==false);sc('dDecree',s.d_decree!==false);
+  sc('dGuarantor',!!s.d_guarantor);sc('dWM',s.d_wm!==false);
+  sc('dSigs',    s.d_sigs     !==false);sc('dEndorse',!!s.d_endorse);
+  sv('dFont',s.font_sz);sv('dPrint',s.print_sz);
+  /* قانوني */
+  sv('lMain',s.legal_main);sv('lCourt',s.legal_court);sv('lComm',s.legal_comm);
+  sv('lCap',s.legal_cap);sv('lEndorse',s.legal_endorse);
+  /* تنبيهات */
+  sv('aDays',s.alert_days);sv('aRepeat',s.alert_repeat);
+  sc('aOvr',s.alert_ovr!==false);sc('aNear',s.alert_near!==false);
+  sc('aMiss',s.alert_miss!==false);sc('aAuto',s.alert_auto!==false);
+  /* واتساب */
+  sv('waTmpl',s.wa_tmpl);sv('waCol',s.wa_col);
+}
+
+function saveCfg() {
+  var ex = getS();
+  var up = Object.assign({}, ex, {
+    company_name:    gv('cName'),  company_cr:      gv('cCR'),
+    company_phone:   gv('cPhone'), company_fax:     gv('cFax'),
+    company_city:    gv('cCity'),  company_zip:     gv('cZip'),
+    company_address: gv('cAddr'),  company_vat:     gv('cVAT'),
+    company_email:   gv('cEmail'),
+    note_decree:  gv('nDecree')||'692', note_dur:    parseInt(gv('nDur'))||6,
+    note_place:   gv('nPlace')||'الرياض', note_court: gv('nCourt')||'الرياض',
+    note_def_st:  gv('nDefSt')||'ساري', note_pfx:   gv('nPfx'),
+    note_close:   gv('nClose')||'والله ولي التوفيق',
+    comm_rate:    parseFloat(gv('nComm'))||3, vat_rate:  parseFloat(gv('nVAT'))||15,
+    comm_type:    gv('nCommType'), min_amt: parseFloat(gv('nMin'))||1000,
+    d_uncond:   gc('dUncond'), d_words:     gc('dWords'),
+    d_table:    gc('dTable'),  d_decree:    gc('dDecree'),
+    d_guarantor:gc('dGuarantor'), d_wm:    gc('dWM'),
+    d_sigs:     gc('dSigs'),   d_endorse:   gc('dEndorse'),
+    font_sz:  parseInt(gv('dFont'))||14, print_sz: parseInt(gv('dPrint'))||13,
+    legal_main:  gv('lMain'), legal_court: gv('lCourt'),
+    legal_comm:  gv('lComm'), legal_cap:   gv('lCap'), legal_endorse: gv('lEndorse'),
+    alert_days:  parseInt(gv('aDays'))||7, alert_repeat: gv('aRepeat'),
+    alert_ovr:   gc('aOvr'), alert_near:   gc('aNear'),
+    alert_miss:  gc('aMiss'), alert_auto:   gc('aAuto'),
+    wa_tmpl: gv('waTmpl'), wa_col: gv('waCol')
+  });
+  putS(up);
+  applyTheme(); syncHeader(); alerts(); render();
+  showToast('✓ تم حفظ الإعدادات','success');
+  closeModal('mCfg');
+}
+
+function resetCfg() {
+  if (!confirm('استعادة الإعدادات الافتراضية؟ (لن تُمسح بيانات السندات)')) return;
+  var logo = getS().company_logo;
+  var fr = Object.assign({}, DEF);
+  if (logo) fr.company_logo = logo;
+  putS(fr); fillCfg(); applyTheme(); syncHeader();
+  showToast('تمت الاستعادة إلى الافتراضي','success');
+}
+
+/* المعاينة الحية */
+function refreshPreview() {
+  var s = {
+    company_name:    gv('cName')    || DEF.company_name,
+    company_cr:      gv('cCR')      || DEF.company_cr,
+    company_phone:   gv('cPhone')   || DEF.company_phone,
+    company_vat:     gv('cVAT')     || '',
+    company_city:    gv('cCity')    || DEF.company_city,
+    company_address: gv('cAddr')    || DEF.company_address,
+    company_logo:    getS().company_logo || '',
+    note_court:      gv('nCourt')   || DEF.note_court,
+    note_decree:     gv('nDecree')  || DEF.note_decree,
+    note_close:      gv('nClose')   || DEF.note_close,
+    note_place:      gv('nPlace')   || DEF.note_place,
+    legal_main:      gv('lMain')    || DEF.legal_main,
+    legal_endorse:   gv('lEndorse') || DEF.legal_endorse,
+    d_uncond:    gc('dUncond'),  d_words:     gc('dWords'),
+    d_table:     gc('dTable'),   d_decree:    gc('dDecree'),
+    d_guarantor: gc('dGuarantor'), d_wm:      gc('dWM'),
+    d_sigs:      gc('dSigs'),    d_endorse:   gc('dEndorse')
+  };
+  var smp = {
+    note_number:   (gv('nPfx')||'') + '3617',
+    contract_id:   '',
+    debtor_name:   'عقيل بن هريسان بن خلف الضوي العنزي',
+    debtor_id:     '1030460636',
+    phone:         '0554456710',
+    amount:        24000,
+    issue_date:    today(),
+    due_date:      futDate(6),
+    payment_place: gv('nPlace') || 'الرياض',
+    status:        'ساري',
+    notes:         'سند عمولة وساطة عقارية — رقم السعي المتفق عليه'
+  };
+  var area = document.getElementById('pvArea');
+  if (area) area.innerHTML = buildDoc(smp, s);
+}
+
+function printPreview() {
+  refreshPreview();
+  var el = document.getElementById('pvArea') && document.getElementById('pvArea').querySelector('.note-doc');
+  if (!el) { showToast('لا توجد معاينة — حدّث أولاً','warning'); return; }
+  buildPrintWindow(el.outerHTML);
+}
+
+/* ════════════════════════════════════════════
+   مساعدات عامة
+════════════════════════════════════════════ */
+function find(id)   { return DB.find(function(n){return n.id===id;})||null; }
+function q(id)      { return document.getElementById(id); }
+function setT(id,v) { var e=q(id); if(e) e.textContent=v; }
+function val(id)    { var e=q(id); return e?e.value:''; }
+function setV(id,v) { var e=q(id); if(e&&v!==undefined&&v!==null) e.value=v; }
+function tb(h)      { var e=q('tbody'); if(e) e.innerHTML=h; }
+function today()    { return new Date().toISOString().split('T')[0]; }
+function futDate(m) { var d=new Date(); d.setMonth(d.getMonth()+m); return d.toISOString().split('T')[0]; }
+/* إعدادات */
+function sv(id,v)   { var e=q(id); if(e&&v!==undefined&&v!==null) e.value=v; }
+function sc(id,v)   { var e=q(id); if(e) e.checked=!!v; }
+function gv(id)     { var e=q(id); return e?e.value:''; }
+function gc(id)     { var e=q(id); return e?e.checked:false; }
+
+/* ════════════════════════════════════════════
+   تشغيل التطبيق
+════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', boot);
+<\/script>
+</body>
+</html>
+`,ca=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الأرشيف | شركة الموعد للمقاولات العامة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+      <div class="logo-text">
+        <span class="company-name">الموعد</span>
+        <span class="company-sub">للمقاولات العامة</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+      <a href="contracts.html" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+      <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+      <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+      <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <a href="archive.html" class="nav-item active"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><h1><i class="fas fa-archive"></i> أرشيف العقود</h1></div>
+      <div class="topbar-actions"><a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a><div class="current-date" id="currentDate"></div></div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div class="page-header-title">
+          <h2>الأرشيف</h2>
+          <p>العقود المؤرشفة بعد اكتمال معاملاتها</p>
+        </div>
+      </div>
+
+      <div class="filters-bar">
+        <div class="search-input-wrap">
+          <i class="fas fa-search"></i>
+          <input type="text" class="form-control" id="searchInput" placeholder="ابحث..." oninput="filterArchive()" />
+        </div>
+      </div>
+
+      <div class="dashboard-card full-card">
+        <div class="card-header">
+          <h3><i class="fas fa-box-open"></i> العقود المؤرشفة</h3>
+          <span id="archiveCount" class="text-muted" style="font-size:13px;"></span>
+        </div>
+        <div class="card-body table-responsive" style="padding:0;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>رقم العقد</th>
+                <th>العميل</th>
+                <th>نوع العقد</th>
+                <th>مبلغ التمويل</th>
+                <th>السعي</th>
+                <th>تاريخ الأرشفة</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="archiveBody">
+              <tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/app.js"><\/script>
+  <script>
+    let archived = [];
+
+    async function loadArchive() {
+      try {
+        const data = await API.get('contracts', { limit: 200 });
+        archived = (data.data || []).filter(c => c.is_archived === true || c.status === 'مؤرشف');
+        renderArchive(archived);
+      } catch (e) { showToast('خطأ في التحميل', 'error'); }
+    }
+
+    function filterArchive() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = archived.filter(c =>
+        !q ||
+        (c.contract_number || '').toLowerCase().includes(q) ||
+        (c.party_two_name || '').toLowerCase().includes(q)
+      );
+      renderArchive(filtered);
+    }
+
+    function renderArchive(list) {
+      const tbody = document.getElementById('archiveBody');
+      document.getElementById('archiveCount').textContent = \`(\${list.length} عقد)\`;
+      if (list.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="7"><div class="empty-state"><i class="fas fa-archive"></i><p>لا توجد عقود مؤرشفة</p></div></td></tr>\`;
+        return;
+      }
+      tbody.innerHTML = list.map(c => \`
+        <tr style="opacity:0.85;">
+          <td><strong class="text-muted">\${c.contract_number || '—'}</strong></td>
+          <td>\${c.party_two_name || '—'}</td>
+          <td><small>\${c.template_name || '—'}</small></td>
+          <td>\${formatMoney(c.finance_amount)}</td>
+          <td class="text-secondary"><strong>\${formatMoney(c.commission_amount)}</strong></td>
+          <td style="font-size:12px;color:var(--text-muted);">\${c.date_gregorian || '—'}</td>
+          <td>
+            <div class="action-btns">
+              <a href="contract-view.html?id=\${c.id}" class="action-btn action-view" title="عرض"><i class="fas fa-eye"></i></a>
+              <button class="action-btn action-edit" onclick="restoreContract('\${c.id}')" title="استرجاع"><i class="fas fa-undo"></i></button>
+            </div>
+          </td>
+        </tr>
+      \`).join('');
+    }
+
+    async function restoreContract(id) {
+      if (!confirm('هل تريد استرجاع هذا العقد للقائمة الرئيسية؟')) return;
+      try {
+        await API.patch('contracts', id, { status: 'نشط', is_archived: false });
+        showToast('تم استرجاع العقد بنجاح', 'success');
+        loadArchive();
+      } catch (e) { showToast('خطأ في الاسترجاع', 'error'); }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadArchive);
+  <\/script>
+</body>
+</html>
+`,pa=`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>الإعدادات | شركة الموعد للمقاولات العامة</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/style.css"/>
+<style>
+/* ── Settings Layout ── */
+.s-layout{display:grid;grid-template-columns:250px 1fr;gap:24px;align-items:start;}
+@media(max-width:900px){.s-layout{grid-template-columns:1fr;}}
+
+/* ── Settings Menu ── */
+.s-menu{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;position:sticky;top:80px;}
+.s-menu-title{padding:16px 20px;background:var(--primary);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.s-item{display:flex;align-items:center;gap:10px;padding:14px 20px;cursor:pointer;border:none;background:none;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:500;color:var(--text-muted);width:100%;text-align:right;border-right:3px solid transparent;transition:var(--transition);}
+.s-item:hover{background:var(--bg);color:var(--primary);}
+.s-item.active{color:var(--primary);font-weight:700;background:rgba(26,60,94,.06);border-right-color:var(--secondary);}
+.s-item i{width:18px;text-align:center;color:var(--secondary);}
+.s-item .s-badge{background:var(--secondary);color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;margin-right:auto;}
+
+/* ── Settings Panel ── */
+.s-panel{display:none;}
+.s-panel.active{display:block;}
+
+/* ── Section ── */
+.s-sec{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:20px;overflow:hidden;}
+.s-sec-hdr{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.s-sec-ico{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.ico-b{background:rgba(26,60,94,.1);color:var(--primary);}
+.ico-g{background:rgba(200,168,75,.1);color:var(--secondary);}
+.ico-gr{background:rgba(39,174,96,.1);color:var(--success);}
+.ico-r{background:rgba(231,76,60,.1);color:var(--danger);}
+.ico-p{background:rgba(142,68,173,.1);color:#8e44ad;}
+.s-sec-hdr h4{font-size:15px;font-weight:700;color:var(--primary);margin:0;}
+.s-sec-hdr p{font-size:12px;color:var(--text-muted);margin:2px 0 0;}
+.s-sec-body{padding:24px;}
+
+/* ── Toggle ── */
+.tog-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);}
+.tog-row:last-child{border-bottom:none;}
+.tog-lbl{font-size:14px;color:var(--text);}
+.tog-lbl small{display:block;font-size:12px;color:var(--text-muted);margin-top:2px;}
+.tog{position:relative;width:50px;height:26px;flex-shrink:0;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-sl{position:absolute;inset:0;background:#ccc;border-radius:13px;cursor:pointer;transition:.3s;}
+.tog-sl::before{content:'';position:absolute;width:20px;height:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 4px rgba(0,0,0,.2);}
+.tog input:checked+.tog-sl{background:var(--primary);}
+.tog input:checked+.tog-sl::before{transform:translateX(24px);}
+
+/* ── Color ── */
+.color-row{display:flex;align-items:center;gap:12px;}
+.color-sw{width:40px;height:40px;border-radius:8px;border:2px solid #ddd;cursor:pointer;flex-shrink:0;}
+.color-presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.cp{width:30px;height:30px;border-radius:6px;cursor:pointer;border:2px solid transparent;transition:var(--transition);}
+.cp:hover,.cp.sel{border-color:#000;transform:scale(1.1);}
+
+/* ── Logo ── */
+.logo-box{width:100%;min-height:100px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;background:#f7f9fc;cursor:pointer;position:relative;overflow:hidden;transition:var(--transition);}
+.logo-box:hover{border-color:var(--primary);}
+.logo-box img{max-height:90px;max-width:100%;object-fit:contain;}
+.logo-ph{text-align:center;color:var(--text-muted);}
+.logo-ph i{font-size:32px;margin-bottom:8px;}
+
+/* ── Preview Note ── */
+.note-prev{font-family:'Tajawal',sans-serif;border:2px solid #1a3c5e;border-radius:10px;padding:24px 30px;background:#fff;font-size:12px;line-height:1.9;color:#000;max-width:600px;margin:0 auto;}
+.np-hdr{text-align:center;border-bottom:2px double #1a3c5e;padding-bottom:10px;margin-bottom:12px;}
+.np-co{font-size:15px;font-weight:800;color:#1a3c5e;}
+.np-sub{font-size:10px;color:#666;}
+.np-badge{display:inline-block;background:#1a3c5e;color:#fff;padding:4px 28px;border-radius:4px;font-size:13px;font-weight:800;margin-top:8px;}
+.np-amt{border:1.5px solid #c8a84b;border-radius:8px;padding:10px;text-align:center;margin:10px 0;background:#fffdf5;}
+.np-amt-val{font-size:20px;font-weight:800;color:#c8a84b;}
+.np-amt-w{font-size:11px;color:#333;margin-top:3px;font-style:italic;}
+.np-legal{font-size:11px;color:#444;background:#f0f4f8;border-right:3px solid #1a3c5e;padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0;}
+.np-sigs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px;border-top:1.5px solid #1a3c5e;padding-top:14px;}
+.np-sig{text-align:center;font-size:11px;}
+.np-sig div.role{font-weight:800;color:#1a3c5e;margin-bottom:3px;}
+.np-sig-line{height:40px;border-bottom:1px solid #888;margin-bottom:4px;}
+.np-sig small{color:#999;}
+
+/* ── Test Panel ── */
+.test-panel{background:rgba(26,60,94,.04);border-radius:10px;padding:18px;border:1px solid var(--border);margin-bottom:16px;}
+.test-panel h5{font-size:13px;font-weight:700;color:var(--primary);margin-bottom:14px;}
+
+/* ── Save Bar ── */
+.save-bar{position:sticky;bottom:0;background:#fff;padding:14px 24px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;box-shadow:0 -4px 16px rgba(0,0,0,.06);z-index:50;margin:0 -28px -28px;border-radius:0 0 var(--radius) var(--radius);}
+.save-ok{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--success);margin-right:auto;opacity:0;transition:opacity .3s;}
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+    <div class="logo-text">
+      <span class="company-name" id="sb_co">الموعد</span>
+      <span class="company-sub">للمقاولات العامة</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="index.html"        class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+    <a href="contracts.html"    class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+    <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+    <a href="templates.html"    class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+    <a href="notes.html"        class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+    <a href="archive.html"      class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    <a href="settings.html"     class="nav-item active"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="cr-number"><i class="fas fa-registered"></i> س.ت: <span id="sb_cr">3350140062</span></div>
+  </div>
+</aside>
+
+<main class="main-content">
+  <header class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <div class="topbar-title"><h1><i class="fas fa-cog"></i> الإعدادات</h1></div>
+    <div class="topbar-actions">
+      <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <div class="current-date" id="currentDate"></div>
+      <button class="btn btn-primary" onclick="saveAll()">
+        <i class="fas fa-save"></i> حفظ الإعدادات
+      </button>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <div class="s-layout">
+
+      <!-- ── MENU ── -->
+      <div class="s-menu">
+        <div class="s-menu-title"><i class="fas fa-sliders-h"></i> أقسام الإعدادات</div>
+        <button class="s-item active" onclick="showPanel('company',this)">
+          <i class="fas fa-building"></i> بيانات الشركة
+        </button>
+        <button class="s-item" onclick="showPanel('contracts',this)">
+          <i class="fas fa-file-contract"></i> إعدادات العقود
+          <span class="s-badge">مهم</span>
+        </button>
+        <button class="s-item" id="noteMenuBtn" onclick="showPanel('notes',this)">
+          <i class="fas fa-money-check-alt"></i> إعدادات السندات
+          <span class="s-badge">مهم</span>
+        </button>
+        <button class="s-item" onclick="showPanel('legal',this)">
+          <i class="fas fa-gavel"></i> البنود القانونية
+        </button>
+        <button class="s-item" onclick="showPanel('appearance',this)">
+          <i class="fas fa-palette"></i> المظهر والألوان
+        </button>
+        <button class="s-item" onclick="showPanel('notif',this)">
+          <i class="fas fa-bell"></i> التنبيهات
+        </button>
+        <button class="s-item" onclick="showPanel('backup',this)">
+          <i class="fas fa-database"></i> النسخ الاحتياطي
+        </button>
+      </div>
+
+      <!-- ── PANELS ── -->
+      <div>
+
+        <!-- ══════ COMPANY ══════ -->
+        <div class="s-panel active" id="panel-company">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-building"></i></div>
+              <div><h4>بيانات الشركة الرسمية</h4><p>تظهر في ترويسة جميع العقود والسندات</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-grid">
+                <div class="form-group form-full">
+                  <label class="form-label">اسم الشركة الرسمي</label>
+                  <input type="text" class="form-control" id="s_company_name" placeholder="شركة الموعد للمقاولات العامة"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">السجل التجاري</label>
+                  <input type="text" class="form-control" id="s_company_cr" placeholder="3350140062"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الرقم الضريبي (VAT)</label>
+                  <input type="text" class="form-control" id="s_company_vat" placeholder="310XXXXXXXXXX"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">رقم الهاتف</label>
+                  <input type="text" class="form-control" id="s_company_phone" placeholder="920012979"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">رقم الفاكس</label>
+                  <input type="text" class="form-control" id="s_company_fax" placeholder="اختياري"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">المدينة / المقر</label>
+                  <input type="text" class="form-control" id="s_company_city" placeholder="الرياض"/>
+                </div>
+                <div class="form-group form-full">
+                  <label class="form-label">العنوان التفصيلي</label>
+                  <input type="text" class="form-control" id="s_company_address" placeholder="طريق الإمام سعود الفرعي، حي التعاون"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">البريد الإلكتروني</label>
+                  <input type="email" class="form-control" id="s_company_email" placeholder="info@almaw3d.com"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الموقع الإلكتروني</label>
+                  <input type="text" class="form-control" id="s_company_website" placeholder="www.almaw3d.com"/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-g"><i class="fas fa-image"></i></div>
+              <div><h4>شعار الشركة</h4><p>يظهر في ترويسة العقود والسندات عند الطباعة</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="logo-box" id="logoBox" onclick="document.getElementById('logoFile').click()">
+                <div class="logo-ph" id="logoPh">
+                  <i class="fas fa-cloud-upload-alt"></i>
+                  <div style="font-size:13px;margin-top:6px;">انقر لرفع شعار الشركة</div>
+                  <div style="font-size:11px;color:#aaa;">PNG أو JPG — بحد أقصى 2MB</div>
+                </div>
+              </div>
+              <input type="file" id="logoFile" accept="image/*" style="display:none;" onchange="handleLogo(event)"/>
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('logoFile').click()">
+                  <i class="fas fa-upload"></i> رفع شعار
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="removeLogo()">
+                  <i class="fas fa-trash"></i> حذف الشعار
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /company -->
+
+        <!-- ══════ CONTRACTS ══════ -->
+        <div class="s-panel" id="panel-contracts">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-file-signature"></i></div>
+              <div><h4>إعدادات نموذج العقد</h4><p>القيم الافتراضية عند إنشاء عقد جديد</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">بادئة رقم العقد</label>
+                  <input type="text" class="form-control" id="s_contract_prefix" placeholder="CNT"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">المدينة القضائية للعقد</label>
+                  <input type="text" class="form-control" id="s_court_city" placeholder="الرياض"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">نوع العمولة الافتراضي</label>
+                  <select class="form-control" id="s_commission_type">
+                    <option value="مبلغ مقطوع">مبلغ مقطوع</option>
+                    <option value="نسبة مئوية">نسبة مئوية</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">نسبة العمولة الافتراضية (%)</label>
+                  <input type="number" class="form-control" id="s_commission_rate" placeholder="3" min="0" max="100" step="0.1"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">مكان الدفع الافتراضي</label>
+                  <input type="text" class="form-control" id="s_payment_place" placeholder="الرياض"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الحالة الافتراضية للعقد الجديد</label>
+                  <select class="form-control" id="s_default_status">
+                    <option value="بانتظار التمويل">بانتظار التمويل</option>
+                    <option value="نشط">نشط</option>
+                  </select>
+                </div>
+                <div class="form-group form-full">
+                  <label class="form-label">نص خاتمة العقد الافتراضية</label>
+                  <input type="text" class="form-control" id="s_closing_text" placeholder="والله ولي التوفيق"/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-gr"><i class="fas fa-eye"></i></div>
+              <div><h4>خيارات عرض وطباعة العقد</h4><p>ما يظهر في صفحة معاينة وطباعة العقد</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="tog-row">
+                <div class="tog-lbl">عرض الرقم الضريبي في الترويسة<small>إظهار رقم VAT في أعلى العقد</small></div>
+                <label class="tog"><input type="checkbox" id="s_show_vat"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">عرض رقم الفاكس<small>إظهار الفاكس في بيانات الشركة</small></div>
+                <label class="tog"><input type="checkbox" id="s_show_fax"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">خانة التوقيع الإلكتروني<small>إظهار منطقة الرسم للتوقيع</small></div>
+                <label class="tog"><input type="checkbox" id="s_show_esig" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">ترقيم الصفحات عند الطباعة<small>إضافة رقم الصفحة في التذييل</small></div>
+                <label class="tog"><input type="checkbox" id="s_page_numbers" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">توليد سند الأمر تلقائياً<small>إنشاء سند مرتبط عند حفظ العقد</small></div>
+                <label class="tog"><input type="checkbox" id="s_auto_note" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">طباعة رأس الصفحة في كل ورقة<small>تكرار ترويسة الشركة عند التعدد</small></div>
+                <label class="tog"><input type="checkbox" id="s_repeat_header" checked/><span class="tog-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-g"><i class="fas fa-percent"></i></div>
+              <div><h4>إعدادات الضريبة والعمولة</h4><p>تُطبق تلقائياً في حسابات العقود</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">نسبة ضريبة القيمة المضافة (%)</label>
+                  <input type="number" class="form-control" id="s_vat_rate" value="15" min="0" max="100" step="0.1"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الحد الأدنى للعمولة (ريال)</label>
+                  <input type="number" class="form-control" id="s_min_commission" placeholder="0" min="0"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الحد الأقصى للعمولة (ريال)</label>
+                  <input type="number" class="form-control" id="s_max_commission" placeholder="بلا حد"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">رمز العملة</label>
+                  <input type="text" class="form-control" id="s_currency" placeholder="ريال"/>
+                </div>
+              </div>
+              <div class="tog-row" style="margin-top:10px;">
+                <div class="tog-lbl">إضافة الضريبة تلقائياً على العمولة<small>احتساب VAT عند تعديل العمولة</small></div>
+                <label class="tog"><input type="checkbox" id="s_auto_vat" checked/><span class="tog-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-r"><i class="fas fa-ban"></i></div>
+              <div><h4>قيود التمويل والأرشفة</h4><p>قواعد العمل الخاصة بالعمليات المالية</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="tog-row">
+                <div class="tog-lbl">منع المطالبة قبل نزول التمويل<small>تحذير عند محاولة تحصيل العمولة مبكراً</small></div>
+                <label class="tog"><input type="checkbox" id="s_no_early_claim" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">أرشفة العقد تلقائياً بعد اكتماله<small>نقل العقد للأرشيف بعد تأكيد التمويل</small></div>
+                <label class="tog"><input type="checkbox" id="s_auto_archive" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">تثبيت مكان الدفع "الرياض"<small>عدم السماح بتغيير مكان الدفع</small></div>
+                <label class="tog"><input type="checkbox" id="s_lock_payment_place"/><span class="tog-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /contracts -->
+
+        <!-- ══════ NOTES ══════ -->
+        <div class="s-panel" id="panel-notes">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-g"><i class="fas fa-money-check-alt"></i></div>
+              <div><h4>إعدادات سندات الأمر — الأساسية</h4><p>القيم الافتراضية عند إنشاء سند جديد</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">رقم قرار مجلس الوزراء</label>
+                  <input type="text" class="form-control" id="s_pay_decree" placeholder="692" oninput="refreshPreview()"/>
+                  <small class="text-muted">يظهر في النص القانوني أسفل السند</small>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">مكان الدفع الافتراضي للسند</label>
+                  <input type="text" class="form-control" id="s_note_pay_place" placeholder="الرياض" oninput="refreshPreview()"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">المدينة القضائية للسند</label>
+                  <input type="text" class="form-control" id="s_note_court" placeholder="الرياض" oninput="refreshPreview()"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الحالة الافتراضية للسند الجديد</label>
+                  <select class="form-control" id="s_note_status">
+                    <option value="ساري">ساري</option>
+                    <option value="متأخر">متأخر</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">مدة السند الافتراضية (شهور)</label>
+                  <input type="number" class="form-control" id="s_note_months" placeholder="6" min="1" max="60"/>
+                  <small class="text-muted">يُحتسب منه تاريخ الاستحقاق تلقائياً</small>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">تنبيه مبكر قبل الاستحقاق (أيام)</label>
+                  <input type="number" class="form-control" id="s_note_alert_days" placeholder="7" min="1" max="90"/>
+                  <small class="text-muted">يظهر تحذير عند اقتراب التاريخ</small>
+                </div>
+                <div class="form-group form-full">
+                  <label class="form-label">نص خاتمة السند</label>
+                  <input type="text" class="form-control" id="s_note_closing" placeholder="والله ولي التوفيق" oninput="refreshPreview()"/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-sliders-h"></i></div>
+              <div><h4>خيارات محتوى السند</h4><p>تحكم في العناصر التي تظهر داخل السند</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="tog-row">
+                <div class="tog-lbl">جملة "بدون قيد أو شرط"<small>إضافة الجملة القانونية في نص السند</small></div>
+                <label class="tog"><input type="checkbox" id="s_note_unconditional" checked onchange="refreshPreview()"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">عرض نص قرار مجلس الوزراء<small>إظهار المرجع القانوني رقم (692)</small></div>
+                <label class="tog"><input type="checkbox" id="s_note_show_decree" checked onchange="refreshPreview()"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">عرض جدول الأطراف<small>جدول بيانات المستفيد والمدين</small></div>
+                <label class="tog"><input type="checkbox" id="s_note_show_table" checked onchange="refreshPreview()"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">العلامة المائية (Watermark)<small>اسم الشركة كخلفية شبه شفافة</small></div>
+                <label class="tog"><input type="checkbox" id="s_note_watermark" checked onchange="refreshPreview()"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">المبلغ بالأرقام والحروف العربية<small>كتابة المبلغ تفقيطاً في السند</small></div>
+                <label class="tog"><input type="checkbox" id="s_note_show_words" checked onchange="refreshPreview()"/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">خانات التوقيع في السند<small>إظهار حقول التوقيع للطرفين</small></div>
+                <label class="tog"><input type="checkbox" id="s_note_show_sig" checked onchange="refreshPreview()"/><span class="tog-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-p"><i class="fas fa-vial"></i></div>
+              <div><h4>اختبار وتجربة السند</h4><p>أدخل بيانات تجريبية وشاهد شكل السند فوراً</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="test-panel">
+                <h5><i class="fas fa-pen" style="color:var(--secondary);margin-left:6px;"></i> بيانات الاختبار</h5>
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label class="form-label">اسم المدين</label>
+                    <input type="text" class="form-control" id="t_name" value="عقيل بن هريسان العنزي" oninput="refreshPreview()"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">رقم الهوية</label>
+                    <input type="text" class="form-control" id="t_id" value="1030460636" oninput="refreshPreview()"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">المبلغ (ريال)</label>
+                    <input type="number" class="form-control" id="t_amt" value="24000" oninput="refreshPreview()"/>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">رقم السند</label>
+                    <input type="text" class="form-control" id="t_num" value="3617" oninput="refreshPreview()"/>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                  <button class="btn btn-primary btn-sm" onclick="refreshPreview()"><i class="fas fa-sync"></i> تحديث المعاينة</button>
+                  <button class="btn btn-outline btn-sm" onclick="printPreview()"><i class="fas fa-print"></i> طباعة النموذج</button>
+                  <button class="btn btn-ghost btn-sm" onclick="resetTest()"><i class="fas fa-undo"></i> إعادة تعيين</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-eye"></i></div>
+              <div><h4>معاينة السند الحية</h4><p>تتحدث تلقائياً مع كل تغيير في الإعدادات</p></div>
+            </div>
+            <div class="s-sec-body" style="padding:12px;">
+              <div id="notePreview" style="min-height:150px;"></div>
+              <div style="text-align:center;margin-top:10px;">
+                <button class="btn btn-ghost btn-sm" onclick="refreshPreview()">
+                  <i class="fas fa-sync-alt"></i> تحديث المعاينة
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /notes -->
+
+        <!-- ══════ LEGAL ══════ -->
+        <div class="s-panel" id="panel-legal">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-r"><i class="fas fa-gavel"></i></div>
+              <div><h4>البنود القانونية الثابتة</h4><p>تُدرج تلقائياً في جميع العقود والسندات</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">بند الاختصاص القضائي</label>
+                <textarea class="form-control" id="s_legal_court" rows="3">في حال نشوب أي خلاف بين طرفي هذا العقد حول تفسيره أو تنفيذه، يكون الفصل فيه لمحاكم مدينة الرياض وتحتكم هذا العقد أحكام الشريعة الإسلامية والأنظمة السعودية.</textarea>
+              </div>
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">بند السعي (شرط نزول التمويل)</label>
+                <textarea class="form-control" id="s_legal_commission" rows="3">ولن يستحق الطرف الأول هذا المبلغ إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني مباشرةً، ويحق للطرف الأول طلب مستحقاته فور تحويل مبلغ التمويل من البنك لحساب الطرف الثاني.</textarea>
+              </div>
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">النص القانوني لسند الأمر</label>
+                <textarea class="form-control" id="s_legal_note" rows="3">يخضع هذا السند لأحكام نظام الأوراق التجارية في المملكة العربية السعودية، استناداً لقرار مجلس الوزراء رقم (692).</textarea>
+              </div>
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">بند الإقرار بالأهلية</label>
+                <textarea class="form-control" id="s_legal_capacity" rows="2">وبعد أن أقر الطرفان وهما بكامل الأهلية المعتبرة شرعاً ونظاماً على إبرام هذا العقد وفقاً للبنود والشروط التالية:</textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">نص التمهيد الافتراضي للعقد</label>
+                <textarea class="form-control" id="s_preamble" rows="4">حيث أن الطرف الأول شركة وساطة عقارية مقابل عمولة وتقدم خدماتها بوصفها وسيط عقاري، وحيث أن الطرف الثاني يرغب بالتقسيط عن طريق أحد البنوك أو أحد الجهات التمويلية وفق أحكام وقواعد الشريعة الإسلامية ودور الطرف الأول الوساطة.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-g"><i class="fab fa-whatsapp"></i></div>
+              <div><h4>قالب رسالة واتساب</h4><p>الرسالة الافتراضية المُرسلة للعملاء</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-group">
+                <label class="form-label">نص رسالة واتساب</label>
+                <textarea class="form-control" id="s_wa_template" rows="7">السلام عليكم {{client_name}}،
+
+نود إحاطتكم بأنه تم إعداد {{contract_type}} رقم ({{contract_number}}).
+
+📋 تفاصيل:
+• نوع التمويل: {{finance_type}}
+• مبلغ التمويل: {{finance_amount}}
+• قيمة السعي: {{commission_amount}}
+• رقم سند الأمر: {{note_number}}
+
+⚠️ تنبيه: لن يُستحق مبلغ السعي إلا بعد نزول التمويل في حسابكم.
+
+شركة الموعد للمقاولات العامة
+📞 920012979</textarea>
+              </div>
+              <div style="margin-top:10px;font-size:12px;color:var(--text-muted);">
+                <i class="fas fa-info-circle" style="color:var(--secondary);"></i>
+                المتغيرات المتاحة:
+                <code>{{client_name}}</code> <code>{{contract_number}}</code>
+                <code>{{finance_amount}}</code> <code>{{commission_amount}}</code>
+                <code>{{note_number}}</code> <code>{{contract_type}}</code>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /legal -->
+
+        <!-- ══════ APPEARANCE ══════ -->
+        <div class="s-panel" id="panel-appearance">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-paint-brush"></i></div>
+              <div><h4>اللون الأساسي للنظام</h4><p>يُطبق على الشريط الجانبي والعناوين</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="color-row">
+                <input type="color" class="color-sw" id="s_primary_color" value="#1a3c5e" oninput="applyPrimary(this.value)"/>
+                <div>
+                  <div style="font-size:14px;font-weight:600;">اللون الأساسي</div>
+                  <div style="font-size:12px;color:var(--text-muted);" id="primHex">#1a3c5e</div>
+                </div>
+              </div>
+              <div class="color-presets">
+                <div class="cp" style="background:#1a3c5e;" title="أزرق داكن" onclick="setPrimary('#1a3c5e')"></div>
+                <div class="cp" style="background:#1a237e;" title="نيلي"       onclick="setPrimary('#1a237e')"></div>
+                <div class="cp" style="background:#006064;" title="فيروزي"     onclick="setPrimary('#006064')"></div>
+                <div class="cp" style="background:#1b5e20;" title="أخضر داكن" onclick="setPrimary('#1b5e20')"></div>
+                <div class="cp" style="background:#4a148c;" title="بنفسجي"    onclick="setPrimary('#4a148c')"></div>
+                <div class="cp" style="background:#b71c1c;" title="أحمر داكن" onclick="setPrimary('#b71c1c')"></div>
+                <div class="cp" style="background:#37474f;" title="رمادي"      onclick="setPrimary('#37474f')"></div>
+                <div class="cp" style="background:#212121;" title="أسود"       onclick="setPrimary('#212121')"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-g"><i class="fas fa-star"></i></div>
+              <div><h4>اللون الذهبي / الثانوي</h4><p>يُطبق على المبالغ وعناصر التمييز</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="color-row">
+                <input type="color" class="color-sw" id="s_secondary_color" value="#c8a84b" oninput="applySecondary(this.value)"/>
+                <div>
+                  <div style="font-size:14px;font-weight:600;">اللون الثانوي</div>
+                  <div style="font-size:12px;color:var(--text-muted);" id="secHex">#c8a84b</div>
+                </div>
+              </div>
+              <div class="color-presets">
+                <div class="cp" style="background:#c8a84b;" onclick="setSecondary('#c8a84b')"></div>
+                <div class="cp" style="background:#ffa000;" onclick="setSecondary('#ffa000')"></div>
+                <div class="cp" style="background:#ff6f00;" onclick="setSecondary('#ff6f00')"></div>
+                <div class="cp" style="background:#558b2f;" onclick="setSecondary('#558b2f')"></div>
+                <div class="cp" style="background:#ad1457;" onclick="setSecondary('#ad1457')"></div>
+                <div class="cp" style="background:#6a1520;" onclick="setSecondary('#6a1520')"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-gr"><i class="fas fa-font"></i></div>
+              <div><h4>حجم الخط والعرض</h4><p>تأثير فوري على الواجهة</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">حجم خط الواجهة</label>
+                  <select class="form-control" id="s_font_size" onchange="applyFontSize(this.value)">
+                    <option value="14">عادي (14px)</option>
+                    <option value="15">متوسط (15px)</option>
+                    <option value="16">كبير (16px)</option>
+                    <option value="13">صغير (13px)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">حجم خط الطباعة</label>
+                  <select class="form-control" id="s_print_font_size">
+                    <option value="13">عادي (13px)</option>
+                    <option value="14">متوسط (14px)</option>
+                    <option value="15">كبير (15px)</option>
+                    <option value="12">صغير (12px)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="tog-row" style="margin-top:10px;">
+                <div class="tog-lbl">الوضع المضغوط (Compact Mode)<small>تقليل المسافات لعرض بيانات أكثر</small></div>
+                <label class="tog"><input type="checkbox" id="s_compact" onchange="applyCompact(this.checked)"/><span class="tog-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /appearance -->
+
+        <!-- ══════ NOTIFICATIONS ══════ -->
+        <div class="s-panel" id="panel-notif">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-bell"></i></div>
+              <div><h4>إعدادات التنبيهات</h4><p>التحكم في متى تظهر التحذيرات</p></div>
+            </div>
+            <div class="s-sec-body">
+              <div class="tog-row">
+                <div class="tog-lbl">تنبيه العقود بانتظار التمويل<small>إظهار تنبيه في لوحة التحكم</small></div>
+                <label class="tog"><input type="checkbox" id="s_notif_pending" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">تنبيه السندات قاربت الاستحقاق<small>تحذير قبل موعد الاستحقاق</small></div>
+                <label class="tog"><input type="checkbox" id="s_notif_due" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">تنبيه العقود النشطة بدون سند<small>تحذير عند غياب سند الأمر للعقد النشط</small></div>
+                <label class="tog"><input type="checkbox" id="s_notif_no_note" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div class="tog-row">
+                <div class="tog-lbl">تنبيه العقود المنتهية قريباً<small>تحذير قبل انتهاء مدة العقد</small></div>
+                <label class="tog"><input type="checkbox" id="s_notif_expiry" checked/><span class="tog-sl"></span></label>
+              </div>
+              <div style="margin-top:16px;" class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">عدد أيام التنبيه المبكر للسندات</label>
+                  <input type="number" class="form-control" id="s_notif_days" value="7" min="1" max="30"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">عدد أيام التنبيه لانتهاء العقد</label>
+                  <input type="number" class="form-control" id="s_notif_exp_days" value="14" min="1" max="60"/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /notif -->
+
+        <!-- ══════ BACKUP ══════ -->
+        <div class="s-panel" id="panel-backup">
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-b"><i class="fas fa-download"></i></div>
+              <div><h4>تصدير الإعدادات</h4><p>احتفظ بنسخة من إعدادات النظام</p></div>
+            </div>
+            <div class="s-sec-body">
+              <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+                قم بتصدير إعدادات النظام لاستعادتها على جهاز آخر أو بعد التحديث.
+              </p>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="exportSettings()">
+                  <i class="fas fa-download"></i> تصدير الإعدادات (JSON)
+                </button>
+                <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">
+                  <i class="fas fa-upload"></i> استيراد الإعدادات
+                </button>
+                <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importSettings(event)"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="s-sec">
+            <div class="s-sec-hdr">
+              <div class="s-sec-ico ico-r"><i class="fas fa-undo"></i></div>
+              <div><h4>إعادة الضبط</h4><p>العودة للإعدادات الافتراضية</p></div>
+            </div>
+            <div class="s-sec-body">
+              <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+                ستُحذف جميع التخصيصات وتعود للقيم الافتراضية. <strong>لن تتأثر بيانات العقود والسندات.</strong>
+              </p>
+              <button class="btn btn-danger" onclick="resetSettings()">
+                <i class="fas fa-undo"></i> إعادة ضبط كل الإعدادات
+              </button>
+            </div>
+          </div>
+
+        </div><!-- /backup -->
+
+        <!-- Save Bar -->
+        <div class="save-bar">
+          <button class="btn btn-primary" onclick="saveAll()">
+            <i class="fas fa-save"></i> حفظ جميع الإعدادات
+          </button>
+          <button class="btn btn-ghost" onclick="resetSettings()">
+            <i class="fas fa-undo"></i> إعادة الضبط
+          </button>
+          <div class="save-ok" id="saveOk">
+            <i class="fas fa-check-circle"></i> تم الحفظ بنجاح
+          </div>
+        </div>
+
+      </div><!-- /panels wrapper -->
+    </div><!-- /s-layout -->
+  </div><!-- /page-content -->
+</main>
+
+<script src="js/app.js"><\/script>
+<script>
+/* ═══════════════════════════════════════════════
+   SETTINGS ENGINE — v3.0
+   مفتاح التخزين: mawid_settings (localStorage)
+   ═══════════════════════════════════════════════ */
+
+var KEY = 'mawid_settings';
+
+var DEFAULTS = {
+  /* Company */
+  company_name:    'شركة الموعد للمقاولات العامة',
+  company_cr:      '3350140062',
+  company_vat:     '',
+  company_phone:   '920012979',
+  company_fax:     '',
+  company_city:    'الرياض',
+  company_address: 'طريق الإمام سعود الفرعي، حي التعاون',
+  company_email:   '',
+  company_website: '',
+  company_logo:    '',
+  /* Contracts */
+  contract_prefix:     'CNT',
+  court_city:          'الرياض',
+  commission_type:     'مبلغ مقطوع',
+  commission_rate:     3,
+  payment_place:       'الرياض',
+  default_status:      'بانتظار التمويل',
+  closing_text:        'والله ولي التوفيق',
+  show_vat:            false,
+  show_fax:            false,
+  show_esig:           true,
+  page_numbers:        true,
+  auto_note:           true,
+  repeat_header:       true,
+  vat_rate:            15,
+  min_commission:      0,
+  max_commission:      0,
+  currency:            'ريال',
+  auto_vat:            true,
+  no_early_claim:      true,
+  auto_archive:        true,
+  lock_payment_place:  false,
+  /* Notes */
+  pay_decree:          '692',
+  note_pay_place:      'الرياض',
+  note_court:          'الرياض',
+  note_status:         'ساري',
+  note_months:         6,
+  note_alert_days:     7,
+  note_closing:        'والله ولي التوفيق',
+  note_unconditional:  true,
+  note_show_decree:    true,
+  note_show_table:     true,
+  note_watermark:      true,
+  note_show_words:     true,
+  note_show_sig:       true,
+  /* Legal */
+  legal_court:      'في حال نشوب أي خلاف بين طرفي هذا العقد حول تفسيره أو تنفيذه، يكون الفصل فيه لمحاكم مدينة الرياض وتحتكم هذا العقد أحكام الشريعة الإسلامية والأنظمة السعودية.',
+  legal_commission: 'ولن يستحق الطرف الأول هذا المبلغ إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني مباشرةً.',
+  legal_note:       'يخضع هذا السند لأحكام نظام الأوراق التجارية في المملكة العربية السعودية، استناداً لقرار مجلس الوزراء رقم (692).',
+  legal_capacity:   'وبعد أن أقر الطرفان وهما بكامل الأهلية المعتبرة شرعاً ونظاماً على إبرام هذا العقد وفقاً للبنود والشروط التالية:',
+  preamble:         'حيث أن الطرف الأول شركة وساطة عقارية مقابل عمولة وتقدم خدماتها بوصفها وسيط عقاري.',
+  wa_template:      'السلام عليكم {{client_name}}،\\n\\nبخصوص {{contract_type}} رقم ({{contract_number}}).\\nالسعي: {{commission_amount}}\\nرقم السند: {{note_number}}\\n\\nشركة الموعد للمقاولات العامة',
+  /* Appearance */
+  primary_color:   '#1a3c5e',
+  secondary_color: '#c8a84b',
+  font_size:       '14',
+  print_font_size: '13',
+  compact:         false,
+  /* Notifications */
+  notif_pending:   true,
+  notif_due:       true,
+  notif_no_note:   true,
+  notif_expiry:    true,
+  notif_days:      7,
+  notif_exp_days:  14
+};
+
+/* ── Read/Write ── */
+function getAll() {
+  try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); }
+  catch(e) { return Object.assign({}, DEFAULTS); }
+}
+
+function G(id) { var e = document.getElementById(id); return e ? e.value : ''; }
+function B(id) { var e = document.getElementById(id); return e ? e.checked : false; }
+function SV(id, v) { var e = document.getElementById(id); if(e) e.value = v; }
+function SC(id, v) { var e = document.getElementById(id); if(e) e.checked = !!v; }
+
+/* ── Populate form ── */
+function populate() {
+  var c = getAll();
+  SV('s_company_name', c.company_name); SV('s_company_cr', c.company_cr);
+  SV('s_company_vat', c.company_vat);  SV('s_company_phone', c.company_phone);
+  SV('s_company_fax', c.company_fax);  SV('s_company_city', c.company_city);
+  SV('s_company_address', c.company_address); SV('s_company_email', c.company_email);
+  SV('s_company_website', c.company_website);
+  if (c.company_logo) showLogo(c.company_logo);
+
+  SV('s_contract_prefix', c.contract_prefix); SV('s_court_city', c.court_city);
+  SV('s_commission_type', c.commission_type); SV('s_commission_rate', c.commission_rate);
+  SV('s_payment_place', c.payment_place); SV('s_default_status', c.default_status);
+  SV('s_closing_text', c.closing_text);
+  SC('s_show_vat', c.show_vat); SC('s_show_fax', c.show_fax);
+  SC('s_show_esig', c.show_esig); SC('s_page_numbers', c.page_numbers);
+  SC('s_auto_note', c.auto_note); SC('s_repeat_header', c.repeat_header);
+  SV('s_vat_rate', c.vat_rate); SV('s_min_commission', c.min_commission);
+  SV('s_max_commission', c.max_commission || ''); SV('s_currency', c.currency);
+  SC('s_auto_vat', c.auto_vat); SC('s_no_early_claim', c.no_early_claim);
+  SC('s_auto_archive', c.auto_archive); SC('s_lock_payment_place', c.lock_payment_place);
+
+  SV('s_pay_decree', c.pay_decree); SV('s_note_pay_place', c.note_pay_place);
+  SV('s_note_court', c.note_court); SV('s_note_status', c.note_status);
+  SV('s_note_months', c.note_months); SV('s_note_alert_days', c.note_alert_days);
+  SV('s_note_closing', c.note_closing);
+  SC('s_note_unconditional', c.note_unconditional); SC('s_note_show_decree', c.note_show_decree);
+  SC('s_note_show_table', c.note_show_table); SC('s_note_watermark', c.note_watermark);
+  SC('s_note_show_words', c.note_show_words); SC('s_note_show_sig', c.note_show_sig);
+
+  SV('s_legal_court', c.legal_court); SV('s_legal_commission', c.legal_commission);
+  SV('s_legal_note', c.legal_note); SV('s_legal_capacity', c.legal_capacity);
+  SV('s_preamble', c.preamble); SV('s_wa_template', c.wa_template);
+
+  SV('s_primary_color', c.primary_color); SV('s_secondary_color', c.secondary_color);
+  SV('s_font_size', c.font_size); SV('s_print_font_size', c.print_font_size);
+  SC('s_compact', c.compact);
+  document.getElementById('primHex').textContent = c.primary_color;
+  document.getElementById('secHex').textContent  = c.secondary_color;
+  applyPrimary(c.primary_color, false);
+  applySecondary(c.secondary_color, false);
+  if (c.compact) document.body.classList.add('compact');
+
+  SC('s_notif_pending', c.notif_pending); SC('s_notif_due', c.notif_due);
+  SC('s_notif_no_note', c.notif_no_note); SC('s_notif_expiry', c.notif_expiry);
+  SV('s_notif_days', c.notif_days); SV('s_notif_exp_days', c.notif_exp_days);
+
+  var co = document.getElementById('sb_co');
+  var parts = c.company_name.split(' ');
+  if (co) co.textContent = parts[1] || 'الموعد';
+  var cr = document.getElementById('sb_cr');
+  if (cr) cr.textContent = c.company_cr;
+
+  refreshPreview();
+}
+
+/* ── Save ── */
+function saveAll() {
+  var c = {
+    company_name: G('s_company_name'), company_cr: G('s_company_cr'),
+    company_vat: G('s_company_vat'),   company_phone: G('s_company_phone'),
+    company_fax: G('s_company_fax'),   company_city: G('s_company_city'),
+    company_address: G('s_company_address'), company_email: G('s_company_email'),
+    company_website: G('s_company_website'), company_logo: getAll().company_logo,
+
+    contract_prefix: G('s_contract_prefix'), court_city: G('s_court_city'),
+    commission_type: G('s_commission_type'),
+    commission_rate: parseFloat(G('s_commission_rate')) || 0,
+    payment_place: G('s_payment_place'), default_status: G('s_default_status'),
+    closing_text: G('s_closing_text'),
+    show_vat: B('s_show_vat'), show_fax: B('s_show_fax'),
+    show_esig: B('s_show_esig'), page_numbers: B('s_page_numbers'),
+    auto_note: B('s_auto_note'), repeat_header: B('s_repeat_header'),
+    vat_rate: parseFloat(G('s_vat_rate')) || 15,
+    min_commission: parseFloat(G('s_min_commission')) || 0,
+    max_commission: parseFloat(G('s_max_commission')) || 0,
+    currency: G('s_currency') || 'ريال',
+    auto_vat: B('s_auto_vat'), no_early_claim: B('s_no_early_claim'),
+    auto_archive: B('s_auto_archive'), lock_payment_place: B('s_lock_payment_place'),
+
+    pay_decree: G('s_pay_decree'), note_pay_place: G('s_note_pay_place'),
+    note_court: G('s_note_court'), note_status: G('s_note_status'),
+    note_months: parseInt(G('s_note_months')) || 6,
+    note_alert_days: parseInt(G('s_note_alert_days')) || 7,
+    note_closing: G('s_note_closing'),
+    note_unconditional: B('s_note_unconditional'), note_show_decree: B('s_note_show_decree'),
+    note_show_table: B('s_note_show_table'), note_watermark: B('s_note_watermark'),
+    note_show_words: B('s_note_show_words'), note_show_sig: B('s_note_show_sig'),
+
+    legal_court: G('s_legal_court'), legal_commission: G('s_legal_commission'),
+    legal_note: G('s_legal_note'), legal_capacity: G('s_legal_capacity'),
+    preamble: G('s_preamble'), wa_template: G('s_wa_template'),
+
+    primary_color: G('s_primary_color'), secondary_color: G('s_secondary_color'),
+    font_size: G('s_font_size'), print_font_size: G('s_print_font_size'),
+    compact: B('s_compact'),
+
+    notif_pending: B('s_notif_pending'), notif_due: B('s_notif_due'),
+    notif_no_note: B('s_notif_no_note'), notif_expiry: B('s_notif_expiry'),
+    notif_days: parseInt(G('s_notif_days')) || 7,
+    notif_exp_days: parseInt(G('s_notif_exp_days')) || 14
+  };
+
+  localStorage.setItem(KEY, JSON.stringify(c));
+  applyPrimary(c.primary_color);
+  applySecondary(c.secondary_color);
+  refreshPreview();
+  showToast('✓ تم حفظ الإعدادات بنجاح', 'success');
+  var ok = document.getElementById('saveOk');
+  if (ok) { ok.style.opacity = '1'; setTimeout(function() { ok.style.opacity = '0'; }, 3000); }
+
+  var co = document.getElementById('sb_co');
+  var parts = c.company_name.split(' ');
+  if (co) co.textContent = parts[1] || 'الموعد';
+  var cr = document.getElementById('sb_cr');
+  if (cr) cr.textContent = c.company_cr;
+}
+
+/* ── Panel Switching ── */
+function showPanel(id, btn) {
+  document.querySelectorAll('.s-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.s-item').forEach(function(b) { b.classList.remove('active'); });
+  var p = document.getElementById('panel-' + id);
+  if (p) p.classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'notes') setTimeout(refreshPreview, 100);
+}
+
+/* ── Logo ── */
+function handleLogo(e) {
+  var file = e.target.files[0]; if (!file) return;
+  if (file.size > 2097152) { showToast('الحجم يتجاوز 2MB', 'warning'); return; }
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var b64 = ev.target.result;
+    var s = getAll(); s.company_logo = b64;
+    localStorage.setItem(KEY, JSON.stringify(s));
+    showLogo(b64);
+    showToast('✓ تم رفع الشعار', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+function showLogo(src) {
+  var box = document.getElementById('logoBox');
+  var ph  = document.getElementById('logoPh');
+  if (!box) return;
+  var img = box.querySelector('img');
+  if (!img) { img = document.createElement('img'); box.appendChild(img); }
+  img.src = src;
+  if (ph) ph.style.display = 'none';
+}
+function removeLogo() {
+  var s = getAll(); s.company_logo = '';
+  localStorage.setItem(KEY, JSON.stringify(s));
+  var box = document.getElementById('logoBox');
+  var img = box ? box.querySelector('img') : null;
+  if (img) img.remove();
+  var ph = document.getElementById('logoPh');
+  if (ph) ph.style.display = '';
+  showToast('تم حذف الشعار', 'success');
+}
+
+/* ── Colors ── */
+function applyPrimary(c, upd) {
+  document.documentElement.style.setProperty('--primary', c);
+  document.documentElement.style.setProperty('--primary-dark', adj(c, -15));
+  document.documentElement.style.setProperty('--primary-light', adj(c, 10));
+  if (upd !== false) {
+    SV('s_primary_color', c);
+    document.getElementById('primHex').textContent = c;
+  }
+}
+function applySecondary(c, upd) {
+  document.documentElement.style.setProperty('--secondary', c);
+  document.documentElement.style.setProperty('--secondary-light', adj(c, 15));
+  if (upd !== false) {
+    SV('s_secondary_color', c);
+    document.getElementById('secHex').textContent = c;
+  }
+}
+function setPrimary(c) { applyPrimary(c); }
+function setSecondary(c) { applySecondary(c); }
+function adj(hex, pct) {
+  var r = parseInt(hex.slice(1,3),16),g = parseInt(hex.slice(3,5),16),b = parseInt(hex.slice(5,7),16);
+  r = Math.max(0,Math.min(255,r+Math.round(255*pct/100)));
+  g = Math.max(0,Math.min(255,g+Math.round(255*pct/100)));
+  b = Math.max(0,Math.min(255,b+Math.round(255*pct/100)));
+  return '#'+(r.toString(16).padStart(2,'0'))+(g.toString(16).padStart(2,'0'))+(b.toString(16).padStart(2,'0'));
+}
+function applyFontSize(sz) { document.body.style.fontSize = sz + 'px'; }
+function applyCompact(on) { document.body.classList.toggle('compact', on); }
+
+/* ── LIVE NOTE PREVIEW ── */
+function refreshPreview() {
+  var el = document.getElementById('notePreview'); if (!el) return;
+  var c        = getAll();
+  var coName   = G('s_company_name')   || c.company_name;
+  var coCR     = G('s_company_cr')     || c.company_cr;
+  var coPhone  = G('s_company_phone')  || c.company_phone;
+  var coCity   = G('s_company_city')   || c.company_city;
+  var coLogo   = c.company_logo;
+  var decree   = G('s_pay_decree')     || c.pay_decree;
+  var payPlace = G('s_note_pay_place') || c.note_pay_place;
+  var courtC   = G('s_note_court')     || c.note_court;
+  var closing  = G('s_note_closing')   || c.note_closing;
+  var legalTxt = G('s_legal_note')     || c.legal_note;
+  var unCond   = B('s_note_unconditional');
+  var showDec  = B('s_note_show_decree');
+  var showTbl  = B('s_note_show_table');
+  var showWM   = B('s_note_watermark');
+  var showW    = B('s_note_show_words');
+  var showSig  = B('s_note_show_sig');
+
+  var tName  = G('t_name')  || 'عقيل بن هريسان العنزي';
+  var tId    = G('t_id')    || '1030460636';
+  var tAmt   = parseFloat(G('t_amt'))  || 24000;
+  var tNum   = G('t_num')   || '3617';
+  var today  = new Date().toISOString().split('T')[0];
+  var amtF   = tAmt.toLocaleString('ar-SA') + ' ريال';
+  var amtW   = typeof numberToArabicWords === 'function' ? numberToArabicWords(tAmt) : amtF;
+
+  var logoH = coLogo
+    ? '<img src="' + coLogo + '" style="max-height:50px;max-width:130px;object-fit:contain;margin-bottom:5px;" alt="شعار"/>'
+    : '<div style="font-size:28px;color:#c8a84b;margin-bottom:4px;"><i class="fas fa-building"></i></div>';
+
+  var h = '<div class="note-prev">';
+  if (showWM) h += '<div style="position:relative;">';
+  h += '<div class="np-hdr">' + logoH;
+  h += '<div class="np-co">' + coName + '</div>';
+  h += '<div class="np-sub">س.ت: ' + coCR + ' | هاتف: ' + coPhone + ' | ' + coCity + '</div>';
+  h += '<div><span class="np-badge">سند لأمر</span></div>';
+  h += '<div style="margin-top:7px;font-size:11px;color:#444;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">';
+  h += '<span>رقم السند: <strong style="color:#1a3c5e;">' + tNum + '</strong></span>';
+  h += '<span>تاريخ الإصدار: <strong>' + today + '</strong></span></div></div>';
+
+  h += '<div class="np-amt">';
+  h += '<div style="font-size:10px;color:#888;margin-bottom:4px;font-weight:600;">المبلغ المستحق</div>';
+  h += '<div class="np-amt-val">' + amtF + '</div>';
+  if (showW) h += '<div class="np-amt-w">(' + amtW + ')</div>';
+  h += '</div>';
+
+  h += '<p style="text-align:justify;font-size:12px;margin-bottom:10px;">';
+  h += 'أنا الموقّع أدناه السيد/ <strong>' + tName + '</strong> ';
+  h += 'حامل الهوية (<strong>' + tId + '</strong>)، أتعهد بأن أدفع ';
+  if (unCond) h += '<strong>بدون قيد أو شرط</strong> ';
+  h += 'لأمر <strong>' + coName + '</strong> مبلغ <strong style="color:#c8a84b;">' + amtF + '</strong>';
+  if (showW) h += ' (<em>' + amtW + '</em>)';
+  h += '. يستحق في مكان الدفع: مدينة <strong>' + payPlace + '</strong>.</p>';
+
+  if (showTbl) {
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin:8px 0;">';
+    h += '<tr><th style="background:#1a3c5e;color:#fff;padding:5px 8px;text-align:right;">البيان</th><th style="background:#1a3c5e;color:#fff;padding:5px 8px;text-align:right;">المستفيد</th><th style="background:#1a3c5e;color:#fff;padding:5px 8px;text-align:right;">المدين</th></tr>';
+    h += '<tr><td style="padding:5px 8px;border-bottom:1px solid #eee;">الاسم</td><td style="padding:5px 8px;border-bottom:1px solid #eee;">' + coName + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee;">' + tName + '</td></tr>';
+    h += '<tr style="background:#f7f9fc;"><td style="padding:5px 8px;">الرقم</td><td style="padding:5px 8px;">س.ت: ' + coCR + '</td><td style="padding:5px 8px;">هوية: ' + tId + '</td></tr>';
+    h += '</table>';
+  }
+
+  if (showDec) {
+    h += '<div class="np-legal"><i class="fas fa-gavel" style="color:#1a3c5e;margin-left:5px;"></i>';
+    h += legalTxt.replace('692', decree);
+    h += ' المحكمة: <strong>' + courtC + '</strong>.</div>';
+  }
+
+  if (showSig) {
+    h += '<div class="np-sigs">';
+    h += '<div class="np-sig"><div class="role">المستفيد</div>';
+    h += '<div style="font-size:11px;color:#444;margin-bottom:10px;">' + coName + '</div>';
+    h += '<div class="np-sig-line"></div><small>التوقيع والختم</small></div>';
+    h += '<div class="np-sig"><div class="role">المدين</div>';
+    h += '<div style="font-size:11px;color:#444;margin-bottom:10px;">' + tName + '</div>';
+    h += '<div class="np-sig-line"></div><small>التوقيع</small></div>';
+    h += '</div>';
+  }
+
+  h += '<div style="text-align:center;margin-top:10px;font-size:10px;color:#888;border-top:1px solid #eee;padding-top:8px;">';
+  h += 'حُرِّر في ' + courtC + ' بتاريخ ' + today + ' | ' + closing;
+  h += ' | حالة السند: <strong style="color:#2980b9;">ساري</strong></div>';
+
+  if (showWM) h += '</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+/* ── Print Preview ── */
+function printPreview() {
+  refreshPreview();
+  var el = document.getElementById('notePreview'); if (!el) return;
+  var w = window.open('', '_blank', 'width=850,height=700');
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/>');
+  w.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">');
+  w.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">');
+  w.document.write('<style>*{box-sizing:border-box;}body{font-family:"Tajawal",sans-serif;padding:20px;background:#fff;}@page{size:A4;margin:14mm;}</style>');
+  w.document.write('</head><body>' + el.innerHTML + '</body></html>');
+  w.document.close();
+  setTimeout(function() { w.focus(); w.print(); }, 700);
+}
+
+function resetTest() {
+  SV('t_name', 'عقيل بن هريسان العنزي');
+  SV('t_id',   '1030460636');
+  SV('t_amt',  '24000');
+  SV('t_num',  '3617');
+  refreshPreview();
+}
+
+/* ── Export / Import / Reset ── */
+function exportSettings() {
+  var c = getAll();
+  var b = new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(b);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'mawid_settings.json'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('تم تصدير الإعدادات', 'success');
+}
+function importSettings(e) {
+  var file = e.target.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var imp = JSON.parse(ev.target.result);
+      localStorage.setItem(KEY, JSON.stringify(Object.assign({}, DEFAULTS, imp)));
+      populate();
+      showToast('✓ تم استيراد الإعدادات', 'success');
+    } catch(err) { showToast('ملف غير صالح', 'error'); }
+  };
+  reader.readAsText(file);
+}
+function resetSettings() {
+  if (!confirm('هل تريد إعادة ضبط جميع الإعدادات للقيم الافتراضية؟\\nلن تتأثر بيانات العقود والسندات.')) return;
+  localStorage.removeItem(KEY);
+  populate();
+  showToast('تم إعادة الضبط', 'success');
+}
+
+/* ── Hash-based panel open ── */
+function openFromHash() {
+  var h = window.location.hash.replace('#', '');
+  if (h === 'notes') {
+    var btn = document.getElementById('noteMenuBtn');
+    if (btn) { showPanel('notes', btn); }
+  }
+}
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded', function() {
+  populate();
+  openFromHash();
+});
+<\/script>
+</body>
+</html>
+`;function ua(e){const t=`
+  <style id="contracts-module-styles">
+${sa}
+  </style>
+`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function ma(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function A(e){let t=ua(ma(e.replace(/\r\n/g,`
+`)));return t=t.replace(/src="js\/app\.js"/g,'src="/contracts-module/js/app.js?v=20260330"'),t=t.replace(/src="js\/dashboard\.js"/g,'src="/contracts-module/js/dashboard.js?v=20260330"'),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t.includes("contracts-home-btn")||(t=t.replace(/<div class="topbar-actions">/,'<div class="topbar-actions"><a href="/admin/panel" class="btn btn-ghost contracts-home-btn" title="العودة للنظام الرئيسي"><i class="fas fa-home"></i> الرئيسية</a>')),t}const ga=A(na),fa=A(ra),ba=A(oa),xa=A(la),ha=A(ia),ya=A(da),va=A(ca),wa=A(pa);function z(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function ce(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function q(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}async function F(e,t){const a=await t(e);return a.userId?{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function _a(e,t){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(q(e)){const a=t?.tenant_id;return typeof a=="number"&&a>0?{tenantId:a,error:null}:typeof a=="string"&&/^\d+$/.test(a)?{tenantId:parseInt(a,10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}function pe(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:q(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:q(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function Ea(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:l}=await F(s,t);if(l)return l;let r="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&q(n)){const p=s.req.query("tenant_id");if(p&&/^\d+$/.test(String(p))&&(o=parseInt(String(p),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)r+=" WHERE tenant_id = ?",i.push(o);else return q(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(r+=" AND assigned_to = ?",i.push(n.userId)),r+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(r).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:l}=await F(s,t);if(l)return l;const r=s.req.param("table"),i=z(r);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:p}=pe(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...p,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:l}=await F(s,t);if(l)return l;const r=s.req.param("table"),i=z(r);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:p}=pe(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...p).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:l}=await F(s,t);if(l)return l;const r=s.req.param("table"),i=z(r);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:p}=_a(n,o);if(p)return p;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const f=(await s.env.DB.prepare(`INSERT INTO contract_templates (
+          tenant_id, template_name, template_type, header_content, body_content, footer_content,
+          variables_list, is_active, court_city
+        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,ce(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="contracts"){const m=(await s.env.DB.prepare(`INSERT INTO contracts (
+          tenant_id, contract_number, template_id, template_name, date_gregorian, date_hijri, day_name,
+          customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
+          commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
+          property_description, property_location, bank_name, notes, is_archived
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(d,o.contract_number??null,o.template_id!=null?Number(o.template_id):null,o.template_name??null,o.date_gregorian??null,o.date_hijri??null,o.day_name??null,o.customer_id!=null?Number(o.customer_id):null,o.party_two_name??null,o.party_two_id??null,o.party_two_phone??null,o.party_two_address??null,o.finance_type??null,o.finance_amount!=null?Number(o.finance_amount):null,o.commission_amount!=null?Number(o.commission_amount):null,o.commission_type??null,o.commission_rate!=null?Number(o.commission_rate):null,o.note_order_number??null,o.note_due_date??null,o.status??"نشط",o.property_description??null,o.property_location??null,o.bank_name??null,o.notes??null,o.is_archived?1:0).run()).meta.last_row_id,f=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(m).first();return s.json({...f,id:m})}if(i==="promissory_notes"){const u=o.contract_id!=null?Number(o.contract_id):NaN;if(!u)return s.json({error:"contract_id required"},400);const m=await s.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!m||m.tenant_id!==d)return s.json({error:"Invalid contract"},400);const f=String(o.note_number??"");if(!f.trim())return s.json({error:"note_number required"},400);const b=(await s.env.DB.prepare(`INSERT INTO promissory_notes (
+          tenant_id, note_number, contract_id, debtor_name, debtor_id, amount, due_date, issue_date, payment_place, status
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,f,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(b).first();return s.json({...y,id:b})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:l,error:r}=await F(s,t);if(r)return r;const i=s.req.param("table"),o=z(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const p=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(l.tenantId&&u.tenant_id!==l.tenantId)return s.json({error:"Forbidden"},403);if(!l.tenantId&&!q(l))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||p[h]!==void 0)&&(m.push(`${y} = ?`),h==="is_active"?f.push(p[h]?1:0):h==="variables_list"?f.push(ce(p[h])):f.push(p[h]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(b)}if(o==="contracts"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||p[h]!==void 0)&&(m.push(`${y} = ?`),h==="finance_amount"||h==="commission_amount"||h==="commission_rate"||h==="customer_id"||h==="template_id"?f.push(p[h]!=null?Number(p[h]):null):h==="is_archived"?f.push(p[h]?1:0):f.push(p[h]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("date_hijri","date_hijri"),g("day_name","day_name"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(b)}if(o==="promissory_notes"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||p[h]!==void 0)&&(m.push(`${y} = ?`),h==="amount"||h==="contract_id"?f.push(p[h]!=null?Number(p[h]):null):f.push(p[h]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(b)}return s.json({error:"Unsupported"},400)};e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:l}=await F(s,t);if(l)return l;const r=s.req.param("table"),i=z(r);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!q(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const ka=`/* =============================================
+   app.js - الوظائف المشتركة للنظام
+   ============================================= */
+
+// ===== CONFIG =====
+const COMPANY = {
+  name: 'شركة الموعد للمقاولات العامة',
+  cr: '3350140062',
+  tax: '310XXXXXXXXX', // الرقم الضريبي
+  city: 'الرياض',
+  phone: '',
+  court: 'الرياض'
+};
+
+// ===== API HELPERS =====
+const API = {
+  base: '/api/contract-tables',
+
+  async request(path, options = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(path, {
+        credentials: 'same-origin',
+        ...options,
+        signal: controller.signal
+      });
+      if (!res.ok) {
+        throw new Error(\`HTTP \${res.status}\`);
+      }
+      return await res.json();
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('Request timeout');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  async get(table, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return this.request(\`\${this.base}/\${table}\${qs ? '?' + qs : ''}\`);
+  },
+
+  async getOne(table, id) {
+    return this.request(\`\${this.base}/\${table}/\${id}\`);
+  },
+
+  async create(table, data) {
+    return this.request(\`\${this.base}/\${table}\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  async update(table, id, data) {
+    return this.request(\`\${this.base}/\${table}/\${id}\`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  async patch(table, id, data) {
+    return this.request(\`\${this.base}/\${table}/\${id}\`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  async delete(table, id) {
+    await fetch(\`\${this.base}/\${table}/\${id}\`, { method: 'DELETE', credentials: 'same-origin' });
+  }
+};
+
+// ===== FORMATTERS =====
+function formatMoney(amount) {
+  if (!amount && amount !== 0) return '—';
+  return Number(amount).toLocaleString('ar-SA') + ' ريال';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch { return dateStr; }
+}
+
+function getStatusBadge(status) {
+  const map = {
+    'نشط': { cls: 'badge-active', icon: 'fa-check-circle' },
+    'بانتظار التمويل': { cls: 'badge-pending', icon: 'fa-clock' },
+    'مكتمل': { cls: 'badge-completed', icon: 'fa-trophy' },
+    'مؤرشف': { cls: 'badge-archived', icon: 'fa-archive' },
+    'ملغي': { cls: 'badge-cancelled', icon: 'fa-times-circle' }
+  };
+  const s = map[status] || { cls: 'badge-pending', icon: 'fa-question' };
+  return \`<span class="badge \${s.cls}"><i class="fas \${s.icon}" style="font-size:10px;margin-left:4px;"></i>\${status}</span>\`;
+}
+
+function getNoteStatusBadge(status) {
+  const map = {
+    'ساري': { cls: 'badge-active' },
+    'سار':  { cls: 'badge-active' },
+    'محصل': { cls: 'badge-completed' },
+    'متأخر': { cls: 'badge-cancelled' }
+  };
+  const s = map[status] || { cls: 'badge-pending' };
+  return \`<span class="badge \${s.cls}">\${status}</span>\`;
+}
+
+// ===== NUMBER TO ARABIC WORDS =====
+function numberToArabicWords(num) {
+  if (!num) return 'صفر ريال سعودي';
+  const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة',
+    'عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر',
+    'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+  const tens = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+  const hundreds = ['', 'مائة', 'مئتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
+
+  function convert(n) {
+    if (n === 0) return '';
+    if (n < 20) return ones[n];
+    if (n < 100) {
+      return tens[Math.floor(n / 10)] + (n % 10 ? ' و' + ones[n % 10] : '');
+    }
+    if (n < 1000) {
+      return hundreds[Math.floor(n / 100)] + (n % 100 ? ' و' + convert(n % 100) : '');
+    }
+    if (n < 1000000) {
+      const t = Math.floor(n / 1000);
+      const r = n % 1000;
+      const prefix = t === 1 ? 'ألف' : t === 2 ? 'ألفان' : t <= 10 ? convert(t) + ' آلاف' : convert(t) + ' ألف';
+      return prefix + (r ? ' و' + convert(r) : '');
+    }
+    const m = Math.floor(n / 1000000);
+    const r = n % 1000000;
+    const prefix = m === 1 ? 'مليون' : m === 2 ? 'مليونان' : convert(m) + ' ملايين';
+    return prefix + (r ? ' و' + convert(r) : '');
+  }
+
+  const n = Math.floor(num);
+  return (n === 0 ? 'صفر' : convert(n)) + ' ريال سعودي لا غير';
+}
+
+// ===== CONTRACT NUMBER GENERATOR =====
+function generateContractNumber() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const rand = Math.floor(Math.random() * 900) + 100;
+  return \`CNT-\${year}-\${rand}\`;
+}
+
+// ===== HIJRI DATE =====
+function getHijriDate() {
+  try {
+    const today = new Date();
+    const hijri = today.toLocaleDateString('ar-SA-u-ca-islamic', {
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    return hijri;
+  } catch {
+    return '';
+  }
+}
+
+// ===== TOAST NOTIFICATIONS =====
+function showToast(message, type = 'success') {
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle' };
+  const toast = document.createElement('div');
+  toast.className = \`toast toast-\${type}\`;
+  toast.innerHTML = \`<i class="fas \${icons[type] || icons.success}"></i><span>\${message}</span>\`;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ===== MODAL =====
+function openModal(id) {
+  const el = document.getElementById(id);
+  el?.classList.add('active');
+  el?.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  el?.classList.remove('active');
+  el?.setAttribute('aria-hidden', 'true');
+  if (!document.querySelector('.modal-overlay.active')) {
+    document.body.style.overflow = '';
+  }
+}
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('active');
+    e.target.setAttribute('aria-hidden', 'true');
+    if (!document.querySelector('.modal-overlay.active')) {
+      document.body.style.overflow = '';
+    }
+  }
+});
+
+// ===== SIDEBAR TOGGLE =====
+function toggleSidebar() {
+  document.getElementById('sidebar')?.classList.toggle('open');
+}
+
+// ===== ACTIVE NAV =====
+function setActiveNav() {
+  const path = window.location.pathname;
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.remove('active');
+    const h = item.getAttribute('href');
+    if (h && (path === h || path.replace(/\\/$/, '') === h)) item.classList.add('active');
+  });
+}
+
+// ===== CURRENT DATE =====
+function setCurrentDate() {
+  const el = document.getElementById('currentDate');
+  if (!el) return;
+  const now = new Date();
+  const greg = now.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const hijri = now.toLocaleDateString('ar-SA-u-ca-islamic', { year: 'numeric', month: 'long', day: 'numeric' });
+  el.innerHTML = \`<span>\${greg}</span>\`;
+}
+
+// ===== CONFIRM DELETE =====
+function confirmDelete(message, callback) {
+  if (confirm(message || 'هل أنت متأكد من الحذف؟')) callback();
+}
+
+// ===== URL PARAMS =====
+function getParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+// ===== WHATSAPP =====
+function sendWhatsApp(phone, message) {
+  const cleaned = phone.replace(/[^0-9]/g, '').replace(/^0/, '966');
+  const url = \`https://wa.me/\${cleaned}?text=\${encodeURIComponent(message)}\`;
+  window.open(url, '_blank');
+}
+
+// ===== PRINT CONTRACT =====
+function printPage() {
+  window.print();
+}
+
+// Expose for inline handlers + CSP-safe pages
+if (typeof globalThis !== 'undefined') {
+  globalThis.openModal = openModal;
+  globalThis.closeModal = closeModal;
+  globalThis.showToast = showToast;
+  globalThis.toggleSidebar = toggleSidebar;
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  setActiveNav();
+  setCurrentDate();
+});
+`,Sa=`/* =============================================
+   dashboard.js - لوحة التحكم
+   ============================================= */
+
+let contractsChart = null;
+
+async function loadDashboard() {
+  try {
+    const data = await API.get('contracts', { limit: 100 });
+    const contracts = data.data || [];
+
+    // ===== STATS =====
+    const total = contracts.length;
+    const active = contracts.filter(c => c.status === 'نشط').length;
+    const pending = contracts.filter(c => c.status === 'بانتظار التمويل').length;
+    const completed = contracts.filter(c => c.status === 'مكتمل').length;
+    const totalCommission = contracts.reduce((s, c) => s + (Number(c.commission_amount) || 0), 0);
+    const pendingCommission = contracts
+      .filter(c => c.status !== 'مكتمل' && c.status !== 'مؤرشف')
+      .reduce((s, c) => s + (Number(c.commission_amount) || 0), 0);
+
+    animateNumber('totalContracts', total);
+    animateNumber('activeContracts', active);
+    animateNumber('pendingContracts', pending);
+    animateNumber('completedContracts', completed);
+    animateNumberMoney('totalCommission', totalCommission);
+    animateNumberMoney('pendingCommission', pendingCommission);
+
+    // ===== CHART =====
+    try {
+      buildChart(contracts);
+    } catch (e) {
+      console.warn('[contracts dashboard] chart failed (Chart.js CDN blocked?)', e);
+    }
+
+    // ===== ALERTS =====
+    buildAlerts(contracts);
+
+    // ===== RECENT TABLE =====
+    buildRecentTable(contracts);
+
+  } catch (err) {
+    console.error(err);
+    showToast('تعذّر تحميل بيانات لوحة التحكم', 'error');
+  }
+}
+
+function animateNumber(id, target) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let current = 0;
+  const step = Math.ceil(target / 30);
+  const timer = setInterval(() => {
+    current = Math.min(current + step, target);
+    el.textContent = current.toLocaleString('ar-SA');
+    if (current >= target) clearInterval(timer);
+  }, 30);
+}
+
+function animateNumberMoney(id, target) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let current = 0;
+  const step = Math.ceil(target / 40);
+  const timer = setInterval(() => {
+    current = Math.min(current + step, target);
+    el.textContent = current.toLocaleString('ar-SA');
+    if (current >= target) clearInterval(timer);
+  }, 25);
+}
+
+function buildChart(contracts) {
+  const ctx = document.getElementById('contractsChart');
+  if (!ctx) return;
+
+  const statusCounts = {
+    'نشط': 0,
+    'بانتظار التمويل': 0,
+    'مكتمل': 0,
+    'مؤرشف': 0,
+    'ملغي': 0
+  };
+  contracts.forEach(c => {
+    if (statusCounts[c.status] !== undefined) statusCounts[c.status]++;
+    else statusCounts['نشط']++;
+  });
+
+  const labels = Object.keys(statusCounts).filter(k => statusCounts[k] > 0);
+  const values = labels.map(l => statusCounts[l]);
+  const colors = {
+    'نشط': '#27ae60',
+    'بانتظار التمويل': '#f39c12',
+    'مكتمل': '#3498db',
+    'مؤرشف': '#95a5a6',
+    'ملغي': '#e74c3c'
+  };
+
+  if (contractsChart) contractsChart.destroy();
+
+  contractsChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: labels.map(l => colors[l] || '#ccc'),
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            font: { family: 'Tajawal', size: 13 },
+            padding: 16,
+            usePointStyle: true
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => \` \${ctx.label}: \${ctx.parsed} عقد\`
+          },
+          bodyFont: { family: 'Tajawal' },
+          titleFont: { family: 'Tajawal' }
+        }
+      },
+      cutout: '65%'
+    }
+  });
+}
+
+function buildAlerts(contracts) {
+  const container = document.getElementById('alertsList');
+  if (!container) return;
+
+  const alerts = [];
+
+  // عقود بانتظار التمويل
+  const pendingFunding = contracts.filter(c => c.status === 'بانتظار التمويل');
+  if (pendingFunding.length > 0) {
+    alerts.push({
+      type: 'warning',
+      icon: 'fa-clock',
+      title: \`\${pendingFunding.length} عقود بانتظار نزول التمويل\`,
+      sub: pendingFunding.map(c => c.party_two_name).slice(0, 3).join('، ') + (pendingFunding.length > 3 ? ' ...' : '')
+    });
+  }
+
+  // سندات أمر سارية
+  const activeNotes = contracts.filter(c => c.note_order_number && c.status !== 'مكتمل' && c.status !== 'مؤرشف');
+  if (activeNotes.length > 0) {
+    alerts.push({
+      type: 'info',
+      icon: 'fa-money-check-alt',
+      title: \`\${activeNotes.length} سندات أمر سارية لم تُحصَّل\`,
+      sub: 'تأكد من متابعة تحصيل مبالغ السعي'
+    });
+  }
+
+  // عقود نشطة
+  const activeContracts = contracts.filter(c => c.status === 'نشط');
+  if (activeContracts.length > 0) {
+    alerts.push({
+      type: 'danger',
+      icon: 'fa-exclamation-triangle',
+      title: \`\${activeContracts.length} عقود نشطة تحتاج متابعة\`,
+      sub: activeContracts.map(c => c.party_two_name).slice(0, 2).join('، ')
+    });
+  }
+
+  if (alerts.length === 0) {
+    container.innerHTML = \`<div class="empty-state"><i class="fas fa-bell-slash"></i><p>لا توجد تنبيهات حالياً</p></div>\`;
+    return;
+  }
+
+  container.innerHTML = alerts.map(a => \`
+    <div class="alert-item alert-\${a.type}">
+      <div class="alert-icon"><i class="fas \${a.icon}"></i></div>
+      <div class="alert-text">
+        <strong>\${a.title}</strong>
+        <span>\${a.sub}</span>
+      </div>
+    </div>
+  \`).join('');
+}
+
+function buildRecentTable(contracts) {
+  const tbody = document.getElementById('recentContractsBody');
+  if (!tbody) return;
+
+  const recent = [...contracts]
+    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+    .slice(0, 8);
+
+  if (recent.length === 0) {
+    tbody.innerHTML = \`<tr><td colspan="8"><div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد عقود بعد</p></div></td></tr>\`;
+    return;
+  }
+
+  tbody.innerHTML = recent.map(c => \`
+    <tr>
+      <td><strong class="text-primary">\${c.contract_number || '—'}</strong></td>
+      <td>\${c.party_two_name || '—'}</td>
+      <td><small>\${c.template_name || '—'}</small></td>
+      <td><span class="amount-display" style="font-size:14px;">\${formatMoney(c.finance_amount)}</span></td>
+      <td><strong class="text-secondary">\${formatMoney(c.commission_amount)}</strong></td>
+      <td>\${getStatusBadge(c.status)}</td>
+      <td>\${c.note_order_number ? \`<code>\${c.note_order_number}</code>\` : '—'}</td>
+      <td>
+        <div class="action-btns">
+          <a href="/admin/contracts/view?id=\${c.id}" class="action-btn action-view" title="عرض"><i class="fas fa-eye"></i></a>
+          <a href="/admin/contracts/new?edit=\${c.id}" class="action-btn action-edit" title="تعديل"><i class="fas fa-edit"></i></a>
+          <a href="/admin/contracts/view?id=\${c.id}&print=1" class="action-btn action-pdf" title="طباعة/PDF"><i class="fas fa-print"></i></a>
+          \${c.party_two_phone ? \`<button class="action-btn action-whatsapp" onclick="sendWA('\${c.party_two_phone}','\${c.party_two_name}','\${c.contract_number}')" title="واتساب"><i class="fab fa-whatsapp"></i></button>\` : ''}
+        </div>
+      </td>
+    </tr>
+  \`).join('');
+}
+
+function sendWA(phone, name, contractNum) {
+  const msg = \`السلام عليكم \${name}،\\nبخصوص عقد الوساطة رقم \${contractNum}، نرجو التواصل معنا لمتابعة إجراءات التمويل.\\nشركة الموعد للمقاولات العامة\`;
+  sendWhatsApp(phone, msg);
+}
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+`;function Ia(e){e.get("/contracts-module/js/app.js",t=>t.newResponse(ka,200,{headers:{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}})),e.get("/contracts-module/js/dashboard.js",t=>t.newResponse(Sa,200,{headers:{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}}))}function je(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function Y(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}async function Oe(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function Ta(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const c=new Ce;Ia(c);const j=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -16538,19 +23433,19 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       min-width: 60px !important;
     }
   }
-`;c.use("*",nt());c.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});async function Pt(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),r=s?s[1]:null;let o=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(o=await e.env.DB.prepare(`
+`;c.use("*",_t());c.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});async function Ca(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let l=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(l=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
-    `).bind(a).first()),!o&&r&&(o=await e.env.DB.prepare(`
+    `).bind(a).first()),!l&&n&&(l=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE slug = ? AND status = 'active'
       LIMIT 1
-    `).bind(r).first()),o||(o=await e.env.DB.prepare(`
+    `).bind(n).first()),l||(l=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),o}function Ut(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),r=s.length%4;if(r===1)return null;const o=r===0?"":"=".repeat(4-r);return s+o}function G(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function A(e){return e===null?null:{11:1,12:2,13:3,14:4}[e]??e}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const u=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",u?"Present":"Missing"),u){const g=u.split(";").map(b=>b.trim()).find(b=>b.startsWith("authToken="));g?(t=g.split("=")[1],console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const u=e.req.query("tenant_id");return{userId:null,tenantId:u?parseInt(u):null,roleId:null,tokenRoleId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=Ut(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const r=s.split(":");console.log("🔍 [getUserInfo] Token parts:",r.length,"parts");const o=G(r[0]);if(!o)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};const l=G(r[1]),i=A(G(r[2]));if(console.log("🔍 [getUserInfo] Parsed:",{userId:o,tenantIdFromToken:l,tokenRoleId:i}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("🔍 [getUserInfo] Querying database for user:",o);const n=await e.env.DB.prepare(`
+    `).bind().first()),l}function Da(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const l=n===0?"":"=".repeat(4-n);return s+l}function O(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}const ue=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function re(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...ue]}catch{return[...ue]}}function M(e){return e===null?null:{11:1,12:2,13:3,14:4}[e]??e}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const m=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",m?"Present":"Missing"),m){const g=m.split(";").map(b=>b.trim()).find(b=>b.startsWith("authToken="));g?(t=g.startsWith("authToken=")?g.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const m=e.req.query("tenant_id");return{userId:null,tenantId:m?parseInt(m):null,roleId:null,tokenRoleId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=Da(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const l=O(n[0]);if(!l)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};const r=O(n[1]),i=M(O(n[2]));if(console.log("🔍 [getUserInfo] Parsed:",{userId:l,tenantIdFromToken:r,tokenRoleId:i}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("🔍 [getUserInfo] Querying database for user:",l);const o=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id FROM users WHERE id = ?
-    `).bind(o).first();if(!n)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("✅ [getUserInfo] User found:",{id:n.id,tenant_id:n.tenant_id,role_id:n.role_id});const d=A(n.role_id);if(d===1){const u=e.req.query("tenant_id"),m={userId:n.id,tenantId:u?parseInt(u):null,roleId:1,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning super admin info:",m),m}const p={userId:n.id,tenantId:l||n.tenant_id,roleId:d,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning user info:",p),p}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null}}}function T(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const Wt=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function zt(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
+    `).bind(l).first();if(!o)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("✅ [getUserInfo] User found:",{id:o.id,tenant_id:o.tenant_id,role_id:o.role_id});const d=M(o.role_id);if(d===1){const m=e.req.query("tenant_id"),f={userId:o.id,tenantId:m?parseInt(m):null,roleId:1,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning super admin info:",f),f}const p=o.tenant_id,u={userId:o.id,tenantId:p??r,roleId:d,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning user info:",u),u}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null}}}async function Ae(e,t,a){let s="SELECT id, full_name, phone, national_id, city FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let r=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(r=parseInt(String(i),10)),r==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(r=o.tenant_id)}if(r==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(r)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else t.roleId===4?t.tenantId?(s+=" WHERE tenant_id = ? AND assigned_to = ?",n.push(t.tenantId,t.userId)):(s+=" WHERE assigned_to = ?",n.push(t.userId)):s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function T(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const Ba=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function Ra(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
 <style>
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
@@ -16559,22 +23454,22 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
   [href^="/admin/saas-settings"],
   [href^="/admin/tenant-calculators"] { display: none !important; }
 </style>
-</head>`),s}c.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=T(a),r=e.req.path||"";if(Wt.some(l=>r===l||r.startsWith(l+"/"))&&!s)return e.redirect("/admin/dashboard");if(await t(),!s&&e.res)try{console.log("🔒 [RBAC] Post-processing HTML for non-superadmin user");const l=e.res;if(l.status>=300&&l.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(l.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const i=l.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",i),i.includes("text/html")&&l.body){console.log("🔒 [RBAC] Processing HTML response...");const d=await l.clone().text();console.log("🔒 [RBAC] HTML length:",d.length);const p=zt(d);console.log("🔒 [RBAC] HTML processed, updated length:",p.length);const u=new Headers(l.headers);u.set("content-type","text/html; charset=UTF-8"),e.res=new Response(p,{status:l.status,statusText:l.statusText,headers:u}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(l){const i={message:l?.message||"Unknown error",name:l?.name||"Error",stack:l?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(l,Object.getOwnPropertyNames(l),2)}catch(n){return`Failed to stringify: ${n}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",i)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(r){return`Failed to stringify: ${r}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});c.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:A(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});c.use("/c/:tenant/*",async(e,t)=>{const a=await Pt(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function Yt(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function z(e,t){if(!t)return null;if(/^\d+$/.test(t)){const r=Number(t);if(Number.isInteger(r)&&r>0)return r}return(await e.env.DB.prepare(`
+</head>`),s}c.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=T(a),n=e.req.path||"";if(Ba.some(r=>n===r||n.startsWith(r+"/"))&&!s)return e.redirect("/admin/dashboard");if(await t(),!s&&e.res)try{console.log("🔒 [RBAC] Post-processing HTML for non-superadmin user");const r=e.res;if(r.status>=300&&r.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(r.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const i=r.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",i),i.includes("text/html")&&r.body){console.log("🔒 [RBAC] Processing HTML response...");const d=await r.clone().text();console.log("🔒 [RBAC] HTML length:",d.length);const p=Ra(d);console.log("🔒 [RBAC] HTML processed, updated length:",p.length);const u=new Headers(r.headers);u.set("content-type","text/html; charset=UTF-8"),e.res=new Response(p,{status:r.status,statusText:r.statusText,headers:u}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(r){const i={message:r?.message||"Unknown error",name:r?.name||"Error",stack:r?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(r,Object.getOwnPropertyNames(r),2)}catch(o){return`Failed to stringify: ${o}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",i)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});c.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:M(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});c.use("/c/:tenant/*",async(e,t)=>{const a=await Ca(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function La(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function ee(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
     SELECT id FROM tenants WHERE public_uuid = ? LIMIT 1
   `).bind(t).first())?.id??null}c.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
-    `).bind(t.slug).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const s=Yt(),r=await e.env.DB.prepare(`
+    `).bind(t.slug).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const s=La(),n=await e.env.DB.prepare(`
       INSERT INTO tenants (
         public_uuid,
         company_name, slug, subdomain, status, max_users, 
         max_customers, max_requests, contact_email, contact_phone,
         primary_color, secondary_color
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(s,t.company_name,t.slug,t.subdomain||t.slug,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:r.meta.last_row_id,public_uuid:s,...t},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await z(e,t),s=await e.req.json();if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const r=await e.env.DB.prepare(`
+    `).bind(s,t.company_name,t.slug,t.subdomain||t.slug,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:n.meta.last_row_id,public_uuid:s,...t},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await ee(e,t),s=await e.req.json();if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const n=await e.env.DB.prepare(`
       SELECT id, public_uuid FROM tenants WHERE id = ?
-    `).bind(a).first();return r?(await e.env.DB.prepare(`
+    `).bind(a).first();return n?(await e.env.DB.prepare(`
       UPDATE tenants SET
         company_name = ?,
         slug = ?,
@@ -16588,7 +23483,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         primary_color = ?,
         secondary_color = ?
       WHERE id = ?
-    `).bind(s.company_name,s.slug,s.subdomain,s.status,s.max_users,s.max_customers,s.max_requests,s.contact_email,s.contact_phone,s.primary_color||"#667eea",s.secondary_color||"#764ba2",a).run(),e.json({success:!0,data:{id:a,public_uuid:r?.public_uuid,...s},message:"تم تحديث الشركة بنجاح"})):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await z(e,t);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const s=await e.env.DB.prepare(`
+    `).bind(s.company_name,s.slug,s.subdomain,s.status,s.max_users,s.max_customers,s.max_requests,s.contact_email,s.contact_phone,s.primary_color||"#667eea",s.secondary_color||"#764ba2",a).run(),e.json({success:!0,data:{id:a,public_uuid:n?.public_uuid,...s},message:"تم تحديث الشركة بنجاح"})):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await ee(e,t);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const s=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE tenant_id = ?
     `).bind(a).first();return s&&s.count>0?e.json({success:!1,error:`لا يمكن حذف الشركة لأنها تحتوي على ${s.count} مستخدم/مستخدمين`},400):(await e.env.DB.prepare(`
       DELETE FROM tenants WHERE id = ?
@@ -16604,31 +23499,31 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),e.env?.DB?(console.log("✅ [LOGIN] Updating last_login timestamp..."),await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")):console.error("❌ [LOGIN] DB binding lost after user query"),console.log("🔐 [LOGIN] Creating authentication token...");const r=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",r);const o=btoa(r);console.log("🔐 [LOGIN] Token created:",o.substring(0,30)+"...");const l=10080*60,i=`authToken=${o}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,n="/admin/panel";console.log(`🎯 Redirect to: ${n}`),console.log(`🍪 Cookie set: authToken=${o.substring(0,20)}...`);const d=e.json({success:!0,token:o,redirect:n,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role_id:s.role_id,role_name:s.role_name||"موظف",role_description:s.role_description,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}});return console.log("🍪 [LOGIN] Setting cookie header..."),d.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),d}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,r)=>{try{s[r]=String(t[r])}catch{s[r]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});c.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});c.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
+    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),e.env?.DB?(console.log("✅ [LOGIN] Updating last_login timestamp..."),await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")):console.error("❌ [LOGIN] DB binding lost after user query"),console.log("🔐 [LOGIN] Creating authentication token...");const n=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",n);const l=btoa(n);console.log("🔐 [LOGIN] Token created:",l.substring(0,30)+"...");const r=10080*60,i=`authToken=${l}; Path=/; Max-Age=${r}; SameSite=Lax; Secure`,o="/admin/panel";console.log(`🎯 Redirect to: ${o}`),console.log(`🍪 Cookie set: authToken=${l.substring(0,20)}...`);const d=e.json({success:!0,token:l,redirect:o,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role_id:s.role_id,role_name:s.role_name||"موظف",role_description:s.role_description,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}});return console.log("🍪 [LOGIN] Setting cookie header..."),d.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),d}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,n)=>{try{s[n]=String(t[n])}catch{s[n]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});c.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});c.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
-    `).bind(t,t).first();if(!a)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const s=Math.floor(1e5+Math.random()*9e5).toString(),r=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
+    `).bind(t,t).first();if(!a)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const s=Math.floor(1e5+Math.random()*9e5).toString(),n=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
       VALUES (?, ?, ?, 0)
-    `).bind(a.id,s,r.toISOString()).run(),console.log(`Verification code for ${a.email}: ${s}`),e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني",devCode:s})}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(a.id,s,n.toISOString()).run(),console.log(`Verification code for ${a.email}: ${s}`),e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني",devCode:s})}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
-    `).bind(t,t).first();if(!s)return e.json({success:!1,message:"المستخدم غير موجود"},404);const r=await e.env.DB.prepare(`
+    `).bind(t,t).first();if(!s)return e.json({success:!1,message:"المستخدم غير موجود"},404);const n=await e.env.DB.prepare(`
       SELECT id, verification_code, expires_at, is_used
       FROM password_change_notifications
       WHERE user_id = ? AND is_used = 0
       ORDER BY created_at DESC
       LIMIT 1
-    `).bind(s.id).first();if(!r)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(r.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(r.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const o=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:o})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const r=await e.env.DB.prepare(`
+    `).bind(s.id).first();if(!n)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(n.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(n.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const l=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:l})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const n=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
-    `).bind(t,t).first();return r?(await e.env.DB.prepare(`
+    `).bind(t,t).first();return n?(await e.env.DB.prepare(`
       UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).bind(s,r.id).run(),await e.env.DB.prepare(`
+    `).bind(s,n.id).run(),await e.env.DB.prepare(`
       UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
-    `).bind(r.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.get("/api/banks",async e=>{try{let t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,s=null;const r=e.req.header("Authorization"),o=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],l=r?.replace("Bearer ","")||o;if(l)try{const u=atob(l).split(":"),m=u[1]!=="null"?parseInt(u[1]):null,g=u[2]?parseInt(u[2]):null;(!a||Number.isNaN(a))&&m&&!Number.isNaN(m)&&(a=m),g&&!Number.isNaN(g)&&(s=g)}catch{}const i=e.req.query("include_global")==="1";let n="SELECT * FROM banks",d;return s===1?(n+=" ORDER BY bank_name",d=(await e.env.DB.prepare(n).all()).results):a!==null&&!Number.isNaN(a)?(i?n+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name":n+=" WHERE tenant_id = ? ORDER BY bank_name",d=(await e.env.DB.prepare(n).bind(a).all()).results):(n+=" WHERE 1=0 ORDER BY bank_name",d=(await e.env.DB.prepare(n).all()).results),e.json({success:!0,data:d})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:r,is_active:o,tenant_id:l}=t;let i=l;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const n=await e.env.DB.prepare(`
+    `).bind(n.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.get("/api/banks",async e=>{try{let t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,s=null;const n=e.req.header("Authorization"),l=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],r=n?.replace("Bearer ","")||l;if(r)try{const u=atob(r).split(":"),m=u[1]!=="null"?parseInt(u[1]):null,f=u[2]?parseInt(u[2]):null;(!a||Number.isNaN(a))&&m&&!Number.isNaN(m)&&(a=m),f&&!Number.isNaN(f)&&(s=f)}catch{}const i=e.req.query("include_global")==="1";let o="SELECT * FROM banks",d;return s===1?(o+=" ORDER BY bank_name",d=(await e.env.DB.prepare(o).all()).results):a!==null&&!Number.isNaN(a)?(i?o+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name":o+=" WHERE tenant_id = ? ORDER BY bank_name",d=(await e.env.DB.prepare(o).bind(a).all()).results):(o+=" WHERE 1=0 ORDER BY bank_name",d=(await e.env.DB.prepare(o).all()).results),e.json({success:!0,data:d})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:n,is_active:l,tenant_id:r}=t;let i=r;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const o=await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
       VALUES (?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,i).run();return e.json({success:!0,id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:r,logo_url:o,is_active:l}=a,n=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(n){const m=atob(n).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,r,o,l,t,d).run()):await e.env.DB.prepare(p).bind(s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),r=a.get("bank_code"),o=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
+    `).bind(a,s,n,l,i).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:n,logo_url:l,is_active:r}=a,o=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(o){const m=atob(o).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,n,l,r,t,d).run()):await e.env.DB.prepare(p).bind(s,n,l,r,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),n=a.get("bank_code"),l=a.get("logo_url")||null,r=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(s,r,o,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null,o=null;if(s)try{const n=atob(s).split(":");r=n[1]!=="null"?parseInt(n[1]):null,o=n[2]?parseInt(n[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(o!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(r!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const l=atob(a).split(":");s=l[2]?parseInt(l[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const r=await e.env.DB.prepare("DELETE FROM banks WHERE tenant_id IS NULL").run();return e.json({success:!0,message:`تم حذف ${r.meta.changes||0} بنك عام`,deleted_count:r.meta.changes||0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const d=atob(r).split(":");o=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(o=a);let l=`
+    `).bind(s,n,l,r,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,l=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,l=o[2]?parseInt(o[2]):null}catch{}const r=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!r)return e.json({success:!1,error:"البنك غير موجود"},404);if(r.tenant_id===null){if(l!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==r.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await Oe(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await Ta(e.env.DB),l=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${l} بنك عام`,deleted_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await x(e),n=Number.isFinite(a)?a:s.tenantId,r=(await re(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let l=null;if(n){const d=atob(n).split(":");l=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(l=a);let r=`
       SELECT 
         r.*,
         b.bank_name,
@@ -16636,19 +23531,19 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM bank_financing_rates r
       JOIN banks b ON r.bank_id = b.id
       JOIN financing_types f ON r.financing_type_id = f.id
-    `;o!==null&&(l+=" WHERE r.tenant_id = ?"),l+=" ORDER BY b.bank_name, f.type_name";const{results:i}=o!==null?await e.env.DB.prepare(l).bind(o).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const d=atob(a).split(":");s=d[1]!=="null"?parseInt(d[1]):null}const r=e.req.header("Content-Type")||"";let o={};r.includes("application/json")?o=await e.req.json():(await e.req.formData()).forEach((d,p)=>{o[p]=d}),s===null&&o.tenant_id&&(s=parseInt(o.tenant_id));const l=o.notes&&String(o.notes).trim()?String(o.notes).trim():null,i=await e.env.DB.prepare(`
+    `;l!==null&&(r+=" WHERE r.tenant_id = ?"),r+=" ORDER BY b.bank_name, f.type_name";const{results:i}=l!==null?await e.env.DB.prepare(r).bind(l).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const d=atob(a).split(":");s=d[1]!=="null"?parseInt(d[1]):null}const n=e.req.header("Content-Type")||"";let l={};n.includes("application/json")?l=await e.req.json():(await e.req.formData()).forEach((d,p)=>{l[p]=d}),s===null&&l.tenant_id&&(s=parseInt(l.tenant_id));const r=l.notes&&String(l.notes).trim()?String(l.notes).trim():null,i=await e.env.DB.prepare(`
       INSERT INTO bank_financing_rates 
       (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_duration||null,o.max_duration||null,o.is_active||1,s,l).run();return r.includes("application/json")?e.json({success:!0,message:"تم إضافة النسبة بنجاح",id:i.meta.last_row_id}):e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message||"Unknown error",message:t.message||"Unknown error"},500)}});c.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const d=atob(r).split(":");o=d[1]!=="null"?parseInt(d[1]):null}const l=a.notes!=null&&String(a.notes).trim()?String(a.notes).trim():null;let i=`
+    `).bind(l.bank_id,l.financing_type_id,l.rate,l.min_amount||null,l.max_amount||null,l.min_duration||null,l.max_duration||null,l.is_active||1,s,r).run();return n.includes("application/json")?e.json({success:!0,message:"تم إضافة النسبة بنجاح",id:i.meta.last_row_id}):e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message||"Unknown error",message:t.message||"Unknown error"},500)}});c.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=e.req.header("Authorization")?.replace("Bearer ","");let l=null;if(n){const d=atob(n).split(":");l=d[1]!=="null"?parseInt(d[1]):null}const r=a.notes!=null&&String(a.notes).trim()?String(a.notes).trim():null;let i=`
       UPDATE bank_financing_rates 
       SET bank_id = ?, financing_type_id = ?, rate = ?, 
           min_amount = ?, max_amount = ?, min_salary = ?, max_salary = ?,
           min_duration = ?, max_duration = ?, is_active = ?, notes = ?
       WHERE id = ?
-    `;return o?(i+=" AND tenant_id = ?",await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,l,t,o).run()):await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const i=atob(s).split(":");r=i[1]!=="null"?parseInt(i[1]):null}let o="DELETE FROM bank_financing_rates WHERE id = ?";return r?(o+=" AND tenant_id = ?",await e.env.DB.prepare(o).bind(t,r).run()):await e.env.DB.prepare(o).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates/sample-csv",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT id, bank_name FROM banks WHERE is_active = 1",s=[];t&&(a+=" AND tenant_id = ?",s.push(t)),a+=" ORDER BY bank_name";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),l=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i=[],n=["بنك 1","بنك 2","بنك 3","بنك 4","بنك 5"],d=["نوع تمويل 1","نوع تمويل 2","نوع تمويل 3"];for(let b=0;b<5;b++)i.push([(60+b*12).toString(),(12+b*12).toString(),(5e5+b*5e5).toString(),(5e4+b*5e4).toString(),(4.5+b*.5).toFixed(1),d[b%d.length]||`نوع تمويل ${b%3+1}`,n[b]||`بنك ${b+1}`,(b+1).toString()]);const p="\uFEFF",u="‏";let m=p;const g=l.map(b=>u+b);return m+=g.join(",")+`\r
-`,i.forEach(b=>{const f=b.map(h=>{const y=String(h||""),_=u+y;return _.includes(",")||_.includes('"')||_.includes(`
-`)?'"'+_.replace(/"/g,'""')+'"':_});m+=f.join(",")+`\r
+    `;return l?(i+=" AND tenant_id = ?",await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,r,t,l).run()):await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,r,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null;if(s){const i=atob(s).split(":");n=i[1]!=="null"?parseInt(i[1]):null}let l="DELETE FROM bank_financing_rates WHERE id = ?";return n?(l+=" AND tenant_id = ?",await e.env.DB.prepare(l).bind(t,n).run()):await e.env.DB.prepare(l).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates/sample-csv",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT id, bank_name FROM banks WHERE is_active = 1",s=[];t&&(a+=" AND tenant_id = ?",s.push(t)),a+=" ORDER BY bank_name";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),r=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i=[],o=["بنك 1","بنك 2","بنك 3","بنك 4","بنك 5"],d=["نوع تمويل 1","نوع تمويل 2","نوع تمويل 3"];for(let g=0;g<5;g++)i.push([(60+g*12).toString(),(12+g*12).toString(),(5e5+g*5e5).toString(),(5e4+g*5e4).toString(),(4.5+g*.5).toFixed(1),d[g%d.length]||`نوع تمويل ${g%3+1}`,o[g]||`بنك ${g+1}`,(g+1).toString()]);const p="\uFEFF",u="‏";let m=p;const f=r.map(g=>u+g);return m+=f.join(",")+`\r
+`,i.forEach(g=>{const b=g.map(y=>{const h=String(y||""),w=u+h;return w.includes(",")||w.includes('"')||w.includes(`
+`)?'"'+w.replace(/"/g,'""')+'"':w});m+=b.join(",")+`\r
 `}),new Response(m,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نموذج_نسب_التمويل.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates/export-csv",async e=>{try{const t=await x(e),a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);let s=`
       SELECT 
         r.*,
@@ -16657,13 +23552,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM bank_financing_rates r
       LEFT JOIN banks b ON r.bank_id = b.id
       LEFT JOIN financing_types f ON r.financing_type_id = f.id
-    `,r=[];t.roleId===1?a&&(s+=" WHERE r.tenant_id = ?",r.push(a)):t.roleId===2||t.roleId===3?t.tenantId&&(s+=" WHERE r.tenant_id = ?",r.push(t.tenantId)):a&&(s+=" WHERE r.tenant_id = ?",r.push(a)),s+=" ORDER BY b.bank_name, f.type_name";const o=r.length>0?await e.env.DB.prepare(s).bind(...r).all():await e.env.DB.prepare(s).all(),l=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i="\uFEFF",n="‏";let d=i;const p=l.map(u=>n+u);return d+=p.join(",")+`\r
-`,o.results.forEach((u,m)=>{const b=[u.max_duration||"",u.min_duration||"",u.max_amount||"",u.min_amount||"",u.rate||"",u.financing_type_name||"",u.bank_name||"",(m+1).toString()].map(f=>{const h=String(f||""),y=n+h;return y.includes(",")||y.includes('"')||y.includes(`
-`)?'"'+y.replace(/"/g,'""')+'"':y});d+=b.join(",")+`\r
-`}),new Response(d,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نسب_التمويل_'+new Date().toISOString().split("T")[0]+'.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates/upload-excel",async e=>{try{const{rates:t}=await e.req.json();if(!t||!Array.isArray(t)||t.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const s=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(s){const d=atob(s).split(":");r=d[1]!=="null"?parseInt(d[1]):null}let o=0,l=0;const i=[];for(const n of t)try{if(!n.bank_id||!n.financing_type_id||n.rate===void 0){i.push(`سطر غير صالح: البنك=${n.bank_id}, النوع=${n.financing_type_id}, النسبة=${n.rate}`);continue}let d=`
+    `,n=[];t.roleId===1?a&&(s+=" WHERE r.tenant_id = ?",n.push(a)):t.roleId===2||t.roleId===3?t.tenantId&&(s+=" WHERE r.tenant_id = ?",n.push(t.tenantId)):a&&(s+=" WHERE r.tenant_id = ?",n.push(a)),s+=" ORDER BY b.bank_name, f.type_name";const l=n.length>0?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all(),r=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i="\uFEFF",o="‏";let d=i;const p=r.map(u=>o+u);return d+=p.join(",")+`\r
+`,l.results.forEach((u,m)=>{const g=[u.max_duration||"",u.min_duration||"",u.max_amount||"",u.min_amount||"",u.rate||"",u.financing_type_name||"",u.bank_name||"",(m+1).toString()].map(b=>{const y=String(b||""),h=o+y;return h.includes(",")||h.includes('"')||h.includes(`
+`)?'"'+h.replace(/"/g,'""')+'"':h});d+=g.join(",")+`\r
+`}),new Response(d,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نسب_التمويل_'+new Date().toISOString().split("T")[0]+'.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates/upload-excel",async e=>{try{const{rates:t}=await e.req.json();if(!t||!Array.isArray(t)||t.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const s=e.req.header("Authorization")?.replace("Bearer ","");let n=null;if(s){const d=atob(s).split(":");n=d[1]!=="null"?parseInt(d[1]):null}let l=0,r=0;const i=[];for(const o of t)try{if(!o.bank_id||!o.financing_type_id||o.rate===void 0){i.push(`سطر غير صالح: البنك=${o.bank_id}, النوع=${o.financing_type_id}, النسبة=${o.rate}`);continue}let d=`
           SELECT id FROM bank_financing_rates 
           WHERE bank_id = ? AND financing_type_id = ?
-        `;const p=[n.bank_id,n.financing_type_id];r!==null&&(d+=" AND tenant_id = ?",p.push(r));const u=await e.env.DB.prepare(d).bind(...p).first();if(u){let m=`
+        `;const p=[o.bank_id,o.financing_type_id];n!==null&&(d+=" AND tenant_id = ?",p.push(n));const u=await e.env.DB.prepare(d).bind(...p).first();if(u){let m=`
             UPDATE bank_financing_rates 
             SET rate = ?, 
                 min_amount = ?, 
@@ -16674,35 +23569,35 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 max_duration = ?,
                 is_active = ?
             WHERE id = ?
-          `;const g=[n.rate,n.min_amount||null,n.max_amount||null,n.min_salary||null,n.max_salary||null,n.min_duration||null,n.max_duration||null,n.is_active!==void 0?n.is_active:1,u.id];r!==null&&(m+=" AND tenant_id = ?",g.push(r)),await e.env.DB.prepare(m).bind(...g).run(),l++}else await e.env.DB.prepare(`
+          `;const f=[o.rate,o.min_amount||null,o.max_amount||null,o.min_salary||null,o.max_salary||null,o.min_duration||null,o.max_duration||null,o.is_active!==void 0?o.is_active:1,u.id];n!==null&&(m+=" AND tenant_id = ?",f.push(n)),await e.env.DB.prepare(m).bind(...f).run(),r++}else await e.env.DB.prepare(`
             INSERT INTO bank_financing_rates 
             (bank_id, financing_type_id, rate, min_amount, max_amount, min_salary, max_salary, min_duration, max_duration, is_active, tenant_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(n.bank_id,n.financing_type_id,n.rate,n.min_amount||null,n.max_amount||null,n.min_salary||null,n.max_salary||null,n.min_duration||null,n.max_duration||null,n.is_active!==void 0?n.is_active:1,r).run(),o++}catch(d){i.push(`خطأ في معالجة السطر: ${d.message}`),console.error("Error processing rate:",d)}return e.json({success:!0,created:o,updated:l,errors:i.length>0?i:void 0,message:`تم إضافة ${o} سجل جديد وتحديث ${l} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+          `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_salary||null,o.max_salary||null,o.min_duration||null,o.max_duration||null,o.is_active!==void 0?o.is_active:1,n).run(),l++}catch(d){i.push(`خطأ في معالجة السطر: ${d.message}`),console.error("Error processing rate:",d)}return e.json({success:!0,created:l,updated:r,errors:i.length>0?i:void 0,message:`تم إضافة ${l} سجل جديد وتحديث ${r} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),r=t.get("price"),o=t.get("duration_months"),l=t.get("max_calculations"),i=t.get("max_users"),n=t.get("is_active")||"1",d=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),n=t.get("price"),l=t.get("duration_months"),r=t.get("max_calculations"),i=t.get("max_users"),o=t.get("is_active")||"1",d=await e.env.DB.prepare(`
       INSERT INTO packages (package_name, description, price, duration_months, max_calculations, max_users, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s||null,r,o,l||null,i||null,n).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:r,duration_months:o,max_calculations:l,max_users:i,is_active:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s||null,n,l,r||null,i||null,o).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:n,duration_months:l,max_calculations:r,max_users:i,is_active:o}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE packages 
       SET package_name = ?, description = ?, price = ?, duration_months = ?, 
           max_calculations = ?, max_users = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,i,n,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(a,s,n,l,r,i,o,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let n=`
       SELECT 
         s.*,
         p.package_name,
         p.price,
         p.max_calculations
       FROM subscriptions s
-      JOIN packages p ON s.package_id = p.id`;s&&(r+=` WHERE s.tenant_id = ${s}`),r+=" ORDER BY s.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),r=t.get("start_date"),o=t.get("end_date"),l=t.get("status")||"active",i=t.get("calculations_used")||0,d=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(d){const g=atob(d).split(":");p=g[1]!=="null"?parseInt(g[1]):null}const u=await e.env.DB.prepare(`
+      JOIN packages p ON s.package_id = p.id`;s&&(n+=` WHERE s.tenant_id = ${s}`),n+=" ORDER BY s.created_at DESC";const{results:l}=await e.env.DB.prepare(n).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),n=t.get("start_date"),l=t.get("end_date"),r=t.get("status")||"active",i=t.get("calculations_used")||0,d=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(d){const f=atob(d).split(":");p=f[1]!=="null"?parseInt(f[1]):null}const u=await e.env.DB.prepare(`
       INSERT INTO subscriptions (company_name, package_id, start_date, end_date, status, calculations_used, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:r,end_date:o,status:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s,n,l,r,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:n,end_date:l,status:r}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscriptions 
       SET company_name = ?, package_id = ?, start_date = ?, end_date = ?, status = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(a,s,n,l,r,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name,
@@ -16722,39 +23617,39 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       WHERE sr.id = ?
-    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:r,package_id:o,notes:l}=await e.req.json();if(!t||!a||!s||!r||!o)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(r.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
+    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:n,package_id:l,notes:r}=await e.req.json();if(!t||!a||!s||!n||!l)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(n.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
       SELECT id FROM packages WHERE id = ? AND is_active = 1
-    `).bind(o).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const p=await e.env.DB.prepare(`
+    `).bind(l).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const p=await e.env.DB.prepare(`
       INSERT INTO subscription_requests 
       (company_name, contact_name, email, phone, package_id, status, notes)
       VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(t,a,s,r,o,l||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,n,l,r||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
     `).bind(a,s||null,t).run(),e.json({success:!0,message:"تم تحديث الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM subscription_requests WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/users",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId,s=t.tenantId;let r=`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/users",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId,s=t.tenantId;let n=`
       SELECT u.*, r.role_name, r.description as role_description,
              t.company_name as tenant_name,
              COUNT(DISTINCT rp.permission_id) as permissions_count
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
-      LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(r+=` WHERE u.tenant_id = ${s}`),r+=`
+      LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(n+=` WHERE u.tenant_id = ${s}`),n+=`
       GROUP BY u.id
-      ORDER BY u.id DESC`;const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),r=t.get("full_name"),o=t.get("email"),l=t.get("phone"),i=t.get("role_id"),n=t.get("subscription_id")||null,d=t.get("is_active")||"1",p=await x(e);if(!p.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!T(p))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=t.get("tenant_id");if(T(p))m&&m!==""?m=parseInt(m):m=null;else{if(!p.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=p.tenantId}if(await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:l}=await e.env.DB.prepare(n).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),l=t.get("email"),r=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",p=await x(e);if(!p.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!T(p))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=t.get("tenant_id");if(T(p))m&&m!==""?m=parseInt(m):m=null;else{if(!p.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=p.tenantId}if(await e.env.DB.prepare(`
       SELECT id FROM users WHERE username = ?
-    `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(o&&await e.env.DB.prepare(`
+    `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(l&&await e.env.DB.prepare(`
         SELECT id FROM users WHERE email = ?
-      `).bind(o).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const b=await e.env.DB.prepare(`
+      `).bind(l).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const g=await e.env.DB.prepare(`
       INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,u,n,d,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:b.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});c.put("/api/users/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),{username:s,full_name:r,email:o,phone:l,role_id:i,subscription_id:n,is_active:d}=await e.req.json(),p=Number.parseInt(String(i??""),10);return Number.isNaN(p)?e.json({success:!1,error:"Invalid role_id"},400):p===1&&!T(t)?e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403):(await e.env.DB.prepare(`
+    `).bind(a,s,n,l,r,u,o,d,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:g.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});c.put("/api/users/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),{username:s,full_name:n,email:l,phone:r,role_id:i,subscription_id:o,is_active:d}=await e.req.json(),p=Number.parseInt(String(i??""),10);return Number.isNaN(p)?e.json({success:!1,error:"Invalid role_id"},400):p===1&&!T(t)?e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403):(await e.env.DB.prepare(`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(s,r,o,l,p,n,d,a).run(),e.json({success:!0}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers",async e=>{try{const t=await x(e);let a=`
+    `).bind(s,n,l,r,p,o,d,a).run(),e.json({success:!0}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers",async e=>{try{const t=await x(e);let a=`
       SELECT 
         c.*,
         COUNT(f.id) as total_requests,
@@ -16763,7 +23658,9 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4&&t.userId?a+=` WHERE c.assigned_to = ${t.userId}`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),r=t.get("email")||null,o=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("dob_calendar_type")||"gregorian",n=t.get("employer_name")||null,d=t.get("job_type")||"civilian",p=t.get("job_title")||null,u=t.get("military_rank")||null,m=t.get("work_start_date")||null,g=t.get("city")||null,b=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,f=parseFloat(t.get("monthly_salary")||"0"),h=await x(e);let y=h.tenantId;if(h.roleId&&h.roleId!==1&&!y)throw new Error("Missing tenant context for customer creation");if(o){let k="SELECT id, full_name FROM customers WHERE national_id = ?",R=[o];y&&(k+=" AND tenant_id = ?",R.push(y));const E=await e.env.DB.prepare(k).bind(...R).first();if(E)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=t.get("email")||null,l=t.get("national_id")||null,r=t.get("date_of_birth")||null,i=t.get("dob_calendar_type")||"gregorian",o=t.get("employer_name")||null,d=t.get("job_type")||"civilian",p=t.get("job_title")||null,u=t.get("military_rank")||null,m=t.get("work_start_date")||null,f=t.get("city")||null,g=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,b=parseFloat(t.get("monthly_salary")||"0"),y=t.get("notes")?.trim()||null,h=je(t.get("solutions_json")),w=await x(e);let v=w.tenantId;if(!v&&w.roleId===1){const E=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(E)&&E>0&&(v=E)}if(!v){const E=await e.env.DB.prepare(`
+        SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
+      `).first();E?.id&&(v=E.id)}if(!v)throw new Error("Missing tenant context for customer creation");if(l){let E="SELECT id, full_name FROM customers WHERE national_id = ?",$=[l];v&&(E+=" AND tenant_id = ?",$.push(v));const R=await e.env.DB.prepare(E).bind(...$).first();if(R)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -16784,16 +23681,16 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </div>
                 </div>
                 <div class="bg-white rounded-lg p-4 mb-4">
-                  <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${o}</p>
-                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${E.full_name}</p>
-                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${E.id}</p>
+                  <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${l}</p>
+                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${R.full_name}</p>
+                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${R.id}</p>
                 </div>
                 <div class="flex gap-3">
                   <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-arrow-right ml-2"></i>
                     العودة للنموذج
                   </a>
-                  <a href="/admin/customers/${E.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <a href="/admin/customers/${R.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-eye ml-2"></i>
                     عرض العميل الموجود
                   </a>
@@ -16806,7 +23703,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             </div>
           </body>
           </html>
-        `)}let _="SELECT id, full_name FROM customers WHERE phone = ?",v=[s];y&&(_+=" AND tenant_id = ?",v.push(y));const w=await e.env.DB.prepare(_).bind(...v).first();if(w)return e.html(`
+        `)}let _="SELECT id, full_name FROM customers WHERE phone = ?",C=[s];v&&(_+=" AND tenant_id = ?",C.push(v));const D=await e.env.DB.prepare(_).bind(...C).first();if(D)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -16828,15 +23725,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               </div>
               <div class="bg-white rounded-lg p-4 mb-4">
                 <p class="text-gray-700"><strong>رقم الهاتف:</strong> ${s}</p>
-                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${w.full_name}</p>
-                <p class="text-gray-700"><strong>رقم العميل:</strong> #${w.id}</p>
+                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${D.full_name}</p>
+                <p class="text-gray-700"><strong>رقم العميل:</strong> #${D.id}</p>
               </div>
               <div class="flex gap-3">
                 <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-arrow-right ml-2"></i>
                   العودة للنموذج
                 </a>
-                <a href="/admin/customers/${w.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/customers/${D.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-eye ml-2"></i>
                   عرض العميل الموجود
                 </a>
@@ -16845,10 +23742,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           </div>
         </body>
         </html>
-      `);const S=(await e.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,r,o,l,i==="hijri"?"hijri":"gregorian",n,d==="military"?"military":"civilian",p,d==="military"?u:null,m,g,b,f,y).run()).meta?.last_row_id,D=t.get("obligations_json");if(S&&D)try{const k=JSON.parse(D);if(Array.isArray(k)&&k.length>0){let R=0;for(const E of k){const Y=E.obligation_type??"",K=Number(E.total_amount)||0,Z=Number(E.monthly_installment)||0,Se=E.due_date||null;R+=Z,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(S,Y,K,Z,Se,y).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(R,S).run()}}catch{}return e.redirect("/admin/customers")}catch(t){return e.html(`
+      `);const B=[a,s,n,l,r,i==="hijri"?"hijri":"gregorian",o,d==="military"?"military":"civilian",p,d==="military"?u:null,m,f,g,b,v,y];let S;try{S=await e.env.DB.prepare(`
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...B,h).run()}catch(E){if(!Y(E))throw E;S=await e.env.DB.prepare(`
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...B).run()}const L=S.meta?.last_row_id,I=t.get("obligations_json");if(L&&I)try{const E=JSON.parse(I);if(Array.isArray(E)&&E.length>0){let $=0;for(const R of E){const Ne=R.obligation_type??"",Fe=Number(R.total_amount)||0,oe=Number(R.monthly_installment)||0,Pe=R.due_date||null;$+=oe,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(L,Ne,Fe,oe,Pe,v).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind($,L).run()}}catch{}return e.redirect("/admin/customers")}catch(t){return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -16879,12 +23779,17 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
       </body>
       </html>
-    `)}});c.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),r=a.get("phone"),o=a.get("email")||null,l=a.get("national_id")||null,i=a.get("date_of_birth")||null,n=a.get("dob_calendar_type")||"gregorian",d=a.get("employer_name")||null,p=a.get("job_type")||"civilian",u=a.get("job_title")||null,m=a.get("military_rank")||null,g=a.get("work_start_date")||null,b=a.get("city")||null,f=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,h=parseFloat(a.get("monthly_salary")||"0");await e.env.DB.prepare(`
+    `)}});c.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),l=a.get("email")||null,r=a.get("national_id")||null,i=a.get("date_of_birth")||null,o=a.get("dob_calendar_type")||"gregorian",d=a.get("employer_name")||null,p=a.get("job_type")||"civilian",u=a.get("job_title")||null,m=a.get("military_rank")||null,f=a.get("work_start_date")||null,g=a.get("city")||null,b=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,y=parseFloat(a.get("monthly_salary")||"0"),h=a.get("notes")?.trim()||null,w=je(a.get("solutions_json")),v=[s,n,l,r,i,o==="hijri"?"hijri":"gregorian",d,p==="military"?"military":"civilian",u,p==="military"?m:null,f,g,b,y,h];try{await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
-          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
       WHERE id = ?
-    `).bind(s,r,o,l,i,n==="hijri"?"hijri":"gregorian",d,p==="military"?"military":"civilian",u,p==="military"?m:null,g,b,f,h,t).run();const y=a.get("obligations_json");if(y)try{const v=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const w=JSON.parse(y);if(Array.isArray(w)&&w.length>0){let B=0;for(const S of w){const D=S.obligation_type??"",k=Number(S.total_amount)||0,R=Number(S.monthly_installment)||0,E=S.due_date||null;B+=R,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,D,k,R,E,v).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(B,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const r=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[]});const r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first();if(!r)return e.json({success:!1,customer:null,obligations:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];return e.json({success:!0,customer:r,obligations:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let r=null;s&&(r=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let o=null;if(r!=null?o=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(r,t||"",a||"").first():o=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!o)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(o.id).all()).results||[];return e.json({success:!0,customer:o,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e),a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(t.tenantId!=null&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const o=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e),a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(t.tenantId!=null&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const r=await e.req.json(),o=Array.isArray(r?.obligations)?r.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of o){const n=i.obligation_type??"",d=Number(i.total_amount)||0,p=Number(i.monthly_installment)||0,u=i.due_date||null;l+=p,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,n,d,p,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let r=`
+    `).bind(...v,w,t).run()}catch(C){if(!Y(C))throw C;await e.env.DB.prepare(`
+      UPDATE customers 
+      SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
+      WHERE id = ?
+    `).bind(...v,t).run()}const _=a.get("obligations_json");if(_)try{const D=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const B=JSON.parse(_);if(Array.isArray(B)&&B.length>0){let S=0;for(const L of B){const I=L.obligation_type??"",E=Number(L.total_amount)||0,$=Number(L.monthly_installment)||0,R=L.due_date||null;S+=$,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,I,E,$,R,D).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(S,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!Y(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(p=>({note:typeof p=="string"?p:String(p?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:r,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let l=null;if(n!=null?l=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():l=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!l)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(l.id).all()).results||[];return e.json({success:!0,customer:l,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e),a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(t.tenantId!=null&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e),a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(t.tenantId!=null&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),l=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let r=0;for(const i of l){const o=i.obligation_type??"",d=Number(i.total_amount)||0,p=Number(i.monthly_installment)||0,u=i.due_date||null;r+=p,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,p,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(r,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let n=`
       SELECT 
         f.*,
         c.full_name as customer_name,
@@ -16901,15 +23806,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN banks b ON f.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id`;s&&(r+=` WHERE f.tenant_id = ${s}`),r+=" ORDER BY f.created_at DESC";const{results:o}=await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),r=s.get("customer_id"),o=s.get("financing_type_id"),l=s.get("requested_amount"),i=s.get("duration_months"),n=s.get("salary_at_request"),d=s.get("selected_bank_id")||null,p=s.get("status")||"pending",u=s.get("notes")||"",m=await x(e);if(!m.userId||!m.roleId)return e.json({success:!1,error:"غير مصرح"},401);const g=await e.env.DB.prepare(`
+      LEFT JOIN users u ON ca.employee_id = u.id`;s&&(n+=` WHERE f.tenant_id = ${s}`),n+=" ORDER BY f.created_at DESC";const{results:l}=await e.env.DB.prepare(n).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),n=s.get("customer_id"),l=s.get("financing_type_id"),r=s.get("requested_amount"),i=s.get("duration_months"),o=s.get("salary_at_request"),d=s.get("selected_bank_id")||null,p=s.get("status")||"pending",u=s.get("notes")||"",m=await x(e);if(!m.userId||!m.roleId)return e.json({success:!1,error:"غير مصرح"},401);const f=await e.env.DB.prepare(`
       SELECT id, tenant_id, assigned_to FROM customers WHERE id = ?
-    `).bind(r).first();if(!g)return e.json({success:!1,error:"العميل غير موجود"},400);if(m.roleId!==1){if(!m.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(g.tenant_id!==m.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403);if(m.roleId===4&&g.assigned_to!==m.userId)return e.json({success:!1,error:"غير مصرح لهذا العميل"},403)}const b=m.roleId===1?g.tenant_id:m.tenantId,f=await e.env.DB.prepare(`
+    `).bind(n).first();if(!f)return e.json({success:!1,error:"العميل غير موجود"},400);if(m.roleId!==1){if(!m.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(f.tenant_id!==m.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403);if(m.roleId===4&&f.assigned_to!==m.userId)return e.json({success:!1,error:"غير مصرح لهذا العميل"},403)}const g=m.roleId===1?f.tenant_id:m.tenantId,b=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(r,o,d,l,n,i,p,u,b).run();return a?e.json({success:!0,id:f.meta.last_row_id},201):e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});c.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(n,l,d,r,o,i,p,u,g).run();return a?e.json({success:!0,id:b.meta.last_row_id},201):e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});c.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
       ORDER BY stage_order ASC
@@ -16941,7 +23846,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN users u ON wsa.performed_by = u.id
       WHERE wsa.request_id = ?
       ORDER BY wsa.created_at ASC
-    `).bind(t).all(),{results:r}=await e.env.DB.prepare(`
+    `).bind(t).all(),{results:n}=await e.env.DB.prepare(`
       SELECT 
         wst.*,
         ws.stage_name_ar,
@@ -16953,7 +23858,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
       WHERE wst.request_id = ?
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:r}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:r}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE financing_requests 
       SET current_stage_id = ?, 
           stage_entered_at = CURRENT_TIMESTAMP
@@ -16964,15 +23869,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         WHERE request_id = ? AND to_stage_id = ?
         ORDER BY created_at DESC
         LIMIT 1
-      `).bind(s,r,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:r,performedBy:o,notes:l}=await e.req.json();return await e.env.DB.prepare(`
+      `).bind(s,n,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:n,performedBy:l,notes:r}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_actions 
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,r,o,l).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:r,assignedTo:o,dueDate:l,priority:i}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,n,l,r).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:n,assignedTo:l,dueDate:r,priority:i}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_tasks 
       (request_id, stage_id, task_title, task_description, assigned_to, due_date, priority)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,r,o,l,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,n,l,r,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE workflow_stage_tasks 
       SET status = 'completed', 
           completed_at = CURRENT_TIMESTAMP,
@@ -16992,7 +23897,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN customers c ON fr.customer_id = c.id
       WHERE wst.assigned_to = ? AND wst.status = 'pending'
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a),[n,d]=i.split(":");s=d==="null"?null:parseInt(d)}catch{}let r=`
+    `).bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a),[o,d]=i.split(":");s=d==="null"?null:parseInt(d)}catch{}let n=`
       SELECT 
         p.*,
         c.full_name as customer_name,
@@ -17000,16 +23905,16 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM payments p
       LEFT JOIN customers c ON p.customer_id = c.id
       LEFT JOIN users u ON p.employee_id = u.id
-    `;const o=[];s&&(r+=" WHERE p.tenant_id = ?",o.push(s)),r+=" ORDER BY p.created_at DESC";const{results:l}=await e.env.DB.prepare(r).bind(...o).all();return e.json({success:!0,data:l})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=parseInt(r);if(!l)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const n=await e.req.json();return!n.financing_request_id||!n.customer_id||!n.amount||!n.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
+    `;const l=[];s&&(n+=" WHERE p.tenant_id = ?",l.push(s)),n+=" ORDER BY p.created_at DESC";const{results:r}=await e.env.DB.prepare(n).bind(...l).all();return e.json({success:!0,data:r})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[n,l]=s.split(":"),r=l==="null"?null:parseInt(l),i=parseInt(n);if(!r)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const o=await e.req.json();return!o.financing_request_id||!o.customer_id||!o.amount||!o.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
       INSERT INTO payments (
         financing_request_id, customer_id, tenant_id, employee_id,
         amount, payment_date, payment_method, receipt_number, notes, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(n.financing_request_id,n.customer_id,l,n.employee_id||null,n.amount,n.payment_date,n.payment_method||"cash",n.receipt_number||null,n.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[r,o]=s.split(":"),l=o==="null"?null:parseInt(o),i=e.req.param("id");if(l){const n=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(n&&n.tenant_id!==l)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(o.financing_request_id,o.customer_id,r,o.employee_id||null,o.amount,o.payment_date,o.payment_method||"cash",o.receipt_number||null,o.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[n,l]=s.split(":"),r=l==="null"?null:parseInt(l),i=e.req.param("id");if(r){const o=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(o&&o.tenant_id!==r)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ? AND status = 'active'
-    `).bind(t).first();if(!s)return e.json({success:!1,error:"شركة غير موجودة"},404);const r=s.id;let o=await e.env.DB.prepare(`
+    `).bind(t).first();if(!s)return e.json({success:!1,error:"شركة غير موجودة"},404);const n=s.id;let l=await e.env.DB.prepare(`
       SELECT id FROM customers WHERE (national_id = ? OR phone = ?) AND tenant_id = ?
-    `).bind(a.national_id||"",a.phone||"",r).first(),l;if(o)l=o.id,await e.env.DB.prepare(`
+    `).bind(a.national_id||"",a.phone||"",n).first(),r;if(l)r=l.id,await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, phone = ?, email = ?, 
             birthdate = ?, monthly_salary = ?,
@@ -17017,16 +23922,16 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             work_start_date = ?, city = ?,
             financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
         WHERE id = ?
-      `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else try{l=(await e.env.DB.prepare(`
+      `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,r).run();else try{r=(await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
             job_title, work_start_date, city, tenant_id,
             financing_amount, monthly_obligations, financing_type_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null).run()).meta.last_row_id}catch(d){if(d.message&&d.message.includes("UNIQUE")){const p=await e.env.DB.prepare(`
+        `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",n,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null).run()).meta.last_row_id}catch(d){if(d.message&&d.message.includes("UNIQUE")){const p=await e.env.DB.prepare(`
             SELECT id FROM customers WHERE (national_id = ? OR phone = ?)
-          `).bind(a.national_id||"",a.phone||"").first();if(p)l=p.id,await e.env.DB.prepare(`
+          `).bind(a.national_id||"",a.phone||"").first();if(p)r=p.id,await e.env.DB.prepare(`
               UPDATE customers 
               SET full_name = ?, phone = ?, email = ?, 
                   birthdate = ?, monthly_salary = ?,
@@ -17034,20 +23939,37 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   work_start_date = ?, city = ?, tenant_id = ?,
                   financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
               WHERE id = ?
-            `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",r,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else throw d}else throw d}const n=(await e.env.DB.prepare(`
+            `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",n,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,r).run();else throw d}else throw d}const o=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id,
         requested_amount, salary_at_request, duration_months,
         monthly_obligations, monthly_payment,
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-    `).bind(l,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,r).run()).meta.last_row_id;return e.json({success:!0,request_id:n,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});c.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const l=await e.env.DB.prepare(`
+    `).bind(r,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,n).run()).meta.last_row_id;return e.json({success:!0,request_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});c.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const i=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
-      `).bind(a).first();l&&(s=l.id)}if(!s){const l=await e.env.DB.prepare(`
+      `).bind(a).first();i&&(s=i.id)}if(!s){const i=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
-      `).first();l&&(s=l.id)}let r=await e.env.DB.prepare(`
+      `).first();i&&(s=i.id)}let n=await e.env.DB.prepare(`
       SELECT id FROM customers WHERE phone = ?
-    `).bind(t.phone).first(),o;if(r)o=r.id,await e.env.DB.prepare(`
+    `).bind(t.phone).first(),l;const r=Array.isArray(t.solutions)?JSON.stringify(t.solutions.map(i=>({note:String(typeof i=="string"?i:i?.note??"").trim()}))):null;if(n){l=n.id;const i=[t.name,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,s,r,l];try{await e.env.DB.prepare(`
+        UPDATE customers 
+        SET full_name = ?, 
+            birthdate = ?, 
+            monthly_salary = ?,
+            financing_amount = ?,
+            monthly_obligations = ?,
+            financing_type_id = ?,
+            financing_duration_months = ?,
+            best_bank_id = ?,
+            best_rate = ?,
+            monthly_payment = ?,
+            total_payment = ?,
+            calculation_date = CURRENT_TIMESTAMP,
+            tenant_id = COALESCE(?, tenant_id),
+            solutions_json = IFNULL(?, solutions_json)
+        WHERE id = ?
+      `).bind(...i).run()}catch(o){if(!Y(o))throw o;await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, 
             birthdate = ?, 
@@ -17063,7 +23985,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             calculation_date = CURRENT_TIMESTAMP,
             tenant_id = COALESCE(?, tenant_id)
         WHERE id = ?
-      `).bind(t.name,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,s,o).run();else{const l=`TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`;o=(await e.env.DB.prepare(`
+      `).bind(t.name,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,s,l).run()}}else{const i=`TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`,o=[t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,i,s];let d;try{d=await e.env.DB.prepare(`
+        INSERT INTO customers (
+          full_name, phone, birthdate, monthly_salary,
+          financing_amount, monthly_obligations, financing_type_id,
+          financing_duration_months, best_bank_id, best_rate,
+          monthly_payment, total_payment, calculation_date,
+          national_id, tenant_id, solutions_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+      `).bind(...o,r??"[]").run()}catch(p){if(!Y(p))throw p;d=await e.env.DB.prepare(`
         INSERT INTO customers (
           full_name, phone, birthdate, monthly_salary,
           financing_amount, monthly_obligations, financing_type_id,
@@ -17071,13 +24001,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           monthly_payment, total_payment, calculation_date,
           national_id, tenant_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-      `).bind(t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,l,s).run()).meta.last_row_id}return e.json({success:!0,customer_id:o,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const n=await e.env.DB.prepare(`
+      `).bind(...o).run()}l=d.meta.last_row_id}return e.json({success:!0,customer_id:l,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const o=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
-      `).bind(a).first();n&&(s=n.id)}if(!s){const n=await e.env.DB.prepare(`
+      `).bind(a).first();o&&(s=o.id)}if(!s){const o=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
-      `).first();n&&(s=n.id)}let r=await e.env.DB.prepare(`
+      `).first();o&&(s=o.id)}let n=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM customers WHERE national_id = ? OR phone = ?
-    `).bind(t.national_id,t.phone).first(),o;if(r)o=r.id,await e.env.DB.prepare(`
+    `).bind(t.national_id,t.phone).first(),l;if(n)l=n.id,await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, phone = ?, email = ?, 
             birthdate = ?, monthly_salary = ?,
@@ -17085,62 +24015,62 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             work_start_date = ?, city = ?,
             tenant_id = COALESCE(tenant_id, ?)
         WHERE id = ?
-      `).bind(t.full_name,t.phone,t.email||null,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s,o).run(),r.tenant_id&&(s=r.tenant_id);else try{o=(await e.env.DB.prepare(`
+      `).bind(t.full_name,t.phone,t.email||null,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s,l).run(),n.tenant_id&&(s=n.tenant_id);else try{l=(await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
             job_title, work_start_date, city, tenant_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s).run()).meta.last_row_id}catch(n){if(n.message&&n.message.includes("UNIQUE")){const d=await e.env.DB.prepare(`
+        `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s).run()).meta.last_row_id}catch(o){if(o.message&&o.message.includes("UNIQUE")){const d=await e.env.DB.prepare(`
             SELECT id, tenant_id FROM customers WHERE national_id = ? OR phone = ?
-          `).bind(t.national_id,t.phone).first();if(d)o=d.id,d.tenant_id&&(s=d.tenant_id);else throw n}else throw n}const i=(await e.env.DB.prepare(`
+          `).bind(t.national_id,t.phone).first();if(d)l=d.id,d.tenant_id&&(s=d.tenant_id);else throw o}else throw o}const i=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id,
         requested_amount, salary_at_request, duration_months,
         monthly_obligations, monthly_payment,
         status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(o,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
+    `).bind(l,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const _=a.substring(7).split(".");_.length===3&&(s=JSON.parse(atob(_[1])).tenant_id||null)}const{requested_amount:r,duration_months:o,salary_at_request:l,monthly_obligations:i,status:n,notes:d,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:g}=await e.req.json();let b=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const f=[r,o,l||0,i||0,n||"pending",d||""];p&&(b.push("id_attachment_url = ?"),f.push(p)),u&&(b.push("bank_statement_attachment_url = ?"),f.push(u)),m&&(b.push("salary_attachment_url = ?"),f.push(m)),g&&(b.push("additional_attachment_url = ?"),f.push(g)),f.push(t);let h=`
+    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:l,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const w=a.substring(7).split(".");w.length===3&&(s=JSON.parse(atob(w[1])).tenant_id||null)}const{requested_amount:n,duration_months:l,salary_at_request:r,monthly_obligations:i,status:o,notes:d,id_attachment_url:p,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:f}=await e.req.json();let g=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[n,l,r||0,i||0,o||"pending",d||""];p&&(g.push("id_attachment_url = ?"),b.push(p)),u&&(g.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(g.push("salary_attachment_url = ?"),b.push(m)),f&&(g.push("additional_attachment_url = ?"),b.push(f)),b.push(t);let y=`
       UPDATE financing_requests 
-      SET ${b.join(", ")}
+      SET ${g.join(", ")}
       WHERE id = ?
-    `;return s!==null&&(h+=" AND tenant_id = ?",f.push(s)),await e.env.DB.prepare(h).bind(...f).run(),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),r=await e.env.DB.prepare(`
+    `;return s!==null&&(y+=" AND tenant_id = ?",b.push(s)),await e.env.DB.prepare(y).bind(...b).run(),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
-    `).bind(t).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];l?await e.env.DB.prepare(`
+    `).bind(t).first(),r={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];r?await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET status = ?, notes = ?, ${l} = datetime('now'), reviewed_at = datetime('now')
+        SET status = ?, notes = ?, ${r} = datetime('now'), reviewed_at = datetime('now')
         WHERE id = ?
       `).bind(a,s,t).run():await e.env.DB.prepare(`
         UPDATE financing_requests SET status = ?, notes = ? WHERE id = ?
-      `).bind(a,s,t).run(),r&&r.status!==a&&await e.env.DB.prepare(`
+      `).bind(a,s,t).run(),n&&n.status!==a&&await e.env.DB.prepare(`
         INSERT INTO financing_request_status_history (request_id, old_status, new_status, changed_by, notes)
         VALUES (?, ?, ?, 'admin', ?)
-      `).bind(t,r.status,a,s||"").run();const i=await e.env.DB.prepare(`
+      `).bind(t,n.status,a,s||"").run();const i=await e.env.DB.prepare(`
       SELECT requested_amount FROM financing_requests WHERE id = ?
-    `).bind(t).first(),n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},d={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
+    `).bind(t).first(),o={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},d={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${n[a]||a}`,d[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),r=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),o=new Set(["id","salary","bank_statement","additional"]),l=r.toLowerCase();if(!o.has(l))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,n=2*1024*1024;if(i.size>n)return e.json({success:!1,error:"File too large. Max size is 2MB"},400);const d=Date.now(),p=Math.random().toString(36).substring(7),m=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",g=s?`${s}/${l}_${d}.${m}`:`temp/${l}_${d}_${p}.${m}`,b=await i.arrayBuffer();await e.env.ATTACHMENTS.put(g,b,{httpMetadata:{contentType:i.type}});const f=`/api/attachments/view/${g}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const y={id:"id_attachment_url",salary:"salary_attachment_url",bank_statement:"bank_statement_attachment_url",additional:"additional_attachment_url"}[l];console.log("📎 Updating attachment:",{requestId:s,attachmentType:l,columnName:y,publicUrl:f});const _=await e.env.DB.prepare(`
+    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${o[a]||a}`,d[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),n=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),l=new Set(["id","salary","bank_statement","additional"]),r=n.toLowerCase();if(!l.has(r))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,o=2*1024*1024;if(i.size>o)return e.json({success:!1,error:"File too large. Max size is 2MB"},400);const d=Date.now(),p=Math.random().toString(36).substring(7),m=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",f=s?`${s}/${r}_${d}.${m}`:`temp/${r}_${d}_${p}.${m}`,g=await i.arrayBuffer();await e.env.ATTACHMENTS.put(f,g,{httpMetadata:{contentType:i.type}});const b=`/api/attachments/view/${f}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const h={id:"id_attachment_url",salary:"salary_attachment_url",bank_statement:"bank_statement_attachment_url",additional:"additional_attachment_url"}[r];console.log("📎 Updating attachment:",{requestId:s,attachmentType:r,columnName:h,publicUrl:b});const w=await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET ${y} = ? 
+        SET ${h} = ? 
         WHERE id = ?
-      `).bind(f,s).run();console.log("✅ Update result:",_)}return e.json({success:!0,url:f,filename:g})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],r=a[1];let o=null;r.startsWith("id_")?o="id_attachment_url":r.startsWith("salary_")?o="salary_attachment_url":r.startsWith("bank_statement_")?o="bank_statement_attachment_url":r.startsWith("additional_")&&(o="additional_attachment_url"),o&&await e.env.DB.prepare(`
+      `).bind(b,s).run();console.log("✅ Update result:",w)}return e.json({success:!0,url:b,filename:f})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let l=null;n.startsWith("id_")?l="id_attachment_url":n.startsWith("salary_")?l="salary_attachment_url":n.startsWith("bank_statement_")?l="bank_statement_attachment_url":n.startsWith("additional_")&&(l="additional_attachment_url"),l&&await e.env.DB.prepare(`
           UPDATE financing_requests 
-          SET ${o} = NULL 
+          SET ${l} = NULL 
           WHERE id = ?
-        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o=`
+        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,n=1;if(a){const o=atob(a).split(":");n=parseInt(o[0]),s=o[1]!=="null"?parseInt(o[1]):null}let l=`
       SELECT 
         n.*,
         fr.requested_amount,
         fr.status as request_status
       FROM notifications n
       LEFT JOIN financing_requests fr ON n.related_request_id = fr.id
-      WHERE n.user_id = ?`;s&&(o+=` AND n.tenant_id = ${s}`),o+=`
+      WHERE n.user_id = ?`;s&&(l+=` AND n.tenant_id = ${s}`),l+=`
       ORDER BY n.created_at DESC
-      LIMIT 50`;const{results:l}=await e.env.DB.prepare(o).bind(r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,r=1;if(a){const n=atob(a).split(":");r=parseInt(n[0]),s=n[1]!=="null"?parseInt(n[1]):null}let o="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(o+=` AND tenant_id = ${s}`);const l=await e.env.DB.prepare(o).bind(r).first();return e.json({success:!0,count:l?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+      LIMIT 50`;const{results:r}=await e.env.DB.prepare(l).bind(n).all();return e.json({success:!0,data:r})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,n=1;if(a){const o=atob(a).split(":");n=parseInt(o[0]),s=o[1]!=="null"?parseInt(o[1]):null}let l="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(l+=` AND tenant_id = ${s}`);const r=await e.env.DB.prepare(l).bind(n).first();return e.json({success:!0,count:r?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE notifications
       SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
@@ -17151,10 +24081,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     `).bind(1).run(),e.json({success:!0})}catch(t){return console.error("Error marking all as read:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/notifications/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM notifications
       WHERE id = ? AND user_id = ?
-    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:r,category:o,related_request_id:l}=await e.req.json(),i=await e.env.DB.prepare(`
+    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:n,category:l,related_request_id:r}=await e.req.json(),i=await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t||1,a,s,r||"info",o||"general",l||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(t||1,a,s,n||"info",l||"general",r||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         calc.*,
         u.full_name as user_name,
@@ -17166,15 +24096,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       JOIN financing_types ft ON calc.financing_type_id = ft.id
       ORDER BY calc.created_at DESC
       LIMIT 100
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:r,financing_type_id:o,user_id:l,subscription_id:i}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:n,financing_type_id:l,user_id:r,subscription_id:i}=await e.req.json(),o=await e.env.DB.prepare(`
       SELECT rate FROM bank_financing_rates 
       WHERE bank_id = ? AND financing_type_id = ? AND is_active = 1
       LIMIT 1
-    `).bind(r,o).first();if(!n)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const d=n.rate,p=d/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,g=m-t,b=await e.env.DB.prepare(`
+    `).bind(n,l).first();if(!o)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const d=o.rate,p=d/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,f=m-t,g=await e.env.DB.prepare(`
       INSERT INTO calculations 
       (user_id, subscription_id, financing_type_id, bank_id, amount, duration_months, salary, rate, monthly_payment, total_payment, total_interest)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(l||null,i||null,o,r,t,a,s,d,u,m,g).run();return e.json({success:!0,data:{id:b.meta.last_row_id,amount:t,duration_months:a,rate:d,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(g*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
+    `).bind(r||null,i||null,l,n,t,a,s,d,u,m,f).run();return e.json({success:!0,data:{id:g.meta.last_row_id,amount:t,duration_months:a,rate:d,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(f*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         financing_request_id INTEGER NOT NULL,
@@ -17190,7 +24120,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',o='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',l='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",n=null;t.roleId===1?n=null:t.roleId===2||t.roleId===3?(n=t.tenantId,n!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",r+=" AND tenant_id = ?",o+=" AND tenant_id = ?",l+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",r+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",o+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",r+=" AND 1 = 0",o+=" AND 1 = 0");const d=n!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(n).first():await e.env.DB.prepare(a).first(),p=n!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(n).first():await e.env.DB.prepare(s).first(),u=n!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(n).first():await e.env.DB.prepare(r).first(),m=n!==null&&t.roleId!==1?await e.env.DB.prepare(o).bind(n).first():await e.env.DB.prepare(o).first(),g=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(l).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(l).first():{count:0},b=n!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},f=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),y=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:d?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:g?.count||0,total_calculations:y?.count||0,active_banks:f?.count||0,active_tenants:h?.count||0,active_users:b?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run()).meta.changes===0?e.json({success:!1,error:"الطلب غير موجود"},404):e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return console.error("Error deleting financing request:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",n='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',l='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',r='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",o=null;t.roleId===1?o=null:t.roleId===2||t.roleId===3?(o=t.tenantId,o!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",n+=" AND tenant_id = ?",l+=" AND tenant_id = ?",r+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s+=" WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",n+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",l+=" AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)",o=t.userId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",n+=" AND 1 = 0",l+=" AND 1 = 0");const d=o!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(o).first():await e.env.DB.prepare(a).first(),p=o!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(o).first():await e.env.DB.prepare(s).first(),u=o!==null&&t.roleId!==1?await e.env.DB.prepare(n).bind(o).first():await e.env.DB.prepare(n).first(),m=o!==null&&t.roleId!==1?await e.env.DB.prepare(l).bind(o).first():await e.env.DB.prepare(l).first(),f=o!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(r).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(r).first():{count:0},g=o!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),y=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),h=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:d?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:f?.count||0,total_calculations:h?.count||0,active_banks:b?.count||0,active_tenants:y?.count||0,active_users:g?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run()).meta.changes===0?e.json({success:!1,error:"الطلب غير موجود"},404):e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return console.error("Error deleting financing request:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name
@@ -17201,7 +24131,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(r=>{s[r.category]||(s[r.category]=[]),s[r.category].push(r)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(n=>{s[n.category]||(s[n.category]=[]),s[n.category].push(n)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
       SELECT p.* FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = ?
@@ -17212,7 +24142,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       INNER JOIN users u ON u.role_id = rp.role_id
       WHERE u.id = ?
       ORDER BY p.category, p.id
-    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:roleId/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("roleId"),{permission_ids:s}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(a).run();for(const r of s)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(a,r).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:roleId/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("roleId"),{permission_ids:s}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(a).run();for(const n of s)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(a,n).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as has_permission FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       INNER JOIN users u ON u.role_id = rp.role_id
@@ -17224,26 +24154,29 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       GROUP BY r.id
       ORDER BY r.id
-    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/roles",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const{role_name:a,description:s}=await e.req.json(),r=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/roles",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const{role_name:a,description:s}=await e.req.json(),n=await e.env.DB.prepare(`
       INSERT INTO roles (role_name, description, created_at)
       VALUES (?, ?, datetime('now'))
-    `).bind(a,s).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:r.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_name:s,description:r}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_name:s,description:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE roles 
       SET role_name = ?, description = ?
       WHERE id = ?
-    `).bind(s,r,a).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),s=await e.env.DB.prepare(`
+    `).bind(s,n,a).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE role_id = ?
     `).bind(a).first();return s&&s.count>0?e.json({success:!1,error:"لا يمكن حذف هذا الدور لأنه مرتبط بمستخدمين"},400):(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(a).run(),await e.env.DB.prepare(`
       DELETE FROM roles WHERE id = ?
-    `).bind(a).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:r,role_id:o,is_active:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:n,role_id:l,is_active:r}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,r,o,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(it));c.get("/calculator",e=>e.html(he));c.get("/calculator-old",e=>e.html(dt));c.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(a,s,n,l,r,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(Et));c.get("/calculator",e=>e.html(De));c.get("/calculator-old",e=>e.html(kt));c.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();if(!a)return e.html(`
+  `).bind(t).first();return a?e.html(De.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+        // Tenant information for company-specific calculator
+        window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
+    `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -17265,11 +24198,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
       </body>
       </html>
-    `);const s=await x(e),r=[1,2,3,4].includes(Number(s.roleId??0));return e.html(he.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
-        // Tenant information for company-specific calculator
-        window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
-        window.CALCULATOR_SHOW_CUSTOMER_SELECT = ${r};
-    `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`))});c.get("/login",e=>e.html(ct));c.get("/forgot-password",e=>e.html(pt));c.get("/packages",e=>e.html(ut));c.get("/subscribe",e=>e.html(mt));c.get("/admin",e=>e.html(`
+    `)});c.get("/login",e=>e.html(St));c.get("/forgot-password",e=>e.html(It));c.get("/packages",e=>e.html(Tt));c.get("/subscribe",e=>e.html(Ct));c.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -17319,7 +24248,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         <\/script>
     </body>
     </html>
-  `));c.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),r=e.req.header("Authorization")?.replace("Bearer ","");let o=null;if(r){const g=atob(r).split(":");o=g[1]!=="null"?parseInt(g[1]):null}let l="1=1";const i=[];o&&(l+=" AND f.tenant_id = ?",i.push(o)),t&&(l+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(l+=" AND DATE(f.created_at) <= ?",i.push(a));const n=`
+  `));c.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),n=e.req.header("Authorization")?.replace("Bearer ","");let l=null;if(n){const f=atob(n).split(":");l=f[1]!=="null"?parseInt(f[1]):null}let r="1=1";const i=[];l&&(r+=" AND f.tenant_id = ?",i.push(l)),t&&(r+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(r+=" AND DATE(f.created_at) <= ?",i.push(a));const o=`
       SELECT 
         COUNT(*) as total_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
@@ -17327,8 +24256,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         SUM(CASE WHEN f.status = 'rejected' THEN 1 ELSE 0 END) as rejected_requests,
         SUM(f.requested_amount) as total_amount
       FROM financing_requests f
-      WHERE ${l}
-    `,d=await e.env.DB.prepare(n).bind(...i).first(),p=`
+      WHERE ${r}
+    `,d=await e.env.DB.prepare(o).bind(...i).first(),p=`
       SELECT 
         c.full_name as customer_name,
         COUNT(f.id) as request_count,
@@ -17336,11 +24265,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         MAX(f.created_at) as last_request_date
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
-      WHERE ${l}
+      WHERE ${r}
       GROUP BY c.id
       ORDER BY request_count DESC, total_amount DESC
       LIMIT 10
-    `,{results:u}=await e.env.DB.prepare(p).bind(...i).all();return e.json({success:!0,data:{...d,top_customers:u}})}catch(t){return console.error("Reports API error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/requests-followup",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("tenant_id");let s=a?parseInt(a):t.tenantId;t.roleId===1&&!s&&(s=null),console.log("📊 Requests followup report - User:",t.userId,"Role:",t.roleId,"Tenant:",s);let r=`
+    `,{results:u}=await e.env.DB.prepare(p).bind(...i).all();return e.json({success:!0,data:{...d,top_customers:u}})}catch(t){return console.error("Reports API error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/requests-followup",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("tenant_id");let s=a?parseInt(a):t.tenantId;t.roleId===1&&!s&&(s=null),console.log("📊 Requests followup report - User:",t.userId,"Role:",t.roleId,"Tenant:",s);let n=`
       SELECT 
         fr.id,
         fr.created_at,
@@ -17377,7 +24306,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-    `;s&&(r+=" WHERE c.tenant_id = ?"),r+=" ORDER BY fr.created_at DESC";const{results:o}=s?await e.env.DB.prepare(r).bind(s).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/banks",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const r=`
+    `;s&&(n+=" WHERE c.tenant_id = ?"),n+=" ORDER BY fr.created_at DESC";const{results:l}=s?await e.env.DB.prepare(n).bind(s).all():await e.env.DB.prepare(n).all();return e.json({success:!0,data:l})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/banks",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const n=`
       SELECT 
         b.id,
         b.bank_name,
@@ -17396,7 +24325,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       ${a}
       GROUP BY b.id, b.bank_name
       ORDER BY total_requests DESC
-    `,{results:o}=s.length>0?await e.env.DB.prepare(r).bind(...s).all():await e.env.DB.prepare(r).all(),l={total_banks:o.length,total_requests:o.reduce((i,n)=>i+(n.total_requests||0),0),overall_approval_rate:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.approval_rate)||0),0)/o.length).toFixed(2):"0.00",average_amount:o.length>0?(o.reduce((i,n)=>i+(parseFloat(n.average_amount)||0),0)/o.length).toFixed(2):"0.00"};return e.json({success:!0,banks:o,summary:l})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/performance",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let r="",o=[];t.roleId!==1&&t.tenantId&&(r="WHERE c.tenant_id = ?",o.push(t.tenantId)),a&&s&&(r+=(r?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",o.push(a,s));const l=`
+    `,{results:l}=s.length>0?await e.env.DB.prepare(n).bind(...s).all():await e.env.DB.prepare(n).all(),r={total_banks:l.length,total_requests:l.reduce((i,o)=>i+(o.total_requests||0),0),overall_approval_rate:l.length>0?(l.reduce((i,o)=>i+(parseFloat(o.approval_rate)||0),0)/l.length).toFixed(2):"0.00",average_amount:l.length>0?(l.reduce((i,o)=>i+(parseFloat(o.average_amount)||0),0)/l.length).toFixed(2):"0.00"};return e.json({success:!0,banks:l,summary:r})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/performance",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let n="",l=[];t.roleId!==1&&t.tenantId&&(n="WHERE c.tenant_id = ?",l.push(t.tenantId)),a&&s&&(n+=(n?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",l.push(a,s));const r=`
       SELECT 
         COUNT(DISTINCT c.id) as total_customers,
         COUNT(DISTINCT CASE WHEN c.created_at >= date('now', '-30 days') THEN c.id END) as active_customers,
@@ -17413,8 +24342,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         ROUND(SUM(CASE WHEN fr.status = 'approved' THEN fr.requested_amount ELSE 0 END), 2) as total_revenue
       FROM customers c
       LEFT JOIN financing_requests fr ON c.id = fr.customer_id
-      ${r}
-    `,i=o.length>0?await e.env.DB.prepare(l).bind(...o).first():await e.env.DB.prepare(l).first(),n=`
+      ${n}
+    `,i=l.length>0?await e.env.DB.prepare(r).bind(...l).first():await e.env.DB.prepare(r).first(),o=`
       SELECT 
         u.id,
         u.full_name as name,
@@ -17431,12 +24360,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
       LEFT JOIN customers c ON ca.customer_id = c.id
       LEFT JOIN financing_requests fr ON c.id = fr.customer_id
-      ${r.replace("c.tenant_id","u.tenant_id")}
+      ${n.replace("c.tenant_id","u.tenant_id")}
       GROUP BY u.id, u.full_name
       HAVING requests_count > 0
       ORDER BY approved_count DESC
       LIMIT 10
-    `,{results:d}=o.length>0?await e.env.DB.prepare(n).bind(...o).all():await e.env.DB.prepare(n).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:d})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/workflow",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("customer_id"),s=e.req.query("start_date"),r=e.req.query("end_date"),o=["1=1"],l=[];t.roleId!==1&&t.tenantId&&(o.push("c.tenant_id = ?"),l.push(t.tenantId)),a&&(o.push("c.id = ?"),l.push(a)),s&&(o.push("DATE(fr.created_at) >= DATE(?)"),l.push(s)),r&&(o.push("DATE(fr.created_at) <= DATE(?)"),l.push(r));const i=o.join(" AND "),n=`
+    `,{results:d}=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:d})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/workflow",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("customer_id"),s=e.req.query("start_date"),n=e.req.query("end_date"),l=["1=1"],r=[];t.roleId!==1&&t.tenantId&&(l.push("c.tenant_id = ?"),r.push(t.tenantId)),a&&(l.push("c.id = ?"),r.push(a)),s&&(l.push("DATE(fr.created_at) >= DATE(?)"),r.push(s)),n&&(l.push("DATE(fr.created_at) <= DATE(?)"),r.push(n));const i=l.join(" AND "),o=`
       SELECT
         COALESCE(ws.stage_name_ar, 'غير محدد') as name,
         COUNT(fr.id) as count
@@ -17494,7 +24423,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       WHERE ${i}
       ORDER BY fr.created_at DESC
       LIMIT 500
-    `,{results:u}=l.length>0?await e.env.DB.prepare(n).bind(...l).all():await e.env.DB.prepare(n).all(),{results:m}=l.length>0?await e.env.DB.prepare(d).bind(...l).all():await e.env.DB.prepare(d).all(),{results:g}=l.length>0?await e.env.DB.prepare(p).bind(...l).all():await e.env.DB.prepare(p).all(),b={approved:"مكتمل",rejected:"مرفوض",pending:"قيد المعالجة",under_review:"قيد المراجعة",reviewed:"تمت المراجعة",submitted:"مقدم"},f=v=>{const w=Number(v||0);if(!Number.isFinite(w)||w<=0)return"0 دقيقة";const B=Math.floor(w/60),S=Math.round(w%60);return B<=0?`${S} دقيقة`:`${B} ساعة ${S} دقيقة`},h=(g||[]).map(v=>({customerId:v.customer_id,customerName:v.customer_name||"-",requestId:v.request_id,amount:Number(v.requested_amount||0),stage:v.current_stage||"غير محدد",transitions:Number(v.transitions||0),duration:f(v.total_duration_minutes),status:b[v.status]||v.status||"غير محدد"})),y=(m||[]).map(v=>({stage:v.stage||"غير محدد",duration:Number(v.duration||0)})),_=(u||[]).map(v=>({name:v.name||"غير محدد",count:Number(v.count||0)}));return e.json({success:!0,data:{stages:_,durations:y,details:h}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/admin/panel",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
+    `,{results:u}=r.length>0?await e.env.DB.prepare(o).bind(...r).all():await e.env.DB.prepare(o).all(),{results:m}=r.length>0?await e.env.DB.prepare(d).bind(...r).all():await e.env.DB.prepare(d).all(),{results:f}=r.length>0?await e.env.DB.prepare(p).bind(...r).all():await e.env.DB.prepare(p).all(),g={approved:"مكتمل",rejected:"مرفوض",pending:"قيد المعالجة",under_review:"قيد المراجعة",reviewed:"تمت المراجعة",submitted:"مقدم"},b=v=>{const _=Number(v||0);if(!Number.isFinite(_)||_<=0)return"0 دقيقة";const C=Math.floor(_/60),D=Math.round(_%60);return C<=0?`${D} دقيقة`:`${C} ساعة ${D} دقيقة`},y=(f||[]).map(v=>({customerId:v.customer_id,customerName:v.customer_name||"-",requestId:v.request_id,amount:Number(v.requested_amount||0),stage:v.current_stage||"غير محدد",transitions:Number(v.transitions||0),duration:b(v.total_duration_minutes),status:g[v.status]||v.status||"غير محدد"})),h=(m||[]).map(v=>({stage:v.stage||"غير محدد",duration:Number(v.duration||0)})),w=(u||[]).map(v=>({name:v.name||"غير محدد",count:Number(v.count||0)}));return e.json({success:!0,data:{stages:w,durations:h,details:y}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/admin/panel",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -17542,15 +24471,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
-  `).bind(t.roleId).all(),r=Array.isArray(s.results)?s.results:[];let o=ve;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const n=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");o=o.replace(n,"")}o=o.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return o=o.replace("<script>",`<script>
+  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let l=Be;if(t.roleId!==1){const r=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of r){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");l=l.replace(o,"")}l=l.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return l=l.replace("<script>",`<script>
       window.USER_DATA = ${JSON.stringify({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:a.role_name,role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
-      window.USER_PERMISSIONS = ${JSON.stringify(r.map(l=>l.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${JSON.stringify(r)};
+      window.USER_PERMISSIONS = ${JSON.stringify(n.map(r=>r.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${JSON.stringify(n)};
       window.USER_ROLE_ID = ${t.roleId};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
     <\/script>
-    <script>`),e.html(o)}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [ADMIN_PANEL] ERROR DUMP:",a),e.html(`
+    <script>`),e.html(l)}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [ADMIN_PANEL] ERROR DUMP:",a),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -17617,7 +24546,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
           }
           
-          ${C()}
+          ${j()}
           
           /* Scroll Buttons for Tables */
           .scroll-btn {
@@ -18325,7 +25254,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         <\/script>
     </body>
     </html>
-  `));c.get("/admin/tenants/:tenantRef/edit",async e=>{try{const t=e.req.param("tenantRef"),a=await z(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
+  `));c.get("/admin/tenants/:tenantRef/edit",async e=>{try{const t=e.req.param("tenantRef"),a=await ee(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(a).first();return s?e.html(`
       <!DOCTYPE html>
@@ -18524,9 +25453,9 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           <\/script>
       </body>
       </html>
-    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await z(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
+    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await ee(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
-    `).bind(a).first();if(!s)return e.html("<h1>الشركة غير موجودة</h1>");const r=await e.env.DB.prepare(`
+    `).bind(a).first();if(!s)return e.html("<h1>الشركة غير موجودة</h1>");const n=await e.env.DB.prepare(`
       SELECT 
         (SELECT COUNT(*) FROM users WHERE tenant_id = ?) as total_users,
         (SELECT COUNT(*) FROM customers WHERE tenant_id = ?) as total_customers,
@@ -18586,7 +25515,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                       <div class="flex items-center justify-between">
                           <div>
                               <p class="text-gray-600 text-sm mb-1">المستخدمين</p>
-                              <p class="text-3xl font-bold text-blue-600">${r?.total_users||0}</p>
+                              <p class="text-3xl font-bold text-blue-600">${n?.total_users||0}</p>
                               <p class="text-gray-500 text-xs mt-1">من ${s.max_users} مسموح</p>
                           </div>
                           <i class="fas fa-users text-4xl text-blue-200"></i>
@@ -18597,7 +25526,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                       <div class="flex items-center justify-between">
                           <div>
                               <p class="text-gray-600 text-sm mb-1">العملاء</p>
-                              <p class="text-3xl font-bold text-green-600">${r?.total_customers||0}</p>
+                              <p class="text-3xl font-bold text-green-600">${n?.total_customers||0}</p>
                           </div>
                           <i class="fas fa-user-friends text-4xl text-green-200"></i>
                       </div>
@@ -18607,7 +25536,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                       <div class="flex items-center justify-between">
                           <div>
                               <p class="text-gray-600 text-sm mb-1">طلبات التمويل</p>
-                              <p class="text-3xl font-bold text-purple-600">${r?.total_requests||0}</p>
+                              <p class="text-3xl font-bold text-purple-600">${n?.total_requests||0}</p>
                           </div>
                           <i class="fas fa-file-invoice text-4xl text-purple-200"></i>
                       </div>
@@ -18695,9 +25624,9 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants",e=>e.html(gt));c.get("/admin/tenant-calculators",e=>e.html(bt));c.get("/admin/saas-settings",e=>e.html(we));c.get("/admin/settings",e=>e.html(we));c.get("/admin/reports",e=>e.html(ft));c.get("/admin/reports/customers",e=>e.html(xt));c.get("/admin/reports/requests",e=>e.html(yt));c.get("/admin/reports/financial",e=>e.html(ht));c.get("/admin/reports/banks",e=>e.html(St));c.get("/admin/reports/performance",e=>e.html(Tt));c.get("/admin/reports/clicks",e=>e.html(Dt));c.get("/admin/reports/workflow",e=>e.html(Rt));c.get("/admin/reports/employee-performance",e=>e.html(Ct));c.get("/admin/payments",e=>e.html(wt));c.get("/admin/banks",e=>e.html(_t));c.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants",e=>e.html(Dt));c.get("/admin/tenant-calculators",e=>e.html(Bt));c.get("/admin/saas-settings",e=>e.html(Re));c.get("/admin/settings",e=>e.html(Re));c.get("/admin/reports",e=>e.html(Rt));c.get("/admin/reports/customers",e=>e.html(Lt));c.get("/admin/reports/requests",e=>e.html($t));c.get("/admin/reports/financial",e=>e.html(jt));c.get("/admin/reports/banks",e=>e.html(Pt));c.get("/admin/reports/performance",e=>e.html(Ht));c.get("/admin/reports/clicks",e=>e.html(Ut));c.get("/admin/reports/workflow",e=>e.html(zt));c.get("/admin/reports/employee-performance",e=>e.html(Wt));c.get("/admin/payments",e=>e.html(At));c.get("/admin/banks",e=>e.html(qt));c.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(ve.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(Be.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18753,7 +25682,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
     </body>
     </html>
-  `));c.get("/admin/dashboard",async e=>{try{const t=await x(e);let a="",s="",r="",o=[];t.roleId===1?(a="",s="",r=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,r=`AND c.tenant_id = ${t.tenantId}`,o.push(t.tenantId)):t.roleId===4&&t.userId?(a=`WHERE assigned_to = ${t.userId}`,s=`WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${t.userId})`,r=`AND c.assigned_to = ${t.userId}`,o.push(t.userId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",r="AND 1 = 0");const l=await e.env.DB.prepare(`
+  `));c.get("/admin/dashboard",async e=>{try{const t=await x(e);let a="",s="",n="",l=[];t.roleId===1?(a="",s="",n=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,n=`AND c.tenant_id = ${t.tenantId}`,l.push(t.tenantId)):t.roleId===4&&t.userId?(a=`WHERE assigned_to = ${t.userId}`,s=`WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${t.userId})`,n=`AND c.assigned_to = ${t.userId}`,l.push(t.userId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",n="AND 1 = 0");const r=await e.env.DB.prepare(`
       SELECT 
         (SELECT COUNT(*) FROM customers ${a}) as total_customers,
         (SELECT COUNT(*) FROM financing_requests ${s}) as total_requests,
@@ -18775,7 +25704,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       ${s?"AND":"WHERE"} created_at >= date('now', '-6 months')
       GROUP BY strftime('%Y-%m', created_at)
       ORDER BY month
-    `).all(),n=await e.env.DB.prepare(`
+    `).all(),o=await e.env.DB.prepare(`
       SELECT 
         b.bank_name,
         COUNT(fr.id) as request_count,
@@ -18783,7 +25712,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM banks b
       LEFT JOIN financing_requests fr ON b.id = fr.selected_bank_id
       LEFT JOIN customers c ON fr.customer_id = c.id
-      WHERE fr.id IS NOT NULL ${r}
+      WHERE fr.id IS NOT NULL ${n}
       GROUP BY b.id, b.bank_name
       ORDER BY request_count DESC
       LIMIT 5
@@ -18795,7 +25724,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM financing_requests
       ${s}
       GROUP BY status
-    `).all(),p=i.results||[],u=n.results||[],m=d.results||[];return e.html(`
+    `).all(),p=i.results||[],u=o.results||[],m=d.results||[];return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -18811,7 +25740,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             .print-full-width { width: 100%; }
           }
           
-          ${C()}
+          ${j()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -18847,7 +25776,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-blue-100 text-sm mb-1">إجمالي العملاء</p>
-                  <p class="text-4xl font-bold">${l?.total_customers||0}</p>
+                  <p class="text-4xl font-bold">${r?.total_customers||0}</p>
                 </div>
                 <i class="fas fa-users text-6xl opacity-20"></i>
               </div>
@@ -18857,7 +25786,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-green-100 text-sm mb-1">إجمالي الطلبات</p>
-                  <p class="text-4xl font-bold">${l?.total_requests||0}</p>
+                  <p class="text-4xl font-bold">${r?.total_requests||0}</p>
                 </div>
                 <i class="fas fa-file-invoice text-6xl opacity-20"></i>
               </div>
@@ -18867,7 +25796,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-yellow-100 text-sm mb-1">قيد الانتظار</p>
-                  <p class="text-4xl font-bold">${l?.pending_requests||0}</p>
+                  <p class="text-4xl font-bold">${r?.pending_requests||0}</p>
                 </div>
                 <i class="fas fa-clock text-6xl opacity-20"></i>
               </div>
@@ -18877,7 +25806,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-purple-100 text-sm mb-1">موافق عليها</p>
-                  <p class="text-4xl font-bold">${l?.approved_requests||0}</p>
+                  <p class="text-4xl font-bold">${r?.approved_requests||0}</p>
                 </div>
                 <i class="fas fa-check-circle text-6xl opacity-20"></i>
               </div>
@@ -18887,7 +25816,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-red-100 text-sm mb-1">مرفوضة</p>
-                  <p class="text-4xl font-bold">${l?.rejected_requests||0}</p>
+                  <p class="text-4xl font-bold">${r?.rejected_requests||0}</p>
                 </div>
                 <i class="fas fa-times-circle text-6xl opacity-20"></i>
               </div>
@@ -18903,7 +25832,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">إجمالي التمويل المطلوب</p>
-                  <p class="text-2xl font-bold text-gray-800">${parseFloat(l?.total_requested_amount||0).toLocaleString("ar-SA")} ر.س</p>
+                  <p class="text-2xl font-bold text-gray-800">${parseFloat(r?.total_requested_amount||0).toLocaleString("ar-SA")} ر.س</p>
                 </div>
               </div>
             </div>
@@ -18915,7 +25844,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">التمويل الموافق عليه</p>
-                  <p class="text-2xl font-bold text-gray-800">${parseFloat(l?.total_approved_amount||0).toLocaleString("ar-SA")} ر.س</p>
+                  <p class="text-2xl font-bold text-gray-800">${parseFloat(r?.total_approved_amount||0).toLocaleString("ar-SA")} ر.س</p>
                 </div>
               </div>
             </div>
@@ -18927,7 +25856,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">نسبة القبول</p>
-                  <p class="text-2xl font-bold text-gray-800">${((l?.approved_requests||0)/Math.max(l?.total_requests,1)*100).toFixed(1)}%</p>
+                  <p class="text-2xl font-bold text-gray-800">${((r?.approved_requests||0)/Math.max(r?.total_requests,1)*100).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -18939,7 +25868,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-gray-600 text-sm">متوسط المبلغ</p>
-                  <p class="text-2xl font-bold text-gray-800">${(parseFloat(l?.total_requested_amount||0)/Math.max(l?.total_requests,1)).toLocaleString("ar-SA",{maximumFractionDigits:0})} ر.س</p>
+                  <p class="text-2xl font-bold text-gray-800">${(parseFloat(r?.total_requested_amount||0)/Math.max(r?.total_requests,1)).toLocaleString("ar-SA",{maximumFractionDigits:0})} ر.س</p>
                 </div>
               </div>
             </div>
@@ -18960,11 +25889,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </div>
                   <div class="bg-white/20 rounded-lg p-4">
                     <p class="text-sm opacity-90">الطلبات النشطة</p>
-                    <p class="text-xl font-bold mt-1">${(l?.pending_requests||0)+(l?.under_review_requests||0)}</p>
+                    <p class="text-xl font-bold mt-1">${(r?.pending_requests||0)+(r?.under_review_requests||0)}</p>
                   </div>
                   <div class="bg-white/20 rounded-lg p-4">
                     <p class="text-sm opacity-90">معدل النجاح</p>
-                    <p class="text-xl font-bold mt-1">${((l?.approved_requests||0)/Math.max((l?.approved_requests||0)+(l?.rejected_requests||0),1)*100).toFixed(1)}%</p>
+                    <p class="text-xl font-bold mt-1">${((r?.approved_requests||0)/Math.max((r?.approved_requests||0)+(r?.rejected_requests||0),1)*100).toFixed(1)}%</p>
                   </div>
                 </div>
               </div>
@@ -19010,13 +25939,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     </tr>
                   </thead>
                   <tbody>
-                    ${u.map((g,b)=>`
+                    ${u.map((f,g)=>`
                       <tr class="border-t hover:bg-gray-50">
                         <td class="px-4 py-3">
-                          <span class="text-2xl">${b===0?"🥇":b===1?"🥈":b===2?"🥉":(b+1).toString()}</span>
+                          <span class="text-2xl">${g===0?"🥇":g===1?"🥈":g===2?"🥉":(g+1).toString()}</span>
                         </td>
-                        <td class="px-4 py-3 font-bold text-gray-800">${g.bank_name}</td>
-                        <td class="px-4 py-3 text-blue-600 font-bold">${g.request_count}</td>
+                        <td class="px-4 py-3 font-bold text-gray-800">${f.bank_name}</td>
+                        <td class="px-4 py-3 text-blue-600 font-bold">${f.request_count}</td>
                       </tr>
                       `).join("")}
                   </tbody>
@@ -19041,14 +25970,14 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               تفاصيل حالات الطلبات
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              ${m.map(g=>{const f={pending:{color:"yellow",icon:"clock",label:"قيد الانتظار"},under_review:{color:"blue",icon:"search",label:"قيد المراجعة"},approved:{color:"green",icon:"check-circle",label:"موافق"},rejected:{color:"red",icon:"times-circle",label:"مرفوض"}}[g.status]||{color:"gray",icon:"question",label:g.status};return`
-                  <div class="bg-${f.color}-50 border-2 border-${f.color}-200 rounded-lg p-4">
+              ${m.map(f=>{const b={pending:{color:"yellow",icon:"clock",label:"قيد الانتظار"},under_review:{color:"blue",icon:"search",label:"قيد المراجعة"},approved:{color:"green",icon:"check-circle",label:"موافق"},rejected:{color:"red",icon:"times-circle",label:"مرفوض"}}[f.status]||{color:"gray",icon:"question",label:f.status};return`
+                  <div class="bg-${b.color}-50 border-2 border-${b.color}-200 rounded-lg p-4">
                     <div class="flex items-center justify-between mb-2">
-                      <i class="fas fa-${f.icon} text-2xl text-${f.color}-600"></i>
-                      <span class="text-3xl font-bold text-${f.color}-600">${g.count}</span>
+                      <i class="fas fa-${b.icon} text-2xl text-${b.color}-600"></i>
+                      <span class="text-3xl font-bold text-${b.color}-600">${f.count}</span>
                     </div>
-                    <p class="text-sm text-gray-700 font-bold">${f.label}</p>
-                    <p class="text-xs text-gray-600">${g.percentage}% من الإجمالي</p>
+                    <p class="text-sm text-gray-700 font-bold">${b.label}</p>
+                    <p class="text-xs text-gray-600">${f.percentage}% من الإجمالي</p>
                   </div>
                 `}).join("")}
             </div>
@@ -19185,7 +26114,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/add",async e=>e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/add",async e=>{const t=await x(e),a=await re(e.env.DB,t.tenantId);return e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -19264,9 +26193,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                     <input type="date" id="date_of_birth_gregorian"
                            class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                    <input type="text" id="date_of_birth_hijri" style="display:none"
-                           placeholder="1445-01-01 (هـ)" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}"
-                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <div id="hijri_dob_wrap" style="display:none" class="flex flex-1 min-w-0 items-stretch divide-x divide-gray-200 rtl:divide-x-reverse">
+                      <select id="hijri_dob_year" aria-label="السنة الهجرية" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
+                      <select id="hijri_dob_month" aria-label="الشهر الهجري" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
+                      <select id="hijri_dob_day" aria-label="اليوم الهجري" class="w-[4.5rem] shrink-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
+                    </div>
+                    <input type="hidden" id="date_of_birth_hijri" value="">
                   </div>
                   <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
                     <button type="button" id="dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
@@ -19274,16 +26206,138 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1"><span id="dob_calendar_label">ميلادي</span></p>
+                <script type="module">
+                  import umalqura from 'https://esm.sh/@umalqura/core@0.0.7';
+                  const U = umalqura.$;
+                  try { umalqura.locale('ar'); } catch (e) {}
+                  const monthNames = umalqura.months();
+                  const yearSel = document.getElementById('hijri_dob_year');
+                  const monthSel = document.getElementById('hijri_dob_month');
+                  const daySel = document.getElementById('hijri_dob_day');
+                  const hHidden = document.getElementById('date_of_birth_hijri');
+                  if (!yearSel || !monthSel || !daySel || !hHidden) {
+                    window.syncHijriDobFromSelects = function () {};
+                  } else {
+                    function pad(n) { return String(n).padStart(2, '0'); }
+                    function clearSelect(el) {
+                      while (el.firstChild) el.removeChild(el.firstChild);
+                    }
+                    function fillDays() {
+                      const y = parseInt(yearSel.value, 10);
+                      const m = parseInt(monthSel.value, 10);
+                      const prev = daySel.value;
+                      clearSelect(daySel);
+                      const ph = document.createElement('option');
+                      ph.value = '';
+                      ph.textContent = 'اليوم';
+                      daySel.appendChild(ph);
+                      if (!y || !m || y !== y || m !== m) return;
+                      let dim = 30;
+                      try {
+                        dim = U.getDaysInMonth(y, m);
+                      } catch (e) {
+                        console.warn('[hijri dob] getDaysInMonth', e);
+                      }
+                      if (dim !== 29 && dim !== 30) dim = 30;
+                      for (let d = 1; d <= dim; d++) {
+                        const opt = document.createElement('option');
+                        opt.value = String(d);
+                        opt.textContent = String(d);
+                        daySel.appendChild(opt);
+                      }
+                      const prevN = parseInt(prev, 10);
+                      if (prev && !isNaN(prevN) && prevN >= 1 && prevN <= dim) daySel.value = String(prevN);
+                    }
+                    function syncHijriDobFromSelects() {
+                      fillDays();
+                      const y = yearSel.value;
+                      const m = monthSel.value;
+                      const d = daySel.value;
+                      if (!y || !m || !d) {
+                        hHidden.value = '';
+                      } else {
+                        hHidden.value = y + '-' + pad(parseInt(m, 10)) + '-' + pad(parseInt(d, 10));
+                      }
+                      const type = document.getElementById('dob_calendar_type');
+                      const mainHidden = document.getElementById('date_of_birth');
+                      if (type && type.value === 'hijri' && mainHidden) mainHidden.value = hHidden.value;
+                    }
+                    window.syncHijriDobFromSelects = syncHijriDobFromSelects;
+                    const nowH = U.gregorianToHijri(new Date());
+                    const maxY = nowH.hy;
+                    const minY = Math.max(U.minCalendarYear, nowH.hy - 120);
+                    clearSelect(yearSel);
+                    const yPh = document.createElement('option');
+                    yPh.value = '';
+                    yPh.textContent = 'السنة';
+                    yearSel.appendChild(yPh);
+                    for (let y = maxY; y >= minY; y--) {
+                      const opt = document.createElement('option');
+                      opt.value = String(y);
+                      opt.textContent = String(y);
+                      yearSel.appendChild(opt);
+                    }
+                    clearSelect(monthSel);
+                    const mPh = document.createElement('option');
+                    mPh.value = '';
+                    mPh.textContent = 'الشهر';
+                    monthSel.appendChild(mPh);
+                    for (let m = 1; m <= 12; m++) {
+                      const opt = document.createElement('option');
+                      opt.value = String(m);
+                      opt.textContent = monthNames[m - 1] || String(m);
+                      monthSel.appendChild(opt);
+                    }
+                    clearSelect(daySel);
+                    const dPh = document.createElement('option');
+                    dPh.value = '';
+                    dPh.textContent = 'اليوم';
+                    daySel.appendChild(dPh);
+                    function onYearOrMonth() {
+                      syncHijriDobFromSelects();
+                    }
+                    yearSel.addEventListener('change', onYearOrMonth);
+                    monthSel.addEventListener('change', onYearOrMonth);
+                    yearSel.addEventListener('input', onYearOrMonth);
+                    monthSel.addEventListener('input', onYearOrMonth);
+                    daySel.addEventListener('change', syncHijriDobFromSelects);
+                  }
+                <\/script>
                 <script>
-                  (function(){
-                    var g=document.getElementById('date_of_birth_gregorian'),h=document.getElementById('date_of_birth_hijri'),hidden=document.getElementById('date_of_birth'),type=document.getElementById('dob_calendar_type'),lbl=document.getElementById('dob_calendar_label'),btnG=document.getElementById('dob_toggle_gregorian'),btnH=document.getElementById('dob_toggle_hijri');
-                    function setGregorian(){ g.style.display=''; h.style.display='none'; type.value='gregorian'; lbl.textContent='ميلادي'; hidden.value=g.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100'; }
-                    function setHijri(){ g.style.display='none'; h.style.display=''; type.value='hijri'; lbl.textContent='هجري'; hidden.value=h.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white'; }
-                    btnG.onclick=setGregorian; btnH.onclick=setHijri;
-                    g.onchange=function(){ if(type.value==='gregorian') hidden.value=g.value||''; };
-                    h.oninput=h.onchange=function(){ if(type.value==='hijri') hidden.value=h.value||''; };
-                    hidden.value = type.value==='hijri' ? (h.value||'') : (g.value||'');
-                  })();
+                  document.addEventListener('DOMContentLoaded', function () {
+                    var g = document.getElementById('date_of_birth_gregorian');
+                    var hWrap = document.getElementById('hijri_dob_wrap');
+                    var hHidden = document.getElementById('date_of_birth_hijri');
+                    var hidden = document.getElementById('date_of_birth');
+                    var type = document.getElementById('dob_calendar_type');
+                    var lbl = document.getElementById('dob_calendar_label');
+                    var btnG = document.getElementById('dob_toggle_gregorian');
+                    var btnH = document.getElementById('dob_toggle_hijri');
+                    if (!g || !hWrap || !hHidden || !hidden || !type || !lbl || !btnG || !btnH) return;
+                    function setGregorian() {
+                      g.style.display = '';
+                      hWrap.style.display = 'none';
+                      type.value = 'gregorian';
+                      lbl.textContent = 'ميلادي';
+                      hidden.value = g.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
+                    }
+                    function setHijri() {
+                      g.style.display = 'none';
+                      hWrap.style.display = 'flex';
+                      type.value = 'hijri';
+                      lbl.textContent = 'هجري';
+                      if (typeof window.syncHijriDobFromSelects === 'function') window.syncHijriDobFromSelects();
+                      hidden.value = hHidden.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
+                    }
+                    btnG.onclick = setGregorian;
+                    btnH.onclick = setHijri;
+                    g.onchange = function () { if (type.value === 'gregorian') hidden.value = g.value || ''; };
+                    hidden.value = type.value === 'hijri' ? (hHidden.value || '') : (g.value || '');
+                  });
                 <\/script>
               </div>
               
@@ -19384,6 +26438,40 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               </div>
             </div>
 
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-2">
+                <i class="fas fa-sticky-note text-gray-600 ml-1"></i>
+                ملاحظات
+              </label>
+              <textarea name="notes" rows="2"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                        placeholder="أي ملاحظات إضافية عن العميل (اختياري)"></textarea>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
+              <h3 class="text-sm font-bold text-gray-700 mb-3">
+                <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
+                الحلول المقترحة
+              </h3>
+              <input type="hidden" name="solutions_json" id="solutions_json" value="[]">
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-300 text-right">
+                      <th class="py-2 px-2 w-20">رقم الحل</th>
+                      <th class="py-2 px-2">نص الحل</th>
+                      <th class="py-2 px-2 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="add-solutions-tbody"></tbody>
+                </table>
+              </div>
+              <button type="button" id="add-solution-row" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                <i class="fas fa-plus ml-1"></i>
+                إضافة صف
+              </button>
+            </div>
+
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
               <h3 class="text-sm font-bold text-gray-700 mb-3">
                 <i class="fas fa-credit-card text-red-600 ml-1"></i>
@@ -19446,21 +26534,64 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             updateJobTypeVisibility();
           })();
 
+          (function solutionsTable() {
+            var tbody = document.getElementById('add-solutions-tbody');
+            var addBtn = document.getElementById('add-solution-row');
+            var hidden = document.getElementById('solutions_json');
+            if (!tbody || !addBtn || !hidden) return;
+            function refreshNumbers() {
+              var rows = tbody.querySelectorAll('tr');
+              for (var r = 0; r < rows.length; r++) {
+                var cell = rows[r].querySelector('.sol-num-cell');
+                if (cell) cell.textContent = String(r + 1);
+              }
+            }
+            function addRow(data) {
+              data = data || {};
+              var tr = document.createElement('tr');
+              tr.className = 'border-b border-gray-200';
+              tr.innerHTML = '<td class="py-1 px-2 sol-num-cell text-center text-gray-700 font-medium w-20">1</td>' +
+                '<td class="py-1 px-2"><input type="text" class="sol-note w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder=""></td>' +
+                '<td class="py-1 px-2"><button type="button" class="sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+              if (data.note) tr.querySelector('.sol-note').value = data.note;
+              tr.querySelector('.sol-remove').onclick = function() { tr.remove(); refreshNumbers(); };
+              tbody.appendChild(tr);
+              refreshNumbers();
+            }
+            addBtn.onclick = function() { addRow(); };
+            addRow();
+          })();
+
           (function obligationsTable() {
             var tbody = document.getElementById('add-obligations-tbody');
             var addBtn = document.getElementById('add-obligation-row');
             var hidden = document.getElementById('obligations_json');
             if (!tbody || !addBtn || !hidden) return;
+            var obligationTypeNames = ${JSON.stringify(a)};
+            function esc(s) {
+              return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            }
+            function buildObligTypeSelect(selectedValue) {
+              var sel = selectedValue == null ? '' : String(selectedValue);
+              var opts = '<option value="">— اختر نوع الالتزام —</option>';
+              for (var i = 0; i < obligationTypeNames.length; i++) {
+                var name = obligationTypeNames[i];
+                opts += '<option value="' + esc(name) + '"' + (sel === name ? ' selected' : '') + '>' + esc(name) + '</option>';
+              }
+              if (sel && obligationTypeNames.indexOf(sel) === -1) {
+                opts += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
+              }
+              return '<select class="oblig-type w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>';
+            }
             function addRow(data) {
               data = data || {};
               var tr = document.createElement('tr');
               tr.className = 'border-b border-gray-200';
-              tr.innerHTML = '<td class="py-1 px-2"><input type="text" class="oblig-type w-full px-2 py-1.5 border rounded" placeholder="مثال: قرض شخصي"></td>' +
+              tr.innerHTML = '<td class="py-1 px-2">' + buildObligTypeSelect(data.obligation_type || '') + '</td>' +
                 '<td class="py-1 px-2"><input type="number" class="oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                 '<td class="py-1 px-2"><input type="number" class="oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                 '<td class="py-1 px-2"><input type="date" class="oblig-due w-full px-2 py-1.5 border rounded" placeholder=""></td>' +
                 '<td class="py-1 px-2"><button type="button" class="oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-              if (data.obligation_type) tr.querySelector('.oblig-type').value = data.obligation_type;
               if (data.total_amount != null) tr.querySelector('.oblig-total').value = data.total_amount;
               if (data.monthly_installment != null) tr.querySelector('.oblig-monthly').value = data.monthly_installment;
               if (data.due_date) tr.querySelector('.oblig-due').value = data.due_date;
@@ -19502,6 +26633,17 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 arr.push({ obligation_type: typeEl.value || '', total_amount: total, monthly_installment: monthly, due_date: dueEl ? (dueEl.value || null) : null });
               });
               obligationsJsonEl.value = JSON.stringify(arr);
+            }
+            var solutionsJsonEl = document.getElementById('solutions_json');
+            if (solutionsJsonEl) {
+              var solRows = document.querySelectorAll('#add-solutions-tbody tr');
+              var solArr = [];
+              solRows.forEach(function(tr) {
+                var noteEl = tr.querySelector('.sol-note');
+                if (!noteEl) return;
+                solArr.push({ note: (noteEl.value || '').trim() });
+              });
+              solutionsJsonEl.value = JSON.stringify(solArr);
             }
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
@@ -19545,12 +26687,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <\/script>
     </body>
     </html>
-  `));c.get("/admin/customer-assignment",async e=>{const t=await x(e),a=t.roleId===1,s=t.roleId===1||t.roleId===2,r=t.roleId===1||t.roleId===2||t.roleId===3,o=e.req.query("tenant_id")||1,l=await e.env.DB.prepare(`
+  `)});c.get("/admin/customer-assignment",async e=>{const t=await x(e),a=t.roleId===1,s=t.roleId===1||t.roleId===2,n=t.roleId===1||t.roleId===2||t.roleId===3,l=O(e.req.query("tenant_id"))??null,r=a?l??1:t.tenantId??1,i=await e.env.DB.prepare(`
     SELECT id, username, full_name, email
     FROM users 
-    WHERE role_id = 4 AND tenant_id = ?
+    WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
     ORDER BY full_name
-  `).bind(o).all(),i=await e.env.DB.prepare(`
+  `).bind(r).all(),o=await e.env.DB.prepare(`
     SELECT 
       c.*,
       ca.employee_id,
@@ -19560,7 +26702,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     LEFT JOIN users u ON ca.employee_id = u.id
     WHERE c.tenant_id = ?
     ORDER BY c.created_at DESC
-  `).bind(o).all(),n=await e.env.DB.prepare(`
+  `).bind(r).all(),d=await e.env.DB.prepare(`
     SELECT 
       u.id,
       u.full_name,
@@ -19569,10 +26711,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
     FROM users u
     LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
     LEFT JOIN customers c ON ca.customer_id = c.id AND c.tenant_id = ?
-    WHERE u.role_id = 4 AND u.tenant_id = ?
+    WHERE u.role_id IN (3, 4, 13, 14) AND u.tenant_id = ?
     GROUP BY u.id
     ORDER BY customer_count DESC
-  `).bind(o,o).all(),d=`
+  `).bind(r,r).all(),p=`
     <!DOCTYPE html>
     <html dir="rtl" lang="ar">
     <head>
@@ -19599,7 +26741,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
         
-        ${C()}
+        ${j()}
       </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
@@ -19665,7 +26807,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <i class="fas fa-users text-blue-600 group-hover:scale-110 transition-transform"></i>
               <span>العملاء</span>
             </a>
-            <a href="/admin/customer-assignment?tenant_id=${o}" class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg">
+            <a href="/admin/customer-assignment?tenant_id=${r}" class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg">
               <i class="fas fa-users-cog text-blue-600"></i>
               <span class="font-semibold">توزيع العملاء</span>
             </a>
@@ -19715,7 +26857,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           </div>
           `:""}
 
-          ${r?`
+          ${n?`
           <div class="border-t border-gray-200 my-2"></div>
 
           <!-- الموارد البشرية -->
@@ -19770,10 +26912,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
 
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          ${n.results.map((p,u)=>`
-              <div class="stat-card bg-gradient-to-br ${["from-blue-500 to-blue-600","from-green-500 to-green-600","from-purple-500 to-purple-600","from-orange-500 to-orange-600","from-pink-500 to-pink-600"][u%5]} text-white rounded-xl p-5 shadow-lg">
-                <div class="text-sm opacity-90 mb-1">${p.full_name}</div>
-                <div class="text-3xl font-bold">${p.customer_count}</div>
+          ${d.results.map((u,m)=>`
+              <div class="stat-card bg-gradient-to-br ${["from-blue-500 to-blue-600","from-green-500 to-green-600","from-purple-500 to-purple-600","from-orange-500 to-orange-600","from-pink-500 to-pink-600"][m%5]} text-white rounded-xl p-5 shadow-lg">
+                <div class="text-sm opacity-90 mb-1">${u.full_name}</div>
+                <div class="text-3xl font-bold">${u.customer_count}</div>
                 <div class="text-xs opacity-80 mt-1">عميل مخصص</div>
               </div>
             `).join("")}
@@ -19806,7 +26948,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           <div class="p-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <h2 class="text-2xl font-bold">
               <i class="fas fa-list ml-2"></i>
-              قائمة العملاء (${i.results.length})
+              قائمة العملاء (${o.results.length})
             </h2>
           </div>
           
@@ -19816,8 +26958,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <select id="filterEmployee" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
                 <option value="">كل الموظفين</option>
                 <option value="unassigned">غير مخصص</option>
-                ${n.results.map(p=>`
-                  <option value="${p.id}">${p.full_name} (${p.customer_count})</option>
+                ${d.results.map(u=>`
+                  <option value="${u.id}">${u.full_name} (${u.customer_count})</option>
                 `).join("")}
               </select>
             </div>
@@ -19838,26 +26980,26 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </tr>
                 </thead>
                 <tbody id="customersTableBody">
-                  ${i.results.map(p=>`
-                    <tr class="border-t hover:bg-gray-50 customer-row" data-customer-id="${p.id}" data-employee-id="${p.employee_id||""}">
+                  ${o.results.map(u=>`
+                    <tr class="border-t hover:bg-gray-50 customer-row" data-customer-id="${u.id}" data-employee-id="${u.employee_id||""}">
                       <td class="px-4 py-3">
-                        <input type="checkbox" class="customer-checkbox rounded" value="${p.id}">
+                        <input type="checkbox" class="customer-checkbox rounded" value="${u.id}">
                       </td>
-                      <td class="px-4 py-3">#${p.id}</td>
-                      <td class="px-4 py-3 font-semibold">${p.full_name||"غير محدد"}</td>
-                      <td class="px-4 py-3">${p.phone||"غير محدد"}</td>
-                      <td class="px-4 py-3">${p.email||"غير محدد"}</td>
+                      <td class="px-4 py-3">#${u.id}</td>
+                      <td class="px-4 py-3 font-semibold">${u.full_name||"غير محدد"}</td>
+                      <td class="px-4 py-3">${u.phone||"غير محدد"}</td>
+                      <td class="px-4 py-3">${u.email||"غير محدد"}</td>
                       <td class="px-4 py-3">
-                        ${p.assigned_employee_name?`<span class="employee-badge assigned">${p.assigned_employee_name}</span>`:'<span class="employee-badge unassigned">غير مخصص</span>'}
+                        ${u.assigned_employee_name?`<span class="employee-badge assigned">${u.assigned_employee_name}</span>`:'<span class="employee-badge unassigned">غير مخصص</span>'}
                       </td>
                       <td class="px-4 py-3">
                         <select class="assignment-select px-3 py-1 border border-gray-300 rounded text-sm" 
-                                data-customer-id="${p.id}"
-                                onchange="assignCustomer(${p.id}, this.value)">
+                                data-customer-id="${u.id}"
+                                onchange="assignCustomer(${u.id}, this.value)">
                           <option value="">اختر موظف...</option>
-                          ${l.results.map(u=>`
-                            <option value="${u.id}" ${p.employee_id==u.id?"selected":""}>
-                              ${u.full_name}
+                          ${i.results.map(m=>`
+                            <option value="${m.id}" ${u.employee_id==m.id?"selected":""}>
+                              ${m.full_name}
                             </option>
                           `).join("")}
                         </select>
@@ -19895,8 +27037,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           </label>
           <select id="bulkAssignEmployeeSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
             <option value="">اختر موظف...</option>
-            ${l.results.map(p=>`
-              <option value="${p.id}">${p.full_name}${p.username?` (${p.username})`:""}</option>
+            ${i.results.map(u=>`
+              <option value="${u.id}">${u.full_name}${u.username?` (${u.username})`:""}</option>
             `).join("")}
           </select>
 
@@ -20081,7 +27223,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           try {
             // Get tenant_id from URL parameter
             const urlParams = new URLSearchParams(window.location.search);
-            const tenantId = urlParams.get('tenant_id') || '${o}';
+            const tenantId = urlParams.get('tenant_id') || '${r}';
             
             const response = await fetch('/api/customer-assignment/auto-distribute', {
               method: 'POST',
@@ -20203,14 +27345,14 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       <\/script>
     </body>
     </html>
-  `;return e.html(d)});c.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json();if(!a)return await e.env.DB.prepare(`
+  `;return e.html(p)});c.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json(),n=await x(e),l=n.roleId===1,r=l?O(e.req.query("tenant_id"))??n.tenantId??1:n.tenantId??1;if(!a){const u=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();return u?!l&&u.tenant_id!==r?e.json({success:!1,error:"غير مصرح"},403):(await e.env.DB.prepare(`
         DELETE FROM customer_assignments WHERE customer_id = ?
-      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"});const r=await e.env.DB.prepare(`
+      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"})):e.json({success:!1,error:"العميل غير موجود"},404)}const i=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!i)return e.json({success:!1,error:"الموظف غير موجود"},404);const o=M(i.role_id);if(o!==3&&o!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!l&&i.tenant_id!==r)return e.json({success:!1,error:"غير مصرح"},403);const d=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();if(!d)return e.json({success:!1,error:"العميل غير موجود"},404);if(!l&&d.tenant_id!==r)return e.json({success:!1,error:"غير مصرح"},403);const p=await e.env.DB.prepare(`
       SELECT * FROM customer_assignments WHERE customer_id = ?
-    `).bind(t).first();return r?(await e.env.DB.prepare(`
+    `).bind(t).first();return p?(await e.env.DB.prepare(`
         INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
         VALUES (?, ?, ?, 1, ?)
-      `).bind(t,r.employee_id,a,s||"").run(),await e.env.DB.prepare(`
+      `).bind(t,p.employee_id,a,s||"").run(),await e.env.DB.prepare(`
         UPDATE customer_assignments 
         SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now'), notes = ?
         WHERE customer_id = ?
@@ -20220,31 +27362,31 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       `).bind(t,a,s||"").run(),await e.env.DB.prepare(`
         INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
         VALUES (?, NULL, ?, 1, ?)
-      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/auto-distribute",async e=>{try{const a=(await e.req.json().catch(()=>({}))).tenant_id||e.req.query("tenant_id")||1,s=await e.env.DB.prepare(`
+      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/auto-distribute",async e=>{try{const t=await x(e),a=t.roleId===1,s=await e.req.json().catch(()=>({})),n=O(s?.tenant_id?.toString?.())??O(e.req.query("tenant_id"))??null,l=a?n??1:t.tenantId??1,r=await e.env.DB.prepare(`
       SELECT id FROM users 
-      WHERE role_id = 4 AND tenant_id = ?
+      WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
       ORDER BY id
-    `).bind(a).all();if(s.results.length===0)return e.json({success:!1,error:"لا يوجد موظفين في هذه الشركة"});const r=await e.env.DB.prepare(`
+    `).bind(l).all();if(r.results.length===0)return e.json({success:!1,error:"لا يوجد موظفين في هذه الشركة"});const i=await e.env.DB.prepare(`
       SELECT c.id 
       FROM customers c
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       WHERE ca.customer_id IS NULL AND c.tenant_id = ?
       ORDER BY c.id
-    `).bind(a).all();let o=0;const l=s.results.length;for(let i=0;i<r.results.length;i++){const n=r.results[i],d=s.results[i%l];await e.env.DB.prepare(`
+    `).bind(l).all();let o=0;const d=r.results.length;for(let p=0;p<i.results.length;p++){const u=i.results[p],m=r.results[p%d];await e.env.DB.prepare(`
         INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
         VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(n.id,d.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
+      `).bind(u.id,m.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:d})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/clear-all",async e=>{try{const t=await e.env.DB.prepare(`
       DELETE FROM customer_assignments
-    `).run();return e.json({success:!0,cleared_count:t.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json();let s=0;for(const r of t)await e.env.DB.prepare(`
+    `).run();return e.json({success:!0,cleared_count:t.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json(),s=await x(e),n=s.roleId===1,l=n?O(e.req.query("tenant_id"))??s.tenantId??1:s.tenantId??1,r=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!r)return e.json({success:!1,error:"الموظف غير موجود"},404);const i=M(r.role_id);if(i!==3&&i!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!n&&r.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);let o=0;for(const d of t){const p=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(d).first();if(!p||!n&&p.tenant_id!==l)continue;await e.env.DB.prepare(`
         SELECT * FROM customer_assignments WHERE customer_id = ?
-      `).bind(r).first()?await e.env.DB.prepare(`
+      `).bind(d).first()?await e.env.DB.prepare(`
           UPDATE customer_assignments 
           SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now')
           WHERE customer_id = ?
-        `).bind(a,r).run():await e.env.DB.prepare(`
+        `).bind(a,d).run():await e.env.DB.prepare(`
           INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
           VALUES (?, ?, 1)
-        `).bind(r,a).run(),s++;return e.json({success:!0,assigned_count:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/admin/banks",async e=>{try{let t=e.req.query("tenant_id");if(!t){const o=e.req.header("Authorization"),l=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],i=o?.replace("Bearer ","")||l;if(i)try{const d=atob(i).split(":");t=d[1]!=="null"?d[1]:null}catch{}}let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(parseInt(t)).first());let s="SELECT * FROM banks";t?s+=" WHERE tenant_id = ?":s+=" WHERE 1=1",s+=" ORDER BY bank_name";const r=t?await e.env.DB.prepare(s).bind(parseInt(t)).all():await e.env.DB.prepare(s).all();return e.html(`
+        `).bind(d,a).run(),o++}return e.json({success:!0,assigned_count:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/admin/banks",async e=>{try{let t=e.req.query("tenant_id");if(!t){const l=e.req.header("Authorization"),r=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],i=l?.replace("Bearer ","")||r;if(i)try{const d=atob(i).split(":");t=d[1]!=="null"?d[1]:void 0}catch{}}let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(parseInt(t)).first());let s="SELECT * FROM banks";t?s+=" WHERE tenant_id = ?":s+=" WHERE 1=1",s+=" ORDER BY bank_name";const n=t?await e.env.DB.prepare(s).bind(parseInt(t)).all():await e.env.DB.prepare(s).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -20266,10 +27408,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 <i class="fas fa-university text-blue-600 ml-2"></i>
                 البنوك ${a?"- "+a.company_name:"(جميع الشركات)"}
               </h1>
-              <span class="text-2xl font-bold text-blue-600">${r.results.length} بنك</span>
+              <span class="text-2xl font-bold text-blue-600">${n.results.length} بنك</span>
             </div>
             
-            ${r.results.length===0?`
+            ${n.results.length===0?`
               <div class="text-center py-12">
                 <i class="fas fa-university text-gray-300 text-6xl mb-4"></i>
                 <p class="text-gray-500 text-xl">لا توجد بنوك لهذه الشركة</p>
@@ -20286,14 +27428,14 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
-                    ${r.results.map((o,l)=>`
+                    ${n.results.map((l,r)=>`
                       <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 text-sm">${l+1}</td>
-                        <td class="px-6 py-4 font-bold">${o.bank_name}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${o.bank_code||"-"}</td>
+                        <td class="px-6 py-4 text-sm">${r+1}</td>
+                        <td class="px-6 py-4 font-bold">${l.bank_name}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${l.bank_code||"-"}</td>
                         <td class="px-6 py-4 text-sm">
                           <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                            Tenant ${o.tenant_id||"N/A"}
+                            Tenant ${l.tenant_id||"N/A"}
                           </span>
                         </td>
                       </tr>
@@ -20306,7 +27448,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null),s=null;a&&(s=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(a).first());let r=`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null),s=null;a&&(s=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(a).first());let n=`
       SELECT 
         r.*,
         b.bank_name,
@@ -20314,7 +27456,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM bank_financing_rates r
       LEFT JOIN banks b ON r.bank_id = b.id
       LEFT JOIN financing_types f ON r.financing_type_id = f.id
-    `,o=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(r+=" WHERE r.tenant_id = ?",o.push(t.tenantId),a=t.tenantId.toString()):a&&(r+=" WHERE r.tenant_id = ?",o.push(a))),r+=" ORDER BY b.bank_name, f.type_name";const l=o.length>0?await e.env.DB.prepare(r).bind(...o).all():await e.env.DB.prepare(r).all(),i=t.roleId===1||t.roleId===2;return e.html(`
+    `,l=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(n+=" WHERE r.tenant_id = ?",l.push(t.tenantId),a=t.tenantId.toString()):a&&(n+=" WHERE r.tenant_id = ?",l.push(a))),n+=" ORDER BY b.bank_name, f.type_name";const r=l.length>0?await e.env.DB.prepare(n).bind(...l).all():await e.env.DB.prepare(n).all(),i=t.roleId===1||t.roleId===2;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -20364,7 +27506,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
           }
           
-          ${C()}
+          ${j()}
           
           /* Dropdown menu styles */
           .csv-dropdown {
@@ -20414,7 +27556,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <i class="fas fa-percent text-green-600 ml-2"></i>
                   النسب والأسعار ${s?"- "+s.company_name:"(جميع الشركات)"}
                 </h1>
-                <span class="text-lg font-semibold text-green-600 mt-1 block">${l.results.length} نسبة</span>
+                <span class="text-lg font-semibold text-green-600 mt-1 block">${r.results.length} نسبة</span>
               </div>
               <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                 <!-- Search Box -->
@@ -20458,7 +27600,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               </div>
             </div>
             
-            ${l.results.length===0?`
+            ${r.results.length===0?`
               <div class="text-center py-12">
                 <i class="fas fa-percent text-gray-300 text-6xl mb-4"></i>
                 <p class="text-gray-500 text-xl">لا توجد نسب لهذه الشركة</p>
@@ -20479,25 +27621,25 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200">
-                    ${l.results.map((n,d)=>`
+                    ${r.results.map((o,d)=>`
                       <tr class="hover:bg-gray-50">
                         <td class="px-4 py-4 text-sm">${d+1}</td>
-                        <td class="px-4 py-4 font-bold">${n.bank_name||"-"}</td>
-                        <td class="px-4 py-4 text-sm">${n.financing_type_name||"-"}</td>
+                        <td class="px-4 py-4 font-bold">${o.bank_name||"-"}</td>
+                        <td class="px-4 py-4 text-sm">${o.financing_type_name||"-"}</td>
                         <td class="px-4 py-4">
                           <span class="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                            ${n.rate}%
+                            ${o.rate}%
                           </span>
                         </td>
-                        <td class="px-4 py-4 text-sm">${n.min_amount?n.min_amount.toLocaleString():"-"} ريال</td>
-                        <td class="px-4 py-4 text-sm">${n.max_amount?n.max_amount.toLocaleString():"-"} ريال</td>
-                        <td class="px-4 py-4 text-sm">${n.min_duration||"-"} - ${n.max_duration||"-"} شهر</td>
+                        <td class="px-4 py-4 text-sm">${o.min_amount?o.min_amount.toLocaleString():"-"} ريال</td>
+                        <td class="px-4 py-4 text-sm">${o.max_amount?o.max_amount.toLocaleString():"-"} ريال</td>
+                        <td class="px-4 py-4 text-sm">${o.min_duration||"-"} - ${o.max_duration||"-"} شهر</td>
                         ${i?`
                           <td class="px-4 py-4 text-sm">
-                            <a href="/admin/rates/edit/${n.id}?tenant_id=${a||n.tenant_id}" class="text-blue-600 hover:text-blue-800 ml-2" title="تعديل">
+                            <a href="/admin/rates/edit/${o.id}?tenant_id=${a||o.tenant_id}" class="text-blue-600 hover:text-blue-800 ml-2" title="تعديل">
                               <i class="fas fa-edit"></i>
                             </a>
-                            <button onclick="deleteRate(${n.id})" class="text-red-600 hover:text-red-800" title="حذف">
+                            <button onclick="deleteRate(${o.id})" class="text-red-600 hover:text-red-800" title="حذف">
                               <i class="fas fa-trash"></i>
                             </button>
                           </td>
@@ -21057,13 +28199,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Et(a||"",s.results,r.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});c.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Mt(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});c.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),o=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(kt(a,s,r.results,o.results))});c.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),l=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Nt(a,s,n.results,l.results))});c.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -21097,7 +28239,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             </div>
         </body>
         </html>
-      `);let a="SELECT * FROM customers",s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
+      `);let a="SELECT * FROM customers",s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -21142,7 +28284,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
           }
           
-          ${C()}
+          ${j()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -21154,7 +28296,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             <div class="flex justify-between items-center mb-4">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-users text-green-600 ml-2"></i>
-                العملاء (<span id="totalCount">${r.results.length}</span>)
+                العملاء (<span id="totalCount">${n.results.length}</span>)
               </h1>
               
               <div class="flex gap-3">
@@ -21170,7 +28312,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
-                ${o?`
+                ${l?`
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة عميل جديد
@@ -21243,26 +28385,26 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${r.results.map(l=>`
-                  <tr class="hover:bg-gray-50" data-name="${l.full_name||""}" data-phone="${l.phone||""}" data-email="${l.email||""}" data-created-at="${l.created_at||""}">
-                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${l.id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${l.full_name||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.phone||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.email||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(l.created_at).toLocaleDateString("ar-SA")}</td>
+                ${n.results.map(r=>`
+                  <tr class="hover:bg-gray-50" data-name="${r.full_name||""}" data-phone="${r.phone||""}" data-email="${r.email||""}" data-created-at="${r.created_at||""}">
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${r.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${r.full_name||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${r.phone||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${r.email||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(r.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
                       <div class="flex items-center justify-end gap-2">
-                        <a href="/admin/customers/${l.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm" title="تقرير العميل الكامل">
+                        <a href="/admin/customers/${r.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm" title="تقرير العميل الكامل">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
-                        <a href="/admin/customers/${l.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                        <a href="/admin/customers/${r.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-eye"></i> عرض
                         </a>
-                        ${o?`
-                        <a href="/admin/customers/${l.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
+                        ${l?`
+                        <a href="/admin/customers/${r.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-edit"></i> تعديل
                         </a>
-                        <a href="/admin/customers/${l.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                        <a href="/admin/customers/${r.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
                           <i class="fas fa-trash"></i> حذف
                         </a>
                         `:""}
@@ -21344,7 +28486,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           function exportToCSV() {
             const data = [
               ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${r.results.map(l=>`['${l.id}', '${l.full_name||"-"}', '${l.phone||"-"}', '${l.email||"-"}', '${l.national_id||"-"}', '${new Date(l.created_at).toLocaleDateString("ar-SA")}']`).join(`,
+              ${n.results.map(r=>`['${r.id}', '${r.full_name||"-"}', '${r.phone||"-"}', '${r.email||"-"}', '${r.national_id||"-"}', '${new Date(r.created_at).toLocaleDateString("ar-SA")}']`).join(`,
               `)}
             ];
             
@@ -21751,7 +28893,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             50% { opacity: .5; }
           }
           
-          ${C()}
+          ${j()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -22467,7 +29609,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
-    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE c.assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),o=t.roleId!==3;return e.html(`
+    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.userId?(a+=" WHERE c.assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -22512,7 +29654,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             width: max-content;
           }
           
-          ${C()}
+          ${j()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -22544,11 +29686,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             <div class="flex justify-between items-center mb-4">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-file-invoice text-purple-600 ml-2"></i>
-                طلبات التمويل (<span id="totalCount">${r.results.length}</span>)
+                طلبات التمويل (<span id="totalCount">${n.results.length}</span>)
               </h1>
               
               <div class="flex gap-3">
-                ${o?`
+                ${l?`
                 <a href="/admin/requests/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
@@ -22620,37 +29762,37 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${r.results.map(l=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[l.status]||l.status,p={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"}[l.status]||"bg-gray-100 text-gray-800";return`
+                ${n.results.map(r=>{const o={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[r.status]||r.status,p={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"}[r.status]||"bg-gray-100 text-gray-800";return`
                   <tr class="hover:bg-gray-50" 
-                      data-customer="${l.customer_name||""}" 
-                      data-bank="${l.bank_name||""}" 
-                      data-status="${n}">
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${l.customer_name||"عميل #"+l.customer_id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.bank_name||"بنك #"+(l.selected_bank_id||"-")}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.requested_amount?.toLocaleString("ar-SA")} ريال</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${l.duration_months} شهر</td>
+                      data-customer="${r.customer_name||""}" 
+                      data-bank="${r.bank_name||""}" 
+                      data-status="${o}">
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${r.customer_name||"عميل #"+r.customer_id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${r.bank_name||"بنك #"+(r.selected_bank_id||"-")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${r.requested_amount?.toLocaleString("ar-SA")} ريال</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${r.duration_months} شهر</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <span class="px-2 py-1 text-xs rounded-full ${p}">
-                        ${n}
+                        ${o}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(l.created_at).toLocaleDateString("ar-SA")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(r.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="flex gap-2 justify-end">
-                        <a href="/admin/requests/${l.id}/workflow" class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-2 rounded text-xs transition-all shadow-md" title="الجدول الزمني التفصيلي">
+                        <a href="/admin/requests/${r.id}/workflow" class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-2 rounded text-xs transition-all shadow-md" title="الجدول الزمني التفصيلي">
                           <i class="fas fa-clock"></i> ⏱️ Timeline
                         </a>
-                        <a href="/admin/requests/${l.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-xs transition-all" title="تقرير الطلب الكامل">
+                        <a href="/admin/requests/${r.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-xs transition-all" title="تقرير الطلب الكامل">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
-                        <a href="/admin/requests/${l.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
+                        <a href="/admin/requests/${r.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-eye"></i> عرض
                         </a>
-                        ${o?`
-                        <a href="/admin/requests/${l.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
+                        ${l?`
+                        <a href="/admin/requests/${r.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-edit"></i> تعديل
                         </a>
-                        <a href="/admin/requests/${l.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
+                        <a href="/admin/requests/${r.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
                           <i class="fas fa-trash"></i> حذف
                         </a>
                         `:""}
@@ -22717,7 +29859,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           function exportToCSV() {
             const data = [
               ['العميل', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
-              ${r.results.map(l=>{const n={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[l.status]||l.status,d=l.customer_name||`عميل #${l.customer_id}`,p=l.bank_name||`بنك #${l.selected_bank_id||"-"}`;return`['${d}', '${p}', '${l.requested_amount||0}', '${l.duration_months}', '${n}', '${new Date(l.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
+              ${n.results.map(r=>{const o={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[r.status]||r.status,d=r.customer_name||`عميل #${r.customer_id}`,p=r.bank_name||`بنك #${r.selected_bank_id||"-"}`;return`['${d}', '${p}', '${r.requested_amount||0}', '${r.duration_months}', '${o}', '${new Date(r.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
               `)}
             ];
             
@@ -22735,7 +29877,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});c.get("/admin/requests/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});c.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");let a="SELECT id, full_name, phone FROM customers";const s=[];if(t.roleId!==1)if(t.roleId===2||t.roleId===3){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);a+=" WHERE tenant_id = ?",s.push(t.tenantId)}else t.roleId===4?(a+=" WHERE assigned_to = ?",s.push(t.userId)):a+=" WHERE 1 = 0";a+=" ORDER BY full_name";const r=s.length?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();let o="SELECT id, bank_name FROM banks WHERE is_active = 1";const l=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);o+=" AND (tenant_id = ? OR tenant_id IS NULL)",l.push(t.tenantId)}o+=" ORDER BY bank_name";let i;try{i=l.length?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all()}catch(d){console.error("Error loading banks for /admin/requests/new:",d),i=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const n=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
+    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});c.get("/admin/requests/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});c.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await Ae(e,t);let s="SELECT id, bank_name FROM banks WHERE is_active = 1";const n=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);s+=" AND (tenant_id = ? OR tenant_id IS NULL)",n.push(t.tenantId)}s+=" ORDER BY bank_name";let l;try{l=n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()}catch(o){console.error("Error loading banks for /admin/requests/new:",o),l=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const r=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),i=JSON.stringify(a.map(o=>({id:o.id,name:o.full_name||"",text:`${o.full_name} - ${o.phone}`}))).replace(/</g,"\\u003c");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -22762,18 +29904,32 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             
             <form id="newRequestForm" action="/api/requests" method="POST" enctype="application/x-www-form-urlencoded" class="space-y-6">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- اختيار العميل -->
+                <!-- اختيار العميل (قائمة منسدلة مع بحث في الصف الأول) -->
                 <div class="md:col-span-2">
-                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <label class="block text-sm font-bold text-gray-700 mb-2" id="newRequestCustomerLabel">
                     <i class="fas fa-user text-blue-600 ml-1"></i>
                     العميل *
                   </label>
-                  <select name="customer_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">-- اختر العميل --</option>
-                    ${r.results.map(d=>`
-                      <option value="${d.id}">${d.full_name} - ${d.phone}</option>
-                    `).join("")}
-                  </select>
+                  <div class="relative" id="newRequestCustomerCombo">
+                    <input type="hidden" name="customer_id" id="newRequestCustomerId" value="" required>
+                    <button type="button" id="newRequestCustomerTrigger"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg text-right flex items-center justify-between gap-2 bg-white hover:border-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                            aria-expanded="false" aria-haspopup="listbox" aria-labelledby="newRequestCustomerLabel newRequestCustomerTriggerLabel">
+                      <span id="newRequestCustomerTriggerLabel" class="truncate text-gray-500">-- اختر العميل --</span>
+                      <i class="fas fa-chevron-down text-gray-400 shrink-0 text-sm transition-transform" id="newRequestCustomerChevron"></i>
+                    </button>
+                    <div id="newRequestCustomerPanel" class="hidden absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg flex flex-col max-h-72 overflow-hidden" role="presentation">
+                      <div class="p-2 border-b border-gray-200 shrink-0 bg-gray-50">
+                        <div class="relative">
+                          <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-sm"></i>
+                          <input type="text" id="newRequestCustomerFilter" autocomplete="off" role="combobox" aria-autocomplete="list"
+                                 class="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm bg-white"
+                                 placeholder="بحث بالاسم...">
+                        </div>
+                      </div>
+                      <ul id="newRequestCustomerOptions" class="overflow-y-auto py-1 min-h-0 flex-1" role="listbox"></ul>
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- نوع التمويل -->
@@ -22784,8 +29940,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </label>
                   <select name="financing_type_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">-- اختر نوع التمويل --</option>
-                    ${n.results.map(d=>`
-                      <option value="${d.id}">${d.type_name}</option>
+                    ${r.results.map(o=>`
+                      <option value="${o.id}">${o.type_name}</option>
                     `).join("")}
                   </select>
                 </div>
@@ -22814,8 +29970,31 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     <option value="36">36 شهر (3 سنوات)</option>
                     <option value="48">48 شهر (4 سنوات)</option>
                     <option value="60">60 شهر (5 سنوات)</option>
+                    <option value="72">72 شهر (6 سنوات)</option>
                     <option value="84">84 شهر (7 سنوات)</option>
+                    <option value="96">96 شهر (8 سنوات)</option>
+                    <option value="108">108 شهر (9 سنوات)</option>
                     <option value="120">120 شهر (10 سنوات)</option>
+                    <option value="132">132 شهر (11 سنوات)</option>
+                    <option value="144">144 شهر (12 سنوات)</option>
+                    <option value="156">156 شهر (13 سنوات)</option>
+                    <option value="168">168 شهر (14 سنوات)</option>
+                    <option value="180">180 شهر (15 سنوات)</option>
+                    <option value="192">192 شهر (16 سنوات)</option>
+                    <option value="204">204 شهر (17 سنوات)</option>
+                    <option value="216">216 شهر (18 سنوات)</option>
+                    <option value="228">228 شهر (19 سنوات)</option>
+                    <option value="240">240 شهر (20 سنوات)</option>
+                    <option value="252">252 شهر (21 سنوات)</option>
+                    <option value="264">264 شهر (22 سنوات)</option>
+                    <option value="276">276 شهر (23 سنوات)</option>
+                    <option value="288">288 شهر (24 سنوات)</option>
+                    <option value="300">300 شهر (25 سنوات)</option>
+                    <option value="312">312 شهر (26 سنوات)</option>
+                    <option value="324">324 شهر (27 سنوات)</option>
+                    <option value="336">336 شهر (28 سنوات)</option>
+                    <option value="348">348 شهر (29 سنوات)</option>
+                    <option value="360">360 شهر (30 سنوات)</option>
                   </select>
                 </div>
                 
@@ -22838,8 +30017,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </label>
                   <select name="selected_bank_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">-- اختر البنك (اختياري) --</option>
-                    ${i.results.map(d=>`
-                      <option value="${d.id}">${d.bank_name}</option>
+                    ${l.results.map(o=>`
+                      <option value="${o.id}">${o.bank_name}</option>
                     `).join("")}
                   </select>
                 </div>
@@ -22880,32 +30059,94 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </a>
               </div>
             </form>
-            <div class="mt-6 border-t pt-6">
-              <h2 class="text-lg font-bold text-gray-800 mb-3">
-                <i class="fas fa-terminal text-indigo-600 ml-2"></i>
-                سجلات المتصفح واستجابة الـ API
-              </h2>
-              <div id="browserLogs" class="bg-gray-900 text-green-200 text-sm rounded-lg p-4 max-h-64 overflow-auto whitespace-pre-wrap"></div>
-            </div>
           </div>
         </div>
+        <script type="application/json" id="newRequestCustomersJSON">${i}<\/script>
         <script>
           (function() {
-            const logsEl = document.getElementById('browserLogs');
             const form = document.getElementById('newRequestForm');
-
-            function writeLog(label, data) {
-              const timestamp = new Date().toLocaleTimeString('ar-SA');
-              const payload = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-              logsEl.textContent += '[' + timestamp + '] ' + label + '\\n' + payload + '\\n\\n';
-              logsEl.scrollTop = logsEl.scrollHeight;
+            const combo = document.getElementById('newRequestCustomerCombo');
+            const hidden = document.getElementById('newRequestCustomerId');
+            const trigger = document.getElementById('newRequestCustomerTrigger');
+            const triggerLabel = document.getElementById('newRequestCustomerTriggerLabel');
+            const chevron = document.getElementById('newRequestCustomerChevron');
+            const panel = document.getElementById('newRequestCustomerPanel');
+            const filterInput = document.getElementById('newRequestCustomerFilter');
+            const listEl = document.getElementById('newRequestCustomerOptions');
+            const jsonEl = document.getElementById('newRequestCustomersJSON');
+            var customerRows = [];
+            if (jsonEl && jsonEl.textContent) {
+              try { customerRows = JSON.parse(jsonEl.textContent); } catch (e) { customerRows = []; }
             }
-
+            function isOpen() { return panel && !panel.classList.contains('hidden'); }
+            function setOpen(open) {
+              if (!panel || !trigger || !chevron) return;
+              panel.classList.toggle('hidden', !open);
+              trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+              chevron.classList.toggle('rotate-180', open);
+              if (open && filterInput) {
+                filterInput.value = '';
+                renderCustomerList('');
+                setTimeout(function () { filterInput.focus(); }, 0);
+              }
+            }
+            function renderCustomerList(q) {
+              if (!listEl) return;
+              q = (q || '').toLowerCase().replace(/\\s+/g, ' ').trim();
+              var sel = hidden ? String(hidden.value) : '';
+              listEl.innerHTML = '';
+              var any = false;
+              customerRows.forEach(function (row) {
+                var idStr = String(row.id);
+                var text = String(row.text || '');
+                var nameOnly = String(row.name != null ? row.name : '').toLowerCase();
+                var match = !q || nameOnly.indexOf(q) !== -1;
+                var isSel = sel && idStr === sel;
+                if (!match && !isSel) return;
+                any = true;
+                var li = document.createElement('li');
+                li.setAttribute('role', 'option');
+                li.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                li.setAttribute('data-id', idStr);
+                li.className = 'px-4 py-2.5 cursor-pointer hover:bg-purple-50 text-right text-sm' + (isSel ? ' bg-purple-100 font-semibold' : '');
+                li.textContent = text;
+                li.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+                li.addEventListener('click', function () {
+                  if (hidden) hidden.value = idStr;
+                  if (triggerLabel) {
+                    triggerLabel.textContent = text;
+                    triggerLabel.classList.remove('text-gray-500');
+                    triggerLabel.classList.add('text-gray-900');
+                  }
+                  setOpen(false);
+                });
+                listEl.appendChild(li);
+              });
+              if (!any) {
+                var empty = document.createElement('li');
+                empty.className = 'px-4 py-3 text-center text-gray-500 text-sm';
+                empty.textContent = 'لا توجد نتائج';
+                empty.setAttribute('role', 'presentation');
+                listEl.appendChild(empty);
+              }
+            }
+            if (combo && trigger && panel && filterInput && hidden) {
+              trigger.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                setOpen(!isOpen());
+              });
+              filterInput.addEventListener('input', function () {
+                renderCustomerList(filterInput.value);
+              });
+              filterInput.addEventListener('click', function (ev) { ev.stopPropagation(); });
+              combo.addEventListener('click', function (ev) { ev.stopPropagation(); });
+              document.addEventListener('click', function () { setOpen(false); });
+              document.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Escape') setOpen(false);
+              });
+            }
             form.addEventListener('submit', async (event) => {
               event.preventDefault();
-              logsEl.textContent = '';
-              writeLog('بدء إرسال الطلب...', 'POST /api/requests');
-
               try {
                 const formData = new FormData(form);
                 const response = await fetch('/api/requests', {
@@ -22916,7 +30157,6 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     'X-Requested-With': 'fetch'
                   }
                 });
-
                 const contentType = response.headers.get('content-type') || '';
                 let body;
                 if (contentType.includes('application/json')) {
@@ -22924,21 +30164,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 } else {
                   body = await response.text();
                 }
-
-                writeLog('استجابة API:', {
-                  status: response.status,
-                  ok: response.ok,
-                  body
-                });
-
                 if (response.ok && body && body.success) {
-                  writeLog('تم الحفظ بنجاح', body);
-                  setTimeout(() => {
-                    window.location.href = '/admin/requests';
-                  }, 800);
+                  window.location.href = '/admin/requests';
                 }
               } catch (error) {
-                writeLog('خطأ في الطلب', { message: error?.message || String(error) });
+                console.error('Request error:', error);
               }
             });
           })();
@@ -23316,7 +30546,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
       </body>
       </html>
-    `):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(t).first();if(!a)return e.html("<h1>العميل غير موجود</h1>");const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];return e.html(`
+    `):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(t).first();if(!a)return e.html("<h1>العميل غير موجود</h1>");const n=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[],l=await re(e.env.DB,a.tenant_id??null);let r=[];try{const i=a.solutions_json;if(i){const o=JSON.parse(i);Array.isArray(o)&&(r=o.map(d=>({note:typeof d=="string"?d:String(d?.note??"")})))}}catch{}return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -23434,6 +30664,36 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <input type="number" name="monthly_salary" step="0.01" value="${a.monthly_salary??""}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 </div>
               </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-sticky-note text-gray-600 ml-1"></i>
+                  ملاحظات
+                </label>
+                <textarea name="notes" rows="2" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="أي ملاحظات إضافية (اختياري)">${(a.notes||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}</textarea>
+              </div>
+              <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
+                <h3 class="text-sm font-bold text-gray-700 mb-3">
+                  <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
+                  الحلول المقترحة
+                </h3>
+                <input type="hidden" name="solutions_json" id="edit_solutions_json" value="[]">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="border-b border-gray-300 text-right">
+                        <th class="py-2 px-2 w-20">رقم الحل</th>
+                        <th class="py-2 px-2">نص الحل</th>
+                        <th class="py-2 px-2 w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="edit-solutions-tbody"></tbody>
+                  </table>
+                </div>
+                <button type="button" id="edit-add-solution-row" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                  <i class="fas fa-plus ml-1"></i>
+                  إضافة صف
+                </button>
+              </div>
               <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <h3 class="text-sm font-bold text-gray-700 mb-3">
                   <i class="fas fa-credit-card text-red-600 ml-1"></i>
@@ -23491,17 +30751,58 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   updateEditJobType();
                   document.getElementById('edit-customer-form').addEventListener('submit',function(){ if(jobTypeEl.value==='military'&&militarySelect&&jobTitleInput){ jobTitleInput.value=militarySelect.value||''; jobTitleInput.disabled=false; } });
                 }
-                var editObligationsInitial = ${JSON.stringify(r)};
+                var editSolutionsInitial = ${JSON.stringify(r)};
+                var editSolTbody = document.getElementById('edit-solutions-tbody');
+                var editSolAddBtn = document.getElementById('edit-add-solution-row');
+                var editSolHidden = document.getElementById('edit_solutions_json');
+                if(editSolTbody&&editSolAddBtn&&editSolHidden){
+                  function editSolRefreshNumbers(){
+                    var rows = editSolTbody.querySelectorAll('tr');
+                    for(var si = 0; si < rows.length; si++){
+                      var c = rows[si].querySelector('.edit-sol-num-cell');
+                      if(c) c.textContent = String(si + 1);
+                    }
+                  }
+                  function addEditSolRow(data){
+                    data = data || {};
+                    var tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-200';
+                    tr.innerHTML = '<td class="py-1 px-2 edit-sol-num-cell text-center text-gray-700 font-medium w-20">1</td>'+
+                      '<td class="py-1 px-2"><input type="text" class="edit-sol-note w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></td>'+
+                      '<td class="py-1 px-2"><button type="button" class="edit-sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+                    if(data.note) tr.querySelector('.edit-sol-note').value = data.note;
+                    tr.querySelector('.edit-sol-remove').onclick = function(){ tr.remove(); editSolRefreshNumbers(); };
+                    editSolTbody.appendChild(tr);
+                    editSolRefreshNumbers();
+                  }
+                  editSolutionsInitial.forEach(function(s){ addEditSolRow(s); });
+                  if(editSolutionsInitial.length === 0) addEditSolRow();
+                  editSolAddBtn.onclick = function(){ addEditSolRow(); };
+                }
+                var editObligationsInitial = ${JSON.stringify(n)};
                 var editTbody = document.getElementById('edit-obligations-tbody');
                 var editAddBtn = document.getElementById('edit-add-obligation-row');
                 var editHidden = document.getElementById('edit_obligations_json');
                 if(editTbody&&editAddBtn&&editHidden){
+                  var editObligationTypeNames=${JSON.stringify(l)};
+                  function editEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+                  function buildEditObligSelect(selectedValue){
+                    var sel=selectedValue==null?'':String(selectedValue);
+                    var opts='<option value="">— اختر نوع الالتزام —</option>';
+                    for(var i=0;i<editObligationTypeNames.length;i++){
+                      var name=editObligationTypeNames[i];
+                      opts+='<option value="'+editEsc(name)+'"'+(sel===name?' selected':'')+'>'+editEsc(name)+'</option>';
+                    }
+                    if(sel&&editObligationTypeNames.indexOf(sel)===-1){
+                      opts+='<option value="'+editEsc(sel)+'" selected>'+editEsc(sel)+'</option>';
+                    }
+                    return '<select class="edit-oblig-type w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">'+opts+'</select>';
+                  }
                   function addEditRow(data){
                     data=data||{};
                     var tr=document.createElement('tr');
                     tr.className='border-b border-gray-200';
-                    tr.innerHTML='<td class="py-1 px-2"><input type="text" class="edit-oblig-type w-full px-2 py-1.5 border rounded" placeholder="نوع الالتزام"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="date" class="edit-oblig-due w-full px-2 py-1.5 border rounded"></td><td class="py-1 px-2"><button type="button" class="edit-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                    if(data.obligation_type) tr.querySelector('.edit-oblig-type').value=data.obligation_type;
+                    tr.innerHTML='<td class="py-1 px-2">'+buildEditObligSelect(data.obligation_type||'')+'</td><td class="py-1 px-2"><input type="number" class="edit-oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="date" class="edit-oblig-due w-full px-2 py-1.5 border rounded"></td><td class="py-1 px-2"><button type="button" class="edit-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
                     if(data.total_amount!=null) tr.querySelector('.edit-oblig-total').value=data.total_amount;
                     if(data.monthly_installment!=null) tr.querySelector('.edit-oblig-monthly').value=data.monthly_installment;
                     if(data.due_date) tr.querySelector('.edit-oblig-due').value=data.due_date;
@@ -23523,6 +30824,17 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                       arr.push({ obligation_type: typeEl.value||'', total_amount: parseFloat(totalEl.value)||0, monthly_installment: parseFloat(monthlyEl.value)||0, due_date: dueEl&&dueEl.value?dueEl.value:null });
                     });
                     editHidden.value=JSON.stringify(arr);
+                    var esh=document.getElementById('edit_solutions_json');
+                    if(esh&&editSolTbody){
+                      var srows=editSolTbody.querySelectorAll('tr');
+                      var sarr=[];
+                      srows.forEach(function(tr){
+                        var ne=tr.querySelector('.edit-sol-note');
+                        if(!ne) return;
+                        sarr.push({ note: (ne.value||'').trim() });
+                      });
+                      esh.value=JSON.stringify(sarr);
+                    }
                   });
                 }
               })();
@@ -23591,7 +30903,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN financing_types ft ON c.financing_type_id = ft.id
       LEFT JOIN banks b ON c.best_bank_id = b.id
       WHERE c.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>العميل غير موجود</h1>");const s=a,r=l=>l?new Date(l).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",o=l=>l?l.toLocaleString("ar-SA"):"غير محدد";return e.html(`
+    `).bind(t).first();if(!a)return e.html("<h1>العميل غير موجود</h1>");const s=a,n=r=>r?new Date(r).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=r=>r?r.toLocaleString("ar-SA"):"غير محدد";return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -23609,7 +30921,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             page-break-inside: avoid;
           }
           
-          ${C()}
+          ${j()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -23634,7 +30946,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 تقرير العميل الشامل
               </h1>
               <p class="text-xl opacity-90">نظام تمويل - Tamweel Finance</p>
-              <p class="text-sm opacity-75 mt-2">تاريخ التقرير: ${r(new Date().toISOString())}</p>
+              <p class="text-sm opacity-75 mt-2">تاريخ التقرير: ${n(new Date().toISOString())}</p>
             </div>
           </div>
           
@@ -23691,7 +31003,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">تاريخ الميلاد</p>
-                  <p class="text-xl font-bold text-gray-800">${r(s.birthdate)}${s.dob_calendar_type==="hijri"?" هـ":" م"}</p>
+                  <p class="text-xl font-bold text-gray-800">${n(s.birthdate)}${s.dob_calendar_type==="hijri"?" هـ":" م"}</p>
                 </div>
               </div>
               
@@ -23720,7 +31032,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">الراتب الشهري</p>
-                  <p class="text-2xl font-bold text-green-600">${o(s.monthly_salary)} ريال</p>
+                  <p class="text-2xl font-bold text-green-600">${l(s.monthly_salary)} ريال</p>
                 </div>
               </div>
               
@@ -23730,7 +31042,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">مبلغ التمويل المطلوب</p>
-                  <p class="text-2xl font-bold text-blue-600">${o(s.financing_amount)} ريال</p>
+                  <p class="text-2xl font-bold text-blue-600">${l(s.financing_amount)} ريال</p>
                 </div>
               </div>
               
@@ -23740,7 +31052,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">الالتزامات الشهرية</p>
-                  <p class="text-2xl font-bold text-red-600">${o(s.monthly_obligations)} ريال</p>
+                  <p class="text-2xl font-bold text-red-600">${l(s.monthly_obligations)} ريال</p>
                 </div>
               </div>
               
@@ -23808,7 +31120,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">القسط الشهري</p>
-                      <p class="text-2xl font-bold text-purple-600">${o(s.monthly_payment)} ريال</p>
+                      <p class="text-2xl font-bold text-purple-600">${l(s.monthly_payment)} ريال</p>
                     </div>
                   </div>
                 </div>
@@ -23820,7 +31132,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">إجمالي المبلغ المستحق</p>
-                      <p class="text-3xl font-bold text-indigo-600">${o(s.total_payment)} ريال</p>
+                      <p class="text-3xl font-bold text-indigo-600">${l(s.total_payment)} ريال</p>
                     </div>
                   </div>
                 </div>
@@ -23832,7 +31144,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                     </div>
                     <div>
                       <p class="text-sm text-gray-500">تاريخ الحساب</p>
-                      <p class="text-xl font-bold text-green-600">${r(s.calculation_date)}</p>
+                      <p class="text-xl font-bold text-green-600">${n(s.calculation_date)}</p>
                     </div>
                   </div>
                 </div>
@@ -23859,7 +31171,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">تاريخ التسجيل</p>
-                  <p class="text-lg font-bold text-gray-800">${r(s.created_at)}</p>
+                  <p class="text-lg font-bold text-gray-800">${n(s.created_at)}</p>
                 </div>
               </div>
               
@@ -23869,7 +31181,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">آخر تحديث</p>
-                  <p class="text-lg font-bold text-gray-800">${r(s.updated_at)}</p>
+                  <p class="text-lg font-bold text-gray-800">${n(s.updated_at)}</p>
                 </div>
               </div>
             </div>
@@ -23905,7 +31217,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a,r=n=>n?new Date(n).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",o=n=>n?n.toLocaleString("ar-SA"):"غير محدد",l={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=l[s.status]||l.pending;return e.html(`
+    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a,n=o=>o?new Date(o).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=o=>o?o.toLocaleString("ar-SA"):"غير محدد",r={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=r[s.status]||r.pending;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -23923,7 +31235,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
             page-break-inside: avoid;
           }
           
-          ${C()}
+          ${j()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -23954,7 +31266,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 تقرير طلب التمويل
               </h1>
               <p class="text-xl opacity-90">نظام تمويل - Tamweel Finance</p>
-              <p class="text-sm opacity-75 mt-2">رقم الطلب: #${s.id} | تاريخ التقرير: ${r(new Date().toISOString())}</p>
+              <p class="text-sm opacity-75 mt-2">رقم الطلب: #${s.id} | تاريخ التقرير: ${n(new Date().toISOString())}</p>
             </div>
           </div>
           
@@ -23964,7 +31276,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="bg-${i.color}-100 border-2 border-${i.color}-300 rounded-lg p-6 text-center">
                 <i class="fas fa-${i.icon} text-${i.color}-600 text-5xl mb-3"></i>
                 <p class="text-2xl font-bold text-${i.color}-700">حالة الطلب: ${i.text}</p>
-                <p class="text-sm text-gray-600 mt-2">تاريخ الطلب: ${r(s.created_at)}</p>
+                <p class="text-sm text-gray-600 mt-2">تاريخ الطلب: ${n(s.created_at)}</p>
               </div>
             </div>
           </div>
@@ -24012,7 +31324,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">تاريخ الميلاد</p>
-                  <p class="text-xl font-bold text-gray-800">${r(s.customer_birthdate)}${s.customer_dob_calendar_type==="hijri"?" هـ":" م"}</p>
+                  <p class="text-xl font-bold text-gray-800">${n(s.customer_birthdate)}${s.customer_dob_calendar_type==="hijri"?" هـ":" م"}</p>
                 </div>
               </div>
               
@@ -24022,7 +31334,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">الراتب الشهري</p>
-                  <p class="text-xl font-bold text-yellow-600">${o(s.customer_salary)} ريال</p>
+                  <p class="text-xl font-bold text-yellow-600">${l(s.customer_salary)} ريال</p>
                 </div>
               </div>
               
@@ -24064,7 +31376,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">المبلغ المطلوب</p>
-                    <p class="text-2xl font-bold text-blue-600">${o(s.requested_amount)} ريال</p>
+                    <p class="text-2xl font-bold text-blue-600">${l(s.requested_amount)} ريال</p>
                   </div>
                 </div>
               </div>
@@ -24100,7 +31412,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">الالتزامات الشهرية</p>
-                    <p class="text-2xl font-bold text-red-600">${o(s.monthly_obligations)} ريال</p>
+                    <p class="text-2xl font-bold text-red-600">${l(s.monthly_obligations)} ريال</p>
                   </div>
                 </div>
               </div>
@@ -24112,7 +31424,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </div>
                   <div>
                     <p class="text-sm text-gray-500">القسط الشهري</p>
-                    <p class="text-2xl font-bold text-indigo-600">${o(s.monthly_payment)} ريال</p>
+                    <p class="text-2xl font-bold text-indigo-600">${l(s.monthly_payment)} ريال</p>
                   </div>
                 </div>
               </div>
@@ -24132,7 +31444,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">تاريخ تقديم الطلب</p>
-                  <p class="text-lg font-bold text-gray-800">${r(s.created_at)}</p>
+                  <p class="text-lg font-bold text-gray-800">${n(s.created_at)}</p>
                 </div>
               </div>
               
@@ -24142,7 +31454,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">آخر تحديث</p>
-                  <p class="text-lg font-bold text-gray-800">${r(s.updated_at)}</p>
+                  <p class="text-lg font-bold text-gray-800">${n(s.updated_at)}</p>
                 </div>
               </div>
               
@@ -24185,7 +31497,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
       ORDER BY stage_order ASC
-    `).all(),{results:r}=await e.env.DB.prepare(`
+    `).all(),{results:n}=await e.env.DB.prepare(`
       SELECT 
         wst.*,
         ws_from.stage_name_ar as from_stage_name,
@@ -24197,11 +31509,11 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN users u ON wst.transitioned_by = u.id
       WHERE wst.request_id = ?
       ORDER BY wst.created_at DESC
-    `).bind(t).all(),{results:o}=await e.env.DB.prepare(`
-      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
     `).bind(t).all(),{results:l}=await e.env.DB.prepare(`
+      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
+    `).bind(t).all(),{results:r}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(t).all(),i={data:{transitions:r,actions:o,tasks:l}},n=It(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(n)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).all(),i={data:{transitions:n,actions:l,tasks:r}},o=Ft(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
     `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});c.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
@@ -24322,7 +31634,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       UPDATE banks 
       SET bank_name = ?, description = ?
       WHERE id = ?
-    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});c.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM banks WHERE id = ?").bind(t).run(),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});c.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
+    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});c.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await Oe(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});c.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26453,13 +33765,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN roles r ON u.role_id = r.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.id = ?
-    `,{results:s}=await e.env.DB.prepare(a).bind(t).all();if(!s||s.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const r=s[0];return e.html(`
+    `,{results:s}=await e.env.DB.prepare(a).bind(t).all();if(!s||s.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const n=s[0];return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>عرض مستخدم - ${r.full_name}</title>
+        <title>عرض مستخدم - ${n.full_name}</title>
         <script src="https://cdn.tailwindcss.com"><\/script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       </head>
@@ -26476,8 +33788,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="flex items-center">
                 <i class="fas fa-user-circle text-5xl ml-4"></i>
                 <div>
-                  <h1 class="text-3xl font-bold">${r.full_name||r.username}</h1>
-                  <p class="text-indigo-100 mt-1">${r.role_name||"لا يوجد دور"}</p>
+                  <h1 class="text-3xl font-bold">${n.full_name||n.username}</h1>
+                  <p class="text-indigo-100 mt-1">${n.role_name||"لا يوجد دور"}</p>
                 </div>
               </div>
             </div>
@@ -26493,27 +33805,27 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <div class="space-y-3">
                     <div>
                       <label class="text-sm text-gray-500">الرقم التعريفي</label>
-                      <p class="font-bold text-gray-800">#${r.id}</p>
+                      <p class="font-bold text-gray-800">#${n.id}</p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">اسم المستخدم</label>
-                      <p class="font-bold text-gray-800">${r.username}</p>
+                      <p class="font-bold text-gray-800">${n.username}</p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">الاسم الكامل</label>
-                      <p class="font-bold text-gray-800">${r.full_name||"-"}</p>
+                      <p class="font-bold text-gray-800">${n.full_name||"-"}</p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">البريد الإلكتروني</label>
-                      <p class="font-bold text-gray-800">${r.email||"-"}</p>
+                      <p class="font-bold text-gray-800">${n.email||"-"}</p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">رقم الجوال</label>
-                      <p class="font-bold text-gray-800">${r.phone||"-"}</p>
+                      <p class="font-bold text-gray-800">${n.phone||"-"}</p>
                     </div>
                   </div>
                 </div>
@@ -26527,37 +33839,37 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <div class="space-y-3">
                     <div>
                       <label class="text-sm text-gray-500">الدور الوظيفي</label>
-                      <p class="font-bold text-gray-800">${r.role_name||"غير محدد"}</p>
-                      ${r.role_description?`<p class="text-xs text-gray-500 mt-1">${r.role_description}</p>`:""}
+                      <p class="font-bold text-gray-800">${n.role_name||"غير محدد"}</p>
+                      ${n.role_description?`<p class="text-xs text-gray-500 mt-1">${n.role_description}</p>`:""}
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">نوع المستخدم</label>
-                      <p class="font-bold text-gray-800">${r.role_name||"غير محدد"}</p>
+                      <p class="font-bold text-gray-800">${n.role_name||"غير محدد"}</p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">الشركة</label>
-                      <p class="font-bold text-gray-800">${r.tenant_name||"لا توجد شركة"}</p>
+                      <p class="font-bold text-gray-800">${n.tenant_name||"لا توجد شركة"}</p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">الحالة</label>
-                      <p class="font-bold ${r.is_active?"text-green-600":"text-red-600"}">
-                        <i class="fas ${r.is_active?"fa-check-circle":"fa-times-circle"} ml-1"></i>
-                        ${r.is_active?"نشط":"غير نشط"}
+                      <p class="font-bold ${n.is_active?"text-green-600":"text-red-600"}">
+                        <i class="fas ${n.is_active?"fa-check-circle":"fa-times-circle"} ml-1"></i>
+                        ${n.is_active?"نشط":"غير نشط"}
                       </p>
                     </div>
                     
                     <div>
                       <label class="text-sm text-gray-500">تاريخ الإنشاء</label>
-                      <p class="font-bold text-gray-800">${r.created_at||"-"}</p>
+                      <p class="font-bold text-gray-800">${n.created_at||"-"}</p>
                     </div>
                     
-                    ${r.last_login?`
+                    ${n.last_login?`
                     <div>
                       <label class="text-sm text-gray-500">آخر تسجيل دخول</label>
-                      <p class="font-bold text-gray-800">${r.last_login}</p>
+                      <p class="font-bold text-gray-800">${n.last_login}</p>
                     </div>
                     `:""}
                   </div>
@@ -26565,13 +33877,13 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               </div>
               
               <div class="mt-8 pt-6 border-t border-gray-200 flex gap-3">
-                <a href="/admin/users/${r.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/users/${n.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-edit ml-2"></i> تعديل المعلومات
                 </a>
-                <a href="/admin/users/${r.id}/permissions" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/users/${n.id}/permissions" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-user-shield ml-2"></i> إدارة الصلاحيات
                 </a>
-                <a href="/admin/users/${r.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا المستخدم؟\\nهذه العملية لا يمكن التراجع عنها!')" class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/users/${n.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا المستخدم؟\\nهذه العملية لا يمكن التراجع عنها!')" class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-trash ml-2"></i> حذف المستخدم
                 </a>
               </div>
@@ -26580,12 +33892,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),a=await x(e),s=a.roleId,r=T(a),o=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),a=await x(e),s=a.roleId,n=T(a),l=`
       SELECT u.*, r.role_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       WHERE u.id = ?
-    `,{results:l}=await e.env.DB.prepare(o).bind(t).all();if(!l||l.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const i=l[0];if(!r){if(A(i.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(a.tenantId&&i.tenant_id&&i.tenant_id!==a.tenantId)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>",403)}const n=r?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",d=await e.env.DB.prepare(n).all();let p={results:[]};return s===1&&(p=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()),e.html(`
+    `,{results:r}=await e.env.DB.prepare(l).bind(t).all();if(!r||r.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const i=r[0];if(!n){if(M(i.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(a.tenantId&&i.tenant_id&&i.tenant_id!==a.tenantId)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>",403)}const o=n?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",d=await e.env.DB.prepare(o).all();let p={results:[]};return s===1&&(p=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26711,15 +34023,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const r=T(s),o=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,n=a.get("phone")||null,d=a.get("password"),p=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),g=Number.parseInt(String(p||""),10);if(Number.isNaN(g))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const b=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!b)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!r){if(A(b.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(g===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const f=r?u:s.tenantId;let h=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=T(s),l=a.get("username"),r=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),p=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),f=Number.parseInt(String(p||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(M(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const b=n?u:s.tenantId;let y=`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
           role_id = ?, tenant_id = ?, is_active = ?
-    `,y=[o,l,i,n,g,f,m];return d&&d.toString().trim()!==""&&(h=`
+    `,h=[l,r,i,o,f,b,m];return d&&d.toString().trim()!==""&&(y=`
         UPDATE users 
         SET username = ?, full_name = ?, email = ?, phone = ?, 
             password = ?, role_id = ?, tenant_id = ?, is_active = ?
-      `,y=[o,l,i,n,d,g,f,m]),h+=" WHERE id = ?",y.push(t),await e.env.DB.prepare(h).bind(...y).run(),e.html(`
+      `,h=[l,r,i,o,d,f,b,m]),y+=" WHERE id = ?",h.push(t),await e.env.DB.prepare(y).bind(...h).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26829,7 +34141,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         </div>
       </body>
       </html>
-    `)}});c.get("/admin/users-new",async e=>{try{const t=await x(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const r=T(t)?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",o=await e.env.DB.prepare(r).all(),l=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
+    `)}});c.get("/admin/users-new",async e=>{try{const t=await x(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const n=T(t)?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",l=await e.env.DB.prepare(n).all(),r=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -26938,7 +34250,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   <select name="role_id" required id="roleSelect" 
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الدور --</option>
-                    ${o.results.map(i=>`
+                    ${l.results.map(i=>`
                       <option value="${i.id}" data-role-name="${i.role_name}">${i.role_name} - ${i.description||""}</option>
                     `).join("")}
                   </select>
@@ -26953,7 +34265,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
                   </label>
                   <select name="tenant_id" id="tenantSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الشركة --</option>
-                    ${l.results.map(i=>`
+                    ${r.results.map(i=>`
                       <option value="${i.id}">${i.company_name}</option>
                     `).join("")}
                   </select>
@@ -27215,14 +34527,14 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       WHERE u.id = ?
-    `).bind(t).first();if(!s)return e.html("<h1>المستخدم غير موجود</h1>");const r=await e.env.DB.prepare(`
+    `).bind(t).first();if(!s)return e.html("<h1>المستخدم غير موجود</h1>");const n=await e.env.DB.prepare(`
       SELECT * FROM permissions ORDER BY category, id
-    `).all(),l=(await e.env.DB.prepare(`
+    `).all(),r=(await e.env.DB.prepare(`
       SELECT p.id, p.permission_key
       FROM permissions p
       JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = ?
-    `).bind(s.role_id).all()).results.map(d=>d.id),i={};r.results.forEach(d=>{i[d.category]||(i[d.category]=[]),i[d.category].push({...d,hasPermission:l.includes(d.id)})});const n={dashboard:"لوحة التحكم",customers:"العملاء",requests:"طلبات التمويل",banks:"البنوك",rates:"النسب التمويلية",packages:"الباقات",subscriptions:"الاشتراكات",users:"المستخدمين",calculator:"الحاسبة",reports:"التقارير"};return e.html(`
+    `).bind(s.role_id).all()).results.map(d=>d.id),i={};n.results.forEach(d=>{i[d.category]||(i[d.category]=[]),i[d.category].push({...d,hasPermission:r.includes(d.id)})});const o={dashboard:"لوحة التحكم",customers:"العملاء",requests:"طلبات التمويل",banks:"البنوك",rates:"النسب التمويلية",packages:"الباقات",subscriptions:"الاشتراكات",users:"المستخدمين",calculator:"الحاسبة",reports:"التقارير"};return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -27264,7 +34576,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
               <div class="bg-white rounded-lg shadow-md p-6">
                 <h2 class="text-xl font-bold text-gray-800 mb-4 border-b-2 border-indigo-600 pb-2">
                   <i class="fas fa-folder text-indigo-600 ml-2"></i>
-                  ${n[d]||d}
+                  ${o[d]||d}
                 </h2>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -27348,12 +34660,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});c.post("/api/users/:id/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_id:s,permission_ids:r}=await e.req.json();if(await e.env.DB.prepare(`
+    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});c.post("/api/users/:id/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!T(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_id:s,permission_ids:n}=await e.req.json();if(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
-    `).bind(s).run(),r&&r.length>0)for(const o of r)await e.env.DB.prepare(`
+    `).bind(s).run(),n&&n.length>0)for(const l of n)await e.env.DB.prepare(`
           INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
           VALUES (?, ?)
-        `).bind(s,o).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",r=e.req.query("employee_id")||"";let o=`
+        `).bind(s,l).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",n=e.req.query("employee_id")||"";let l=`
       SELECT 
         l.*,
         e.full_name_ar as employee_name,
@@ -27363,10 +34675,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       FROM hr_leaves l
       LEFT JOIN hr_employees e ON l.employee_id = e.id
       WHERE 1=1
-    `;const l=[];a&&(o+=" AND l.status = ?",l.push(a)),s&&(o+=" AND l.leave_type = ?",l.push(s)),r&&(o+=" AND l.employee_id = ?",l.push(r)),o+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:r,end_date:o,reason:l}=await e.req.json(),i=new Date(r),n=new Date(o),d=Math.ceil((n.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
+    `;const r=[];a&&(l+=" AND l.status = ?",r.push(a)),s&&(l+=" AND l.leave_type = ?",r.push(s)),n&&(l+=" AND l.employee_id = ?",r.push(n)),l+=" ORDER BY l.created_at DESC";const i=r.length>0?await e.env.DB.prepare(l).bind(...r).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:n,end_date:l,reason:r}=await e.req.json(),i=new Date(n),o=new Date(l),d=Math.ceil((o.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
       INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(t.tenantId||1,a,s,r,o,d,l||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
+    `).bind(t.tenantId||1,a,s,n,l,d,r||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
       UPDATE hr_leaves 
       SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -27374,12 +34686,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       UPDATE hr_leaves 
       SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
       WHERE id = ?
-    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:r,status:o}=e.req.query();let l=`
+    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:n,status:l}=e.req.query();let r=`
       SELECT s.*, e.full_name_ar as employee_name
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
       WHERE 1=1
-    `;const i=[];s&&(l+=" AND s.employee_id = ?",i.push(s)),r&&(l+=" AND s.salary_month = ?",i.push(r)),o&&(l+=" AND s.payment_status = ?",i.push(o)),l+=" ORDER BY s.salary_month DESC, s.created_at DESC";const n=i.length>0?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),r=parseFloat(s.basic_salary)||0,o=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,n=parseFloat(s.bonuses)||0,d=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,g=r+o+l+i+n+d,b=p+u+m,f=g-b;return await e.env.DB.prepare(`
+    `;const i=[];s&&(r+=" AND s.employee_id = ?",i.push(s)),n&&(r+=" AND s.salary_month = ?",i.push(n)),l&&(r+=" AND s.payment_status = ?",i.push(l)),r+=" ORDER BY s.salary_month DESC, s.created_at DESC";const o=i.length>0?await e.env.DB.prepare(r).bind(...i).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:o.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),n=parseFloat(s.basic_salary)||0,l=parseFloat(s.housing_allowance)||0,r=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,o=parseFloat(s.bonuses)||0,d=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,f=n+l+r+i+o+d,g=p+u+m,b=f-g;return await e.env.DB.prepare(`
       INSERT INTO hr_salaries (
         tenant_id, employee_id, salary_month, basic_salary,
         housing_allowance, transportation_allowance, other_allowances,
@@ -27387,7 +34699,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         other_deductions, gross_salary, total_deductions, net_salary,
         payment_status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(a,s.employee_id,s.salary_month,r,o,l,i,n,d,p,u,m,g,b,f,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s.employee_id,s.salary_month,n,l,r,i,o,d,p,u,m,f,g,b,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries 
       SET payment_status = 'approved'
       WHERE id = ?
@@ -27395,7 +34707,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       UPDATE hr_salaries 
       SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error paying salary:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_salaries WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting salary:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId,s=a?`WHERE d.tenant_id = ${a}`:"",r=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error paying salary:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_salaries WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting salary:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId,s=a?`WHERE d.tenant_id = ${a}`:"",n=await e.env.DB.prepare(`
       SELECT d.*, 
              m.full_name as manager_name,
              (SELECT COUNT(*) FROM hr_employees e WHERE e.department = d.department_code AND e.tenant_id = d.tenant_id) as employee_count
@@ -27403,12 +34715,12 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN hr_employees m ON d.manager_id = m.id
       ${s}
       ORDER BY d.department_name
-    `).all();return e.json({success:!0,data:r.results})}catch(t){return console.error("Error fetching departments:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json();return await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching departments:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO hr_departments (
         tenant_id, department_name, department_code, 
         manager_id, description, budget
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId;console.log("🔍 HR Performance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const r=await e.env.DB.prepare(`
+    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId;console.log("🔍 HR Performance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const n=await e.env.DB.prepare(`
       SELECT p.*, 
              e.full_name_ar as employee_name,
              r.full_name_ar as reviewer_name,
@@ -27422,14 +34734,14 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       LEFT JOIN hr_employees e ON p.employee_id = e.id
       LEFT JOIN hr_employees r ON p.reviewer_id = r.id
       ORDER BY p.review_date DESC
-    `).all();return console.log("🔍 HR Performance API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let r=s.review_period_start||s.review_date,o=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(r=s.review_date,o=s.review_date);const l=s.attendance_rating||3,i=s.quality_rating||3,n=s.teamwork_rating||3,d=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(l)+parseFloat(i)+parseFloat(n)+parseFloat(d))/4;return await e.env.DB.prepare(`
+    `).all();return console.log("🔍 HR Performance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let n=s.review_period_start||s.review_date,l=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(n=s.review_date,l=s.review_date);const r=s.attendance_rating||3,i=s.quality_rating||3,o=s.teamwork_rating||3,d=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(r)+parseFloat(i)+parseFloat(o)+parseFloat(d))/4;return await e.env.DB.prepare(`
       INSERT INTO hr_performance_reviews (
         tenant_id, employee_id, reviewer_id, review_period_start, review_period_end, review_date,
         overall_rating, attendance_punctuality, quality_of_work, 
         teamwork, strengths, areas_for_improvement,
         goals, comments, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(a,s.employee_id,t.userId,r,o,s.review_date,p,l,i,n,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
+    `).bind(a,s.employee_id,t.userId,n,l,s.review_date,p,r,i,o,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
       SELECT p.*, 
              e.full_name_ar as employee_name,
              e.job_title as current_position,
@@ -27438,7 +34750,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
              p.effective_date as promotion_date
       FROM hr_promotions_transfers p
       LEFT JOIN hr_employees e ON p.employee_id = e.id
-    `;console.log("🔍 HR Promotions API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),s=s.replace("WHERE 1=1",""),s+=" ORDER BY p.effective_date DESC";const r=await e.env.DB.prepare(s).all();return console.log("🔍 HR Promotions API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json(),r=await e.env.DB.prepare(`
+    `;console.log("🔍 HR Promotions API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),s=s.replace("WHERE 1=1",""),s+=" ORDER BY p.effective_date DESC";const n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Promotions API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT job_title, basic_salary, department FROM hr_employees WHERE id = ?
     `).bind(s.employee_id).first();return await e.env.DB.prepare(`
       INSERT INTO hr_promotions_transfers (
@@ -27446,7 +34758,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         old_salary, new_salary, effective_date,
         old_department, new_department, reason, approved_by, status
       ) VALUES (?, ?, 'promotion', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(a,s.employee_id,r?.job_title||"",s.new_position,r?.basic_salary||0,s.new_salary,s.effective_date||s.promotion_date,r?.department||"",s.new_department||r?.department||"",s.reason||"",t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e),s=await e.env.DB.prepare(`
+    `).bind(a,s.employee_id,n?.job_title||"",s.new_position,n?.basic_salary||0,s.new_salary,s.effective_date||s.promotion_date,n?.department||"",s.new_department||n?.department||"",s.reason||"",t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e),s=await e.env.DB.prepare(`
       SELECT * FROM hr_promotions_transfers WHERE id = ?
     `).bind(t).first();return s?(await e.env.DB.prepare(`
       UPDATE hr_promotions_transfers 
@@ -27458,38 +34770,38 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       WHERE id = ?
     `).bind(s.new_job_title,s.new_salary,s.new_department,s.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_promotions_transfers SET status = 'rejected' WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.query("search")||"",r=e.req.query("type")||"",o=e.req.query("status")||"";let l=`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.query("search")||"",n=e.req.query("type")||"",l=e.req.query("status")||"";let r=`
       SELECT d.*, e.full_name as employee_name, e.employee_number
       FROM hr_documents d
       LEFT JOIN hr_employees e ON d.employee_id = e.id
       WHERE d.tenant_id = ?
-    `;const i=[a];s&&(l+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),r&&(l+=" AND d.document_type = ?",i.push(r)),l+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const n=await e.env.DB.prepare(l).bind(...i).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!0,data:[]})}});c.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=await e.req.json(),{employee_id:r,document_type:o,document_number:l,issue_date:i,expiry_date:n,notes:d}=s,p=await e.env.DB.prepare(`
+    `;const i=[a];s&&(r+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),n&&(r+=" AND d.document_type = ?",i.push(n)),r+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const o=await e.env.DB.prepare(r).bind(...i).all();return e.json({success:!0,data:o.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!0,data:[]})}});c.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=await e.req.json(),{employee_id:n,document_type:l,document_number:r,issue_date:i,expiry_date:o,notes:d}=s,p=await e.env.DB.prepare(`
       INSERT INTO hr_documents (tenant_id, employee_id, document_type, document_number, issue_date, expiry_date, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,r,o,l||null,i||null,n||null,d||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.param("type"),r=e.req.query("start_date")||"",o=e.req.query("end_date")||"";let l={};const i=await e.env.DB.prepare(`
+    `).bind(a,n,l,r||null,i||null,o||null,d||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.param("type"),n=e.req.query("start_date")||"",l=e.req.query("end_date")||"";let r={};const i=await e.env.DB.prepare(`
       SELECT COUNT(*) as total, 
              COUNT(CASE WHEN status = 'active' THEN 1 END) as active
       FROM hr_employees 
       WHERE tenant_id = ?
-    `).bind(a).first();if(l.totalEmployees=i?.total||0,s==="overview"||s==="attendance"){const u=await e.env.DB.prepare(`
+    `).bind(a).first();if(r.totalEmployees=i?.total||0,s==="overview"||s==="attendance"){const u=await e.env.DB.prepare(`
         SELECT 
           COUNT(*) as total,
           COUNT(CASE WHEN status = 'present' THEN 1 END) as present
         FROM hr_attendance
         WHERE tenant_id = ?
-        ${r?"AND attendance_date >= ?":""}
-        ${o?"AND attendance_date <= ?":""}
-      `).bind(a,...r?[r]:[],...o?[o]:[]).first(),m=u?.total||0,g=u?.present||0;l.attendanceRate=m>0?Math.round(g/m*100):0,l.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],l.attendanceData=[95,92,88,94,90,85]}const n=await e.env.DB.prepare(`
+        ${n?"AND attendance_date >= ?":""}
+        ${l?"AND attendance_date <= ?":""}
+      `).bind(a,...n?[n]:[],...l?[l]:[]).first(),m=u?.total||0,f=u?.present||0;r.attendanceRate=m>0?Math.round(f/m*100):0,r.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],r.attendanceData=[95,92,88,94,90,85]}const o=await e.env.DB.prepare(`
       SELECT SUM(net_salary) as total
       FROM hr_salaries
       WHERE tenant_id = ?
-      ${r?"AND salary_month >= ?":""}
-      ${o?"AND salary_month <= ?":""}
-    `).bind(a,...r?[r]:[],...o?[o]:[]).first();l.totalSalaries=n?.total||0;const d=await e.env.DB.prepare(`
+      ${n?"AND salary_month >= ?":""}
+      ${l?"AND salary_month <= ?":""}
+    `).bind(a,...n?[n]:[],...l?[l]:[]).first();r.totalSalaries=o?.total||0;const d=await e.env.DB.prepare(`
       SELECT AVG(overall_rating) as avg
       FROM hr_performance_reviews
       WHERE tenant_id = ?
-    `).bind(a).first();l.avgPerformance=d?.avg||0,(s==="overview"||s==="leaves")&&(l.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],l.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
+    `).bind(a).first();r.avgPerformance=d?.avg||0,(s==="overview"||s==="leaves")&&(r.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],r.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
       SELECT d.department_name as department, SUM(s.net_salary) as total
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
@@ -27498,7 +34810,8 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});c.get("/admin/hr",e=>e.html(Bt));c.get("/admin/hr/employees",e=>e.html(Lt));c.get("/admin/hr/employees/:id",e=>e.html($t));c.get("/admin/hr/employees/:id/edit",e=>e.html(jt));c.get("/admin/hr/attendance",e=>e.html(Ot));c.get("/admin/hr/leaves",e=>e.html(qt));c.get("/admin/hr/salaries",e=>e.html(Mt));c.get("/admin/hr/performance",e=>e.html(At));c.get("/admin/hr/promotions",e=>e.html(Nt));c.get("/admin/hr/documents",e=>e.html(Ft));c.get("/admin/hr/reports",e=>e.html(Ht));c.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",r=await e.env.DB.prepare(s).first(),o=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(o).first(),n=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(n).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:g}=await e.env.DB.prepare(m).all(),b=a?`SELECT DATE(date) as date, 
+    `).bind(a).all();return r.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],r.salariesData=p.results?.map(u=>u.total||0)||[],r.performanceLabels=["ممتاز","جيد جداً","جيد"],r.performanceData=[30,50,20],r.details=[],e.json({success:!0,data:r})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Ea(c,x);c.get("/admin/contracts",e=>e.html(ga));c.get("/admin/contracts/list",e=>e.html(fa));c.get("/admin/contracts/new",async e=>{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await Ae(e,t,{scopeSuperAdminToTenant:!0}),s=d=>(d||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),n=d=>(d||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=a.map(d=>{const p=d.national_id&&!String(d.national_id).startsWith("TEMP-")?String(d.national_id):"",u=n(d.full_name||"")+(d.phone?" — "+n(d.phone):"")+(p?" ("+n(p)+")":"");return`<option value="${s(String(d.id))}" data-name="${s(d.full_name||"")}" data-national_id="${s(p)}" data-phone="${s(d.phone||"")}" data-city="${s(d.city||"")}">${u}</option>`}).join(`
+`);let r="";const i=t.tenantId;if(i){const d=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(i).first();if(d?.company_name){const p=(d.contact_phone||"").trim();r=`<strong>${n(d.company_name)}</strong>${p?` — الجوال: ${n(p)}`:""}`}}r||(r=t.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');const o=ba.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",r);return e.html(o)});c.get("/admin/contracts/view",e=>e.html(xa));c.get("/admin/contracts/templates",e=>e.html(ha));c.get("/admin/contracts/notes",e=>e.html(ya));c.get("/admin/contracts/archive",e=>e.html(va));c.get("/admin/contracts/settings",e=>e.html(wa));c.get("/admin/hr",e=>e.html(Vt));c.get("/admin/hr/employees",e=>e.html(Yt));c.get("/admin/hr/employees/:id",e=>e.html(Jt));c.get("/admin/hr/employees/:id/edit",e=>e.html(Gt));c.get("/admin/hr/attendance",e=>e.html(Xt));c.get("/admin/hr/leaves",e=>e.html(Qt));c.get("/admin/hr/salaries",e=>e.html(Kt));c.get("/admin/hr/performance",e=>e.html(Zt));c.get("/admin/hr/promotions",e=>e.html(ea));c.get("/admin/hr/documents",e=>e.html(ta));c.get("/admin/hr/reports",e=>e.html(aa));c.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),l=new Date().toISOString().split("T")[0],r=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(r).bind(l).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -27508,7 +34821,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
          WHERE DATE(date) >= DATE('now', '-7 days')
-         GROUP BY DATE(date) ORDER BY date`,{results:f}=await e.env.DB.prepare(b).all();return e.json({success:!0,data:{totalEmployees:r?.total||0,activeEmployees:r?.active||0,presentToday:i?.present||0,pendingLeaves:d?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:g||[],attendanceTrend:f||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
+         GROUP BY DATE(date) ORDER BY date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:n?.total||0,activeEmployees:n?.active||0,presentToday:i?.present||0,pendingLeaves:d?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
         id,
         tenant_id,
         COALESCE(employee_number, employee_code) AS employee_number,
@@ -27565,14 +34878,14 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         created_at,
         updated_at
       FROM hr_employees 
-      WHERE id = ?`).bind(t).first();return s?e.json({success:!0,data:s}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,r=await e.env.DB.prepare(`
+      WHERE id = ?`).bind(t).first();return s?e.json({success:!0,data:s}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,n=await e.env.DB.prepare(`
       INSERT INTO hr_employees (
         employee_number, full_name, national_id, email, phone, birthdate, gender,
         department, job_title, basic_salary, housing_allowance, transportation_allowance,
         hire_date, contract_start_date, contract_end_date, direct_manager,
         employment_type, work_schedule, status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_number||null,t.full_name,t.national_id||null,t.email||null,t.phone||null,t.birthdate||t.date_of_birth||null,t.gender||null,t.department||null,t.job_title||null,t.basic_salary||0,t.housing_allowance||0,t.transportation_allowance||0,t.hire_date||null,t.contract_start_date||null,t.contract_end_date||null,t.direct_manager||null,t.employment_type||"full_time",t.work_schedule||"regular",t.status||"active",t.notes||null,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return console.error("Error adding employee:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t.employee_number||null,t.full_name,t.national_id||null,t.email||null,t.phone||null,t.birthdate||t.date_of_birth||null,t.gender||null,t.department||null,t.job_title||null,t.basic_salary||0,t.housing_allowance||0,t.transportation_allowance||0,t.hire_date||null,t.contract_start_date||null,t.contract_end_date||null,t.direct_manager||null,t.employment_type||"full_time",t.work_schedule||"regular",t.status||"active",t.notes||null,s).run();return e.json({success:!0,id:n.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return console.error("Error adding employee:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_employees SET
         employee_number = ?, full_name = ?, national_id = ?, email = ?, phone = ?,
         birthdate = ?, gender = ?, department = ?, job_title = ?, basic_salary = ?,
@@ -27598,7 +34911,7 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
           a.working_hours as work_hours
         FROM hr_attendance a 
         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,r=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",r.results?.length||0),e.json({success:!0,data:r.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function ke(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,r]=e.split(":").map(Number),[o,l]=t.split(":").map(Number),i=s*60+r;let n=o*60+l;n<i&&(n+=1440);const d=n-i,p=Math.round(d/60*100)/100,u=Math.floor(p),m=Math.round((p-u)*60),g=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:p,workHoursFormatted:g}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}c.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:r,workHoursFormatted:o}=ke(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function qe(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[l,r]=t.split(":").map(Number),i=s*60+n;let o=l*60+r;o<i&&(o+=1440);const d=o-i,p=Math.round(d/60*100)/100,u=Math.floor(p),m=Math.round((p-u)*60),f=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:p,workHoursFormatted:f}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}c.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:n,workHoursFormatted:l}=qe(t.check_in_time,t.check_out_time,t.attendance_date),r=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
         employee_id,
         attendance_date,
@@ -27612,10 +34925,10 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
         work_hours,
         tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,r,o,s).run();return e.json({success:!0,id:l.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),r=(await x(e)).tenantId,o=await e.env.DB.prepare(`
+    `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,n,l,s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=(await x(e)).tenantId,l=await e.env.DB.prepare(`
       SELECT check_in_time, attendance_date FROM hr_attendance 
       WHERE id = ? AND tenant_id = ?
-    `).bind(t,r).first();if(!o)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||o.check_in_time,i=a.check_out_time||null,n=a.attendance_date||o.attendance_date,{workingHours:d,workHoursFormatted:p}=ke(l,i,n),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,p)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,r),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
+    `).bind(t,n).first();if(!l)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const r=a.check_in_time||l.check_in_time,i=a.check_out_time||null,o=a.attendance_date||l.attendance_date,{workingHours:d,workHoursFormatted:p}=qe(r,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,p)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
       UPDATE hr_attendance 
       SET ${u.join(", ")}
       WHERE id = ? AND tenant_id = ?
@@ -27627,15 +34940,15 @@ var ee=(e,t,a)=>(s,r)=>{let o=-1;return l(0);async function l(i){if(i<=o)throw n
          FROM hr_leaves l 
          LEFT JOIN hr_employees e ON l.employee_id = e.id 
          LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
-         ORDER BY l.request_date DESC`,{results:r}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,r=await e.env.DB.prepare(`
+         ORDER BY l.request_date DESC`,{results:n}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:n})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,n=await e.env.DB.prepare(`
       INSERT INTO hr_leaves (
         employee_id, leave_type_id, start_date, end_date, days_count,
         reason, status, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:r.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:r}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:n.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_leaves SET status = ?, rejection_reason = ?, approved_by = ?, approval_date = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(a,s,r,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s,n,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});c.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});const se=new ye,Jt=Object.assign({"/src/index.tsx":c});let Ie=!1;for(const[,e]of Object.entries(Jt))e&&(se.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),se.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Ie=!0);if(!Ie)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{se as default};
+    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});c.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});const me=new Ce,$a=Object.assign({"/src/index.tsx":c});let Me=!1;for(const[,e]of Object.entries($a))e&&(me.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),me.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Me=!0);if(!Me)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{me as default};

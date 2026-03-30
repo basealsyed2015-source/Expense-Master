@@ -1,4 +1,4 @@
-﻿-- Tenants (companies)
+-- Tenants (companies)
 CREATE TABLE tenants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   company_name TEXT NOT NULL,
@@ -236,6 +236,8 @@ CREATE TABLE financing_requests (
   approved_amount REAL,
   salary_at_request REAL,
   duration_months INTEGER,
+  monthly_obligations REAL DEFAULT 0,
+  monthly_payment REAL DEFAULT 0,
   status TEXT DEFAULT 'pending',
   notes TEXT,
   tenant_id INTEGER,

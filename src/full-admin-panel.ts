@@ -241,6 +241,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
                 </a>
 
+                <!-- Contracts (brokerage) -->
+                <a href="/admin/contracts" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-file-contract text-xl text-amber-700 group-hover:text-amber-800"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-800">إدارة العقود</span>
+                </a>
+
                 <hr class="my-4">
 
                 <!-- Users -->
@@ -386,6 +392,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <i class="fas fa-users-cog text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الموارد البشرية HR</div>
                         <div class="text-xs mt-1 opacity-90">إدارة الموظفين</div>
+                    </a>
+                    
+                    <a href="/admin/contracts" class="quick-access-btn bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-file-contract text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">إدارة العقود</div>
+                        <div class="text-xs mt-1 opacity-90">عقود وسندات</div>
                     </a>
                     
                     <!-- زر الإشعارات -->
@@ -1925,7 +1937,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/reports',
                         '/admin/payments',
                         '/admin/settings',
-                        '/admin/hr'
+                        '/admin/hr',
+                        '/admin/contracts'
                     ],
                     '2': [ // Company Admin (companyadmin)
                         '/admin/dashboard',
@@ -1937,6 +1950,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/payments',
                         '/admin/users',
                         '/admin/hr',
+                        '/admin/contracts',
                         '/admin/notifications',
                         '/calculator',
                         '/'
@@ -1948,6 +1962,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/reports',
                         '/admin/banks',
                         '/admin/rates',
+                        '/admin/contracts',
                         '/calculator',
                         '/'
                     ],
@@ -1955,6 +1970,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
+                        '/admin/contracts',
                         '/calculator',
                         '/'
                     ]
@@ -3632,9 +3648,27 @@ export const fullAdminPanel = `<!DOCTYPE html>
         }
         
         // Form Submissions
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const addCustomerForm = document.getElementById('addCustomerForm');
             if (addCustomerForm) {
+                let modalObligationTypeNames = [];
+                try {
+                    let q = '';
+                    const userStr = localStorage.getItem('userData') || localStorage.getItem('user');
+                    if (userStr) {
+                        const u = JSON.parse(userStr);
+                        if (u.tenant_id) q = '?tenant_id=' + encodeURIComponent(String(u.tenant_id));
+                    }
+                    const otRes = await axios.get('/api/obligation-types' + q);
+                    if (otRes.data && otRes.data.success && Array.isArray(otRes.data.data)) {
+                        modalObligationTypeNames = otRes.data.data.map(function (x) { return x.type_name; });
+                    }
+                } catch (e) {
+                    console.warn('obligation-types:', e);
+                }
+                if (!modalObligationTypeNames.length) {
+                    modalObligationTypeNames = ['قرض شخصي', 'قرض عقاري', 'تمويل سيارة قائم', 'بطاقة ائتمان', 'تمويل تعاوني', 'تقسيط / شراء بالأقساط', 'سلفة راتب', 'التزامات أخرى'];
+                }
                 (function setupDobToggle() {
                     const g = document.getElementById('modal_date_of_birth_gregorian');
                     const h = document.getElementById('modal_date_of_birth_hijri');
@@ -3677,16 +3711,29 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     const addBtn = document.getElementById('modal_add_obligation_row');
                     const hidden = document.getElementById('modal_obligations_json');
                     if (!tbody || !addBtn || !hidden) return;
+                    function escAttr(s) {
+                        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                    }
+                    function buildModalObligSelect(selectedValue) {
+                        const sel = selectedValue == null ? '' : String(selectedValue);
+                        let opts = '<option value="">— اختر نوع الالتزام —</option>';
+                        modalObligationTypeNames.forEach(function (name) {
+                            opts += '<option value="' + escAttr(name) + '"' + (sel === name ? ' selected' : '') + '>' + escAttr(name) + '</option>';
+                        });
+                        if (sel && modalObligationTypeNames.indexOf(sel) === -1) {
+                            opts += '<option value="' + escAttr(sel) + '" selected>' + escAttr(sel) + '</option>';
+                        }
+                        return '<select class="modal-oblig-type w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>';
+                    }
                     function addRow(data) {
                         data = data || {};
                         const tr = document.createElement('tr');
                         tr.className = 'border-b border-gray-200';
-                        tr.innerHTML = '<td class="py-1 px-2"><input type="text" class="modal-oblig-type w-full px-2 py-1 border rounded" placeholder="نوع"></td>' +
+                        tr.innerHTML = '<td class="py-1 px-2">' + buildModalObligSelect(data.obligation_type || '') + '</td>' +
                             '<td class="py-1 px-2"><input type="number" class="modal-oblig-total w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                             '<td class="py-1 px-2"><input type="number" class="modal-oblig-monthly w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                             '<td class="py-1 px-2"><input type="date" class="modal-oblig-due w-full px-2 py-1 border rounded"></td>' +
                             '<td class="py-1 px-2"><button type="button" class="modal-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                        if (data.obligation_type) tr.querySelector('.modal-oblig-type').value = data.obligation_type;
                         if (data.total_amount != null) tr.querySelector('.modal-oblig-total').value = data.total_amount;
                         if (data.monthly_installment != null) tr.querySelector('.modal-oblig-monthly').value = data.monthly_installment;
                         if (data.due_date) tr.querySelector('.modal-oblig-due').value = data.due_date;

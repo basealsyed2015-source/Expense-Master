@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سندات الأمر | شركة الموعد للمقاولات العامة</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* ══════════════════════════════════════════
+   بطاقات الإحصاء
+══════════════════════════════════════════ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--shadow);
+  border-right: 4px solid var(--primary);
+  transition: var(--transition);
+}
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card.gold  { border-right-color: #c8a84b; }
+.stat-card.green { border-right-color: var(--success); }
+.stat-card.red   { border-right-color: var(--danger); }
+.stat-icon {
+  width: 50px; height: 50px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.ic-b { background: rgba(26,60,94,.1);   color: var(--primary); }
+.ic-g { background: rgba(200,168,75,.1); color: #c8a84b; }
+.ic-s { background: rgba(39,174,96,.1);  color: var(--success); }
+.ic-r { background: rgba(231,76,60,.1);  color: var(--danger); }
+.stat-val { font-size: 28px; font-weight: 800; color: var(--primary); line-height: 1; }
+.stat-lbl { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* شريط التنبيه */
+.warn-bar {
+  display: none;
+  align-items: center; gap: 12px;
+  background: #fff8e1; border: 1px solid #ffe082;
+  border-radius: 10px; padding: 12px 18px;
+  margin-bottom: 18px; font-size: 13px;
+}
+.warn-bar.on { display: flex; }
+.warn-bar i { color: #f39c12; font-size: 18px; flex-shrink: 0; }
+.warn-bar a { color: #c8a84b; font-weight: 700; text-decoration: none; margin-right: 8px; }
+
+/* حبات الحالة */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; border: none;
+  font-family: 'Tajawal', sans-serif;
+  transition: all .2s; white-space: nowrap;
+}
+.pill-b { background: rgba(52,152,219,.13); color: #2980b9; }
+.pill-b:hover { background: #2980b9; color: #fff; }
+.pill-g { background: rgba(39,174,96,.13);  color: #27ae60; }
+.pill-g:hover { background: #27ae60; color: #fff; }
+.pill-r { background: rgba(231,76,60,.13);  color: #e74c3c; }
+.pill-r:hover { background: #e74c3c; color: #fff; }
+.b-late { display:inline-block; background:#ffedef; color:#e74c3c; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700; margin-right:4px; }
+.b-near { display:inline-block; background:#fff3cd; color:#e67e22; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700; margin-right:4px; }
+
+/* ══════════════════════════════════════════
+   وثيقة السند
+══════════════════════════════════════════ */
+.note-doc {
+  font-family: 'Tajawal', sans-serif;
+  border: 2px solid #1a3c5e; border-radius: 12px;
+  padding: 44px 52px; background: #fff;
+  max-width: 720px; margin: 0 auto;
+  font-size: 14px; line-height: 2; color: #000;
+  position: relative; box-shadow: 0 4px 24px rgba(0,0,0,.1);
+}
+.n-wm {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%) rotate(-30deg);
+  font-size: 72px; font-weight: 800;
+  color: rgba(26,60,94,.04); white-space: nowrap;
+  pointer-events: none; z-index: 0;
+}
+.note-doc > *:not(.n-wm) { position: relative; z-index: 1; }
+.n-hd {
+  text-align: center;
+  border-bottom: 3px double #1a3c5e;
+  padding-bottom: 16px; margin-bottom: 20px;
+}
+.n-logo-img  { max-height: 65px; max-width: 160px; object-fit: contain; }
+.n-logo-ico  { font-size: 38px; color: #c8a84b; }
+.n-co   { font-size: 20px; font-weight: 800; color: #1a3c5e; margin-top: 4px; }
+.n-sub  { font-size: 12px; color: #666; margin-top: 3px; }
+.n-bdg  {
+  display: inline-block;
+  background: linear-gradient(135deg,#1a3c5e,#2d6a9f);
+  color: #fff; padding: 7px 44px;
+  border-radius: 6px; font-size: 18px;
+  font-weight: 800; margin-top: 12px; letter-spacing: 2px;
+}
+.n-meta {
+  margin-top: 10px; font-size: 13px; color: #444;
+  display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+}
+.n-meta span { display: flex; align-items: center; gap: 5px; }
+.n-ref {
+  background: #f0f4f8; border-radius: 8px;
+  padding: 8px 16px; margin-bottom: 14px;
+  font-size: 13px; color: #555;
+  display: flex; gap: 20px; flex-wrap: wrap;
+}
+.n-ref strong { color: #1a3c5e; }
+.n-amt-box {
+  border: 2px solid #c8a84b; border-radius: 12px;
+  padding: 18px; text-align: center; margin: 16px 0;
+  background: linear-gradient(135deg,#fffdf5,#fff9e6);
+}
+.n-amt-lbl   { font-size: 11px; color: #888; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px; }
+.n-amt-val   { font-size: 30px; font-weight: 800; color: #c8a84b; }
+.n-amt-wrd   { font-size: 13px; color: #333; margin-top: 5px; font-style: italic; }
+.n-body      { margin: 14px 0; }
+.n-body p    { margin-bottom: 12px; text-align: justify; }
+.n-body p strong { color: #1a3c5e; }
+.n-tbl       { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.n-tbl th    { background: #1a3c5e; color: #fff; padding: 7px 12px; text-align: right; }
+.n-tbl td    { padding: 7px 12px; border-bottom: 1px solid #eee; }
+.n-tbl tr:nth-child(even) td { background: #f7f9fc; }
+.n-law {
+  font-size: 13px; color: #444;
+  background: #f0f4f8;
+  border-right: 4px solid #1a3c5e;
+  padding: 12px 16px; border-radius: 0 8px 8px 0;
+  margin: 12px 0; line-height: 1.9;
+}
+.n-sigs {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 40px; margin-top: 32px;
+  border-top: 2px solid #1a3c5e; padding-top: 24px;
+}
+.n-sig { text-align: center; }
+.n-sig-role { font-weight: 800; color: #1a3c5e; font-size: 14px; margin-bottom: 3px; }
+.n-sig-name { font-size: 13px; color: #444; margin-bottom: 16px; }
+.n-sig-line { height: 75px; border-bottom: 1.5px solid #888; margin-bottom: 5px; }
+.n-sig-hint { font-size: 11px; color: #999; }
+.n-foot {
+  text-align: center; margin-top: 16px;
+  font-size: 12px; color: #888;
+  border-top: 1px solid #eee; padding-top: 10px;
+}
+
+/* كفيل غارم */
+.n-guarantor {
+  border: 1.5px dashed #c8a84b; border-radius: 10px;
+  padding: 14px 18px; margin-top: 16px; font-size: 13px;
+}
+.n-guarantor-title {
+  font-weight: 800; color: #c8a84b; font-size: 14px;
+  border-bottom: 1px dashed #c8a84b; padding-bottom: 6px; margin-bottom: 10px;
+}
+.n-gt-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.n-gt-item { font-size: 12px; color: #555; }
+.n-gt-item strong { color: #1a3c5e; }
+.n-gt-line { height: 55px; border-bottom: 1.5px solid #888; margin: 8px 0 3px; }
+
+/* ══════════════════════════════════════════
+   مودال الإعدادات
+══════════════════════════════════════════ */
+.cfg-body {
+  display: flex; height: 100%; min-height: 0;
+}
+.cfg-nav {
+  width: 190px; background: #f5f7fa;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0; overflow-y: auto; padding: 8px 0;
+}
+.cfg-nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px; font-size: 13px; font-weight: 500;
+  color: var(--text-muted); cursor: pointer;
+  border-right: 3px solid transparent;
+  transition: all .18s; user-select: none;
+}
+.cfg-nav-item i { width: 18px; text-align: center; }
+.cfg-nav-item:hover { background: rgba(26,60,94,.05); color: var(--primary); }
+.cfg-nav-item.on {
+  background: #fff; color: var(--primary);
+  font-weight: 700; border-right-color: var(--primary);
+}
+.cfg-panels { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.cfg-pane { display: none; }
+.cfg-pane.on { display: block; }
+.cfg-sec { margin-bottom: 26px; }
+.cfg-stitle {
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 8px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
+.g1 { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 12px; }
+.ff label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 5px;
+}
+.ff input, .ff select, .ff textarea {
+  width: 100%; padding: 8px 12px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  font-family: 'Tajawal',sans-serif; font-size: 13px;
+  color: var(--text); background: #fff;
+  transition: border .2s; outline: none; box-sizing: border-box;
+}
+.ff input:focus, .ff select:focus, .ff textarea:focus {
+  border-color: var(--primary);
+}
+.tgl-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px; background: #f7f9fc;
+  border-radius: 8px; margin-bottom: 8px;
+}
+.tgl-lbl { font-size: 13px; font-weight: 600; color: var(--text); }
+.tgl-dsc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.tgl { position: relative; width: 42px; height: 23px; flex-shrink: 0; }
+.tgl input { opacity: 0; width: 0; height: 0; }
+.tgl-sl {
+  position: absolute; inset: 0;
+  background: #ccc; border-radius: 23px;
+  cursor: pointer; transition: .3s;
+}
+.tgl-sl:before {
+  content: '';
+  position: absolute;
+  height: 17px; width: 17px;
+  left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%;
+  transition: .3s;
+}
+.tgl input:checked + .tgl-sl { background: var(--primary); }
+.tgl input:checked + .tgl-sl:before { transform: translateX(19px); }
+
+/* ══════════════════════════════════════════
+   طباعة رسمية A4
+══════════════════════════════════════════ */
+@media print {
+  .sidebar, .topbar, .no-print,
+  .stat-grid, .filters-bar, .warn-bar,
+  .dashboard-card, .modal-footer,
+  button, a.btn, .action-btns,
+  .modal-overlay { display: none !important; }
+
+  body {
+    background: #fff !important;
+    font-family: 'Tajawal', sans-serif !important;
+    font-size: 13px !important;
+    direction: rtl;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 18mm 14mm 14mm 14mm;
+  }
+
+  .note-doc {
+    box-shadow: none !important;
+    border: 2px solid #1a3c5e !important;
+    padding: 24px 32px !important;
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  .n-sigs { page-break-inside: avoid; }
+  .n-guarantor { page-break-inside: avoid; }
+}
+
+@media (max-width: 768px) {
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+  .cfg-body  { flex-direction: column; }
+  .cfg-nav {
+    width: 100%; border-left: none;
+    border-bottom: 1px solid var(--border);
+    display: flex; overflow-x: auto; padding: 0;
+  }
+  .cfg-nav-item {
+    flex-direction: column; gap: 3px;
+    padding: 10px 12px; font-size: 11px;
+    border-right: none; border-bottom: 3px solid transparent;
+    white-space: nowrap; min-width: 70px; text-align: center;
+  }
+  .cfg-nav-item.on {
+    border-bottom-color: var(--primary); border-right: none;
+  }
+  .g2 { grid-template-columns: 1fr; }
+  .cfg-panels { padding: 16px; }
+  .n-gt-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════ SIDEBAR ════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><i class="fas fa-file-contract"></i></div>
+    <div class="logo-text">
+      <span class="company-name" id="sbName">الموعد</span>
+      <span class="company-sub">للمقاولات العامة</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="index.html"        class="nav-item"><i class="fas fa-chart-pie"></i><span>لوحة التحكم</span></a>
+    <a href="contracts.html"    class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
+    <a href="new-contract.html" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
+    <a href="templates.html"    class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
+    <a href="notes.html"        class="nav-item active"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+    <a href="archive.html"      class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+    <a href="settings.html"     class="nav-item"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="cr-number">
+      <i class="fas fa-registered"></i> س.ت: <span id="sbCR">3350140062</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<main class="main-content">
+
+  <header class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <div class="topbar-title">
+      <h1><i class="fas fa-money-check-alt"></i> سندات الأمر</h1>
+    </div>
+    <div class="topbar-actions">
+      <a href="/admin/panel" class="btn btn-ghost contracts-home-btn no-print"><i class="fas fa-home"></i> الرئيسية</a>
+      <div class="current-date" id="currentDate"></div>
+      <button class="btn btn-outline btn-sm no-print" onclick="doExportCSV()" title="تصدير CSV">
+        <i class="fas fa-file-csv"></i> CSV
+      </button>
+      <button class="btn btn-secondary btn-sm no-print" onclick="openSettings()" style="margin-right:6px;" title="الإعدادات">
+        <i class="fas fa-cog"></i> الإعدادات
+      </button>
+      <button class="btn btn-primary no-print" onclick="openAdd()">
+        <i class="fas fa-plus"></i> سند جديد
+      </button>
+    </div>
+  </header>
+
+  <div class="page-content">
+
+    <div class="page-header">
+      <div class="page-header-title">
+        <h2>إدارة سندات الأمر</h2>
+        <p>وفقاً لنظام الأوراق التجارية — قرار مجلس الوزراء رقم (<span id="hdDecree">692</span>)</p>
+      </div>
+    </div>
+
+    <!-- تنبيه -->
+    <div class="warn-bar no-print" id="warnBar">
+      <i class="fas fa-exclamation-triangle"></i>
+      <div>
+        <strong>تنبيه:</strong> يوجد <strong id="warnCount">0</strong> سند متأخر أو يقترب موعد استحقاقه.
+        <a href="#" onclick="doFilter('متأخر');return false;">عرض المتأخرة</a>
+      </div>
+    </div>
+
+    <!-- إحصاءات -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon ic-b"><i class="fas fa-money-check-alt"></i></div>
+        <div><div class="stat-val" id="stAll">0</div><div class="stat-lbl">إجمالي السندات</div></div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-icon ic-g"><i class="fas fa-clock"></i></div>
+        <div><div class="stat-val" id="stSari">0</div><div class="stat-lbl">ساري / نشط</div></div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-icon ic-s"><i class="fas fa-check-double"></i></div>
+        <div><div class="stat-val" id="stColl">0</div><div class="stat-lbl">محصّل</div></div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-icon ic-r"><i class="fas fa-coins"></i></div>
+        <div><div class="stat-val" id="stAmt">—</div><div class="stat-lbl">إجمالي المبالغ (ريال)</div></div>
+      </div>
+    </div>
+
+    <!-- فلاتر -->
+    <div class="filters-bar no-print" style="margin-bottom:18px;">
+      <div class="search-input-wrap" style="flex:1;min-width:200px;">
+        <i class="fas fa-search"></i>
+        <input type="text" class="form-control" id="fQ"
+               placeholder="بحث بالرقم، الاسم، الهوية، الجوال…"
+               oninput="render()">
+      </div>
+      <select class="form-control" id="fSt" style="min-width:140px;" onchange="render()">
+        <option value="">كل الحالات</option>
+        <option value="ساري">ساري</option>
+        <option value="محصل">محصل</option>
+        <option value="متأخر">متأخر</option>
+      </select>
+      <select class="form-control" id="fOr" style="min-width:155px;" onchange="render()">
+        <option value="new">الأحدث أولاً</option>
+        <option value="old">الأقدم أولاً</option>
+        <option value="hi">الأعلى مبلغاً</option>
+        <option value="lo">الأقل مبلغاً</option>
+        <option value="due">أقرب استحقاق</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="resetFilters()">
+        <i class="fas fa-undo"></i> إعادة ضبط
+      </button>
+    </div>
+
+    <!-- الجدول -->
+    <div class="dashboard-card full-card">
+      <div class="card-header">
+        <h3><i class="fas fa-list-ul"></i> قائمة سندات الأمر</h3>
+        <span id="rowCount" style="font-size:13px;color:var(--text-muted);"></span>
+      </div>
+      <div class="table-responsive" style="padding:0;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:38px;">#</th>
+              <th>رقم السند</th>
+              <th>المدين</th>
+              <th>الهوية</th>
+              <th>الجوال</th>
+              <th>المبلغ</th>
+              <th>الإصدار</th>
+              <th>الاستحقاق</th>
+              <th>مكان الدفع</th>
+              <th>الحالة</th>
+              <th style="min-width:168px;">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr>
+              <td colspan="11" style="text-align:center;padding:50px;">
+                <i class="fas fa-spinner fa-spin" style="font-size:28px;color:var(--primary);"></i>
+                <div style="margin-top:12px;color:var(--text-muted);">جاري التحميل…</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+
+<!-- ══════════════════════════════════════════
+     مودال الإعدادات الشامل
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="mCfg">
+  <div class="modal-box" style="max-width:870px;height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-header" style="flex-shrink:0;">
+      <h3><i class="fas fa-cog" style="color:#c8a84b;"></i> &nbsp;إعدادات سندات الأمر</h3>
+      <button class="modal-close" onclick="closeModal('mCfg')"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="modal-body" style="flex:1;overflow:hidden;padding:0;">
+      <div class="cfg-body">
+
+        <!-- قائمة التبويبات -->
+        <div class="cfg-nav" id="cfgNav">
+          <div class="cfg-nav-item on" data-pane="pCompany">
+            <i class="fas fa-building"></i> بيانات الشركة
+          </div>
+          <div class="cfg-nav-item" data-pane="pNote">
+            <i class="fas fa-sliders-h"></i> إعدادات السند
+          </div>
+          <div class="cfg-nav-item" data-pane="pDisplay">
+            <i class="fas fa-toggle-on"></i> خيارات العرض
+          </div>
+          <div class="cfg-nav-item" data-pane="pLegal">
+            <i class="fas fa-gavel"></i> البنود القانونية
+          </div>
+          <div class="cfg-nav-item" data-pane="pAlerts">
+            <i class="fas fa-bell"></i> التنبيهات
+          </div>
+          <div class="cfg-nav-item" data-pane="pWA">
+            <i class="fab fa-whatsapp"></i> واتساب
+          </div>
+          <div class="cfg-nav-item" data-pane="pPreview">
+            <i class="fas fa-eye"></i> معاينة السند
+          </div>
+        </div>
+
+        <!-- الألواح -->
+        <div class="cfg-panels">
+
+          <!-- لوح: بيانات الشركة -->
+          <div class="cfg-pane on" id="pCompany">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-building"></i> بيانات الشركة المُصدِرة للسند</div>
+              <div class="g2">
+                <div class="ff"><label>اسم الشركة الرسمي</label>
+                  <input type="text" id="cName" placeholder="شركة الموعد للمقاولات العامة"></div>
+                <div class="ff"><label>رقم السجل التجاري</label>
+                  <input type="text" id="cCR" placeholder="3350140062"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>رقم الهاتف / الجوال</label>
+                  <input type="text" id="cPhone" placeholder="920012979"></div>
+                <div class="ff"><label>رقم الفاكس (اختياري)</label>
+                  <input type="text" id="cFax" placeholder="011XXXXXXX"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>المدينة</label>
+                  <input type="text" id="cCity" placeholder="الرياض"></div>
+                <div class="ff"><label>الرمز البريدي</label>
+                  <input type="text" id="cZip" placeholder="12345"></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>العنوان التفصيلي</label>
+                  <input type="text" id="cAddr" placeholder="طريق الإمام سعود الفرعي، حي التعاون"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>الرقم الضريبي (VAT)</label>
+                  <input type="text" id="cVAT" placeholder="310XXXXXXXXX"></div>
+                <div class="ff"><label>البريد الإلكتروني</label>
+                  <input type="email" id="cEmail" placeholder="info@almaw3d.com"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: إعدادات السند -->
+          <div class="cfg-pane" id="pNote">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-file-signature"></i> الإعدادات الافتراضية</div>
+              <div class="g2">
+                <div class="ff"><label>رقم قرار مجلس الوزراء</label>
+                  <input type="text" id="nDecree" placeholder="692"></div>
+                <div class="ff"><label>مدة السند الافتراضية (أشهر)</label>
+                  <input type="number" id="nDur" placeholder="6" min="1" max="120"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>مكان الدفع الافتراضي</label>
+                  <input type="text" id="nPlace" placeholder="الرياض"></div>
+                <div class="ff"><label>المحكمة المختصة</label>
+                  <input type="text" id="nCourt" placeholder="الرياض"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>الحالة الافتراضية للسند الجديد</label>
+                  <select id="nDefSt">
+                    <option value="ساري">ساري</option>
+                    <option value="متأخر">متأخر</option>
+                  </select>
+                </div>
+                <div class="ff"><label>بادئة ترقيم السند</label>
+                  <input type="text" id="nPfx" placeholder="SND- (اختياري)"></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>نص ختام السند</label>
+                  <input type="text" id="nClose" placeholder="والله ولي التوفيق"></div>
+              </div>
+            </div>
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-percentage"></i> العمولة والضريبة</div>
+              <div class="g2">
+                <div class="ff"><label>نسبة العمولة الافتراضية (%)</label>
+                  <input type="number" id="nComm" placeholder="3" min="0" max="100" step="0.5"></div>
+                <div class="ff"><label>ضريبة القيمة المضافة (%)</label>
+                  <input type="number" id="nVAT" placeholder="15" min="0" max="100" step="0.5"></div>
+              </div>
+              <div class="g2">
+                <div class="ff"><label>نوع العمولة الافتراضي</label>
+                  <select id="nCommType">
+                    <option value="مبلغ مقطوع">مبلغ مقطوع</option>
+                    <option value="نسبة مئوية">نسبة مئوية</option>
+                  </select>
+                </div>
+                <div class="ff"><label>الحد الأدنى للمبلغ (ريال)</label>
+                  <input type="number" id="nMin" placeholder="1000" min="0"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: خيارات العرض -->
+          <div class="cfg-pane" id="pDisplay">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-toggle-on"></i> محتوى وثيقة السند</div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">عبارة "بدون قيد أو شرط"</div><div class="tgl-dsc">تُضاف في صياغة التعهد</div></div>
+                <label class="tgl"><input type="checkbox" id="dUncond"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">المبلغ كتابةً بالحروف</div><div class="tgl-dsc">كتابة المبلغ بالعربية أسفل الأرقام</div></div>
+                <label class="tgl"><input type="checkbox" id="dWords"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">جدول بيانات الطرفين</div><div class="tgl-dsc">جدول المستفيد والمدين</div></div>
+                <label class="tgl"><input type="checkbox" id="dTable"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">البند القانوني</div><div class="tgl-dsc">استناد السند لقرار 692</div></div>
+                <label class="tgl"><input type="checkbox" id="dDecree"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">الكفيل الغارم</div><div class="tgl-dsc">إظهار حقول الكفيل في السند</div></div>
+                <label class="tgl"><input type="checkbox" id="dGuarantor"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">العلامة المائية</div><div class="tgl-dsc">اسم الشركة كخلفية شفافة</div></div>
+                <label class="tgl"><input type="checkbox" id="dWM"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">خطوط التوقيع والختم</div><div class="tgl-dsc">حقلا توقيع الطرفين</div></div>
+                <label class="tgl"><input type="checkbox" id="dSigs"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">التظهير</div><div class="tgl-dsc">إضافة بند حق التظهير لطرف ثالث</div></div>
+                <label class="tgl"><input type="checkbox" id="dEndorse"><span class="tgl-sl"></span></label>
+              </div>
+            </div>
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-text-height"></i> حجم الخط</div>
+              <div class="g2">
+                <div class="ff"><label>حجم خط الواجهة (px)</label>
+                  <select id="dFont">
+                    <option value="13">13px</option>
+                    <option value="14">14px</option>
+                    <option value="15">15px</option>
+                    <option value="16">16px</option>
+                  </select>
+                </div>
+                <div class="ff"><label>حجم خط الطباعة (px)</label>
+                  <select id="dPrint">
+                    <option value="12">12px</option>
+                    <option value="13">13px</option>
+                    <option value="14">14px</option>
+                    <option value="15">15px</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: البنود القانونية -->
+          <div class="cfg-pane" id="pLegal">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-gavel"></i> نصوص البنود القانونية</div>
+              <div class="g1">
+                <div class="ff"><label>النص القانوني الرئيسي (يُطبع في السند)</label>
+                  <textarea id="lMain" rows="4"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند الاختصاص القضائي</label>
+                  <textarea id="lCourt" rows="3"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند الاستحقاق والعمولة</label>
+                  <textarea id="lComm" rows="3"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند الأهلية القانونية</label>
+                  <textarea id="lCap" rows="2"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>بند التظهير</label>
+                  <textarea id="lEndorse" rows="2" placeholder="يحق للمستفيد تظهير هذا السند لأي طرف ثالث دون الحاجة لموافقة المدين…"></textarea></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: التنبيهات -->
+          <div class="cfg-pane" id="pAlerts">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-bell"></i> ضبط التنبيهات</div>
+              <div class="g2">
+                <div class="ff"><label>التنبيه المبكر قبل الاستحقاق (أيام)</label>
+                  <input type="number" id="aDays" placeholder="7" min="1" max="90"></div>
+                <div class="ff"><label>تكرار التنبيه</label>
+                  <select id="aRepeat">
+                    <option value="daily">يومياً</option>
+                    <option value="once">مرة واحدة</option>
+                    <option value="weekly">أسبوعياً</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-toggle-on"></i> أنواع التنبيهات</div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تنبيه السندات المتأخرة</div><div class="tgl-dsc">شريط تحذير للسندات التي تجاوزت تاريخ الاستحقاق</div></div>
+                <label class="tgl"><input type="checkbox" id="aOvr"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تنبيه القادمة للاستحقاق</div><div class="tgl-dsc">تحذير عند الاقتراب من الاستحقاق ضمن المدة المحددة</div></div>
+                <label class="tgl"><input type="checkbox" id="aNear"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تنبيه عقود بدون سند</div><div class="tgl-dsc">تحذير للعقود النشطة التي لا تحتوي سند أمر</div></div>
+                <label class="tgl"><input type="checkbox" id="aMiss"><span class="tgl-sl"></span></label>
+              </div>
+              <div class="tgl-row">
+                <div><div class="tgl-lbl">تحديث تلقائي للحالة إلى "متأخر"</div><div class="tgl-dsc">يُغيَّر تلقائياً عند تجاوز تاريخ الاستحقاق عند التحميل</div></div>
+                <label class="tgl"><input type="checkbox" id="aAuto"><span class="tgl-sl"></span></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: واتساب -->
+          <div class="cfg-pane" id="pWA">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fab fa-whatsapp"></i> نماذج رسائل واتساب</div>
+              <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+                المتغيرات: <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{client_name}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{note_number}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{due_date}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{amount}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{company_name}}</code>
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;">{{company_phone}}</code>
+              </p>
+              <div class="g1">
+                <div class="ff"><label>رسالة تذكير بالاستحقاق</label>
+                  <textarea id="waTmpl" rows="5"></textarea></div>
+              </div>
+              <div class="g1">
+                <div class="ff"><label>رسالة تأكيد التحصيل</label>
+                  <textarea id="waCol" rows="4"></textarea></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- لوح: معاينة -->
+          <div class="cfg-pane" id="pPreview">
+            <div class="cfg-sec">
+              <div class="cfg-stitle"><i class="fas fa-eye"></i> معاينة حية لوثيقة السند</div>
+              <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+                تعكس الإعدادات الحالية في النماذج. اضغط "تحديث" بعد تغيير أي خيار.
+              </p>
+              <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="refreshPreview()">
+                  <i class="fas fa-sync-alt"></i> تحديث المعاينة
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="printPreview()">
+                  <i class="fas fa-print"></i> طباعة النموذج
+                </button>
+              </div>
+              <div id="pvArea" style="transform:scale(0.78);transform-origin:top right;pointer-events:none;"></div>
+            </div>
+          </div>
+
+        </div><!-- end cfg-panels -->
+      </div><!-- end cfg-body -->
+    </div><!-- end modal-body -->
+
+    <div class="modal-footer" style="flex-shrink:0;">
+      <button class="btn btn-primary" onclick="saveCfg()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+      <button class="btn btn-outline btn-sm" onclick="resetCfg()"><i class="fas fa-undo"></i> استعادة الافتراضي</button>
+      <button class="btn btn-ghost" onclick="closeModal('mCfg')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     مودال عرض السند
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="mView">
+  <div class="modal-box" style="max-width:780px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3><i class="fas fa-money-check-alt" style="color:#c8a84b;"></i> &nbsp;عرض سند الأمر</h3>
+      <button class="modal-close" onclick="closeModal('mView')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="mViewBody" style="padding:14px 18px;"></div>
+    <div class="modal-footer no-print" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-primary"  onclick="doPrint()"><i class="fas fa-print"></i> طباعة A4</button>
+      <button class="btn btn-success"  id="btnCollect" onclick="doCollect()" style="display:none;"><i class="fas fa-check"></i> تحصيل</button>
+      <button class="btn btn-outline"  onclick="doEditCurrent()"><i class="fas fa-edit"></i> تعديل</button>
+      <button class="btn btn-whatsapp" id="btnWA" onclick="doViewWA()" style="display:none;background:#25d366;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;"><i class="fab fa-whatsapp"></i> واتساب</button>
+      <button class="btn btn-ghost"    onclick="closeModal('mView')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     مودال إضافة / تعديل سند
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="mForm">
+  <div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3 id="mFormTitle"><i class="fas fa-plus-circle"></i> &nbsp;إضافة سند جديد</h3>
+      <button class="modal-close" onclick="closeModal('mForm')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="noteForm" novalidate autocomplete="off">
+        <input type="hidden" id="fID">
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label class="form-label">رقم السند <span class="required">*</span></label>
+            <input type="text" class="form-control" id="fNum" placeholder="مثال: 3617" required>
+            <div class="invalid-feedback">أدخل رقم السند</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ربط بعقد <small style="color:var(--text-muted);">(اختياري)</small></label>
+            <select class="form-control" id="fCon" onchange="onContractChange()">
+              <option value="">— بدون ربط —</option>
+            </select>
+          </div>
+
+          <div class="form-group form-full">
+            <label class="form-label">اسم المدين <span class="required">*</span></label>
+            <input type="text" class="form-control" id="fName"
+                   placeholder="الاسم الكامل كما في الهوية الوطنية" required>
+            <div class="invalid-feedback">أدخل الاسم الكامل</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">رقم الهوية الوطنية <span class="required">*</span></label>
+            <input type="text" class="form-control" id="fNatID"
+                   placeholder="10 أرقام" maxlength="10" required>
+            <div class="invalid-feedback">يجب إدخال 10 أرقام</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">رقم الجوال</label>
+            <input type="tel" class="form-control" id="fPhone" placeholder="05XXXXXXXX" maxlength="10">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">مبلغ السند (ريال) <span class="required">*</span></label>
+            <input type="number" class="form-control" id="fAmt"
+                   placeholder="مثال: 24000" min="1" oninput="onAmtInput()" required>
+            <div class="invalid-feedback">أدخل مبلغاً صحيحاً</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">مكان الدفع</label>
+            <input type="text" class="form-control" id="fPlace" value="الرياض">
+          </div>
+
+          <div class="form-group form-full" id="wordsRow" style="display:none;">
+            <div style="background:#f0f4f8;border-radius:8px;padding:9px 14px;font-size:13px;color:#555;">
+              <i class="fas fa-font" style="color:#c8a84b;margin-left:7px;"></i>
+              المبلغ كتابةً: <span id="wordsSpan" style="font-weight:700;color:var(--primary);"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">تاريخ الإصدار</label>
+            <input type="date" class="form-control" id="fIssue">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">تاريخ الاستحقاق</label>
+            <input type="date" class="form-control" id="fDue">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">الحالة</label>
+            <select class="form-control" id="fStat">
+              <option value="ساري">ساري</option>
+              <option value="محصل">محصل</option>
+              <option value="متأخر">متأخر</option>
+            </select>
+          </div>
+
+          <div class="form-group form-full">
+            <label class="form-label">ملاحظات</label>
+            <textarea class="form-control" id="fNotes" rows="2" placeholder="ملاحظات إضافية…"></textarea>
+          </div>
+
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="btnSave" onclick="saveNote()"><i class="fas fa-save"></i> حفظ السند</button>
+      <button class="btn btn-ghost" onclick="closeModal('mForm')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- مودال الحذف -->
+<div class="modal-overlay" id="mDel">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3><i class="fas fa-trash" style="color:var(--danger);"></i> &nbsp;تأكيد الحذف</h3>
+      <button class="modal-close" onclick="closeModal('mDel')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>هل أنت متأكد من حذف هذا السند؟ <strong>لا يمكن التراجع.</strong></p>
+      <div id="delInfo" style="margin-top:12px;padding:10px 14px;background:#ffedef;border-radius:8px;color:#c0392b;font-weight:700;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btnDel"><i class="fas fa-trash"></i> حذف نهائياً</button>
+      <button class="btn btn-ghost" onclick="closeModal('mDel')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════ SCRIPTS ════════════════ -->
+<script src="js/app.js"></script>
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════
+   سندات الأمر — مودول مُعاد بناؤه بالكامل
+   ════════════════════════════════════════════════════════════ */
+
+var SK = 'mawid_settings';
+
+/* ── القيم الافتراضية ── */
+var DEF = {
+  company_name:    'شركة الموعد للمقاولات العامة',
+  company_cr:      '3350140062',
+  company_phone:   '920012979',
+  company_fax:     '',
+  company_city:    'الرياض',
+  company_zip:     '',
+  company_address: 'طريق الإمام سعود الفرعي، حي التعاون',
+  company_vat:     '310XXXXXXXXX',
+  company_email:   'info@almaw3d.com',
+  company_logo:    '',
+  note_decree:     '692',
+  note_dur:        6,
+  note_place:      'الرياض',
+  note_court:      'الرياض',
+  note_def_st:     'ساري',
+  note_pfx:        '',
+  note_close:      'والله ولي التوفيق',
+  comm_rate:       3,
+  vat_rate:        15,
+  comm_type:       'مبلغ مقطوع',
+  min_amt:         1000,
+  d_uncond:        true,
+  d_words:         true,
+  d_table:         true,
+  d_decree:        true,
+  d_guarantor:     false,
+  d_wm:            true,
+  d_sigs:          true,
+  d_endorse:       false,
+  font_sz:         14,
+  print_sz:        13,
+  legal_main:      'يخضع هذا السند لأحكام نظام الأوراق التجارية في المملكة العربية السعودية، استناداً لقرار مجلس الوزراء رقم (692) وتعديلاته.',
+  legal_court:     'يختص بالنظر في أي نزاع يتعلق بهذا السند محاكم مدينة الرياض وفق أحكام الشريعة الإسلامية.',
+  legal_comm:      'لا تستحق العمولة إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني. وفي حال تعامل الطرف الثاني مع الجهة الممولة من خارج نطاق هذه الشركة تُستحق العمولة كاملةً.',
+  legal_cap:       'يُقر الموقِّع بأهليته القانونية الكاملة وعدم وجود أي موانع شرعية أو نظامية تحول دون توقيعه على هذا السند.',
+  legal_endorse:   'يحق للمستفيد (شركة الموعد) تظهير هذا السند لأي طرف ثالث دون الحاجة إلى إخطار المدين أو الحصول على موافقته المسبقة.',
+  alert_days:      7,
+  alert_repeat:    'daily',
+  alert_ovr:       true,
+  alert_near:      true,
+  alert_miss:      true,
+  alert_auto:      true,
+  wa_tmpl:  'السلام عليكم {{client_name}}، تذكير بسند الأمر رقم {{note_number}} المستحق بتاريخ {{due_date}} بمبلغ {{amount}} ريال. {{company_name}} — {{company_phone}}',
+  wa_col:   'السلام عليكم {{client_name}}، تم استلام سند الأمر رقم {{note_number}}. شكراً لتعاملكم. {{company_name}}'
+};
+
+/* ── قراءة الإعدادات ── */
+function getS() {
+  try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(SK) || '{}')); }
+  catch(e) { return Object.assign({}, DEF); }
+}
+function putS(obj) { localStorage.setItem(SK, JSON.stringify(obj)); }
+
+/* ── حالة التطبيق ── */
+var DB = [];          /* كل السندات */
+var curView = null;   /* id السند المفتوح */
+var curEdit = null;   /* id السند قيد التعديل */
+
+/* ════════════════════════════════════════════
+   التهيئة
+════════════════════════════════════════════ */
+function boot() {
+  applyTheme();
+  syncHeader();
+  initCfgNav();
+  load();
+}
+
+function applyTheme() {
+  document.body.style.fontSize = (getS().font_sz || 14) + 'px';
+}
+
+function syncHeader() {
+  var s = getS();
+  var parts = (s.company_name || '').split(' ');
+  q('sbName')    && (q('sbName').textContent    = parts[1] || 'الموعد');
+  q('sbCR')      && (q('sbCR').textContent      = s.company_cr   || '3350140062');
+  q('hdDecree')  && (q('hdDecree').textContent  = s.note_decree  || '692');
+}
+
+/* ════════════════════════════════════════════
+   تحميل السندات
+════════════════════════════════════════════ */
+function load() {
+  tb('<tr><td colspan="11" style="text-align:center;padding:50px;">' +
+     '<i class="fas fa-spinner fa-spin" style="font-size:28px;color:var(--primary);"></i>' +
+     '<div style="margin-top:12px;color:var(--text-muted);">جاري التحميل…</div></td></tr>');
+
+  API.get('promissory_notes', { limit: 500 })
+    .then(function(res) {
+      var s = getS();
+      var today = new Date(); today.setHours(0,0,0,0);
+      DB = (res.data || []).map(function(n) {
+        if (n.status === 'سار') n.status = 'ساري';
+        if (s.alert_auto && n.status === 'ساري' && n.due_date) {
+          var d = new Date(n.due_date); d.setHours(0,0,0,0);
+          if (d < today) n.status = 'متأخر';
+        }
+        return n;
+      });
+      stats(); alerts(); render();
+      var op = getParam('open');
+      if (op) {
+        var f = DB.find(function(n) { return n.id === op || n.note_number === op; });
+        if (f) setTimeout(function() { openView(f.id); }, 350);
+      }
+    })
+    .catch(function(e) {
+      console.error(e);
+      tb('<tr><td colspan="11" style="text-align:center;padding:52px;">' +
+         '<i class="fas fa-exclamation-circle" style="font-size:32px;color:var(--danger);"></i>' +
+         '<div style="margin-top:12px;font-weight:700;color:var(--danger);">تعذّر تحميل البيانات</div>' +
+         '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">تحقق من الاتصال ثم أعد المحاولة</div>' +
+         '<button class="btn btn-primary btn-sm" style="margin-top:14px;" onclick="load()">' +
+         '<i class="fas fa-redo"></i> إعادة المحاولة</button></td></tr>');
+      showToast('تعذّر تحميل السندات', 'error');
+    });
+}
+
+/* ════════════════════════════════════════════
+   الإحصاءات والتنبيهات
+════════════════════════════════════════════ */
+function stats() {
+  var tot = DB.length, sari = 0, coll = 0, amt = 0;
+  DB.forEach(function(n) {
+    if (n.status === 'ساري') sari++;
+    if (n.status === 'محصل') coll++;
+    amt += parseFloat(n.amount) || 0;
+  });
+  setT('stAll', tot); setT('stSari', sari);
+  setT('stColl', coll); setT('stAmt', amt.toLocaleString('ar-SA'));
+}
+
+function alerts() {
+  var s = getS();
+  if (!s.alert_ovr && !s.alert_near) { warnOff(); return; }
+  var days = parseInt(s.alert_days) || 7;
+  var today = new Date(); today.setHours(0,0,0,0);
+  var cnt = 0;
+  DB.forEach(function(n) {
+    if (n.status === 'محصل' || !n.due_date) return;
+    var d = new Date(n.due_date); d.setHours(0,0,0,0);
+    if ((d - today) / 86400000 < days || d < today) cnt++;
+  });
+  if (cnt > 0) { setT('warnCount', cnt); warnOn(); } else { warnOff(); }
+}
+function warnOn()  { q('warnBar') && q('warnBar').classList.add('on'); }
+function warnOff() { q('warnBar') && q('warnBar').classList.remove('on'); }
+
+/* ════════════════════════════════════════════
+   الفلترة والرسم
+════════════════════════════════════════════ */
+function render() {
+  var qv = (val('fQ') || '').trim().toLowerCase();
+  var sv = val('fSt');
+  var ov = val('fOr');
+
+  var list = DB.filter(function(n) {
+    var m = !qv ||
+      (n.note_number || '').toLowerCase().indexOf(qv) > -1 ||
+      (n.debtor_name || '').toLowerCase().indexOf(qv) > -1 ||
+      (n.debtor_id   || '').toLowerCase().indexOf(qv) > -1 ||
+      (n.phone       || '').toLowerCase().indexOf(qv) > -1;
+    return m && (!sv || n.status === sv);
+  });
+
+  list.sort(function(a, b) {
+    switch(ov) {
+      case 'old': return (a.issue_date||'') > (b.issue_date||'') ? 1 : -1;
+      case 'hi':  return (parseFloat(b.amount)||0) - (parseFloat(a.amount)||0);
+      case 'lo':  return (parseFloat(a.amount)||0) - (parseFloat(b.amount)||0);
+      case 'due': return (a.due_date||'') > (b.due_date||'') ? 1 : -1;
+      default:    return (a.issue_date||'') < (b.issue_date||'') ? 1 : -1;
+    }
+  });
+
+  setT('rowCount', '(' + list.length + ' سند)');
+  drawTable(list);
+}
+
+function resetFilters() {
+  setV('fQ',''); setV('fSt',''); setV('fOr','new'); render();
+}
+
+function doFilter(st) { setV('fSt', st); render(); }
+
+function drawTable(list) {
+  if (!list.length) {
+    tb('<tr><td colspan="11"><div class="empty-state">' +
+       '<i class="fas fa-money-check-alt"></i>' +
+       '<p>لا توجد سندات مطابقة &mdash; ' +
+       '<a href="#" onclick="resetFilters();return false;">إعادة الضبط</a></p>' +
+       '</div></td></tr>');
+    return;
+  }
+
+  var s    = getS();
+  var days = parseInt(s.alert_days) || 7;
+  var now  = new Date(); now.setHours(0,0,0,0);
+  var rows = '';
+
+  list.forEach(function(n, i) {
+    var dd = n.due_date ? new Date(n.due_date) : null;
+    if (dd) dd.setHours(0,0,0,0);
+    var late = dd && dd < now && n.status !== 'محصل';
+    var near = !late && dd && n.status !== 'محصل' && (dd - now)/86400000 < days;
+
+    var rowCss = n.status === 'محصل' ? 'opacity:.62;' : late ? 'background:rgba(231,76,60,.03);' : '';
+
+    var pc = 'pill pill-b', pi = 'fa-clock';
+    if (n.status === 'محصل') { pc = 'pill pill-g'; pi = 'fa-check-double'; }
+    if (n.status === 'متأخر') { pc = 'pill pill-r'; pi = 'fa-exclamation-triangle'; }
+
+    var dstr  = n.due_date || '—';
+    var dbdg  = late ? '<span class="b-late"><i class="fas fa-exclamation-circle"></i> متأخر</span>'
+              : near ? '<span class="b-near"><i class="fas fa-clock"></i> يقترب</span>' : '';
+    var dcss  = late ? 'color:var(--danger);font-weight:700;' : near ? 'color:#e67e22;font-weight:700;' : '';
+
+    /* أزرار */
+    var ab = '';
+    ab += ab_('action-view',   'عرض',    'fa-eye',            'openView(\'' + n.id + '\')');
+    ab += ab_('action-edit',   'تعديل',  'fa-edit',           'openEdit(\'' + n.id + '\')');
+    ab += ab_('action-pdf',    'طباعة',  'fa-print',          'printById(\'' + n.id + '\')');
+    if (n.status !== 'محصل') {
+      ab += '<button class="action-btn" style="background:rgba(39,174,96,.12);color:#27ae60;" ' +
+            'onclick="collectById(\'' + n.id + '\')" title="تحصيل"><i class="fas fa-check"></i></button>';
+    }
+    if (n.contract_id) {
+      ab += '<a class="action-btn" href="contract-view.html?id=' + n.contract_id + '" ' +
+            'style="background:rgba(26,60,94,.1);color:var(--primary);" title="عرض العقد">' +
+            '<i class="fas fa-file-contract"></i></a>';
+    }
+    if (n.phone) {
+      var wm = buildWA(n, 'remind');
+      ab += '<button class="action-btn action-whatsapp" ' +
+            'onclick="sendWhatsApp(\'' + esc(n.phone) + '\',\'' + esc(wm) + '\')" title="واتساب">' +
+            '<i class="fab fa-whatsapp"></i></button>';
+    }
+    ab += ab_('action-delete', 'حذف', 'fa-trash', 'openDel(\'' + n.id + '\')');
+
+    rows += '<tr style="' + rowCss + '">';
+    rows += '<td style="color:var(--text-muted);font-size:12px;">' + (i+1) + '</td>';
+    rows += '<td><strong style="color:var(--primary);font-size:15px;cursor:pointer;" ' +
+            'onclick="openView(\'' + n.id + '\')">' + (n.note_number||'—') + '</strong>';
+    if (n.contract_id) rows += '<br><small style="color:var(--text-muted);font-size:11px;"><i class="fas fa-link"></i> مرتبط بعقد</small>';
+    rows += '</td>';
+    rows += '<td><div style="font-weight:600;">' + (n.debtor_name||'—') + '</div></td>';
+    rows += '<td><code style="font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px;">' + (n.debtor_id||'—') + '</code></td>';
+    rows += '<td style="font-size:12px;color:var(--text-muted);">' + (n.phone||'—') + '</td>';
+    rows += '<td><strong style="font-size:15px;color:#c8a84b;">' + formatMoney(n.amount) + '</strong></td>';
+    rows += '<td style="font-size:13px;">' + (n.issue_date||'—') + '</td>';
+    rows += '<td style="font-size:13px;' + dcss + '">' + dstr + dbdg + '</td>';
+    rows += '<td style="font-size:13px;">' + (n.payment_place||'الرياض') + '</td>';
+    rows += '<td><button class="' + pc + '" onclick="toggleSt(\'' + n.id + '\',\'' + (n.status||'ساري') + '\')" title="تبديل الحالة"><i class="fas ' + pi + '"></i> ' + (n.status||'ساري') + '</button></td>';
+    rows += '<td><div class="action-btns">' + ab + '</div></td>';
+    rows += '</tr>';
+  });
+
+  tb(rows);
+}
+
+function ab_(cls, ttl, ico, fn) {
+  return '<button class="action-btn ' + cls + '" onclick="' + fn + '" title="' + ttl + '">' +
+         '<i class="fas ' + ico + '"></i></button>';
+}
+function esc(s) {
+  return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');
+}
+
+/* ════════════════════════════════════════════
+   بناء وثيقة السند
+════════════════════════════════════════════ */
+function buildDoc(n, ov) {
+  var s = ov || getS();
+  var coName  = s.company_name    || DEF.company_name;
+  var coCR    = s.company_cr      || DEF.company_cr;
+  var coPhone = s.company_phone   || DEF.company_phone;
+  var coVAT   = s.company_vat     || '';
+  var coCity  = s.company_city    || DEF.company_city;
+  var coAddr  = s.company_address || DEF.company_address;
+  var coLogo  = s.company_logo    || '';
+  var court   = s.note_court      || DEF.note_court;
+  var decree  = s.note_decree     || DEF.note_decree;
+  var closing = s.note_close      || DEF.note_close;
+  var payPlc  = n.payment_place   || s.note_place || 'الرياض';
+  var legal   = s.legal_main      || DEF.legal_main;
+
+  var uncond  = s.d_uncond      !== false;
+  var words   = s.d_words       !== false;
+  var tbl     = s.d_table       !== false;
+  var dec     = s.d_decree      !== false;
+  var guar    = !!s.d_guarantor;
+  var wm      = s.d_wm          !== false;
+  var sigs    = s.d_sigs        !== false;
+  var endorse = !!s.d_endorse;
+
+  var amt  = parseFloat(n.amount) || 0;
+  var amtF = amt.toLocaleString('ar-SA') + ' ريال';
+  var amtW = numberToArabicWords(amt);
+
+  var logo = coLogo
+    ? '<img src="' + coLogo + '" class="n-logo-img" alt="شعار">'
+    : '<div class="n-logo-ico"><i class="fas fa-building"></i></div>';
+
+  var h = '<div class="note-doc" id="printArea">';
+
+  /* علامة مائية */
+  if (wm) h += '<div class="n-wm">' + coName + '</div>';
+
+  /* الرأس */
+  h += '<div class="n-hd">' + logo;
+  h += '<div class="n-co">' + coName + '</div>';
+  h += '<div class="n-sub">السجل التجاري: ' + coCR;
+  h += ' &nbsp;|&nbsp; هاتف: ' + coPhone;
+  if (coVAT) h += ' &nbsp;|&nbsp; الرقم الضريبي: ' + coVAT;
+  h += ' &nbsp;|&nbsp; ' + coCity + '</div>';
+  h += '<div><span class="n-bdg">سند لأمر</span></div>';
+  h += '<div class="n-meta">';
+  h += '<span><i class="fas fa-hashtag" style="color:#c8a84b;"></i>';
+  h += ' رقم السند: <strong style="font-size:16px;color:#1a3c5e;">' + (n.note_number||'—') + '</strong></span>';
+  h += '<span><i class="fas fa-calendar-alt" style="color:#1a3c5e;"></i>';
+  h += ' تاريخ الإصدار: <strong>' + (n.issue_date||'—') + '</strong></span>';
+  h += '</div></div>';
+
+  /* ربط عقد */
+  if (n.contract_id) {
+    h += '<div class="n-ref">';
+    h += '<span><i class="fas fa-link" style="color:#c8a84b;margin-left:4px;"></i>';
+    h += ' العقد المرتبط: <strong>' + n.contract_id + '</strong></span>';
+    h += '<span><i class="fas fa-map-marker-alt" style="color:#1a3c5e;margin-left:4px;"></i>';
+    h += ' مكان الدفع: <strong>' + payPlc + '</strong></span>';
+    h += '</div>';
+  }
+
+  /* المبلغ */
+  h += '<div class="n-amt-box">';
+  h += '<div class="n-amt-lbl">المبلغ المستحق</div>';
+  h += '<div class="n-amt-val">' + amtF + '</div>';
+  if (words) h += '<div class="n-amt-wrd">(' + amtW + ')</div>';
+  h += '</div>';
+
+  /* المتن */
+  h += '<div class="n-body"><p>';
+  h += 'أنا الموقّع أدناه السيد/ <strong>' + (n.debtor_name||'—') + '</strong>';
+  h += ' حامل الهوية الوطنية رقم (<strong>' + (n.debtor_id||'—') + '</strong>)';
+  if (n.phone) h += ' رقم الجوال: <strong>' + n.phone + '</strong>';
+  h += '، أتعهد بموجب هذا السند بأن أدفع';
+  if (uncond) h += ' <strong>بدون قيد أو شرط</strong>';
+  h += ' لأمر <strong>' + coName + '</strong> (أو لأمر من تُنيبه)';
+  h += ' مبلغاً وقدره <strong style="color:#c8a84b;">' + amtF + '</strong>';
+  if (words) h += ' (<em>' + amtW + '</em>)';
+  h += '.</p>';
+  h += '<p>يستحق هذا المبلغ السداد في تاريخ';
+  h += ' <strong>' + (n.due_date||'——/——/——') + '</strong>';
+  h += ' في مكان الدفع: مدينة <strong>' + payPlc + '</strong>.</p>';
+
+  /* جدول الأطراف */
+  if (tbl) {
+    h += '<table class="n-tbl"><thead><tr>';
+    h += '<th>البيان</th><th>المستفيد (الدائن)</th><th>المدين (الموقّع)</th>';
+    h += '</tr></thead><tbody>';
+    h += '<tr><td>الاسم الكامل</td><td>' + coName + '</td><td>' + (n.debtor_name||'—') + '</td></tr>';
+    h += '<tr><td>الرقم المرجعي</td><td>س.ت: ' + coCR + '</td><td>هوية: ' + (n.debtor_id||'—') + '</td></tr>';
+    h += '<tr><td>العنوان</td><td>' + (coAddr||coCity) + '</td><td>' + payPlc + '</td></tr>';
+    h += '<tr><td>الهاتف</td><td>' + coPhone + '</td><td>' + (n.phone||'—') + '</td></tr>';
+    h += '</tbody></table>';
+  }
+
+  /* البند القانوني */
+  if (dec) {
+    h += '<div class="n-law">';
+    h += '<i class="fas fa-gavel" style="color:#1a3c5e;margin-left:7px;"></i>';
+    h += legal.replace('(692)', '(' + decree + ')');
+    h += ' المحكمة المختصة: محاكم مدينة <strong>' + court + '</strong>.';
+    h += '</div>';
+  }
+
+  /* بند التظهير */
+  if (endorse && s.legal_endorse) {
+    h += '<div class="n-law" style="border-right-color:#c8a84b;">';
+    h += '<i class="fas fa-exchange-alt" style="color:#c8a84b;margin-left:7px;"></i>';
+    h += s.legal_endorse;
+    h += '</div>';
+  }
+
+  /* ملاحظات */
+  if (n.notes) {
+    h += '<div style="background:#f9f9f9;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:10px;">';
+    h += '<i class="fas fa-sticky-note" style="color:#c8a84b;margin-left:7px;"></i>';
+    h += '<strong>ملاحظات: </strong>' + n.notes;
+    h += '</div>';
+  }
+
+  h += '</div>';/* end n-body */
+
+  /* التوقيعات */
+  if (sigs) {
+    h += '<div class="n-sigs">';
+    h += '<div class="n-sig"><div class="n-sig-role">المستفيد (الدائن)</div>';
+    h += '<div class="n-sig-name">' + coName + '</div>';
+    h += '<div class="n-sig-line"></div><div class="n-sig-hint">التوقيع والختم الرسمي</div></div>';
+    h += '<div class="n-sig"><div class="n-sig-role">المدين (الموقّع)</div>';
+    h += '<div class="n-sig-name">' + (n.debtor_name||'—') + '</div>';
+    h += '<div class="n-sig-line"></div><div class="n-sig-hint">التوقيع</div></div>';
+    h += '</div>';
+  }
+
+  /* الكفيل الغارم */
+  if (guar) {
+    h += '<div class="n-guarantor">';
+    h += '<div class="n-guarantor-title"><i class="fas fa-user-shield" style="margin-left:7px;"></i>الكفيل الغارم</div>';
+    h += '<div class="n-gt-grid">';
+    h += '<div class="n-gt-item"><strong>الاسم الكامل:</strong> ………………………………………………</div>';
+    h += '<div class="n-gt-item"><strong>رقم الهوية:</strong> ………………………………………………</div>';
+    h += '<div class="n-gt-item"><strong>رقم الجوال:</strong> ………………………………………………</div>';
+    h += '<div class="n-gt-item"><strong>العنوان:</strong> ………………………………………………</div>';
+    h += '</div>';
+    h += '<div class="n-gt-line"></div>';
+    h += '<div style="text-align:center;font-size:11px;color:#999;">توقيع الكفيل الغارم</div>';
+    h += '</div>';
+  }
+
+  /* التذييل */
+  var sc = n.status==='محصل'?'#27ae60': n.status==='متأخر'?'#e74c3c':'#2980b9';
+  h += '<div class="n-foot">';
+  h += 'حُرِّر في مدينة ' + court + ' بتاريخ ' + (n.issue_date||'—');
+  h += ' &nbsp;|&nbsp; ' + closing;
+  h += ' &nbsp;|&nbsp; الحالة: <strong style="color:' + sc + ';">' + (n.status||'—') + '</strong>';
+  h += '</div>';
+
+  h += '</div>';/* end note-doc */
+  return h;
+}
+
+/* ════════════════════════════════════════════
+   الطباعة الرسمية A4
+════════════════════════════════════════════ */
+var PRINT_CSS = [
+  '*{box-sizing:border-box;margin:0;padding:0;}',
+  'body{font-family:"Tajawal",sans-serif;background:#fff;direction:rtl;color:#000;font-size:FONT_SIZEpx;}',
+  '@page{size:A4 portrait;margin:15mm 12mm 12mm 12mm;}',
+  '@media print{body{background:#fff!important;}}',
+  '.note-doc{border:2px solid #1a3c5e;border-radius:10px;padding:30px 44px;',
+  '  max-width:100%;margin:0 auto;line-height:1.9;color:#000;position:relative;',
+  '  page-break-inside:avoid;}',
+  '.n-wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);',
+  '  font-size:64px;font-weight:800;color:rgba(26,60,94,.035);white-space:nowrap;pointer-events:none;z-index:0;}',
+  '.note-doc>*:not(.n-wm){position:relative;z-index:1;}',
+  '.n-hd{text-align:center;border-bottom:3px double #1a3c5e;padding-bottom:14px;margin-bottom:18px;}',
+  '.n-logo-img{max-height:60px;max-width:150px;object-fit:contain;}',
+  '.n-logo-ico{font-size:32px;color:#c8a84b;}',
+  '.n-co{font-size:18px;font-weight:800;color:#1a3c5e;margin-top:5px;}',
+  '.n-sub{font-size:11px;color:#555;margin-top:3px;}',
+  '.n-bdg{display:inline-block;background:linear-gradient(135deg,#1a3c5e,#2d6a9f);color:#fff;',
+  '  padding:6px 38px;border-radius:5px;font-size:16px;font-weight:800;margin-top:10px;letter-spacing:2px;}',
+  '.n-meta{margin-top:9px;font-size:12px;color:#444;display:flex;justify-content:center;gap:20px;flex-wrap:wrap;}',
+  '.n-meta span{display:flex;align-items:center;gap:4px;}',
+  '.n-ref{background:#f0f4f8;border-radius:7px;padding:7px 14px;margin-bottom:12px;',
+  '  font-size:12px;color:#555;display:flex;gap:18px;flex-wrap:wrap;}',
+  '.n-ref strong{color:#1a3c5e;}',
+  '.n-amt-box{border:2px solid #c8a84b;border-radius:10px;padding:14px;text-align:center;',
+  '  margin:14px 0;background:linear-gradient(135deg,#fffdf5,#fff9e6);}',
+  '.n-amt-lbl{font-size:10px;color:#888;font-weight:600;letter-spacing:1px;margin-bottom:4px;}',
+  '.n-amt-val{font-size:26px;font-weight:800;color:#c8a84b;}',
+  '.n-amt-wrd{font-size:11px;color:#333;margin-top:4px;font-style:italic;}',
+  '.n-body{margin:12px 0;line-height:2;}',
+  '.n-body p{margin-bottom:10px;text-align:justify;}',
+  '.n-body p strong{color:#1a3c5e;}',
+  '.n-tbl{width:100%;border-collapse:collapse;margin:11px 0;font-size:12px;}',
+  '.n-tbl th{background:#1a3c5e;color:#fff;padding:6px 10px;text-align:right;}',
+  '.n-tbl td{padding:6px 10px;border-bottom:1px solid #eee;}',
+  '.n-tbl tr:nth-child(even) td{background:#f7f9fc;}',
+  '.n-law{font-size:11.5px;color:#444;background:#f0f4f8;border-right:4px solid #1a3c5e;',
+  '  padding:10px 14px;border-radius:0 8px 8px 0;margin:11px 0;line-height:1.85;}',
+  '.n-sigs{display:grid;grid-template-columns:1fr 1fr;gap:36px;',
+  '  margin-top:28px;border-top:2px solid #1a3c5e;padding-top:20px;page-break-inside:avoid;}',
+  '.n-sig{text-align:center;}',
+  '.n-sig-role{font-weight:800;color:#1a3c5e;font-size:13px;margin-bottom:3px;}',
+  '.n-sig-name{font-size:12px;color:#444;margin-bottom:14px;}',
+  '.n-sig-line{height:70px;border-bottom:1.5px solid #888;margin-bottom:5px;}',
+  '.n-sig-hint{font-size:10px;color:#999;}',
+  '.n-guarantor{border:1.5px dashed #c8a84b;border-radius:9px;padding:12px 16px;',
+  '  margin-top:14px;font-size:12px;page-break-inside:avoid;}',
+  '.n-guarantor-title{font-weight:800;color:#c8a84b;font-size:13px;',
+  '  border-bottom:1px dashed #c8a84b;padding-bottom:5px;margin-bottom:9px;}',
+  '.n-gt-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}',
+  '.n-gt-item{font-size:11px;color:#555;}',
+  '.n-gt-item strong{color:#1a3c5e;}',
+  '.n-gt-line{height:50px;border-bottom:1.5px solid #888;margin:7px 0 3px;}',
+  '.n-foot{text-align:center;margin-top:14px;font-size:11px;color:#777;',
+  '  border-top:1px solid #ddd;padding-top:10px;}'
+].join('\n');
+
+function buildPrintWindow(htmlContent, fontSize) {
+  var ps = fontSize || getS().print_sz || 13;
+  var css = PRINT_CSS.replace('FONT_SIZE', ps);
+  var w = window.open('', '_blank', 'width=820,height=700');
+  if (!w) { showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning'); return null; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head>');
+  w.document.write('<meta charset="UTF-8">');
+  w.document.write('<meta name="viewport" content="width=device-width,initial-scale=1">');
+  w.document.write('<title>سند لأمر — شركة الموعد للمقاولات العامة</title>');
+  w.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">');
+  w.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">');
+  w.document.write('<style>' + css + '</style>');
+  w.document.write('</head><body>');
+  w.document.write(htmlContent);
+  w.document.write('<script>');
+  w.document.write('window.onload=function(){setTimeout(function(){window.print();},600);};');
+  w.document.write('<\/script>');
+  w.document.write('</body></html>');
+  w.document.close();
+  return w;
+}
+
+function doPrint() {
+  var el = document.getElementById('printArea');
+  if (!el) { showToast('السند غير محمّل', 'error'); return; }
+  buildPrintWindow(el.outerHTML);
+}
+
+function printById(id) {
+  var n = find(id); if (!n) return;
+  var html = buildDoc(n);
+  buildPrintWindow(html);
+}
+
+/* ════════════════════════════════════════════
+   عرض السند
+════════════════════════════════════════════ */
+function openView(id) {
+  var n = find(id); if (!n) { showToast('السند غير موجود','error'); return; }
+  curView = id;
+  var cb  = document.getElementById('btnCollect');
+  var wab = document.getElementById('btnWA');
+  if (cb)  cb.style.display  = n.status !== 'محصل' ? 'inline-flex' : 'none';
+  if (wab) wab.style.display = n.phone ? 'inline-flex' : 'none';
+  document.getElementById('mViewBody').innerHTML = buildDoc(n);
+  openModal('mView');
+}
+function doViewWA() {
+  var n = find(curView); if (!n || !n.phone) return;
+  var msg = buildWA(n, 'remind');
+  sendWhatsApp(n.phone, msg);
+}
+function doEditCurrent() {
+  if (!curView) return;
+  closeModal('mView');
+  setTimeout(function() { openEdit(curView); }, 200);
+}
+function doCollect() {
+  if (!curView) return;
+  var n = find(curView); if (!n) return;
+  if (!confirm('تأكيد تحصيل ' + formatMoney(n.amount) + ' من ' + n.debtor_name + '؟')) return;
+  closeModal('mView');
+  setStatus(curView, 'محصل');
+}
+
+/* ════════════════════════════════════════════
+   تغيير الحالة
+════════════════════════════════════════════ */
+function toggleSt(id, cur) {
+  var cyc = {'ساري':'محصل','محصل':'متأخر','متأخر':'ساري'};
+  var nx  = cyc[cur] || 'ساري';
+  if (!confirm('تغيير الحالة إلى "' + nx + '"؟')) return;
+  setStatus(id, nx);
+}
+function collectById(id) {
+  var n = find(id); if (!n) return;
+  if (!confirm('تأكيد تحصيل ' + formatMoney(n.amount) + ' من ' + n.debtor_name + '؟')) return;
+  setStatus(id, 'محصل');
+}
+function setStatus(id, ns) {
+  API.patch('promissory_notes', id, { status: ns })
+    .then(function() {
+      var idx = DB.findIndex(function(n) { return n.id === id; });
+      if (idx > -1) DB[idx].status = ns;
+      stats(); alerts(); render();
+      showToast('✓ الحالة: ' + ns, 'success');
+    })
+    .catch(function() { showToast('خطأ في تحديث الحالة','error'); });
+}
+
+/* ════════════════════════════════════════════
+   نموذج إضافة / تعديل سند
+════════════════════════════════════════════ */
+function openAdd() {
+  curEdit = null;
+  var s = getS();
+  setT('mFormTitle', ''); q('mFormTitle').innerHTML = '<i class="fas fa-plus-circle"></i> &nbsp;إضافة سند جديد';
+  document.getElementById('noteForm').reset();
+  setV('fID',''); hideWords();
+  setV('fPlace', s.note_place  || 'الرياض');
+  setV('fStat',  s.note_def_st || 'ساري');
+  setV('fIssue', today());
+  var dd = new Date(); dd.setMonth(dd.getMonth() + (parseInt(s.note_dur)||6));
+  setV('fDue', dd.toISOString().split('T')[0]);
+  /* ترقيم تلقائي تسلسلي */
+  var nextNum = genNextNum(s.note_pfx || '');
+  setV('fNum', nextNum);
+  fillContracts('');
+  openModal('mForm');
+}
+
+function openEdit(id) {
+  var n = find(id); if (!n) return;
+  curEdit = id;
+  q('mFormTitle').innerHTML = '<i class="fas fa-edit"></i> &nbsp;تعديل السند — ' + (n.note_number||'');
+  setV('fID',    n.id);           setV('fNum',   n.note_number   || '');
+  setV('fName',  n.debtor_name  || ''); setV('fNatID', n.debtor_id    || '');
+  setV('fPhone', n.phone        || ''); setV('fAmt',   n.amount       || '');
+  setV('fPlace', n.payment_place|| 'الرياض');
+  setV('fIssue', n.issue_date   || ''); setV('fDue',   n.due_date     || '');
+  setV('fStat',  n.status       || 'ساري');
+  setV('fNotes', n.notes        || '');
+  if (n.amount) { showWords(numberToArabicWords(parseFloat(n.amount))); } else { hideWords(); }
+  fillContracts(n.contract_id || '');
+  openModal('mForm');
+}
+
+/* سحب بيانات العقد تلقائياً عند الاختيار */
+function onContractChange() {
+  var cid = val('fCon');
+  if (!cid) return;
+  API.getOne('contracts', cid)
+    .then(function(c) {
+      if (!c || c.error) return;
+      /* اسم المدين (الطرف الثاني) */
+      var name = c.party_two_name || c.secondPartyName || c.second_party_name || '';
+      var nid  = c.party_two_id   || c.secondPartyId   || c.second_party_id   || '';
+      var ph   = c.party_two_phone|| c.secondPartyPhone|| c.second_party_phone || '';
+      var comm = c.commission_amount || c.commissionAmount || c.total_amount || '';
+
+      if (name)  { setV('fName',  name);  document.getElementById('fName').classList.remove('is-invalid'); }
+      if (nid)   { setV('fNatID', nid);   document.getElementById('fNatID').classList.remove('is-invalid'); }
+      if (ph)    { setV('fPhone', ph); }
+      if (comm)  { setV('fAmt',   comm);  onAmtInput(); }
+
+      /* توليد رقم سند مرتبط بالعقد */
+      var s = getS();
+      var cnum = c.contract_number || c.contractNumber || '';
+      if (cnum && !val('fNum')) {
+        setV('fNum', (s.note_pfx||'SND-') + cnum + '-' + (DB.filter(function(n){return n.contract_id===cid;}).length + 1));
+      }
+
+      showToast('✓ تم سحب بيانات العقد: ' + (name||cnum||cid), 'success');
+    })
+    .catch(function(e) { console.warn('خطأ سحب العقد:', e); });
+}
+
+function onAmtInput() {
+  var v = parseFloat(val('fAmt'));
+  if (v > 0) { showWords(numberToArabicWords(v)); } else { hideWords(); }
+}
+function showWords(t) {
+  var wr = q('wordsRow'), ws = q('wordsSpan');
+  if (ws) ws.textContent = t;
+  if (wr) wr.style.display = 'block';
+}
+function hideWords() {
+  var wr = q('wordsRow');
+  if (wr) wr.style.display = 'none';
+}
+
+function fillContracts(selId) {
+  var sel = document.getElementById('fCon');
+  sel.innerHTML = '<option value="">— بدون ربط —</option>';
+  API.get('contracts', { limit: 300 })
+    .then(function(res) {
+      (res.data||[]).forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c.id;
+        o.textContent = (c.contract_number||c.id) + ' — ' + (c.party_two_name||'');
+        if (c.id === selId) o.selected = true;
+        sel.appendChild(o);
+      });
+    }).catch(function() {});
+}
+
+/* ════════════════════════════════════════════
+   توليد رقم السند التسلسلي
+════════════════════════════════════════════ */
+function genNextNum(pfx) {
+  if (!DB.length) return pfx + '1';
+  var nums = DB.map(function(n) {
+    var raw = (n.note_number || '').replace(pfx, '').trim();
+    var m   = raw.match(/(\d+)/);
+    return m ? parseInt(m[1]) : 0;
+  });
+  var maxN = Math.max.apply(null, nums);
+  return pfx + (maxN + 1);
+}
+
+/* ════════════════════════════════════════════
+   حفظ السند
+════════════════════════════════════════════ */
+function saveNote() {
+  var rules = [
+    { id:'fNum',   ok: function(v) { return v.trim().length > 0; } },
+    { id:'fName',  ok: function(v) { return v.trim().length >= 2; } },
+    { id:'fNatID', ok: function(v) { return /^\d{10}$/.test(v.trim()); } },
+    { id:'fAmt',   ok: function(v) { return parseFloat(v) > 0; } }
+  ];
+  var valid = true;
+  rules.forEach(function(r) {
+    var el = document.getElementById(r.id);
+    var ok = r.ok(el.value);
+    el.classList.toggle('is-invalid', !ok);
+    if (!ok) valid = false;
+  });
+  if (!valid) { showToast('يرجى تصحيح الحقول المطلوبة','warning'); return; }
+
+  /* التحقق من تعارض رقم السند */
+  if (!curEdit) {
+    var numInput = val('fNum').trim();
+    var dup = DB.find(function(n) { return n.note_number === numInput; });
+    if (dup) {
+      document.getElementById('fNum').classList.add('is-invalid');
+      showToast('رقم السند ' + numInput + ' مستخدم مسبقاً — يرجى تغييره', 'error');
+      return;
+    }
+  }
+
+  var data = {
+    note_number:   val('fNum').trim(),
+    contract_id:   val('fCon') || '',
+    debtor_name:   val('fName').trim(),
+    debtor_id:     val('fNatID').trim(),
+    phone:         val('fPhone').trim(),
+    amount:        parseFloat(val('fAmt')),
+    payment_place: val('fPlace') || 'الرياض',
+    issue_date:    val('fIssue'),
+    due_date:      val('fDue'),
+    status:        val('fStat'),
+    notes:         val('fNotes').trim()
+  };
+
+  var btn = document.getElementById('btnSave');
+  function lock()   { if(btn){btn.disabled=true;  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> جاري الحفظ…';} }
+  function unlock() { if(btn){btn.disabled=false; btn.innerHTML='<i class="fas fa-save"></i> حفظ السند';} }
+  lock();
+
+  if (curEdit) {
+    API.update('promissory_notes', curEdit, data)
+      .then(function(up) {
+        var i = DB.findIndex(function(n) { return n.id === curEdit; });
+        if (i>-1) DB[i] = Object.assign(DB[i], up);
+        closeModal('mForm'); stats(); render();
+        showToast('✓ تم تحديث السند','success'); unlock();
+      })
+      .catch(function(e) { console.error(e); showToast('خطأ في الحفظ','error'); unlock(); });
+  } else {
+    API.create('promissory_notes', data)
+      .then(function(cr) {
+        DB.unshift(cr); closeModal('mForm'); stats(); render();
+        showToast('✓ تم إضافة السند بنجاح','success'); unlock();
+      })
+      .catch(function(e) { console.error(e); showToast('خطأ في الحفظ','error'); unlock(); });
+  }
+}
+
+/* ════════════════════════════════════════════
+   حذف السند
+════════════════════════════════════════════ */
+function openDel(id) {
+  var n = find(id);
+  q('delInfo').textContent = n ? 'سند رقم ' + n.note_number + ' — ' + n.debtor_name : '';
+  openModal('mDel');
+  document.getElementById('btnDel').onclick = function() {
+    API.delete('promissory_notes', id)
+      .then(function() {
+        DB = DB.filter(function(x) { return x.id !== id; });
+        closeModal('mDel'); stats(); render();
+        showToast('تم الحذف','success');
+      })
+      .catch(function() { showToast('خطأ في الحذف','error'); });
+  };
+}
+
+/* ════════════════════════════════════════════
+   تصدير CSV
+════════════════════════════════════════════ */
+function doExportCSV() {
+  if (!DB.length) { showToast('لا توجد سندات','warning'); return; }
+  var hd = ['رقم السند','اسم المدين','رقم الهوية','الجوال','المبلغ','تاريخ الإصدار','تاريخ الاستحقاق','مكان الدفع','الحالة','ملاحظات'];
+  var rows = DB.map(function(n) {
+    return [n.note_number,n.debtor_name,n.debtor_id,n.phone||'',
+      n.amount,n.issue_date,n.due_date,n.payment_place,n.status,n.notes||'']
+      .map(function(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }).join(',');
+  });
+  var csv  = '\uFEFF' + hd.join(',') + '\n' + rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url; a.download = 'سندات_' + new Date().toLocaleDateString('en') + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✓ تم التصدير — ' + DB.length + ' سند','success');
+}
+
+/* ════════════════════════════════════════════
+   واتساب
+════════════════════════════════════════════ */
+function buildWA(n, type) {
+  var s = getS();
+  var t = type === 'col' ? (s.wa_col||'') : (s.wa_tmpl||'');
+  return t
+    .replace('{{client_name}}',   n.debtor_name  || '')
+    .replace('{{note_number}}',   n.note_number  || '')
+    .replace('{{due_date}}',      n.due_date     || '')
+    .replace('{{amount}}',        (parseFloat(n.amount)||0).toLocaleString('ar-SA'))
+    .replace('{{company_name}}',  s.company_name  || DEF.company_name)
+    .replace('{{company_phone}}', s.company_phone || DEF.company_phone);
+}
+
+/* ════════════════════════════════════════════
+   الإعدادات
+════════════════════════════════════════════ */
+function initCfgNav() {
+  document.querySelectorAll('#cfgNav .cfg-nav-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var pid = this.getAttribute('data-pane');
+      document.querySelectorAll('#cfgNav .cfg-nav-item').forEach(function(x){x.classList.remove('on');});
+      document.querySelectorAll('.cfg-pane').forEach(function(x){x.classList.remove('on');});
+      this.classList.add('on');
+      var p = document.getElementById(pid); if(p) p.classList.add('on');
+      if (pid === 'pPreview') refreshPreview();
+    });
+  });
+}
+
+function openSettings() {
+  fillCfg();
+  openModal('mCfg');
+  /* إعادة تفعيل أول تبويب */
+  document.querySelectorAll('#cfgNav .cfg-nav-item').forEach(function(x){x.classList.remove('on');});
+  document.querySelectorAll('.cfg-pane').forEach(function(x){x.classList.remove('on');});
+  var fi = document.querySelector('#cfgNav .cfg-nav-item');
+  var fp = document.getElementById('pCompany');
+  if(fi) fi.classList.add('on'); if(fp) fp.classList.add('on');
+}
+
+function fillCfg() {
+  var s = getS();
+  /* شركة */
+  sv('cName',s.company_name);sv('cCR',s.company_cr);sv('cPhone',s.company_phone);sv('cFax',s.company_fax);
+  sv('cCity',s.company_city);sv('cZip',s.company_zip);sv('cAddr',s.company_address);
+  sv('cVAT',s.company_vat);sv('cEmail',s.company_email);
+  /* سند */
+  sv('nDecree',s.note_decree);sv('nDur',s.note_dur);sv('nPlace',s.note_place);sv('nCourt',s.note_court);
+  sv('nDefSt',s.note_def_st);sv('nPfx',s.note_pfx);sv('nClose',s.note_close);
+  sv('nComm',s.comm_rate);sv('nVAT',s.vat_rate);sv('nCommType',s.comm_type);sv('nMin',s.min_amt);
+  /* عرض */
+  sc('dUncond',  s.d_uncond   !==false);sc('dWords',s.d_words!==false);
+  sc('dTable',   s.d_table    !==false);sc('dDecree',s.d_decree!==false);
+  sc('dGuarantor',!!s.d_guarantor);sc('dWM',s.d_wm!==false);
+  sc('dSigs',    s.d_sigs     !==false);sc('dEndorse',!!s.d_endorse);
+  sv('dFont',s.font_sz);sv('dPrint',s.print_sz);
+  /* قانوني */
+  sv('lMain',s.legal_main);sv('lCourt',s.legal_court);sv('lComm',s.legal_comm);
+  sv('lCap',s.legal_cap);sv('lEndorse',s.legal_endorse);
+  /* تنبيهات */
+  sv('aDays',s.alert_days);sv('aRepeat',s.alert_repeat);
+  sc('aOvr',s.alert_ovr!==false);sc('aNear',s.alert_near!==false);
+  sc('aMiss',s.alert_miss!==false);sc('aAuto',s.alert_auto!==false);
+  /* واتساب */
+  sv('waTmpl',s.wa_tmpl);sv('waCol',s.wa_col);
+}
+
+function saveCfg() {
+  var ex = getS();
+  var up = Object.assign({}, ex, {
+    company_name:    gv('cName'),  company_cr:      gv('cCR'),
+    company_phone:   gv('cPhone'), company_fax:     gv('cFax'),
+    company_city:    gv('cCity'),  company_zip:     gv('cZip'),
+    company_address: gv('cAddr'),  company_vat:     gv('cVAT'),
+    company_email:   gv('cEmail'),
+    note_decree:  gv('nDecree')||'692', note_dur:    parseInt(gv('nDur'))||6,
+    note_place:   gv('nPlace')||'الرياض', note_court: gv('nCourt')||'الرياض',
+    note_def_st:  gv('nDefSt')||'ساري', note_pfx:   gv('nPfx'),
+    note_close:   gv('nClose')||'والله ولي التوفيق',
+    comm_rate:    parseFloat(gv('nComm'))||3, vat_rate:  parseFloat(gv('nVAT'))||15,
+    comm_type:    gv('nCommType'), min_amt: parseFloat(gv('nMin'))||1000,
+    d_uncond:   gc('dUncond'), d_words:     gc('dWords'),
+    d_table:    gc('dTable'),  d_decree:    gc('dDecree'),
+    d_guarantor:gc('dGuarantor'), d_wm:    gc('dWM'),
+    d_sigs:     gc('dSigs'),   d_endorse:   gc('dEndorse'),
+    font_sz:  parseInt(gv('dFont'))||14, print_sz: parseInt(gv('dPrint'))||13,
+    legal_main:  gv('lMain'), legal_court: gv('lCourt'),
+    legal_comm:  gv('lComm'), legal_cap:   gv('lCap'), legal_endorse: gv('lEndorse'),
+    alert_days:  parseInt(gv('aDays'))||7, alert_repeat: gv('aRepeat'),
+    alert_ovr:   gc('aOvr'), alert_near:   gc('aNear'),
+    alert_miss:  gc('aMiss'), alert_auto:   gc('aAuto'),
+    wa_tmpl: gv('waTmpl'), wa_col: gv('waCol')
+  });
+  putS(up);
+  applyTheme(); syncHeader(); alerts(); render();
+  showToast('✓ تم حفظ الإعدادات','success');
+  closeModal('mCfg');
+}
+
+function resetCfg() {
+  if (!confirm('استعادة الإعدادات الافتراضية؟ (لن تُمسح بيانات السندات)')) return;
+  var logo = getS().company_logo;
+  var fr = Object.assign({}, DEF);
+  if (logo) fr.company_logo = logo;
+  putS(fr); fillCfg(); applyTheme(); syncHeader();
+  showToast('تمت الاستعادة إلى الافتراضي','success');
+}
+
+/* المعاينة الحية */
+function refreshPreview() {
+  var s = {
+    company_name:    gv('cName')    || DEF.company_name,
+    company_cr:      gv('cCR')      || DEF.company_cr,
+    company_phone:   gv('cPhone')   || DEF.company_phone,
+    company_vat:     gv('cVAT')     || '',
+    company_city:    gv('cCity')    || DEF.company_city,
+    company_address: gv('cAddr')    || DEF.company_address,
+    company_logo:    getS().company_logo || '',
+    note_court:      gv('nCourt')   || DEF.note_court,
+    note_decree:     gv('nDecree')  || DEF.note_decree,
+    note_close:      gv('nClose')   || DEF.note_close,
+    note_place:      gv('nPlace')   || DEF.note_place,
+    legal_main:      gv('lMain')    || DEF.legal_main,
+    legal_endorse:   gv('lEndorse') || DEF.legal_endorse,
+    d_uncond:    gc('dUncond'),  d_words:     gc('dWords'),
+    d_table:     gc('dTable'),   d_decree:    gc('dDecree'),
+    d_guarantor: gc('dGuarantor'), d_wm:      gc('dWM'),
+    d_sigs:      gc('dSigs'),    d_endorse:   gc('dEndorse')
+  };
+  var smp = {
+    note_number:   (gv('nPfx')||'') + '3617',
+    contract_id:   '',
+    debtor_name:   'عقيل بن هريسان بن خلف الضوي العنزي',
+    debtor_id:     '1030460636',
+    phone:         '0554456710',
+    amount:        24000,
+    issue_date:    today(),
+    due_date:      futDate(6),
+    payment_place: gv('nPlace') || 'الرياض',
+    status:        'ساري',
+    notes:         'سند عمولة وساطة عقارية — رقم السعي المتفق عليه'
+  };
+  var area = document.getElementById('pvArea');
+  if (area) area.innerHTML = buildDoc(smp, s);
+}
+
+function printPreview() {
+  refreshPreview();
+  var el = document.getElementById('pvArea') && document.getElementById('pvArea').querySelector('.note-doc');
+  if (!el) { showToast('لا توجد معاينة — حدّث أولاً','warning'); return; }
+  buildPrintWindow(el.outerHTML);
+}
+
+/* ════════════════════════════════════════════
+   مساعدات عامة
+════════════════════════════════════════════ */
+function find(id)   { return DB.find(function(n){return n.id===id;})||null; }
+function q(id)      { return document.getElementById(id); }
+function setT(id,v) { var e=q(id); if(e) e.textContent=v; }
+function val(id)    { var e=q(id); return e?e.value:''; }
+function setV(id,v) { var e=q(id); if(e&&v!==undefined&&v!==null) e.value=v; }
+function tb(h)      { var e=q('tbody'); if(e) e.innerHTML=h; }
+function today()    { return new Date().toISOString().split('T')[0]; }
+function futDate(m) { var d=new Date(); d.setMonth(d.getMonth()+m); return d.toISOString().split('T')[0]; }
+/* إعدادات */
+function sv(id,v)   { var e=q(id); if(e&&v!==undefined&&v!==null) e.value=v; }
+function sc(id,v)   { var e=q(id); if(e) e.checked=!!v; }
+function gv(id)     { var e=q(id); return e?e.value:''; }
+function gc(id)     { var e=q(id); return e?e.checked:false; }
+
+/* ════════════════════════════════════════════
+   تشغيل التطبيق
+════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

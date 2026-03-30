@@ -10,9 +10,10 @@ command = ""
 binding = "DB"
 database_name = "tamweel-production-v2"
 database_id = "67526746-97fb-4914-aa8f-d3cc73a6ab87"
+# Apply pending migrations to Cloudflare (not just local): wrangler d1 migrations apply tamweel-production-v2 --remote
 
 [[r2_buckets]]
 binding = "ATTACHMENTS"
-bucket_name = "tamweel-attachments-production"
+bucket_name = "tamweel-calc-r2"
 
 

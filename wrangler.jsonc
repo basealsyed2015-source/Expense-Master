@@ -14,7 +14,7 @@
   "r2_buckets": [
     {
       "binding": "ATTACHMENTS",
-      "bucket_name": "tamweel-attachments-production"
+      "bucket_name": "tamweel-calc-r2"
     }
   ]
 }

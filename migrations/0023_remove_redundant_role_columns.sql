@@ -1,10 +1,10 @@
--- Remove redundant role columns from users table
--- The 'role' and 'user_type' columns are redundant since we use role_id and role_name from the roles table
+-- Legacy cleanup was originally: DROP COLUMN role, DROP COLUMN user_type on users.
+-- Databases created from migrations/01_create_all_tables.sql never had those columns
+-- (only role_id), so ALTER TABLE ... DROP COLUMN role fails with "no such column".
+--
+-- This file is a no-op so migration order stays stable. If you have an old database
+-- that still includes users.role or users.user_type, remove them manually (SQLite 3.35+ / D1), e.g.:
+--   ALTER TABLE users DROP COLUMN role;
+--   ALTER TABLE users DROP COLUMN user_type;
 
--- Drop the 'role' column (redundant text column that was always 'employee')
--- Note: SQLite DROP COLUMN requires SQLite 3.35.0+ (Cloudflare D1 supports this)
-ALTER TABLE users DROP COLUMN role;
-
--- Drop the 'user_type' column (redundant grouping column)
--- This was causing inconsistency (role_id 2 and 3 both had user_type='company')
-ALTER TABLE users DROP COLUMN user_type;
+SELECT 1;
