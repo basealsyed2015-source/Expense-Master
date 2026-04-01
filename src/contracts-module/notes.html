@@ -1024,7 +1024,7 @@ function load() {
       stats(); alerts(); render();
       var op = getParam('open');
       if (op) {
-        var f = DB.find(function(n) { return n.id === op || n.note_number === op; });
+        var f = DB.find(function(n) { return idEq(n.id, op) || n.note_number === op; });
         if (f) setTimeout(function() { openView(f.id); }, 350);
       }
     })
@@ -1497,7 +1497,7 @@ function collectById(id) {
 function setStatus(id, ns) {
   API.patch('promissory_notes', id, { status: ns })
     .then(function() {
-      var idx = DB.findIndex(function(n) { return n.id === id; });
+      var idx = DB.findIndex(function(n) { return idEq(n.id, id); });
       if (idx > -1) DB[idx].status = ns;
       stats(); alerts(); render();
       showToast('✓ الحالة: ' + ns, 'success');
@@ -1564,7 +1564,7 @@ function onContractChange() {
       var s = getS();
       var cnum = c.contract_number || c.contractNumber || '';
       if (cnum && !val('fNum')) {
-        setV('fNum', (s.note_pfx||'SND-') + cnum + '-' + (DB.filter(function(n){return n.contract_id===cid;}).length + 1));
+        setV('fNum', (s.note_pfx||'SND-') + cnum + '-' + (DB.filter(function(n){return idEq(n.contract_id, cid);}).length + 1));
       }
 
       showToast('✓ تم سحب بيانات العقد: ' + (name||cnum||cid), 'success');
@@ -1595,7 +1595,7 @@ function fillContracts(selId) {
         var o = document.createElement('option');
         o.value = c.id;
         o.textContent = (c.contract_number||c.id) + ' — ' + (c.party_two_name||'');
-        if (c.id === selId) o.selected = true;
+        if (idEq(c.id, selId)) o.selected = true;
         sel.appendChild(o);
       });
     }).catch(function() {});
@@ -1667,7 +1667,7 @@ function saveNote() {
   if (curEdit) {
     API.update('promissory_notes', curEdit, data)
       .then(function(up) {
-        var i = DB.findIndex(function(n) { return n.id === curEdit; });
+        var i = DB.findIndex(function(n) { return idEq(n.id, curEdit); });
         if (i>-1) DB[i] = Object.assign(DB[i], up);
         closeModal('mForm'); stats(); render();
         showToast('✓ تم تحديث السند','success'); unlock();
@@ -1693,7 +1693,7 @@ function openDel(id) {
   document.getElementById('btnDel').onclick = function() {
     API.delete('promissory_notes', id)
       .then(function() {
-        DB = DB.filter(function(x) { return x.id !== id; });
+        DB = DB.filter(function(x) { return !idEq(x.id, id); });
         closeModal('mDel'); stats(); render();
         showToast('تم الحذف','success');
       })
@@ -1879,7 +1879,12 @@ function printPreview() {
 /* ════════════════════════════════════════════
    مساعدات عامة
 ════════════════════════════════════════════ */
-function find(id)   { return DB.find(function(n){return n.id===id;})||null; }
+/** DB/API ids are often numbers; inline onclick passes string — strict === breaks lookups. */
+function idEq(a, b) {
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}
+function find(id)   { return DB.find(function(n){ return idEq(n.id, id); })||null; }
 function q(id)      { return document.getElementById(id); }
 function setT(id,v) { var e=q(id); if(e) e.textContent=v; }
 function val(id)    { var e=q(id); return e?e.value:''; }

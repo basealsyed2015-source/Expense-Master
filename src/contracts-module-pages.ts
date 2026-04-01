@@ -1,12 +1,17 @@
+/** Keep in sync with `ASSETS_VERSION` in scripts/build-contracts-ts-pages.mjs when bumping cache. */
+const LEGACY_ASSETS_QUERY = '?v=20260401'
+
 import contractsModuleCss from './contracts-module/css/style.css?raw'
-import indexHtml from './contracts-module/index.html?raw'
-import contractsListHtml from './contracts-module/contracts.html?raw'
-import newContractHtml from './contracts-module/new-contract.html?raw'
 import contractViewHtml from './contracts-module/contract-view.html?raw'
-import templatesHtml from './contracts-module/templates.html?raw'
 import notesHtml from './contracts-module/notes.html?raw'
 import archiveHtml from './contracts-module/archive.html?raw'
 import settingsHtml from './contracts-module/settings.html?raw'
+
+/** Phase 1: core pages generated from HTML via scripts/build-contracts-ts-pages.mjs */
+export { contractsDashboardPage } from './contracts-module-pages/generated/contractsDashboardPage'
+export { contractsListPage } from './contracts-module-pages/generated/contractsListPage'
+export { contractsNewPage } from './contracts-module-pages/generated/contractsNewPage'
+export { contractsTemplatesPage } from './contracts-module-pages/generated/contractsTemplatesPage'
 
 /** Inline bundled CSS so the UI is styled even when asset URLs are blocked or not routed to the Worker. */
 function injectContractsCss(html: string): string {
@@ -25,13 +30,18 @@ function stripExternalContractsStylesheet(html: string): string {
 }
 
 /**
- * Rewrite relative asset and page links for deployment under /admin/contracts and /contracts-module.
+ * Legacy: rewrite relative asset and page links for remaining raw HTML pages (view, notes, archive, settings).
  * Font Awesome + Tajawal stay on CDN; app CSS is inlined for reliability.
  */
+/** Adds class on `<html>` so role-3 sidebar CSS applies before app.js runs (avoids flash of hidden nav). */
+export function markContractsHtmlRole3Restricted(html: string): string {
+  return html.replace('<html lang="ar" dir="rtl">', '<html lang="ar" dir="rtl" class="contracts-role-3">')
+}
+
 export function patchContractsHtml(html: string): string {
   let h = injectContractsCss(stripExternalContractsStylesheet(html.replace(/\r\n/g, '\n')))
-  h = h.replace(/src="js\/app\.js"/g, 'src="/contracts-module/js/app.js?v=20260330"')
-  h = h.replace(/src="js\/dashboard\.js"/g, 'src="/contracts-module/js/dashboard.js?v=20260330"')
+  h = h.replace(/src="js\/app\.js"/g, `src="/contracts-module/js/app.js${LEGACY_ASSETS_QUERY}"`)
+  h = h.replace(/src="js\/dashboard\.js"/g, `src="/contracts-module/js/dashboard.js${LEGACY_ASSETS_QUERY}"`)
   h = h.replace(/new-contract\.html\?template=/g, '/admin/contracts/new?template=')
   h = h.replace(/new-contract\.html\?edit=/g, '/admin/contracts/new?edit=')
   h = h.replace(/contract-view\.html\?id=/g, '/admin/contracts/view?id=')
@@ -48,7 +58,7 @@ export function patchContractsHtml(html: string): string {
   h = h.replace(/`contracts\.html`/g, '`/admin/contracts/list`')
   h = h.replace(/`new-contract\.html\?edit=/g, '`/admin/contracts/new?edit=')
   h = h.replace(/`notes\.html\?search=/g, '`/admin/contracts/notes?search=')
-  // Home link is inlined here so it appears even when /contracts-module/js/app.js is blocked or cached.
+  h = h.replace(/`contract-view\.html\?id=/g, '`/admin/contracts/view?id=')
   if (!h.includes('contracts-home-btn')) {
     h = h.replace(
       /<div class="topbar-actions">/,
@@ -58,11 +68,10 @@ export function patchContractsHtml(html: string): string {
   return h
 }
 
-export const contractsDashboardPage = patchContractsHtml(indexHtml)
-export const contractsListPage = patchContractsHtml(contractsListHtml)
-export const contractsNewPage = patchContractsHtml(newContractHtml)
 export const contractsViewPage = patchContractsHtml(contractViewHtml)
-export const contractsTemplatesPage = patchContractsHtml(templatesHtml)
 export const contractsNotesPage = patchContractsHtml(notesHtml)
 export const contractsArchivePage = patchContractsHtml(archiveHtml)
 export const contractsSettingsPage = patchContractsHtml(settingsHtml)
+
+/** Shared layout helpers and route constants for future refactors. */
+export * from './contracts-module-pages/contracts-layout'

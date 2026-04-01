@@ -1,4 +1,3 @@
-import type { Hono } from 'hono'
 import type { Context } from 'hono'
 
 type UserInfo = {
@@ -27,23 +26,37 @@ function isSuperAdmin(info: UserInfo): boolean {
   return info.roleId === 1 && (info.tokenRoleId === null || info.tokenRoleId === 1)
 }
 
+function isContractsModuleBlockedRole(info: UserInfo): boolean {
+  return info.roleId === 4
+}
+
+function isContractsModuleReadOnlyRole(info: UserInfo): boolean {
+  return info.roleId === 3
+}
+
 async function auth(c: Context, getUserInfo: GetUserInfo) {
   const info = await getUserInfo(c)
   if (!info.userId) {
     return { info, error: c.json({ error: 'Unauthorized' }, 401) as Response }
+  }
+  if (isContractsModuleBlockedRole(info)) {
+    return { info, error: c.json({ error: 'Forbidden' }, 403) as Response }
   }
   return { info, error: null as Response | null }
 }
 
 function resolveWriteTenantId(
   info: UserInfo,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  c: Context
 ): { tenantId: number | null; error: Response | null } {
   if (info.tenantId) return { tenantId: info.tenantId, error: null }
   if (isSuperAdmin(info)) {
     const tid = body?.tenant_id
     if (typeof tid === 'number' && tid > 0) return { tenantId: tid, error: null }
     if (typeof tid === 'string' && /^\d+$/.test(tid)) return { tenantId: parseInt(tid, 10), error: null }
+    const q = c.req.query('tenant_id')
+    if (q && /^\d+$/.test(String(q))) return { tenantId: parseInt(String(q), 10), error: null }
     return {
       tenantId: null,
       error: new Response(JSON.stringify({ error: 'يجب تحديد tenant_id لحساب المدير العام' }), {
@@ -79,7 +92,7 @@ function tenantFilterClause(
   return { sql: ' AND 1=0 ', binds: [] }
 }
 
-export function registerContractsModuleApi(app: Hono, getUserInfo: GetUserInfo) {
+export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
   // Dedicated customer lookup for the new-contract form — fetches customers table
   // directly so the contracts module never depends on the generic :table route for this.
   app.get('/api/contract-tables/customer-list', async (c) => {
@@ -163,7 +176,7 @@ export function registerContractsModuleApi(app: Hono, getUserInfo: GetUserInfo) 
     const table = sqlTable(name)
     if (!table) return c.json({ error: 'Unknown table' }, 400)
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
-    const { tenantId, error: te } = resolveWriteTenantId(info, body)
+    const { tenantId, error: te } = resolveWriteTenantId(info, body, c)
     if (te) return te
     if (tenantId == null) return c.json({ error: 'Missing tenant' }, 400)
 
@@ -274,6 +287,7 @@ export function registerContractsModuleApi(app: Hono, getUserInfo: GetUserInfo) 
   const updateRow = async (c: Context, method: 'PUT' | 'PATCH') => {
     const { info, error } = await auth(c, getUserInfo)
     if (error) return error
+    if (isContractsModuleReadOnlyRole(info)) return c.json({ error: 'Forbidden' }, 403)
     const name = c.req.param('table')
     const table = sqlTable(name)
     if (!table) return c.json({ error: 'Unknown table' }, 400)
@@ -405,6 +419,7 @@ export function registerContractsModuleApi(app: Hono, getUserInfo: GetUserInfo) 
   app.delete('/api/contract-tables/:table/:id', async (c) => {
     const { info, error } = await auth(c, getUserInfo)
     if (error) return error
+    if (isContractsModuleReadOnlyRole(info)) return c.json({ error: 'Forbidden' }, 403)
     const name = c.req.param('table')
     const table = sqlTable(name)
     if (!table) return c.json({ error: 'Unknown table' }, 400)

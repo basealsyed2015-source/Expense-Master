@@ -1911,6 +1911,16 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 console.log('👤 role_id:', roleId);
                 console.log('📋 user data:', user || window.USER_DATA || {});
+
+                // Role 3 should land directly on contracts list (not dashboard)
+                if (roleId === 3) {
+                    document.querySelectorAll('.quick-access-btn[href="/admin/contracts"]').forEach((el) => {
+                        el.setAttribute('href', '/admin/contracts/list');
+                    });
+                    document.querySelectorAll('#mobile-menu a[href="/admin/contracts"]').forEach((el) => {
+                        el.setAttribute('href', '/admin/contracts/list');
+                    });
+                }
                 
                 // تعريف الروابط المسموحة لكل role_id
                 // Source of truth for permissions:
@@ -1962,7 +1972,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/reports',
                         '/admin/banks',
                         '/admin/rates',
+                        // Logical entry + list URL: href is rewritten to /admin/contracts/list before allowlist runs
                         '/admin/contracts',
+                        '/admin/contracts/list',
                         '/calculator',
                         '/'
                     ],
@@ -1970,7 +1982,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
-                        '/admin/contracts',
                         '/calculator',
                         '/'
                     ]

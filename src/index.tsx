@@ -39,7 +39,8 @@ import {
   contractsTemplatesPage,
   contractsNotesPage,
   contractsArchivePage,
-  contractsSettingsPage
+  contractsSettingsPage,
+  markContractsHtmlRole3Restricted
 } from './contracts-module-pages'
 import { registerContractsModuleApi } from './contracts-module-api'
 import { registerContractsStaticRoutes } from './contracts-module-static-routes'
@@ -107,7 +108,7 @@ async function deleteGlobalBanksAndDependents(db: D1Database) {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
 // Contracts module static assets (JS; CSS is inlined in HTML). Register early so routes are matched.
-registerContractsStaticRoutes(app)
+registerContractsStaticRoutes(app, getUserInfo)
 
 // Helper: Mobile-Responsive CSS Styles
 const getMobileResponsiveCSS = () => `
@@ -445,8 +446,15 @@ async function fetchObligationTypeNamesForTenant(
   }
 }
 
-function normalizeRoleId(roleId: number | null): number | null {
-  if (roleId === null) {
+function parseRoleId(roleId: unknown): number | null {
+  if (roleId == null || roleId === '') return null
+  const n = typeof roleId === 'number' ? roleId : parseInt(String(roleId), 10)
+  return Number.isNaN(n) ? null : n
+}
+
+function normalizeRoleId(roleId: unknown): number | null {
+  const n = parseRoleId(roleId)
+  if (n === null) {
     return null
   }
   const legacyMap: Record<number, number> = {
@@ -455,7 +463,30 @@ function normalizeRoleId(roleId: number | null): number | null {
     13: 3,
     14: 4
   }
-  return legacyMap[roleId] ?? roleId
+  return legacyMap[n] ?? n
+}
+
+function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined): string {
+  const normalizedRoleId = normalizeRoleId(roleId)
+  const raw = (roleName || '').trim()
+  const rn = raw.toLowerCase()
+
+  if (normalizedRoleId === 1) return 'مدير النظام'
+  // Prefer DB label (e.g. حساب شركة) for company accounts
+  if (normalizedRoleId === 2) return raw || 'حساب شركة'
+  // Numeric 3 = sales supervisor (even if an old migration relabeled the roles row as "employee"/موظف)
+  if (normalizedRoleId === 3) return 'مشرف المبيعات'
+  if (normalizedRoleId === 4) return 'موظف'
+
+  // Legacy English keys from older seeds / custom role rows (when role_id is missing or non-standard)
+  if (rn === 'supervisor') return 'مشرف المبيعات'
+  if (rn === 'employee') return 'موظف'
+  if (rn === 'company_admin') return 'حساب شركة'
+  if (rn === 'super_admin') return 'مدير النظام'
+  if (raw === 'موظف') return 'موظف'
+  if (raw === 'مشرف' || raw.includes('مشرف')) return 'مشرف المبيعات'
+
+  return raw || 'غير محدد'
 }
 
 // Get tenant_id for current user (for multi-tenancy filtering)
@@ -1133,7 +1164,7 @@ app.post('/api/auth/login', async (c) => {
         email: user.email,
         phone: user.phone,
         role_id: user.role_id,
-        role_name: user.role_name || 'موظف',  // Role name from roles table
+        role_name: getRoleDisplayName(user.role_id, user.role_name),  // Role name from roles table
         role_description: user.role_description,
         company_name: user.subscription_company_name || user.tenant_name,
         subscription_id: user.subscription_id,
@@ -2417,13 +2448,15 @@ app.get('/api/users', async (c) => {
     const roleId = userInfo.roleId
     const tenantId = userInfo.tenantId
     
+    // Resolve role_name from u.role_id only (scalar subqueries). Avoid GROUP BY + permission JOINs —
+    // SQLite can surface inconsistent non-aggregated columns; old rows then showed wrong role_name (e.g. "employee").
     let query = `
-      SELECT u.*, r.role_name, r.description as role_description,
-             t.company_name as tenant_name,
-             COUNT(DISTINCT rp.permission_id) as permissions_count
+      SELECT u.*,
+             (SELECT role_name FROM roles WHERE id = u.role_id) AS role_name,
+             (SELECT description FROM roles WHERE id = u.role_id) AS role_description,
+             t.company_name AS tenant_name,
+             (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count
       FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN role_permissions rp ON r.id = rp.role_id
       LEFT JOIN tenants t ON u.tenant_id = t.id`
     
     // Superadmin (role_id = 1) can see all users
@@ -2433,11 +2466,14 @@ app.get('/api/users', async (c) => {
     }
     
     query += `
-      GROUP BY u.id
       ORDER BY u.id DESC`
     
     const { results } = await c.env.DB.prepare(query).all()
-    return c.json({ success: true, data: results })
+    const normalizedResults = (results || []).map((u: any) => ({
+      ...u,
+      role_name: getRoleDisplayName(u.role_id, u.role_name)
+    }))
+    return c.json({ success: true, data: normalizedResults })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -4889,7 +4925,11 @@ app.delete('/api/subscription-requests/:id', async (c) => {
 app.get('/api/permissions', async (c) => {
   try {
     const result = await c.env.DB.prepare('SELECT * FROM permissions ORDER BY category, id').all()
-    return c.json({ success: true, data: result.results })
+    const normalizedRoles = (result.results || []).map((role: any) => ({
+      ...role,
+      role_name: getRoleDisplayName(role.id, role.role_name)
+    }))
+    return c.json({ success: true, data: normalizedRoles })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -5867,7 +5907,7 @@ app.get('/admin/panel', async (c) => {
         full_name: user.full_name,
         email: user.email,
         role_id: user.role_id,
-        role_name: user.role_name,
+        role_name: getRoleDisplayName(user.role_id, user.role_name),
         role_description: user.role_description,
         tenant_id: user.tenant_id,
         company_name: user.company_name
@@ -16231,15 +16271,41 @@ app.get('/admin/users', async (c) => {
         <script>
           let allUsers = []; // تخزين جميع المستخدمين
           
+          function parseRoleIdClient(v) {
+            if (v == null || v === '') return null;
+            const n = parseInt(String(v), 10);
+            return Number.isNaN(n) ? null : n;
+          }
+          function normalizeRoleIdClient(rid) {
+            const n = parseRoleIdClient(rid);
+            if (n === null) return null;
+            const legacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+            return legacy[n] !== undefined ? legacy[n] : n;
+          }
+          function roleDisplayLabel(user) {
+            const n = normalizeRoleIdClient(user.role_id);
+            const raw = (user.role_name || '').trim();
+            const rn = raw.toLowerCase();
+            if (n === 1) return 'مدير النظام';
+            if (n === 2) return raw || 'حساب شركة';
+            if (n === 3) return 'مشرف المبيعات';
+            if (n === 4) return 'موظف';
+            if (rn === 'supervisor') return 'مشرف المبيعات';
+            if (rn === 'employee') return 'موظف';
+            if (rn === 'company_admin') return 'حساب شركة';
+            if (rn === 'super_admin') return 'مدير النظام';
+            if (raw === 'موظف') return 'موظف';
+            if (raw === 'مشرف' || raw.indexOf('مشرف') !== -1) return 'مشرف المبيعات';
+            return raw || 'غير محدد';
+          }
+          
           // تحميل بيانات المستخدم الحالي
           function loadCurrentUser() {
             const userData = localStorage.getItem('userData') || localStorage.getItem('user');
             if (userData) {
               const user = JSON.parse(userData);
               document.getElementById('currentUserName').textContent = user.full_name || user.username || 'مستخدم';
-              // Use role_name or role_id to determine role display
-              const roleDisplay = user.role_name || (user.role_id === 1 ? 'مدير نظام' : user.role_id === 2 ? 'مدير شركة' : 'مستخدم');
-              document.getElementById('currentUserRole').textContent = roleDisplay;
+              document.getElementById('currentUserRole').textContent = roleDisplayLabel(user);
             }
           }
           
@@ -16296,9 +16362,10 @@ app.get('/admin/users', async (c) => {
             }
             
             tbody.innerHTML = users.map(user => {
+              const nr = normalizeRoleIdClient(user.role_id);
               // Determine role class based on role_id
-              const roleClass = user.role_id === 1 ? 'bg-red-100 text-red-800' : 
-                                (user.role_id === 2 || user.role_id === 3) ? 'bg-blue-100 text-blue-800' : 
+              const roleClass = nr === 1 ? 'bg-red-100 text-red-800' : 
+                                (nr === 2 || nr === 3) ? 'bg-blue-100 text-blue-800' : 
                                 'bg-gray-100 text-gray-800';
               const statusClass = user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
               const statusText = user.is_active ? 'نشط' : 'غير نشط';
@@ -16319,7 +16386,7 @@ app.get('/admin/users', async (c) => {
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.email || '-'}</td>
                   <td class="px-6 py-4">
                     <span class="px-3 py-1 rounded-full text-xs font-bold \${roleClass}">
-                      \${user.role_name || 'غير محدد'}
+                      \${roleDisplayLabel(user)}
                     </span>
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.company_name || '-'}</td>
@@ -16400,7 +16467,7 @@ app.get('/admin/users', async (c) => {
                 user.username,
                 user.full_name || '-',
                 user.email || '-',
-                user.role_name || 'غير محدد',
+                roleDisplayLabel(user),
                 user.company_name || '-',
                 user.is_active ? 'نشط' : 'غير نشط'
               ]);
@@ -16714,7 +16781,7 @@ app.get('/admin/users/:id/edit', async (c) => {
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     ${roles.results?.map((role: any) => `
                       <option value="${role.id}" ${user.role_id === role.id ? 'selected' : ''}>
-                        ${role.role_name} ${role.description ? `- ${role.description}` : ''}
+                        ${getRoleDisplayName(role.id, role.role_name)}
                       </option>
                     `).join('') || ''}
                   </select>
@@ -17123,7 +17190,7 @@ app.get('/admin/users-new', async (c) => {
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الدور --</option>
                     ${roles.results.map((role: any) => `
-                      <option value="${role.id}" data-role-name="${role.role_name}">${role.role_name} - ${role.description || ''}</option>
+                      <option value="${role.id}" data-role-name="${getRoleDisplayName(role.id, role.role_name)}">${getRoleDisplayName(role.id, role.role_name)}</option>
                     `).join('')}
                   </select>
                 </div>
@@ -18481,12 +18548,42 @@ app.get('/api/hr/reports/:type', async (c) => {
 // ===============================================
 registerContractsModuleApi(app, getUserInfo)
 
-app.get('/admin/contracts', (c) => c.html(contractsDashboardPage))
-app.get('/admin/contracts/list', (c) => c.html(contractsListPage))
+async function ensureContractsModuleAccess(
+  c: any,
+  allowedForRole3: 'all' | 'list-new-only' = 'all'
+): Promise<Response | null> {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+  if (userInfo.roleId === 4) return c.redirect('/admin/panel')
+  if (userInfo.roleId === 3) {
+    if (allowedForRole3 === 'list-new-only') return null
+    return c.redirect('/admin/contracts/list')
+  }
+  return null
+}
+
+app.get('/admin/contracts', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'all')
+  if (denied) return denied
+  return c.html(contractsDashboardPage)
+})
+app.get('/admin/contracts/list', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only')
+  if (denied) return denied
+  const userInfo = await getUserInfo(c)
+  const page =
+    userInfo.roleId === 3 ? markContractsHtmlRole3Restricted(contractsListPage) : contractsListPage
+  return c.html(page)
+})
 app.get('/admin/contracts/new', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only')
+  if (denied) return denied
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) {
     return c.redirect('/login')
+  }
+  if (userInfo.roleId === 3 && c.req.query('edit')) {
+    return c.redirect('/admin/contracts/list')
   }
   if ((userInfo.roleId === 2 || userInfo.roleId === 3) && !userInfo.tenantId) {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
@@ -18524,16 +18621,39 @@ app.get('/admin/contracts/new', async (c) => {
         : '<span class="text-muted">تعذر تحميل بيانات الشركة.</span>'
   }
 
-  const html = contractsNewPage
+  let html = contractsNewPage
     .replace('<!--CONTRACTS_CUSTOMERS_OPTIONS-->', optionsHtml)
     .replace('<!--CONTRACTS_PARTY_ONE_SUMMARY-->', partyOneSummaryHtml)
+  if (userInfo.roleId === 3) {
+    html = markContractsHtmlRole3Restricted(html)
+  }
   return c.html(html)
 })
-app.get('/admin/contracts/view', (c) => c.html(contractsViewPage))
-app.get('/admin/contracts/templates', (c) => c.html(contractsTemplatesPage))
-app.get('/admin/contracts/notes', (c) => c.html(contractsNotesPage))
-app.get('/admin/contracts/archive', (c) => c.html(contractsArchivePage))
-app.get('/admin/contracts/settings', (c) => c.html(contractsSettingsPage))
+app.get('/admin/contracts/view', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only')
+  if (denied) return denied
+  return c.html(contractsViewPage)
+})
+app.get('/admin/contracts/templates', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'all')
+  if (denied) return denied
+  return c.html(contractsTemplatesPage)
+})
+app.get('/admin/contracts/notes', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'all')
+  if (denied) return denied
+  return c.html(contractsNotesPage)
+})
+app.get('/admin/contracts/archive', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'all')
+  if (denied) return denied
+  return c.html(contractsArchivePage)
+})
+app.get('/admin/contracts/settings', async (c) => {
+  const denied = await ensureContractsModuleAccess(c, 'all')
+  if (denied) return denied
+  return c.html(contractsSettingsPage)
+})
 
 // HR SYSTEM ROUTES & APIs
 // ===============================================

@@ -112,7 +112,7 @@
       <div class="topbar-actions">
         <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
         <div class="current-date" id="currentDate"></div>
-        <button type="button" id="btnNewTemplate" class="btn btn-primary"><i class="fas fa-plus"></i> قالب جديد</button>
+        <button type="button" class="btn btn-primary" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
       </div>
     </header>
 
@@ -302,6 +302,7 @@
       document.getElementById('tpl_body').value = getDefaultBody();
       openModal('templateModal');
     }
+    globalThis.openNewTemplateModal = openNewTemplateModal;
 
     function getDefaultBody() {
       return `بسم الله الرحمن الرحيم
@@ -436,19 +437,7 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      loadTemplates();
-      const btn = document.getElementById('btnNewTemplate');
-      if (btn) {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          openNewTemplateModal();
-        });
-      }
-      if (typeof globalThis !== 'undefined') {
-        globalThis.openNewTemplateModal = openNewTemplateModal;
-      }
-    });
+    document.addEventListener('DOMContentLoaded', loadTemplates);
   </script>
 </body>
 </html>

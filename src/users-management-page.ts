@@ -311,6 +311,37 @@ export const usersManagementPage = () => `
     let allUsers = [];
     let allRoles = [];
 
+    function normalizeRoleLabel(roleId, roleName) {
+      const rid = parseInt(roleId, 10);
+      const raw = (roleName || '').trim();
+      const rn = raw.toLowerCase();
+      if (rid === 1 || rid === 11) return 'مدير النظام';
+      if (rid === 2 || rid === 12) return raw || 'حساب شركة';
+      if (rid === 3 || rid === 13) return 'مشرف المبيعات';
+      if (rid === 4 || rid === 14) return 'موظف';
+      if (rn === 'supervisor') return 'مشرف المبيعات';
+      if (rn === 'employee') return 'موظف';
+      if (rn === 'company_admin') return 'حساب شركة';
+      if (rn === 'super_admin') return 'مدير النظام';
+      return raw || 'غير محدد';
+    }
+
+    function getRoleOptionLabel(role) {
+      const rid = parseInt(role?.id, 10);
+      const baseName = normalizeRoleLabel(rid, role?.role_name);
+      const fallbackById = {
+        1: 'مدير النظام',
+        2: 'حساب شركة',
+        3: 'مشرف المبيعات',
+        4: 'موظف',
+        11: 'مدير النظام',
+        12: 'حساب شركة',
+        13: 'مشرف المبيعات',
+        14: 'موظف'
+      };
+      return fallbackById[rid] || baseName;
+    }
+
     // تحميل البيانات
     async function loadData() {
       try {
@@ -347,19 +378,19 @@ export const usersManagementPage = () => `
         // فلتر الأدوار
         const filterOption = document.createElement('option');
         filterOption.value = role.id;
-        filterOption.textContent = role.role_name;
+        filterOption.textContent = getRoleOptionLabel(role);
         roleFilter.appendChild(filterOption);
         
         // قائمة إضافة
         const addOption = document.createElement('option');
         addOption.value = role.id;
-        addOption.textContent = role.role_name;
+        addOption.textContent = getRoleOptionLabel(role);
         addUserRole.appendChild(addOption);
         
         // قائمة تعديل
         const editOption = document.createElement('option');
         editOption.value = role.id;
-        editOption.textContent = role.role_name;
+        editOption.textContent = getRoleOptionLabel(role);
         editUserRole.appendChild(editOption);
       });
     }
@@ -382,7 +413,7 @@ export const usersManagementPage = () => `
       
       tbody.innerHTML = users.map((user, index) => {
         const role = allRoles.find(r => r.id === user.role_id);
-        const roleName = role ? role.role_name : 'غير محدد';
+        const roleName = normalizeRoleLabel(user.role_id, role ? role.role_name : null);
         const statusBadge = user.is_active ? 
           '<span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold"><i class="fas fa-check-circle ml-1"></i>نشط</span>' :
           '<span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-bold"><i class="fas fa-times-circle ml-1"></i>غير نشط</span>';

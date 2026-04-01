@@ -13,6 +13,24 @@ const COMPANY = {
 };
 
 // ===== API HELPERS =====
+/** When admin opens /admin/contracts/...?tenant_id=N, pass it through so super-admin writes resolve tenant (see contracts-module-api resolveWriteTenantId). */
+function contractTablesTenantQuerySuffix() {
+  if (typeof window === 'undefined') return '';
+  try {
+    const t = new URLSearchParams(window.location.search).get('tenant_id');
+    if (t && /^\d+$/.test(t)) return `tenant_id=${encodeURIComponent(t)}`;
+  } catch (_) {}
+  return '';
+}
+
+function mergeTenantIntoUrl(path) {
+  const extra = contractTablesTenantQuerySuffix();
+  if (!extra) return path;
+  const sep = path.includes('?') ? '&' : '?';
+  if (path.includes('tenant_id=')) return path;
+  return path + sep + extra;
+}
+
 const API = {
   base: '/api/contract-tables',
 
@@ -20,7 +38,7 @@ const API = {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(path, {
+      const res = await fetch(mergeTenantIntoUrl(path), {
         credentials: 'same-origin',
         ...options,
         signal: controller.signal
@@ -40,8 +58,14 @@ const API = {
   },
 
   async get(table, params = {}) {
-    const qs = new URLSearchParams(params).toString();
-    return this.request(`${this.base}/${table}${qs ? '?' + qs : ''}`);
+    const qs = new URLSearchParams(params);
+    const extra = contractTablesTenantQuerySuffix();
+    if (extra) {
+      const [k, v] = extra.split('=');
+      if (k && v != null && !qs.has(k)) qs.set(k, decodeURIComponent(v));
+    }
+    const s = qs.toString();
+    return this.request(`${this.base}/${table}${s ? '?' + s : ''}`);
   },
 
   async getOne(table, id) {
@@ -73,7 +97,7 @@ const API = {
   },
 
   async delete(table, id) {
-    await fetch(`${this.base}/${table}/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+    await fetch(mergeTenantIntoUrl(`${this.base}/${table}/${id}`), { method: 'DELETE', credentials: 'same-origin' });
   }
 };
 
@@ -210,6 +234,26 @@ document.addEventListener('click', e => {
   }
 });
 
+/** Templates page: new-template — capture phase + DOMContentLoaded direct bind (bypasses bubbling/z-order issues). */
+function tryOpenNewTemplateModal(e) {
+  if (typeof globalThis.openNewTemplateModal !== 'function') return false;
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  globalThis.openNewTemplateModal();
+  return true;
+}
+document.addEventListener(
+  'click',
+  (e) => {
+    const btn = e.target.closest && e.target.closest('[data-contracts-action="new-template"]');
+    if (!btn) return;
+    tryOpenNewTemplateModal(e);
+  },
+  true
+);
+
 // ===== SIDEBAR TOGGLE =====
 function toggleSidebar() {
   document.getElementById('sidebar')?.classList.toggle('open');
@@ -257,16 +301,95 @@ function printPage() {
   window.print();
 }
 
+function normalizeRoleId(value) {
+  const numeric = parseInt(value, 10);
+  const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
+  return legacyMap[numeric] || numeric || null;
+}
+
+function getContractsRoleId() {
+  try {
+    const userStr = localStorage.getItem('userData') || localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const rid = normalizeRoleId(user?.role_id);
+      if (rid) return rid;
+    }
+  } catch (_) {}
+
+  if (typeof window !== 'undefined') {
+    if (window.USER_ROLE_ID != null) {
+      const rid = normalizeRoleId(window.USER_ROLE_ID);
+      if (rid) return rid;
+    }
+    if (window.USER_DATA && window.USER_DATA.role_id != null) {
+      const rid = normalizeRoleId(window.USER_DATA.role_id);
+      if (rid) return rid;
+    }
+  }
+
+  return null;
+}
+
+function applyRole3ContractsRestrictions() {
+  const roleId = getContractsRoleId();
+  if (roleId !== 3) return;
+
+  const allowedSidebarLinks = new Set(['/admin/contracts/list', '/admin/contracts/new']);
+  document.querySelectorAll('.sidebar-nav .nav-item[href]').forEach((link) => {
+    const href = (link.getAttribute('href') || '').split('?')[0];
+    if (!allowedSidebarLinks.has(href)) {
+      link.style.display = 'none';
+    }
+  });
+
+  const hideRestrictedListActions = () => {
+    document
+      .querySelectorAll(
+        '.action-edit, .action-delete, a[href*="/admin/contracts/new?edit="], button[onclick*="archiveContract("]'
+      )
+      .forEach((el) => {
+        el.style.display = 'none';
+      });
+  };
+
+  hideRestrictedListActions();
+
+  const contractsBody = document.getElementById('contractsBody');
+  if (contractsBody && typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(() => hideRestrictedListActions());
+    observer.observe(contractsBody, { childList: true, subtree: true });
+  }
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target || !target.closest) return;
+      const blocked = target.closest(
+        'a[href*="/admin/contracts/new?edit="], .action-delete, button[onclick*="archiveContract("]'
+      );
+      if (!blocked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showToast('غير مسموح بالتعديل أو الأرشفة لهذا الدور', 'warning');
+    },
+    true
+  );
+}
+
 // Expose for inline handlers + CSP-safe pages
 if (typeof globalThis !== 'undefined') {
   globalThis.openModal = openModal;
   globalThis.closeModal = closeModal;
   globalThis.showToast = showToast;
   globalThis.toggleSidebar = toggleSidebar;
+  globalThis.getContractsRoleId = getContractsRoleId;
 }
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   setActiveNav();
   setCurrentDate();
+  applyRole3ContractsRestrictions();
 });

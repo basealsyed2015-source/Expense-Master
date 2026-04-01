@@ -6,6 +6,7 @@
     "start": "node server.js",
     "dev": "vite",
     "build": "vite build",
+    "build:contracts-pages": "node scripts/build-contracts-ts-pages.mjs",
     "preview": "wrangler pages dev dist",
     "deploy": "npm run build && wrangler pages deploy dist",
     "test": "echo 'Tests coming soon...'"
