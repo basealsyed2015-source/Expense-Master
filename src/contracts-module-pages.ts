@@ -1,5 +1,5 @@
 /** Keep in sync with `ASSETS_VERSION` in scripts/build-contracts-ts-pages.mjs when bumping cache. */
-const LEGACY_ASSETS_QUERY = '?v=20260401'
+const LEGACY_ASSETS_QUERY = '?v=20260405'
 
 import contractsModuleCss from './contracts-module/css/style.css?raw'
 import contractViewHtml from './contracts-module/contract-view.html?raw'

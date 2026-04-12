@@ -30,6 +30,7 @@ export type ContractsNavKey =
   | 'templates'
   | 'notes'
   | 'archive'
+  | 'settings'
 
 /** Inlined CSS block (replaces external css/style.css link). */
 export function contractsInlineStyles(): string {
@@ -91,6 +92,9 @@ export function contractsSidebarNav(active: ContractsNavKey): string {
       </a>
       <a href="${R.archive}" class="${n('archive', 'nav-item')}" data-page="archive">
         <i class="fas fa-archive"></i><span>الأرشيف</span>
+      </a>
+      <a href="${R.settings}" class="${n('settings', 'nav-item')}" data-page="settings">
+        <i class="fas fa-cog"></i><span>الإعدادات</span>
       </a>
     </nav>
     <div class="sidebar-footer">

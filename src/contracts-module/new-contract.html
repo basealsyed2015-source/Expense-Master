@@ -26,6 +26,7 @@
       <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
       <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
       <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
+      <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
     </nav>
     <div class="sidebar-footer">
       <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
@@ -92,6 +93,28 @@
             <div class="form-note" id="partyOneSummary">
               <i class="fas fa-info-circle text-secondary"></i>
               <!--CONTRACTS_PARTY_ONE_SUMMARY-->
+            </div>
+            <div class="form-grid">
+              <div class="form-group form-full">
+                <label class="form-label">اسم الشركة (الطرف الأول)</label>
+                <input type="text" class="form-control" id="party_one_name" placeholder="اسم الشركة" value="<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->" />
+              </div>
+              <div class="form-group form-full">
+                <label class="form-label">هاتف الشركة</label>
+                <input type="text" class="form-control" id="party_one_phone" placeholder="05XXXXXXXX" dir="ltr" style="text-align:right;" value="<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->" />
+              </div>
+              <div class="form-group form-full">
+                <label class="form-label">شعار الشركة (صورة)</label>
+                <input type="file" class="form-control" id="party_one_logo_file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <input type="hidden" id="party_one_logo" />
+                <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">يُرفع إلى نفس تخزين المرفقات (R2) — PNG أو JPEG أو WebP أو GIF، حتى 2 ميجابايت</div>
+                <div id="party_one_logo_preview" style="margin-top:10px;display:none;">
+                  <img id="party_one_logo_img" alt="" style="max-height:80px;max-width:220px;border-radius:8px;border:1px solid var(--border);object-fit:contain;" />
+                  <div style="margin-top:8px;">
+                    <button type="button" class="btn btn-ghost btn-sm" id="party_one_logo_clear"><i class="fas fa-times"></i> إزالة الصورة</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -448,10 +471,22 @@
       return valid;
     }
 
+    function escHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     function buildReview() {
       const data = getFormData();
       document.getElementById('reviewContent').innerHTML = `
         <div style="display:grid;gap:16px;">
+          <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">الطرف الأول (الشركة)</div>
+            <div class="info-row">
+              <div class="info-item"><label>اسم الشركة</label><span>${data.party_one_name ? escHtml(data.party_one_name) : '—'}</span></div>
+              <div class="info-item"><label>هاتف الشركة</label><span>${data.party_one_phone ? escHtml(data.party_one_phone) : '—'}</span></div>
+              <div class="info-item"><label>الشعار</label><span>${data.party_one_logo ? 'مرفق' : '—'}</span></div>
+            </div>
+          </div>
           <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
             <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">بيانات العقد</div>
             <div class="info-row">
@@ -500,6 +535,115 @@
       `;
     }
 
+    /** `logoValue` = `/api/attachments/view/...` (R2) or legacy `data:image/...`. */
+    function setPartyOneLogoPreview(logoValue) {
+      const hidden = document.getElementById('party_one_logo');
+      const prev = document.getElementById('party_one_logo_preview');
+      const img = document.getElementById('party_one_logo_img');
+      const fileInput = document.getElementById('party_one_logo_file');
+      if (hidden) hidden.value = logoValue || '';
+      if (logoValue && img && prev) {
+        img.src = logoValue;
+        prev.style.display = 'block';
+      } else if (prev) {
+        prev.style.display = 'none';
+        if (img) img.removeAttribute('src');
+        if (fileInput) fileInput.value = '';
+      }
+    }
+
+    function partyLogoUploadUrl() {
+      let path = '/api/contracts/party-logo-upload';
+      const t = new URLSearchParams(window.location.search).get('tenant_id');
+      if (t && /^\d+$/.test(t)) path += '?tenant_id=' + encodeURIComponent(t);
+      return path;
+    }
+
+    function compressImageToJpegBlob(file, maxW, quality, cb) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          URL.revokeObjectURL(url);
+          let w = img.naturalWidth || img.width;
+          let h = img.naturalHeight || img.height;
+          if (w > maxW) {
+            h = Math.round((h * maxW) / w);
+            w = maxW;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            cb(null);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob((blob) => cb(blob), 'image/jpeg', quality);
+        } catch (_) {
+          cb(null);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        cb(null);
+      };
+      img.src = url;
+    }
+
+    function uploadPartyLogoBlob(blob) {
+      const fd = new FormData();
+      fd.append('file', blob, 'party-logo.jpg');
+      const tid = new URLSearchParams(window.location.search).get('tenant_id');
+      if (tid) fd.append('tenant_id', tid);
+      return fetch(partyLogoUploadUrl(), { method: 'POST', body: fd, credentials: 'same-origin' }).then(async (res) => {
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.detail || j.error || `HTTP ${res.status}`);
+        if (!j.url) throw new Error('لم يُرجع رابط الصورة');
+        return j.url;
+      });
+    }
+
+    function onPartyOneLogoFileChange(e) {
+      const f = e.target?.files?.[0];
+      const inputEl = e.target;
+      if (!f) return;
+      if (f.size > 5 * 1024 * 1024) {
+        showToast('حجم الملف كبير جداً (الحد الأقصى 5 ميجابايت)', 'warning');
+        inputEl.value = '';
+        return;
+      }
+      const tryUpload = (blob) => {
+        if (!blob || blob.size > 2 * 1024 * 1024) {
+          showToast('تعذر ضغط الصورة ضمن حد الرفع (2 ميجابايت)', 'warning');
+          inputEl.value = '';
+          return;
+        }
+        uploadPartyLogoBlob(blob)
+          .then((url) => {
+            setPartyOneLogoPreview(url);
+            showToast('تم رفع الشعار', 'success');
+          })
+          .catch((err) => {
+            showToast(err instanceof Error ? err.message : 'فشل رفع الشعار', 'error');
+            inputEl.value = '';
+          });
+      };
+      compressImageToJpegBlob(f, 960, 0.82, (blob) => {
+        if (!blob) {
+          showToast('تعذر معالجة الصورة', 'error');
+          inputEl.value = '';
+          return;
+        }
+        if (blob.size > 2 * 1024 * 1024) {
+          compressImageToJpegBlob(f, 640, 0.72, tryUpload);
+          return;
+        }
+        tryUpload(blob);
+      });
+    }
+
     function getFormData() {
       const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
       return {
@@ -510,6 +654,9 @@
         date_gregorian: document.getElementById('date_gregorian').value,
         date_hijri: document.getElementById('date_hijri').value,
         day_name: document.getElementById('day_name')?.value || '',
+        party_one_name: document.getElementById('party_one_name')?.value || '',
+        party_one_phone: document.getElementById('party_one_phone')?.value || '',
+        party_one_logo: document.getElementById('party_one_logo')?.value || '',
         party_two_name: document.getElementById('party_two_name').value,
         party_two_id: document.getElementById('party_two_id').value,
         party_two_phone: document.getElementById('party_two_phone').value,
@@ -560,7 +707,8 @@
         }
         setTimeout(() => { window.location.href = `contract-view.html?id=${contract.id}`; }, 1200);
       } catch (e) {
-        showToast('خطأ في حفظ العقد', 'error');
+        const msg = e instanceof Error ? e.message : String(e);
+        showToast(msg && msg.length > 5 ? msg : 'خطأ في حفظ العقد', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> حفظ العقد';
       }
@@ -591,7 +739,12 @@
     }
 
     // Auto-calc commission on amount change
-    document.addEventListener('DOMContentLoaded', async () => {
+      document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('party_one_logo_file')?.addEventListener('change', onPartyOneLogoFileChange);
+      document.getElementById('party_one_logo_clear')?.addEventListener('click', () => {
+        setPartyOneLogoPreview('');
+      });
+
       document.getElementById('finance_amount')?.addEventListener('input', () => {
         if (document.getElementById('commission_type').value === 'نسبة مئوية') calcCommission();
       });
@@ -640,6 +793,11 @@
           document.getElementById('contract_number').value = c.contract_number || '';
           document.getElementById('date_gregorian').value = c.date_gregorian || '';
           document.getElementById('date_hijri').value = c.date_hijri || '';
+          const p1n = document.getElementById('party_one_name');
+          const p1p = document.getElementById('party_one_phone');
+          if (p1n) p1n.value = c.party_one_name || '';
+          if (p1p) p1p.value = c.party_one_phone || '';
+          setPartyOneLogoPreview(c.party_one_logo || '');
           document.getElementById('party_two_name').value = c.party_two_name || '';
           document.getElementById('party_two_id').value = c.party_two_id || '';
           document.getElementById('party_two_phone').value = c.party_two_phone || '';

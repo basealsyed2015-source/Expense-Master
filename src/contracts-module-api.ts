@@ -74,6 +74,61 @@ function resolveWriteTenantId(
   }
 }
 
+/** Legacy rows may still store a base64 data URL; new uploads use R2 + `/api/attachments/view/...` like financing attachments. */
+const MAX_PARTY_ONE_LOGO_CHARS = 200_000
+
+function normalizePartyOneLogo(
+  body: Record<string, unknown>
+): { ok: true; value: string | null } | { ok: false; response: Response } {
+  const raw = body.party_one_logo
+  if (raw == null || raw === '') return { ok: true, value: null }
+  const s = typeof raw === 'string' ? raw.trim() : String(raw).trim()
+  if (!s) return { ok: true, value: null }
+
+  if (s.startsWith('/api/attachments/view/')) {
+    if (s.includes('..') || s.length > 2000) {
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({
+            error: 'party_one_logo_invalid',
+            detail: 'رابط شعار الشركة غير صالح.'
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+        )
+      }
+    }
+    return { ok: true, value: s }
+  }
+
+  if (s.length > MAX_PARTY_ONE_LOGO_CHARS) {
+    return {
+      ok: false,
+      response: new Response(
+        JSON.stringify({
+          error: 'party_one_logo_too_large',
+          detail: 'صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج.'
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      )
+    }
+  }
+  if (!/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(s)) {
+    return {
+      ok: false,
+      response: new Response(
+        JSON.stringify({
+          error: 'party_one_logo_invalid',
+          detail:
+            'صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل.'
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      )
+    }
+  }
+  return { ok: true, value: s }
+}
+
 function tenantFilterClause(
   info: UserInfo,
   c: Context,
@@ -207,42 +262,64 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     }
 
     if (table === 'contracts') {
-      const r = await c.env.DB.prepare(
-        `INSERT INTO contracts (
+      const logoNorm = normalizePartyOneLogo(body)
+      if (!logoNorm.ok) return logoNorm.response
+      let r
+      try {
+        r = await c.env.DB.prepare(
+          `INSERT INTO contracts (
           tenant_id, contract_number, template_id, template_name, date_gregorian, date_hijri, day_name,
+          party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      )
-        .bind(
-          tenantId,
-          body.contract_number ?? null,
-          body.template_id != null ? Number(body.template_id) : null,
-          body.template_name ?? null,
-          body.date_gregorian ?? null,
-          body.date_hijri ?? null,
-          body.day_name ?? null,
-          body.customer_id != null ? Number(body.customer_id) : null,
-          body.party_two_name ?? null,
-          body.party_two_id ?? null,
-          body.party_two_phone ?? null,
-          body.party_two_address ?? null,
-          body.finance_type ?? null,
-          body.finance_amount != null ? Number(body.finance_amount) : null,
-          body.commission_amount != null ? Number(body.commission_amount) : null,
-          body.commission_type ?? null,
-          body.commission_rate != null ? Number(body.commission_rate) : null,
-          body.note_order_number ?? null,
-          body.note_due_date ?? null,
-          body.status ?? 'نشط',
-          body.property_description ?? null,
-          body.property_location ?? null,
-          body.bank_name ?? null,
-          body.notes ?? null,
-          body.is_archived ? 1 : 0
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
-        .run()
+          .bind(
+            tenantId,
+            body.contract_number ?? null,
+            body.template_id != null ? Number(body.template_id) : null,
+            body.template_name ?? null,
+            body.date_gregorian ?? null,
+            body.date_hijri ?? null,
+            body.day_name ?? null,
+            body.party_one_name ?? null,
+            body.party_one_phone ?? null,
+            logoNorm.value,
+            body.customer_id != null ? Number(body.customer_id) : null,
+            body.party_two_name ?? null,
+            body.party_two_id ?? null,
+            body.party_two_phone ?? null,
+            body.party_two_address ?? null,
+            body.finance_type ?? null,
+            body.finance_amount != null ? Number(body.finance_amount) : null,
+            body.commission_amount != null ? Number(body.commission_amount) : null,
+            body.commission_type ?? null,
+            body.commission_rate != null ? Number(body.commission_rate) : null,
+            body.note_order_number ?? null,
+            body.note_due_date ?? null,
+            body.status ?? 'نشط',
+            body.property_description ?? null,
+            body.property_location ?? null,
+            body.bank_name ?? null,
+            body.notes ?? null,
+            body.is_archived ? 1 : 0
+          )
+          .run()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/no such column/i.test(msg)) {
+          return c.json(
+            {
+              error: 'database_schema',
+              detail:
+                'العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1.'
+            },
+            500
+          )
+        }
+        return c.json({ error: 'database_error', detail: msg }, 500)
+      }
       const id = r.meta.last_row_id as number
       const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
       return c.json({ ...row, id })
@@ -331,6 +408,11 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     }
 
     if (table === 'contracts') {
+      if (body.party_one_logo !== undefined) {
+        const logoNorm = normalizePartyOneLogo(body)
+        if (!logoNorm.ok) return logoNorm.response
+        body.party_one_logo = logoNorm.value
+      }
       const fields: string[] = []
       const vals: unknown[] = []
       const maybe = (col: string, key: keyof typeof body) => {
@@ -354,6 +436,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       maybe('date_gregorian', 'date_gregorian')
       maybe('date_hijri', 'date_hijri')
       maybe('day_name', 'day_name')
+      maybe('party_one_name', 'party_one_name')
+      maybe('party_one_phone', 'party_one_phone')
+      maybe('party_one_logo', 'party_one_logo')
       maybe('customer_id', 'customer_id')
       maybe('party_two_name', 'party_two_name')
       maybe('party_two_id', 'party_two_id')
@@ -376,7 +461,22 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
         return c.json(row)
       }
-      await c.env.DB.prepare(`UPDATE contracts SET ${fields.join(', ')} WHERE id = ?`).bind(...vals, id).run()
+      try {
+        await c.env.DB.prepare(`UPDATE contracts SET ${fields.join(', ')} WHERE id = ?`).bind(...vals, id).run()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/no such column/i.test(msg)) {
+          return c.json(
+            {
+              error: 'database_schema',
+              detail:
+                'العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1.'
+            },
+            500
+          )
+        }
+        return c.json({ error: 'database_error', detail: msg }, 500)
+      }
       const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
       return c.json(row)
     }
@@ -412,6 +512,70 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
 
     return c.json({ error: 'Unsupported' }, 400)
   }
+
+  /**
+   * Same as POST /api/attachments/upload: `ATTACHMENTS` R2 bucket + URL `/api/attachments/view/:path`.
+   * Key: `contracts/{tenantId}/party_logo_{timestamp}_{random}.ext`
+   */
+  app.post('/api/contracts/party-logo-upload', async (c) => {
+    const { info, error } = await auth(c, getUserInfo)
+    if (error) return error
+    const attachments = (c.env as { ATTACHMENTS?: { put: (k: string, b: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> } }).ATTACHMENTS
+    if (!attachments) {
+      return c.json(
+        { error: 'storage_not_configured', detail: 'Attachment storage (R2) not configured' },
+        500
+      )
+    }
+
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ error: 'invalid_form', detail: 'Expected multipart/form-data' }, 400)
+    }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ error: 'no_file', detail: 'No file provided' }, 400)
+    }
+
+    const file = fileEntry
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return c.json({ error: 'file_too_large', detail: 'الحد الأقصى 2 ميجابايت' }, 400)
+    }
+
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ error: 'invalid_type', detail: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+
+    const tidFromForm = formData.get('tenant_id')
+    const body: Record<string, unknown> = {}
+    if (tidFromForm != null && String(tidFromForm).trim() !== '') {
+      body.tenant_id = tidFromForm
+    }
+    const { tenantId, error: te } = resolveWriteTenantId(info, body, c)
+    if (te) return te
+    if (tenantId == null) return c.json({ error: 'missing_tenant', detail: 'Missing tenant' }, 400)
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'jpg'
+    const key = `contracts/${tenantId}/party_logo_${timestamp}_${random}.${ext}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    await attachments.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      }
+    })
+
+    const publicUrl = `/api/attachments/view/${key}`
+    return c.json({ success: true, url: publicUrl, filename: key })
+  })
 
   app.put('/api/contract-tables/:table/:id', (c) => updateRow(c, 'PUT'))
   app.patch('/api/contract-tables/:table/:id', (c) => updateRow(c, 'PATCH'))

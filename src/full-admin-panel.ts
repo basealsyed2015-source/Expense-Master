@@ -172,7 +172,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 <!-- Dashboard -->
                 <a href="/admin/dashboard" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-tachometer-alt text-xl text-blue-600 group-hover:text-blue-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-blue-700">لوحة المعلومات</span>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">مخلص العملاء</span>
                 </a>
 
                 <!-- Customers -->
@@ -321,10 +321,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </h2>
                 
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <!-- زر لوحة المعلومات -->
+                    <!-- زر مخلص العملاء -->
                     <a href="/admin/dashboard" class="quick-access-btn bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-tachometer-alt text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">لوحة المعلومات</div>
+                        <div class="text-sm font-bold">مخلص العملاء</div>
                     </a>
                     
                     <!-- زر العملاء -->
@@ -412,12 +412,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <div class="text-sm font-bold">الحاسبة</div>
                     </a>
                     
-                    <!-- زر الصفحة الرئيسية -->
-                    <a href="/" class="quick-access-btn bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
-                        <i class="fas fa-home text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">الصفحة الرئيسية</div>
-                    </a>
-                    
                     <!-- زر الشركات (Super Admin فقط) -->
                     <a href="/admin/tenants" data-superadmin-only="true" class="quick-access-btn bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-building text-3xl mb-2"></i>
@@ -447,7 +441,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
             <div id="dashboard-section" class="content-section active">
                 <h1 class="text-3xl font-bold mb-6 text-gray-800">
                     <i class="fas fa-tachometer-alt text-blue-600 ml-2"></i>
-                    لوحة المعلومات
+                    مخلص العملاء
                 </h1>
                 
                 <!-- Stats Cards -->
@@ -1769,18 +1763,19 @@ export const fullAdminPanel = `<!DOCTYPE html>
             console.log('═══════════════════════════════════════');
             
             try {
-                // Try both 'userData' and 'user' keys for compatibility
-                let userStr = localStorage.getItem('userData') || localStorage.getItem('user');
-
-                // If localStorage is empty, hydrate it from server-injected data
-                if (!userStr && typeof window.USER_DATA !== 'undefined') {
+                // Prefer fresh server-injected data to avoid stale role labels in localStorage
+                let user = null;
+                if (typeof window.USER_DATA !== 'undefined' && window.USER_DATA) {
+                    user = window.USER_DATA;
                     try {
                         localStorage.setItem('userData', JSON.stringify(window.USER_DATA));
-                        userStr = localStorage.getItem('userData');
-                        console.log('✅ تم حفظ USER_DATA في localStorage');
+                        console.log('✅ تم تحديث userData من USER_DATA');
                     } catch (e) {
                         console.warn('⚠️ فشل حفظ USER_DATA في localStorage:', e);
                     }
+                } else {
+                    const userStr = localStorage.getItem('userData') || localStorage.getItem('user');
+                    if (userStr) user = JSON.parse(userStr);
                 }
                 
                 console.log('📦 محتويات localStorage:');
@@ -1788,14 +1783,28 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 console.log('  - user:', localStorage.getItem('user') ? 'موجود ✅' : 'غير موجود ❌');
                 console.log('  - authToken:', localStorage.getItem('authToken') ? 'موجود ✅' : 'غير موجود ❌');
                 
-                if (userStr) {
-                    const user = JSON.parse(userStr);
+                if (user) {
+                    const normalizeRoleId = (value) => {
+                        const numeric = parseInt(value, 10);
+                        const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
+                        return legacyMap[numeric] || numeric || null;
+                    };
+                    const roleId = normalizeRoleId(user.role_id || window.USER_ROLE_ID);
+                    const roleName = (user.role_name || '').trim();
+                    const roleLabelFromId =
+                        roleId === 1 ? 'مدير النظام' :
+                        roleId === 2 ? 'مدير الشركة' :
+                        roleId === 3 ? 'مشرف المبيعات' :
+                        roleId === 4 ? 'موظف' : '';
+                    const finalRoleLabel = roleName || roleLabelFromId || 'مستخدم';
+
                     console.log('👤 بيانات المستخدم المحملة:');
                     console.log('  - username:', user.username);
                     console.log('  - full_name:', user.full_name);
-                    console.log('  - role:', user.role);
+                    console.log('  - role_id:', roleId);
+                    console.log('  - role_name:', finalRoleLabel);
                     console.log('  - tenant_id:', user.tenant_id);
-                    console.log('  - tenant_name:', user.tenant_name);
+                    console.log('  - company_name:', user.company_name || user.tenant_name);
                     console.log('  - tenant_slug:', user.tenant_slug);
                     
                     // تحديث اسم المستخدم
@@ -1808,30 +1817,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     
                     if (displayNameEl) {
                         let displayName = user.full_name || user.username || 'مستخدم';
-                        
-                        console.log('🔍 تحديد اسم العرض:');
-                        console.log('  - الاسم الأساسي:', displayName);
-                        
-                        // إضافة اسم الشركة إن وجد (له الأولوية)
-                        if (user.tenant_name) {
-                            displayName = 'مدير ' + user.tenant_name;
-                            console.log('  - tenant_name موجود:', user.tenant_name);
-                            console.log('  - اسم العرض النهائي:', displayName);
-                        } 
-                        // إضافة الدور إذا لم يكن هناك شركة
-                        else if (user.role === 'admin') {
-                            displayName += ' (مدير النظام)';
-                            console.log('  - الدور: admin');
-                            console.log('  - اسم العرض النهائي:', displayName);
-                        } else if (user.role === 'company') {
-                            displayName += ' (مدير الشركة)';
-                            console.log('  - الدور: company');
-                            console.log('  - اسم العرض النهائي:', displayName);
-                        } else if (user.role === 'user') {
-                            displayName += ' (مستخدم)';
-                            console.log('  - الدور: user');
-                            console.log('  - اسم العرض النهائي:', displayName);
-                        }
+                        // Do not force "manager" based on company presence; always respect real role
+                        displayName += ' (' + finalRoleLabel + ')';
                         
                         displayNameEl.textContent = displayName;
                         console.log('✅ تم تحديث DOM - الاسم:', displayName);
@@ -2246,6 +2233,18 @@ export const fullAdminPanel = `<!DOCTYPE html>
             }
         }
         
+        // Actions dropdown toggle
+        function toggleActionsDropdown(btn) {
+            const menu = btn.nextElementSibling;
+            document.querySelectorAll('.actions-dropdown-menu').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
+            menu.classList.toggle('hidden');
+        }
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.actions-dropdown-btn')) {
+                document.querySelectorAll('.actions-dropdown-menu').forEach(m => m.classList.add('hidden'));
+            }
+        });
+
         // Load Customers
         async function loadCustomers() {
             try {
@@ -2295,15 +2294,26 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <td class="px-4 py-3 text-sm text-orange-600">\${customer.monthly_obligations ? customer.monthly_obligations.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm">\${customer.financing_type_name || '-'}</td>
                             <td class="px-4 py-3">
-                                <button onclick="viewCustomer(\${customer.id})" class="text-blue-600 hover:text-blue-800 ml-2" title="عرض الملف الكامل">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button onclick="editCustomer(\${customer.id})" class="text-green-600 hover:text-green-800 ml-2" title="تعديل">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button onclick="deleteCustomer(\${customer.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div class="relative inline-block text-right">
+                                    <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
+                                        <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
+                                    </button>
+                                    <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[11rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-50">
+                                        <button onclick="viewCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 text-right">
+                                            <i class="fas fa-eye w-3"></i> عرض
+                                        </button>
+                                        <a href="/admin/requests/new?customer_id=\${customer.id}" class="flex items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-right">
+                                            <i class="fas fa-file-invoice w-3 flex-shrink-0"></i> طلب تمويل جديد
+                                        </a>
+                                        <button onclick="editCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-green-700 hover:bg-green-50 text-right">
+                                            <i class="fas fa-edit w-3"></i> تعديل
+                                        </button>
+                                        <div class="border-t border-gray-100 my-1"></div>
+                                        <button onclick="deleteCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-700 hover:bg-red-50 text-right">
+                                            <i class="fas fa-trash w-3"></i> حذف
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     \`).join('');
@@ -2367,15 +2377,23 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <span class="\${statusColors[req.status]} px-2 py-1 rounded text-xs">\${statusText[req.status]}</span>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <button onclick="viewRequest(\${req.id})" class="text-blue-600 hover:text-blue-800 ml-2" title="عرض">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button onclick="updateStatus(\${req.id})" class="text-green-600 hover:text-green-800 ml-2" title="تعديل الحالة">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button onclick="deleteRequest(event, \${req.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <div class="relative inline-block text-right">
+                                        <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
+                                            <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
+                                        </button>
+                                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-100 z-50">
+                                            <button onclick="viewRequest(\${req.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 text-right">
+                                                <i class="fas fa-eye w-3"></i> عرض
+                                            </button>
+                                            <button onclick="updateStatus(\${req.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-green-700 hover:bg-green-50 text-right">
+                                                <i class="fas fa-edit w-3"></i> تعديل الحالة
+                                            </button>
+                                            <div class="border-t border-gray-100 my-1"></div>
+                                            <button onclick="deleteRequest(event, \${req.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-700 hover:bg-red-50 text-right">
+                                                <i class="fas fa-trash w-3"></i> حذف
+                                            </button>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                         \`;

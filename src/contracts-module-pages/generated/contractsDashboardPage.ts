@@ -869,6 +869,9 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       <a href="/admin/contracts/archive" class="nav-item" data-page="archive">
         <i class="fas fa-archive"></i><span>الأرشيف</span>
       </a>
+      <a href="/admin/contracts/settings" class="nav-item" data-page="settings">
+        <i class="fas fa-cog"></i><span>الإعدادات</span>
+      </a>
     </nav>
     <div class="sidebar-footer">
       <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
@@ -995,8 +998,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/contracts-module/js/app.js?v=20260401"></script>
-  <script src="/contracts-module/js/dashboard.js?v=20260401"></script>
+  <script src="/contracts-module/js/app.js?v=20260405"></script>
+  <script src="/contracts-module/js/dashboard.js?v=20260405"></script>
 </body>
 </html>
 `

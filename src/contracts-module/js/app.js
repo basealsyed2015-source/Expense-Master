@@ -44,7 +44,15 @@ const API = {
         signal: controller.signal
       });
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        let detail = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          if (j && typeof j.detail === 'string' && j.detail.trim()) detail = j.detail;
+          else if (j && typeof j.error === 'string' && j.error.trim()) detail = j.error;
+        } catch (_) {}
+        const err = new Error(detail);
+        err.status = res.status;
+        throw err;
       }
       return await res.json();
     } catch (err) {

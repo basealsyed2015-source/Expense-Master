@@ -489,6 +489,11 @@ function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined
   return raw || 'غير محدد'
 }
 
+/** توزيع العملاء: مدير النظام (1) أو حساب شركة (2) فقط — لا يشمل مشرف المبيعات (3) أو الموظف (4) */
+function canManageCustomerAssignments(roleId: number | null): boolean {
+  return roleId === 1 || roleId === 2
+}
+
 // Get tenant_id for current user (for multi-tenancy filtering)
 async function getUserInfo(
   c: any
@@ -619,7 +624,7 @@ async function getUserTenantId(c: any): Promise<number | null> {
 }
 
 /**
- * Same customer scope as `/admin/requests/new` (role + tenant + assigned_to).
+ * Same customer scope as `/admin/requests/new` (role + tenant).
  * Used server-side so lists match without a separate API round-trip.
  *
  * `scopeSuperAdminToTenant`: when true (contracts new form), super-admins are limited to
@@ -660,13 +665,12 @@ async function loadCustomersForAdminForms(
     customersQuery += ' WHERE tenant_id = ?'
     customersParams.push(userInfo.tenantId)
   } else if (userInfo.roleId === 4) {
-    if (userInfo.tenantId) {
-      customersQuery += ' WHERE tenant_id = ? AND assigned_to = ?'
-      customersParams.push(userInfo.tenantId, userInfo.userId!)
-    } else {
-      customersQuery += ' WHERE assigned_to = ?'
-      customersParams.push(userInfo.userId!)
+    // Employee can browse all customers in their company scope.
+    if (!userInfo.tenantId) {
+      return { results: [] }
     }
+    customersQuery += ' WHERE tenant_id = ?'
+    customersParams.push(userInfo.tenantId)
   } else {
     customersQuery += ' WHERE 1 = 0'
   }
@@ -718,6 +722,236 @@ function stripSuperAdminLinksFromHtml(html: string): string {
   return result
 }
 
+/**
+ * Same href allowlist as full-admin-panel.ts `applyUserPermissions()` (quick-access + #mobile-menu).
+ * Keep these lists in sync when either changes.
+ */
+const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
+  '1': [
+    '/admin/dashboard',
+    '/admin/customers',
+    '/admin/requests',
+    '/admin/banks',
+    '/admin/rates',
+    '/admin/subscriptions',
+    '/admin/packages',
+    '/admin/users',
+    '/admin/roles',
+    '/admin/notifications',
+    '/calculator',
+    '/',
+    '/admin/tenants',
+    '/admin/tenant-calculators',
+    '/admin/saas-settings',
+    '/admin/reports',
+    '/admin/payments',
+    '/admin/settings',
+    '/admin/hr',
+    '/admin/contracts',
+  ],
+  '2': [
+    '/admin/dashboard',
+    '/admin/customers',
+    '/admin/requests',
+    '/admin/reports',
+    '/admin/banks',
+    '/admin/rates',
+    '/admin/payments',
+    '/admin/users',
+    '/admin/hr',
+    '/admin/contracts',
+    '/admin/notifications',
+    '/calculator',
+    '/',
+  ],
+  '3': [
+    '/admin/dashboard',
+    '/admin/customers',
+    '/admin/requests',
+    '/admin/reports',
+    '/admin/banks',
+    '/admin/rates',
+    '/admin/contracts',
+    '/admin/contracts/list',
+    '/calculator',
+    '/',
+  ],
+  '4': [
+    '/admin/dashboard',
+    '/admin/customers',
+    '/admin/requests',
+    '/calculator',
+    '/',
+  ],
+}
+
+function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number }): string {
+  if (!pathname.startsWith('/admin/')) return html
+  if (pathname === '/admin/panel') return html
+  if (pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) return html
+  if (html.includes('id="global-persistent-sidebar"')) return html
+
+  const effectiveRoleId = opts?.roleId ?? 4
+  const allowedLinksJson = JSON.stringify(PERSISTENT_SIDEBAR_ALLOWED_LINKS)
+
+  const style = `
+<style>
+  #global-persistent-sidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 260px;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 1000;
+    background: #ffffff;
+    box-shadow: -2px 0 16px rgba(15,23,42,0.10);
+    border-left: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    font-family: inherit;
+  }
+  #global-persistent-sidebar .gps-header {
+    padding: 18px 16px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #1e40af, #3730a3);
+    color: #fff;
+    flex-shrink: 0;
+  }
+  #global-persistent-sidebar .gps-header i { font-size: 22px; }
+  #global-persistent-sidebar .gps-header h2 { font-size: 14px; font-weight: 700; margin: 0; line-height: 1.3; }
+  #global-persistent-sidebar .gps-header p { font-size: 11px; opacity: 0.72; margin: 0; }
+  #global-persistent-sidebar .gps-nav { padding: 8px; flex: 1; }
+  #global-persistent-sidebar .gps-nav a,
+  #global-persistent-sidebar .gps-nav button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #374151;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: background 0.14s, color 0.14s;
+    width: 100%;
+    text-align: right;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  #global-persistent-sidebar .gps-nav a:hover,
+  #global-persistent-sidebar .gps-nav button:hover { background: #eff6ff; color: #1d4ed8; }
+  #global-persistent-sidebar .gps-nav a.gps-active { background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+  #global-persistent-sidebar .gps-nav i { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
+  #global-persistent-sidebar .gps-divider { margin: 4px 8px; border: 0; border-top: 1px solid #f1f5f9; }
+  body { margin-right: 260px !important; }
+  @media (max-width: 768px) {
+    #global-persistent-sidebar { display: none; }
+    body { margin-right: 0 !important; }
+  }
+</style>
+`
+
+  const sidebar = `
+<aside id="global-persistent-sidebar" dir="rtl">
+  <div class="gps-header">
+    <i class="fas fa-calculator"></i>
+    <div>
+      <h2>منصة التمويل</h2>
+      <p>لوحة التحكم</p>
+    </div>
+  </div>
+  <nav class="gps-nav">
+    <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>مخلص العملاء</a>
+    <a href="/admin/customers"><i class="fas fa-users"></i>العملاء</a>
+    <a href="/admin/requests"><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
+    <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
+    <a href="/admin/rates"><i class="fas fa-percentage"></i>نسب التمويل</a>
+    <a href="/admin/payments"><i class="fas fa-receipt"></i>سندات القبض</a>
+    <a href="/admin/banks"><i class="fas fa-university"></i>البنوك</a>
+    <a href="/admin/subscriptions" data-superadmin-only="true"><i class="fas fa-calendar-check"></i>الاشتراكات</a>
+    <a href="/admin/packages" data-superadmin-only="true"><i class="fas fa-box"></i>الباقات</a>
+    <a href="/admin/tenants" data-superadmin-only="true"><i class="fas fa-building"></i>إدارة الشركات</a>
+    <a href="/admin/settings" data-superadmin-only="true"><i class="fas fa-cog"></i>إعدادات النظام</a>
+    <a href="/admin/hr"><i class="fas fa-users-cog"></i>الموارد البشرية</a>
+    <a href="/admin/contracts"><i class="fas fa-file-contract"></i>إدارة العقود</a>
+    <hr class="gps-divider">
+    <a href="/admin/users"><i class="fas fa-user-shield"></i>المستخدمين</a>
+    <a href="/admin/roles" data-superadmin-only="true"><i class="fas fa-user-tag"></i>الأدوار والصلاحيات</a>
+    <a href="/admin/notifications"><i class="fas fa-bell"></i>الإشعارات</a>
+    <a href="/admin/tenant-calculators" data-superadmin-only="true"><i class="fas fa-calculator"></i>حاسبات الشركات</a>
+    <a href="/admin/saas-settings" data-superadmin-only="true"><i class="fas fa-cogs"></i>إعدادات SaaS</a>
+    <hr class="gps-divider">
+    <a href="/calculator"><i class="fas fa-calculator"></i>الحاسبة</a>
+    <a href="/"><i class="fas fa-home"></i>الصفحة الرئيسية</a>
+    <hr class="gps-divider">
+    <button onclick="(function(){localStorage.removeItem('authToken');document.cookie='authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';window.location.href='/login';})()">
+      <i class="fas fa-sign-out-alt"></i>تسجيل الخروج
+    </button>
+  </nav>
+</aside>
+<script>
+  (function () {
+    var ALLOWED = ${allowedLinksJson};
+    var ROLE_ID = ${effectiveRoleId};
+    window.USER_ROLE_ID = ROLE_ID;
+
+    function applyGlobalSidebarPermissions() {
+      var sidebar = document.getElementById('global-persistent-sidebar');
+      if (!sidebar) return;
+
+      if (ROLE_ID === 3) {
+        sidebar.querySelectorAll('a[href="/admin/contracts"]').forEach(function (el) {
+          el.setAttribute('href', '/admin/contracts/list');
+        });
+      }
+
+      var userAllowed = ALLOWED[String(ROLE_ID)] || ALLOWED['4'];
+
+      sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (link) {
+        var href = link.getAttribute('href');
+        if (!href) return;
+        var normalizedHref = href.split('?')[0];
+        var isSuperAdminOnly = link.getAttribute('data-superadmin-only') === 'true';
+        if (isSuperAdminOnly && ROLE_ID !== 1) {
+          link.style.display = 'none';
+          return;
+        }
+        var isAlways = normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0;
+        if (isAlways || userAllowed.indexOf(normalizedHref) !== -1) {
+          link.style.display = 'flex';
+        } else {
+          link.style.display = 'none';
+        }
+      });
+
+      var path = window.location.pathname;
+      sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (a) {
+        a.classList.remove('gps-active');
+        var h = a.getAttribute('href');
+        if (!h || h === '/') return;
+        if (path === h || path.indexOf(h + '/') === 0) {
+          a.classList.add('gps-active');
+        }
+      });
+    }
+
+    applyGlobalSidebarPermissions();
+    document.addEventListener('DOMContentLoaded', applyGlobalSidebarPermissions);
+  })();
+</script>
+`
+
+  let out = html
+  out = out.includes('</head>') ? out.replace('</head>', `${style}</head>`) : `${style}${out}`
+  out = out.includes('</body>') ? out.replace('</body>', `${sidebar}</body>`) : `${out}${sidebar}`
+  return out
+}
+
 app.use('/admin/*', async (c, next) => {
   try {
     console.log('🔒 [RBAC] Checking access for:', c.req.path)
@@ -750,10 +984,10 @@ app.use('/admin/*', async (c, next) => {
 
   await next()
 
-    // Post-process HTML responses to remove super-admin-only links for non-superadmin users
-    if (!isSuperAdmin && c.res) {
+    // Post-process HTML responses to keep admin UI consistent across modules
+    if (c.res) {
       try {
-        console.log('🔒 [RBAC] Post-processing HTML for non-superadmin user')
+        console.log('🔒 [RBAC] Post-processing admin HTML response')
         const res = c.res
         // Skip if response is a redirect or error
         if (res.status >= 300 && res.status < 400) {
@@ -773,7 +1007,12 @@ app.use('/admin/*', async (c, next) => {
           const clonedRes = res.clone()
           const html = await clonedRes.text()
           console.log('🔒 [RBAC] HTML length:', html.length)
-          const updated = stripSuperAdminLinksFromHtml(html)
+          let updated = html
+          if (!isSuperAdmin) {
+            updated = stripSuperAdminLinksFromHtml(updated)
+          }
+          const effectiveSidebarRole = normalizeRoleId(info.roleId) ?? 4
+          updated = injectPersistentAdminSidebar(pathname, updated, { roleId: effectiveSidebarRole })
           console.log('🔒 [RBAC] HTML processed, updated length:', updated.length)
           const headers = new Headers(res.headers)
           headers.set('content-type', 'text/html; charset=UTF-8')
@@ -2628,11 +2867,11 @@ app.get('/api/customers', async (c) => {
         query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees only assigned customers
-      if (userInfo.userId) {
-        query += ` WHERE c.assigned_to = ${userInfo.userId}`
+      // Role 4: Employee - sees company customers
+      if (userInfo.tenantId) {
+        query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       } else {
-        query += ` WHERE 1 = 0` // No data if user ID not found
+        query += ` WHERE 1 = 0` // No data if tenant scope is missing
       }
     } else {
       // Unknown role - no data
@@ -2860,6 +3099,27 @@ app.post('/api/customers', async (c) => {
           await c.env.DB.prepare('UPDATE customers SET monthly_obligations = ? WHERE id = ?').bind(monthlySum, newId).run()
         }
       } catch (_) {}
+    }
+    // Employees (role 4): auto-assign the new customer to themselves (same rows as admin/customer-assignment)
+    if (
+      newId &&
+      userInfo.roleId === 4 &&
+      userInfo.userId &&
+      userInfo.tenantId != null &&
+      userInfo.tenantId === tenant_id
+    ) {
+      try {
+        await c.env.DB.prepare(`
+          INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+          VALUES (?, ?, ?, ?)
+        `).bind(newId, userInfo.userId, userInfo.userId, '').run()
+        await c.env.DB.prepare(`
+          INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+          VALUES (?, NULL, ?, ?, ?)
+        `).bind(newId, userInfo.userId, userInfo.userId, '').run()
+      } catch (e) {
+        console.error('Auto-assign new customer to employee (role 4) failed:', e)
+      }
     }
     return c.redirect('/admin/customers')
   } catch (error: any) {
@@ -3190,23 +3450,20 @@ app.post('/api/requests', async (c) => {
     }
 
     const customer = await c.env.DB.prepare(`
-      SELECT id, tenant_id, assigned_to FROM customers WHERE id = ?
+      SELECT id, tenant_id FROM customers WHERE id = ?
     `).bind(customer_id).first()
 
     if (!customer) {
       return c.json({ success: false, error: 'العميل غير موجود' }, 400)
     }
 
-    // Enforce tenant and assignment scope for non-superadmins
+    // Enforce tenant scope for non-superadmins (all tenant roles may create requests for any company customer)
     if (userInfo.roleId !== 1) {
       if (!userInfo.tenantId) {
         return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
       }
       if (customer.tenant_id !== userInfo.tenantId) {
         return c.json({ success: false, error: 'غير مصرح لهذه الشركة' }, 403)
-      }
-      if (userInfo.roleId === 4 && customer.assigned_to !== userInfo.userId) {
-        return c.json({ success: false, error: 'غير مصرح لهذا العميل' }, 403)
       }
     }
 
@@ -4421,6 +4678,221 @@ app.delete('/api/attachments/delete/:path{.+}', async (c) => {
   }
 })
 
+// CUSTOMER REVIEWS APIs
+
+app.post('/api/customer-reviews', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const { customer_id, customer_name, rating, note } = await c.req.json()
+    if (!customer_id || !customer_name || !rating) {
+      return c.json({ success: false, error: 'customer_id, customer_name, and rating are required' }, 400)
+    }
+    const r = parseInt(rating, 10)
+    if (r < 1 || r > 5) return c.json({ success: false, error: 'rating must be 1–5' }, 400)
+    const result = await c.env.DB.prepare(`
+      INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(customer_id, customer_name, r, note || null, userInfo.userId || null, userInfo.tenantId || null).run()
+    return c.json({ success: true, id: result.meta.last_row_id })
+  } catch (error: any) {
+    console.error('Error creating customer review:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.get('/api/customer-reviews', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const latestPerCustomer = c.req.query('latest_per_customer') === '1'
+    let query: string
+    const params: any[] = []
+    if (latestPerCustomer) {
+      // Return the most recent review per customer
+      query = `SELECT cr.* FROM customer_reviews cr
+        INNER JOIN (
+          SELECT customer_id, MAX(created_at) as max_created
+          FROM customer_reviews
+          WHERE 1=1`
+      if (userInfo.tenantId) { query += ` AND tenant_id = ?`; params.push(userInfo.tenantId) }
+      else if (userInfo.userId) { query += ` AND user_id = ?`; params.push(userInfo.userId) }
+      query += ` GROUP BY customer_id
+        ) latest ON cr.customer_id = latest.customer_id AND cr.created_at = latest.max_created`
+      if (userInfo.tenantId) { query += ` WHERE cr.tenant_id = ?`; params.push(userInfo.tenantId) }
+      else if (userInfo.userId) { query += ` WHERE cr.user_id = ?`; params.push(userInfo.userId) }
+    } else {
+      query = `SELECT * FROM customer_reviews WHERE 1=1`
+      if (userInfo.tenantId) { query += ` AND tenant_id = ?`; params.push(userInfo.tenantId) }
+      else if (userInfo.userId) { query += ` AND user_id = ?`; params.push(userInfo.userId) }
+      query += ` ORDER BY created_at DESC`
+    }
+    const { results } = params.length > 0
+      ? await c.env.DB.prepare(query).bind(...params).all()
+      : await c.env.DB.prepare(query).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.get('/api/customer-reviews/:customerId', async (c) => {
+  try {
+    const customerId = c.req.param('customerId')
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM customer_reviews WHERE customer_id = ? ORDER BY created_at DESC`
+    ).bind(customerId).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.delete('/api/customer-reviews/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    await c.env.DB.prepare(`DELETE FROM customer_reviews WHERE id = ?`).bind(id).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// CUSTOMER ARCHIVE APIs
+
+app.put('/api/customers/:id/archive', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    const id = c.req.param('id')
+    await c.env.DB.prepare(`
+      UPDATE customers SET is_archived = 1, archived_at = CURRENT_TIMESTAMP, archived_by = ?
+      WHERE id = ?
+    `).bind(userInfo.userId || null, id).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    console.error('Error archiving customer:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.put('/api/customers/:id/unarchive', async (c) => {
+  try {
+    const id = c.req.param('id')
+    await c.env.DB.prepare(`
+      UPDATE customers SET is_archived = 0, archived_at = NULL, archived_by = NULL
+      WHERE id = ?
+    `).bind(id).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    console.error('Error unarchiving customer:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// CUSTOMER ALARMS APIs
+
+// Create a customer alarm
+app.post('/api/customer-alarms', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const { customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note } = await c.req.json()
+    if (!customer_id || !customer_name) {
+      return c.json({ success: false, error: 'customer_id and customer_name are required' }, 400)
+    }
+    const result = await c.env.DB.prepare(`
+      INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(customer_id, customer_name, alarm_date_gregorian || null, alarm_date_hijri || null, alarm_time || null, note || null, userInfo.userId, userInfo.tenantId || null).run()
+    return c.json({ success: true, id: result.meta.last_row_id })
+  } catch (error: any) {
+    console.error('Error creating customer alarm:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get all customer alarms for current user/tenant
+app.get('/api/customer-alarms', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    let query = `SELECT * FROM customer_alarms WHERE user_id = ?`
+    const params: any[] = [userInfo.userId]
+    query += ` ORDER BY created_at DESC`
+    const { results } = await c.env.DB.prepare(query).bind(...params).all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    console.error('Error fetching customer alarms:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Get unread customer alarms count
+app.get('/api/customer-alarms/unread-count', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    let query = `SELECT COUNT(*) as count FROM customer_alarms WHERE is_read = 0 AND user_id = ?`
+    const result = await c.env.DB.prepare(query).bind(userInfo.userId).first()
+    return c.json({ success: true, count: result?.count || 0 })
+  } catch (error: any) {
+    console.error('Error fetching unread alarms count:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Mark customer alarm as read
+app.put('/api/customer-alarms/:id/read', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const id = c.req.param('id')
+    await c.env.DB.prepare(`UPDATE customer_alarms SET is_read = 1 WHERE id = ? AND user_id = ?`).bind(id, userInfo.userId).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    console.error('Error marking alarm as read:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Mark all customer alarms as read for current user/tenant
+app.put('/api/customer-alarms/read-all', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    let query = `UPDATE customer_alarms SET is_read = 1 WHERE is_read = 0 AND user_id = ?`
+    await c.env.DB.prepare(query).bind(userInfo.userId).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    console.error('Error marking all alarms as read:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Delete customer alarm
+app.delete('/api/customer-alarms/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const id = c.req.param('id')
+    await c.env.DB.prepare(`DELETE FROM customer_alarms WHERE id = ? AND user_id = ?`).bind(id, userInfo.userId).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    console.error('Error deleting customer alarm:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 // NOTIFICATIONS APIs
 
 // Get all notifications for current user (for now, hardcoded user_id = 1)
@@ -4714,16 +5186,15 @@ app.get('/api/dashboard/stats', async (c) => {
         users_query += ' AND tenant_id = ?'
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees only assigned customers/requests
-      if (userInfo.userId) {
-        customers_query += ' WHERE assigned_to = ?'
-        requests_query += ' WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)'
-        pending_query += ' AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)'
-        approved_query += ' AND customer_id IN (SELECT id FROM customers WHERE assigned_to = ?)'
-        // For employee, we use userId instead of tenant_id
-        tenant_id = userInfo.userId;
+      // Role 4: Employee - sees company customers/requests
+      if (userInfo.tenantId) {
+        customers_query += ' WHERE tenant_id = ?'
+        requests_query += ' WHERE tenant_id = ?'
+        pending_query += ' AND tenant_id = ?'
+        approved_query += ' AND tenant_id = ?'
+        tenant_id = userInfo.tenantId;
       } else {
-        // No data for employee without userId
+        // No data for employee without tenant context
         customers_query += ' WHERE 1 = 0'
         requests_query += ' WHERE 1 = 0'
         pending_query += ' AND 1 = 0'
@@ -7275,12 +7746,12 @@ app.get('/admin/dashboard', async (c) => {
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees only assigned customers/requests
-      if (userInfo.userId) {
-        customersWhere = `WHERE assigned_to = ${userInfo.userId}`;
-        requestsWhere = `WHERE customer_id IN (SELECT id FROM customers WHERE assigned_to = ${userInfo.userId})`;
-        requestsJoinWhere = `AND c.assigned_to = ${userInfo.userId}`;
-        queryParams.push(userInfo.userId);
+      // Role 4: Employee - sees company customers/requests
+      if (userInfo.tenantId) {
+        customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
+        requestsWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
+        requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
+        queryParams.push(userInfo.tenantId);
       } else {
         customersWhere = 'WHERE 1 = 0';
         requestsWhere = 'WHERE 1 = 0';
@@ -7357,7 +7828,7 @@ app.get('/admin/dashboard', async (c) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>لوحة المعلومات المتقدمة</title>
+        <title>مخلص العملاء</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -7381,7 +7852,7 @@ app.get('/admin/dashboard', async (c) => {
               </a>
               <h1 class="text-4xl font-bold text-gray-800">
                 <i class="fas fa-chart-line text-blue-600 ml-2"></i>
-                لوحة المعلومات المتقدمة
+                مخلص العملاء
               </h1>
               <p class="text-gray-600 mt-2">تحليلات وإحصائيات شاملة لنظام حاسبة التمويل</p>
             </div>
@@ -7750,6 +8221,169 @@ app.get('/admin/dashboard', async (c) => {
               document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
             } catch (e) {}
             window.location.href = '/login';
+          }
+        </script>
+      </body>
+      </html>
+    `)
+  } catch (error) {
+    return c.html('<h1>خطأ في تحميل البيانات</h1>')
+  }
+})
+
+// ==================== أرشيف العملاء ====================
+app.get('/admin/customers/archived', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+
+    let query = 'SELECT * FROM customers WHERE is_archived = 1'
+    const queryParams: any[] = []
+    if (userInfo.roleId === 1) {
+      // sees all
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) { query += ' AND tenant_id = ?'; queryParams.push(userInfo.tenantId) }
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.userId) { query += ' AND assigned_to = ?'; queryParams.push(userInfo.userId) }
+      else query += ' AND 1 = 0'
+    } else query += ' AND 1 = 0'
+    query += ' ORDER BY archived_at DESC'
+
+    const customers = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all()
+
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>أرشيف العملاء</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+          .overflow-x-auto { overflow-x: scroll !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #6b7280 #f7fafc; }
+          .overflow-x-auto::-webkit-scrollbar { height: 10px; }
+          .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; }
+          .overflow-x-auto::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 10px; }
+          .overflow-x-auto table { min-width: 900px; width: max-content; }
+        </style>
+      </head>
+      <body class="bg-gray-50">
+        <div class="max-w-7xl mx-auto p-6">
+          <div class="mb-6">
+            <a href="/admin/customers" class="text-blue-600 hover:text-blue-800">← العودة للعملاء</a>
+          </div>
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex justify-between items-center flex-wrap gap-3">
+              <h1 class="text-3xl font-bold text-gray-700">
+                <i class="fas fa-archive text-gray-500 ml-2"></i>
+                أرشيف العملاء (<span id="archivedCount">${customers.results.length}</span>)
+              </h1>
+              <div class="relative">
+                <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
+                <input type="text" id="searchInput" placeholder="بحث..." onkeyup="filterTable()"
+                  class="pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent w-72">
+              </div>
+            </div>
+          </div>
+
+          ${customers.results.length === 0 ? `
+          <div class="bg-white rounded-xl shadow-lg p-16 text-center text-gray-400">
+            <i class="fas fa-archive text-6xl mb-4 text-gray-300"></i>
+            <p class="text-xl font-medium">لا يوجد عملاء مؤرشفون</p>
+          </div>` : `
+          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="min-w-full" id="dataTable">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الأرشفة</th>
+                    <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase w-px">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100" id="tableBody">
+                  ${customers.results.map((c: any) => `
+                    <tr class="hover:bg-gray-50" data-name="${c.full_name || ''}" data-phone="${c.phone || ''}">
+                      <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-500">${c.id}</td>
+                      <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-700">${c.full_name || '-'}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.phone || '-'}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.email || '-'}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">${c.archived_at ? new Date(c.archived_at).toLocaleDateString('ar-SA') : '-'}</td>
+                      <td class="px-3 py-3 whitespace-nowrap w-px text-right align-middle">
+                        <div class="flex gap-2 items-center justify-end">
+                          <a href="/admin/customers/${c.id}" class="inline-flex items-center gap-1 px-3 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium transition-colors">
+                            <i class="fas fa-eye"></i> عرض
+                          </a>
+                          <button type="button" onclick="unarchiveCustomer(${c.id}, this)"
+                                  class="inline-flex items-center gap-1 px-3 py-1 rounded text-xs bg-green-100 hover:bg-green-200 text-green-700 font-medium transition-colors">
+                            <i class="fas fa-undo"></i> استعادة
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>`}
+        </div>
+
+        <!-- Toast -->
+        <div id="toastMsg" class="fixed bottom-6 right-6 z-[2000] hidden">
+          <div class="bg-gray-800 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-2">
+            <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
+            <span id="toastText"></span>
+          </div>
+        </div>
+
+        <script>
+          function filterTable() {
+            const q = document.getElementById('searchInput').value.toLowerCase().trim();
+            const rows = document.getElementById('tableBody').getElementsByTagName('tr');
+            let count = 0;
+            for (let i = 0; i < rows.length; i++) {
+              const name = (rows[i].getAttribute('data-name') || '').toLowerCase();
+              const phone = (rows[i].getAttribute('data-phone') || '').toLowerCase();
+              const show = !q || name.includes(q) || phone.includes(q);
+              rows[i].style.display = show ? '' : 'none';
+              if (show) count++;
+            }
+            document.getElementById('archivedCount').textContent = count;
+          }
+
+          async function unarchiveCustomer(id, btn) {
+            if (!confirm('هل تريد استعادة هذا العميل إلى القائمة الرئيسية؟')) return;
+            btn.disabled = true;
+            try {
+              const resp = await fetch('/api/customers/' + id + '/unarchive', { method: 'PUT' });
+              const data = await resp.json();
+              if (data.success) {
+                const row = btn.closest('tr');
+                if (row) row.remove();
+                filterTable();
+                showToast('تم استعادة العميل بنجاح', 'success');
+              } else {
+                showToast('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
+                btn.disabled = false;
+              }
+            } catch(e) {
+              showToast('فشل الاتصال بالخادم', 'error');
+              btn.disabled = false;
+            }
+          }
+
+          function showToast(msg, type) {
+            const t = document.getElementById('toastMsg');
+            document.getElementById('toastIcon').className = 'fas ' + (type==='success'?'fa-check-circle text-green-400':'fa-times-circle text-red-400');
+            document.getElementById('toastText').textContent = msg;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
           }
         </script>
       </body>
@@ -8344,8 +8978,13 @@ app.get('/admin/customers/add', async (c) => {
 // صفحة توزيع العملاء على الموظفين (للمدير فقط)
 // ============================
 app.get('/admin/customer-assignment', async (c) => {
-  // Get user info to check role
   const userInfo = await getUserInfo(c);
+  if (!userInfo.userId || !userInfo.roleId) {
+    return c.redirect('/login');
+  }
+  if (!canManageCustomerAssignments(userInfo.roleId)) {
+    return c.html('<h1>خطأ: ليس لديك صلاحية لإدارة توزيع العملاء</h1>', 403);
+  }
   const isSuperAdmin = userInfo.roleId === 1;
   const canManageCompany = userInfo.roleId === 1 || userInfo.roleId === 2;
   const canAccessHr = userInfo.roleId === 1 || userInfo.roleId === 2 || userInfo.roleId === 3;
@@ -8468,7 +9107,7 @@ app.get('/admin/customer-assignment', async (c) => {
             </a>
             <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-chart-line text-green-600 group-hover:scale-110 transition-transform"></i>
-              <span>لوحة المعلومات</span>
+              <span>مخلص العملاء</span>
             </a>
             <a href="/admin/reports" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-file-alt text-purple-600 group-hover:scale-110 transition-transform"></i>
@@ -9045,6 +9684,12 @@ app.post('/api/customer-assignment', async (c) => {
   try {
     const { customer_id, employee_id, notes } = await c.req.json();
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (!canManageCustomerAssignments(userInfo.roleId)) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
     const isSuperAdmin = userInfo.roleId === 1
     const tenantId = isSuperAdmin
       ? (parseOptionalInt(c.req.query('tenant_id')) ?? userInfo.tenantId ?? 1)
@@ -9120,6 +9765,12 @@ app.post('/api/customer-assignment', async (c) => {
 app.post('/api/customer-assignment/auto-distribute', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (!canManageCustomerAssignments(userInfo.roleId)) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
     const isSuperAdmin = userInfo.roleId === 1
     const body = await c.req.json().catch(() => ({} as any));
     const requestedTenantId =
@@ -9177,6 +9828,13 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
 // API: Clear all assignments
 app.post('/api/customer-assignment/clear-all', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (!canManageCustomerAssignments(userInfo.roleId)) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
     const result = await c.env.DB.prepare(`
       DELETE FROM customer_assignments
     `).run();
@@ -9196,6 +9854,12 @@ app.post('/api/customer-assignment/bulk', async (c) => {
     const { customer_ids, employee_id } = await c.req.json();
 
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (!canManageCustomerAssignments(userInfo.roleId)) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
     const isSuperAdmin = userInfo.roleId === 1
     const tenantId = isSuperAdmin
       ? (parseOptionalInt(c.req.query('tenant_id')) ?? userInfo.tenantId ?? 1)
@@ -10281,32 +10945,29 @@ app.get('/admin/customers', async (c) => {
       `);
     }
     
-    // Build query based on role
-    let query = 'SELECT * FROM customers';
+    // Build query based on role — always exclude archived customers
+    let query = 'SELECT * FROM customers WHERE (is_archived = 0 OR is_archived IS NULL)';
     let queryParams: any[] = [];
     
     if (userInfo.roleId === 1) {
-      // Role 1: Super Admin - sees ALL customers
-      // No filtering
+      // Role 1: Super Admin - sees ALL non-archived customers
     } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin - sees all company customers
       // Role 3: Supervisor - sees all company customers (read-only)
       if (userInfo.tenantId) {
-        query += ' WHERE tenant_id = ?';
+        query += ' AND tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees ONLY assigned customers
-      if (userInfo.userId) {
-        query += ' WHERE assigned_to = ?';
-        queryParams.push(userInfo.userId);
+      // Role 4: Employee - sees company customers
+      if (userInfo.tenantId) {
+        query += ' AND tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
       } else {
-        // No assigned customers if user ID not found
-        query += ' WHERE 1 = 0';
+        query += ' AND 1 = 0';
       }
     } else {
-      // Unknown role - no data
-      query += ' WHERE 1 = 0';
+      query += ' AND 1 = 0';
     }
     
     query += ' ORDER BY created_at DESC';
@@ -10314,6 +10975,18 @@ app.get('/admin/customers', async (c) => {
     const customers = queryParams.length > 0
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
+
+    // Fetch customer IDs that have at least one financing request (same scope)
+    let reqQuery = 'SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1';
+    const reqParams: any[] = [];
+    if (userInfo.roleId !== 1) {
+      if (userInfo.tenantId) { reqQuery += ' AND tenant_id = ?'; reqParams.push(userInfo.tenantId); }
+      else if (userInfo.userId) { reqQuery += ' AND user_id = ?'; reqParams.push(userInfo.userId); }
+    }
+    const reqRows = reqParams.length > 0
+      ? await c.env.DB.prepare(reqQuery).bind(...reqParams).all()
+      : await c.env.DB.prepare(reqQuery).all();
+    const customerIdsWithRequests = new Set((reqRows.results as any[]).map((r: any) => r.customer_id));
     
     // Determine if user can edit/delete (not for Role 3 - Supervisor)
     const canEdit = userInfo.roleId !== 3;
@@ -10328,41 +11001,23 @@ app.get('/admin/customers', async (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
-          /* Custom Scrollbar - Enhanced */
-          .overflow-x-auto {
-            overflow-x: scroll !important;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
-            scrollbar-color: #10b981 #f7fafc;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar {
-            height: 12px;
-            width: 12px;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar-track {
-            background: #e5e7eb;
-            border-radius: 10px;
-            margin: 0 10px;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, #10b981 0%, #059669 100%);
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, #059669 0%, #047857 100%);
-            border-color: #d1d5db;
-          }
-          
-          .overflow-x-auto table {
-            min-width: 1200px;
-            width: max-content;
-          }
-          
+          .overflow-x-auto { overflow-x: scroll !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
+          .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
+          .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
+          .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
+          .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #059669 0%, #047857 100%); border-color: #d1d5db; }
+          .overflow-x-auto table { min-width: 1200px; width: max-content; }
+          @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0)} }
+          .alarm-unread-dot { display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:50%; animation:pulse-glow 1.5s infinite; position:absolute; top:-3px; left:-3px; }
+          .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+          .modal-backdrop.hidden { display:none; }
+          #notifPanel { position:fixed; top:0; left:0; bottom:0; width:400px; max-width:95vw; background:#fff; box-shadow:4px 0 30px rgba(0,0,0,.15); z-index:1100; display:flex; flex-direction:column; transform:translateX(-100%); transition:transform .3s ease; }
+          #notifPanel.open { transform:translateX(0); }
+          #notifPanelOverlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:1099; display:none; }
+          #notifPanelOverlay.open { display:block; }
+          #tableBody tr[style*="background-color"]:hover { filter: brightness(0.97); }
+          #tableBody.dropdown-open tr:not(.dropdown-active-row) { pointer-events: none !important; }
+          #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td { background-color: inherit !important; }
           ${getMobileResponsiveCSS()}
         </style>
       </head>
@@ -10372,22 +11027,31 @@ app.get('/admin/customers', async (c) => {
             <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-users text-green-600 ml-2"></i>
                 العملاء (<span id="totalCount">${customers.results.length}</span>)
               </h1>
-              
-              <div class="flex gap-3">
-                ${userInfo.roleId !== 3 ? `
+              <div class="flex gap-3 flex-wrap">
+                <a href="/admin/customers/archived"
+                   class="bg-gradient-to-r from-gray-500 to-gray-700 hover:from-gray-600 hover:to-gray-800 text-white px-5 py-3 rounded-lg font-bold transition-all shadow-md">
+                  <i class="fas fa-archive ml-2"></i>
+                  الأرشيف
+                </a>
+                <button onclick="openNotifPanel()" id="notifBtn"
+                        class="relative bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 text-white px-5 py-3 rounded-lg font-bold transition-all shadow-md">
+                  <i class="fas fa-bell ml-2"></i>
+                  التنبيهات
+                  <span id="notifDot" class="alarm-unread-dot hidden"></span>
+                </button>
+                ${canManageCustomerAssignments(userInfo.roleId) ? `
                 <a href="/admin/customer-assignment${userInfo.tenantId ? '?tenant_id=' + userInfo.tenantId : ''}" 
                    class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
                   <i class="fas fa-users-cog ml-2"></i>
                   توزيع العملاء
                 </a>
                 ` : ''}
-                <button onclick="exportToCSV()" 
-                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
@@ -10399,58 +11063,89 @@ app.get('/admin/customers', async (c) => {
                 ` : ''}
               </div>
             </div>
-            
-            <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="relative">
-                  <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
-                  <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="بحث في جميع الحقول..." 
-                    class="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onkeyup="filterTable()"
-                  >
-                </div>
-                
-                <div>
-                  <select 
-                    id="filterField" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="filterTable()"
-                  >
-                    <option value="all">البحث في: الكل</option>
+              <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+
+                <!-- Row 1: Search -->
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-bold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">
+                    <i class="fas fa-search ml-1"></i>بحث
+                  </span>
+                  <div class="relative flex-1 min-w-[180px]">
+                    <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
+                      class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                      onkeyup="filterTable()">
+                  </div>
+                  <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white" onchange="filterTable()">
+                    <option value="all">الكل</option>
                     <option value="name">الاسم فقط</option>
                     <option value="phone">الهاتف فقط</option>
                     <option value="email">البريد فقط</option>
                   </select>
                 </div>
 
-                <div>
-                  <select
-                    id="dateRangeFilter"
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onchange="filterTable()"
-                  >
-                    <option value="all">تاريخ التسجيل: الكل</option>
-                    <option value="30">آخر 30 يوم</option>
-                    <option value="60">آخر 60 يوم</option>
-                    <option value="90">آخر 90 يوم</option>
-                  </select>
+                <!-- Divider -->
+                <div class="border-t border-gray-200"></div>
+
+                <!-- Row 2: Structured filters -->
+                <div class="flex items-center gap-4 flex-wrap">
+
+                  <!-- Date range -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                      <i class="fas fa-calendar-alt ml-1"></i>التاريخ
+                    </span>
+                    <select id="dateRangeFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">الكل</option>
+                      <option value="30">آخر 30 يوم</option>
+                      <option value="60">آخر 60 يوم</option>
+                      <option value="90">آخر 90 يوم</option>
+                    </select>
+                  </div>
+
+                  <div class="w-px h-8 bg-gray-300 hidden md:block"></div>
+
+                  <!-- Requests filter -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                      <i class="fas fa-file-invoice ml-1"></i>طلبات
+                    </span>
+                    <select id="requestsFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">الكل</option>
+                      <option value="1">لديه طلب ✓</option>
+                      <option value="0">بدون طلب ✗</option>
+                    </select>
+                  </div>
+
+                  <div class="w-px h-8 bg-gray-300 hidden md:block"></div>
+
+                  <!-- Rating filter -->
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                      <i class="fas fa-user-check ml-1"></i>التقييم
+                    </span>
+                    <select id="ratingFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">الكل</option>
+                      <option value="0">بدون تقييم</option>
+                      <option value="5">عميل ممتاز</option>
+                      <option value="4">عميل جيد</option>
+                      <option value="3">عميل مقبول</option>
+                      <option value="2">عميل سيئ</option>
+                      <option value="1">عميل موقوف</option>
+                    </select>
+                  </div>
+
+                  <!-- Reset pushed to end -->
+                  <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
+                    <i class="fas fa-redo"></i> إعادة تعيين
+                  </button>
+
                 </div>
-                
-                <button 
-                  onclick="resetFilters()" 
-                  class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                >
-                  <i class="fas fa-redo ml-2"></i>
-                  إعادة تعيين
-                </button>
               </div>
             </div>
           </div>
-          
+
           <div class="bg-white rounded-xl shadow-lg overflow-hidden">
             <table class="min-w-full" id="dataTable">
               <thead class="bg-gray-50">
@@ -10460,33 +11155,59 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
-                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${customers.results.map((customer: any) => `
-                  <tr class="hover:bg-gray-50" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}" data-created-at="${customer.created_at || ''}">
+                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}" data-created-at="${customer.created_at || ''}" data-has-request="${customerIdsWithRequests.has(customer.id) ? '1' : '0'}" data-rating="0">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.phone || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.email || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(customer.created_at).toLocaleDateString('ar-SA')}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right">
-                      <div class="flex items-center justify-end gap-2">
-                        <a href="/admin/customers/${customer.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm" title="تقرير العميل الكامل">
-                          <i class="fas fa-file-alt"></i> تقرير
-                        </a>
-                        <a href="/admin/customers/${customer.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
-                          <i class="fas fa-eye"></i> عرض
-                        </a>
-                        ${canEdit ? `
-                        <a href="/admin/customers/${customer.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">
-                          <i class="fas fa-edit"></i> تعديل
-                        </a>
-                        <a href="/admin/customers/${customer.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
-                          <i class="fas fa-trash"></i> حذف
-                        </a>
-                        ` : ''}
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                      ${customerIdsWithRequests.has(customer.id)
+                        ? `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 font-bold text-base" title="يوجد طلب تمويل">✓</span>`
+                        : `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-500 font-bold text-base" title="لا يوجد طلب تمويل">✗</span>`
+                      }
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${customer.id}">
+                      <span class="text-gray-300 text-sm">—</span>
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap w-px text-right align-middle relative">
+                      <div class="relative inline-block text-right">
+                        <button type="button" onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap">
+                          <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[10rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                          <button type="button" onclick="openAlarmModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50 text-right">
+                            <i class="fas fa-bell w-4 flex-shrink-0"></i> إضافة تنبيه
+                          </button>
+                          <button type="button" onclick="openReviewModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50 text-right">
+                            <i class="fas fa-star w-4 flex-shrink-0"></i> تقييم العميل
+                          </button>
+                          <a href="/admin/customers/${customer.id}/report" class="flex items-center gap-2 px-3 py-2 text-sm text-purple-700 hover:bg-purple-50">
+                            <i class="fas fa-file-alt w-4 flex-shrink-0"></i> تقرير
+                          </a>
+                          <a href="/admin/customers/${customer.id}" class="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">
+                            <i class="fas fa-eye w-4 flex-shrink-0"></i> عرض
+                          </a>
+                          <button type="button" onclick="openNewRequest(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50 text-right">
+                            <i class="fas fa-file-invoice w-4 flex-shrink-0"></i> طلب تمويل جديد
+                          </button>
+                          ${canEdit ? `
+                          <div class="border-t border-gray-100 my-1"></div>
+                          <a href="/admin/customers/${customer.id}/edit" class="flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
+                            <i class="fas fa-edit w-4 flex-shrink-0"></i> تعديل
+                          </a>
+                          <a href="/admin/customers/${customer.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                            <i class="fas fa-trash w-4 flex-shrink-0"></i> حذف
+                          </a>
+                          ` : ''}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -10495,90 +11216,549 @@ app.get('/admin/customers', async (c) => {
             </table>
           </div>
         </div>
-        
+
+        <!-- ===== Alarm Modal ===== -->
+        <div id="alarmModal" class="modal-backdrop hidden">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div class="bg-gradient-to-r from-orange-400 to-red-500 px-6 py-4 flex items-center justify-between">
+              <h2 class="text-white text-xl font-bold"><i class="fas fa-bell ml-2"></i><span id="alarmModalTitle">إضافة تنبيه</span></h2>
+              <button onclick="closeAlarmModal()" class="text-white hover:text-orange-100 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-calendar-alt text-orange-500 ml-1"></i> التاريخ الميلادي</label>
+                <input type="date" id="alarmGregorian" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent" onchange="syncHijriFromGregorian()" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-moon text-orange-500 ml-1"></i> التاريخ الهجري</label>
+                <input type="text" id="alarmHijri" placeholder="مثال: 1447/06/04" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-clock text-orange-500 ml-1"></i> الوقت</label>
+                <input type="time" id="alarmTime" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-sticky-note text-orange-500 ml-1"></i> ملاحظة</label>
+                <textarea id="alarmNote" rows="3" placeholder="أدخل ملاحظة..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent resize-none"></textarea>
+              </div>
+            </div>
+            <div class="px-6 pb-6 flex gap-3 justify-end">
+              <button onclick="closeAlarmModal()" class="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors">إلغاء</button>
+              <button onclick="saveAlarm()" class="px-6 py-2.5 rounded-lg bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 text-white font-bold transition-all shadow-md"><i class="fas fa-save ml-1"></i> حفظ التنبيه</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Review Modal ===== -->
+        <div id="reviewModal" class="modal-backdrop hidden">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-visible">
+            <div id="reviewModalHeader" class="bg-gradient-to-r from-yellow-400 to-green-500 px-6 py-4 flex items-center justify-between transition-all duration-300">
+              <h2 class="text-white text-xl font-bold"><i class="fas fa-user-check ml-2"></i><span id="reviewModalTitle">تقييم العميل</span></h2>
+              <button onclick="closeReviewModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 space-y-5">
+              <!-- Rating dropdown -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">التقييم</label>
+                <div class="relative" id="reviewRatingContainer">
+                  <button type="button" id="reviewRatingBtn" onclick="toggleRatingDropdown(event)"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-right flex items-center justify-between font-semibold transition-all duration-200 bg-white text-gray-400">
+                    <span id="reviewRatingText">— اختر تقييم العميل —</span>
+                    <i class="fas fa-chevron-down text-sm transition-transform" id="reviewRatingChevron"></i>
+                  </button>
+                  <div id="reviewRatingDropdown" class="hidden absolute z-[1200] w-full mt-1 rounded-xl shadow-xl overflow-hidden border border-gray-100">
+                    <button type="button" onclick="selectRating(5)" class="w-full px-4 py-3.5 text-right font-bold text-green-800 bg-green-50 hover:bg-green-100 transition-colors border-b border-green-100 flex items-center gap-2">
+                      <span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز
+                    </button>
+                    <button type="button" onclick="selectRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2">
+                      <span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد
+                    </button>
+                    <button type="button" onclick="selectRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2">
+                      <span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل مقبول
+                    </button>
+                    <button type="button" onclick="selectRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2">
+                      <span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل سيئ
+                    </button>
+                    <button type="button" onclick="selectRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2">
+                      <span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقوف
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <!-- Note -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-comment-alt text-gray-400 ml-1"></i> الملاحظة / سبب التقييم</label>
+                <textarea id="reviewNote" rows="3" placeholder="أدخل ملاحظة أو سبب التقييم..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"></textarea>
+              </div>
+            </div>
+            <div class="px-6 pb-6 flex flex-wrap gap-3">
+              <button onclick="archiveAndReview()" class="flex-1 min-w-max px-4 py-2.5 rounded-lg bg-gradient-to-r from-gray-500 to-gray-700 hover:from-gray-600 hover:to-gray-800 text-white font-bold transition-all shadow-md text-sm">
+                <i class="fas fa-archive ml-1"></i> أرشفة العميل
+              </button>
+              <div class="flex gap-2 mr-auto">
+                <button onclick="closeReviewModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors text-sm">إلغاء</button>
+                <button onclick="saveReview()" id="reviewSaveBtn" class="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed" disabled>
+                  <i class="fas fa-save ml-1"></i> حفظ التقييم
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Notifications Side Panel ===== -->
+        <div id="notifPanelOverlay" onclick="closeNotifPanel()"></div>
+        <div id="notifPanel">
+          <div class="bg-gradient-to-r from-orange-400 to-red-500 px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <h2 class="text-white text-xl font-bold"><i class="fas fa-bell ml-2"></i> التنبيهات</h2>
+            <div class="flex items-center gap-3">
+              <button onclick="markAllAlarmsRead()" class="text-white text-sm hover:text-orange-100 font-medium" title="تحديد الكل كمقروء">
+                <i class="fas fa-check-double ml-1"></i> تحديد الكل
+              </button>
+              <button onclick="closeNotifPanel()" class="text-white hover:text-orange-100 text-2xl leading-none">&times;</button>
+            </div>
+          </div>
+          <div id="notifList" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>
+          </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toastMsg" class="fixed bottom-6 right-6 z-[2000] hidden">
+          <div class="bg-gray-800 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-2">
+            <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
+            <span id="toastText"></span>
+          </div>
+        </div>
+
         <script>
-          // البحث والفلترة
-          function filterTable() {
-            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
-            const filterField = document.getElementById('filterField').value
-            const dateRangeFilter = document.getElementById('dateRangeFilter').value
-            const tableBody = document.getElementById('tableBody')
-            const rows = tableBody.getElementsByTagName('tr')
-            let visibleCount = 0
-            
-            for (let i = 0; i < rows.length; i++) {
-              const row = rows[i]
-              const name = row.getAttribute('data-name') || ''
-              const phone = row.getAttribute('data-phone') || ''
-              const email = row.getAttribute('data-email') || ''
-              const createdAt = row.getAttribute('data-created-at') || ''
-              
-              let matchesSearch = false
-              
-              if (searchInput === '') {
-                matchesSearch = true
-              } else {
-                switch(filterField) {
-                  case 'name':
-                    matchesSearch = name.toLowerCase().includes(searchInput)
-                    break
-                  case 'phone':
-                    matchesSearch = phone.toLowerCase().includes(searchInput)
-                    break
-                  case 'email':
-                    matchesSearch = email.toLowerCase().includes(searchInput)
-                    break
-                  default: // 'all'
-                    matchesSearch = name.toLowerCase().includes(searchInput) || 
-                                    phone.toLowerCase().includes(searchInput) || 
-                                    email.toLowerCase().includes(searchInput)
-                }
-              }
+          const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
 
-              let matchesDateRange = true
-              if (dateRangeFilter !== 'all') {
-                const days = parseInt(dateRangeFilter, 10)
-                const createdDate = new Date(createdAt)
-                const cutoffDate = new Date()
-                cutoffDate.setDate(cutoffDate.getDate() - days)
-                matchesDateRange = !isNaN(createdDate.getTime()) && createdDate >= cutoffDate
-              }
-
-              const shouldShow = matchesSearch && matchesDateRange
-              
-              row.style.display = shouldShow ? '' : 'none'
-              if (shouldShow) visibleCount++
+          function openNewRequest(customerId, customerName) {
+            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
+            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(function(b) { b.style.visibility = ''; b.style.pointerEvents = ''; });
+            if (customerIdsWithRequests.has(customerId)) {
+              showToast('يوجد طلب تمويل مسبق لهذا العميل', 'error');
+              return;
             }
-            
-            document.getElementById('totalCount').textContent = visibleCount
+            window.location.href = '/admin/requests/new?customer_id=' + customerId;
           }
-          
-          // إعادة تعيين الفلاتر
+
+          let alarmCustomerId = null;
+          let alarmCustomerName = '';
+
+          function getHijriDate(d) {
+            try { return (d || new Date()).toLocaleDateString('ar-SA-u-ca-islamic', { year:'numeric', month:'2-digit', day:'2-digit' }); }
+            catch { return ''; }
+          }
+          function syncHijriFromGregorian() {
+            const val = document.getElementById('alarmGregorian').value;
+            if (!val) return;
+            try { document.getElementById('alarmHijri').value = getHijriDate(new Date(val)); } catch(e) {}
+          }
+
+          function openAlarmModal(customerId, customerName) {
+            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
+            alarmCustomerId = customerId;
+            alarmCustomerName = customerName;
+            document.getElementById('alarmModalTitle').textContent = 'إضافة تنبيه للعميل: ' + customerName;
+            const today = new Date();
+            document.getElementById('alarmGregorian').value = today.toISOString().split('T')[0];
+            document.getElementById('alarmHijri').value = getHijriDate(today);
+            document.getElementById('alarmTime').value = today.toTimeString().slice(0,5);
+            document.getElementById('alarmNote').value = '';
+            document.getElementById('alarmModal').classList.remove('hidden');
+          }
+          function closeAlarmModal() { document.getElementById('alarmModal').classList.add('hidden'); }
+          document.getElementById('alarmModal').addEventListener('click', function(e) { if (e.target === this) closeAlarmModal(); });
+
+          async function saveAlarm() {
+            const gregorian = document.getElementById('alarmGregorian').value;
+            const hijri = document.getElementById('alarmHijri').value;
+            const time = document.getElementById('alarmTime').value;
+            const note = document.getElementById('alarmNote').value.trim();
+            if (!gregorian && !hijri) { showToast('يرجى تحديد تاريخ على الأقل', 'warning'); return; }
+            try {
+              const resp = await fetch('/api/customer-alarms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_id: alarmCustomerId, customer_name: alarmCustomerName, alarm_date_gregorian: gregorian || null, alarm_date_hijri: hijri || null, alarm_time: time || null, note: note || null })
+              });
+              const data = await resp.json();
+              if (data.success) { closeAlarmModal(); showToast('تم حفظ التنبيه بنجاح', 'success'); refreshUnreadDot(); }
+              else showToast('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
+            } catch(e) { showToast('فشل الاتصال بالخادم', 'error'); }
+          }
+
+          // ---- Review Modal ----
+          let reviewCustomerId = null;
+          let reviewCustomerName = '';
+          let reviewRating = 0;
+
+          const RATING_CONFIG = {
+            5: { label: 'عميل ممتاز',  textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#16a34a', headerTo: '#15803d', rowBg: '#f0fdf4', rowText: '#14532d' },
+            4: { label: 'عميل جيد',    textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f', rowBg: '#f7fee7', rowText: '#365314' },
+            3: { label: 'عميل مقبول', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309', rowBg: '#fefce8', rowText: '#713f12' },
+            2: { label: 'عميل سيئ',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c', rowBg: '#fff7ed', rowText: '#7c2d12' },
+            1: { label: 'عميل موقوف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626', rowBg: '#fef2f2', rowText: '#7f1d1d' },
+          };
+
+          function selectRating(n) {
+            reviewRating = n;
+            const cfg = RATING_CONFIG[n];
+            const btn = document.getElementById('reviewRatingBtn');
+            btn.style.backgroundColor = cfg.bgColor;
+            btn.style.borderColor = cfg.borderColor;
+            btn.style.color = cfg.textColor;
+            btn.querySelector('span').textContent = cfg.label;
+            document.getElementById('reviewRatingDropdown').classList.add('hidden');
+            document.getElementById('reviewRatingChevron').style.transform = '';
+            // Update modal header colour
+            const header = document.getElementById('reviewModalHeader');
+            header.style.background = 'linear-gradient(to right, ' + cfg.headerFrom + ', ' + cfg.headerTo + ')';
+            // Enable save button
+            const saveBtn = document.getElementById('reviewSaveBtn');
+            saveBtn.disabled = false;
+            saveBtn.className = 'px-5 py-2.5 rounded-lg font-bold transition-all shadow-md text-sm text-white cursor-pointer';
+            saveBtn.style.background = 'linear-gradient(to right, ' + cfg.headerFrom + ', ' + cfg.headerTo + ')';
+          }
+
+          function toggleRatingDropdown(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('reviewRatingDropdown');
+            const chevron = document.getElementById('reviewRatingChevron');
+            const isOpen = !dd.classList.contains('hidden');
+            dd.classList.toggle('hidden');
+            chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+          }
+
+          function resetReviewRating() {
+            reviewRating = 0;
+            const btn = document.getElementById('reviewRatingBtn');
+            btn.style.backgroundColor = '';
+            btn.style.borderColor = '';
+            btn.style.color = '';
+            btn.querySelector('span').textContent = '— اختر تقييم العميل —';
+            document.getElementById('reviewRatingDropdown').classList.add('hidden');
+            document.getElementById('reviewRatingChevron').style.transform = '';
+            document.getElementById('reviewModalHeader').style.background = '';
+            const saveBtn = document.getElementById('reviewSaveBtn');
+            saveBtn.disabled = true;
+            saveBtn.className = 'px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed';
+            saveBtn.style.background = '';
+          }
+
+          function applyRowRating(customerId, rating) {
+            const row = document.querySelector('#tableBody tr[data-customer-id="' + customerId + '"]');
+            if (!row) return;
+            const cell = document.getElementById('rating-cell-' + customerId);
+            if (!rating || !RATING_CONFIG[rating]) {
+              row.setAttribute('data-rating', '0');
+              if (cell) cell.innerHTML = '<span class="text-gray-300 text-sm">—</span>';
+              return;
+            }
+            const cfg = RATING_CONFIG[rating];
+            row.style.backgroundColor = cfg.rowBg;
+            row.setAttribute('data-rating', String(rating));
+            if (cell) {
+              cell.innerHTML = '<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap" style="background-color:' + cfg.bgColor + ';color:' + cfg.textColor + ';border:1px solid ' + cfg.borderColor + '">' + cfg.label + '</span>';
+            }
+          }
+
+          async function loadCustomerRatings() {
+            try {
+              const resp = await fetch('/api/customer-reviews?latest_per_customer=1');
+              const data = await resp.json();
+              if (data.success && data.data) {
+                data.data.forEach(function(r) { applyRowRating(r.customer_id, r.rating); });
+              }
+            } catch(e) {}
+          }
+
+          function openReviewModal(customerId, customerName) {
+            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
+            reviewCustomerId = customerId;
+            reviewCustomerName = customerName;
+            document.getElementById('reviewModalTitle').textContent = 'تقييم العميل: ' + customerName;
+            document.getElementById('reviewNote').value = '';
+            resetReviewRating();
+            document.getElementById('reviewModal').classList.remove('hidden');
+          }
+          function closeReviewModal() {
+            document.getElementById('reviewRatingDropdown').classList.add('hidden');
+            document.getElementById('reviewModal').classList.add('hidden');
+          }
+          document.getElementById('reviewModal').addEventListener('click', function(e) { if (e.target === this) closeReviewModal(); });
+          document.addEventListener('click', function(e) {
+            const dd = document.getElementById('reviewRatingDropdown');
+            if (!dd.classList.contains('hidden') && !document.getElementById('reviewRatingContainer').contains(e.target)) {
+              dd.classList.add('hidden');
+              document.getElementById('reviewRatingChevron').style.transform = '';
+            }
+          });
+
+          async function saveReview() {
+            if (!reviewRating) { showToast('يرجى اختيار تقييم', 'warning'); return; }
+            const note = document.getElementById('reviewNote').value.trim();
+            try {
+              const resp = await fetch('/api/customer-reviews', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_id: reviewCustomerId, customer_name: reviewCustomerName, rating: reviewRating, note: note || null })
+              });
+              const data = await resp.json();
+              if (data.success) {
+                const savedId = reviewCustomerId;
+                const savedRating = reviewRating;
+                closeReviewModal();
+                applyRowRating(savedId, savedRating);
+                showToast('تم حفظ التقييم بنجاح', 'success');
+              } else showToast('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
+            } catch(e) { showToast('فشل الاتصال بالخادم', 'error'); }
+          }
+
+          async function archiveAndReview() {
+            if (!confirm('هل تريد أرشفة العميل "' + reviewCustomerName + '"؟ سيتم نقله إلى صفحة الأرشيف.')) return;
+            const note = document.getElementById('reviewNote').value.trim();
+            if (reviewRating) {
+              try {
+                await fetch('/api/customer-reviews', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ customer_id: reviewCustomerId, customer_name: reviewCustomerName, rating: reviewRating, note: note || null })
+                });
+              } catch(e) {}
+            }
+            try {
+              const resp = await fetch('/api/customers/' + reviewCustomerId + '/archive', { method: 'PUT' });
+              const data = await resp.json();
+              if (data.success) {
+                closeReviewModal();
+                const row = document.querySelector('#tableBody tr[data-customer-id="' + reviewCustomerId + '"]');
+                if (row) row.remove();
+                filterTable();
+                showToast('تم أرشفة العميل بنجاح', 'success');
+              } else {
+                showToast('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
+              }
+            } catch(e) { showToast('فشل الاتصال بالخادم', 'error'); }
+          }
+
+          async function openNotifPanel() {
+            document.getElementById('notifPanel').classList.add('open');
+            document.getElementById('notifPanelOverlay').classList.add('open');
+            await loadAlarms();
+          }
+          function closeNotifPanel() {
+            document.getElementById('notifPanel').classList.remove('open');
+            document.getElementById('notifPanelOverlay').classList.remove('open');
+          }
+
+          async function loadAlarms() {
+            const list = document.getElementById('notifList');
+            list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>';
+            try {
+              const resp = await fetch('/api/customer-alarms');
+              const data = await resp.json();
+              if (!data.success || !data.data.length) {
+                list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
+                return;
+              }
+              list.innerHTML = data.data.map(a => {
+                const isUnread = !a.is_read;
+                const dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
+                const timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                const cid = a.customer_id;
+                const customerHref = (cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#';
+                return \`<div id="alarm-\${a.id}" class="rounded-xl border \${isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'} shadow-sm transition-all flex items-stretch overflow-hidden">
+                  <a href="\${customerHref}" title="بيانات العميل"
+                     class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded-s-xl">
+                    <div class="flex items-center gap-2 mb-1">
+                      \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
+                      <p class="font-bold text-gray-800 text-sm truncate">\${a.customer_name}</p>
+                    </div>
+                    \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-calendar-alt text-orange-400 ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
+                    \${a.note ? \`<p class="text-sm text-gray-600 mt-1 line-clamp-3">\${a.note}</p>\` : ''}
+                  </a>
+                  <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80'}">
+                    \${isUnread ? \`<button type="button" onclick="markAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
+                    <button type="button" onclick="deleteAlarm(\${a.id})" title="حذف" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center transition-colors"><i class="fas fa-trash text-xs"></i></button>
+                  </div>
+                </div>\`;
+              }).join('');
+            } catch(e) {
+              list.innerHTML = '<div class="text-center text-red-400 py-10"><i class="fas fa-exclamation-circle text-3xl mb-2"></i><p class="text-sm">فشل تحميل التنبيهات</p></div>';
+            }
+          }
+
+          async function markAlarmRead(id) {
+            await fetch('/api/customer-alarms/' + id + '/read', { method: 'PUT' });
+            const el = document.getElementById('alarm-' + id);
+            if (el) {
+              el.classList.remove('border-orange-300','bg-orange-50');
+              el.classList.add('border-gray-200','bg-white');
+              const dot = el.querySelector('.rounded-full.bg-red-500');
+              if (dot) dot.remove();
+              const readBtn = el.querySelector('button[onclick^="markAlarmRead"]');
+              if (readBtn) readBtn.remove();
+            }
+            refreshUnreadDot();
+          }
+
+          async function deleteAlarm(id) {
+            await fetch('/api/customer-alarms/' + id, { method: 'DELETE' });
+            const el = document.getElementById('alarm-' + id);
+            if (el) el.remove();
+            if (!document.getElementById('notifList').querySelector('[id^="alarm-"]')) {
+              document.getElementById('notifList').innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
+            }
+            refreshUnreadDot();
+          }
+
+          async function markAllAlarmsRead() {
+            await fetch('/api/customer-alarms/read-all', { method: 'PUT' });
+            await loadAlarms();
+            refreshUnreadDot();
+            showToast('تم تحديد جميع التنبيهات كمقروءة', 'success');
+          }
+
+          async function refreshUnreadDot() {
+            try {
+              const resp = await fetch('/api/customer-alarms/unread-count');
+              const data = await resp.json();
+              const dot = document.getElementById('notifDot');
+              if (data.count > 0) dot.classList.remove('hidden');
+              else dot.classList.add('hidden');
+            } catch(e) {}
+          }
+
+          function showToast(msg, type) {
+            const t = document.getElementById('toastMsg');
+            document.getElementById('toastIcon').className = 'fas ' + (type==='success'?'fa-check-circle text-green-400':type==='warning'?'fa-exclamation-triangle text-yellow-400':'fa-times-circle text-red-400');
+            document.getElementById('toastText').textContent = msg;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
+          }
+
+          function closeAllDropdowns() {
+            document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
+              m.classList.add('hidden');
+              m.style.top = '';
+              m.style.bottom = '';
+              m.style.marginTop = '';
+              m.style.marginBottom = '';
+            });
+            document.querySelectorAll('td.actions-cell-active').forEach(td => {
+              td.classList.remove('actions-cell-active');
+              td.style.zIndex = '';
+            });
+            document.querySelectorAll('tbody.dropdown-open').forEach(tb => tb.classList.remove('dropdown-open'));
+            document.querySelectorAll('tr.dropdown-active-row').forEach(tr => tr.classList.remove('dropdown-active-row'));
+            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(b => { b.style.visibility = ''; });
+          }
+
+          function positionDropdownMenu(menu) {
+            menu.style.top = '100%';
+            menu.style.bottom = 'auto';
+            menu.style.marginTop = '0.25rem';
+            menu.style.marginBottom = '0';
+            const rect = menu.getBoundingClientRect();
+            if (rect.bottom > (window.innerHeight - 8)) {
+              menu.style.top = 'auto';
+              menu.style.bottom = '100%';
+              menu.style.marginTop = '0';
+              menu.style.marginBottom = '0.25rem';
+            }
+          }
+
+          function toggleActionsDropdown(btn) {
+            const menu = btn.nextElementSibling;
+            const willOpen = menu.classList.contains('hidden');
+            closeAllDropdowns();
+            if (willOpen) {
+              menu.classList.remove('hidden');
+              positionDropdownMenu(menu);
+              const cell = btn.closest('td');
+              if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
+              const row = btn.closest('tr');
+              if (row) row.classList.add('dropdown-active-row');
+              const tbody = btn.closest('tbody');
+              if (tbody) {
+                tbody.classList.add('dropdown-open');
+                tbody.querySelectorAll('.actions-dropdown-btn').forEach(b => {
+                  b.style.visibility = b === btn ? '' : 'hidden';
+                });
+              }
+            }
+          }
+          document.addEventListener('click', function(e) {
+            if (!e.target.closest('.actions-dropdown-btn') && !e.target.closest('.actions-dropdown-menu')) {
+              closeAllDropdowns();
+            }
+          });
+
+          function filterTable() {
+            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
+            const filterField = document.getElementById('filterField').value;
+            const dateRangeFilter = document.getElementById('dateRangeFilter').value;
+            const requestsFilter = document.getElementById('requestsFilter').value;
+            const ratingFilter = document.getElementById('ratingFilter').value;
+            const rows = document.getElementById('tableBody').getElementsByTagName('tr');
+            let visibleCount = 0;
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i];
+              const name = row.getAttribute('data-name') || '';
+              const phone = row.getAttribute('data-phone') || '';
+              const email = row.getAttribute('data-email') || '';
+              const createdAt = row.getAttribute('data-created-at') || '';
+              const hasRequest = row.getAttribute('data-has-request') || '0';
+              const rating = row.getAttribute('data-rating') || '0';
+
+              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput));
+
+              let matchesDateRange = true;
+              if (dateRangeFilter !== 'all') {
+                const days = parseInt(dateRangeFilter, 10);
+                const createdDate = new Date(createdAt);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                matchesDateRange = !isNaN(createdDate.getTime()) && createdDate >= cutoffDate;
+              }
+
+              let matchesRequests = requestsFilter === 'all' || hasRequest === requestsFilter;
+              let matchesRating = ratingFilter === 'all' || rating === ratingFilter;
+
+              const visible = matchesSearch && matchesDateRange && matchesRequests && matchesRating;
+              row.style.display = visible ? '' : 'none';
+              if (visible) visibleCount++;
+            }
+            document.getElementById('totalCount').textContent = visibleCount;
+          }
+
           function resetFilters() {
-            document.getElementById('searchInput').value = ''
-            document.getElementById('filterField').value = 'all'
-            document.getElementById('dateRangeFilter').value = 'all'
-            filterTable()
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterField').value = 'all';
+            document.getElementById('dateRangeFilter').value = 'all';
+            document.getElementById('requestsFilter').value = 'all';
+            document.getElementById('ratingFilter').value = 'all';
+            filterTable();
           }
-          
-          // التصدير إلى CSV
+
           function exportToCSV() {
             const data = [
               ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الرقم الوطني', 'تاريخ التسجيل'],
               ${customers.results.map((customer: any) => `['${customer.id}', '${customer.full_name || '-'}', '${customer.phone || '-'}', '${customer.email || '-'}', '${customer.national_id || '-'}', '${new Date(customer.created_at).toLocaleDateString('ar-SA')}']`).join(',\n              ')}
             ];
-            
             let csv = '\\uFEFF';
-            data.forEach(row => {
-              csv += row.join(',') + '\\n';
-            });
-            
+            data.forEach(row => { csv += row.join(',') + '\\n'; });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'العملاء_' + new Date().toISOString().split('T')[0] + '.csv';
             link.click();
           }
+
+          refreshUnreadDot();
+          loadCustomerRatings();
         </script>
       </body>
       </html>
@@ -11754,12 +12934,12 @@ app.get('/admin/requests', async (c) => {
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees ONLY requests for assigned customers
-      if (userInfo.userId) {
-        query += ' WHERE c.assigned_to = ?';
-        queryParams.push(userInfo.userId);
+      // Role 4: Employee - all company requests in tenant (matches create form + POST /api/requests scope)
+      if (userInfo.tenantId) {
+        query += ' WHERE c.tenant_id = ?';
+        queryParams.push(userInfo.tenantId);
       } else {
-        query += ' WHERE 1 = 0'; // No data if user ID not found
+        query += ' WHERE 1 = 0';
       }
     } else {
       // Unknown role - no data
@@ -11772,8 +12952,9 @@ app.get('/admin/requests', async (c) => {
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
     
-    // Determine if user can edit/delete (not for Role 3 - Supervisor)
+    // Role 3: no edit/delete on existing rows; may still create new funding requests (same as other tenant roles)
     const canEdit = userInfo.roleId !== 3;
+    const canCreateFundingRequest = [1, 2, 3, 4].includes(Number(userInfo.roleId));
     
     return c.html(`
       <!DOCTYPE html>
@@ -11856,7 +13037,7 @@ app.get('/admin/requests', async (c) => {
               </h1>
               
               <div class="flex gap-3">
-                ${canEdit ? `
+                ${canCreateFundingRequest ? `
                 <a href="/admin/requests/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
@@ -11968,25 +13149,31 @@ app.get('/admin/requests', async (c) => {
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex gap-2 justify-end">
-                        <a href="/admin/requests/${req.id}/workflow" class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-2 rounded text-xs transition-all shadow-md" title="الجدول الزمني التفصيلي">
-                          <i class="fas fa-clock"></i> ⏱️ Timeline
-                        </a>
-                        <a href="/admin/requests/${req.id}/report" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-xs transition-all" title="تقرير الطلب الكامل">
-                          <i class="fas fa-file-alt"></i> تقرير
-                        </a>
-                        <a href="/admin/requests/${req.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
-                          <i class="fas fa-eye"></i> عرض
-                        </a>
-                        ${canEdit ? `
-                        <a href="/admin/requests/${req.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
-                          <i class="fas fa-edit"></i> تعديل
-                        </a>
-                        <a href="/admin/requests/${req.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
-                          <i class="fas fa-trash"></i> حذف
-                        </a>
-                        ` : ''}
+                    <td class="px-6 py-4 whitespace-nowrap text-right relative">
+                      <div class="relative inline-block text-right">
+                        <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
+                          الإجراءات <i class="fas fa-chevron-down text-xs"></i>
+                        </button>
+                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                          <a href="/admin/requests/${req.id}/workflow" class="flex items-center gap-2 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">
+                            <i class="fas fa-clock w-4"></i> الجدول الزمني
+                          </a>
+                          <a href="/admin/requests/${req.id}/report" class="flex items-center gap-2 px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">
+                            <i class="fas fa-file-alt w-4"></i> تقرير
+                          </a>
+                          <a href="/admin/requests/${req.id}" class="flex items-center gap-2 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">
+                            <i class="fas fa-eye w-4"></i> عرض
+                          </a>
+                          ${canEdit ? `
+                          <div class="border-t border-gray-100 my-1"></div>
+                          <a href="/admin/requests/${req.id}/edit" class="flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
+                            <i class="fas fa-edit w-4"></i> تعديل
+                          </a>
+                          <a href="/admin/requests/${req.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="flex items-center gap-2 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                            <i class="fas fa-trash w-4"></i> حذف
+                          </a>
+                          ` : ''}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -11998,6 +13185,63 @@ app.get('/admin/requests', async (c) => {
         </div>
         
         <script>
+          function closeAllDropdowns() {
+            document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
+              m.classList.add('hidden');
+              m.style.top = '';
+              m.style.bottom = '';
+              m.style.marginTop = '';
+              m.style.marginBottom = '';
+            });
+            document.querySelectorAll('td.actions-cell-active').forEach(td => {
+              td.classList.remove('actions-cell-active');
+              td.style.zIndex = '';
+            });
+            document.querySelectorAll('tbody.dropdown-open').forEach(tb => tb.classList.remove('dropdown-open'));
+            document.querySelectorAll('tr.dropdown-active-row').forEach(tr => tr.classList.remove('dropdown-active-row'));
+            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(b => { b.style.visibility = ''; });
+          }
+
+          function positionDropdownMenu(menu) {
+            menu.style.top = '100%';
+            menu.style.bottom = 'auto';
+            menu.style.marginTop = '0.25rem';
+            menu.style.marginBottom = '0';
+            const rect = menu.getBoundingClientRect();
+            if (rect.bottom > (window.innerHeight - 8)) {
+              menu.style.top = 'auto';
+              menu.style.bottom = '100%';
+              menu.style.marginTop = '0';
+              menu.style.marginBottom = '0.25rem';
+            }
+          }
+
+          function toggleActionsDropdown(btn) {
+            const menu = btn.nextElementSibling;
+            const willOpen = menu.classList.contains('hidden');
+            closeAllDropdowns();
+            if (willOpen) {
+              menu.classList.remove('hidden');
+              positionDropdownMenu(menu);
+              const cell = btn.closest('td');
+              if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
+              const row = btn.closest('tr');
+              if (row) row.classList.add('dropdown-active-row');
+              const tbody = btn.closest('tbody');
+              if (tbody) {
+                tbody.classList.add('dropdown-open');
+                tbody.querySelectorAll('.actions-dropdown-btn').forEach(b => {
+                  b.style.visibility = b === btn ? '' : 'hidden';
+                });
+              }
+            }
+          }
+          document.addEventListener('click', function(e) {
+            if (!e.target.closest('.actions-dropdown-btn') && !e.target.closest('.actions-dropdown-menu')) {
+              closeAllDropdowns();
+            }
+          });
+
           // البحث والفلترة
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
@@ -12114,6 +13358,16 @@ app.get('/admin/requests/new', async (c) => {
       }
     }
     const { results: customerRows } = await loadCustomersForAdminForms(c, userInfo)
+
+    const prefillRaw = c.req.query('customer_id')
+    let prefillCustomerIdNum: number | null = null
+    if (prefillRaw != null && String(prefillRaw).trim() !== '') {
+      const n = parseInt(String(prefillRaw), 10)
+      if (!Number.isNaN(n) && n > 0) prefillCustomerIdNum = n
+    }
+    const prefillCustomerIdAllowed =
+      prefillCustomerIdNum != null &&
+      customerRows.some((cust: any) => Number(cust.id) === prefillCustomerIdNum)
 
     // Get banks scoped by tenant (allow global banks if tenant_id is NULL)
     let banksQuery = 'SELECT id, bank_name FROM banks WHERE is_active = 1'
@@ -12333,6 +13587,7 @@ app.get('/admin/requests/new', async (c) => {
           </div>
         </div>
         <script type="application/json" id="newRequestCustomersJSON">${newRequestCustomersJson}</script>
+        <script type="application/json" id="newRequestPrefillCustomerId">${JSON.stringify(prefillCustomerIdAllowed ? prefillCustomerIdNum : null)}</script>
         <script>
           (function() {
             const form = document.getElementById('newRequestForm');
@@ -12416,6 +13671,26 @@ app.get('/admin/requests/new', async (c) => {
                 if (ev.key === 'Escape') setOpen(false);
               });
             }
+            (function applyPrefillCustomer() {
+              var prefillEl = document.getElementById('newRequestPrefillCustomerId');
+              var prefillId = null;
+              if (prefillEl && prefillEl.textContent) {
+                try {
+                  var t = JSON.parse(prefillEl.textContent.trim());
+                  if (t != null && t !== '') prefillId = String(t);
+                } catch (e) {}
+              }
+              if (!prefillId || !hidden || !triggerLabel) return;
+              var found = null;
+              for (var i = 0; i < customerRows.length; i++) {
+                if (String(customerRows[i].id) === prefillId) { found = customerRows[i]; break; }
+              }
+              if (!found) return;
+              hidden.value = String(found.id);
+              triggerLabel.textContent = found.text;
+              triggerLabel.classList.remove('text-gray-500');
+              triggerLabel.classList.add('text-gray-900');
+            })();
             form.addEventListener('submit', async (event) => {
               event.preventDefault();
               try {
@@ -18600,6 +19875,8 @@ app.get('/admin/contracts/new', async (c) => {
   }).join('\n')
 
   let partyOneSummaryHtml = ''
+  let partyOneNameAttr = ''
+  let partyOnePhoneAttr = ''
   const tid = userInfo.tenantId
   if (tid) {
     const trow = await c.env.DB.prepare(
@@ -18607,11 +19884,17 @@ app.get('/admin/contracts/new', async (c) => {
     )
       .bind(tid)
       .first<{ company_name: string | null; contact_phone: string | null }>()
-    if (trow?.company_name) {
-      const phone = (trow.contact_phone || '').trim()
-      partyOneSummaryHtml = `<strong>${escText(trow.company_name)}</strong>${
-        phone ? ` — الجوال: ${escText(phone)}` : ''
-      }`
+    if (trow) {
+      partyOneNameAttr = escAttr(trow.company_name || '')
+      partyOnePhoneAttr = escAttr((trow.contact_phone || '').trim())
+      partyOneSummaryHtml =
+        '<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>'
+      if (trow.company_name) {
+        const phone = (trow.contact_phone || '').trim()
+        partyOneSummaryHtml += `<br><span style="margin-top:8px;display:inline-block;"><strong>${escText(
+          trow.company_name
+        )}</strong>${phone ? ` — ${escText(phone)}` : ''}</span>`
+      }
     }
   }
   if (!partyOneSummaryHtml) {
@@ -18624,6 +19907,8 @@ app.get('/admin/contracts/new', async (c) => {
   let html = contractsNewPage
     .replace('<!--CONTRACTS_CUSTOMERS_OPTIONS-->', optionsHtml)
     .replace('<!--CONTRACTS_PARTY_ONE_SUMMARY-->', partyOneSummaryHtml)
+    .replace('<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->', partyOneNameAttr)
+    .replace('<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->', partyOnePhoneAttr)
   if (userInfo.roleId === 3) {
     html = markContractsHtmlRole3Restricted(html)
   }

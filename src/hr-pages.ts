@@ -2,6 +2,7 @@
 // صفحات نظام الموارد البشرية - HR Pages
 // ========================================
 
+
 // صفحة الإجازات - Leaves Page
 export const hrLeavesPage = `
 <!DOCTYPE html>
@@ -404,6 +405,7 @@ export const hrSalariesPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white py-6 px-8 shadow-lg">
@@ -708,6 +710,7 @@ export const hrDepartmentsPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-6 px-8 shadow-lg">
@@ -900,6 +903,7 @@ export const hrPerformancePage = `
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-50">
+
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-6 px-8 shadow-lg">
@@ -1148,6 +1152,7 @@ export const hrPromotionsPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-orange-600 to-red-600 text-white py-6 px-8 shadow-lg">
@@ -1408,6 +1413,7 @@ export const hrDocumentsPage = `
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-100">
+
   <div class="min-h-screen">
     <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
@@ -1898,6 +1904,7 @@ export const hrReportsPage = `
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-100">
+
   <div class="min-h-screen">
     <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
