@@ -494,6 +494,24 @@ function canManageCustomerAssignments(roleId: number | null): boolean {
   return roleId === 1 || roleId === 2
 }
 
+async function canUserAccessCustomer(
+  db: D1Database,
+  userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
+  customer: { id: number; tenant_id: number | null } | null
+): Promise<boolean> {
+  if (!userInfo.userId || !userInfo.roleId || !customer) return false
+  if (userInfo.roleId === 1) return true
+  if (userInfo.tenantId == null || customer.tenant_id == null || customer.tenant_id !== userInfo.tenantId) return false
+  if (userInfo.roleId === 4) {
+    const assignment = await db
+      .prepare('SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1')
+      .bind(customer.id, userInfo.userId)
+      .first<{ ok: number }>()
+    return Boolean(assignment?.ok)
+  }
+  return userInfo.roleId === 2 || userInfo.roleId === 3
+}
+
 // Get tenant_id for current user (for multi-tenancy filtering)
 async function getUserInfo(
   c: any
@@ -2867,9 +2885,12 @@ app.get('/api/customers', async (c) => {
         query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees company customers
-      if (userInfo.tenantId) {
-        query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
+      // Role 4: Employee - sees only assigned customers in same company
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE c.tenant_id = ${userInfo.tenantId} AND EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ${userInfo.userId}
+        )`
       } else {
         query += ` WHERE 1 = 0` // No data if tenant scope is missing
       }
@@ -3342,10 +3363,11 @@ app.get('/api/calculator/customer-by-identifier', async (c) => {
 app.get('/api/customers/:id/obligations', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const id = c.req.param('id')
     const customer = await c.env.DB.prepare('SELECT id, tenant_id FROM customers WHERE id = ?').bind(id).first() as { id: number; tenant_id: number } | null
     if (!customer) return c.json({ success: false, error: 'Not found' }, 404)
-    if (userInfo.tenantId != null && customer.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) return c.json({ success: false, error: 'Forbidden' }, 403)
     const obligationsResult = await c.env.DB.prepare('SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(id).all()
     const obligations = obligationsResult.results || []
     return c.json({ success: true, obligations })
@@ -3358,10 +3380,11 @@ app.get('/api/customers/:id/obligations', async (c) => {
 app.post('/api/customers/:id/obligations', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const id = c.req.param('id')
     const customer = await c.env.DB.prepare('SELECT id, tenant_id FROM customers WHERE id = ?').bind(id).first() as { id: number; tenant_id: number } | null
     if (!customer) return c.json({ success: false, error: 'Not found' }, 404)
-    if (userInfo.tenantId != null && customer.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) return c.json({ success: false, error: 'Forbidden' }, 403)
     const body = await c.req.json() as { obligations?: Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }> }
     const obligations = Array.isArray(body?.obligations) ? body.obligations : []
     await c.env.DB.prepare('DELETE FROM customer_obligations WHERE customer_id = ?').bind(id).run()
@@ -8244,8 +8267,13 @@ app.get('/admin/customers/archived', async (c) => {
     } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       if (userInfo.tenantId) { query += ' AND tenant_id = ?'; queryParams.push(userInfo.tenantId) }
     } else if (userInfo.roleId === 4) {
-      if (userInfo.userId) { query += ' AND assigned_to = ?'; queryParams.push(userInfo.userId) }
-      else query += ' AND 1 = 0'
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else query += ' AND 1 = 0'
     } else query += ' AND 1 = 0'
     query += ' ORDER BY archived_at DESC'
 
@@ -10959,10 +10987,13 @@ app.get('/admin/customers', async (c) => {
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - sees company customers
-      if (userInfo.tenantId) {
-        query += ' AND tenant_id = ?';
-        queryParams.push(userInfo.tenantId);
+      // Role 4: Employee - sees only assigned customers in same company
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+        )`;
+        queryParams.push(userInfo.tenantId, userInfo.userId);
       } else {
         query += ' AND 1 = 0';
       }
@@ -14054,11 +14085,16 @@ app.get('/admin/requests/:id', async (c) => {
 // صفحة عرض عميل واحد
 app.get('/admin/customers/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
     const id = c.req.param('id')
-    const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first()
+    const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first() as { id: number; tenant_id: number | null } | null
     
     if (!customer) {
       return c.html('<h1>العميل غير موجود</h1>')
+    }
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) {
+      return c.html('<h1>غير مصرح بعرض هذا العميل</h1>', 403)
     }
     
     return c.html(`
@@ -14138,11 +14174,16 @@ app.get('/admin/customers/:id', async (c) => {
 // صفحة تعديل عميل
 app.get('/admin/customers/:id/edit', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
     const id = c.req.param('id')
-    const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first()
+    const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first() as { id: number; tenant_id: number | null } | null
     
     if (!customer) {
       return c.html('<h1>العميل غير موجود</h1>')
+    }
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) {
+      return c.html('<h1>غير مصرح بتعديل هذا العميل</h1>', 403)
     }
     const obligationsResult = await c.env.DB.prepare('SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id').bind(id).all()
     const obligations = (obligationsResult.results || []) as Array<{ obligation_type?: string; total_amount?: number; monthly_installment?: number; due_date?: string | null }>
@@ -14536,6 +14577,8 @@ app.get('/admin/banks/add', async (c) => {
 // تقرير العميل الكامل - يعرض جميع بيانات الحاسبة
 app.get('/admin/customers/:id/report', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
     const id = c.req.param('id')
     
     // جلب بيانات العميل مع بيانات الحاسبة
@@ -14552,6 +14595,9 @@ app.get('/admin/customers/:id/report', async (c) => {
     
     if (!customer) {
       return c.html('<h1>العميل غير موجود</h1>')
+    }
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer as { id: number; tenant_id: number | null }))) {
+      return c.html('<h1>غير مصرح بعرض تقرير هذا العميل</h1>', 403)
     }
     
     const cust = customer as any
