@@ -120,7 +120,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
         <div class="flex items-center justify-between px-6 py-4">
             <!-- Right Side: Menu Toggle (Always Visible) -->
-            <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
+            <button type="button" onclick="window.toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
                 <i class="fas fa-bars text-2xl"></i>
             </button>
             
@@ -152,7 +152,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
     <div id="mobile-menu" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
         <div class="p-6">
             <!-- Close Button -->
-            <button onclick="toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
+            <button type="button" onclick="window.toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
                 <i class="fas fa-times text-2xl text-gray-600"></i>
             </button>
             
@@ -318,7 +318,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
     </div>
 
     <!-- Menu Overlay -->
-    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleMobileMenu()"></div>
+    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="window.toggleMobileMenu()"></div>
 
     <!-- Sidebar permissions are enforced by applyUserPermissions() (same allowlist as quick-access) -->
 
@@ -466,6 +466,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
             </div>
             <!-- Dashboard Section -->
             <div id="dashboard-section" class="content-section active">
+                <div id="dashboardCustomerSummarySection">
                 <h1 class="text-3xl font-bold mb-6 text-gray-800">
                     <i class="fas fa-tachometer-alt text-blue-600 ml-2"></i>
                     ملخص العملاء
@@ -556,96 +557,73 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <p class="text-2xl font-bold text-gray-800" id="stat-calculations">0</p>
                     </div>
                 </div>
+                </div>
                 
                 <!-- Calculator Link & QR Code Section -->
                 <div class="bg-white rounded-xl shadow-lg p-6 mt-6" id="calculatorLinkSection">
-                    <div class="flex items-center mb-4">
-                        <i class="fas fa-calculator text-blue-600 text-2xl ml-3"></i>
-                        <h2 class="text-xl font-bold text-gray-800">رابط حاسبة التمويل</h2>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-share-alt text-blue-600 text-2xl ml-3"></i>
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-800">روابط العملاء</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">الحاسبة، صفحة التواصل، وروابط الإحالة التسويقية</p>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Left Side: Link -->
+                        <!-- Left: collapsible share links -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-link ml-1"></i>
-                                رابط الحاسبة الخاصة بك
-                            </label>
-                            <div class="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    id="calculatorLinkInput" 
-                                    value="جاري التحميل..." 
-                                    readonly 
-                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-blue-500"
-                                >
-                                <button 
-                                    onclick="copyCalculatorLink()" 
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
-                                    title="نسخ الرابط"
-                                >
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-2">
-                                <i class="fas fa-info-circle ml-1"></i>
-                                يمكنك مشاركة هذا الرابط مع عملائك لاستخدام حاسبة التمويل
-                            </p>
-                            
-                            <!-- Success Message -->
-                            <div id="copySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
-                                <i class="fas fa-check-circle ml-1"></i>
-                                تم نسخ الرابط بنجاح!
-                            </div>
-                            
-                            <!-- Open Link Button -->
-                            <button 
-                                onclick="openCalculatorLink()" 
-                                class="w-full mt-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
-                            >
-                                <i class="fas fa-external-link-alt ml-2"></i>
-                                فتح الحاسبة في نافذة جديدة
-                            </button>
+                            <details id="clientShareLinksDetails" class="group border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 bg-slate-50 hover:bg-slate-100 text-gray-900 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                                    <span class="flex items-center gap-2 min-w-0">
+                                        <i class="fas fa-copy text-blue-600 shrink-0"></i>
+                                        <span class="truncate">نسخ أو فتح الروابط</span>
+                                    </span>
+                                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform group-open:rotate-180 shrink-0"></i>
+                                </summary>
+                                <div class="border-t border-gray-100 p-4 space-y-3 bg-white">
+                                    <p class="text-xs text-gray-500 -mt-1 mb-1">جميع الروابط أدناه بنفس الشكل: انسخ أو افتح في تبويب جديد.</p>
 
-                            <label class="block text-sm font-medium text-gray-700 mb-2 mt-5">
-                                <i class="fas fa-address-card ml-1"></i>
-                                رابط صفحة التواصل (المسار الجذر)
-                            </label>
-                            <div class="flex gap-2">
-                                <input
-                                    type="text"
-                                    id="contactRootLinkInput"
-                                    value="جاري التحميل..."
-                                    readonly
-                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-blue-500"
-                                >
-                                <button
-                                    onclick="copyContactRootLink()"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
-                                    title="نسخ الرابط"
-                                >
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <div id="contactRootCopySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
-                                <i class="fas fa-check-circle ml-1"></i>
-                                تم نسخ رابط صفحة التواصل بنجاح!
-                            </div>
-                            <button
-                                onclick="openContactRootLink()"
-                                class="w-full mt-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
-                            >
-                                <i class="fas fa-external-link-alt ml-2"></i>
-                                فتح صفحة التواصل في نافذة جديدة
-                            </button>
-                            <div id="contactAffiliateLinksWrap" class="mt-6 border-t border-gray-200 pt-4" style="display:none;">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-funnel-dollar ml-1"></i>روابط التواصل التسويقية
-                                </label>
-                                <ul id="contactAffiliateLinksList" class="space-y-2 text-sm text-gray-700 max-h-48 overflow-y-auto"></ul>
-                                <p class="text-xs text-gray-500 mt-2">لإضافة أو حذف مسار (مثل /facebook) استخدم صفحة الإدارة.</p>
-                                <a href="/admin/contact-affiliates" class="inline-block mt-1 text-amber-700 hover:underline text-sm font-medium">إدارة روابط الإحالة</a>
-                            </div>
+                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
+                                        <p class="text-xs font-semibold text-gray-600 mb-2">حاسبة التمويل</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <input type="text" id="calculatorLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                                            <button type="button" onclick="copyCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
+                                            <button type="button" onclick="openCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
+                                        <p class="text-xs font-semibold text-gray-600 mb-2">صفحة التواصل (الرابط الأساسي)</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <input type="text" id="contactRootLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                                            <button type="button" onclick="copyContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
+                                            <button type="button" onclick="openContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div id="affiliateSectionWrap" class="space-y-3" style="display:none">
+                                        <p class="text-xs font-semibold text-gray-600">روابط التواصل التسويقية</p>
+                                        <div id="affiliateLinksRowsContainer" class="space-y-3"></div>
+                                        <div id="contactAffiliatesManageBlock" class="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-3 text-center text-sm text-gray-600" style="display:none">
+                                            <a href="/admin/contact-affiliates" class="font-semibold text-blue-700 hover:underline">إدارة روابط الإحالة</a>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1 pt-1">
+                                        <div id="anyLinkCopyToast" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
+                                            <i class="fas fa-check-circle ml-1"></i><span id="anyLinkCopyToastText">تم النسخ</span>
+                                        </div>
+                                        <div id="copySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
+                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط الحاسبة
+                                        </div>
+                                        <div id="contactRootCopySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
+                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط التواصل
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
                         
                         <!-- Right Side: QR Code -->
@@ -1711,7 +1689,25 @@ export const fullAdminPanel = `<!DOCTYPE html>
         
     </div>
 
+    <!--__PANEL_USER_BOOT__-->
     <script>
+        // Defined first so header/overlay onclick handlers work even if a later error halts this script.
+        window.toggleMobileMenu = function () {
+            const sidebar = document.getElementById('mobile-menu');
+            const overlay = document.getElementById('menu-overlay');
+            if (sidebar && overlay) {
+                if (sidebar.classList.contains('translate-x-full')) {
+                    sidebar.classList.remove('translate-x-full');
+                    sidebar.classList.add('translate-x-0');
+                    overlay.classList.remove('hidden');
+                } else {
+                    sidebar.classList.add('translate-x-full');
+                    sidebar.classList.remove('translate-x-0');
+                    overlay.classList.add('hidden');
+                }
+            }
+        };
+
         // Debug dump function - displays data on screen
         window.dd = function(data) {
             console.log('🔍 DD:', data);
@@ -1863,7 +1859,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         roleId === 2 ? 'مدير الشركة' :
                         roleId === 3 ? 'مشرف المبيعات' :
                         roleId === 4 ? 'موظف' :
-                        roleId === 5 ? 'وكيل بنك' : '';
+                        roleId === 5 ? 'موظف التمويل' : '';
                     const finalRoleLabel = roleName || roleLabelFromId || 'مستخدم';
 
                     console.log('👤 بيانات المستخدم المحملة:');
@@ -2148,34 +2144,39 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 if (adminOnlyStats) {
                     if (roleId === 4 || roleId === 3 || roleId === 5) {
                         adminOnlyStats.style.display = 'none';
-                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو وكيل بنك)');
+                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو موظف التمويل)');
                     } else {
                         adminOnlyStats.style.display = 'grid';
                         console.log('✅ عرض الكروت الإضافية');
                     }
                 }
                 
-                // قسم روابط الحاسبة و QR: لجميع الأدوار ما عدا وكيل البنك (5)
+                const dashboardCustomerSummarySection = document.getElementById('dashboardCustomerSummarySection');
+                if (dashboardCustomerSummarySection) {
+                    if (roleId === 3 || roleId === 4 || roleId === 5) {
+                        dashboardCustomerSummarySection.style.display = 'none';
+                        console.log('🚫 إخفاء ملخص العملاء (مشرف / موظف / وكيل بنك)');
+                    } else {
+                        dashboardCustomerSummarySection.style.display = '';
+                        console.log('✅ عرض ملخص العملاء');
+                    }
+                }
+
+                // قسم رابط الحاسبة + QR + صفحة التواصل + روابط الإحالة — لجميع الأدوار
                 const calculatorLinkSection = document.getElementById('calculatorLinkSection');
                 const employeeCalculatorSection = document.getElementById('employeeCalculatorSection');
                 
                 if (calculatorLinkSection) {
-                    if (roleId === 5) {
-                        calculatorLinkSection.style.display = 'none';
-                        if (employeeCalculatorSection) employeeCalculatorSection.style.display = 'none';
-                        console.log('🚫 إخفاء قسم رابط الحاسبة (وكيل بنك)');
-                    } else {
-                        calculatorLinkSection.style.display = 'block';
-                        console.log('✅ عرض قسم رابط الحاسبة و QR');
-                        if (employeeCalculatorSection) {
-                            employeeCalculatorSection.style.display = 'none';
-                        }
-                        setTimeout(() => {
-                            if (typeof loadCalculatorLink === 'function') {
-                                loadCalculatorLink();
-                            }
-                        }, 500);
+                    calculatorLinkSection.style.display = 'block';
+                    if (employeeCalculatorSection) {
+                        employeeCalculatorSection.style.display = 'none';
                     }
+                    console.log('✅ عرض قسم رابط الحاسبة والتواصل (جميع الأدوار)');
+                    setTimeout(() => {
+                        if (typeof loadCalculatorLink === 'function') {
+                            loadCalculatorLink();
+                        }
+                    }, 500);
                 } else {
                     console.warn('⚠️ لم يتم العثور على calculatorLinkSection');
                 }
@@ -4215,7 +4216,53 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 return localPath;
             }
         }
-        
+
+        window.showPanelCopyToast = function (msg) {
+            var wrap = document.getElementById('anyLinkCopyToast');
+            var span = document.getElementById('anyLinkCopyToastText');
+            if (span) span.textContent = msg || 'تم النسخ';
+            if (wrap) {
+                wrap.classList.remove('hidden');
+                if (window.__panelCopyToastTimer) clearTimeout(window.__panelCopyToastTimer);
+                window.__panelCopyToastTimer = setTimeout(function () {
+                    wrap.classList.add('hidden');
+                }, 2500);
+            }
+            var h1 = document.getElementById('copySuccessMessage');
+            var h2 = document.getElementById('contactRootCopySuccessMessage');
+            if (h1) h1.classList.add('hidden');
+            if (h2) h2.classList.add('hidden');
+        };
+
+        function legacyCopyString(text, onOk) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                if (onOk) onOk();
+            } catch (e) {
+                alert('تعذر نسخ الرابط');
+            }
+            document.body.removeChild(ta);
+        }
+
+        function copyStringToClipboard(text, onOk) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    if (onOk) onOk();
+                }).catch(function () {
+                    legacyCopyString(text, onOk);
+                });
+                return;
+            }
+            legacyCopyString(text, onOk);
+        }
+
         // Generate and display calculator link and QR code
         async function loadCalculatorLink() {
             console.log('📱 بدء تحميل رابط الحاسبة...');
@@ -4272,54 +4319,94 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 qrcodeContainer.appendChild(qrImg);
             }
 
-            const affWrap = document.getElementById('contactAffiliateLinksWrap');
-            const affList = document.getElementById('contactAffiliateLinksList');
-            if (affWrap && affList) {
-                affList.innerHTML = '';
-                let rid = parseInt(userData.role_id, 10);
-                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+            const sectionWrap = document.getElementById('affiliateSectionWrap');
+            const container = document.getElementById('affiliateLinksRowsContainer');
+            if (sectionWrap && container) {
+                container.innerHTML = '';
+                var rid = parseInt(userData.role_id, 10);
+                var roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
                 if (roleLegacy[rid]) rid = roleLegacy[rid];
                 if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
-                    const w = parseInt(window.USER_ROLE_ID, 10);
+                    var w = parseInt(window.USER_ROLE_ID, 10);
                     rid = roleLegacy[w] || w;
                 }
-                let showAff = rid !== 5 && contactRootPath && contactRootPath !== '/';
+                var showAff = (rid === 1 || rid === 2) && contactRootPath && contactRootPath !== '/';
                 if (rid === 1) {
-                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
+                    var tidCheck = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                    if (!Number.isFinite(tidCheck) || tidCheck <= 0) showAff = false;
+                }
+                var manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
+                if (manageAffBlock) {
+                    manageAffBlock.style.display = showAff && (rid === 1 || rid === 2) ? '' : 'none';
                 }
                 if (!showAff) {
-                    affWrap.style.display = 'none';
+                    sectionWrap.style.display = 'none';
                 } else {
-                    affWrap.style.display = 'block';
+                    sectionWrap.style.display = '';
+                    function escAffRow(s) {
+                        return String(s ?? '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;');
+                    }
+                    function escAttrRow(s) {
+                        return String(s ?? '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#39;');
+                    }
+                    function affiliateRowCard(label, fullUrl) {
+                        var esc = escAffRow;
+                        var a = escAttrRow(fullUrl);
+                        return (
+                            '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">' +
+                            '<p class="text-xs font-semibold text-gray-600 mb-2">' + esc(label) + '</p>' +
+                            '<div class="flex flex-wrap gap-2">' +
+                            '<input type="text" readonly dir="ltr" value="' + a + '" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">' +
+                            '<button type="button" class="js-aff-copy inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ" data-url="' + a + '"><i class="fas fa-copy"></i></button>' +
+                            '<button type="button" class="js-aff-open inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح" data-url="' + a + '"><i class="fas fa-external-link-alt"></i></button>' +
+                            '</div></div>'
+                        );
+                    }
                     try {
-                        let u = '/api/tenant-contact-affiliates';
+                        var u = '/api/tenant-contact-affiliates';
                         if (rid === 1) {
-                            const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                            u += '?tenant_id=' + tid;
+                            var tidQ = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            u += '?tenant_id=' + tidQ;
                         }
-                        const res = await axios.get(u);
-                        const rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
-                        function escAff(s) {
-                            return String(s ?? '')
-                                .replace(/&/g, '&amp;')
-                                .replace(/</g, '&lt;')
-                                .replace(/>/g, '&gt;')
-                                .replace(/"/g, '&quot;');
-                        }
+                        var res = await axios.get(u);
+                        var rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
                         if (!rows.length) {
-                            affList.innerHTML = '<li class="text-gray-500 text-sm">لا توجد روابط تسويقية بعد.</li>';
+                            container.innerHTML =
+                                '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70 text-sm text-gray-500 text-center">لا توجد روابط تسويقية بعد.</div>';
                         } else {
-                            affList.innerHTML = rows.map(function (r) {
-                                var pathSeg = encodeURIComponent(r.path_segment || '');
-                                var full = baseUrl + String(contactRootPath).replace(/\/$/, '') + '/' + pathSeg;
-                                return '<li class="pb-3 mb-3 border-b border-gray-100 last:border-0 last:mb-0 last:pb-0">' +
-                                    '<div class="font-medium text-gray-900">' + escAff(r.label) + '</div>' +
-                                    '<div class="text-xs text-gray-500 break-all mt-1" dir="ltr">' + escAff(full) + '</div></li>';
-                            }).join('');
+                            container.innerHTML = rows
+                                .map(function (r) {
+                                    var pathSeg = encodeURIComponent(r.path_segment || '');
+                                    var full = baseUrl + String(contactRootPath).replace(/\\/$/, '') + '/' + pathSeg;
+                                    return affiliateRowCard(r.label || r.path_segment || 'رابط', full);
+                                })
+                                .join('');
                         }
+                        container.querySelectorAll('.js-aff-copy').forEach(function (btn) {
+                            btn.addEventListener('click', function () {
+                                var url = btn.getAttribute('data-url');
+                                if (!url) return;
+                                copyStringToClipboard(url, function () {
+                                    window.showPanelCopyToast('تم نسخ الرابط');
+                                });
+                            });
+                        });
+                        container.querySelectorAll('.js-aff-open').forEach(function (btn) {
+                            btn.addEventListener('click', function () {
+                                var url = btn.getAttribute('data-url');
+                                if (url) window.open(url, '_blank');
+                            });
+                        });
                     } catch (e) {
-                        affList.innerHTML = '<li class="text-red-600 text-xs">تعذر تحميل الروابط</li>';
+                        container.innerHTML =
+                            '<div class="rounded-lg border border-red-200 p-3 bg-red-50 text-sm text-red-700 text-center">تعذر تحميل روابط الإحالة</div>';
                     }
                 }
             }
@@ -4345,6 +4432,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 // Show success message
                 const successMessage = document.getElementById('copySuccessMessage');
+                var anyT = document.getElementById('anyLinkCopyToast');
+                if (anyT) anyT.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => {
@@ -4383,6 +4472,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 document.execCommand('copy');
                 const successMessage = document.getElementById('contactRootCopySuccessMessage');
+                var anyT2 = document.getElementById('anyLinkCopyToast');
+                if (anyT2) anyT2.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => successMessage.classList.add('hidden'), 3000);
@@ -4547,22 +4638,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         // Initialize on load
         loadDashboardStats();
         
-        // Load calculator link when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-                const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
-                let rid = legacyMap[parseInt(userData.role_id, 10)] || parseInt(userData.role_id, 10) || null;
-                if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
-                    const w = parseInt(window.USER_ROLE_ID, 10);
-                    rid = legacyMap[w] || w;
-                }
-                if (!rid) rid = 4;
-                if (rid !== 5 && typeof loadCalculatorLink === 'function') {
-                    loadCalculatorLink();
-                }
-            }, 1000);
-        });
+        // رابط الحاسبة يُحمَّل من applyUserPermissions → loadCalculatorLink لجميع الأدوار
         
         // Show Section function
         window.showSection = function(sectionName) {

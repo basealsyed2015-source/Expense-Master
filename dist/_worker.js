@@ -1,4 +1,4 @@
-var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw new Error("next() called multiple times");r=i;let o,d=!1,c;if(e[i]?(c=e[i][0][0],s.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{o=await c(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},yt=Symbol(),vt=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,r=(e instanceof We?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?wt(e,{all:a,dot:s}):{}};async function wt(e,t){const a=await e.formData();return a?_t(a,t):{}}function _t(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?kt(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(Et(a,s,n),delete a[s])}),a}var kt=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Et=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((r,l)=>{l===n.length-1?s[r]=a:((!s[r]||typeof s[r]!="object"||Array.isArray(s[r])||s[r]instanceof File)&&(s[r]=Object.create(null)),s=s[r])})},Fe=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},It=e=>{const{groups:t,path:a}=St(e),s=Fe(a);return Tt(s,t)},St=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},Tt=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},ce={},Dt=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return ce[s]||(a[2]?ce[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:ce[s]=[e,a[1],!0]),ce[s]}return null},_e=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Bt=e=>_e(e,decodeURI),Pe=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const r=t.indexOf("?",s),l=t.slice(a,r===-1?void 0:r);return Bt(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(n===63)break}return t.slice(a,s)},Ct=e=>{const t=Pe(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},K=(e,t,...a)=>(a.length&&(t=K(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),He=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const r=n.replace("?","");s+="/"+r,a.push(s)}else s+="/"+n}),a.filter((n,r,l)=>l.indexOf(n)===r)},ye=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?_e(e,ze):e):e,Ue=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const o=l+t.length+2,d=e.indexOf("&",o);return ye(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){const l=e.indexOf("&",r+1);let i=e.indexOf("=",r);i>l&&l!==-1&&(i=-1);let o=e.slice(r+1,i===-1?l===-1?void 0:l:i);if(s&&(o=ye(o)),r=l,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=ye(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},Rt=Ue,jt=(e,t)=>Ue(e,t,!0),ze=decodeURIComponent,Be=e=>_e(e,ze),We=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?Be(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Be(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Rt(this.url,e)}queries(e){return jt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await vt(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(r=>(n==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[yt](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Lt={Stringify:1},Ve=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const r=e.callbacks;return r?.length?(n?n[0]+=e:n=[e],Promise.all(r.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>Ve(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},At="text/plain; charset=UTF-8",ve=(e,t)=>({"Content-Type":e,...t}),Nt=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new We(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#i??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of r)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[r,l]of Object.entries(a))if(typeof l=="string")s.set(r,l);else{s.delete(r);for(const i of l)s.append(r,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,ve(At,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,ve("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,ve("text/html; charset=UTF-8",a));return typeof e=="object"?Ve(e,Lt.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},T="ALL",Ot="all",$t=["get","post","put","delete","options","patch"],Ge="Can not add a route since the matcher is already built.",Ye=class extends Error{},qt="__COMPOSED_HANDLER",Mt=e=>e.text("404 Not Found",404),Ce=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ft=class Je{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...$t,Ot].forEach(r=>{this[r]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#r(r,this.#t,l),i.forEach(o=>{this.#r(r,this.#t,o)}),this)}),this.on=(r,l,...i)=>{for(const o of[l].flat()){this.#t=o;for(const d of[r].flat())i.map(c=>{this.#r(d.toUpperCase(),this.#t,c)})}return this},this.use=(r,...l)=>(typeof r=="string"?this.#t=r:(this.#t="*",l.unshift(r)),l.forEach(i=>{this.#r(T,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??Pe:Ct}#e(){const t=new Je({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Mt;errorHandler=Ce;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let r;a.errorHandler===Ce?r=n.handler:(r=async(l,i)=>(await De([],a.errorHandler)(l,()=>n.handler(l,i))).res,r[qt]=n.handler),s.#r(n.method,n.path,r)}),this}basePath(t){const a=this.#e();return a._basePath=K(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,r;s&&(typeof s=="function"?r=s:(r=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const l=r?o=>{const d=r(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=K(this._basePath,t),d=o==="/"?0:o.length;return c=>{const u=new URL(c.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,c)}})();const i=async(o,d)=>{const c=await a(n(o.req.raw),...l(o));if(c)return c;await d()};return this.#r(T,K(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=K(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const r=this.getPath(t,{env:s}),l=this.router.match(n,r),i=new Nt(t,{path:r,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const o=De(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${K("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},Xe=[];function Pt(e,t){const a=this.buildAllMatchers(),s=((n,r)=>{const l=a[n]||a[T],i=l[2][r];if(i)return i;const o=r.match(l[0]);if(!o)return[[],Xe];const d=o.indexOf("",1);return[l[1][d],o]});return this.match=s,s(e,t)}var pe="[^/]+",re=".*",oe="(?:|/.*)",Z=Symbol(),Ht=new Set(".\\+*[^]$()");function Ut(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===re||e===oe?1:t===re||t===oe?-1:e===pe?1:t===pe?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var zt=class we{#t;#e;#a=Object.create(null);insert(t,a,s,n,r){if(t.length===0){if(this.#t!==void 0)throw Z;if(r)return;this.#t=a;return}const[l,...i]=t,o=l==="*"?i.length===0?["","",re]:["","",pe]:l==="/*"?["","",oe]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const c=o[1];let u=o[2]||pe;if(c&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw Z;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==re&&m!==oe))throw Z;if(r)return;d=this.#a[u]=new we,c!==""&&(d.#e=n.varIndex++)}!r&&c!==""&&s.push([c,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==re&&c!==oe))throw Z;if(r)return;d=this.#a[l]=new we}d.insert(i,a,s,n,r)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ut).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:Ht.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Wt=class{#t={varIndex:0};#e=new zt;insert(e,t,a){const s=[],n=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${l}`;return n[l]=[d,o],l++,i=!0,d}),!i)break}const r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=n.length-1;l>=0;l--){const[i]=n[l];for(let o=r.length-1;o>=0;o--)if(r[o].indexOf(i)!==-1){r[o]=r[o].replace(i,n[l][1]);break}}return this.#e.insert(r,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,r,l)=>r!==void 0?(a[++t]=Number(r),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Vt=[/^$/,[],Object.create(null)],Qe=Object.create(null);function Ke(e){return Qe[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Gt(){Qe=Object.create(null)}function Yt(e){const t=new Wt,a=[];if(e.length===0)return Vt;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[u,m])=>d?1:u?-1:c.length-m.length),n=Object.create(null);for(let d=0,c=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?n[f]=[g.map(([y])=>[y,Object.create(null)]),Xe]:c++;let b;try{b=t.insert(f,c,m)}catch(y){throw y===Z?new Ye(f):y}m||(a[c]=g.map(([y,h])=>{const w=Object.create(null);for(h-=1;h>=0;h--){const[v,_]=b[h];w[v]=_}return[y,w]}))}const[r,l,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,y=g.length;b<y;b++)f[g[b]]=i[f[g[b]]]}const o=[];for(const d in l)o[d]=a[l[d]];return[r,o,n]}function Q(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if(Ke(a).test(t))return[...e[a]]}}var Jt=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[T]:Object.create(null)},this.#e={[T]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(Ge);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[T]).forEach(o=>{i[e][o]=[...i[T][o]]})}),t==="/*"&&(t="*");const r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=Ke(t);e===T?Object.keys(s).forEach(o=>{s[o][t]||=Q(s[o],t)||Q(s[T],t)||[]}):s[e][t]||=Q(s[e],t)||Q(s[T],t)||[],Object.keys(s).forEach(o=>{(e===T||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,r])})}),Object.keys(n).forEach(o=>{(e===T||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,r]))});return}const l=He(t)||[t];for(let i=0,o=l.length;i<o;i++){const d=l[i];Object.keys(n).forEach(c=>{(e===T||e===c)&&(n[c][d]||=[...Q(s[c],d)||Q(s[T],d)||[]],n[c][d].push([a,r-o+i+1]))})}}match=Pt;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Gt(),e}#a(e){const t=[];let a=e===T;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(r=>[r,s[e][r]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==T&&t.push(...Object.keys(s[T]).map(r=>[r,s[T][r]]))}),a?Yt(t):null}},Xt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ge);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let r=0,l;for(;r<n;r++){const i=a[r];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);l=i.match(e,t)}catch(o){if(o instanceof Ye)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(r===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},se=Object.create(null),Qt=class Ze{#t;#e;#a;#r=0;#n=se;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const r=It(a),l=[];for(let i=0,o=r.length;i<o;i++){const d=r[i],c=r[i+1],u=Dt(d,c),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&l.push(u[1]);continue}n.#e[m]=new Ze,u&&(n.#a.push(u),l.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const r=[];for(let l=0,i=t.#t.length;l<i;l++){const o=t.#t[l],d=o[a]||o[T],c={};if(d!==void 0&&(d.params=Object.create(null),r.push(d),s!==se||n&&n!==se))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=c[d.score];d.params[f]=n?.[f]&&!g?n[f]:s[f]??n?.[f],c[d.score]=!0}}return r}search(t,a){const s=[];this.#n=se;let r=[this];const l=Fe(a),i=[];for(let o=0,d=l.length;o<d;o++){const c=l[o],u=o===d-1,m=[];for(let f=0,g=r.length;f<g;f++){const b=r[f],y=b.#e[c];y&&(y.#n=b.#n,u?(y.#e["*"]&&s.push(...this.#s(y.#e["*"],t,b.#n)),s.push(...this.#s(y,t,b.#n))):m.push(y));for(let h=0,w=b.#a.length;h<w;h++){const v=b.#a[h],_=b.#n===se?{}:{...b.#n};if(v==="*"){const C=b.#e["*"];C&&(s.push(...this.#s(C,t,b.#n)),C.#n=_,m.push(C));continue}const[R,B,j]=v;if(!c&&!(j instanceof RegExp))continue;const E=b.#e[R],S=l.slice(o).join("/");if(j instanceof RegExp){const C=j.exec(S);if(C){if(_[B]=C[0],s.push(...this.#s(E,t,b.#n,_)),Object.keys(E.#e).length){E.#n=_;const O=C[0].match(/\//)?.length??0;(i[O]||=[]).push(E)}continue}}(j===!0||j.test(c))&&(_[B]=c,u?(s.push(...this.#s(E,t,_,b.#n)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,_,b.#n))):(E.#n=_,m.push(E)))}}r=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},Kt=class{name="TrieRouter";#t;constructor(){this.#t=new Qt}add(e,t,a){const s=He(t);if(s){for(let n=0,r=s.length;n<r;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},et=class extends Ft{constructor(e={}){super(e),this.router=e.router??new Xt({routers:[new Jt,new Kt]})}},Zt=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(r=>typeof r=="string"?r==="*"?()=>r:l=>r===l?l:null:typeof r=="function"?r:l=>r.includes(l)?l:null)(a.origin),n=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(a.allowMethods);return async function(l,i){function o(c,u){l.res.headers.set(c,u)}const d=await s(l.req.header("origin")||"",l);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const c=await n(l.req.header("origin")||"",l);c.length&&o("Access-Control-Allow-Methods",c.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const ea=`<!DOCTYPE html>
+var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw new Error("next() called multiple times");r=i;let o,d=!1,c;if(e[i]?(c=e[i][0][0],s.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{o=await c(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},vt=Symbol(),wt=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,r=(e instanceof Ve?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?_t(e,{all:a,dot:s}):{}};async function _t(e,t){const a=await e.formData();return a?kt(a,t):{}}function kt(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?Et(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(It(a,s,n),delete a[s])}),a}var Et=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},It=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((r,l)=>{l===n.length-1?s[r]=a:((!s[r]||typeof s[r]!="object"||Array.isArray(s[r])||s[r]instanceof File)&&(s[r]=Object.create(null)),s=s[r])})},Pe=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},St=e=>{const{groups:t,path:a}=Tt(e),s=Pe(a);return Dt(s,t)},Tt=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},Dt=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},ce={},Bt=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return ce[s]||(a[2]?ce[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:ce[s]=[e,a[1],!0]),ce[s]}return null},ke=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Ct=e=>ke(e,decodeURI),He=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const r=t.indexOf("?",s),l=t.slice(a,r===-1?void 0:r);return Ct(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(n===63)break}return t.slice(a,s)},Rt=e=>{const t=He(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},K=(e,t,...a)=>(a.length&&(t=K(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Ue=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const r=n.replace("?","");s+="/"+r,a.push(s)}else s+="/"+n}),a.filter((n,r,l)=>l.indexOf(n)===r)},ye=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?ke(e,We):e):e,ze=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const o=l+t.length+2,d=e.indexOf("&",o);return ye(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){const l=e.indexOf("&",r+1);let i=e.indexOf("=",r);i>l&&l!==-1&&(i=-1);let o=e.slice(r+1,i===-1?l===-1?void 0:l:i);if(s&&(o=ye(o)),r=l,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=ye(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},jt=ze,Lt=(e,t)=>ze(e,t,!0),We=decodeURIComponent,Ce=e=>ke(e,We),Ve=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?Ce(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Ce(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return jt(this.url,e)}queries(e){return Lt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await wt(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(r=>(n==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[vt](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},At={Stringify:1},Ge=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const r=e.callbacks;return r?.length?(n?n[0]+=e:n=[e],Promise.all(r.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>Ge(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},Nt="text/plain; charset=UTF-8",ve=(e,t)=>({"Content-Type":e,...t}),Ot=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Ve(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#i??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of r)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[r,l]of Object.entries(a))if(typeof l=="string")s.set(r,l);else{s.delete(r);for(const i of l)s.append(r,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,ve(Nt,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,ve("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,ve("text/html; charset=UTF-8",a));return typeof e=="object"?Ge(e,At.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},T="ALL",$t="all",qt=["get","post","put","delete","options","patch"],Ye="Can not add a route since the matcher is already built.",Je=class extends Error{},Mt="__COMPOSED_HANDLER",Ft=e=>e.text("404 Not Found",404),Re=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Pt=class Xe{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...qt,$t].forEach(r=>{this[r]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#r(r,this.#t,l),i.forEach(o=>{this.#r(r,this.#t,o)}),this)}),this.on=(r,l,...i)=>{for(const o of[l].flat()){this.#t=o;for(const d of[r].flat())i.map(c=>{this.#r(d.toUpperCase(),this.#t,c)})}return this},this.use=(r,...l)=>(typeof r=="string"?this.#t=r:(this.#t="*",l.unshift(r)),l.forEach(i=>{this.#r(T,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??He:Rt}#e(){const t=new Xe({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ft;errorHandler=Re;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let r;a.errorHandler===Re?r=n.handler:(r=async(l,i)=>(await Be([],a.errorHandler)(l,()=>n.handler(l,i))).res,r[Mt]=n.handler),s.#r(n.method,n.path,r)}),this}basePath(t){const a=this.#e();return a._basePath=K(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,r;s&&(typeof s=="function"?r=s:(r=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const l=r?o=>{const d=r(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=K(this._basePath,t),d=o==="/"?0:o.length;return c=>{const u=new URL(c.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,c)}})();const i=async(o,d)=>{const c=await a(n(o.req.raw),...l(o));if(c)return c;await d()};return this.#r(T,K(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=K(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const r=this.getPath(t,{env:s}),l=this.router.match(n,r),i=new Ot(t,{path:r,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const o=Be(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${K("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},Qe=[];function Ht(e,t){const a=this.buildAllMatchers(),s=((n,r)=>{const l=a[n]||a[T],i=l[2][r];if(i)return i;const o=r.match(l[0]);if(!o)return[[],Qe];const d=o.indexOf("",1);return[l[1][d],o]});return this.match=s,s(e,t)}var pe="[^/]+",re=".*",oe="(?:|/.*)",Z=Symbol(),Ut=new Set(".\\+*[^]$()");function zt(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===re||e===oe?1:t===re||t===oe?-1:e===pe?1:t===pe?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Wt=class _e{#t;#e;#a=Object.create(null);insert(t,a,s,n,r){if(t.length===0){if(this.#t!==void 0)throw Z;if(r)return;this.#t=a;return}const[l,...i]=t,o=l==="*"?i.length===0?["","",re]:["","",pe]:l==="/*"?["","",oe]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const c=o[1];let u=o[2]||pe;if(c&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw Z;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==re&&m!==oe))throw Z;if(r)return;d=this.#a[u]=new _e,c!==""&&(d.#e=n.varIndex++)}!r&&c!==""&&s.push([c,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==re&&c!==oe))throw Z;if(r)return;d=this.#a[l]=new _e}d.insert(i,a,s,n,r)}buildRegExpStr(){const a=Object.keys(this.#a).sort(zt).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:Ut.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Vt=class{#t={varIndex:0};#e=new Wt;insert(e,t,a){const s=[],n=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${l}`;return n[l]=[d,o],l++,i=!0,d}),!i)break}const r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=n.length-1;l>=0;l--){const[i]=n[l];for(let o=r.length-1;o>=0;o--)if(r[o].indexOf(i)!==-1){r[o]=r[o].replace(i,n[l][1]);break}}return this.#e.insert(r,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,r,l)=>r!==void 0?(a[++t]=Number(r),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Gt=[/^$/,[],Object.create(null)],Ke=Object.create(null);function Ze(e){return Ke[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Yt(){Ke=Object.create(null)}function Jt(e){const t=new Vt,a=[];if(e.length===0)return Gt;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[u,m])=>d?1:u?-1:c.length-m.length),n=Object.create(null);for(let d=0,c=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?n[f]=[g.map(([y])=>[y,Object.create(null)]),Qe]:c++;let b;try{b=t.insert(f,c,m)}catch(y){throw y===Z?new Je(f):y}m||(a[c]=g.map(([y,h])=>{const w=Object.create(null);for(h-=1;h>=0;h--){const[v,_]=b[h];w[v]=_}return[y,w]}))}const[r,l,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,y=g.length;b<y;b++)f[g[b]]=i[f[g[b]]]}const o=[];for(const d in l)o[d]=a[l[d]];return[r,o,n]}function Q(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if(Ze(a).test(t))return[...e[a]]}}var Xt=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[T]:Object.create(null)},this.#e={[T]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(Ye);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[T]).forEach(o=>{i[e][o]=[...i[T][o]]})}),t==="/*"&&(t="*");const r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=Ze(t);e===T?Object.keys(s).forEach(o=>{s[o][t]||=Q(s[o],t)||Q(s[T],t)||[]}):s[e][t]||=Q(s[e],t)||Q(s[T],t)||[],Object.keys(s).forEach(o=>{(e===T||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,r])})}),Object.keys(n).forEach(o=>{(e===T||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,r]))});return}const l=Ue(t)||[t];for(let i=0,o=l.length;i<o;i++){const d=l[i];Object.keys(n).forEach(c=>{(e===T||e===c)&&(n[c][d]||=[...Q(s[c],d)||Q(s[T],d)||[]],n[c][d].push([a,r-o+i+1]))})}}match=Ht;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Yt(),e}#a(e){const t=[];let a=e===T;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(r=>[r,s[e][r]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==T&&t.push(...Object.keys(s[T]).map(r=>[r,s[T][r]]))}),a?Jt(t):null}},Qt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ye);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let r=0,l;for(;r<n;r++){const i=a[r];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);l=i.match(e,t)}catch(o){if(o instanceof Je)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(r===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},se=Object.create(null),Kt=class et{#t;#e;#a;#r=0;#n=se;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const r=St(a),l=[];for(let i=0,o=r.length;i<o;i++){const d=r[i],c=r[i+1],u=Bt(d,c),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&l.push(u[1]);continue}n.#e[m]=new et,u&&(n.#a.push(u),l.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const r=[];for(let l=0,i=t.#t.length;l<i;l++){const o=t.#t[l],d=o[a]||o[T],c={};if(d!==void 0&&(d.params=Object.create(null),r.push(d),s!==se||n&&n!==se))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=c[d.score];d.params[f]=n?.[f]&&!g?n[f]:s[f]??n?.[f],c[d.score]=!0}}return r}search(t,a){const s=[];this.#n=se;let r=[this];const l=Pe(a),i=[];for(let o=0,d=l.length;o<d;o++){const c=l[o],u=o===d-1,m=[];for(let f=0,g=r.length;f<g;f++){const b=r[f],y=b.#e[c];y&&(y.#n=b.#n,u?(y.#e["*"]&&s.push(...this.#s(y.#e["*"],t,b.#n)),s.push(...this.#s(y,t,b.#n))):m.push(y));for(let h=0,w=b.#a.length;h<w;h++){const v=b.#a[h],_=b.#n===se?{}:{...b.#n};if(v==="*"){const C=b.#e["*"];C&&(s.push(...this.#s(C,t,b.#n)),C.#n=_,m.push(C));continue}const[R,B,j]=v;if(!c&&!(j instanceof RegExp))continue;const E=b.#e[R],S=l.slice(o).join("/");if(j instanceof RegExp){const C=j.exec(S);if(C){if(_[B]=C[0],s.push(...this.#s(E,t,b.#n,_)),Object.keys(E.#e).length){E.#n=_;const O=C[0].match(/\//)?.length??0;(i[O]||=[]).push(E)}continue}}(j===!0||j.test(c))&&(_[B]=c,u?(s.push(...this.#s(E,t,_,b.#n)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,_,b.#n))):(E.#n=_,m.push(E)))}}r=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},Zt=class{name="TrieRouter";#t;constructor(){this.#t=new Kt}add(e,t,a){const s=Ue(t);if(s){for(let n=0,r=s.length;n<r;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},tt=class extends Pt{constructor(e={}){super(e),this.router=e.router??new Qt({routers:[new Xt,new Zt]})}},ea=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(r=>typeof r=="string"?r==="*"?()=>r:l=>r===l?l:null:typeof r=="function"?r:l=>r.includes(l)?l:null)(a.origin),n=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(a.allowMethods);return async function(l,i){function o(c,u){l.res.headers.set(c,u)}const d=await s(l.req.header("origin")||"",l);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const c=await n(l.req.header("origin")||"",l);c.length&&o("Access-Control-Allow-Methods",c.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const ta=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ta=`<!DOCTYPE html>
+`,aa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,tt=`<!DOCTYPE html>
+`,at=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2089,7 +2089,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,aa=`<!DOCTYPE html>
+`,sa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2340,7 +2340,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,sa=`<!DOCTYPE html>
+`,na=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2676,7 +2676,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,na=`<!DOCTYPE html>
+`,ra=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2975,7 +2975,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ra=`<!DOCTYPE html>
+`,oa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3464,7 +3464,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,at=`<!DOCTYPE html>
+`,st=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3586,7 +3586,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
         <div class="flex items-center justify-between px-6 py-4">
             <!-- Right Side: Menu Toggle (Always Visible) -->
-            <button onclick="toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
+            <button type="button" onclick="window.toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
                 <i class="fas fa-bars text-2xl"></i>
             </button>
             
@@ -3618,7 +3618,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <div id="mobile-menu" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
         <div class="p-6">
             <!-- Close Button -->
-            <button onclick="toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
+            <button type="button" onclick="window.toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
                 <i class="fas fa-times text-2xl text-gray-600"></i>
             </button>
             
@@ -3784,7 +3784,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     </div>
 
     <!-- Menu Overlay -->
-    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="toggleMobileMenu()"></div>
+    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="window.toggleMobileMenu()"></div>
 
     <!-- Sidebar permissions are enforced by applyUserPermissions() (same allowlist as quick-access) -->
 
@@ -3932,6 +3932,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             </div>
             <!-- Dashboard Section -->
             <div id="dashboard-section" class="content-section active">
+                <div id="dashboardCustomerSummarySection">
                 <h1 class="text-3xl font-bold mb-6 text-gray-800">
                     <i class="fas fa-tachometer-alt text-blue-600 ml-2"></i>
                     ملخص العملاء
@@ -4022,96 +4023,73 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         <p class="text-2xl font-bold text-gray-800" id="stat-calculations">0</p>
                     </div>
                 </div>
+                </div>
                 
                 <!-- Calculator Link & QR Code Section -->
                 <div class="bg-white rounded-xl shadow-lg p-6 mt-6" id="calculatorLinkSection">
-                    <div class="flex items-center mb-4">
-                        <i class="fas fa-calculator text-blue-600 text-2xl ml-3"></i>
-                        <h2 class="text-xl font-bold text-gray-800">رابط حاسبة التمويل</h2>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-share-alt text-blue-600 text-2xl ml-3"></i>
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-800">روابط العملاء</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">الحاسبة، صفحة التواصل، وروابط الإحالة التسويقية</p>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Left Side: Link -->
+                        <!-- Left: collapsible share links -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-link ml-1"></i>
-                                رابط الحاسبة الخاصة بك
-                            </label>
-                            <div class="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    id="calculatorLinkInput" 
-                                    value="جاري التحميل..." 
-                                    readonly 
-                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-blue-500"
-                                >
-                                <button 
-                                    onclick="copyCalculatorLink()" 
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
-                                    title="نسخ الرابط"
-                                >
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-2">
-                                <i class="fas fa-info-circle ml-1"></i>
-                                يمكنك مشاركة هذا الرابط مع عملائك لاستخدام حاسبة التمويل
-                            </p>
-                            
-                            <!-- Success Message -->
-                            <div id="copySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
-                                <i class="fas fa-check-circle ml-1"></i>
-                                تم نسخ الرابط بنجاح!
-                            </div>
-                            
-                            <!-- Open Link Button -->
-                            <button 
-                                onclick="openCalculatorLink()" 
-                                class="w-full mt-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
-                            >
-                                <i class="fas fa-external-link-alt ml-2"></i>
-                                فتح الحاسبة في نافذة جديدة
-                            </button>
+                            <details id="clientShareLinksDetails" class="group border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 bg-slate-50 hover:bg-slate-100 text-gray-900 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                                    <span class="flex items-center gap-2 min-w-0">
+                                        <i class="fas fa-copy text-blue-600 shrink-0"></i>
+                                        <span class="truncate">نسخ أو فتح الروابط</span>
+                                    </span>
+                                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform group-open:rotate-180 shrink-0"></i>
+                                </summary>
+                                <div class="border-t border-gray-100 p-4 space-y-3 bg-white">
+                                    <p class="text-xs text-gray-500 -mt-1 mb-1">جميع الروابط أدناه بنفس الشكل: انسخ أو افتح في تبويب جديد.</p>
 
-                            <label class="block text-sm font-medium text-gray-700 mb-2 mt-5">
-                                <i class="fas fa-address-card ml-1"></i>
-                                رابط صفحة التواصل (المسار الجذر)
-                            </label>
-                            <div class="flex gap-2">
-                                <input
-                                    type="text"
-                                    id="contactRootLinkInput"
-                                    value="جاري التحميل..."
-                                    readonly
-                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-blue-500"
-                                >
-                                <button
-                                    onclick="copyContactRootLink()"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
-                                    title="نسخ الرابط"
-                                >
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <div id="contactRootCopySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
-                                <i class="fas fa-check-circle ml-1"></i>
-                                تم نسخ رابط صفحة التواصل بنجاح!
-                            </div>
-                            <button
-                                onclick="openContactRootLink()"
-                                class="w-full mt-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
-                            >
-                                <i class="fas fa-external-link-alt ml-2"></i>
-                                فتح صفحة التواصل في نافذة جديدة
-                            </button>
-                            <div id="contactAffiliateLinksWrap" class="mt-6 border-t border-gray-200 pt-4" style="display:none;">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i class="fas fa-funnel-dollar ml-1"></i>روابط التواصل التسويقية
-                                </label>
-                                <ul id="contactAffiliateLinksList" class="space-y-2 text-sm text-gray-700 max-h-48 overflow-y-auto"></ul>
-                                <p class="text-xs text-gray-500 mt-2">لإضافة أو حذف مسار (مثل /facebook) استخدم صفحة الإدارة.</p>
-                                <a href="/admin/contact-affiliates" class="inline-block mt-1 text-amber-700 hover:underline text-sm font-medium">إدارة روابط الإحالة</a>
-                            </div>
+                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
+                                        <p class="text-xs font-semibold text-gray-600 mb-2">حاسبة التمويل</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <input type="text" id="calculatorLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                                            <button type="button" onclick="copyCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
+                                            <button type="button" onclick="openCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
+                                        <p class="text-xs font-semibold text-gray-600 mb-2">صفحة التواصل (الرابط الأساسي)</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <input type="text" id="contactRootLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                                            <button type="button" onclick="copyContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
+                                            <button type="button" onclick="openContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div id="affiliateSectionWrap" class="space-y-3" style="display:none">
+                                        <p class="text-xs font-semibold text-gray-600">روابط التواصل التسويقية</p>
+                                        <div id="affiliateLinksRowsContainer" class="space-y-3"></div>
+                                        <div id="contactAffiliatesManageBlock" class="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-3 text-center text-sm text-gray-600" style="display:none">
+                                            <a href="/admin/contact-affiliates" class="font-semibold text-blue-700 hover:underline">إدارة روابط الإحالة</a>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1 pt-1">
+                                        <div id="anyLinkCopyToast" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
+                                            <i class="fas fa-check-circle ml-1"></i><span id="anyLinkCopyToastText">تم النسخ</span>
+                                        </div>
+                                        <div id="copySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
+                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط الحاسبة
+                                        </div>
+                                        <div id="contactRootCopySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
+                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط التواصل
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
                         
                         <!-- Right Side: QR Code -->
@@ -5177,7 +5155,25 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         
     </div>
 
+    <!--__PANEL_USER_BOOT__-->
     <script>
+        // Defined first so header/overlay onclick handlers work even if a later error halts this script.
+        window.toggleMobileMenu = function () {
+            const sidebar = document.getElementById('mobile-menu');
+            const overlay = document.getElementById('menu-overlay');
+            if (sidebar && overlay) {
+                if (sidebar.classList.contains('translate-x-full')) {
+                    sidebar.classList.remove('translate-x-full');
+                    sidebar.classList.add('translate-x-0');
+                    overlay.classList.remove('hidden');
+                } else {
+                    sidebar.classList.add('translate-x-full');
+                    sidebar.classList.remove('translate-x-0');
+                    overlay.classList.add('hidden');
+                }
+            }
+        };
+
         // Debug dump function - displays data on screen
         window.dd = function(data) {
             console.log('🔍 DD:', data);
@@ -5329,7 +5325,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         roleId === 2 ? 'مدير الشركة' :
                         roleId === 3 ? 'مشرف المبيعات' :
                         roleId === 4 ? 'موظف' :
-                        roleId === 5 ? 'وكيل بنك' : '';
+                        roleId === 5 ? 'موظف التمويل' : '';
                     const finalRoleLabel = roleName || roleLabelFromId || 'مستخدم';
 
                     console.log('👤 بيانات المستخدم المحملة:');
@@ -5614,56 +5610,39 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 if (adminOnlyStats) {
                     if (roleId === 4 || roleId === 3 || roleId === 5) {
                         adminOnlyStats.style.display = 'none';
-                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو وكيل بنك)');
+                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو موظف التمويل)');
                     } else {
                         adminOnlyStats.style.display = 'grid';
                         console.log('✅ عرض الكروت الإضافية');
                     }
                 }
                 
-                // إخفاء قسم رابط الحاسبة للموظفين والمشرفين
+                const dashboardCustomerSummarySection = document.getElementById('dashboardCustomerSummarySection');
+                if (dashboardCustomerSummarySection) {
+                    if (roleId === 3 || roleId === 4 || roleId === 5) {
+                        dashboardCustomerSummarySection.style.display = 'none';
+                        console.log('🚫 إخفاء ملخص العملاء (مشرف / موظف / وكيل بنك)');
+                    } else {
+                        dashboardCustomerSummarySection.style.display = '';
+                        console.log('✅ عرض ملخص العملاء');
+                    }
+                }
+
+                // قسم رابط الحاسبة + QR + صفحة التواصل + روابط الإحالة — لجميع الأدوار
                 const calculatorLinkSection = document.getElementById('calculatorLinkSection');
                 const employeeCalculatorSection = document.getElementById('employeeCalculatorSection');
                 
                 if (calculatorLinkSection) {
-                    if (roleId === 5) {
-                        calculatorLinkSection.style.display = 'none';
-                        if (employeeCalculatorSection) employeeCalculatorSection.style.display = 'none';
-                        console.log('🚫 إخفاء قسم رابط الحاسبة (وكيل بنك)');
-                    } else if (roleId === 3 || roleId === 4) {
-                        // Supervisor or employee
-                        calculatorLinkSection.style.display = 'none';
-                        console.log('🚫 إخفاء قسم رابط الحاسبة (موظف أو مشرف)');
-                        
-                        // عرض قسم الباركود للموظفين فقط
-                        if (userRole === 'employee' && employeeCalculatorSection) {
-                            employeeCalculatorSection.style.display = 'block';
-                            console.log('✅ عرض قسم الباركود للموظف');
-                            
-                            // تحميل رابط الحاسبة للموظف
-                            setTimeout(() => {
-                                if (typeof loadEmployeeCalculatorLink === 'function') {
-                                    loadEmployeeCalculatorLink();
-                                }
-                            }, 500);
-                        }
-                    } else {
-                        // عرض القسم لـ superadmin، admin، manager، company
-                        calculatorLinkSection.style.display = 'block';
-                        console.log('✅ عرض قسم رابط الحاسبة');
-                        
-                        // إخفاء قسم الموظف
-                        if (employeeCalculatorSection) {
-                            employeeCalculatorSection.style.display = 'none';
-                        }
-                        
-                        // تحميل رابط الحاسبة و QR Code
-                        setTimeout(() => {
-                            if (typeof loadCalculatorLink === 'function') {
-                                loadCalculatorLink();
-                            }
-                        }, 500);
+                    calculatorLinkSection.style.display = 'block';
+                    if (employeeCalculatorSection) {
+                        employeeCalculatorSection.style.display = 'none';
                     }
+                    console.log('✅ عرض قسم رابط الحاسبة والتواصل (جميع الأدوار)');
+                    setTimeout(() => {
+                        if (typeof loadCalculatorLink === 'function') {
+                            loadCalculatorLink();
+                        }
+                    }, 500);
                 } else {
                     console.warn('⚠️ لم يتم العثور على calculatorLinkSection');
                 }
@@ -7703,7 +7682,53 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 return localPath;
             }
         }
-        
+
+        window.showPanelCopyToast = function (msg) {
+            var wrap = document.getElementById('anyLinkCopyToast');
+            var span = document.getElementById('anyLinkCopyToastText');
+            if (span) span.textContent = msg || 'تم النسخ';
+            if (wrap) {
+                wrap.classList.remove('hidden');
+                if (window.__panelCopyToastTimer) clearTimeout(window.__panelCopyToastTimer);
+                window.__panelCopyToastTimer = setTimeout(function () {
+                    wrap.classList.add('hidden');
+                }, 2500);
+            }
+            var h1 = document.getElementById('copySuccessMessage');
+            var h2 = document.getElementById('contactRootCopySuccessMessage');
+            if (h1) h1.classList.add('hidden');
+            if (h2) h2.classList.add('hidden');
+        };
+
+        function legacyCopyString(text, onOk) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                if (onOk) onOk();
+            } catch (e) {
+                alert('تعذر نسخ الرابط');
+            }
+            document.body.removeChild(ta);
+        }
+
+        function copyStringToClipboard(text, onOk) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    if (onOk) onOk();
+                }).catch(function () {
+                    legacyCopyString(text, onOk);
+                });
+                return;
+            }
+            legacyCopyString(text, onOk);
+        }
+
         // Generate and display calculator link and QR code
         async function loadCalculatorLink() {
             console.log('📱 بدء تحميل رابط الحاسبة...');
@@ -7760,54 +7785,94 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 qrcodeContainer.appendChild(qrImg);
             }
 
-            const affWrap = document.getElementById('contactAffiliateLinksWrap');
-            const affList = document.getElementById('contactAffiliateLinksList');
-            if (affWrap && affList) {
-                affList.innerHTML = '';
-                let rid = parseInt(userData.role_id, 10);
-                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+            const sectionWrap = document.getElementById('affiliateSectionWrap');
+            const container = document.getElementById('affiliateLinksRowsContainer');
+            if (sectionWrap && container) {
+                container.innerHTML = '';
+                var rid = parseInt(userData.role_id, 10);
+                var roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
                 if (roleLegacy[rid]) rid = roleLegacy[rid];
                 if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
-                    const w = parseInt(window.USER_ROLE_ID, 10);
+                    var w = parseInt(window.USER_ROLE_ID, 10);
                     rid = roleLegacy[w] || w;
                 }
-                let showAff = (rid === 1 || rid === 2) && contactRootPath && contactRootPath !== '/';
+                var showAff = (rid === 1 || rid === 2) && contactRootPath && contactRootPath !== '/';
                 if (rid === 1) {
-                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
+                    var tidCheck = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                    if (!Number.isFinite(tidCheck) || tidCheck <= 0) showAff = false;
+                }
+                var manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
+                if (manageAffBlock) {
+                    manageAffBlock.style.display = showAff && (rid === 1 || rid === 2) ? '' : 'none';
                 }
                 if (!showAff) {
-                    affWrap.style.display = 'none';
+                    sectionWrap.style.display = 'none';
                 } else {
-                    affWrap.style.display = 'block';
+                    sectionWrap.style.display = '';
+                    function escAffRow(s) {
+                        return String(s ?? '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;');
+                    }
+                    function escAttrRow(s) {
+                        return String(s ?? '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#39;');
+                    }
+                    function affiliateRowCard(label, fullUrl) {
+                        var esc = escAffRow;
+                        var a = escAttrRow(fullUrl);
+                        return (
+                            '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">' +
+                            '<p class="text-xs font-semibold text-gray-600 mb-2">' + esc(label) + '</p>' +
+                            '<div class="flex flex-wrap gap-2">' +
+                            '<input type="text" readonly dir="ltr" value="' + a + '" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">' +
+                            '<button type="button" class="js-aff-copy inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ" data-url="' + a + '"><i class="fas fa-copy"></i></button>' +
+                            '<button type="button" class="js-aff-open inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح" data-url="' + a + '"><i class="fas fa-external-link-alt"></i></button>' +
+                            '</div></div>'
+                        );
+                    }
                     try {
-                        let u = '/api/tenant-contact-affiliates';
+                        var u = '/api/tenant-contact-affiliates';
                         if (rid === 1) {
-                            const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                            u += '?tenant_id=' + tid;
+                            var tidQ = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            u += '?tenant_id=' + tidQ;
                         }
-                        const res = await axios.get(u);
-                        const rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
-                        function escAff(s) {
-                            return String(s ?? '')
-                                .replace(/&/g, '&amp;')
-                                .replace(/</g, '&lt;')
-                                .replace(/>/g, '&gt;')
-                                .replace(/"/g, '&quot;');
-                        }
+                        var res = await axios.get(u);
+                        var rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
                         if (!rows.length) {
-                            affList.innerHTML = '<li class="text-gray-500 text-sm">لا توجد روابط تسويقية بعد.</li>';
+                            container.innerHTML =
+                                '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70 text-sm text-gray-500 text-center">لا توجد روابط تسويقية بعد.</div>';
                         } else {
-                            affList.innerHTML = rows.map(function (r) {
-                                var pathSeg = encodeURIComponent(r.path_segment || '');
-                                var full = baseUrl + String(contactRootPath).replace(//$/, '') + '/' + pathSeg;
-                                return '<li class="pb-3 mb-3 border-b border-gray-100 last:border-0 last:mb-0 last:pb-0">' +
-                                    '<div class="font-medium text-gray-900">' + escAff(r.label) + '</div>' +
-                                    '<div class="text-xs text-gray-500 break-all mt-1" dir="ltr">' + escAff(full) + '</div></li>';
-                            }).join('');
+                            container.innerHTML = rows
+                                .map(function (r) {
+                                    var pathSeg = encodeURIComponent(r.path_segment || '');
+                                    var full = baseUrl + String(contactRootPath).replace(/\\/$/, '') + '/' + pathSeg;
+                                    return affiliateRowCard(r.label || r.path_segment || 'رابط', full);
+                                })
+                                .join('');
                         }
+                        container.querySelectorAll('.js-aff-copy').forEach(function (btn) {
+                            btn.addEventListener('click', function () {
+                                var url = btn.getAttribute('data-url');
+                                if (!url) return;
+                                copyStringToClipboard(url, function () {
+                                    window.showPanelCopyToast('تم نسخ الرابط');
+                                });
+                            });
+                        });
+                        container.querySelectorAll('.js-aff-open').forEach(function (btn) {
+                            btn.addEventListener('click', function () {
+                                var url = btn.getAttribute('data-url');
+                                if (url) window.open(url, '_blank');
+                            });
+                        });
                     } catch (e) {
-                        affList.innerHTML = '<li class="text-red-600 text-xs">تعذر تحميل الروابط</li>';
+                        container.innerHTML =
+                            '<div class="rounded-lg border border-red-200 p-3 bg-red-50 text-sm text-red-700 text-center">تعذر تحميل روابط الإحالة</div>';
                     }
                 }
             }
@@ -7833,6 +7898,8 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 
                 // Show success message
                 const successMessage = document.getElementById('copySuccessMessage');
+                var anyT = document.getElementById('anyLinkCopyToast');
+                if (anyT) anyT.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => {
@@ -7871,6 +7938,8 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             try {
                 document.execCommand('copy');
                 const successMessage = document.getElementById('contactRootCopySuccessMessage');
+                var anyT2 = document.getElementById('anyLinkCopyToast');
+                if (anyT2) anyT2.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => successMessage.classList.add('hidden'), 3000);
@@ -8035,27 +8104,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         // Initialize on load
         loadDashboardStats();
         
-        // Load calculator link when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-                const userRole = userData.role || userData.user_type;
-                
-                if (userRole === 'employee') {
-                    console.log('🔗 تحميل رابط الحاسبة للموظف:', userRole);
-                    if (typeof loadEmployeeCalculatorLink === 'function') {
-                        loadEmployeeCalculatorLink();
-                    }
-                } else if (userRole === 'company' || userRole === 'admin' || userRole === 'superadmin' || userRole === 'manager') {
-                    console.log('🔗 تحميل رابط الحاسبة للمستخدم:', userRole);
-                    if (typeof loadCalculatorLink === 'function') {
-                        loadCalculatorLink();
-                    }
-                } else {
-                    console.log('⚠️ دور المستخدم لا يسمح بعرض رابط الحاسبة:', userRole);
-                }
-            }, 1000);
-        });
+        // رابط الحاسبة يُحمَّل من applyUserPermissions → loadCalculatorLink لجميع الأدوار
         
         // Show Section function
         window.showSection = function(sectionName) {
@@ -8173,7 +8222,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <div id="sidebar-overlay"></div>
 </body>
 </html>
-`,oa=`<!DOCTYPE html>
+`,ia=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8381,7 +8430,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ia=`<!DOCTYPE html>
+`,la=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8449,7 +8498,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,st=`<!DOCTYPE html>
+`,nt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8686,7 +8735,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,la=`<!DOCTYPE html>
+`,da=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8969,7 +9018,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,nt=()=>`
+`,rt=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -9028,7 +9077,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,da=`<!DOCTYPE html>
+`,ca=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9079,7 +9128,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${nt()}
+        ${rt()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9218,7 +9267,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ca=`<!DOCTYPE html>
+</html>`,pa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9270,7 +9319,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${nt()}
+        ${rt()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9483,7 +9532,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,pa=`<!DOCTYPE html>
+</html>`,ua=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9610,7 +9659,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ua=()=>`
+</html>`,ma=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -9657,7 +9706,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,ma=`<!DOCTYPE html>
+`,ga=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9708,7 +9757,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${ua()}
+        ${ma()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -10153,7 +10202,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,ga=`<!DOCTYPE html>
+</html>`,fa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -10517,7 +10566,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,rt=()=>`
+`,ot=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -10548,7 +10597,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function fa(e,t,a){return`
+`;function ba(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10558,7 +10607,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${rt()}
+        ${ot()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10717,7 +10766,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <\/script>
     </body>
     </html>
-  `}function ba(e,t,a,s){return`
+  `}function xa(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10727,7 +10776,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${rt()}
+        ${ot()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10870,7 +10919,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <\/script>
     </body>
     </html>
-  `}function xa(e,t,a,s){const{transitions:n=[],actions:r=[],tasks:l=[]}=s,i=(o,d)=>{const c=new Date(o),m=new Date(d).getTime()-c.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
+  `}function ha(e,t,a,s){const{transitions:n=[],actions:r=[],tasks:l=[]}=s,i=(o,d)=>{const c=new Date(o),m=new Date(d).getTime()-c.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11370,7 +11419,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   
 </body>
 </html>
-  `}const ha=`
+  `}const ya=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11680,7 +11729,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ya=`
+`,va=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12094,7 +12143,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,va=`
+`,wa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12537,7 +12586,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,wa=`
+`,_a=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12762,7 +12811,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,_a=`
+`,ka=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -13001,7 +13050,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ka=`<!DOCTYPE html>
+`,Ea=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13467,7 +13516,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         alert('❌ ' + message);
     }
 <\/script>
-`,Ea=`<!DOCTYPE html>
+`,Ia=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13827,7 +13876,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ia=`<!DOCTYPE html>
+`,Sa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -14011,7 +14060,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Sa=`<!DOCTYPE html>
+`,Ta=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -14220,7 +14269,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ta=`<!DOCTYPE html>
+`,Da=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -14551,7 +14600,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Da=`
+`,Ba=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14942,7 +14991,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Ba=`
+`,Ca=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15249,7 +15298,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Ca=`
+`,Ra=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15501,7 +15550,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Ra=`
+`,ja=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15764,7 +15813,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,ja=`
+`,La=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16258,7 +16307,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,La=`
+`,Aa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16645,7 +16694,7 @@ var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Aa=`/* =============================================
+`,Na=`/* =============================================
    نظام إدارة العقود - شركة الموعد للمقاولات العامة
    ============================================= */
 
@@ -17498,7 +17547,7 @@ body {
 html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([href="/admin/contracts/list"]):not([href="/admin/contracts/new"]) {
   display: none !important;
 }
-`,Na=`<!DOCTYPE html>
+`,Oa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -18252,7 +18301,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,Oa=`<!DOCTYPE html>
+`,$a=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -20161,7 +20210,7 @@ document.addEventListener('DOMContentLoaded', boot);
 <\/script>
 </body>
 </html>
-`,$a=`<!DOCTYPE html>
+`,qa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -20317,7 +20366,7 @@ document.addEventListener('DOMContentLoaded', boot);
   <\/script>
 </body>
 </html>
-`,qa=`<!DOCTYPE html>
+`,Ma=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
@@ -21522,7 +21571,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <\/script>
 </body>
 </html>
-`,Ma=`<!DOCTYPE html>
+`,Fa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -22553,7 +22602,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <script src="/contracts-module/js/dashboard.js?v=20260401"><\/script>
 </body>
 </html>
-`,Re=`<!DOCTYPE html>
+`,je=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -23696,7 +23745,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,Fa=`<!DOCTYPE html>
+`,Pa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -25568,7 +25617,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,Pa=`<!DOCTYPE html>
+`,Ha=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -26870,15 +26919,15 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,je="?v=20260405";function Ha(e){const t=`
+`,Le="?v=20260405";function Ua(e){const t=`
   <style id="contracts-module-styles">
-${Aa}
+${Na}
   </style>
-`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function Ua(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function ot(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function be(e){let t=Ha(Ua(e.replace(/\r\n/g,`
-`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${je}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${je}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const za=be(Na),Wa=be(Oa),Va=be($a),Ga=be(qa);function ne(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function Le(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function G(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Ya(e){return e.roleId===4}function Ae(e){return e.roleId===3}async function V(e,t){const a=await t(e);return a.userId?Ya(a)?{info:a,error:e.json({error:"Forbidden"},403)}:{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function Ne(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(G(e)){const s=t?.tenant_id;if(typeof s=="number"&&s>0)return{tenantId:s,error:null};if(typeof s=="string"&&/^\d+$/.test(s))return{tenantId:parseInt(s,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const Ja=2e5;function Oe(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>Ja?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function $e(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:G(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:G(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function Xa(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;let l="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&G(n)){const c=s.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(o=parseInt(String(c),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)l+=" WHERE tenant_id = ?",i.push(o);else return G(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(l+=" AND assigned_to = ?",i.push(n.userId)),l+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(l).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:c}=$e(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...c,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:c}=$e(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...c).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:c}=Ne(n,o,s);if(c)return c;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const f=(await s.env.DB.prepare(`INSERT INTO contract_templates (
+`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function za(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function it(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function be(e){let t=Ua(za(e.replace(/\r\n/g,`
+`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${Le}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${Le}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const Wa=be(Oa),Va=be($a),Ga=be(qa),Ya=be(Ma);function ne(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function Ae(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function G(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Ja(e){return e.roleId===4}function Ne(e){return e.roleId===3}async function V(e,t){const a=await t(e);return a.userId?Ja(a)?{info:a,error:e.json({error:"Forbidden"},403)}:{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function Oe(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(G(e)){const s=t?.tenant_id;if(typeof s=="number"&&s>0)return{tenantId:s,error:null};if(typeof s=="string"&&/^\d+$/.test(s))return{tenantId:parseInt(s,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const Xa=2e5;function $e(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>Xa?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function qe(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:G(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:G(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function Qa(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;let l="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&G(n)){const c=s.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(o=parseInt(String(c),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)l+=" WHERE tenant_id = ?",i.push(o);else return G(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(l+=" AND assigned_to = ?",i.push(n.userId)),l+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(l).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:c}=qe(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...c,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:c}=qe(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...c).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:c}=Oe(n,o,s);if(c)return c;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const f=(await s.env.DB.prepare(`INSERT INTO contract_templates (
           tenant_id, template_name, template_type, header_content, body_content, footer_content,
           variables_list, is_active, court_city
-        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,Le(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="contracts"){const u=Oe(o);if(!u.ok)return u.response;let m;try{m=await s.env.DB.prepare(`INSERT INTO contracts (
+        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,Ae(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="contracts"){const u=$e(o);if(!u.ok)return u.response;let m;try{m=await s.env.DB.prepare(`INSERT INTO contracts (
           tenant_id, contract_number, template_id, template_name, date_gregorian, day_name,
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
@@ -26886,7 +26935,7 @@ ${Aa}
           property_description, property_location, bank_name, notes, is_archived
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(d,o.contract_number??null,o.template_id!=null?Number(o.template_id):null,o.template_name??null,o.date_gregorian??null,o.day_name??null,o.party_one_name??null,o.party_one_phone??null,u.value,o.customer_id!=null?Number(o.customer_id):null,o.party_two_name??null,o.party_two_id??null,o.party_two_phone??null,o.party_two_address??null,o.finance_type??null,o.finance_amount!=null?Number(o.finance_amount):null,o.commission_amount!=null?Number(o.commission_amount):null,o.commission_type??null,o.commission_rate!=null?Number(o.commission_rate):null,o.note_order_number??null,o.note_due_date??null,o.status??"نشط",o.property_description??null,o.property_location??null,o.bank_name??null,o.notes??null,o.is_archived?1:0).run()}catch(b){const y=b instanceof Error?b.message:String(b);return/no such column/i.test(y)?s.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:y},500)}const f=m.meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="promissory_notes"){const u=o.contract_id!=null?Number(o.contract_id):NaN;if(!u)return s.json({error:"contract_id required"},400);const m=await s.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!m||m.tenant_id!==d)return s.json({error:"Invalid contract"},400);const f=String(o.note_number??"");if(!f.trim())return s.json({error:"note_number required"},400);const b=(await s.env.DB.prepare(`INSERT INTO promissory_notes (
           tenant_id, note_number, contract_id, debtor_name, debtor_id, amount, due_date, issue_date, payment_place, status
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,f,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(b).first();return s.json({...y,id:b})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:r,error:l}=await V(s,t);if(l)return l;if(Ae(r))return s.json({error:"Forbidden"},403);const i=s.req.param("table"),o=ne(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const c=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(r.tenantId&&u.tenant_id!==r.tenantId)return s.json({error:"Forbidden"},403);if(!r.tenantId&&!G(r))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="is_active"?f.push(c[h]?1:0):h==="variables_list"?f.push(Le(c[h])):f.push(c[h]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(b)}if(o==="contracts"){if(c.party_one_logo!==void 0){const y=Oe(c);if(!y.ok)return y.response;c.party_one_logo=y.value}const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="finance_amount"||h==="commission_amount"||h==="commission_rate"||h==="customer_id"||h==="template_id"?f.push(c[h]!=null?Number(c[h]):null):h==="is_archived"?f.push(c[h]?1:0):f.push(c[h]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("day_name","day_name"),g("party_one_name","party_one_name"),g("party_one_phone","party_one_phone"),g("party_one_logo","party_one_logo"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(y)}try{await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run()}catch(y){const h=y instanceof Error?y.message:String(y);return/no such column/i.test(h)?s.json({error:"database_schema",detail:"العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:h},500)}const b=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(b)}if(o==="promissory_notes"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="amount"||h==="contract_id"?f.push(c[h]!=null?Number(c[h]):null):f.push(c[h]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(b)}return s.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.env.ATTACHMENTS;if(!l)return s.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let i;try{i=await s.req.formData()}catch{return s.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const o=i.get("file");if(!o||!(o instanceof File))return s.json({error:"no_file",detail:"No file provided"},400);const d=o,c=2*1024*1024;if(d.size>c)return s.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(d.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return s.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const m=i.get("tenant_id"),f={};m!=null&&String(m).trim()!==""&&(f.tenant_id=m);const{tenantId:g,error:b}=Ne(n,f,s);if(b)return b;if(g==null)return s.json({error:"missing_tenant",detail:"Missing tenant"},400);const y=Date.now(),h=Math.random().toString(36).slice(2,9),w=(d.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",v=["jpg","jpeg","png","gif","webp"].includes(w)?w:"jpg",_=`contracts/${g}/party_logo_${y}_${h}.${v}`,R=await d.arrayBuffer();await l.put(_,R,{httpMetadata:{contentType:d.type||`image/${v==="jpg"?"jpeg":v}`}});const B=`/api/attachments/view/${_}`;return s.json({success:!0,url:B,filename:_})}),e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;if(Ae(n))return s.json({error:"Forbidden"},403);const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!G(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const Qa=`/* =============================================
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,f,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(b).first();return s.json({...y,id:b})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:r,error:l}=await V(s,t);if(l)return l;if(Ne(r))return s.json({error:"Forbidden"},403);const i=s.req.param("table"),o=ne(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const c=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(r.tenantId&&u.tenant_id!==r.tenantId)return s.json({error:"Forbidden"},403);if(!r.tenantId&&!G(r))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="is_active"?f.push(c[h]?1:0):h==="variables_list"?f.push(Ae(c[h])):f.push(c[h]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(b)}if(o==="contracts"){if(c.party_one_logo!==void 0){const y=$e(c);if(!y.ok)return y.response;c.party_one_logo=y.value}const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="finance_amount"||h==="commission_amount"||h==="commission_rate"||h==="customer_id"||h==="template_id"?f.push(c[h]!=null?Number(c[h]):null):h==="is_archived"?f.push(c[h]?1:0):f.push(c[h]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("day_name","day_name"),g("party_one_name","party_one_name"),g("party_one_phone","party_one_phone"),g("party_one_logo","party_one_logo"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(y)}try{await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run()}catch(y){const h=y instanceof Error?y.message:String(y);return/no such column/i.test(h)?s.json({error:"database_schema",detail:"العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:h},500)}const b=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(b)}if(o==="promissory_notes"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="amount"||h==="contract_id"?f.push(c[h]!=null?Number(c[h]):null):f.push(c[h]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(b)}return s.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.env.ATTACHMENTS;if(!l)return s.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let i;try{i=await s.req.formData()}catch{return s.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const o=i.get("file");if(!o||!(o instanceof File))return s.json({error:"no_file",detail:"No file provided"},400);const d=o,c=2*1024*1024;if(d.size>c)return s.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(d.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return s.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const m=i.get("tenant_id"),f={};m!=null&&String(m).trim()!==""&&(f.tenant_id=m);const{tenantId:g,error:b}=Oe(n,f,s);if(b)return b;if(g==null)return s.json({error:"missing_tenant",detail:"Missing tenant"},400);const y=Date.now(),h=Math.random().toString(36).slice(2,9),w=(d.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",v=["jpg","jpeg","png","gif","webp"].includes(w)?w:"jpg",_=`contracts/${g}/party_logo_${y}_${h}.${v}`,R=await d.arrayBuffer();await l.put(_,R,{httpMetadata:{contentType:d.type||`image/${v==="jpg"?"jpeg":v}`}});const B=`/api/attachments/view/${_}`;return s.json({success:!0,url:B,filename:_})}),e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;if(Ne(n))return s.json({error:"Forbidden"},403);const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!G(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const Ka=`/* =============================================
    app.js - الوظائف المشتركة للنظام
    ============================================= */
 
@@ -27289,7 +27338,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setCurrentDate();
   applyRole3ContractsRestrictions();
 });
-`,Ka=`/* =============================================
+`,Za=`/* =============================================
    dashboard.js - لوحة التحكم
    ============================================= */
 
@@ -27520,7 +27569,7 @@ function sendWA(phone, name, contractNum) {
 }
 
 document.addEventListener('DOMContentLoaded', loadDashboard);
-`;function Za(e,t){e.get("/contracts-module/js/app.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Qa,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)}),e.get("/contracts-module/js/dashboard.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Ka,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)})}function it(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function Y(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function M(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("id_attachment_url")||t.includes("bank_statement_attachment_url")||t.includes("salary_attachment_url")||t.includes("additional_attachment_url"):!1}async function ke(e,t,a){if(!t)return;const s=Object.entries(a).filter(([,l])=>l!==void 0);if(s.length===0)return;const n=s.map(([l])=>`${l} = ?`).join(", "),r=s.map(([,l])=>l??null);try{await e.prepare(`
+`;function es(e,t){e.get("/contracts-module/js/app.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Ka,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)}),e.get("/contracts-module/js/dashboard.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Za,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)})}function lt(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function Y(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function M(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("id_attachment_url")||t.includes("bank_statement_attachment_url")||t.includes("salary_attachment_url")||t.includes("additional_attachment_url"):!1}async function Ee(e,t,a){if(!t)return;const s=Object.entries(a).filter(([,l])=>l!==void 0);if(s.length===0)return;const n=s.map(([l])=>`${l} = ?`).join(", "),r=s.map(([,l])=>l??null);try{await e.prepare(`
       UPDATE customers
       SET ${n}
       WHERE id = ?
@@ -27528,7 +27577,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     UPDATE financing_requests
     SET ${n}
     WHERE customer_id = ?
-  `).bind(...r,t).run()}function lt(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function dt(e){let a=lt(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const s=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(s)?{normalized:`966${s}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678"}}function ie(e){const t=lt(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const ct=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function le(e){return String(e??"").trim().toLowerCase()}function de(e){return ct.has(e)}function U(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function Ee(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function Ie(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||ct.has(e))}function pt(e,t){const a=U(e.company_name),s=U(e.contact_email||""),n=U(e.contact_phone||""),r=U(e.primary_color||"#0f766e"),l=U(e.secondary_color||"#14b8a6"),i=JSON.stringify(t?.path_segment??null),o=t?U(t.label):"",d=t?`<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
+  `).bind(...r,t).run()}function dt(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function ct(e){let a=dt(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const s=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(s)?{normalized:`966${s}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678"}}function ie(e){const t=dt(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const pt=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function le(e){return String(e??"").trim().toLowerCase()}function de(e){return pt.has(e)}function U(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function Ie(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function Se(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||pt.has(e))}function ut(e,t){const a=U(e.company_name),s=U(e.contact_email||""),n=U(e.contact_phone||""),r=U(e.primary_color||"#0f766e"),l=U(e.secondary_color||"#14b8a6"),i=JSON.stringify(t?.path_segment??null),o=t?U(t.label):"",d=t?`<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
          <i class="fas fa-bullhorn ml-1"></i> المصدر: <strong>${o}</strong>
        </div>`:"";return`
     <!DOCTYPE html>
@@ -27629,7 +27678,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `}async function ut(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function es(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const p=new et;Za(p,x);const F=()=>`
+  `}async function mt(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function ts(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const p=new tt;es(p,x);const F=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -27830,7 +27879,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       min-width: 60px !important;
     }
   }
-`;p.use("*",Zt());p.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});p.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}const s=await x(e);if(k(s.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});p.use("*",async(e,t)=>{if(e.req.method==="OPTIONS"){await t();return}const a=e.req.path||"";if(a.startsWith("/admin/")){await t();return}if(a.startsWith("/api/")){await t();return}const s=await x(e);if(!s.userId||k(s.roleId)!==5){await t();return}if(a==="/login"||a==="/forgot-password"||a.startsWith("/.well-known")){await t();return}return e.redirect("/admin/requests")});async function ts(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let r=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(r=await e.env.DB.prepare(`
+`;p.use("*",ea());p.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});p.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}const s=await x(e);if(k(s.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});p.use("*",async(e,t)=>{if(e.req.method==="OPTIONS"){await t();return}const a=e.req.path||"";if(a.startsWith("/admin/")){await t();return}if(a.startsWith("/api/")){await t();return}const s=await x(e);if(!s.userId||k(s.roleId)!==5){await t();return}if(a==="/login"||a==="/forgot-password"||a.startsWith("/.well-known")){await t();return}return e.redirect("/admin/requests")});async function as(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let r=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(r=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -27840,14 +27889,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LIMIT 1
     `).bind(n).first()),r||(r=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),r}function as(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const r=n===0?"":"=".repeat(4-n);return s+r}function q(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function ss(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,s=Date.parse(a);return Number.isNaN(s)?null:s}const qe=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function Se(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...qe]}catch{return[...qe]}}function ns(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function k(e){const t=ns(e);return t===null?null:{11:1,12:2,13:3,14:4}[t]??t}function J(e,t){const a=k(e),s=(t||"").trim(),n=s.toLowerCase();return a===1?"مدير النظام":a===2?s||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"وكيل بنك":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":s==="موظف"?"موظف":s==="مشرف"||s.includes("مشرف")?"مشرف المبيعات":s||"غير محدد"}function ee(e){return e===1||e===2}async function te(e,t,a){return!t.userId||!t.roleId||!a?!1:t.roleId===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:t.roleId===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:t.roleId===2||t.roleId===3}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const y=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",y?"Present":"Missing"),y){const w=y.split(";").map(v=>v.trim()).find(v=>v.startsWith("authToken="));w?(t=w.startsWith("authToken=")?w.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const y=e.req.query("tenant_id");return{userId:null,tenantId:y?parseInt(y):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=as(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const r=q(n[0]);if(!r)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const l=q(n[1]),i=k(q(n[2])),o=q(n[3]);if(!o)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:r,tenantIdFromToken:l,tokenRoleId:i,tokenIssuedAtMs:o}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",r);const d=await e.env.DB.prepare(`
+    `).bind().first()),r}function ss(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const r=n===0?"":"=".repeat(4-n);return s+r}function q(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function ns(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,s=Date.parse(a);return Number.isNaN(s)?null:s}const Me=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function Te(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...Me]}catch{return[...Me]}}function rs(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function k(e){const t=rs(e);return t===null?null:{11:1,12:2,13:3,14:4}[t]??t}function we(e){return JSON.stringify(e).replace(/</g,"\\u003c")}function J(e,t){const a=k(e),s=(t||"").trim(),n=s.toLowerCase();return a===1?"مدير النظام":a===2?s||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"موظف التمويل":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":s==="موظف"?"موظف":s==="مشرف"||s.includes("مشرف")?"مشرف المبيعات":s||"غير محدد"}function ee(e){return e===1||e===2}async function te(e,t,a){return!t.userId||!t.roleId||!a?!1:t.roleId===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:t.roleId===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:t.roleId===2||t.roleId===3}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const y=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",y?"Present":"Missing"),y){const w=y.split(";").map(v=>v.trim()).find(v=>v.startsWith("authToken="));w?(t=w.startsWith("authToken=")?w.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const y=e.req.query("tenant_id");return{userId:null,tenantId:y?parseInt(y):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=ss(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const r=q(n[0]);if(!r)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const l=q(n[1]),i=k(q(n[2])),o=q(n[3]);if(!o)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:r,tenantIdFromToken:l,tokenRoleId:i,tokenIssuedAtMs:o}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",r);const d=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
-    `).bind(r).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const c=ss(d.last_login??null);if(c&&o<c)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:o,userLastLoginMs:c}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const u=k(d.role_id),m=d.assigned_bank_id,f=m!=null&&!Number.isNaN(Number(m))?Number(m):null;if(u===1){const y=e.req.query("tenant_id"),h={userId:d.id,tenantId:y?parseInt(y):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",h),h}const g=d.tenant_id,b={userId:d.id,tenantId:g??l,roleId:u,tokenRoleId:i,assignedBankId:u===5?f:null};return console.log("✅ [getUserInfo] Returning user info:",b),b}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}async function rs(e,t,a,s){return!!await e.prepare(`SELECT 1 AS ok FROM users
+    `).bind(r).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const c=ns(d.last_login??null);if(c&&o<c)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:o,userLastLoginMs:c}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const u=k(d.role_id),m=d.assigned_bank_id,f=m!=null&&!Number.isNaN(Number(m))?Number(m):null;if(u===1){const y=e.req.query("tenant_id"),h={userId:d.id,tenantId:y?parseInt(y):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",h),h}const g=d.tenant_id,b={userId:d.id,tenantId:g??l,roleId:u,tokenRoleId:i,assignedBankId:u===5?f:null};return console.log("✅ [getUserInfo] Returning user info:",b),b}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}async function os(e,t,a,s){return!!await e.prepare(`SELECT 1 AS ok FROM users
        WHERE id = ? AND is_active = 1 AND role_id = 5
-         AND tenant_id = ? AND assigned_bank_id = ?`).bind(s,t,a).first()}async function xe(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function mt(e,t,a){let s="SELECT id, full_name, phone, national_id, city, tenant_id FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let l=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(l=parseInt(String(i),10)),l==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(l=o.tenant_id)}if(l==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(l)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};s+=` WHERE tenant_id = ? AND EXISTS (
+         AND tenant_id = ? AND assigned_bank_id = ?`).bind(s,t,a).first()}async function xe(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function gt(e,t,a){let s="SELECT id, full_name, phone, national_id, city, tenant_id FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let l=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(l=parseInt(String(i),10)),l==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(l=o.tenant_id)}if(l==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(l)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};s+=` WHERE tenant_id = ? AND EXISTS (
       SELECT 1 FROM customer_assignments ca
       WHERE ca.customer_id = customers.id AND ca.employee_id = ?
-    )`,n.push(t.tenantId,t.userId)}else s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function D(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const os=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function is(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
+    )`,n.push(t.tenantId,t.userId)}else s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function D(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const is=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function ls(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
 <style>
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
@@ -27856,7 +27905,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
   [href^="/admin/saas-settings"],
   [href^="/admin/tenant-calculators"] { display: none !important; }
 </style>
-</head>`),s}const ls={1:["/admin/dashboard","/admin/customers","/admin/requests","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups"],2:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/"],3:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/calculator","/"],4:["/admin/dashboard","/admin/customers","/admin/requests","/admin/my-tasks","/calculator","/"],5:["/admin/requests"]};function ds(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/panel"||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const s=a?.roleId??4,n=JSON.stringify(ls),r=`
+</head>`),s}const ds={1:["/admin/dashboard","/admin/customers","/admin/requests","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups"],2:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/"],3:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/calculator","/"],4:["/admin/dashboard","/admin/customers","/admin/requests","/admin/my-tasks","/calculator","/"],5:["/admin/requests"]};function cs(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/panel"||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const s=a?.roleId??4,n=JSON.stringify(ds),r=`
 <style>
   #global-persistent-sidebar {
     position: fixed;
@@ -28198,13 +28247,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     document.addEventListener('DOMContentLoaded', hydrateSidebarFilterCounts);
   })();
 <\/script>
-`;let i=t;return i=i.includes("</head>")?i.replace("</head>",`${r}</head>`):`${r}${i}`,i=i.includes("</body>")?i.replace("</body>",`${l}</body>`):`${i}${l}`,i}p.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=D(a),n=e.req.path||"";if(os.some(i=>n===i||n.startsWith(i+"/"))&&!s)return e.redirect("/admin/dashboard");if(k(a.roleId)===5&&!(n==="/admin/requests"||n.startsWith("/admin/requests/")&&n!=="/admin/requests/new"&&!n.includes("/edit")&&!n.includes("/delete")&&!n.includes("/workflow")&&!n.includes("/report")))return e.redirect("/admin/requests");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const i=e.res;if(i.status>=300&&i.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(i.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const o=i.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",o),o.includes("text/html")&&i.body){console.log("🔒 [RBAC] Processing HTML response...");const c=await i.clone().text();console.log("🔒 [RBAC] HTML length:",c.length);let u=c;s||(u=is(u));const m=k(a.roleId)??4;u=ds(n,u,{roleId:m}),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const f=new Headers(i.headers);f.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:i.status,statusText:i.statusText,headers:f}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(i){const o={message:i?.message||"Unknown error",name:i?.name||"Error",stack:i?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(i,Object.getOwnPropertyNames(i),2)}catch(d){return`Failed to stringify: ${d}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",o)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});p.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:k(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});p.use("/c/:tenant/*",async(e,t)=>{const a=await ts(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function cs(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function he(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
+`;let i=t;return i=i.includes("</head>")?i.replace("</head>",`${r}</head>`):`${r}${i}`,i=i.includes("</body>")?i.replace("</body>",`${l}</body>`):`${i}${l}`,i}p.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=D(a),n=e.req.path||"";if(is.some(i=>n===i||n.startsWith(i+"/"))&&!s)return e.redirect("/admin/dashboard");if(k(a.roleId)===5&&!(n==="/admin/requests"||n.startsWith("/admin/requests/")&&n!=="/admin/requests/new"&&!n.includes("/edit")&&!n.includes("/delete")&&!n.includes("/workflow")&&!n.includes("/report")))return e.redirect("/admin/requests");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const i=e.res;if(i.status>=300&&i.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(i.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const o=i.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",o),o.includes("text/html")&&i.body){console.log("🔒 [RBAC] Processing HTML response...");const c=await i.clone().text();console.log("🔒 [RBAC] HTML length:",c.length);let u=c;s||(u=ls(u));const m=k(a.roleId)??4;u=cs(n,u,{roleId:m}),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const f=new Headers(i.headers);f.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:i.status,statusText:i.statusText,headers:f}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(i){const o={message:i?.message||"Unknown error",name:i?.name||"Error",stack:i?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(i,Object.getOwnPropertyNames(i),2)}catch(d){return`Failed to stringify: ${d}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",o)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});p.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:k(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});p.use("/c/:tenant/*",async(e,t)=>{const a=await as(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function ps(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function he(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
     SELECT id FROM tenants WHERE public_uuid = ? LIMIT 1
   `).bind(t).first())?.id??null}p.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/tenants",async e=>{try{const t=await e.req.json(),a=le(t.slug);if(!t.company_name||!a)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(de(a))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
-    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=cs(),r=await e.env.DB.prepare(`
+    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=ps(),r=await e.env.DB.prepare(`
       INSERT INTO tenants (
         public_uuid,
         company_name, slug, subdomain, status, max_users, 
@@ -28269,7 +28318,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       VALUES (?, ?, ?, ?, ?)
     `).bind(a,s,n,r,i).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:n,logo_url:r,is_active:l}=a,o=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(o){const m=atob(o).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let c="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(c+=" AND tenant_id = ?",await e.env.DB.prepare(c).bind(s,n,r,l,t,d).run()):await e.env.DB.prepare(c).bind(s,n,r,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),n=a.get("bank_code"),r=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(s,n,r,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,r=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,r=o[2]?parseInt(o[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(r!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await ut(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await es(e.env.DB),r=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${r} بنك عام`,deleted_count:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await x(e),n=Number.isFinite(a)?a:s.tenantId,l=(await Se(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(r=a);let l=`
+    `).bind(s,n,r,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,r=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,r=o[2]?parseInt(o[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(r!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await mt(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await ts(e.env.DB),r=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${r} بنك عام`,deleted_count:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await x(e),n=Number.isFinite(a)?a:s.tenantId,l=(await Te(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(r=a);let l=`
       SELECT 
         r.*,
         b.bank_name,
@@ -28383,7 +28432,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
              (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(n+=` WHERE u.tenant_id = ${s}`),n+=`
-      ORDER BY u.id DESC`;const{results:r}=await e.env.DB.prepare(n).all(),l=(r||[]).map(i=>({...i,role_name:J(i.role_id,i.role_name)}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),r=t.get("email"),l=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",c=await x(e);if(!c.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!D(c))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=null;const f=t.get("tenant_id");if(D(c))if(f!=null&&String(f).trim()!==""){const w=parseInt(String(f),10);m=Number.isNaN(w)?null:w}else m=null;else{if(!c.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=c.tenantId}const g=t.get("assigned_bank_id");let b=null;if(u===5){if(!(D(c)||c.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء وكيل بنك"},403);const v=typeof m=="number"?m:parseInt(String(m||""),10);if(!v||Number.isNaN(v))return e.json({success:!1,error:"يجب اختيار الشركة لوكيل البنك"},400);const _=Number.parseInt(String(g||""),10);if(Number.isNaN(_)||_<=0)return e.json({success:!1,error:"يجب اختيار البنك لوكيل البنك"},400);if(!await xe(e.env.DB,v,_))return e.json({success:!1,error:"البنك غير صالح لهذه الشركة"},400);b=_}if(await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:r}=await e.env.DB.prepare(n).all(),l=(r||[]).map(i=>({...i,role_name:J(i.role_id,i.role_name)}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),r=t.get("email"),l=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",c=await x(e);if(!c.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!D(c))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=null;const f=t.get("tenant_id");if(D(c))if(f!=null&&String(f).trim()!==""){const w=parseInt(String(f),10);m=Number.isNaN(w)?null:w}else m=null;else{if(!c.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=c.tenantId}const g=t.get("assigned_bank_id");let b=null;if(u===5){if(!(D(c)||c.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء موظف التمويل"},403);const v=typeof m=="number"?m:parseInt(String(m||""),10);if(!v||Number.isNaN(v))return e.json({success:!1,error:"يجب اختيار الشركة لموظف التمويل"},400);const _=Number.parseInt(String(g||""),10);if(Number.isNaN(_)||_<=0)return e.json({success:!1,error:"يجب اختيار البنك لموظف التمويل"},400);if(!await xe(e.env.DB,v,_))return e.json({success:!1,error:"البنك غير صالح لهذه الشركة"},400);b=_}if(await e.env.DB.prepare(`
       SELECT id FROM users WHERE username = ?
     `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(r&&await e.env.DB.prepare(`
         SELECT id FROM users WHERE email = ?
@@ -28410,7 +28459,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           WHERE ca.customer_id = c.id AND ca.employee_id = ${t.userId}
         )`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=dt(s);if(!n.normalized)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=ct(s);if(!n.normalized)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -28440,7 +28489,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
         </body>
         </html>
-      `,400);const r=n.normalized,l=t.get("email")||null,i=t.get("national_id")||null,o=t.get("date_of_birth")||null,d=t.get("dob_calendar_type")||"gregorian",c=t.get("employer_name")||null,u=t.get("job_type")||"civilian",m=t.get("job_title")||null,f=t.get("military_rank")||null,g=t.get("work_start_date")||null,b=t.get("city")||null,y=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,h=parseFloat(t.get("monthly_salary")||"0"),w=t.get("notes")?.trim()||null,v=it(t.get("solutions_json")),_=(t.get("id_attachment_url")||"").trim()||null,R=(t.get("bank_statement_attachment_url")||"").trim()||null,B=(t.get("salary_attachment_url")||"").trim()||null,j=(t.get("additional_attachment_url")||"").trim()||null,E=await x(e);let S=E.tenantId;if(!S&&E.roleId===1){const I=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(I)&&I>0&&(S=I)}if(!S){const I=await e.env.DB.prepare(`
+      `,400);const r=n.normalized,l=t.get("email")||null,i=t.get("national_id")||null,o=t.get("date_of_birth")||null,d=t.get("dob_calendar_type")||"gregorian",c=t.get("employer_name")||null,u=t.get("job_type")||"civilian",m=t.get("job_title")||null,f=t.get("military_rank")||null,g=t.get("work_start_date")||null,b=t.get("city")||null,y=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,h=parseFloat(t.get("monthly_salary")||"0"),w=t.get("notes")?.trim()||null,v=lt(t.get("solutions_json")),_=(t.get("id_attachment_url")||"").trim()||null,R=(t.get("bank_statement_attachment_url")||"").trim()||null,B=(t.get("salary_attachment_url")||"").trim()||null,j=(t.get("additional_attachment_url")||"").trim()||null,E=await x(e);let S=E.tenantId;if(!S&&E.roleId===1){const I=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(I)&&I>0&&(S=I)}if(!S){const I=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
       `).first();I?.id&&(S=I.id)}if(!S)throw new Error("Missing tenant context for customer creation");if(i){let I="SELECT id, full_name FROM customers WHERE national_id = ?",A=[i];S&&(I+=" AND tenant_id = ?",A.push(S));const $=await e.env.DB.prepare(I).bind(...A).first();if($)return e.html(`
           <!DOCTYPE html>
@@ -28539,7 +28588,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         `).bind(...N.slice(0,16),v).run()}catch(A){if(!Y(A))throw A;P=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...N.slice(0,16)).run()}else throw I}const H=P.meta?.last_row_id,ae=t.get("obligations_json");if(H&&ae)try{const I=JSON.parse(ae);if(Array.isArray(I)&&I.length>0){let A=0;for(const $ of I){const bt=$.obligation_type??"",xt=Number($.total_amount)||0,Te=Number($.monthly_installment)||0,ht=$.due_date||null;A+=Te,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(H,bt,xt,Te,ht,S).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(A,H).run()}}catch{}if(H&&E.roleId===4&&E.userId&&E.tenantId!=null&&E.tenantId===S)try{await e.env.DB.prepare(`
+        `).bind(...N.slice(0,16)).run()}else throw I}const H=P.meta?.last_row_id,ae=t.get("obligations_json");if(H&&ae)try{const I=JSON.parse(ae);if(Array.isArray(I)&&I.length>0){let A=0;for(const $ of I){const xt=$.obligation_type??"",ht=Number($.total_amount)||0,De=Number($.monthly_installment)||0,yt=$.due_date||null;A+=De,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(H,xt,ht,De,yt,S).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(A,H).run()}}catch{}if(H&&E.roleId===4&&E.userId&&E.tenantId!=null&&E.tenantId===S)try{await e.env.DB.prepare(`
           INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
           VALUES (?, ?, ?, ?)
         `).bind(H,E.userId,E.userId,"").run(),await e.env.DB.prepare(`
@@ -28576,7 +28625,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),r=dt(n);if(!r.normalized)return e.html(`
+    `)}});p.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),r=ct(n);if(!r.normalized)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -28606,7 +28655,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
         </body>
         </html>
-      `,400);const l=r.normalized,i=a.get("email")||null,o=a.get("national_id")||null,d=a.get("date_of_birth")||null,c=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,m=a.get("job_type")||"civilian",f=a.get("job_title")||null,g=a.get("military_rank")||null,b=a.get("work_start_date")||null,y=a.get("city")||null,h=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,w=parseFloat(a.get("monthly_salary")||"0"),v=a.get("notes")?.trim()||null,_=it(a.get("solutions_json")),R=(a.get("id_attachment_url")||"").trim()||null,B=(a.get("bank_statement_attachment_url")||"").trim()||null,j=(a.get("salary_attachment_url")||"").trim()||null,E=(a.get("additional_attachment_url")||"").trim()||null,S=[s,l,i,o,d,c==="hijri"?"hijri":"gregorian",u,m==="military"?"military":"civilian",f,m==="military"?g:null,b,y,h,w,v,R,B,j,E];try{await e.env.DB.prepare(`
+      `,400);const l=r.normalized,i=a.get("email")||null,o=a.get("national_id")||null,d=a.get("date_of_birth")||null,c=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,m=a.get("job_type")||"civilian",f=a.get("job_title")||null,g=a.get("military_rank")||null,b=a.get("work_start_date")||null,y=a.get("city")||null,h=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,w=parseFloat(a.get("monthly_salary")||"0"),v=a.get("notes")?.trim()||null,_=lt(a.get("solutions_json")),R=(a.get("id_attachment_url")||"").trim()||null,B=(a.get("bank_statement_attachment_url")||"").trim()||null,j=(a.get("salary_attachment_url")||"").trim()||null,E=(a.get("additional_attachment_url")||"").trim()||null,S=[s,l,i,o,d,c==="hijri"?"hijri":"gregorian",u,m==="military"?"military":"civilian",f,m==="military"?g:null,b,y,h,w,v,R,B,j,E];try{await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
           employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
@@ -28633,7 +28682,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
           WHERE id = ?
-        `).bind(...S.slice(0,15),t).run()}else throw O}const C=a.get("obligations_json");if(C)try{const L=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const X=JSON.parse(C);if(Array.isArray(X)&&X.length>0){let W=0;for(const N of X){const P=N.obligation_type??"",H=Number(N.total_amount)||0,ae=Number(N.monthly_installment)||0,I=N.due_date||null;W+=ae,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,P,H,ae,I,L).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(W,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return await ke(e.env.DB,t,{id_attachment_url:R,bank_statement_attachment_url:B,salary_attachment_url:j,additional_attachment_url:E}),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!Y(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:l,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let r=null;if(n!=null?r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!r)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(r.id).all()).results||[];return e.json({success:!0,customer:r,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),r=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of r){const o=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,u=i.due_date||null;l+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,c,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-requests",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
+        `).bind(...S.slice(0,15),t).run()}else throw O}const C=a.get("obligations_json");if(C)try{const L=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const X=JSON.parse(C);if(Array.isArray(X)&&X.length>0){let W=0;for(const N of X){const P=N.obligation_type??"",H=Number(N.total_amount)||0,ae=Number(N.monthly_installment)||0,I=N.due_date||null;W+=ae,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,P,H,ae,I,L).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(W,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return await Ee(e.env.DB,t,{id_attachment_url:R,bank_statement_attachment_url:B,salary_attachment_url:j,additional_attachment_url:E}),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!Y(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:l,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let r=null;if(n!=null?r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!r)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(r.id).all()).results||[];return e.json({success:!0,customer:r,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),r=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of r){const o=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,u=i.due_date||null;l+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,c,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-requests",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
       SELECT 
         f.*,
         c.full_name as customer_name,
@@ -28709,7 +28758,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       GROUP BY status_label
     `).bind(...c).all()).results,f={};let g=0;return m.forEach(b=>{const y=String(b?.status_label||"").trim(),h=Number(b?.count||0);y&&(f[y]=h,g+=h)}),e.json({success:!0,customers:{all:l,0:o,1:Number(r?.rating_1||0),2:Number(r?.rating_2||0),3:Number(r?.rating_3||0),4:Number(r?.rating_4||0),5:Number(r?.rating_5||0)},requests:{all:g,byState:f}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),n=s.get("customer_id"),r=s.get("financing_type_id"),l=s.get("requested_amount"),i=s.get("duration_months"),o=s.get("salary_at_request"),d=s.get("selected_bank_id");let c=d!=null&&String(d).trim()!==""?parseInt(String(d),10):null;c!=null&&Number.isNaN(c)&&(c=null);const u=s.get("assigned_bank_agent_id");let m=u!=null&&String(u).trim()!==""?parseInt(String(u),10):null;m!=null&&Number.isNaN(m)&&(m=null);const f=s.get("status")||"pending",g=s.get("notes")||"",b=await x(e);if(!b.userId||!b.roleId)return e.json({success:!1,error:"غير مصرح"},401);const y=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM customers WHERE id = ?
-    `).bind(n).first();if(!y)return e.json({success:!1,error:"العميل غير موجود"},400);if(b.roleId!==1){if(!b.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(y.tenant_id!==b.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}if(b.roleId===4&&!await te(e.env.DB,b,y))return e.json({success:!1,error:"غير مصرح: العميل غير مخصص لك"},403);const h=b.roleId===1?y.tenant_id:b.tenantId;if(m!=null){if(!c||Number.isNaN(c))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين وكيل بنك"},400);const v=h!=null?Number(h):NaN;if(!v||Number.isNaN(v))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين وكيل البنك"},400);if(!await rs(e.env.DB,v,c,m))return e.json({success:!1,error:"وكيل البنك غير صالح لهذا البنك والشركة"},400)}const w=await e.env.DB.prepare(`
+    `).bind(n).first();if(!y)return e.json({success:!1,error:"العميل غير موجود"},400);if(b.roleId!==1){if(!b.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(y.tenant_id!==b.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}if(b.roleId===4&&!await te(e.env.DB,b,y))return e.json({success:!1,error:"غير مصرح: العميل غير مخصص لك"},403);const h=b.roleId===1?y.tenant_id:b.tenantId;if(m!=null){if(!c||Number.isNaN(c))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);const v=h!=null?Number(h):NaN;if(!v||Number.isNaN(v))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await os(e.env.DB,v,c,m))return e.json({success:!1,error:"موظف التمويل غير صالح لهذا البنك والشركة"},400)}const w=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
@@ -28759,11 +28808,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
       WHERE wst.request_id = ?
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});const ps={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function us(e){return e&&ps[e]||null}p.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:n}=await e.req.json(),r=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});const us={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function ms(e){return e&&us[e]||null}p.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:n}=await e.req.json(),r=await e.env.DB.prepare(`
       SELECT stage_name FROM workflow_stages WHERE id = ?
     `).bind(a).first(),l=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
-    `).bind(t).first(),i=us(r?.stage_name||null),o=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],d=[a];return i&&(o.push("status = ?"),d.push(i),i==="pending"?o.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):i==="under_review"?o.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):i==="approved"?o.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):i==="rejected"&&o.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(i==="approved"||i==="rejected"||i==="under_review")&&o.push("reviewed_at = CURRENT_TIMESTAMP")),d.push(t),await e.env.DB.prepare(`
+    `).bind(t).first(),i=ms(r?.stage_name||null),o=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],d=[a];return i&&(o.push("status = ?"),d.push(i),i==="pending"?o.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):i==="under_review"?o.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):i==="approved"?o.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):i==="rejected"&&o.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(i==="approved"||i==="rejected"||i==="under_review")&&o.push("reviewed_at = CURRENT_TIMESTAMP")),d.push(t),await e.env.DB.prepare(`
       UPDATE financing_requests 
       SET ${o.join(", ")}
       WHERE id = ?
@@ -28946,7 +28995,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       WHERE id = ?
     `;s!==null&&(g+=" AND tenant_id = ?",f.push(s)),await e.env.DB.prepare(g).bind(...f).run();const y=(await e.env.DB.prepare(`
       SELECT customer_id FROM financing_requests WHERE id = ?
-    `).bind(t).first())?.customer_id;return await ke(e.env.DB,y,{id_attachment_url:o,bank_statement_attachment_url:d,salary_attachment_url:c,additional_attachment_url:u}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).bind(t).first())?.customer_id;return await Ee(e.env.DB,y,{id_attachment_url:o,bank_statement_attachment_url:d,salary_attachment_url:c,additional_attachment_url:u}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
     `).bind(t).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];l?await e.env.DB.prepare(`
         UPDATE financing_requests 
@@ -28968,7 +29017,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         WHERE id = ?
       `).bind(b,s).run();console.log("✅ Update result:",w);const v=await e.env.DB.prepare(`
         SELECT customer_id FROM financing_requests WHERE id = ?
-      `).bind(s).first(),_={};h==="id_attachment_url"&&(_.id_attachment_url=b),h==="bank_statement_attachment_url"&&(_.bank_statement_attachment_url=b),h==="salary_attachment_url"&&(_.salary_attachment_url=b),h==="additional_attachment_url"&&(_.additional_attachment_url=b),await ke(e.env.DB,v?.customer_id,{..._})}return e.json({success:!0,url:b,filename:f})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let r=null;if(n.startsWith("id_")?r="id_attachment_url":n.startsWith("salary_")?r="salary_attachment_url":n.startsWith("bank_statement_")?r="bank_statement_attachment_url":n.startsWith("additional_")&&(r="additional_attachment_url"),r){await e.env.DB.prepare(`
+      `).bind(s).first(),_={};h==="id_attachment_url"&&(_.id_attachment_url=b),h==="bank_statement_attachment_url"&&(_.bank_statement_attachment_url=b),h==="salary_attachment_url"&&(_.salary_attachment_url=b),h==="additional_attachment_url"&&(_.additional_attachment_url=b),await Ee(e.env.DB,v?.customer_id,{..._})}return e.json({success:!0,url:b,filename:f})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let r=null;if(n.startsWith("id_")?r="id_attachment_url":n.startsWith("salary_")?r="salary_attachment_url":n.startsWith("bank_statement_")?r="bank_statement_attachment_url":n.startsWith("additional_")&&(r="additional_attachment_url"),r){await e.env.DB.prepare(`
           UPDATE financing_requests 
           SET ${r} = NULL 
           WHERE id = ?
@@ -29103,9 +29152,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,n,r,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(ea));p.get("/calculator",e=>e.html(tt));p.get("/calculator-old",e=>e.html(ta));p.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(a,s,n,r,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(ta));p.get("/calculator",e=>e.html(at));p.get("/calculator-old",e=>e.html(aa));p.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(tt.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+  `).bind(t).first();return a?e.html(at.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
         // Tenant information for company-specific calculator
         window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
     `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
@@ -29130,7 +29179,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)});p.get("/login",e=>e.html(aa));p.get("/forgot-password",e=>e.html(sa));p.get("/packages",e=>e.html(na));p.get("/subscribe",e=>e.html(ra));p.get("/admin",e=>e.html(`
+    `)});p.get("/login",e=>e.html(sa));p.get("/forgot-password",e=>e.html(na));p.get("/packages",e=>e.html(ra));p.get("/subscribe",e=>e.html(oa));p.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -29403,15 +29452,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
-  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let r=at;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(o,"")}r=r.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return r=r.replace("<script>",`<script>
-      window.USER_DATA = ${JSON.stringify({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:J(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
-      window.USER_PERMISSIONS = ${JSON.stringify(n.map(l=>l.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${JSON.stringify(n)};
+  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let r=st;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(o,"")}r=r.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return r=r.replace("<!--__PANEL_USER_BOOT__-->",`<script>
+      window.USER_DATA = ${we({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:J(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
+      window.USER_PERMISSIONS = ${we(n.map(l=>l.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${we(n)};
       window.USER_ROLE_ID = ${k(t.roleId)??4};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
-    <\/script>
-    <script>`),e.html(r)}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [ADMIN_PANEL] ERROR DUMP:",a),e.html(`
+    <\/script>`),e.html(r)}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [ADMIN_PANEL] ERROR DUMP:",a),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -30541,9 +30589,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants",e=>e.html(oa));p.get("/admin/tenant-calculators",e=>e.html(ia));p.get("/admin/saas-settings",e=>e.html(st));p.get("/admin/settings",e=>e.html(st));p.get("/admin/reports",e=>e.html(la));p.get("/admin/reports/customers",e=>e.html(da));p.get("/admin/reports/requests",e=>e.html(ca));p.get("/admin/reports/financial",e=>e.html(pa));p.get("/admin/reports/banks",e=>e.html(ha));p.get("/admin/reports/performance",e=>e.html(ya));p.get("/admin/reports/clicks",e=>e.html(va));p.get("/admin/reports/workflow",e=>e.html(wa));p.get("/admin/reports/employee-performance",e=>e.html(_a));p.get("/admin/payments",e=>e.html(ma));p.get("/admin/banks",e=>e.html(ga));p.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants",e=>e.html(ia));p.get("/admin/tenant-calculators",e=>e.html(la));p.get("/admin/saas-settings",e=>e.html(nt));p.get("/admin/settings",e=>e.html(nt));p.get("/admin/reports",e=>e.html(da));p.get("/admin/reports/customers",e=>e.html(ca));p.get("/admin/reports/requests",e=>e.html(pa));p.get("/admin/reports/financial",e=>e.html(ua));p.get("/admin/reports/banks",e=>e.html(ya));p.get("/admin/reports/performance",e=>e.html(va));p.get("/admin/reports/clicks",e=>e.html(wa));p.get("/admin/reports/workflow",e=>e.html(_a));p.get("/admin/reports/employee-performance",e=>e.html(ka));p.get("/admin/payments",e=>e.html(ga));p.get("/admin/banks",e=>e.html(fa));p.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(at.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(st.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -31169,7 +31217,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/add",async e=>{const t=await x(e),s=String(e.req.query("full_name")??e.req.query("name")??"").trim().slice(0,400),n=ie(e.req.query("phone")),r=await Se(e.env.DB,t.tenantId);return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/add",async e=>{const t=await x(e),s=String(e.req.query("full_name")??e.req.query("name")??"").trim().slice(0,400),n=ie(e.req.query("phone")),r=await Te(e.env.DB,t.tenantId);return e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -33702,13 +33750,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});p.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(fa(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});p.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});p.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ba(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});p.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ba(a,s,n.results,r.results))});p.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(xa(a,s,n.results,r.results))});p.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -36134,7 +36182,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});p.get("/admin/requests/:id/delete",async e=>{try{if((await x(e)).roleId===5)return e.redirect("/admin/requests");const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});p.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(k(t.roleId)===5)return e.redirect("/admin/requests");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await mt(e,t),s=e.req.query("customer_id");let n=null;if(s!=null&&String(s).trim()!==""){const m=parseInt(String(s),10);!Number.isNaN(m)&&m>0&&(n=m)}const r=n!=null&&a.some(m=>Number(m.id)===n);let l="SELECT id, bank_name FROM banks WHERE is_active = 1";const i=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);l+=" AND (tenant_id = ? OR tenant_id IS NULL)",i.push(t.tenantId)}l+=" ORDER BY bank_name";let o;try{o=i.length?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all()}catch(m){console.error("Error loading banks for /admin/requests/new:",m),o=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const d=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),c=JSON.stringify(a.map(m=>({id:m.id,name:m.full_name||"",text:`${m.full_name} - ${m.phone}`,tenant_id:m.tenant_id!=null?Number(m.tenant_id):null}))).replace(/</g,"\\u003c"),u=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
+    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});p.get("/admin/requests/:id/delete",async e=>{try{if((await x(e)).roleId===5)return e.redirect("/admin/requests");const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});p.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(k(t.roleId)===5)return e.redirect("/admin/requests");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await gt(e,t),s=e.req.query("customer_id");let n=null;if(s!=null&&String(s).trim()!==""){const m=parseInt(String(s),10);!Number.isNaN(m)&&m>0&&(n=m)}const r=n!=null&&a.some(m=>Number(m.id)===n);let l="SELECT id, bank_name FROM banks WHERE is_active = 1";const i=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);l+=" AND (tenant_id = ? OR tenant_id IS NULL)",i.push(t.tenantId)}l+=" ORDER BY bank_name";let o;try{o=i.length?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all()}catch(m){console.error("Error loading banks for /admin/requests/new:",m),o=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const d=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),c=JSON.stringify(a.map(m=>({id:m.id,name:m.full_name||"",text:`${m.full_name} - ${m.phone}`,tenant_id:m.tenant_id!=null?Number(m.tenant_id):null}))).replace(/</g,"\\u003c"),u=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -36283,11 +36331,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 <div id="bankAgentAssignWrap" class="md:col-span-2" style="display: none;">
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-user-tie text-amber-600 ml-1"></i>
-                    وكيل البنك (اختياري)
+                    موظف التمويل (اختياري)
                   </label>
                   <select name="assigned_bank_agent_id" id="newRequestBankAgentSelect"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">-- اختر وكيل البنك بعد اختيار البنك --</option>
+                    <option value="">-- اختر موظف التمويل بعد اختيار البنك --</option>
                   </select>
                   <p id="bankAgentAssignHint" class="text-xs text-gray-500 mt-1 hidden"></p>
                 </div>
@@ -36381,7 +36429,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               var tid = resolveTenantIdForBankAgents();
               if (!bankId) {
                 bankAgentWrap.style.display = 'none';
-                resetBankAgentSelect('-- اختر وكيل البنك بعد اختيار البنك --');
+                resetBankAgentSelect('-- اختر موظف التمويل بعد اختيار البنك --');
                 if (bankAgentHint) { bankAgentHint.classList.add('hidden'); bankAgentHint.textContent = ''; }
                 return;
               }
@@ -36389,7 +36437,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               if (tid == null || isNaN(tid)) {
                 resetBankAgentSelect('-- اختر العميل أولاً (لتحديد الشركة) --');
                 if (bankAgentHint) {
-                  bankAgentHint.textContent = 'لإسناد وكيل بنك، اختر عميلاً تابعاً لشركة أو سجّل الدخول بحساب شركة.';
+                  bankAgentHint.textContent = 'لإسناد موظف التمويل، اختر عميلاً تابعاً لشركة أو سجّل الدخول بحساب شركة.';
                   bankAgentHint.classList.remove('hidden');
                 }
                 return;
@@ -36407,7 +36455,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 bankAgentSelect.innerHTML = '';
                 var emptyOpt = document.createElement('option');
                 emptyOpt.value = '';
-                emptyOpt.textContent = '-- بدون وكيل بنك --';
+                emptyOpt.textContent = '-- بدون موظف تمويل --';
                 bankAgentSelect.appendChild(emptyOpt);
                 if (data && data.success && Array.isArray(data.data)) {
                   data.data.forEach(function (u) {
@@ -36937,7 +36985,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>غير مصرح بعرض هذا العميل</h1>",403):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id/edit",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await te(e.env.DB,t,s))return e.html("<h1>غير مصرح بتعديل هذا العميل</h1>",403);const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[],l=await Se(e.env.DB,s.tenant_id??null);let i=[];try{const o=s.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.html(`
+    `):e.html("<h1>غير مصرح بعرض هذا العميل</h1>",403):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id/edit",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await te(e.env.DB,t,s))return e.html("<h1>غير مصرح بتعديل هذا العميل</h1>",403);const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[],l=await Te(e.env.DB,s.tenant_id??null);let i=[];try{const o=s.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38161,7 +38209,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
     `).bind(t).all(),{results:l}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(t).all(),i={data:{transitions:n,actions:r,tasks:l}},o=xa(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).all(),i={data:{transitions:n,actions:r,tasks:l}},o=ha(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
     `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});p.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
@@ -38282,7 +38330,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       UPDATE banks 
       SET bank_name = ?, description = ?
       WHERE id = ?
-    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});p.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await ut(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});p.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
+    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});p.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await mt(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});p.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40730,7 +40778,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=D(s),r=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(k(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const b=n?u:s.tenantId,y=b!=null&&String(b).trim()!==""?parseInt(String(b),10):NaN,h=a.get("assigned_bank_id");let w=null;if(f===5){if(!(n||s.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور وكيل البنك.</p>",403);if(!y||Number.isNaN(y))return e.html("<h1>خطأ</h1><p>يجب ربط وكيل البنك بشركة.</p>",400);const B=Number.parseInt(String(h||""),10);if(Number.isNaN(B)||B<=0)return e.html("<h1>خطأ</h1><p>يجب اختيار البنك لوكيل البنك.</p>",400);if(!await xe(e.env.DB,y,B))return e.html("<h1>خطأ</h1><p>البنك غير صالح لهذه الشركة.</p>",400);w=B}let v=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=D(s),r=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(k(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const b=n?u:s.tenantId,y=b!=null&&String(b).trim()!==""?parseInt(String(b),10):NaN,h=a.get("assigned_bank_id");let w=null;if(f===5){if(!(n||s.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>",403);if(!y||Number.isNaN(y))return e.html("<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>",400);const B=Number.parseInt(String(h||""),10);if(Number.isNaN(B)||B<=0)return e.html("<h1>خطأ</h1><p>يجب اختيار البنك لموظف التمويل.</p>",400);if(!await xe(e.env.DB,y,B))return e.html("<h1>خطأ</h1><p>البنك غير صالح لهذه الشركة.</p>",400);w=B}let v=`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
           role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
@@ -40987,7 +41035,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر البنك --</option>
                   </select>
-                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور وكيل البنك، ويقتصر على بنوك الشركة المختارة.</p>
+                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور موظف التمويل، ويقتصر على بنوك الشركة المختارة.</p>
                 </div>
                 
                 <!-- الحالة -->
@@ -41580,8 +41628,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return l.salariesLabels=c.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=c.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Xa(p,x);async function z(e,t="all"){const a=await x(e);return!a.userId||!a.roleId?e.redirect("/login"):a.roleId===4?e.redirect("/admin/panel"):a.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}p.get("/admin/contracts",async e=>{const t=await z(e,"all");return t||e.html(Ma)});p.get("/admin/contracts/list",async e=>{const t=await z(e,"list-new-only");if(t)return t;const s=(await x(e)).roleId===3?ot(Re):Re;return e.html(s)});p.get("/admin/contracts/new",async e=>{const t=await z(e,"list-new-only");if(t)return t;const a=await x(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:s}=await mt(e,a,{scopeSuperAdminToTenant:!0}),n=m=>(m||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),r=m=>(m||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=s.map(m=>{const f=m.national_id&&!String(m.national_id).startsWith("TEMP-")?String(m.national_id):"",g=r(m.full_name||"")+(m.phone?" — "+r(m.phone):"")+(f?" ("+r(f)+")":"");return`<option value="${n(String(m.id))}" data-name="${n(m.full_name||"")}" data-national_id="${n(f)}" data-phone="${n(m.phone||"")}" data-city="${n(m.city||"")}">${g}</option>`}).join(`
-`);let i="",o="",d="";const c=a.tenantId;if(c){const m=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(c).first();if(m&&(o=n(m.company_name||""),d=n((m.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',m.company_name)){const f=(m.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${r(m.company_name)}</strong>${f?` — ${r(f)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let u=Fa.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",o).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d);return a.roleId===3&&(u=ot(u)),e.html(u)});p.get("/admin/contracts/view",async e=>{const t=await z(e,"list-new-only");return t||e.html(za)});p.get("/admin/contracts/templates",async e=>{const t=await z(e,"all");return t||e.html(Pa)});p.get("/admin/contracts/notes",async e=>{const t=await z(e,"all");return t||e.html(Wa)});p.get("/admin/contracts/archive",async e=>{const t=await z(e,"all");return t||e.html(Va)});p.get("/admin/contracts/settings",async e=>{const t=await z(e,"all");return t||e.html(Ga)});p.get("/admin/hr",e=>e.html(ka));p.get("/admin/hr/employees",e=>e.html(Ea));p.get("/admin/hr/employees/:id",e=>e.html(Ia));p.get("/admin/hr/employees/:id/edit",e=>e.html(Sa));p.get("/admin/hr/attendance",e=>e.html(Ta));p.get("/admin/hr/leaves",e=>e.html(Da));p.get("/admin/hr/salaries",e=>e.html(Ba));p.get("/admin/hr/performance",e=>e.html(Ca));p.get("/admin/hr/promotions",e=>e.html(Ra));p.get("/admin/hr/documents",e=>e.html(ja));p.get("/admin/hr/reports",e=>e.html(La));p.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),r=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(r).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),c=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(c).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
+    `).bind(a).all();return l.salariesLabels=c.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=c.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Qa(p,x);async function z(e,t="all"){const a=await x(e);return!a.userId||!a.roleId?e.redirect("/login"):a.roleId===4?e.redirect("/admin/panel"):a.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}p.get("/admin/contracts",async e=>{const t=await z(e,"all");return t||e.html(Fa)});p.get("/admin/contracts/list",async e=>{const t=await z(e,"list-new-only");if(t)return t;const s=(await x(e)).roleId===3?it(je):je;return e.html(s)});p.get("/admin/contracts/new",async e=>{const t=await z(e,"list-new-only");if(t)return t;const a=await x(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:s}=await gt(e,a,{scopeSuperAdminToTenant:!0}),n=m=>(m||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),r=m=>(m||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=s.map(m=>{const f=m.national_id&&!String(m.national_id).startsWith("TEMP-")?String(m.national_id):"",g=r(m.full_name||"")+(m.phone?" — "+r(m.phone):"")+(f?" ("+r(f)+")":"");return`<option value="${n(String(m.id))}" data-name="${n(m.full_name||"")}" data-national_id="${n(f)}" data-phone="${n(m.phone||"")}" data-city="${n(m.city||"")}">${g}</option>`}).join(`
+`);let i="",o="",d="";const c=a.tenantId;if(c){const m=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(c).first();if(m&&(o=n(m.company_name||""),d=n((m.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',m.company_name)){const f=(m.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${r(m.company_name)}</strong>${f?` — ${r(f)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let u=Pa.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",o).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d);return a.roleId===3&&(u=it(u)),e.html(u)});p.get("/admin/contracts/view",async e=>{const t=await z(e,"list-new-only");return t||e.html(Wa)});p.get("/admin/contracts/templates",async e=>{const t=await z(e,"all");return t||e.html(Ha)});p.get("/admin/contracts/notes",async e=>{const t=await z(e,"all");return t||e.html(Va)});p.get("/admin/contracts/archive",async e=>{const t=await z(e,"all");return t||e.html(Ga)});p.get("/admin/contracts/settings",async e=>{const t=await z(e,"all");return t||e.html(Ya)});p.get("/admin/hr",e=>e.html(Ea));p.get("/admin/hr/employees",e=>e.html(Ia));p.get("/admin/hr/employees/:id",e=>e.html(Sa));p.get("/admin/hr/employees/:id/edit",e=>e.html(Ta));p.get("/admin/hr/attendance",e=>e.html(Da));p.get("/admin/hr/leaves",e=>e.html(Ba));p.get("/admin/hr/salaries",e=>e.html(Ca));p.get("/admin/hr/performance",e=>e.html(Ra));p.get("/admin/hr/promotions",e=>e.html(ja));p.get("/admin/hr/documents",e=>e.html(La));p.get("/admin/hr/reports",e=>e.html(Aa));p.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),r=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(r).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),c=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(c).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -41681,7 +41729,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           a.working_hours as work_hours
         FROM hr_attendance a 
         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function gt(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[r,l]=t.split(":").map(Number),i=s*60+n;let o=r*60+l;o<i&&(o+=1440);const d=o-i,c=Math.round(d/60*100)/100,u=Math.floor(c),m=Math.round((c-u)*60),f=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:f}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}p.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:n,workHoursFormatted:r}=gt(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function ft(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[r,l]=t.split(":").map(Number),i=s*60+n;let o=r*60+l;o<i&&(o+=1440);const d=o-i,c=Math.round(d/60*100)/100,u=Math.floor(c),m=Math.round((c-u)*60),f=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:f}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}p.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:n,workHoursFormatted:r}=ft(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
         employee_id,
         attendance_date,
@@ -41698,7 +41746,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,n,r,s).run();return e.json({success:!0,id:l.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=(await x(e)).tenantId,r=await e.env.DB.prepare(`
       SELECT check_in_time, attendance_date FROM hr_attendance 
       WHERE id = ? AND tenant_id = ?
-    `).bind(t,n).first();if(!r)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||r.check_in_time,i=a.check_out_time||null,o=a.attendance_date||r.attendance_date,{workingHours:d,workHoursFormatted:c}=gt(l,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,c)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
+    `).bind(t,n).first();if(!r)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||r.check_in_time,i=a.check_out_time||null,o=a.attendance_date||r.attendance_date,{workingHours:d,workHoursFormatted:c}=ft(l,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,c)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
       UPDATE hr_attendance 
       SET ${u.join(", ")}
       WHERE id = ? AND tenant_id = ?
@@ -41721,12 +41769,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(a,s,n,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});p.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});p.post("/api/public/:slug/contact-submissions",async e=>{try{const t=le(e.req.param("slug"));if(!t||de(t))return e.json({success:!1,error:"Invalid slug"},400);const a=await e.req.json().catch(()=>({})),s=String(a?.customer_name??"").trim(),n=String(a?.customer_phone??"").trim(),r=String(a?.customer_message??"").trim(),l=Ee(a?.affiliate_path);if(!s||!n||!r)return e.json({success:!1,error:"الاسم ورقم الجوال والرسالة مطلوبة"},400);const i=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});p.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});p.post("/api/public/:slug/contact-submissions",async e=>{try{const t=le(e.req.param("slug"));if(!t||de(t))return e.json({success:!1,error:"Invalid slug"},400);const a=await e.req.json().catch(()=>({})),s=String(a?.customer_name??"").trim(),n=String(a?.customer_phone??"").trim(),r=String(a?.customer_message??"").trim(),l=Ie(a?.affiliate_path);if(!s||!n||!r)return e.json({success:!1,error:"الاسم ورقم الجوال والرسالة مطلوبة"},400);const i=await e.env.DB.prepare(`
       SELECT id
       FROM tenants
       WHERE slug = ? AND status = 'active'
       LIMIT 1
-    `).bind(t).first();if(!i?.id)return e.json({success:!1,error:"الشركة غير موجودة"},404);let o=null,d=null;if(l){if(!Ie(l))return e.json({success:!1,error:"مسار الإحالة غير صالح"},400);const c=await e.env.DB.prepare(`
+    `).bind(t).first();if(!i?.id)return e.json({success:!1,error:"الشركة غير موجودة"},404);let o=null,d=null;if(l){if(!Se(l))return e.json({success:!1,error:"مسار الإحالة غير صالح"},400);const c=await e.env.DB.prepare(`
         SELECT path_segment, label
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
@@ -41736,12 +41784,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         tenant_id, customer_name, customer_phone, customer_message, source_slug,
         affiliate_path_segment, affiliate_label
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(i.id,s,n,r,t,o,d).run(),e.json({success:!0,message:"تم إرسال طلبك بنجاح"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);let a=t.roleId===2?t.tenantId:null;if(t.roleId===1){const r=e.req.query("tenant_id");a=r&&/^\d+$/.test(String(r))?parseInt(String(r),10):null}if(!a)return e.json({success:!1,error:t.roleId===1?"tenant_id مطلوب":"لا شركة مرتبطة"},400);if(t.roleId===2&&t.tenantId!==a)return e.json({success:!1,error:"Forbidden"},403);const{results:s}=await e.env.DB.prepare(`
+    `).bind(i.id,s,n,r,t,o,d).run(),e.json({success:!0,message:"تم إرسال طلبك بنجاح"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId;if(a==null)return e.json({success:!1,error:"Forbidden"},403);let s=null;if(a===1){const l=e.req.query("tenant_id");if(s=l&&/^\d+$/.test(String(l))?parseInt(String(l),10):null,!s)return e.json({success:!1,error:"tenant_id مطلوب"},400)}else if(s=t.tenantId,!s)return e.json({success:!1,error:"لا شركة مرتبطة"},400);const{results:n}=await e.env.DB.prepare(`
       SELECT id, tenant_id, path_segment, label, created_at
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
-    `).bind(a).all(),n=await e.env.DB.prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1").bind(a).first();return e.json({success:!0,data:s||[],tenant_slug:n?.slug??null})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>({})),s=Ee(a?.path_segment),n=String(a?.label??"").trim();let r=t.roleId===2?t.tenantId:null;if(t.roleId===1){const l=a?.tenant_id,i=parseInt(String(l??""),10);r=Number.isFinite(i)&&i>0?i:null}return r?t.roleId===2&&t.tenantId!==r?e.json({success:!1,error:"Forbidden"},403):!s||!Ie(s)?e.json({success:!1,error:"مسار غير صالح. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية أو وسطية فقط (مثل facebook أو fb-ads)"},400):!n||n.length>120?e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400):(await e.env.DB.prepare(`
+    `).bind(s).all(),r=await e.env.DB.prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1").bind(s).first();return e.json({success:!0,data:n||[],tenant_slug:r?.slug??null})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>({})),s=Ie(a?.path_segment),n=String(a?.label??"").trim();let r=t.roleId===2?t.tenantId:null;if(t.roleId===1){const l=a?.tenant_id,i=parseInt(String(l??""),10);r=Number.isFinite(i)&&i>0?i:null}return r?t.roleId===2&&t.tenantId!==r?e.json({success:!1,error:"Forbidden"},403):!s||!Se(s)?e.json({success:!1,error:"مسار غير صالح. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية أو وسطية فقط (مثل facebook أو fb-ads)"},400):!n||n.length>120?e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400):(await e.env.DB.prepare(`
       INSERT INTO tenant_contact_affiliate_links (tenant_id, path_segment, label)
       VALUES (?, ?, ?)
     `).bind(r,s,n).run(),e.json({success:!0,message:"تم إنشاء رابط الإحالة"})):e.json({success:!1,error:t.roleId===1?"tenant_id مطلوب":"لا شركة مرتبطة"},400)}catch(t){const a=String(t?.message||"");return a.includes("UNIQUE")||a.toLowerCase().includes("unique")?e.json({success:!1,error:"هذا المسار مستخدم بالفعل لهذه الشركة"},400):e.json({success:!1,error:t?.message||"Server error"},500)}});p.delete("/api/tenant-contact-affiliates/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid id"},400);const s=await e.env.DB.prepare(`
@@ -42163,7 +42211,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         document.getElementById('saveBtn').addEventListener('click', async function () {
           var msg = document.getElementById('formMsg');
           msg.textContent = '';
-          var path = (document.getElementById('pathInput').value || '').trim().toLowerCase().replace(/^/+/, '');
+          var path = (document.getElementById('pathInput').value || '').trim().toLowerCase().replace(/^\\/+/, '');
           var label = (document.getElementById('labelInput').value || '').trim();
           if (!path || !label) {
             msg.className = 'text-sm text-red-600';
@@ -42812,7 +42860,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `):e.redirect("/login")});p.get("/:slug/:affiliatePath",async e=>{const t=le(e.req.param("slug")),a=Ee(e.req.param("affiliatePath"));if(!t||de(t)||!a||!Ie(a))return e.notFound();const s=await e.env.DB.prepare(`
+  `):e.redirect("/login")});p.get("/:slug/:affiliatePath",async e=>{const t=le(e.req.param("slug")),a=Ie(e.req.param("affiliatePath"));if(!t||de(t)||!a||!Se(a))return e.notFound();const s=await e.env.DB.prepare(`
     SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
@@ -42822,9 +42870,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
-  `).bind(s.id,a).first();return n?e.html(pt(s,n)):e.notFound()});p.get("/:slug",async e=>{const t=le(e.req.param("slug"));if(!t||de(t))return e.notFound();const a=await e.env.DB.prepare(`
+  `).bind(s.id,a).first();return n?e.html(ut(s,n)):e.notFound()});p.get("/:slug",async e=>{const t=le(e.req.param("slug"));if(!t||de(t))return e.notFound();const a=await e.env.DB.prepare(`
     SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
-  `).bind(t).first();return a?e.html(pt(a,null)):e.notFound()});const Me=new et,ms=Object.assign({"/src/index.tsx":p});let ft=!1;for(const[,e]of Object.entries(ms))e&&(Me.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Me.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),ft=!0);if(!ft)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Me as default};
+  `).bind(t).first();return a?e.html(ut(a,null)):e.notFound()});const Fe=new tt,gs=Object.assign({"/src/index.tsx":p});let bt=!1;for(const[,e]of Object.entries(gs))e&&(Fe.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Fe.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),bt=!0);if(!bt)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Fe as default};

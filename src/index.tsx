@@ -794,6 +794,10 @@ function normalizeRoleId(roleId: unknown): number | null {
   return legacyMap[n] ?? n
 }
 
+function jsonForInlineScript(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
 function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined): string {
   const normalizedRoleId = normalizeRoleId(roleId)
   const raw = (roleName || '').trim()
@@ -805,7 +809,7 @@ function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined
   // Numeric 3 = sales supervisor (even if an old migration relabeled the roles row as "employee"/موظف)
   if (normalizedRoleId === 3) return 'مشرف المبيعات'
   if (normalizedRoleId === 4) return 'موظف'
-  if (normalizedRoleId === 5) return 'وكيل بنك'
+  if (normalizedRoleId === 5) return 'موظف التمويل'
 
   // Legacy English keys from older seeds / custom role rows (when role_id is missing or non-standard)
   if (rn === 'supervisor') return 'مشرف المبيعات'
@@ -3440,15 +3444,15 @@ app.post('/api/users', async (c) => {
     if (requestedRoleId === 5) {
       const canCreateBankAgent = isSuperAdminUser(userInfo) || userInfo.roleId === 2
       if (!canCreateBankAgent) {
-        return c.json({ success: false, error: 'غير مسموح بإنشاء وكيل بنك' }, 403)
+        return c.json({ success: false, error: 'غير مسموح بإنشاء موظف التمويل' }, 403)
       }
       const tid = typeof tenant_id === 'number' ? tenant_id : parseInt(String(tenant_id || ''), 10)
       if (!tid || Number.isNaN(tid)) {
-        return c.json({ success: false, error: 'يجب اختيار الشركة لوكيل البنك' }, 400)
+        return c.json({ success: false, error: 'يجب اختيار الشركة لموظف التمويل' }, 400)
       }
       const bid = Number.parseInt(String(assignedBankRaw || ''), 10)
       if (Number.isNaN(bid) || bid <= 0) {
-        return c.json({ success: false, error: 'يجب اختيار البنك لوكيل البنك' }, 400)
+        return c.json({ success: false, error: 'يجب اختيار البنك لموظف التمويل' }, 400)
       }
       const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
       if (!okBank) {
@@ -4638,11 +4642,11 @@ app.post('/api/requests', async (c) => {
 
     if (assigned_bank_agent_id != null) {
       if (!selected_bank_id || Number.isNaN(selected_bank_id)) {
-        return c.json({ success: false, error: 'يجب اختيار البنك عند تعيين وكيل بنك' }, 400)
+        return c.json({ success: false, error: 'يجب اختيار البنك عند تعيين موظف التمويل' }, 400)
       }
       const tidNum = tenant_id != null ? Number(tenant_id) : NaN
       if (!tidNum || Number.isNaN(tidNum)) {
-        return c.json({ success: false, error: 'تعذر تحديد الشركة لتعيين وكيل البنك' }, 400)
+        return c.json({ success: false, error: 'تعذر تحديد الشركة لتعيين موظف التمويل' }, 400)
       }
       const agentOk = await validateBankAgentForFinancingRequest(
         c.env.DB,
@@ -4651,7 +4655,7 @@ app.post('/api/requests', async (c) => {
         assigned_bank_agent_id
       )
       if (!agentOk) {
-        return c.json({ success: false, error: 'وكيل البنك غير صالح لهذا البنك والشركة' }, 400)
+        return c.json({ success: false, error: 'موظف التمويل غير صالح لهذا البنك والشركة' }, 400)
       }
     }
     
@@ -7646,11 +7650,11 @@ app.get('/admin/panel', async (c) => {
     );
   }
   
-  // Replace placeholder with actual user data
+  // Inject user data at the fixed marker placed right before the main panel script.
   adminPanel = adminPanel.replace(
-    '<script>',
+    '<!--__PANEL_USER_BOOT__-->',
     `<script>
-      window.USER_DATA = ${JSON.stringify({
+      window.USER_DATA = ${jsonForInlineScript({
         id: user.id,
         username: user.username,
         full_name: user.full_name,
@@ -7661,13 +7665,12 @@ app.get('/admin/panel', async (c) => {
         tenant_id: user.tenant_id,
         company_name: user.company_name
       })};
-      window.USER_PERMISSIONS = ${JSON.stringify(permissionResults.map((p: any) => p.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${JSON.stringify(permissionResults)};
+      window.USER_PERMISSIONS = ${jsonForInlineScript(permissionResults.map((p: any) => p.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${jsonForInlineScript(permissionResults)};
       window.USER_ROLE_ID = ${normalizeRoleId(userInfo.roleId) ?? 4};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
-    </script>
-    <script>`
+    </script>`
   );
   
     return c.html(adminPanel);
@@ -15522,11 +15525,11 @@ app.get('/admin/requests/new', async (c) => {
                 <div id="bankAgentAssignWrap" class="md:col-span-2" style="display: none;">
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-user-tie text-amber-600 ml-1"></i>
-                    وكيل البنك (اختياري)
+                    موظف التمويل (اختياري)
                   </label>
                   <select name="assigned_bank_agent_id" id="newRequestBankAgentSelect"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">-- اختر وكيل البنك بعد اختيار البنك --</option>
+                    <option value="">-- اختر موظف التمويل بعد اختيار البنك --</option>
                   </select>
                   <p id="bankAgentAssignHint" class="text-xs text-gray-500 mt-1 hidden"></p>
                 </div>
@@ -15620,7 +15623,7 @@ app.get('/admin/requests/new', async (c) => {
               var tid = resolveTenantIdForBankAgents();
               if (!bankId) {
                 bankAgentWrap.style.display = 'none';
-                resetBankAgentSelect('-- اختر وكيل البنك بعد اختيار البنك --');
+                resetBankAgentSelect('-- اختر موظف التمويل بعد اختيار البنك --');
                 if (bankAgentHint) { bankAgentHint.classList.add('hidden'); bankAgentHint.textContent = ''; }
                 return;
               }
@@ -15628,7 +15631,7 @@ app.get('/admin/requests/new', async (c) => {
               if (tid == null || isNaN(tid)) {
                 resetBankAgentSelect('-- اختر العميل أولاً (لتحديد الشركة) --');
                 if (bankAgentHint) {
-                  bankAgentHint.textContent = 'لإسناد وكيل بنك، اختر عميلاً تابعاً لشركة أو سجّل الدخول بحساب شركة.';
+                  bankAgentHint.textContent = 'لإسناد موظف التمويل، اختر عميلاً تابعاً لشركة أو سجّل الدخول بحساب شركة.';
                   bankAgentHint.classList.remove('hidden');
                 }
                 return;
@@ -15646,7 +15649,7 @@ app.get('/admin/requests/new', async (c) => {
                 bankAgentSelect.innerHTML = '';
                 var emptyOpt = document.createElement('option');
                 emptyOpt.value = '';
-                emptyOpt.textContent = '-- بدون وكيل بنك --';
+                emptyOpt.textContent = '-- بدون موظف تمويل --';
                 bankAgentSelect.appendChild(emptyOpt);
                 if (data && data.success && Array.isArray(data.data)) {
                   data.data.forEach(function (u) {
@@ -20639,14 +20642,14 @@ app.post('/admin/users/:id', async (c) => {
     if (requestedRoleId === 5) {
       const canSetBankAgent = requesterIsSuperAdmin || requester.roleId === 2
       if (!canSetBankAgent) {
-        return c.html('<h1>غير مسموح</h1><p>لا يمكنك ضبط دور وكيل البنك.</p>', 403 as any)
+        return c.html('<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>', 403 as any)
       }
       if (!tidNum || Number.isNaN(tidNum)) {
-        return c.html('<h1>خطأ</h1><p>يجب ربط وكيل البنك بشركة.</p>', 400 as any)
+        return c.html('<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>', 400 as any)
       }
       const bid = Number.parseInt(String(assignedBankRaw || ''), 10)
       if (Number.isNaN(bid) || bid <= 0) {
-        return c.html('<h1>خطأ</h1><p>يجب اختيار البنك لوكيل البنك.</p>', 400 as any)
+        return c.html('<h1>خطأ</h1><p>يجب اختيار البنك لموظف التمويل.</p>', 400 as any)
       }
       const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tidNum, bid)
       if (!okBank) {
@@ -20986,7 +20989,7 @@ app.get('/admin/users-new', async (c) => {
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر البنك --</option>
                   </select>
-                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور وكيل البنك، ويقتصر على بنوك الشركة المختارة.</p>
+                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور موظف التمويل، ويقتصر على بنوك الشركة المختارة.</p>
                 </div>
                 
                 <!-- الحالة -->
@@ -23259,24 +23262,21 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
-      return c.json({ success: false, error: 'Forbidden' }, 403)
-    }
+    const rid = userInfo.roleId
+    if (rid == null) return c.json({ success: false, error: 'Forbidden' }, 403)
 
-    let tenantId: number | null = userInfo.roleId === 2 ? userInfo.tenantId : null
-    if (userInfo.roleId === 1) {
+    let tenantId: number | null = null
+    if (rid === 1) {
       const q = c.req.query('tenant_id')
       tenantId = q && /^\d+$/.test(String(q)) ? parseInt(String(q), 10) : null
-    }
-    if (!tenantId) {
-      return c.json(
-        { success: false, error: userInfo.roleId === 1 ? 'tenant_id مطلوب' : 'لا شركة مرتبطة' },
-        400
-      )
-    }
-
-    if (userInfo.roleId === 2 && userInfo.tenantId !== tenantId) {
-      return c.json({ success: false, error: 'Forbidden' }, 403)
+      if (!tenantId) {
+        return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
+      }
+    } else {
+      tenantId = userInfo.tenantId
+      if (!tenantId) {
+        return c.json({ success: false, error: 'لا شركة مرتبطة' }, 400)
+      }
     }
 
     const { results } = await c.env.DB.prepare(`
@@ -24084,7 +24084,7 @@ app.get('/admin/contact-affiliates', async (c) => {
         document.getElementById('saveBtn').addEventListener('click', async function () {
           var msg = document.getElementById('formMsg');
           msg.textContent = '';
-          var path = (document.getElementById('pathInput').value || '').trim().toLowerCase().replace(/^\/+/, '');
+          var path = (document.getElementById('pathInput').value || '').trim().toLowerCase().replace(/^\\/+/, '');
           var label = (document.getElementById('labelInput').value || '').trim();
           if (!path || !label) {
             msg.className = 'text-sm text-red-600';

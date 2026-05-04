@@ -319,6 +319,7 @@ export const usersManagementPage = () => `
       if (rid === 2 || rid === 12) return raw || 'حساب شركة';
       if (rid === 3 || rid === 13) return 'مشرف المبيعات';
       if (rid === 4 || rid === 14) return 'موظف';
+      if (rid === 5) return 'موظف التمويل';
       if (rn === 'supervisor') return 'مشرف المبيعات';
       if (rn === 'employee') return 'موظف';
       if (rn === 'company_admin') return 'حساب شركة';
@@ -334,6 +335,7 @@ export const usersManagementPage = () => `
         2: 'حساب شركة',
         3: 'مشرف المبيعات',
         4: 'موظف',
+        5: 'موظف التمويل',
         11: 'مدير النظام',
         12: 'حساب شركة',
         13: 'مشرف المبيعات',
