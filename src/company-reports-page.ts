@@ -166,12 +166,9 @@ export const companyReportsPage = `
             </div>
         </div>
 
-        <!-- أزرار العودة -->
-        <div class="flex gap-3">
-            <a href="/admin/panel" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg">
-                <i class="fas fa-arrow-right mr-2"></i>
-                العودة للوحة التحكم
-            </a>
+        <!-- العودة للوحة الرئيسية -->
+        <div class="border-t border-slate-200/90 pt-3 mt-6">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
 

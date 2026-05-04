@@ -268,12 +268,12 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       try {
         r = await c.env.DB.prepare(
           `INSERT INTO contracts (
-          tenant_id, contract_number, template_id, template_name, date_gregorian, date_hijri, day_name,
+          tenant_id, contract_number, template_id, template_name, date_gregorian, day_name,
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -281,7 +281,6 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.template_id != null ? Number(body.template_id) : null,
             body.template_name ?? null,
             body.date_gregorian ?? null,
-            body.date_hijri ?? null,
             body.day_name ?? null,
             body.party_one_name ?? null,
             body.party_one_phone ?? null,
@@ -434,7 +433,6 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       maybe('template_id', 'template_id')
       maybe('template_name', 'template_name')
       maybe('date_gregorian', 'date_gregorian')
-      maybe('date_hijri', 'date_hijri')
       maybe('day_name', 'day_name')
       maybe('party_one_name', 'party_one_name')
       maybe('party_one_phone', 'party_one_phone')

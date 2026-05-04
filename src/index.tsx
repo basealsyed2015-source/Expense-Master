@@ -75,6 +75,266 @@ function isMissingCustomerSolutionsColumnError(e: unknown): boolean {
   return m.includes('solutions_json') && (m.includes('no such column') || m.includes('no column named'))
 }
 
+function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? e ?? '')
+  if (!(m.includes('no such column') || m.includes('no column named'))) return false
+  return (
+    m.includes('id_attachment_url') ||
+    m.includes('bank_statement_attachment_url') ||
+    m.includes('salary_attachment_url') ||
+    m.includes('additional_attachment_url')
+  )
+}
+
+type AttachmentSyncPayload = {
+  id_attachment_url?: string | null
+  bank_statement_attachment_url?: string | null
+  salary_attachment_url?: string | null
+  additional_attachment_url?: string | null
+}
+
+async function syncAttachmentsForCustomer(
+  db: any,
+  customerId: string | number | null | undefined,
+  attachments: AttachmentSyncPayload
+) {
+  if (!customerId) return
+
+  const entries = Object.entries(attachments).filter(([, value]) => value !== undefined)
+  if (entries.length === 0) return
+
+  const setSql = entries.map(([column]) => `${column} = ?`).join(', ')
+  const values = entries.map(([, value]) => value ?? null)
+
+  try {
+    await db.prepare(`
+      UPDATE customers
+      SET ${setSql}
+      WHERE id = ?
+    `).bind(...values, customerId).run()
+  } catch (customerAttachmentError) {
+    if (!isMissingCustomerAttachmentsColumnError(customerAttachmentError)) throw customerAttachmentError
+  }
+
+  await db.prepare(`
+    UPDATE financing_requests
+    SET ${setSql}
+    WHERE customer_id = ?
+  `).bind(...values, customerId).run()
+}
+
+function normalizeArabicAndPersianDigits(value: string): string {
+  return value
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+}
+
+function normalizeCustomerPhoneForStorage(rawPhone: string | null | undefined): { normalized: string | null; error: string | null } {
+  const raw = normalizeArabicAndPersianDigits(String(rawPhone ?? '').trim())
+  let digits = raw.replace(/[^\d]/g, '')
+  if (!digits) {
+    return { normalized: null, error: 'يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX' }
+  }
+
+  if (digits.startsWith('00966')) {
+    digits = digits.slice(2)
+  } else if (!digits.startsWith('966')) {
+    digits = `966${digits.replace(/^0+/, '')}`
+  }
+
+  const localPart = digits.startsWith('966') ? digits.slice(3) : digits
+  if (!/^5\d{8}$/.test(localPart)) {
+    return {
+      normalized: null,
+      error: 'صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678'
+    }
+  }
+
+  return { normalized: `966${localPart}`, error: null }
+}
+
+function customerPhoneInputValue(rawPhone: string | null | undefined): string {
+  const digits = normalizeArabicAndPersianDigits(String(rawPhone ?? '').trim()).replace(/[^\d]/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('00966')) return digits.slice(5)
+  if (digits.startsWith('966')) return digits.slice(3)
+  if (digits.startsWith('05') && digits.length === 10) return digits.slice(1)
+  return digits
+}
+
+const RESERVED_ROOT_SLUGS = new Set([
+  'admin',
+  'api',
+  'c',
+  'calculator',
+  'calculator-old',
+  'contracts-module',
+  'forgot-password',
+  'login',
+  'packages',
+  'subscribe',
+  'test'
+])
+
+function normalizeTenantSlug(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function isReservedRootSlug(slug: string): boolean {
+  return RESERVED_ROOT_SLUGS.has(slug)
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function normalizeAffiliatePathSegment(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+/g, '')
+}
+
+function isValidAffiliatePathSegment(seg: string): boolean {
+  if (!seg || seg.length > 64) return false
+  if (!/^[a-z0-9_-]+$/.test(seg)) return false
+  if (RESERVED_ROOT_SLUGS.has(seg)) return false
+  return true
+}
+
+type PublicContactTenantRow = {
+  company_name: string
+  slug: string
+  contact_email: string | null
+  contact_phone: string | null
+  primary_color: string | null
+  secondary_color: string | null
+}
+
+function buildPublicContactPageHtml(
+  tenant: PublicContactTenantRow,
+  affiliate: null | { path_segment: string; label: string }
+): string {
+  const companyName = escapeHtml(tenant.company_name)
+  const contactEmail = escapeHtml(tenant.contact_email || '')
+  const contactPhone = escapeHtml(tenant.contact_phone || '')
+  const primaryColor = escapeHtml(tenant.primary_color || '#0f766e')
+  const secondaryColor = escapeHtml(tenant.secondary_color || '#14b8a6')
+  const affiliatePathJson = JSON.stringify(affiliate?.path_segment ?? null)
+  const affiliateLabelEsc = affiliate ? escapeHtml(affiliate.label) : ''
+  const affiliateBanner = affiliate
+    ? `<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
+         <i class="fas fa-bullhorn ml-1"></i> المصدر: <strong>${affiliateLabelEsc}</strong>
+       </div>`
+    : ''
+
+  return `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>تواصل مع ${companyName}</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    </head>
+    <body class="min-h-screen bg-gray-50">
+      <div class="min-h-screen p-6" style="background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor});">
+        <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div class="lg:col-span-2 bg-white rounded-2xl shadow-2xl p-8">
+            <div class="text-center mb-8">
+              <div class="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl" style="background: ${primaryColor};">
+                <i class="fas fa-comments"></i>
+              </div>
+              <h1 class="text-3xl font-bold text-gray-900 mb-2">${companyName}</h1>
+              <p class="text-gray-600">أرسل بياناتك وسيتم التواصل معك</p>
+            </div>
+            ${affiliateBanner}
+            <form id="contactForm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">الاسم</label>
+                <input id="customer_name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب اسمك" required />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال</label>
+                <input id="customer_phone" type="tel" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="05xxxxxxxx" required />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">رسالتك</label>
+                <textarea id="customer_message" rows="5" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب رسالتك هنا..." required></textarea>
+              </div>
+              <button id="submitBtn" type="submit" class="w-full text-white font-semibold py-3 rounded-lg" style="background:${primaryColor};">
+                <i class="fas fa-paper-plane ml-2"></i>إرسال
+              </button>
+              <p id="formStatus" class="text-sm"></p>
+            </form>
+          </div>
+
+          <div class="space-y-4">
+            <div class="bg-white rounded-xl shadow-lg p-5">
+              <p class="text-sm text-gray-500 mb-1">رقم التواصل</p>
+              <p class="text-lg font-semibold text-gray-900 break-words">${contactPhone || 'غير متوفر'}</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-5">
+              <p class="text-sm text-gray-500 mb-1">البريد الإلكتروني</p>
+              <p class="text-lg font-semibold text-gray-900 break-words">${contactEmail || 'غير متوفر'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <script>
+        const AFFILIATE_PATH = ${affiliatePathJson};
+        const form = document.getElementById('contactForm');
+        const statusEl = document.getElementById('formStatus');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          statusEl.textContent = '';
+          statusEl.className = 'text-sm';
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'جاري الإرسال...';
+
+          const payload = {
+            customer_name: document.getElementById('customer_name').value.trim(),
+            customer_phone: document.getElementById('customer_phone').value.trim(),
+            customer_message: document.getElementById('customer_message').value.trim()
+          };
+          if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
+
+          try {
+            const res = await fetch('/api/public/${tenant.slug}/contact-submissions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'تعذر إرسال الطلب');
+            }
+
+            statusEl.textContent = data.message || 'تم الإرسال بنجاح';
+            statusEl.className = 'text-sm text-green-700';
+            form.reset();
+          } catch (err) {
+            statusEl.textContent = err?.message || 'حدث خطأ أثناء الإرسال';
+            statusEl.className = 'text-sm text-red-700';
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i>إرسال';
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `
+}
+
 /** Schema has no ON DELETE CASCADE from banks; clear dependents so DELETE FROM banks succeeds. */
 async function deleteBankAndDependents(db: D1Database, bankId: string | number) {
   await db.batch([
@@ -326,6 +586,62 @@ app.use('*', async (c, next) => {
   await next()
 })
 
+// Bank agents (role 5): only read scoped funding requests, sidebar request counts, and auth logout.
+app.use('/api/*', async (c, next) => {
+  const p = c.req.path
+  if (
+    p === '/api/auth/login' ||
+    p === '/api/auth/logout' ||
+    p.startsWith('/api/auth/forgot') ||
+    p.startsWith('/api/auth/reset')
+  ) {
+    await next()
+    return
+  }
+  const info = await getUserInfo(c)
+  if (normalizeRoleId(info.roleId) !== 5) {
+    await next()
+    return
+  }
+  const method = c.req.method
+  if (p === '/api/financing-requests' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/sidebar-filter-counts' && method === 'GET') {
+    await next()
+    return
+  }
+  return c.json({ success: false, error: 'غير مصرح' }, 403)
+})
+
+// Bank agents: only admin + API (each further restricted). No calculator, home, /c/*, packages, etc.
+app.use('*', async (c, next) => {
+  if (c.req.method === 'OPTIONS') {
+    await next()
+    return
+  }
+  const path = c.req.path || ''
+  if (path.startsWith('/admin/')) {
+    await next()
+    return
+  }
+  if (path.startsWith('/api/')) {
+    await next()
+    return
+  }
+  const info = await getUserInfo(c)
+  if (!info.userId || normalizeRoleId(info.roleId) !== 5) {
+    await next()
+    return
+  }
+  if (path === '/login' || path === '/forgot-password' || path.startsWith('/.well-known')) {
+    await next()
+    return
+  }
+  return c.redirect('/admin/requests')
+})
+
 // ===================================
 // MULTI-TENANT MIDDLEWARE & HELPERS
 // ===================================
@@ -406,6 +722,18 @@ function parseOptionalInt(value?: string): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+function parseLoginTimestampToMs(value?: string | null): number | null {
+  if (!value) {
+    return null
+  }
+  // SQLite timestamps are commonly stored as "YYYY-MM-DD HH:MM:SS[.SSS]".
+  // Normalize to ISO-8601 UTC to compare against token issue time.
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+  const withTimezone = /Z$|[+-]\d\d:\d\d$/.test(normalized) ? normalized : `${normalized}Z`
+  const ms = Date.parse(withTimezone)
+  return Number.isNaN(ms) ? null : ms
+}
+
 const DEFAULT_OBLIGATION_TYPE_NAMES = [
   'قرض شخصي',
   'قرض عقاري',
@@ -477,6 +805,7 @@ function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined
   // Numeric 3 = sales supervisor (even if an old migration relabeled the roles row as "employee"/موظف)
   if (normalizedRoleId === 3) return 'مشرف المبيعات'
   if (normalizedRoleId === 4) return 'موظف'
+  if (normalizedRoleId === 5) return 'وكيل بنك'
 
   // Legacy English keys from older seeds / custom role rows (when role_id is missing or non-standard)
   if (rn === 'supervisor') return 'مشرف المبيعات'
@@ -515,7 +844,13 @@ async function canUserAccessCustomer(
 // Get tenant_id for current user (for multi-tenancy filtering)
 async function getUserInfo(
   c: any
-): Promise<{ userId: number | null; tenantId: number | null; roleId: number | null; tokenRoleId: number | null }> {
+): Promise<{
+  userId: number | null
+  tenantId: number | null
+  roleId: number | null
+  tokenRoleId: number | null
+  assignedBankId: number | null
+}> {
   try {
     console.log('🔍 [getUserInfo] Starting user info retrieval...')
     // Try to get token from Authorization Header (for API calls)
@@ -548,7 +883,8 @@ async function getUserInfo(
         userId: null,
         tenantId: queryTenantId ? parseInt(queryTenantId) : null,
         roleId: null,
-        tokenRoleId: null
+        tokenRoleId: null,
+        assignedBankId: null
       }
     }
     
@@ -558,7 +894,7 @@ async function getUserInfo(
     const normalizedToken = normalizeAuthToken(token)
     if (!normalizedToken) {
       console.log('❌ [getUserInfo] Invalid token format after normalization')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
     }
 
     console.log('🔍 [getUserInfo] Decoding token...')
@@ -569,37 +905,56 @@ async function getUserInfo(
     const userId = parseOptionalInt(parts[0])
     if (!userId) {
       console.log('❌ [getUserInfo] Invalid token payload - no userId')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
     }
 
     const tenantIdFromToken = parseOptionalInt(parts[1])
     const tokenRoleId = normalizeRoleId(parseOptionalInt(parts[2]))
-    console.log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId })
+    const tokenIssuedAtMs = parseOptionalInt(parts[3])
+    if (!tokenIssuedAtMs) {
+      console.log('❌ [getUserInfo] Invalid token payload - missing issue timestamp')
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+    }
+    console.log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId, tokenIssuedAtMs })
     
     // Safety check for DB binding
     if (!c.env?.DB) {
       console.error('❌ [getUserInfo] DB binding not available')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId }
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: tokenRoleId ?? null, assignedBankId: null }
     }
     
     console.log('🔍 [getUserInfo] Querying database for user:', userId)
     const user = await c.env.DB.prepare(`
-      SELECT id, tenant_id, role_id FROM users WHERE id = ?
+      SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
     `).bind(userId).first()
     
     if (!user) {
       console.log('❌ [getUserInfo] User not found in database')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId }
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId, assignedBankId: null }
     }
     
     console.log('✅ [getUserInfo] User found:', { id: user.id, tenant_id: user.tenant_id, role_id: user.role_id })
+
+    const userLastLoginMs = parseLoginTimestampToMs((user as { last_login?: string | null }).last_login ?? null)
+    if (userLastLoginMs && tokenIssuedAtMs < userLastLoginMs) {
+      console.log('❌ [getUserInfo] Token invalidated by a newer login', {
+        tokenIssuedAtMs,
+        userLastLoginMs
+      })
+      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+    }
     
     // Super Admin (role_id = 1) can see all data
     const normalizedRoleId = normalizeRoleId(user.role_id)
+    const assignedBankFromRow = (user as { assigned_bank_id?: number | null }).assigned_bank_id
+    const assignedBankId =
+      assignedBankFromRow != null && !Number.isNaN(Number(assignedBankFromRow))
+        ? Number(assignedBankFromRow)
+        : null
 
     if (normalizedRoleId === 1) {
       const queryTenantId = c.req.query('tenant_id')
-      const result = { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId }
+      const result = { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId, assignedBankId: null }
       console.log('✅ [getUserInfo] Returning super admin info:', result)
       return result
     }
@@ -611,7 +966,8 @@ async function getUserInfo(
       userId: user.id,
       tenantId: dbTenantId != null ? dbTenantId : tenantIdFromToken,
       roleId: normalizedRoleId,
-      tokenRoleId
+      tokenRoleId,
+      assignedBankId: normalizedRoleId === 5 ? assignedBankId : null
     }
     console.log('✅ [getUserInfo] Returning user info:', result)
     return result
@@ -632,7 +988,46 @@ async function getUserInfo(
     
     console.error('❌ [getUserInfo] ERROR DUMP:', errorDump)
     // Don't throw - return null values so request can continue
-    return { userId: null, tenantId: null, roleId: null, tokenRoleId: null }
+    return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+  }
+}
+
+async function validateBankAgentForFinancingRequest(
+  db: D1Database,
+  tenantId: number,
+  bankId: number,
+  agentUserId: number
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS ok FROM users
+       WHERE id = ? AND is_active = 1 AND role_id = 5
+         AND tenant_id = ? AND assigned_bank_id = ?`
+    )
+    .bind(agentUserId, tenantId, bankId)
+    .first()
+  return Boolean(row)
+}
+
+async function validateAssignedBankBelongsToTenant(
+  db: D1Database,
+  tenantId: number,
+  bankId: number
+): Promise<boolean> {
+  try {
+    const row = await db
+      .prepare(
+        `SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)`
+      )
+      .bind(bankId, tenantId)
+      .first()
+    return Boolean(row)
+  } catch {
+    const row = await db
+      .prepare(`SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)`)
+      .bind(bankId, tenantId)
+      .first()
+    return Boolean(row)
   }
 }
 
@@ -653,7 +1048,7 @@ async function loadCustomersForAdminForms(
   userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
   opts?: { scopeSuperAdminToTenant?: boolean }
 ): Promise<{ results: any[] }> {
-  let customersQuery = 'SELECT id, full_name, phone, national_id, city FROM customers'
+  let customersQuery = 'SELECT id, full_name, phone, national_id, city, tenant_id FROM customers'
   const customersParams: any[] = []
 
   if (userInfo.roleId === 1) {
@@ -683,12 +1078,15 @@ async function loadCustomersForAdminForms(
     customersQuery += ' WHERE tenant_id = ?'
     customersParams.push(userInfo.tenantId)
   } else if (userInfo.roleId === 4) {
-    // Employee can browse all customers in their company scope.
-    if (!userInfo.tenantId) {
+    // Employee can browse only assigned customers in their company scope.
+    if (!userInfo.tenantId || !userInfo.userId) {
       return { results: [] }
     }
-    customersQuery += ' WHERE tenant_id = ?'
-    customersParams.push(userInfo.tenantId)
+    customersQuery += ` WHERE tenant_id = ? AND EXISTS (
+      SELECT 1 FROM customer_assignments ca
+      WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+    )`
+    customersParams.push(userInfo.tenantId, userInfo.userId)
   } else {
     customersQuery += ' WHERE 1 = 0'
   }
@@ -766,6 +1164,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/settings',
     '/admin/hr',
     '/admin/contracts',
+    '/admin/follow-ups',
   ],
   '2': [
     '/admin/dashboard',
@@ -778,6 +1177,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/users',
     '/admin/hr',
     '/admin/contracts',
+    '/admin/follow-ups',
     '/admin/notifications',
     '/calculator',
     '/',
@@ -791,6 +1191,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/rates',
     '/admin/contracts',
     '/admin/contracts/list',
+    '/admin/follow-ups',
     '/calculator',
     '/',
   ],
@@ -798,9 +1199,11 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/requests',
+    '/admin/my-tasks',
     '/calculator',
     '/',
   ],
+  '5': ['/admin/requests'],
 }
 
 function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number }): string {
@@ -865,6 +1268,56 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
   #global-persistent-sidebar .gps-nav button:hover { background: #eff6ff; color: #1d4ed8; }
   #global-persistent-sidebar .gps-nav a.gps-active { background: #eff6ff; color: #1d4ed8; font-weight: 700; }
   #global-persistent-sidebar .gps-nav i { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
+  #global-persistent-sidebar .gps-collapsible { margin-bottom: 2px; }
+  #global-persistent-sidebar .gps-collapsible-row { display: flex; align-items: center; gap: 4px; width: 100%; }
+  #global-persistent-sidebar .gps-collapsible-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: calc(100% - 36px);
+  }
+  #global-persistent-sidebar .gps-nav button.gps-collapsible-arrow {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+  }
+  #global-persistent-sidebar .gps-nav button.gps-collapsible-arrow i.gps-chevron { width: auto; font-size: 12px; transition: transform 0.2s ease; }
+  #global-persistent-sidebar .gps-nav button.gps-collapsible-arrow:hover { background: #e2e8f0; color: #1e40af; }
+  #global-persistent-sidebar .gps-collapsible.gps-open .gps-collapsible-arrow i.gps-chevron { transform: rotate(180deg); }
+  #global-persistent-sidebar .gps-submenu { display: none; margin: 2px 0 4px; padding-right: 18px; }
+  #global-persistent-sidebar .gps-collapsible.gps-open .gps-submenu { display: block; }
+  #global-persistent-sidebar .gps-submenu a {
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    margin-bottom: 2px;
+    color: #475569;
+  }
+  #global-persistent-sidebar .gps-count-badge {
+    margin-inline-start: auto;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
   #global-persistent-sidebar .gps-divider { margin: 4px 8px; border: 0; border-top: 1px solid #f1f5f9; }
   body { margin-right: 260px !important; }
   @media (max-width: 768px) {
@@ -884,10 +1337,60 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     </div>
   </div>
   <nav class="gps-nav">
-    <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>مخلص العملاء</a>
-    <a href="/admin/customers"><i class="fas fa-users"></i>العملاء</a>
-    <a href="/admin/requests"><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
+    <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>ملخص العملاء</a>
+    <a href="/admin/customers" data-customers-main-link><i class="fas fa-users"></i>العملاء</a>
+    <div class="gps-collapsible gps-open" data-customers-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/customers?ratingFilter=all" class="gps-collapsible-main">
+        <i class="fas fa-users"></i>
+        <span>العملاء</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-customers-toggle aria-label="توسيع أو طي قائمة تقييم العملاء">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <a href="/admin/customers?ratingFilter=all" data-customer-rating-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/customers?ratingFilter=0" data-customer-rating-filter="0"><i class="fas fa-minus-circle"></i>بدون تقييم</a>
+        <a href="/admin/customers?ratingFilter=5" data-customer-rating-filter="5"><i class="fas fa-star"></i>عميل ممتاز</a>
+        <a href="/admin/customers?ratingFilter=4" data-customer-rating-filter="4"><i class="fas fa-thumbs-up"></i>عميل جيد</a>
+        <a href="/admin/customers?ratingFilter=3" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل مقبول</a>
+        <a href="/admin/customers?ratingFilter=2" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
+        <a href="/admin/customers?ratingFilter=1" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
+      </div>
+    </div>
+    <a href="/admin/requests" data-requests-main-link><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
+    <div class="gps-collapsible gps-open" data-requests-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/requests?requestStatusFilter=all" class="gps-collapsible-main">
+        <i class="fas fa-file-invoice-dollar"></i>
+        <span>طلبات التمويل</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-requests-toggle aria-label="توسيع أو طي قائمة حالات طلبات التمويل">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <a href="/admin/requests?requestStatusFilter=all" data-request-status-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D8%B3%D9%88%D8%AF%D8%A9" data-request-status-filter="مسودة"><i class="fas fa-file"></i>مسودة</a>
+        <a href="/admin/requests?requestStatusFilter=%D8%AA%D9%85%20%D8%A7%D9%84%D8%A5%D8%B1%D8%B3%D8%A7%D9%84" data-request-status-filter="تم الإرسال"><i class="fas fa-paper-plane"></i>تم الإرسال</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%86%D9%88%D8%A7%D9%82%D8%B5%20%D9%85%D8%B3%D8%AA%D9%86%D8%AF%D8%A7%D8%AA" data-request-status-filter="نواقص مستندات"><i class="fas fa-file-alt"></i>نواقص مستندات</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D8%B1%D9%81%D9%88%D8%B6" data-request-status-filter="مرفوض"><i class="fas fa-times-circle"></i>مرفوض</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%84%D8%BA%D9%8A%20%D9%85%D9%86%20%D8%A7%D9%84%D8%B9%D9%85%D9%8A%D9%84" data-request-status-filter="ملغي من العميل"><i class="fas fa-ban"></i>ملغي من العميل</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D9%85%D8%B9%D8%A7%D9%84%D8%AC%D8%A9" data-request-status-filter="قيد المعالجة"><i class="fas fa-cogs"></i>قيد المعالجة</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%AF%D8%B1%D8%A7%D8%B3%D8%A9%20%D8%A7%D9%84%D8%A7%D8%A6%D8%AA%D9%85%D8%A7%D9%86%D9%8A%D8%A9" data-request-status-filter="قيد الدراسة الائتمانية"><i class="fas fa-search"></i>قيد الدراسة الائتمانية</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%85%D8%B4%D8%B1%D9%88%D8%B7%D8%A9" data-request-status-filter="موافقة مشروطة"><i class="fas fa-check-double"></i>موافقة مشروطة</a>
+        <a href="/admin/requests?requestStatusFilter=%D8%AC%D8%A7%D9%87%D8%B2%20%D9%84%D9%84%D8%AA%D9%88%D9%82%D9%8A%D8%B9%2F%D8%AA%D9%88%D8%AB%D9%8A%D9%82" data-request-status-filter="جاهز للتوقيع/توثيق"><i class="fas fa-pen-fancy"></i>جاهز للتوقيع/توثيق</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%20%D8%B9%D9%84%D9%8A%D9%87" data-request-status-filter="موافق عليه"><i class="fas fa-check-circle"></i>موافق عليه</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%86%D9%87%D8%A7%D8%A6%D9%8A%D8%A9" data-request-status-filter="موافقة نهائية"><i class="fas fa-check-circle"></i>موافقة نهائية</a>
+        <a href="/admin/requests?requestStatusFilter=%D8%AA%D9%85%20%D8%A7%D9%84%D8%B5%D8%B1%D9%81" data-request-status-filter="تم الصرف"><i class="fas fa-money-bill-wave"></i>تم الصرف</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%86%D8%B4%D8%B7%2F%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%B3%D8%AF%D8%A7%D8%AF" data-request-status-filter="نشط/قيد السداد"><i class="fas fa-sync"></i>نشط/قيد السداد</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%8F%D8%BA%D9%84%D9%82%2F%D9%85%D8%B3%D8%AF%D8%AF" data-request-status-filter="مُغلق/مسدد"><i class="fas fa-archive"></i>مُغلق/مسدد</a>
+      </div>
+    </div>
+    <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>مهام المتابعة</a>
     <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
+    <a href="/admin/follow-ups"><i class="fas fa-address-card"></i>متابعة التواصل</a>
     <a href="/admin/rates"><i class="fas fa-percentage"></i>نسب التمويل</a>
     <a href="/admin/payments"><i class="fas fa-receipt"></i>سندات القبض</a>
     <a href="/admin/banks"><i class="fas fa-university"></i>البنوك</a>
@@ -929,17 +1432,42 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
       }
 
       var userAllowed = ALLOWED[String(ROLE_ID)] || ALLOWED['4'];
+      var customersMainLink = sidebar.querySelector('[data-customers-main-link]');
+      var customersCollapsible = sidebar.querySelector('[data-customers-collapsible]');
+      var requestsMainLink = sidebar.querySelector('[data-requests-main-link]');
+      var requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]');
+
+      if (customersMainLink && customersCollapsible) {
+        customersMainLink.style.display = 'none';
+        customersCollapsible.style.display = 'block';
+        customersCollapsible.classList.remove('gps-open');
+      }
+
+      if (requestsMainLink && requestsCollapsible) {
+        requestsMainLink.style.display = 'none';
+        requestsCollapsible.style.display = 'block';
+        requestsCollapsible.classList.remove('gps-open');
+      }
 
       sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (link) {
         var href = link.getAttribute('href');
         if (!href) return;
+        if (link.hasAttribute('data-customers-main-link')) {
+          link.style.display = 'none';
+          return;
+        }
+        if (link.hasAttribute('data-requests-main-link')) {
+          link.style.display = 'none';
+          return;
+        }
         var normalizedHref = href.split('?')[0];
         var isSuperAdminOnly = link.getAttribute('data-superadmin-only') === 'true';
         if (isSuperAdminOnly && ROLE_ID !== 1) {
           link.style.display = 'none';
           return;
         }
-        var isAlways = normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0;
+        var isAlways =
+          ROLE_ID !== 5 && (normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0);
         if (isAlways || userAllowed.indexOf(normalizedHref) !== -1) {
           link.style.display = 'flex';
         } else {
@@ -948,18 +1476,87 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
       });
 
       var path = window.location.pathname;
+      var query = new URLSearchParams(window.location.search);
       sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (a) {
         a.classList.remove('gps-active');
         var h = a.getAttribute('href');
         if (!h || h === '/') return;
-        if (path === h || path.indexOf(h + '/') === 0) {
+        var url = new URL(h, window.location.origin);
+        var hrefPath = url.pathname;
+        var hrefRatingFilter = url.searchParams.get('ratingFilter');
+        var hrefRequestStatusFilter = url.searchParams.get('requestStatusFilter');
+        var activeMatch = path === hrefPath || path.indexOf(hrefPath + '/') === 0;
+        if (activeMatch && hrefRatingFilter && query.get('ratingFilter') !== hrefRatingFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch && hrefRequestStatusFilter && query.get('requestStatusFilter') !== hrefRequestStatusFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch) {
           a.classList.add('gps-active');
         }
       });
     }
 
+    function renderSidebarCount(link, count) {
+      if (!link) return;
+      var badge = link.querySelector('.gps-count-badge');
+      if (count == null) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'gps-count-badge';
+        link.appendChild(badge);
+      }
+      badge.textContent = String(count || 0);
+    }
+
+    function hydrateSidebarFilterCounts() {
+      fetch('/api/sidebar-filter-counts', { credentials: 'same-origin' })
+        .then(function (res) { return res.ok ? res.json() : Promise.reject(new Error('Failed to load sidebar counts')); })
+        .then(function (payload) {
+          if (!payload || payload.success !== true) return;
+
+          var customers = payload.customers || {};
+          var requests = payload.requests || {};
+          var requestStatusCounts = requests.byState || {};
+
+          document.querySelectorAll('#global-persistent-sidebar [data-customer-rating-filter]').forEach(function (link) {
+            var key = link.getAttribute('data-customer-rating-filter') || 'all';
+            var value = customers[key];
+            if (typeof value !== 'number') value = null;
+            renderSidebarCount(link, value);
+          });
+
+          document.querySelectorAll('#global-persistent-sidebar [data-request-status-filter]').forEach(function (link) {
+            var key = link.getAttribute('data-request-status-filter') || 'all';
+            var value = key === 'all' ? requests.all : requestStatusCounts[key];
+            if (typeof value !== 'number') value = null;
+            renderSidebarCount(link, value);
+          });
+        })
+        .catch(function () {});
+    }
+
+    document.addEventListener('click', function (event) {
+      var toggle = event.target.closest('#global-persistent-sidebar [data-customers-collapsible] [data-customers-toggle]');
+      if (!toggle) {
+        toggle = event.target.closest('#global-persistent-sidebar [data-requests-collapsible] [data-requests-toggle]');
+      }
+      if (!toggle) return;
+      var wrapper = toggle.closest('[data-customers-collapsible]') || toggle.closest('[data-requests-collapsible]');
+      if (!wrapper) return;
+      event.preventDefault();
+      event.stopPropagation();
+      wrapper.classList.toggle('gps-open');
+    });
+
     applyGlobalSidebarPermissions();
+    hydrateSidebarFilterCounts();
     document.addEventListener('DOMContentLoaded', applyGlobalSidebarPermissions);
+    document.addEventListener('DOMContentLoaded', hydrateSidebarFilterCounts);
   })();
 </script>
 `
@@ -998,6 +1595,21 @@ app.use('/admin/*', async (c, next) => {
   if (isSuperAdminOnly && !isSuperAdmin) {
     // Redirect to dashboard (or you can render 403)
     return c.redirect('/admin/dashboard')
+  }
+
+  const rid = normalizeRoleId(info.roleId)
+  if (rid === 5) {
+    const ok =
+      pathname === '/admin/requests' ||
+      (pathname.startsWith('/admin/requests/') &&
+        pathname !== '/admin/requests/new' &&
+        !pathname.includes('/edit') &&
+        !pathname.includes('/delete') &&
+        !pathname.includes('/workflow') &&
+        !pathname.includes('/report'))
+    if (!ok) {
+      return c.redirect('/admin/requests')
+    }
   }
 
   await next()
@@ -1177,16 +1789,21 @@ app.get('/api/tenants', async (c) => {
 app.post('/api/tenants', async (c) => {
   try {
     const data = await c.req.json()
+    const slug = normalizeTenantSlug(data.slug)
     
     // Validate required fields
-    if (!data.company_name || !data.slug) {
+    if (!data.company_name || !slug) {
       return c.json({ success: false, error: 'اسم الشركة والـ Slug مطلوبان' }, 400)
+    }
+
+    if (isReservedRootSlug(slug)) {
+      return c.json({ success: false, error: 'هذا الـ Slug محجوز ولا يمكن استخدامه' }, 400)
     }
     
     // Check if slug already exists
     const existing = await c.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
-    `).bind(data.slug).first()
+    `).bind(slug).first()
     
     if (existing) {
       return c.json({ success: false, error: 'الـ Slug موجود بالفعل' }, 400)
@@ -1205,8 +1822,8 @@ app.post('/api/tenants', async (c) => {
     `).bind(
       publicUuid,
       data.company_name,
-      data.slug,
-      data.subdomain || data.slug,
+      slug,
+      data.subdomain || slug,
       data.status || 'active',
       data.max_users || 10,
       data.max_customers || 500,
@@ -1219,7 +1836,7 @@ app.post('/api/tenants', async (c) => {
     
     return c.json({ 
       success: true, 
-      data: { id: result.meta.last_row_id, public_uuid: publicUuid, ...data },
+      data: { id: result.meta.last_row_id, public_uuid: publicUuid, ...data, slug },
       message: 'تم إنشاء الشركة بنجاح'
     })
   } catch (error: any) {
@@ -1233,9 +1850,18 @@ app.put('/api/tenants/:tenantRef', async (c) => {
     const tenantRef = c.req.param('tenantRef')
     const id = await resolveTenantIdFromRef(c, tenantRef)
     const data = await c.req.json()
+    const slug = normalizeTenantSlug(data.slug)
 
     if (!id) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    if (!data.company_name || !slug) {
+      return c.json({ success: false, error: 'اسم الشركة والـ Slug مطلوبان' }, 400)
+    }
+
+    if (isReservedRootSlug(slug)) {
+      return c.json({ success: false, error: 'هذا الـ Slug محجوز ولا يمكن استخدامه' }, 400)
     }
     
     // Check if tenant exists
@@ -1246,7 +1872,29 @@ app.put('/api/tenants/:tenantRef', async (c) => {
     if (!tenant) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
     }
+
+    const existingSlug = await c.env.DB.prepare(`
+      SELECT id FROM tenants WHERE slug = ? AND id != ?
+    `).bind(slug, id).first()
+
+    if (existingSlug) {
+      return c.json({ success: false, error: 'الـ Slug موجود بالفعل' }, 400)
+    }
     
+    const normalizedData = {
+      company_name: data.company_name,
+      slug,
+      subdomain: data.subdomain || slug || null,
+      status: data.status || 'active',
+      max_users: typeof data.max_users === 'number' ? data.max_users : 10,
+      max_customers: typeof data.max_customers === 'number' ? data.max_customers : 500,
+      max_requests: typeof data.max_requests === 'number' ? data.max_requests : 2000,
+      contact_email: data.contact_email ?? null,
+      contact_phone: data.contact_phone ?? null,
+      primary_color: data.primary_color || '#667eea',
+      secondary_color: data.secondary_color || '#764ba2'
+    }
+
     // Update tenant
     await c.env.DB.prepare(`
       UPDATE tenants SET
@@ -1263,23 +1911,23 @@ app.put('/api/tenants/:tenantRef', async (c) => {
         secondary_color = ?
       WHERE id = ?
     `).bind(
-      data.company_name,
-      data.slug,
-      data.subdomain,
-      data.status,
-      data.max_users,
-      data.max_customers,
-      data.max_requests,
-      data.contact_email,
-      data.contact_phone,
-      data.primary_color || '#667eea',
-      data.secondary_color || '#764ba2',
+      normalizedData.company_name,
+      normalizedData.slug,
+      normalizedData.subdomain,
+      normalizedData.status,
+      normalizedData.max_users,
+      normalizedData.max_customers,
+      normalizedData.max_requests,
+      normalizedData.contact_email,
+      normalizedData.contact_phone,
+      normalizedData.primary_color,
+      normalizedData.secondary_color,
       id
     ).run()
     
     return c.json({ 
       success: true, 
-      data: { id, public_uuid: tenant?.public_uuid, ...data },
+      data: { id, public_uuid: tenant?.public_uuid, ...normalizedData },
       message: 'تم تحديث الشركة بنجاح'
     })
   } catch (error: any) {
@@ -1362,7 +2010,7 @@ app.post('/api/auth/login', async (c) => {
     const user = await c.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.subscription_id, u.is_active, 
-             u.tenant_id,
+             u.tenant_id, u.assigned_bank_id,
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
              t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
@@ -1387,8 +2035,9 @@ app.post('/api/auth/login', async (c) => {
       // Continue anyway - user is authenticated, just can't update last_login
     } else {
       console.log('✅ [LOGIN] Updating last_login timestamp...')
-      await c.env.DB.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')
-        .bind(user.id).run()
+      const loginTimestamp = new Date().toISOString()
+      await c.env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?')
+        .bind(loginTimestamp, user.id).run()
       console.log('✅ [LOGIN] last_login updated successfully')
     }
     
@@ -1403,8 +2052,8 @@ app.post('/api/auth/login', async (c) => {
     const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
     const cookieValue = `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
     
-    // Determine redirect URL - always go to /admin/panel
-    const redirect = '/admin/panel'
+    // Determine redirect URL — bank agents go straight to funding requests
+    const redirect = normalizeRoleId(user.role_id) === 5 ? '/admin/requests' : '/admin/panel'
     
     console.log(`🎯 Redirect to: ${redirect}`)
     console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
@@ -1427,7 +2076,8 @@ app.post('/api/auth/login', async (c) => {
         subscription_id: user.subscription_id,
         tenant_id: user.tenant_id,
         tenant_name: user.tenant_name,
-        tenant_slug: user.tenant_slug
+        tenant_slug: user.tenant_slug,
+        assigned_bank_id: (user as { assigned_bank_id?: number | null }).assigned_bank_id ?? null
       }
     })
     
@@ -2767,14 +3417,15 @@ app.post('/api/users', async (c) => {
     
     // Get tenant_id from form data (if provided by super admin)
     // If not provided, use the current user's tenant_id (for company admin adding users)
-    let tenant_id = formData.get('tenant_id');
+    let tenant_id: number | null = null
+    const tenantRaw = formData.get('tenant_id')
 
     if (isSuperAdminUser(userInfo)) {
-      if (tenant_id && tenant_id !== '') {
-        tenant_id = parseInt(tenant_id as string);
+      if (tenantRaw != null && String(tenantRaw).trim() !== '') {
+        const parsed = parseInt(String(tenantRaw), 10)
+        tenant_id = Number.isNaN(parsed) ? null : parsed
       } else {
-        // Super admin creating user without tenant - allow null
-        tenant_id = null;
+        tenant_id = null
       }
     } else {
       // Non-superadmin: ignore any provided tenant_id to prevent cross-tenant creation
@@ -2782,6 +3433,28 @@ app.post('/api/users', async (c) => {
         return c.json({ success: false, error: 'No tenant context' }, 400)
       }
       tenant_id = userInfo.tenantId
+    }
+
+    const assignedBankRaw = formData.get('assigned_bank_id')
+    let assigned_bank_id: number | null = null
+    if (requestedRoleId === 5) {
+      const canCreateBankAgent = isSuperAdminUser(userInfo) || userInfo.roleId === 2
+      if (!canCreateBankAgent) {
+        return c.json({ success: false, error: 'غير مسموح بإنشاء وكيل بنك' }, 403)
+      }
+      const tid = typeof tenant_id === 'number' ? tenant_id : parseInt(String(tenant_id || ''), 10)
+      if (!tid || Number.isNaN(tid)) {
+        return c.json({ success: false, error: 'يجب اختيار الشركة لوكيل البنك' }, 400)
+      }
+      const bid = Number.parseInt(String(assignedBankRaw || ''), 10)
+      if (Number.isNaN(bid) || bid <= 0) {
+        return c.json({ success: false, error: 'يجب اختيار البنك لوكيل البنك' }, 400)
+      }
+      const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
+      if (!okBank) {
+        return c.json({ success: false, error: 'البنك غير صالح لهذه الشركة' }, 400)
+      }
+      assigned_bank_id = bid
     }
     
     // Check for duplicate username
@@ -2811,9 +3484,9 @@ app.post('/api/users', async (c) => {
     }
     
     const result = await c.env.DB.prepare(`
-      INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(username, password, full_name, email, phone, requestedRoleId, subscription_id, is_active, tenant_id).run()
+      INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id, assigned_bank_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(username, password, full_name, email, phone, requestedRoleId, subscription_id, is_active, tenant_id, assigned_bank_id).run()
     
     return c.json({ 
       success: true, 
@@ -2829,6 +3502,81 @@ app.post('/api/users', async (c) => {
   }
 })
 
+// Banks available for a company (e.g. assigning a bank agent). Super admin or company admin only.
+app.get('/api/admin/company-banks', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    if (!isSuperAdminUser(userInfo) && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    const tidRaw = c.req.query('tenant_id')
+    const tid = tidRaw != null && String(tidRaw).trim() !== '' ? parseInt(String(tidRaw), 10) : NaN
+    if (!tid || Number.isNaN(tid)) {
+      return c.json({ success: false, error: 'tenant_id required' }, 400)
+    }
+    if (!isSuperAdminUser(userInfo) && userInfo.tenantId !== tid) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    try {
+      const { results } = await c.env.DB
+        .prepare(
+          `SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name`
+        )
+        .bind(tid)
+        .all()
+      return c.json({ success: true, data: results || [] })
+    } catch {
+      const { results } = await c.env.DB
+        .prepare(`SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`)
+        .bind(tid)
+        .all()
+      return c.json({ success: true, data: results || [] })
+    }
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+/** Users with role bank_agent (5) for this company and bank. */
+app.get('/api/admin/bank-agents', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || normalizeRoleId(userInfo.roleId) === 5) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const tidRaw = c.req.query('tenant_id')
+    const bidRaw = c.req.query('bank_id')
+    const tid = tidRaw != null && String(tidRaw).trim() !== '' ? parseInt(String(tidRaw), 10) : NaN
+    const bid = bidRaw != null && String(bidRaw).trim() !== '' ? parseInt(String(bidRaw), 10) : NaN
+    if (!tid || Number.isNaN(tid) || !bid || Number.isNaN(bid)) {
+      return c.json({ success: false, error: 'tenant_id and bank_id required' }, 400)
+    }
+    if (!isSuperAdminUser(userInfo) && userInfo.tenantId !== tid) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
+    if (!okBank) {
+      return c.json({ success: false, error: 'Invalid bank for tenant' }, 400)
+    }
+    const { results } = await c.env.DB
+      .prepare(
+        `SELECT u.id, u.full_name, u.username, u.email
+         FROM users u
+         WHERE u.role_id = 5 AND u.is_active = 1
+           AND u.tenant_id = ? AND u.assigned_bank_id = ?
+         ORDER BY u.full_name`
+      )
+      .bind(tid, bid)
+      .all()
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 // Update user
 app.put('/api/users/:id', async (c) => {
   try {
@@ -2837,7 +3585,8 @@ app.put('/api/users/:id', async (c) => {
       return c.json({ success: false, error: 'Unauthorized' }, 401)
     }
     const id = c.req.param('id')
-    const { username, full_name, email, phone, role_id, subscription_id, is_active } = await c.req.json()
+    const body = await c.req.json()
+    const { username, full_name, email, phone, role_id, subscription_id, is_active, assigned_bank_id: assignedBankBody } = body
 
     const requestedRoleId = Number.parseInt(String(role_id ?? ''), 10)
     if (Number.isNaN(requestedRoleId)) {
@@ -2847,11 +3596,39 @@ app.put('/api/users/:id', async (c) => {
       return c.json({ success: false, error: 'Forbidden: cannot grant SaaS role' }, 403)
     }
 
+    const target = await c.env.DB.prepare(`SELECT id, tenant_id FROM users WHERE id = ?`).bind(id).first() as {
+      id?: number
+      tenant_id?: number | null
+    } | null
+    if (!target) {
+      return c.json({ success: false, error: 'User not found' }, 404)
+    }
+    let assigned_bank_id: number | null = null
+    if (requestedRoleId === 5) {
+      const canSetBankAgent = isSuperAdminUser(requester) || requester.roleId === 2
+      if (!canSetBankAgent) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const tid = target.tenant_id != null ? Number(target.tenant_id) : null
+      if (!tid) {
+        return c.json({ success: false, error: 'Bank agent requires a company (tenant)' }, 400)
+      }
+      const bid = Number.parseInt(String(assignedBankBody ?? ''), 10)
+      if (Number.isNaN(bid) || bid <= 0) {
+        return c.json({ success: false, error: 'assigned_bank_id required for bank agent' }, 400)
+      }
+      const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
+      if (!okBank) {
+        return c.json({ success: false, error: 'Invalid bank for tenant' }, 400)
+      }
+      assigned_bank_id = bid
+    }
+
     await c.env.DB.prepare(`
       UPDATE users 
-      SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?
+      SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?, assigned_bank_id = ?
       WHERE id = ?
-    `).bind(username, full_name, email, phone, requestedRoleId, subscription_id, is_active, id).run()
+    `).bind(username, full_name, email, phone, requestedRoleId, subscription_id, is_active, assigned_bank_id, id).run()
     return c.json({ success: true })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -2915,7 +3692,42 @@ app.post('/api/customers', async (c) => {
   try {
     const formData = await c.req.formData()
     const full_name = formData.get('full_name') as string
-    const phone = formData.get('phone') as string
+    const rawPhone = formData.get('phone') as string
+    const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
+    if (!normalizedPhoneResult.normalized) {
+      return c.html(`
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>تنسيق رقم الجوال غير صحيح</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        </head>
+        <body class="bg-gray-50">
+          <div class="max-w-2xl mx-auto p-6 mt-20">
+            <div class="bg-amber-50 border-r-4 border-amber-500 rounded-lg p-6 shadow-lg">
+              <div class="flex items-center mb-3">
+                <i class="fas fa-phone-slash text-amber-600 text-3xl ml-3"></i>
+                <h1 class="text-2xl font-bold text-amber-800">تنسيق رقم الجوال غير صحيح</h1>
+              </div>
+              <p class="text-amber-700 mb-3">${normalizedPhoneResult.error || 'يرجى مراجعة رقم الجوال'}</p>
+              <div class="bg-white rounded-lg p-3 text-sm text-gray-700 mb-4">
+                <p><strong>الطريقة الصحيحة:</strong> أدخل فقط 9 أرقام تبدأ بـ <span dir="ltr">5</span>.</p>
+                <p><strong>مثال:</strong> <span dir="ltr">512345678</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">966512345678</span>).</p>
+              </div>
+              <a href="/admin/customers/add" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold transition-all">
+                <i class="fas fa-arrow-right ml-2"></i>
+                العودة للنموذج
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `, 400)
+    }
+    const phone = normalizedPhoneResult.normalized
     const email = formData.get('email') as string || null
     const national_id = formData.get('national_id') as string || null
     const date_of_birth = formData.get('date_of_birth') as string || null
@@ -2930,6 +3742,10 @@ app.post('/api/customers', async (c) => {
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
+    const id_attachment_url = (formData.get('id_attachment_url') as string || '').trim() || null
+    const bank_statement_attachment_url = (formData.get('bank_statement_attachment_url') as string || '').trim() || null
+    const salary_attachment_url = (formData.get('salary_attachment_url') as string || '').trim() || null
+    const additional_attachment_url = (formData.get('additional_attachment_url') as string || '').trim() || null
     
     // Resolve tenant from authenticated user (supports both cookie + bearer flows).
     const userInfo = await getUserInfo(c)
@@ -3018,8 +3834,10 @@ app.post('/api/customers', async (c) => {
     }
     
     // Check if phone already exists within the same tenant
-    let phoneCheckQuery = `SELECT id, full_name FROM customers WHERE phone = ?`
-    let phoneBindParams: any[] = [phone]
+    const phoneLocalPart = phone.slice(3)
+    const phoneLegacy10 = `0${phoneLocalPart}`
+    let phoneCheckQuery = `SELECT id, full_name FROM customers WHERE (phone = ? OR phone = ? OR phone = ?)`
+    let phoneBindParams: any[] = [phone, phoneLocalPart, phoneLegacy10]
     
     if (tenant_id) {
       phoneCheckQuery += ` AND tenant_id = ?`
@@ -3087,20 +3905,48 @@ app.post('/api/customers', async (c) => {
       basic_salary,
       monthly_salary,
       tenant_id,
-      notes
+      notes,
+      id_attachment_url,
+      bank_statement_attachment_url,
+      salary_attachment_url,
+      additional_attachment_url
     ] as const
     let result: { meta?: { last_row_id?: number } }
     try {
       result = await c.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url, solutions_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(...insertBind, solutions_json).run() as { meta?: { last_row_id?: number } }
     } catch (e: unknown) {
-      if (!isMissingCustomerSolutionsColumnError(e)) throw e
-      result = await c.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...insertBind).run() as { meta?: { last_row_id?: number } }
+      if (isMissingCustomerSolutionsColumnError(e)) {
+        try {
+          result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...insertBind).run() as { meta?: { last_row_id?: number } }
+        } catch (innerError: unknown) {
+          if (!isMissingCustomerAttachmentsColumnError(innerError)) throw innerError
+          result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...insertBind.slice(0, 16)).run() as { meta?: { last_row_id?: number } }
+        }
+      } else if (isMissingCustomerAttachmentsColumnError(e)) {
+        try {
+          result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...insertBind.slice(0, 16), solutions_json).run() as { meta?: { last_row_id?: number } }
+        } catch (innerError: unknown) {
+          if (!isMissingCustomerSolutionsColumnError(innerError)) throw innerError
+          result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...insertBind.slice(0, 16)).run() as { meta?: { last_row_id?: number } }
+        }
+      } else {
+        throw e
+      }
     }
     const newId = result.meta?.last_row_id
     const obligationsJson = formData.get('obligations_json') as string | null
@@ -3185,7 +4031,42 @@ app.post('/api/customers/:id', async (c) => {
     const id = c.req.param('id')
     const formData = await c.req.formData()
     const full_name = formData.get('full_name') as string
-    const phone = formData.get('phone') as string
+    const rawPhone = formData.get('phone') as string
+    const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
+    if (!normalizedPhoneResult.normalized) {
+      return c.html(`
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>تنسيق رقم الجوال غير صحيح</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        </head>
+        <body class="bg-gray-50">
+          <div class="max-w-2xl mx-auto p-6 mt-20">
+            <div class="bg-amber-50 border-r-4 border-amber-500 rounded-lg p-6 shadow-lg">
+              <div class="flex items-center mb-3">
+                <i class="fas fa-phone-slash text-amber-600 text-3xl ml-3"></i>
+                <h1 class="text-2xl font-bold text-amber-800">تنسيق رقم الجوال غير صحيح</h1>
+              </div>
+              <p class="text-amber-700 mb-3">${normalizedPhoneResult.error || 'يرجى مراجعة رقم الجوال'}</p>
+              <div class="bg-white rounded-lg p-3 text-sm text-gray-700 mb-4">
+                <p><strong>الطريقة الصحيحة:</strong> أدخل فقط 9 أرقام تبدأ بـ <span dir="ltr">5</span>.</p>
+                <p><strong>مثال:</strong> <span dir="ltr">512345678</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">966512345678</span>).</p>
+              </div>
+              <a href="/admin/customers/${id}/edit" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold transition-all">
+                <i class="fas fa-arrow-right ml-2"></i>
+                العودة للتعديل
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `, 400)
+    }
+    const phone = normalizedPhoneResult.normalized
     const email = formData.get('email') as string || null
     const national_id = formData.get('national_id') as string || null
     const date_of_birth = formData.get('date_of_birth') as string || null
@@ -3200,6 +4081,10 @@ app.post('/api/customers/:id', async (c) => {
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
+    const id_attachment_url = (formData.get('id_attachment_url') as string || '').trim() || null
+    const bank_statement_attachment_url = (formData.get('bank_statement_attachment_url') as string || '').trim() || null
+    const salary_attachment_url = (formData.get('salary_attachment_url') as string || '').trim() || null
+    const additional_attachment_url = (formData.get('additional_attachment_url') as string || '').trim() || null
     
     const updateBind = [
       full_name,
@@ -3216,23 +4101,59 @@ app.post('/api/customers/:id', async (c) => {
       city,
       basic_salary,
       monthly_salary,
-      notes
+      notes,
+      id_attachment_url,
+      bank_statement_attachment_url,
+      salary_attachment_url,
+      additional_attachment_url
     ] as const
     try {
       await c.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
-          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
+          id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?, solutions_json = ?
       WHERE id = ?
     `).bind(...updateBind, solutions_json, id).run()
     } catch (e: unknown) {
-      if (!isMissingCustomerSolutionsColumnError(e)) throw e
-      await c.env.DB.prepare(`
-      UPDATE customers 
-      SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
-          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
-      WHERE id = ?
-    `).bind(...updateBind, id).run()
+      if (isMissingCustomerSolutionsColumnError(e)) {
+        try {
+          await c.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
+              id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?
+          WHERE id = ?
+        `).bind(...updateBind, id).run()
+        } catch (innerError: unknown) {
+          if (!isMissingCustomerAttachmentsColumnError(innerError)) throw innerError
+          await c.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
+          WHERE id = ?
+        `).bind(...updateBind.slice(0, 15), id).run()
+        }
+      } else if (isMissingCustomerAttachmentsColumnError(e)) {
+        try {
+          await c.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
+          WHERE id = ?
+        `).bind(...updateBind.slice(0, 15), solutions_json, id).run()
+        } catch (innerError: unknown) {
+          if (!isMissingCustomerSolutionsColumnError(innerError)) throw innerError
+          await c.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
+          WHERE id = ?
+        `).bind(...updateBind.slice(0, 15), id).run()
+        }
+      } else {
+        throw e
+      }
     }
     const obligationsJson = formData.get('obligations_json') as string | null
     if (obligationsJson) {
@@ -3257,6 +4178,12 @@ app.post('/api/customers/:id', async (c) => {
         }
       } catch (_) {}
     }
+    await syncAttachmentsForCustomer(c.env.DB, id, {
+      id_attachment_url,
+      bank_statement_attachment_url,
+      salary_attachment_url,
+      additional_attachment_url
+    })
     return c.redirect('/admin/customers')
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -3409,15 +4336,9 @@ app.post('/api/customers/:id/obligations', async (c) => {
 // Get all financing requests
 app.get('/api/financing-requests', async (c) => {
   try {
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
     }
     
     let query = `
@@ -3438,15 +4359,217 @@ app.get('/api/financing-requests', async (c) => {
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id`
-    
-    if (tenant_id) {
-      query += ` WHERE f.tenant_id = ${tenant_id}`
+
+    const queryParams: any[] = []
+    if (userInfo.roleId === 1) {
+      // sees all
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) {
+        query += ' WHERE f.tenant_id = ?'
+        queryParams.push(userInfo.tenantId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE f.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca2
+          WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      // Bank agent: only requests explicitly assigned to this user
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ' WHERE f.tenant_id = ? AND f.assigned_bank_agent_id = ?'
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
+    } else {
+      query += ' WHERE 1 = 0'
     }
     
     query += ` ORDER BY f.created_at DESC`
     
-    const { results } = await c.env.DB.prepare(query).all()
+    const { results } = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all()
     return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.get('/api/sidebar-filter-counts', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+
+    const customerWhereParts: string[] = []
+    const customerParams: any[] = []
+
+    if (userInfo.roleId === 1) {
+      // Super admin sees all
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) {
+        customerWhereParts.push('c.tenant_id = ?')
+        customerParams.push(userInfo.tenantId)
+      } else {
+        customerWhereParts.push('1 = 0')
+      }
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        customerWhereParts.push('c.tenant_id = ?')
+        customerWhereParts.push(`EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`)
+        customerParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        customerWhereParts.push('1 = 0')
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      customerWhereParts.push('1 = 0')
+    } else {
+      customerWhereParts.push('1 = 0')
+    }
+
+    const customerWhereSql = customerWhereParts.length > 0 ? `WHERE ${customerWhereParts.join(' AND ')}` : ''
+    const customerCountsRow = await c.env.DB.prepare(`
+      WITH scoped_customers AS (
+        SELECT c.id
+        FROM customers c
+        ${customerWhereSql}
+      ),
+      latest_reviews AS (
+        SELECT cr.customer_id, cr.rating
+        FROM customer_reviews cr
+        INNER JOIN (
+          SELECT customer_id, MAX(created_at) AS max_created
+          FROM customer_reviews
+          GROUP BY customer_id
+        ) latest
+          ON latest.customer_id = cr.customer_id
+         AND latest.max_created = cr.created_at
+      )
+      SELECT
+        COUNT(sc.id) AS all_count,
+        SUM(CASE WHEN lr.rating = 1 THEN 1 ELSE 0 END) AS rating_1,
+        SUM(CASE WHEN lr.rating = 2 THEN 1 ELSE 0 END) AS rating_2,
+        SUM(CASE WHEN lr.rating = 3 THEN 1 ELSE 0 END) AS rating_3,
+        SUM(CASE WHEN lr.rating = 4 THEN 1 ELSE 0 END) AS rating_4,
+        SUM(CASE WHEN lr.rating = 5 THEN 1 ELSE 0 END) AS rating_5
+      FROM scoped_customers sc
+      LEFT JOIN latest_reviews lr ON lr.customer_id = sc.id
+    `).bind(...customerParams).first() as {
+      all_count?: number
+      rating_1?: number
+      rating_2?: number
+      rating_3?: number
+      rating_4?: number
+      rating_5?: number
+    } | null
+
+    const allCustomers = Number(customerCountsRow?.all_count || 0)
+    const ratedCustomers =
+      Number(customerCountsRow?.rating_1 || 0) +
+      Number(customerCountsRow?.rating_2 || 0) +
+      Number(customerCountsRow?.rating_3 || 0) +
+      Number(customerCountsRow?.rating_4 || 0) +
+      Number(customerCountsRow?.rating_5 || 0)
+    const withoutRating = Math.max(0, allCustomers - ratedCustomers)
+
+    const requestWhereParts: string[] = []
+    const requestParams: any[] = []
+
+    if (userInfo.roleId === 1) {
+      // Super admin sees all
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) {
+        requestWhereParts.push('c.tenant_id = ?')
+        requestParams.push(userInfo.tenantId)
+      } else {
+        requestWhereParts.push('1 = 0')
+      }
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        requestWhereParts.push('c.tenant_id = ?')
+        requestWhereParts.push(`EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`)
+        requestParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        requestWhereParts.push('1 = 0')
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        requestWhereParts.push('c.tenant_id = ?')
+        requestWhereParts.push('fr.assigned_bank_agent_id = ?')
+        requestParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        requestWhereParts.push('1 = 0')
+      }
+    } else {
+      requestWhereParts.push('1 = 0')
+    }
+
+    const requestWhereSql = requestWhereParts.length > 0 ? `WHERE ${requestWhereParts.join(' AND ')}` : ''
+    const requestRows = (await c.env.DB.prepare(`
+      SELECT
+        COALESCE(
+          ws.stage_name_ar,
+          CASE fr.status
+            WHEN 'pending' THEN 'قيد الانتظار'
+            WHEN 'under_review' THEN 'قيد المراجعة'
+            WHEN 'approved' THEN 'موافق عليه'
+            WHEN 'rejected' THEN 'مرفوض'
+            WHEN 'processing' THEN 'قيد المعالجة'
+            WHEN 'completed' THEN 'مكتمل'
+            WHEN 'cancelled' THEN 'ملغي'
+            ELSE fr.status
+          END,
+          'غير محدد'
+        ) AS status_label,
+        COUNT(*) AS count
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      ${requestWhereSql}
+      GROUP BY status_label
+    `).bind(...requestParams).all()).results as Array<{ status_label?: string; count?: number }>
+
+    const requestCountsByState: Record<string, number> = {}
+    let allRequests = 0
+    requestRows.forEach((row) => {
+      const key = String(row?.status_label || '').trim()
+      const val = Number(row?.count || 0)
+      if (!key) return
+      requestCountsByState[key] = val
+      allRequests += val
+    })
+
+    return c.json({
+      success: true,
+      customers: {
+        all: allCustomers,
+        '0': withoutRating,
+        '1': Number(customerCountsRow?.rating_1 || 0),
+        '2': Number(customerCountsRow?.rating_2 || 0),
+        '3': Number(customerCountsRow?.rating_3 || 0),
+        '4': Number(customerCountsRow?.rating_4 || 0),
+        '5': Number(customerCountsRow?.rating_5 || 0),
+      },
+      requests: {
+        all: allRequests,
+        byState: requestCountsByState,
+      },
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -3463,7 +4586,22 @@ app.post('/api/requests', async (c) => {
     const requested_amount = formData.get('requested_amount')
     const duration_months = formData.get('duration_months')
     const salary_at_request = formData.get('salary_at_request')
-    const selected_bank_id = formData.get('selected_bank_id') || null
+    const selected_bank_id_raw = formData.get('selected_bank_id')
+    let selected_bank_id: number | null =
+      selected_bank_id_raw != null && String(selected_bank_id_raw).trim() !== ''
+        ? parseInt(String(selected_bank_id_raw), 10)
+        : null
+    if (selected_bank_id != null && Number.isNaN(selected_bank_id)) {
+      selected_bank_id = null
+    }
+    const assigned_agent_raw = formData.get('assigned_bank_agent_id')
+    let assigned_bank_agent_id: number | null =
+      assigned_agent_raw != null && String(assigned_agent_raw).trim() !== ''
+        ? parseInt(String(assigned_agent_raw), 10)
+        : null
+    if (assigned_bank_agent_id != null && Number.isNaN(assigned_bank_agent_id)) {
+      assigned_bank_agent_id = null
+    }
     const status = formData.get('status') || 'pending'
     const notes = formData.get('notes') || ''
     
@@ -3480,7 +4618,7 @@ app.post('/api/requests', async (c) => {
       return c.json({ success: false, error: 'العميل غير موجود' }, 400)
     }
 
-    // Enforce tenant scope for non-superadmins (all tenant roles may create requests for any company customer)
+    // Enforce tenant scope for non-superadmins
     if (userInfo.roleId !== 1) {
       if (!userInfo.tenantId) {
         return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
@@ -3489,16 +4627,41 @@ app.post('/api/requests', async (c) => {
         return c.json({ success: false, error: 'غير مصرح لهذه الشركة' }, 403)
       }
     }
+    // Employees can create requests only for customers assigned to them
+    if (userInfo.roleId === 4) {
+      if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer as { id: number; tenant_id: number | null }))) {
+        return c.json({ success: false, error: 'غير مصرح: العميل غير مخصص لك' }, 403)
+      }
+    }
 
     const tenant_id = userInfo.roleId === 1 ? customer.tenant_id : userInfo.tenantId
+
+    if (assigned_bank_agent_id != null) {
+      if (!selected_bank_id || Number.isNaN(selected_bank_id)) {
+        return c.json({ success: false, error: 'يجب اختيار البنك عند تعيين وكيل بنك' }, 400)
+      }
+      const tidNum = tenant_id != null ? Number(tenant_id) : NaN
+      if (!tidNum || Number.isNaN(tidNum)) {
+        return c.json({ success: false, error: 'تعذر تحديد الشركة لتعيين وكيل البنك' }, 400)
+      }
+      const agentOk = await validateBankAgentForFinancingRequest(
+        c.env.DB,
+        tidNum,
+        selected_bank_id,
+        assigned_bank_agent_id
+      )
+      if (!agentOk) {
+        return c.json({ success: false, error: 'وكيل البنك غير صالح لهذا البنك والشركة' }, 400)
+      }
+    }
     
     // Insert financing request directly (customer already exists from dropdown)
     const result = await c.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
-        status, notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, notes, tenant_id, assigned_bank_agent_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       customer_id,
       financing_type_id,
@@ -3508,7 +4671,8 @@ app.post('/api/requests', async (c) => {
       duration_months,
       status,
       notes,
-      tenant_id
+      tenant_id,
+      assigned_bank_agent_id
     ).run()
     
     if (wantsJson) {
@@ -3605,18 +4769,76 @@ app.get('/api/workflow/timeline/:requestId', async (c) => {
   }
 })
 
+const WORKFLOW_STATUS_BY_STAGE: Record<string, 'pending' | 'under_review' | 'approved' | 'rejected' | 'cancelled'> = {
+  draft: 'pending',
+  submitted: 'pending',
+  missing_docs: 'under_review',
+  processing: 'under_review',
+  underwriting: 'under_review',
+  conditional_approval: 'under_review',
+  documentation: 'under_review',
+  approved: 'approved',
+  final_approval: 'approved',
+  disbursed: 'approved',
+  active: 'approved',
+  closed: 'approved',
+  rejected: 'rejected',
+  cancelled: 'cancelled'
+}
+
+function mapWorkflowStageToRequestStatus(stageName?: string | null) {
+  if (!stageName) return null
+  return WORKFLOW_STATUS_BY_STAGE[stageName] || null
+}
+
 // Update request stage
 app.post('/api/workflow/update-stage', async (c) => {
   try {
     const { requestId, newStageId, notes, userId } = await c.req.json()
-    
-    // Update the request's current stage
+
+    const stage = await c.env.DB.prepare(`
+      SELECT stage_name FROM workflow_stages WHERE id = ?
+    `).bind(newStageId).first() as { stage_name?: string } | null
+
+    const currentRequest = await c.env.DB.prepare(`
+      SELECT status FROM financing_requests WHERE id = ?
+    `).bind(requestId).first() as { status?: string } | null
+
+    const mappedStatus = mapWorkflowStageToRequestStatus(stage?.stage_name || null)
+
+    const updateFields = [
+      'current_stage_id = ?',
+      'stage_entered_at = CURRENT_TIMESTAMP'
+    ]
+    const updateParams: any[] = [newStageId]
+
+    if (mappedStatus) {
+      updateFields.push('status = ?')
+      updateParams.push(mappedStatus)
+
+      if (mappedStatus === 'pending') {
+        updateFields.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)")
+      } else if (mappedStatus === 'under_review') {
+        updateFields.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)")
+      } else if (mappedStatus === 'approved') {
+        updateFields.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)")
+      } else if (mappedStatus === 'rejected') {
+        updateFields.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)")
+      }
+
+      if (mappedStatus === 'approved' || mappedStatus === 'rejected' || mappedStatus === 'under_review') {
+        updateFields.push('reviewed_at = CURRENT_TIMESTAMP')
+      }
+    }
+
+    updateParams.push(requestId)
+
+    // Update stage + keep legacy status aligned for compatibility
     await c.env.DB.prepare(`
       UPDATE financing_requests 
-      SET current_stage_id = ?, 
-          stage_entered_at = CURRENT_TIMESTAMP
+      SET ${updateFields.join(', ')}
       WHERE id = ?
-    `).bind(newStageId, requestId).run()
+    `).bind(...updateParams).run()
     
     // The trigger will automatically create a transition record
     // But we can add notes if provided
@@ -3628,6 +4850,13 @@ app.post('/api/workflow/update-stage', async (c) => {
         ORDER BY created_at DESC
         LIMIT 1
       `).bind(notes, userId, requestId, newStageId).run()
+    }
+
+    if (mappedStatus && currentRequest?.status && currentRequest.status !== mappedStatus) {
+      await c.env.DB.prepare(`
+        INSERT INTO financing_request_status_history (request_id, old_status, new_status, changed_by, notes)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(requestId, currentRequest.status, mappedStatus, userId || null, notes || '').run()
     }
     
     return c.json({ success: true, message: 'تم تحديث مرحلة الطلب بنجاح' })
@@ -4391,8 +5620,6 @@ app.put('/api/financing-requests/:id', async (c) => {
       duration_months,
       salary_at_request,
       monthly_obligations,
-      status,
-      notes,
       id_attachment_url,
       bank_statement_attachment_url,
       salary_attachment_url,
@@ -4404,18 +5631,14 @@ app.put('/api/financing-requests/:id', async (c) => {
       'requested_amount = ?',
       'duration_months = ?',
       'salary_at_request = ?',
-      'monthly_obligations = ?',
-      'status = ?',
-      'notes = ?'
+      'monthly_obligations = ?'
     ]
     
     const params = [
       requested_amount,
       duration_months,
       salary_at_request || 0,
-      monthly_obligations || 0,
-      status || 'pending',
-      notes || ''
+      monthly_obligations || 0
     ]
     
     // Add attachment URLs if provided
@@ -4454,6 +5677,18 @@ app.put('/api/financing-requests/:id', async (c) => {
     }
     
     await c.env.DB.prepare(updateQuery).bind(...params).run()
+
+    // Keep customer and all related requests in sync with request edit screen.
+    const customerIdRow = await c.env.DB.prepare(`
+      SELECT customer_id FROM financing_requests WHERE id = ?
+    `).bind(id).first() as { customer_id?: number | null } | null
+    const customerId = customerIdRow?.customer_id
+    await syncAttachmentsForCustomer(c.env.DB, customerId, {
+      id_attachment_url,
+      bank_statement_attachment_url,
+      salary_attachment_url,
+      additional_attachment_url
+    })
     
     return c.json({ success: true })
   } catch (error: any) {
@@ -4615,6 +5850,17 @@ app.post('/api/attachments/upload', async (c) => {
       `).bind(publicUrl, requestId).run()
       
       console.log('✅ Update result:', result)
+      const requestRow = await c.env.DB.prepare(`
+        SELECT customer_id FROM financing_requests WHERE id = ?
+      `).bind(requestId).first() as { customer_id?: number | null } | null
+      const attachmentSyncPayload: AttachmentSyncPayload = {}
+      if (columnName === 'id_attachment_url') attachmentSyncPayload.id_attachment_url = publicUrl
+      if (columnName === 'bank_statement_attachment_url') attachmentSyncPayload.bank_statement_attachment_url = publicUrl
+      if (columnName === 'salary_attachment_url') attachmentSyncPayload.salary_attachment_url = publicUrl
+      if (columnName === 'additional_attachment_url') attachmentSyncPayload.additional_attachment_url = publicUrl
+      await syncAttachmentsForCustomer(c.env.DB, requestRow?.customer_id, {
+        ...attachmentSyncPayload
+      })
     }
     
     return c.json({ 
@@ -4691,6 +5937,15 @@ app.delete('/api/attachments/delete/:path{.+}', async (c) => {
           SET ${columnName} = NULL 
           WHERE id = ?
         `).bind(requestId).run()
+        try {
+          await c.env.DB.prepare(`
+            UPDATE customers
+            SET ${columnName} = NULL
+            WHERE id = (SELECT customer_id FROM financing_requests WHERE id = ?)
+          `).bind(requestId).run()
+        } catch (customerAttachmentError) {
+          if (!isMissingCustomerAttachmentsColumnError(customerAttachmentError)) throw customerAttachmentError
+        }
       }
     }
     
@@ -6408,7 +7663,7 @@ app.get('/admin/panel', async (c) => {
       })};
       window.USER_PERMISSIONS = ${JSON.stringify(permissionResults.map((p: any) => p.permission_key))};
       window.USER_PERMISSIONS_FULL = ${JSON.stringify(permissionResults)};
-      window.USER_ROLE_ID = ${userInfo.roleId};
+      window.USER_ROLE_ID = ${normalizeRoleId(userInfo.roleId) ?? 4};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
     </script>
@@ -7110,16 +8365,6 @@ app.get('/admin/tenants/add', (c) => {
                                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                 >
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Subdomain (اختياري)</label>
-                                <input 
-                                    type="text" 
-                                    id="subdomain"
-                                    pattern="[a-z0-9-]*"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="company1"
-                                >
-                            </div>
                         </div>
                     </div>
                     
@@ -7194,7 +8439,7 @@ app.get('/admin/tenants/add', (c) => {
                     slug: document.getElementById('slug').value,
                     status: document.getElementById('status').value,
                     max_users: parseInt(document.getElementById('max_users').value),
-                    subdomain: document.getElementById('subdomain').value || null,
+                    subdomain: null,
                     contact_email: document.getElementById('contact_email').value || null,
                     contact_phone: document.getElementById('contact_phone').value || null
                 };
@@ -7338,16 +8583,6 @@ app.get('/admin/tenants/:tenantRef/edit', async (c) => {
                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                   >
                               </div>
-                              <div>
-                                  <label class="block text-sm font-medium text-gray-700 mb-2">Subdomain (اختياري)</label>
-                                  <input 
-                                      type="text" 
-                                      id="subdomain"
-                                      value="${tenant.subdomain || ''}"
-                                      pattern="[a-z0-9-]*"
-                                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                  >
-                              </div>
                           </div>
                       </div>
                       
@@ -7411,7 +8646,7 @@ app.get('/admin/tenants/:tenantRef/edit', async (c) => {
                       slug: document.getElementById('slug').value,
                       status: document.getElementById('status').value,
                       max_users: parseInt(document.getElementById('max_users').value),
-                      subdomain: document.getElementById('subdomain').value || null,
+                      subdomain: null,
                       contact_email: document.getElementById('contact_email').value || null,
                       contact_phone: document.getElementById('contact_phone').value || null
                   };
@@ -7615,7 +8850,7 @@ app.get('/admin/tenants/:tenantRef', async (c) => {
                       <i class="fas fa-bolt ml-2"></i>
                       إجراءات سريعة
                   </h2>
-                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                       <a href="/c/${tenant.slug}/admin" target="_blank" 
                          class="flex flex-col items-center justify-center p-4 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all">
                           <i class="fas fa-tachometer-alt text-2xl text-emerald-600 mb-2"></i>
@@ -7630,6 +8865,11 @@ app.get('/admin/tenants/:tenantRef', async (c) => {
                          class="flex flex-col items-center justify-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-all">
                           <i class="fas fa-edit text-2xl text-yellow-600 mb-2"></i>
                           <span class="text-sm font-medium text-gray-700">تعديل البيانات</span>
+                      </a>
+                      <a href="/${tenant.slug}" target="_blank"
+                         class="flex flex-col items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-all">
+                          <i class="fas fa-address-card text-2xl text-purple-600 mb-2"></i>
+                          <span class="text-sm font-medium text-gray-700">صفحة التواصل</span>
                       </a>
                       <button onclick="if(confirm('هل أنت متأكد من الحذف؟')) window.location.href='/admin/tenants'" 
                          class="flex flex-col items-center justify-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-all">
@@ -7851,7 +9091,7 @@ app.get('/admin/dashboard', async (c) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>مخلص العملاء</title>
+        <title>ملخص العملاء</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -7875,7 +9115,7 @@ app.get('/admin/dashboard', async (c) => {
               </a>
               <h1 class="text-4xl font-bold text-gray-800">
                 <i class="fas fa-chart-line text-blue-600 ml-2"></i>
-                مخلص العملاء
+                ملخص العملاء
               </h1>
               <p class="text-gray-600 mt-2">تحليلات وإحصائيات شاملة لنظام حاسبة التمويل</p>
             </div>
@@ -8425,6 +9665,9 @@ app.get('/admin/customers/archived', async (c) => {
 // صفحة إضافة عميل جديد - يجب أن تكون قبل /:id
 app.get('/admin/customers/add', async (c) => {
   const userInfo = await getUserInfo(c)
+  const rawPrefillName = String(c.req.query('full_name') ?? c.req.query('name') ?? '').trim()
+  const prefillFullName = rawPrefillName.slice(0, 400)
+  const prefillPhone = customerPhoneInputValue(c.req.query('phone'))
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
   return c.html(`
     <!DOCTYPE html>
@@ -8435,6 +9678,12 @@ app.get('/admin/customers/add', async (c) => {
       <title>إضافة عميل جديد</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
     </head>
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
@@ -8457,7 +9706,8 @@ app.get('/admin/customers/add', async (c) => {
                 </label>
                 <input type="text" name="full_name" required 
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="مثال: أحمد محمد السعيد">
+                       placeholder="مثال: أحمد محمد السعيد"
+                       value="${escapeHtml(prefillFullName)}">
               </div>
               
               <div>
@@ -8465,9 +9715,16 @@ app.get('/admin/customers/add', async (c) => {
                   <i class="fas fa-phone text-green-600 ml-1"></i>
                   رقم الهاتف *
                 </label>
-                <input type="tel" name="phone" required 
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="05xxxxxxxx">
+                <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden">
+                  <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
+                  <input type="tel" name="phone" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl"
+                         class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
+                         placeholder="5xxxxxxxx"
+                         value="${escapeHtml(prefillPhone)}"
+                         oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
+                         oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
               </div>
             </div>
             
@@ -8505,12 +9762,9 @@ app.get('/admin/customers/add', async (c) => {
                   <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                     <input type="date" id="date_of_birth_gregorian"
                            class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                    <div id="hijri_dob_wrap" style="display:none" class="flex flex-1 min-w-0 items-stretch divide-x divide-gray-200 rtl:divide-x-reverse">
-                      <select id="hijri_dob_year" aria-label="السنة الهجرية" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
-                      <select id="hijri_dob_month" aria-label="الشهر الهجري" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
-                      <select id="hijri_dob_day" aria-label="اليوم الهجري" class="w-[4.5rem] shrink-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
-                    </div>
-                    <input type="hidden" id="date_of_birth_hijri" value="">
+                    <input type="text" id="date_of_birth_hijri" style="display:none"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                           placeholder="اختر التاريخ الهجري" autocomplete="off">
                   </div>
                   <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
                     <button type="button" id="dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
@@ -8518,117 +9772,177 @@ app.get('/admin/customers/add', async (c) => {
                   </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1"><span id="dob_calendar_label">ميلادي</span></p>
-                <script type="module">
-                  import umalqura from 'https://esm.sh/@umalqura/core@0.0.7';
-                  const U = umalqura.$;
-                  try { umalqura.locale('ar'); } catch (e) {}
-                  const monthNames = umalqura.months();
-                  const yearSel = document.getElementById('hijri_dob_year');
-                  const monthSel = document.getElementById('hijri_dob_month');
-                  const daySel = document.getElementById('hijri_dob_day');
-                  const hHidden = document.getElementById('date_of_birth_hijri');
-                  if (!yearSel || !monthSel || !daySel || !hHidden) {
-                    window.syncHijriDobFromSelects = function () {};
-                  } else {
-                    function pad(n) { return String(n).padStart(2, '0'); }
-                    function clearSelect(el) {
-                      while (el.firstChild) el.removeChild(el.firstChild);
-                    }
-                    function fillDays() {
-                      const y = parseInt(yearSel.value, 10);
-                      const m = parseInt(monthSel.value, 10);
-                      const prev = daySel.value;
-                      clearSelect(daySel);
-                      const ph = document.createElement('option');
-                      ph.value = '';
-                      ph.textContent = 'اليوم';
-                      daySel.appendChild(ph);
-                      if (!y || !m || y !== y || m !== m) return;
-                      let dim = 30;
-                      try {
-                        dim = U.getDaysInMonth(y, m);
-                      } catch (e) {
-                        console.warn('[hijri dob] getDaysInMonth', e);
-                      }
-                      if (dim !== 29 && dim !== 30) dim = 30;
-                      for (let d = 1; d <= dim; d++) {
-                        const opt = document.createElement('option');
-                        opt.value = String(d);
-                        opt.textContent = String(d);
-                        daySel.appendChild(opt);
-                      }
-                      const prevN = parseInt(prev, 10);
-                      if (prev && !isNaN(prevN) && prevN >= 1 && prevN <= dim) daySel.value = String(prevN);
-                    }
-                    function syncHijriDobFromSelects() {
-                      fillDays();
-                      const y = yearSel.value;
-                      const m = monthSel.value;
-                      const d = daySel.value;
-                      if (!y || !m || !d) {
-                        hHidden.value = '';
-                      } else {
-                        hHidden.value = y + '-' + pad(parseInt(m, 10)) + '-' + pad(parseInt(d, 10));
-                      }
-                      const type = document.getElementById('dob_calendar_type');
-                      const mainHidden = document.getElementById('date_of_birth');
-                      if (type && type.value === 'hijri' && mainHidden) mainHidden.value = hHidden.value;
-                    }
-                    window.syncHijriDobFromSelects = syncHijriDobFromSelects;
-                    const nowH = U.gregorianToHijri(new Date());
-                    const maxY = nowH.hy;
-                    const minY = Math.max(U.minCalendarYear, nowH.hy - 120);
-                    clearSelect(yearSel);
-                    const yPh = document.createElement('option');
-                    yPh.value = '';
-                    yPh.textContent = 'السنة';
-                    yearSel.appendChild(yPh);
-                    for (let y = maxY; y >= minY; y--) {
-                      const opt = document.createElement('option');
-                      opt.value = String(y);
-                      opt.textContent = String(y);
-                      yearSel.appendChild(opt);
-                    }
-                    clearSelect(monthSel);
-                    const mPh = document.createElement('option');
-                    mPh.value = '';
-                    mPh.textContent = 'الشهر';
-                    monthSel.appendChild(mPh);
-                    for (let m = 1; m <= 12; m++) {
-                      const opt = document.createElement('option');
-                      opt.value = String(m);
-                      opt.textContent = monthNames[m - 1] || String(m);
-                      monthSel.appendChild(opt);
-                    }
-                    clearSelect(daySel);
-                    const dPh = document.createElement('option');
-                    dPh.value = '';
-                    dPh.textContent = 'اليوم';
-                    daySel.appendChild(dPh);
-                    function onYearOrMonth() {
-                      syncHijriDobFromSelects();
-                    }
-                    yearSel.addEventListener('change', onYearOrMonth);
-                    monthSel.addEventListener('change', onYearOrMonth);
-                    yearSel.addEventListener('input', onYearOrMonth);
-                    monthSel.addEventListener('input', onYearOrMonth);
-                    daySel.addEventListener('change', syncHijriDobFromSelects);
-                  }
-                </script>
                 <script>
                   document.addEventListener('DOMContentLoaded', function () {
                     var g = document.getElementById('date_of_birth_gregorian');
-                    var hWrap = document.getElementById('hijri_dob_wrap');
-                    var hHidden = document.getElementById('date_of_birth_hijri');
+                    var h = document.getElementById('date_of_birth_hijri');
                     var hidden = document.getElementById('date_of_birth');
                     var type = document.getElementById('dob_calendar_type');
                     var lbl = document.getElementById('dob_calendar_label');
                     var btnG = document.getElementById('dob_toggle_gregorian');
                     var btnH = document.getElementById('dob_toggle_hijri');
-                    if (!g || !hWrap || !hHidden || !hidden || !type || !lbl || !btnG || !btnH) return;
+                    var isDobSyncing = false;
+                    var hijriDobPicker = null;
+
+                    if (!g || !h || !hidden || !type || !lbl || !btnG || !btnH) return;
+
+                    function normalizeArabicDigits(value) {
+                      if (!value) return '';
+                      var arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+                      var easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+                      return String(value).replace(/[٠-٩۰-۹]/g, function(char) {
+                        var arabicIndex = arabicDigits.indexOf(char);
+                        if (arabicIndex >= 0) return String(arabicIndex);
+                        var easternArabicIndex = easternArabicDigits.indexOf(char);
+                        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+                      });
+                    }
+
+                    function formatHijriDateFromGregorian(dateValue) {
+                      if (!dateValue) return '';
+                      try {
+                        var parts = String(dateValue).split('-').map(Number);
+                        var year = parts[0], month = parts[1], day = parts[2];
+                        if (!year || !month || !day) return '';
+                        var gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+                        if (Number.isNaN(gregorianDate.getTime())) return '';
+                        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        });
+                      } catch (_) {
+                        return '';
+                      }
+                    }
+
+                    function parseHijriInput(value) {
+                      var normalized = normalizeArabicDigits(value).replace(/\u200f/g, '').replace(/\u200e/g, '').trim();
+                      if (!normalized) return null;
+                      var parts = normalized.split(/[^\d]+/).filter(Boolean);
+                      if (parts.length !== 3) return null;
+
+                      var year, month, day;
+                      if (parts[0].length === 4) {
+                        year = Number(parts[0]);
+                        month = Number(parts[1]);
+                        day = Number(parts[2]);
+                      } else if (parts[2].length === 4) {
+                        day = Number(parts[0]);
+                        month = Number(parts[1]);
+                        year = Number(parts[2]);
+                      } else {
+                        return null;
+                      }
+
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      if (year < 1200 || year > 1700) return null;
+                      if (month < 1 || month > 12) return null;
+                      if (day < 1 || day > 30) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function extractHijriPartsFromDate(dateObject) {
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                      }).formatToParts(dateObject);
+                      var year = Number((parts.find(function(part) { return part.type === 'year'; }) || {}).value);
+                      var month = Number((parts.find(function(part) { return part.type === 'month'; }) || {}).value);
+                      var day = Number((parts.find(function(part) { return part.type === 'day'; }) || {}).value);
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function formatGregorianValue(dateObject) {
+                      var year = dateObject.getFullYear();
+                      var month = String(dateObject.getMonth() + 1).padStart(2, '0');
+                      var day = String(dateObject.getDate()).padStart(2, '0');
+                      return year + '-' + month + '-' + day;
+                    }
+
+                    function findGregorianFromHijri(hijriParts) {
+                      var approxGregorianYear = hijriParts.year + 579;
+                      var start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+                      var end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+                      for (var cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                        var currentHijriParts = extractHijriPartsFromDate(cursor);
+                        if (!currentHijriParts) continue;
+                        if (
+                          currentHijriParts.year === hijriParts.year &&
+                          currentHijriParts.month === hijriParts.month &&
+                          currentHijriParts.day === hijriParts.day
+                        ) {
+                          return formatGregorianValue(cursor);
+                        }
+                      }
+                      return '';
+                    }
+
+                    function syncFromGregorian() {
+                      if (isDobSyncing) return;
+                      isDobSyncing = true;
+                      h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
+                      type.value = 'gregorian';
+                      if (hijriDobPicker && g.value) {
+                        hijriDobPicker.setDate(g.value, false, 'Y-m-d');
+                      }
+                      isDobSyncing = false;
+                    }
+
+                    function syncFromHijri() {
+                      if (isDobSyncing) return;
+                      var parsedHijri = parseHijriInput(h.value);
+                      if (!parsedHijri) return;
+                      var gregorianValue = findGregorianFromHijri(parsedHijri);
+                      if (!gregorianValue) return;
+                      isDobSyncing = true;
+                      g.value = gregorianValue;
+                      h.value = formatHijriDateFromGregorian(gregorianValue);
+                      hidden.value = gregorianValue;
+                      type.value = 'gregorian';
+                      if (hijriDobPicker) {
+                        hijriDobPicker.setDate(gregorianValue, false, 'Y-m-d');
+                      }
+                      isDobSyncing = false;
+                    }
+
+                    function initHijriDobPicker() {
+                      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon || !window.luxon.DateTime) {
+                        return;
+                      }
+                      hijriDobPicker = flatpickr(h, {
+                        locale: 'ar',
+                        disableMobile: true,
+                        dateFormat: 'Y-m-d',
+                        allowInput: true,
+                        plugins: [
+                          hijriCalendarPlugin(window.luxon.DateTime, {
+                            showHijriDates: true,
+                            showHijriToggle: false
+                          })
+                        ],
+                        onOpen: [function(_, __, instance) {
+                          if (g.value) instance.setDate(g.value, false, 'Y-m-d');
+                        }],
+                        onChange: [function(selectedDates) {
+                          if (!selectedDates || !selectedDates.length || isDobSyncing) return;
+                          var gregorianValue = formatGregorianValue(selectedDates[0]);
+                          isDobSyncing = true;
+                          g.value = gregorianValue;
+                          h.value = formatHijriDateFromGregorian(gregorianValue);
+                          hidden.value = gregorianValue;
+                          type.value = 'gregorian';
+                          isDobSyncing = false;
+                        }]
+                      });
+                    }
+
                     function setGregorian() {
                       g.style.display = '';
-                      hWrap.style.display = 'none';
+                      h.style.display = 'none';
                       type.value = 'gregorian';
                       lbl.textContent = 'ميلادي';
                       hidden.value = g.value || '';
@@ -8637,18 +9951,22 @@ app.get('/admin/customers/add', async (c) => {
                     }
                     function setHijri() {
                       g.style.display = 'none';
-                      hWrap.style.display = 'flex';
+                      h.style.display = '';
                       type.value = 'hijri';
                       lbl.textContent = 'هجري';
-                      if (typeof window.syncHijriDobFromSelects === 'function') window.syncHijriDobFromSelects();
-                      hidden.value = hHidden.value || '';
+                      if (g.value) h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
                       btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
                       btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
                     }
                     btnG.onclick = setGregorian;
                     btnH.onclick = setHijri;
-                    g.onchange = function () { if (type.value === 'gregorian') hidden.value = g.value || ''; };
-                    hidden.value = type.value === 'hijri' ? (hHidden.value || '') : (g.value || '');
+                    g.onchange = syncFromGregorian;
+                    g.oninput = syncFromGregorian;
+                    h.onblur = syncFromHijri;
+                    initHijriDobPicker();
+                    syncFromGregorian();
+                    setGregorian();
                   });
                 </script>
               </div>
@@ -8718,8 +10036,218 @@ app.get('/admin/customers/add', async (c) => {
                   <i class="fas fa-calendar-check text-pink-600 ml-1"></i>
                   تاريخ بدء العمل
                 </label>
-                <input type="date" name="work_start_date" 
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <input type="hidden" name="work_start_calendar_type" id="work_start_calendar_type" value="gregorian">
+                <input type="hidden" name="work_start_date" id="work_start_date">
+                <div class="flex gap-2 items-center flex-wrap">
+                  <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                    <input type="date" id="work_start_date_gregorian"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <input type="text" id="work_start_date_hijri" style="display:none"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                           placeholder="اختر التاريخ الهجري" autocomplete="off">
+                  </div>
+                  <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
+                    <button type="button" id="work_start_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                    <button type="button" id="work_start_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1"><span id="work_start_calendar_label">ميلادي</span></p>
+                <script>
+                  document.addEventListener('DOMContentLoaded', function () {
+                    var g = document.getElementById('work_start_date_gregorian');
+                    var h = document.getElementById('work_start_date_hijri');
+                    var hidden = document.getElementById('work_start_date');
+                    var type = document.getElementById('work_start_calendar_type');
+                    var lbl = document.getElementById('work_start_calendar_label');
+                    var btnG = document.getElementById('work_start_toggle_gregorian');
+                    var btnH = document.getElementById('work_start_toggle_hijri');
+                    var isWorkStartSyncing = false;
+                    var hijriWorkStartPicker = null;
+                    if (!g || !h || !hidden || !type || !lbl || !btnG || !btnH) return;
+
+                    function normalizeArabicDigits(value) {
+                      if (!value) return '';
+                      var arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+                      var easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+                      return String(value).replace(/[٠-٩۰-۹]/g, function(char) {
+                        var arabicIndex = arabicDigits.indexOf(char);
+                        if (arabicIndex >= 0) return String(arabicIndex);
+                        var easternArabicIndex = easternArabicDigits.indexOf(char);
+                        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+                      });
+                    }
+
+                    function formatHijriDateFromGregorian(dateValue) {
+                      if (!dateValue) return '';
+                      try {
+                        var parts = String(dateValue).split('-').map(Number);
+                        var year = parts[0], month = parts[1], day = parts[2];
+                        if (!year || !month || !day) return '';
+                        var gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+                        if (Number.isNaN(gregorianDate.getTime())) return '';
+                        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        });
+                      } catch (_) {
+                        return '';
+                      }
+                    }
+
+                    function parseHijriInput(value) {
+                      var normalized = normalizeArabicDigits(value).replace(/\u200f/g, '').replace(/\u200e/g, '').trim();
+                      if (!normalized) return null;
+                      var parts = normalized.split(/[^\d]+/).filter(Boolean);
+                      if (parts.length !== 3) return null;
+
+                      var year, month, day;
+                      if (parts[0].length === 4) {
+                        year = Number(parts[0]);
+                        month = Number(parts[1]);
+                        day = Number(parts[2]);
+                      } else if (parts[2].length === 4) {
+                        day = Number(parts[0]);
+                        month = Number(parts[1]);
+                        year = Number(parts[2]);
+                      } else {
+                        return null;
+                      }
+
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      if (year < 1200 || year > 1700) return null;
+                      if (month < 1 || month > 12) return null;
+                      if (day < 1 || day > 30) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function extractHijriPartsFromDate(dateObject) {
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                      }).formatToParts(dateObject);
+                      var year = Number((parts.find(function(part) { return part.type === 'year'; }) || {}).value);
+                      var month = Number((parts.find(function(part) { return part.type === 'month'; }) || {}).value);
+                      var day = Number((parts.find(function(part) { return part.type === 'day'; }) || {}).value);
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function formatGregorianValue(dateObject) {
+                      var year = dateObject.getFullYear();
+                      var month = String(dateObject.getMonth() + 1).padStart(2, '0');
+                      var day = String(dateObject.getDate()).padStart(2, '0');
+                      return year + '-' + month + '-' + day;
+                    }
+
+                    function findGregorianFromHijri(hijriParts) {
+                      var approxGregorianYear = hijriParts.year + 579;
+                      var start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+                      var end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+                      for (var cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                        var currentHijriParts = extractHijriPartsFromDate(cursor);
+                        if (!currentHijriParts) continue;
+                        if (
+                          currentHijriParts.year === hijriParts.year &&
+                          currentHijriParts.month === hijriParts.month &&
+                          currentHijriParts.day === hijriParts.day
+                        ) {
+                          return formatGregorianValue(cursor);
+                        }
+                      }
+                      return '';
+                    }
+
+                    function syncFromGregorian() {
+                      if (isWorkStartSyncing) return;
+                      isWorkStartSyncing = true;
+                      h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
+                      type.value = 'gregorian';
+                      if (hijriWorkStartPicker && g.value) {
+                        hijriWorkStartPicker.setDate(g.value, false, 'Y-m-d');
+                      }
+                      isWorkStartSyncing = false;
+                    }
+
+                    function syncFromHijri() {
+                      if (isWorkStartSyncing) return;
+                      var parsedHijri = parseHijriInput(h.value);
+                      if (!parsedHijri) return;
+                      var gregorianValue = findGregorianFromHijri(parsedHijri);
+                      if (!gregorianValue) return;
+                      isWorkStartSyncing = true;
+                      g.value = gregorianValue;
+                      h.value = formatHijriDateFromGregorian(gregorianValue);
+                      hidden.value = gregorianValue;
+                      type.value = 'gregorian';
+                      if (hijriWorkStartPicker) {
+                        hijriWorkStartPicker.setDate(gregorianValue, false, 'Y-m-d');
+                      }
+                      isWorkStartSyncing = false;
+                    }
+
+                    function initHijriWorkStartPicker() {
+                      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon || !window.luxon.DateTime) {
+                        return;
+                      }
+                      hijriWorkStartPicker = flatpickr(h, {
+                        locale: 'ar',
+                        disableMobile: true,
+                        dateFormat: 'Y-m-d',
+                        allowInput: true,
+                        plugins: [
+                          hijriCalendarPlugin(window.luxon.DateTime, {
+                            showHijriDates: true,
+                            showHijriToggle: false
+                          })
+                        ],
+                        onOpen: [function(_, __, instance) {
+                          if (g.value) instance.setDate(g.value, false, 'Y-m-d');
+                        }],
+                        onChange: [function(selectedDates) {
+                          if (!selectedDates || !selectedDates.length || isWorkStartSyncing) return;
+                          var gregorianValue = formatGregorianValue(selectedDates[0]);
+                          isWorkStartSyncing = true;
+                          g.value = gregorianValue;
+                          h.value = formatHijriDateFromGregorian(gregorianValue);
+                          hidden.value = gregorianValue;
+                          type.value = 'gregorian';
+                          isWorkStartSyncing = false;
+                        }]
+                      });
+                    }
+
+                    function setGregorian() {
+                      g.style.display = '';
+                      h.style.display = 'none';
+                      type.value = 'gregorian';
+                      lbl.textContent = 'ميلادي';
+                      hidden.value = g.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
+                    }
+                    function setHijri() {
+                      g.style.display = 'none';
+                      h.style.display = '';
+                      type.value = 'hijri';
+                      lbl.textContent = 'هجري';
+                      if (g.value) h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
+                    }
+                    btnG.onclick = setGregorian;
+                    btnH.onclick = setHijri;
+                    g.onchange = syncFromGregorian;
+                    g.oninput = syncFromGregorian;
+                    h.onblur = syncFromHijri;
+                    initHijriWorkStartPicker();
+                    syncFromGregorian();
+                    setGregorian();
+                  });
+                </script>
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -8758,6 +10286,56 @@ app.get('/admin/customers/add', async (c) => {
               <textarea name="notes" rows="2"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
                         placeholder="أي ملاحظات إضافية عن العميل (اختياري)"></textarea>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <h2 class="text-xl font-bold text-gray-700 mb-4">
+                <i class="fas fa-paperclip ml-2"></i>
+                المرفقات
+              </h2>
+              <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
+              <input type="hidden" name="id_attachment_url" id="customer_id_attachment_url">
+              <input type="hidden" name="bank_statement_attachment_url" id="customer_bank_statement_attachment_url">
+              <input type="hidden" name="salary_attachment_url" id="customer_salary_attachment_url">
+              <input type="hidden" name="additional_attachment_url" id="customer_additional_attachment_url">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                  </label>
+                  <input type="file" id="customer_id_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_id_attachment_preview" class="mt-2"></div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                  </label>
+                  <input type="file" id="customer_bank_statement_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_bank_statement_attachment_preview" class="mt-2"></div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                  </label>
+                  <input type="file" id="customer_salary_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_salary_attachment_preview" class="mt-2"></div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                  </label>
+                  <input type="file" id="customer_additional_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_additional_attachment_preview" class="mt-2"></div>
+                </div>
+              </div>
             </div>
 
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
@@ -8820,6 +10398,7 @@ app.get('/admin/customers/add', async (c) => {
                 إلغاء
               </a>
             </div>
+            <div id="customer-create-message" class="mt-2"></div>
           </form>
         </div>
       </div>
@@ -8827,6 +10406,85 @@ app.get('/admin/customers/add', async (c) => {
         (function () {
           const form = document.getElementById('add-customer-form');
           if (!form) return;
+          var messageEl = document.getElementById('customer-create-message');
+          var attachmentFiles = {
+            id: null,
+            bank_statement: null,
+            salary: null,
+            additional: null
+          };
+          var attachmentInputs = {
+            id: document.getElementById('customer_id_attachment'),
+            bank_statement: document.getElementById('customer_bank_statement_attachment'),
+            salary: document.getElementById('customer_salary_attachment'),
+            additional: document.getElementById('customer_additional_attachment')
+          };
+          var attachmentPreviewIds = {
+            id: 'customer_id_attachment_preview',
+            bank_statement: 'customer_bank_statement_attachment_preview',
+            salary: 'customer_salary_attachment_preview',
+            additional: 'customer_additional_attachment_preview'
+          };
+          var attachmentHiddenIds = {
+            id: 'customer_id_attachment_url',
+            bank_statement: 'customer_bank_statement_attachment_url',
+            salary: 'customer_salary_attachment_url',
+            additional: 'customer_additional_attachment_url'
+          };
+
+          function setMessage(type, text) {
+            if (!messageEl) return;
+            var className = type === 'error'
+              ? 'bg-red-100 border-red-300 text-red-700'
+              : (type === 'success' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-blue-100 border-blue-300 text-blue-700');
+            messageEl.innerHTML = '<div class="border px-4 py-3 rounded ' + className + '">' +
+              '<i class="fas ' + (type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin')) + ' ml-2"></i>' +
+              text +
+              '</div>';
+          }
+
+          function handleAttachmentSelect(type) {
+            var input = attachmentInputs[type];
+            var preview = document.getElementById(attachmentPreviewIds[type]);
+            if (!input || !preview) return;
+            var file = input.files && input.files[0] ? input.files[0] : null;
+            if (!file) {
+              attachmentFiles[type] = null;
+              preview.innerHTML = '';
+              return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+              input.value = '';
+              attachmentFiles[type] = null;
+              preview.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>';
+              return;
+            }
+            attachmentFiles[type] = file;
+            preview.innerHTML = '<div class="text-sm text-green-600"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' +
+              file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</div>';
+          }
+
+          Object.keys(attachmentInputs).forEach(function(type) {
+            var input = attachmentInputs[type];
+            if (!input) return;
+            input.addEventListener('change', function() { handleAttachmentSelect(type); });
+          });
+
+          async function uploadAttachment(file, attachmentType) {
+            var uploadData = new FormData();
+            uploadData.append('file', file);
+            uploadData.append('attachmentType', attachmentType);
+            const response = await fetch('/api/attachments/upload', {
+              method: 'POST',
+              body: uploadData,
+              credentials: 'include'
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.url) {
+              throw new Error(payload.error || 'فشل رفع المرفق');
+            }
+            return payload.url;
+          }
 
           (function jobTypeToggle() {
             var jobType = document.getElementById('job_type');
@@ -8919,9 +10577,14 @@ app.get('/admin/customers/add', async (c) => {
             var dobType = document.getElementById('dob_calendar_type');
             var dobHidden = document.getElementById('date_of_birth');
             if (dobType && dobHidden) {
-              dobHidden.value = dobType.value === 'hijri'
-                ? (document.getElementById('date_of_birth_hijri').value || '')
-                : (document.getElementById('date_of_birth_gregorian').value || '');
+              dobType.value = 'gregorian';
+              dobHidden.value = document.getElementById('date_of_birth_gregorian').value || '';
+            }
+            var workStartType = document.getElementById('work_start_calendar_type');
+            var workStartHidden = document.getElementById('work_start_date');
+            if (workStartType && workStartHidden) {
+              workStartType.value = 'gregorian';
+              workStartHidden.value = document.getElementById('work_start_date_gregorian').value || '';
             }
             var jobType = document.getElementById('job_type');
             var jobTitleInput = document.getElementById('job_title_input');
@@ -8960,6 +10623,30 @@ app.get('/admin/customers/add', async (c) => {
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
 
+            try {
+              var uploadOrder = [
+                { key: 'id', label: 'صورة الهوية' },
+                { key: 'bank_statement', label: 'كشف الحساب' },
+                { key: 'salary', label: 'تعريف الراتب' },
+                { key: 'additional', label: 'المرفقات الإضافية' }
+              ];
+              for (var i = 0; i < uploadOrder.length; i++) {
+                var item = uploadOrder[i];
+                var file = attachmentFiles[item.key];
+                var hiddenInput = document.getElementById(attachmentHiddenIds[item.key]);
+                if (!hiddenInput) continue;
+                hiddenInput.value = '';
+                if (!file) continue;
+                setMessage('loading', 'جاري رفع ' + item.label + '...');
+                hiddenInput.value = await uploadAttachment(file, item.key);
+              }
+            } catch (uploadError) {
+              console.error('[CustomerCreate] Attachment upload failed:', uploadError);
+              setMessage('error', 'فشل رفع أحد المرفقات: ' + (uploadError.message || uploadError));
+              if (submitBtn) submitBtn.disabled = false;
+              return;
+            }
+
             const formData = new FormData(form);
             const payload = Object.fromEntries(formData.entries());
             console.log('[CustomerCreate] Submitting payload:', payload);
@@ -8990,6 +10677,7 @@ app.get('/admin/customers/add', async (c) => {
               document.close();
             } catch (error) {
               console.error('[CustomerCreate] Request failed:', error);
+              setMessage('error', 'حدث خطأ أثناء إضافة العميل.');
               alert('حدث خطأ أثناء إضافة العميل. راجع Console للمزيد من التفاصيل.');
             } finally {
               if (submitBtn) submitBtn.disabled = false;
@@ -9091,9 +10779,12 @@ app.get('/admin/customer-assignment', async (c) => {
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
       <div class="max-w-7xl mx-auto">
+        <div class="border-b border-slate-200/90 bg-white/90 px-4 py-1.5 mb-4 rounded-md">
+          <a href="/admin/customers" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة إلى صفحة العملاء</a>
+        </div>
         <!-- Header -->
         <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center">
             <div>
               <h1 class="text-3xl font-bold text-gray-800 mb-2">
                 <i class="fas fa-users-cog text-indigo-600"></i>
@@ -9101,10 +10792,6 @@ app.get('/admin/customer-assignment', async (c) => {
               </h1>
               <p class="text-gray-600">قم بتوزيع العملاء على الموظفين لتنظيم العمل</p>
             </div>
-            <a href="/admin/customers" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all">
-              <i class="fas fa-arrow-right ml-2"></i>
-              العودة للعملاء
-            </a>
           </div>
         </div>
       </div>
@@ -9135,11 +10822,15 @@ app.get('/admin/customer-assignment', async (c) => {
             </a>
             <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-chart-line text-green-600 group-hover:scale-110 transition-transform"></i>
-              <span>مخلص العملاء</span>
+              <span>ملخص العملاء</span>
             </a>
             <a href="/admin/reports" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-file-alt text-purple-600 group-hover:scale-110 transition-transform"></i>
               <span>التقارير</span>
+            </a>
+            <a href="/admin/follow-ups" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-address-card text-fuchsia-600 group-hover:scale-110 transition-transform"></i>
+              <span>متابعة التواصل</span>
             </a>
           </div>
 
@@ -9341,7 +11032,7 @@ app.get('/admin/customer-assignment', async (c) => {
                       </td>
                       <td class="px-4 py-3">#${customer.id}</td>
                       <td class="px-4 py-3 font-semibold">${customer.full_name || 'غير محدد'}</td>
-                      <td class="px-4 py-3">${customer.phone || 'غير محدد'}</td>
+                      <td class="px-4 py-3">${customerPhoneInputValue(customer.phone) || 'غير محدد'}</td>
                       <td class="px-4 py-3">${customer.email || 'غير محدد'}</td>
                       <td class="px-4 py-3">
                         ${customer.assigned_employee_name 
@@ -10973,8 +12664,13 @@ app.get('/admin/customers', async (c) => {
       `);
     }
     
-    // Build query based on role — always exclude archived customers
-    let query = 'SELECT * FROM customers WHERE (is_archived = 0 OR is_archived IS NULL)';
+    // Build query based on role — always exclude archived customers (employee assignee: role_id 4 or legacy 14)
+    let query = `
+      SELECT customers.*, u.full_name AS assigned_employee_name
+      FROM customers
+      LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 14)
+      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`;
     let queryParams: any[] = [];
     
     if (userInfo.roleId === 1) {
@@ -10983,15 +12679,15 @@ app.get('/admin/customers', async (c) => {
       // Role 2: Company Admin - sees all company customers
       // Role 3: Supervisor - sees all company customers (read-only)
       if (userInfo.tenantId) {
-        query += ' AND tenant_id = ?';
+        query += ' AND customers.tenant_id = ?';
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
       // Role 4: Employee - sees only assigned customers in same company
       if (userInfo.tenantId && userInfo.userId) {
-        query += ` AND tenant_id = ? AND EXISTS (
-          SELECT 1 FROM customer_assignments ca
-          WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+        query += ` AND customers.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca2
+          WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?
         )`;
         queryParams.push(userInfo.tenantId, userInfo.userId);
       } else {
@@ -11001,7 +12697,7 @@ app.get('/admin/customers', async (c) => {
       query += ' AND 1 = 0';
     }
     
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY customers.created_at DESC';
     
     const customers = queryParams.length > 0
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
@@ -11032,7 +12728,7 @@ app.get('/admin/customers', async (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
-          .overflow-x-auto { overflow-x: scroll !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
+          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
           .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
           .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
           .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
@@ -11177,7 +12873,7 @@ app.get('/admin/customers', async (c) => {
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div class="bg-white rounded-xl shadow-lg overflow-visible">
             <table class="min-w-full" id="dataTable">
               <thead class="bg-gray-50">
                 <tr>
@@ -11185,6 +12881,7 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموظف المخصص</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
@@ -11193,11 +12890,29 @@ app.get('/admin/customers', async (c) => {
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${customers.results.map((customer: any) => `
-                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customer.phone || ''}" data-email="${customer.email || ''}" data-created-at="${customer.created_at || ''}" data-has-request="${customerIdsWithRequests.has(customer.id) ? '1' : '0'}" data-rating="0">
+                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-created-at="${customer.created_at || ''}" data-has-request="${customerIdsWithRequests.has(customer.id) ? '1' : '0'}" data-rating="0">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${customer.phone || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="inline-flex items-center gap-2">
+                        <span dir="ltr">${customerPhoneInputValue(customer.phone) || '-'}</span>
+                        <button
+                          type="button"
+                          onclick="openCustomerWhatsApp('${String(customer.whatsapp_phone || customer.whatsapp_phone_number || '').replace(/'/g, "\\'")}', '${String(customer.phone || '').replace(/'/g, "\\'")}')"
+                          class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
+                          title="فتح واتساب"
+                        >
+                          <i class="fab fa-whatsapp"></i>
+                        </button>
+                      </div>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.email || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      ${customer.assigned_employee_name
+                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">${customer.assigned_employee_name}</span>`
+                        : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>`
+                      }
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(customer.created_at).toLocaleDateString('ar-SA')}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
                       ${customerIdsWithRequests.has(customer.id)
@@ -11363,6 +13078,8 @@ app.get('/admin/customers', async (c) => {
 
         <script>
           const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
+          const pageParams = new URLSearchParams(window.location.search);
+          const presetRatingFilter = pageParams.get('ratingFilter');
 
           function openNewRequest(customerId, customerName) {
             document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
@@ -11501,6 +13218,7 @@ app.get('/admin/customers', async (c) => {
               const data = await resp.json();
               if (data.success && data.data) {
                 data.data.forEach(function(r) { applyRowRating(r.customer_id, r.rating); });
+                if (presetRatingFilter) filterTable();
               }
             } catch(e) {}
           }
@@ -11727,6 +13445,34 @@ app.get('/admin/customers', async (c) => {
             }
           });
 
+          function normalizePhoneDigits(phoneValue) {
+            const raw = String(phoneValue || '').trim();
+            const westernDigits = raw
+              .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+              .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+            return westernDigits.replace(/[^\\d]/g, '');
+          }
+
+          function toSaudiWaNumber(phoneValue) {
+            let digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) digits = digits.slice(2);
+            if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+            if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+            if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+            return '';
+          }
+
+          function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+            const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+            if (!normalizedPhone) {
+              alert('لا يوجد رقم واتساب صالح لهذا العميل');
+              return;
+            }
+
+            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+          }
+
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
             const filterField = document.getElementById('filterField').value;
@@ -11740,11 +13486,12 @@ app.get('/admin/customers', async (c) => {
               const name = row.getAttribute('data-name') || '';
               const phone = row.getAttribute('data-phone') || '';
               const email = row.getAttribute('data-email') || '';
+              const assigned = row.getAttribute('data-assigned') || '';
               const createdAt = row.getAttribute('data-created-at') || '';
               const hasRequest = row.getAttribute('data-has-request') || '0';
               const rating = row.getAttribute('data-rating') || '0';
 
-              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput));
+              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput));
 
               let matchesDateRange = true;
               if (dateRangeFilter !== 'all') {
@@ -11765,6 +13512,15 @@ app.get('/admin/customers', async (c) => {
             document.getElementById('totalCount').textContent = visibleCount;
           }
 
+          function applyPresetFiltersFromUrl() {
+            if (!presetRatingFilter) return;
+            const ratingFilterEl = document.getElementById('ratingFilter');
+            const allowed = ['all', '0', '1', '2', '3', '4', '5'];
+            if (!ratingFilterEl || allowed.indexOf(presetRatingFilter) === -1) return;
+            ratingFilterEl.value = presetRatingFilter;
+            filterTable();
+          }
+
           function resetFilters() {
             document.getElementById('searchInput').value = '';
             document.getElementById('filterField').value = 'all';
@@ -11776,8 +13532,8 @@ app.get('/admin/customers', async (c) => {
 
           function exportToCSV() {
             const data = [
-              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${customers.results.map((customer: any) => `['${customer.id}', '${customer.full_name || '-'}', '${customer.phone || '-'}', '${customer.email || '-'}', '${customer.national_id || '-'}', '${new Date(customer.created_at).toLocaleDateString('ar-SA')}']`).join(',\n              ')}
+              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الموظف المخصص', 'الرقم الوطني', 'تاريخ التسجيل'],
+              ${customers.results.map((customer: any) => `['${customer.id}', '${customer.full_name || '-'}', '${customer.phone || '-'}', '${customer.email || '-'}', '${(customer.assigned_employee_name || 'غير مخصص').replace(/'/g, "\\'")}', '${customer.national_id || '-'}', '${new Date(customer.created_at).toLocaleDateString('ar-SA')}']`).join(',\n              ')}
             ];
             let csv = '\\uFEFF';
             data.forEach(row => { csv += row.join(',') + '\\n'; });
@@ -11790,6 +13546,7 @@ app.get('/admin/customers', async (c) => {
 
           refreshUnreadDot();
           loadCustomerRatings();
+          applyPresetFiltersFromUrl();
         </script>
       </body>
       </html>
@@ -12204,9 +13961,11 @@ app.get('/admin/notifications', async (c) => {
         </style>
       </head>
       <body class="bg-gray-50">
-        <div class="container mx-auto px-4 py-8">
-          <!-- Header -->
-          <div class="flex justify-between items-center mb-8">
+        <div class="container mx-auto px-4 py-6">
+          <div class="border-b border-slate-200/90 bg-slate-50/80 -mx-4 px-4 py-1.5 mb-5 sm:mx-0 sm:rounded-md">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+          </div>
+          <div class="flex flex-wrap items-center gap-4 mb-8">
             <div>
               <h1 class="text-4xl font-bold text-gray-800 flex items-center gap-3">
                 <i class="fas fa-bell text-blue-600"></i>
@@ -12214,15 +13973,11 @@ app.get('/admin/notifications', async (c) => {
               </h1>
               <p class="text-gray-600 mt-2">إدارة جميع إشعارات النظام</p>
             </div>
-            <div class="flex gap-3">
+            <div class="flex flex-wrap gap-3 ms-auto">
               <button onclick="markAllAsRead()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition font-bold">
                 <i class="fas fa-check-double ml-2"></i>
                 تحديد الكل كمقروء
               </button>
-              <a href="/admin" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition font-bold">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة
-              </a>
             </div>
           </div>
 
@@ -12496,6 +14251,27 @@ app.get('/admin/requests/:id/edit', async (c) => {
     if (!request) {
       return c.html('<h1>الطلب غير موجود</h1>')
     }
+
+    try {
+      const customerAttachments = await c.env.DB.prepare(`
+        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        FROM customers
+        WHERE id = ?
+      `).bind((request as any).customer_id).first() as {
+        id_attachment_url?: string | null
+        bank_statement_attachment_url?: string | null
+        salary_attachment_url?: string | null
+        additional_attachment_url?: string | null
+      } | null
+      if (customerAttachments) {
+        ;(request as any).id_attachment_url = customerAttachments.id_attachment_url || (request as any).id_attachment_url || null
+        ;(request as any).bank_statement_attachment_url = customerAttachments.bank_statement_attachment_url || (request as any).bank_statement_attachment_url || null
+        ;(request as any).salary_attachment_url = customerAttachments.salary_attachment_url || (request as any).salary_attachment_url || null
+        ;(request as any).additional_attachment_url = customerAttachments.additional_attachment_url || (request as any).additional_attachment_url || null
+      }
+    } catch (attachmentLoadError) {
+      if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
+    }
     
     // Get all banks for dropdown
     const banks = await c.env.DB.prepare(`
@@ -12715,38 +14491,6 @@ app.get('/admin/requests/:id/edit', async (c) => {
                 </div>
               </div>
               
-              <!-- Status and Notes -->
-              <div>
-                <h2 class="text-xl font-bold text-gray-700 mb-4">
-                  <i class="fas fa-clipboard ml-2"></i>
-                  الحالة والملاحظات
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">الحالة</label>
-                    <select 
-                      id="status"
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="pending" ${request.status === 'pending' ? 'selected' : ''}>قيد الانتظار</option>
-                      <option value="under_review" ${request.status === 'under_review' ? 'selected' : ''}>قيد المراجعة</option>
-                      <option value="approved" ${request.status === 'approved' ? 'selected' : ''}>موافق عليه</option>
-                      <option value="rejected" ${request.status === 'rejected' ? 'selected' : ''}>مرفوض</option>
-                    </select>
-                  </div>
-                  <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">الملاحظات</label>
-                    <textarea 
-                      id="notes"
-                      rows="3"
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="أضف ملاحظات..."
-                    >${request.notes || ''}</textarea>
-                  </div>
-                </div>
-              </div>
-              
               <!-- Submit Buttons -->
               <div class="flex gap-4">
                 <button 
@@ -12840,9 +14584,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
               requested_amount: parseFloat(document.getElementById('requested_amount').value),
               duration_months: parseInt(document.getElementById('duration_months').value),
               salary_at_request: parseFloat(document.getElementById('salary_at_request').value) || 0,
-              monthly_obligations: parseFloat(document.getElementById('monthly_obligations').value) || 0,
-              status: document.getElementById('status').value,
-              notes: document.getElementById('notes').value
+              monthly_obligations: parseFloat(document.getElementById('monthly_obligations').value) || 0
             }
             
             try {
@@ -12943,13 +14685,18 @@ app.get('/admin/requests', async (c) => {
         fr.requested_amount,
         fr.duration_months,
         fr.status,
+        fr.current_stage_id,
         fr.created_at,
         c.full_name as customer_name,
         c.assigned_to as customer_assigned_to,
-        b.bank_name as bank_name
+        b.bank_name as bank_name,
+        ws.stage_name as workflow_stage_name,
+        ws.stage_name_ar as workflow_stage_name_ar,
+        ws.stage_color as workflow_stage_color
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
     `;
     
     let queryParams: any[] = [];
@@ -12965,10 +14712,20 @@ app.get('/admin/requests', async (c) => {
         queryParams.push(userInfo.tenantId);
       }
     } else if (userInfo.roleId === 4) {
-      // Role 4: Employee - all company requests in tenant (matches create form + POST /api/requests scope)
-      if (userInfo.tenantId) {
-        query += ' WHERE c.tenant_id = ?';
-        queryParams.push(userInfo.tenantId);
+      // Role 4: Employee - only requests for assigned customers
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE c.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`;
+        queryParams.push(userInfo.tenantId, userInfo.userId);
+      } else {
+        query += ' WHERE 1 = 0';
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ' WHERE c.tenant_id = ? AND fr.assigned_bank_agent_id = ?';
+        queryParams.push(userInfo.tenantId, userInfo.userId);
       } else {
         query += ' WHERE 1 = 0';
       }
@@ -12982,10 +14739,35 @@ app.get('/admin/requests', async (c) => {
     const requests = queryParams.length > 0
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
+
+    const workflowStagesRaw = await c.env.DB.prepare(`
+      SELECT stage_name_ar
+      FROM workflow_stages
+      WHERE is_active = 1
+      ORDER BY stage_order ASC, id ASC
+    `).all();
+    const workflowStageNames = ((workflowStagesRaw?.results || []) as any[])
+      .map((row: any) => String(row?.stage_name_ar || '').trim())
+      .filter((name: string) => name.length > 0);
+    const fallbackRequestStatuses = [
+      'قيد الانتظار',
+      'قيد المراجعة',
+      'مقبول',
+      'موافق عليه',
+      'مرفوض',
+      'قيد المعالجة',
+      'مكتمل',
+      'ملغي',
+      'غير محدد'
+    ];
+    const allRequestStatusFilters = Array.from(new Set([...workflowStageNames, ...fallbackRequestStatuses]));
+    const requestStatusFiltersJson = JSON.stringify(allRequestStatusFilters).replace(/</g, '\\u003c');
     
     // Role 3: no edit/delete on existing rows; may still create new funding requests (same as other tenant roles)
-    const canEdit = userInfo.roleId !== 3;
+    const ridNorm = normalizeRoleId(userInfo.roleId)
+    const canEdit = userInfo.roleId !== 3 && ridNorm !== 5;
     const canCreateFundingRequest = [1, 2, 3, 4].includes(Number(userInfo.roleId));
+    const isBankAgent = ridNorm === 5;
     
     return c.html(`
       <!DOCTYPE html>
@@ -12999,7 +14781,7 @@ app.get('/admin/requests', async (c) => {
         <style>
           /* Custom Scrollbar - Enhanced */
           .overflow-x-auto {
-            overflow-x: scroll !important;
+            overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: #3b82f6 #f7fafc;
@@ -13028,8 +14810,38 @@ app.get('/admin/requests', async (c) => {
           }
           
           .overflow-x-auto table {
-            min-width: 1200px;
-            width: max-content;
+            min-width: 100%;
+            width: 100%;
+          }
+
+          @media (max-width: 1024px) {
+            .overflow-x-auto table {
+              min-width: 1200px;
+              width: max-content;
+            }
+          }
+
+          .requests-table-scroll {
+            overflow: visible !important;
+          }
+
+          @media (max-width: 1024px) {
+            .requests-table-scroll {
+              overflow-x: auto !important;
+              overflow-y: visible !important;
+            }
+          }
+
+          #tableBody tr:last-child td {
+            border-bottom: 0 !important;
+          }
+
+          #tableBody.dropdown-open tr:not(.dropdown-active-row) {
+            pointer-events: none !important;
+          }
+
+          #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td {
+            background-color: inherit !important;
           }
           
           ${getMobileResponsiveCSS()}
@@ -13046,7 +14858,8 @@ app.get('/admin/requests', async (c) => {
                 try {
                   const user = JSON.parse(userData);
                   if (user.tenant_id) {
-                    window.location.replace('/admin/requests?tenant_id=' + user.tenant_id);
+                    urlParams.set('tenant_id', String(user.tenant_id));
+                    window.location.replace('/admin/requests?' + urlParams.toString());
                   }
                 } catch (e) {
                   console.error('Error parsing userData:', e);
@@ -13057,7 +14870,7 @@ app.get('/admin/requests', async (c) => {
         </script>
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            ${isBankAgent ? '' : `<a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>`}
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -13079,17 +14892,19 @@ app.get('/admin/requests', async (c) => {
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
+                ${!isBankAgent ? `
                 <a href="/admin/reports/requests-followup" 
                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all inline-block text-center">
                   <i class="fas fa-chart-line ml-2"></i>
                   تقرير سير العمل
                 </a>
+                ` : ''}
               </div>
             </div>
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -13113,6 +14928,16 @@ app.get('/admin/requests', async (c) => {
                     <option value="status">الحالة فقط</option>
                   </select>
                 </div>
+
+                <div>
+                  <select
+                    id="statusFilter"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="filterTable()"
+                  >
+                    <option value="all">تصفية الحالة: الكل</option>
+                  </select>
+                </div>
                 
                 <button 
                   onclick="resetFilters()" 
@@ -13125,8 +14950,8 @@ app.get('/admin/requests', async (c) => {
             </div>
           </div>
           
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="overflow-x-auto">
+          <div class="bg-white rounded-xl shadow-lg overflow-visible">
+            <div>
               <table class="min-w-full" id="dataTable">
                 <thead class="bg-gray-50">
                   <tr>
@@ -13151,7 +14976,7 @@ app.get('/admin/requests', async (c) => {
                     'completed': 'مكتمل',
                     'cancelled': 'ملغي'
                   };
-                  const statusAr = statusMap[req.status] || req.status;
+                  const statusAr = req.workflow_stage_name_ar || statusMap[req.status] || req.status || 'غير محدد';
                   
                   // Map status to colors
                   const statusColorMap: Record<string, string> = {
@@ -13163,7 +14988,12 @@ app.get('/admin/requests', async (c) => {
                     'completed': 'bg-teal-100 text-teal-800',
                     'cancelled': 'bg-gray-100 text-gray-800'
                   };
-                  const statusColor = statusColorMap[req.status] || 'bg-gray-100 text-gray-800';
+                  const statusColor = req.workflow_stage_color
+                    ? ''
+                    : (statusColorMap[req.status] || 'bg-gray-100 text-gray-800');
+                  const statusInlineStyle = req.workflow_stage_color
+                    ? `background-color: ${req.workflow_stage_color}20; color: ${req.workflow_stage_color};`
+                    : '';
                   
                   return `
                   <tr class="hover:bg-gray-50" 
@@ -13175,7 +15005,7 @@ app.get('/admin/requests', async (c) => {
                     <td class="px-6 py-4 whitespace-nowrap">${req.requested_amount?.toLocaleString('ar-SA')} ريال</td>
                     <td class="px-6 py-4 whitespace-nowrap">${req.duration_months} شهر</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="px-2 py-1 text-xs rounded-full ${statusColor}">
+                      <span class="px-2 py-1 text-xs rounded-full ${statusColor}" style="${statusInlineStyle}">
                         ${statusAr}
                       </span>
                     </td>
@@ -13185,13 +15015,15 @@ app.get('/admin/requests', async (c) => {
                         <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
                           الإجراءات <i class="fas fa-chevron-down text-xs"></i>
                         </button>
-                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                        <div class="actions-dropdown-menu hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                          ${!isBankAgent ? `
                           <a href="/admin/requests/${req.id}/workflow" class="flex items-center gap-2 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">
                             <i class="fas fa-clock w-4"></i> الجدول الزمني
                           </a>
                           <a href="/admin/requests/${req.id}/report" class="flex items-center gap-2 px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">
                             <i class="fas fa-file-alt w-4"></i> تقرير
                           </a>
+                          ` : ''}
                           <a href="/admin/requests/${req.id}" class="flex items-center gap-2 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">
                             <i class="fas fa-eye w-4"></i> عرض
                           </a>
@@ -13216,6 +15048,7 @@ app.get('/admin/requests', async (c) => {
         </div>
         
         <script>
+          const REQUEST_STATUS_OPTIONS = ${requestStatusFiltersJson};
           function closeAllDropdowns() {
             document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
               m.classList.add('hidden');
@@ -13234,12 +15067,25 @@ app.get('/admin/requests', async (c) => {
           }
 
           function positionDropdownMenu(menu) {
+            const triggerBtn = menu.previousElementSibling;
+            if (!triggerBtn) return;
+            const triggerRect = triggerBtn.getBoundingClientRect();
+            const menuHeight = menu.offsetHeight || 220;
+            const viewportTop = 8;
+            const viewportBottom = window.innerHeight - 8;
+            let boundsTop = viewportTop;
+            let boundsBottom = viewportBottom;
+
+            const spaceBelow = boundsBottom - triggerRect.bottom;
+            const spaceAbove = triggerRect.top - boundsTop;
+            const shouldOpenDown = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
+
             menu.style.top = '100%';
             menu.style.bottom = 'auto';
             menu.style.marginTop = '0.25rem';
             menu.style.marginBottom = '0';
-            const rect = menu.getBoundingClientRect();
-            if (rect.bottom > (window.innerHeight - 8)) {
+
+            if (!shouldOpenDown) {
               menu.style.top = 'auto';
               menu.style.bottom = '100%';
               menu.style.marginTop = '0';
@@ -13277,6 +15123,7 @@ app.get('/admin/requests', async (c) => {
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
             const filterField = document.getElementById('filterField').value
+            const statusFilter = document.getElementById('statusFilter').value
             const tableBody = document.getElementById('tableBody')
             const rows = tableBody.getElementsByTagName('tr')
             let visibleCount = 0
@@ -13309,18 +15156,98 @@ app.get('/admin/requests', async (c) => {
                 }
               }
               
-              row.style.display = shouldShow ? '' : 'none'
-              if (shouldShow) visibleCount++
+              const statusMatches = statusFilter === 'all' || status === statusFilter
+              const visible = shouldShow && statusMatches
+
+              row.style.display = visible ? '' : 'none'
+              if (visible) visibleCount++
             }
             
             document.getElementById('totalCount').textContent = visibleCount
+          }
+
+          function hydrateStatusFilterOptions() {
+            const statusFilter = document.getElementById('statusFilter')
+            if (!statusFilter) return
+            const states = new Set((Array.isArray(REQUEST_STATUS_OPTIONS) ? REQUEST_STATUS_OPTIONS : []).map((s) => String(s || '').trim()).filter((s) => s))
+            document.querySelectorAll('#tableBody tr').forEach((row) => {
+              const state = (row.getAttribute('data-status') || '').trim()
+              if (state) states.add(state)
+            })
+            const sortedStates = Array.from(states).sort((a, b) => a.localeCompare(b, 'ar'))
+            statusFilter.innerHTML = [
+              '<option value="all">تصفية الحالة: الكل</option>',
+              ...sortedStates.map((state) => '<option value="' + state.replace(/"/g, '&quot;') + '">' + state + '</option>')
+            ].join('')
+          }
+
+          function applyRequestStatusFilterFromUrl() {
+            const params = new URLSearchParams(window.location.search)
+            const requestStatusFilter = (params.get('requestStatusFilter') || '').trim()
+            if (!requestStatusFilter || requestStatusFilter === 'all') return
+            const searchInputEl = document.getElementById('searchInput')
+            const filterFieldEl = document.getElementById('filterField')
+            const statusFilterEl = document.getElementById('statusFilter')
+            if (!searchInputEl || !filterFieldEl || !statusFilterEl) return
+            searchInputEl.value = requestStatusFilter
+            filterFieldEl.value = 'status'
+            statusFilterEl.value = requestStatusFilter
+            filterTable()
+          }
+
+          function hydrateRequestsSidebarStatuses() {
+            const sidebar = document.getElementById('global-persistent-sidebar')
+            if (!sidebar) return
+            const requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]')
+            if (!requestsCollapsible) return
+            const submenu = requestsCollapsible.querySelector('.gps-submenu')
+            if (!submenu) return
+
+            const params = new URLSearchParams(window.location.search)
+            const tenantId = params.get('tenant_id')
+            const states = new Set((Array.isArray(REQUEST_STATUS_OPTIONS) ? REQUEST_STATUS_OPTIONS : []).map((s) => String(s || '').trim()).filter((s) => s))
+            document.querySelectorAll('#tableBody tr').forEach((row) => {
+              const state = (row.getAttribute('data-status') || '').trim()
+              if (state) states.add(state)
+            })
+
+            const statusIconMap = {
+              'قيد الانتظار': 'fa-hourglass-half',
+              'قيد المراجعة': 'fa-search',
+              'مقبول': 'fa-check-circle',
+              'مرفوض': 'fa-times-circle',
+              'قيد المعالجة': 'fa-cogs',
+              'مكتمل': 'fa-flag-checkered',
+              'ملغي': 'fa-ban'
+            }
+
+            const makeHref = (statusValue) => {
+              const q = new URLSearchParams()
+              if (tenantId) q.set('tenant_id', tenantId)
+              q.set('requestStatusFilter', statusValue)
+              return '/admin/requests?' + q.toString()
+            }
+
+            const sortedStates = Array.from(states).sort((a, b) => a.localeCompare(b, 'ar'))
+            submenu.innerHTML = [
+              '<a href="' + makeHref('all') + '"><i class="fas fa-list"></i>الكل</a>',
+              ...sortedStates.map((state) => {
+                const iconClass = statusIconMap[state] || 'fa-tag'
+                return '<a href="' + makeHref(state) + '"><i class="fas ' + iconClass + '"></i>' + state + '</a>'
+              })
+            ].join('')
           }
           
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('statusFilter').value = 'all'
             filterTable()
           }
+
+          hydrateStatusFilterOptions()
+          hydrateRequestsSidebarStatuses()
+          applyRequestStatusFilterFromUrl()
           
           function exportToCSV() {
             const data = [
@@ -13366,6 +15293,10 @@ app.get('/admin/requests', async (c) => {
 // Delete financing request (GET route for link-based deletion)
 app.get('/admin/requests/:id/delete', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (userInfo.roleId === 5) {
+      return c.redirect('/admin/requests')
+    }
     const id = c.req.param('id')
     await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
     return c.redirect('/admin/requests?deleted=1')
@@ -13381,6 +15312,9 @@ app.get('/admin/requests/new', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId || !userInfo.roleId) {
       return c.redirect('/login')
+    }
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      return c.redirect('/admin/requests')
     }
 
     if (userInfo.roleId === 2 || userInfo.roleId === 3) {
@@ -13430,8 +15364,14 @@ app.get('/admin/requests/new', async (c) => {
         id: cust.id,
         name: cust.full_name || '',
         text: `${cust.full_name} - ${cust.phone}`,
+        tenant_id: cust.tenant_id != null ? Number(cust.tenant_id) : null
       }))
     ).replace(/</g, '\\u003c')
+
+    const newRequestPageCtxJson = JSON.stringify({
+      viewerRoleId: userInfo.roleId,
+      viewerTenantId: userInfo.tenantId != null ? Number(userInfo.tenantId) : null
+    }).replace(/</g, '\\u003c')
 
     return c.html(`
       <!DOCTYPE html>
@@ -13571,12 +15511,24 @@ app.get('/admin/requests/new', async (c) => {
                     <i class="fas fa-university text-yellow-600 ml-1"></i>
                     البنك المختار
                   </label>
-                  <select name="selected_bank_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                  <select name="selected_bank_id" id="newRequestSelectedBank" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">-- اختر البنك (اختياري) --</option>
                     ${banks.results.map((bank: any) => `
                       <option value="${bank.id}">${bank.bank_name}</option>
                     `).join('')}
                   </select>
+                </div>
+                
+                <div id="bankAgentAssignWrap" class="md:col-span-2" style="display: none;">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-user-tie text-amber-600 ml-1"></i>
+                    وكيل البنك (اختياري)
+                  </label>
+                  <select name="assigned_bank_agent_id" id="newRequestBankAgentSelect"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <option value="">-- اختر وكيل البنك بعد اختيار البنك --</option>
+                  </select>
+                  <p id="bankAgentAssignHint" class="text-xs text-gray-500 mt-1 hidden"></p>
                 </div>
                 
                 <!-- الحالة -->
@@ -13619,6 +15571,7 @@ app.get('/admin/requests/new', async (c) => {
         </div>
         <script type="application/json" id="newRequestCustomersJSON">${newRequestCustomersJson}</script>
         <script type="application/json" id="newRequestPrefillCustomerId">${JSON.stringify(prefillCustomerIdAllowed ? prefillCustomerIdNum : null)}</script>
+        <script type="application/json" id="newRequestPageCtx">${newRequestPageCtxJson}</script>
         <script>
           (function() {
             const form = document.getElementById('newRequestForm');
@@ -13631,9 +15584,93 @@ app.get('/admin/requests/new', async (c) => {
             const filterInput = document.getElementById('newRequestCustomerFilter');
             const listEl = document.getElementById('newRequestCustomerOptions');
             const jsonEl = document.getElementById('newRequestCustomersJSON');
+            const ctxEl = document.getElementById('newRequestPageCtx');
             var customerRows = [];
+            var pageCtx = { viewerRoleId: null, viewerTenantId: null };
             if (jsonEl && jsonEl.textContent) {
               try { customerRows = JSON.parse(jsonEl.textContent); } catch (e) { customerRows = []; }
+            }
+            if (ctxEl && ctxEl.textContent) {
+              try { pageCtx = JSON.parse(ctxEl.textContent); } catch (e) { pageCtx = { viewerRoleId: null, viewerTenantId: null }; }
+            }
+            const bankSelect = document.getElementById('newRequestSelectedBank');
+            const bankAgentWrap = document.getElementById('bankAgentAssignWrap');
+            const bankAgentSelect = document.getElementById('newRequestBankAgentSelect');
+            const bankAgentHint = document.getElementById('bankAgentAssignHint');
+            function resolveTenantIdForBankAgents() {
+              var custId = hidden ? String(hidden.value || '') : '';
+              for (var i = 0; i < customerRows.length; i++) {
+                if (String(customerRows[i].id) === custId && customerRows[i].tenant_id != null) {
+                  return Number(customerRows[i].tenant_id);
+                }
+              }
+              if (pageCtx && pageCtx.viewerTenantId != null) return Number(pageCtx.viewerTenantId);
+              return null;
+            }
+            function resetBankAgentSelect(placeholder) {
+              if (!bankAgentSelect) return;
+              bankAgentSelect.innerHTML = '';
+              var opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = placeholder || '-- بدون --';
+              bankAgentSelect.appendChild(opt);
+            }
+            async function loadBankAgentsForBank(bankId) {
+              if (!bankAgentWrap || !bankAgentSelect) return;
+              var tid = resolveTenantIdForBankAgents();
+              if (!bankId) {
+                bankAgentWrap.style.display = 'none';
+                resetBankAgentSelect('-- اختر وكيل البنك بعد اختيار البنك --');
+                if (bankAgentHint) { bankAgentHint.classList.add('hidden'); bankAgentHint.textContent = ''; }
+                return;
+              }
+              bankAgentWrap.style.display = 'block';
+              if (tid == null || isNaN(tid)) {
+                resetBankAgentSelect('-- اختر العميل أولاً (لتحديد الشركة) --');
+                if (bankAgentHint) {
+                  bankAgentHint.textContent = 'لإسناد وكيل بنك، اختر عميلاً تابعاً لشركة أو سجّل الدخول بحساب شركة.';
+                  bankAgentHint.classList.remove('hidden');
+                }
+                return;
+              }
+              if (bankAgentHint) { bankAgentHint.classList.add('hidden'); bankAgentHint.textContent = ''; }
+              resetBankAgentSelect('... جاري التحميل');
+              var token = localStorage.getItem('authToken');
+              try {
+                var url = '/api/admin/bank-agents?tenant_id=' + encodeURIComponent(String(tid)) + '&bank_id=' + encodeURIComponent(String(bankId));
+                var res = await fetch(url, {
+                  credentials: 'same-origin',
+                  headers: token ? { Authorization: 'Bearer ' + token } : {}
+                });
+                var data = await res.json();
+                bankAgentSelect.innerHTML = '';
+                var emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.textContent = '-- بدون وكيل بنك --';
+                bankAgentSelect.appendChild(emptyOpt);
+                if (data && data.success && Array.isArray(data.data)) {
+                  data.data.forEach(function (u) {
+                    var o = document.createElement('option');
+                    o.value = String(u.id);
+                    o.textContent = (u.full_name || u.username || ('#' + u.id)) + (u.email ? (' — ' + u.email) : '');
+                    bankAgentSelect.appendChild(o);
+                  });
+                  if (data.data.length === 0 && bankAgentHint) {
+                    bankAgentHint.textContent = 'لا يوجد وكلاء بنك مفعّلون لهذا البنك في هذه الشركة.';
+                    bankAgentHint.classList.remove('hidden');
+                  }
+                } else {
+                  resetBankAgentSelect('-- تعذر التحميل --');
+                }
+              } catch (err) {
+                resetBankAgentSelect('-- خطأ في التحميل --');
+              }
+            }
+            if (bankSelect) {
+              bankSelect.addEventListener('change', function () {
+                var bid = bankSelect.value ? parseInt(bankSelect.value, 10) : NaN;
+                loadBankAgentsForBank(!isNaN(bid) && bid > 0 ? bid : null);
+              });
             }
             function isOpen() { return panel && !panel.classList.contains('hidden'); }
             function setOpen(open) {
@@ -13676,6 +15713,10 @@ app.get('/admin/requests/new', async (c) => {
                     triggerLabel.classList.add('text-gray-900');
                   }
                   setOpen(false);
+                  if (bankSelect && bankSelect.value) {
+                    var bnk = parseInt(bankSelect.value, 10);
+                    if (!isNaN(bnk) && bnk > 0) loadBankAgentsForBank(bnk);
+                  }
                 });
                 listEl.appendChild(li);
               });
@@ -13721,6 +15762,11 @@ app.get('/admin/requests/new', async (c) => {
               triggerLabel.textContent = found.text;
               triggerLabel.classList.remove('text-gray-500');
               triggerLabel.classList.add('text-gray-900');
+              var bsPre = document.getElementById('newRequestSelectedBank');
+              if (bsPre && bsPre.value) {
+                var bPre = parseInt(bsPre.value, 10);
+                if (!isNaN(bPre) && bPre > 0) loadBankAgentsForBank(bPre);
+              }
             })();
             form.addEventListener('submit', async (event) => {
               event.preventDefault();
@@ -13761,9 +15807,14 @@ app.get('/admin/requests/new', async (c) => {
 app.get('/admin/requests/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.redirect('/login')
+    }
     const request = await c.env.DB.prepare(`
       SELECT fr.*, 
              c.full_name as customer_name, c.phone as customer_phone, c.email as customer_email,
+             c.tenant_id as customer_tenant_id,
              b.bank_name, ft.type_name as financing_type_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
@@ -13774,6 +15825,42 @@ app.get('/admin/requests/:id', async (c) => {
     
     if (!request) {
       return c.html('<h1>الطلب غير موجود</h1>')
+    }
+
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      const tid = userInfo.tenantId
+      if (!tid || !userInfo.userId) {
+        return c.redirect('/admin/requests')
+      }
+      if (Number((request as any).customer_tenant_id) !== Number(tid)) {
+        return c.redirect('/admin/requests')
+      }
+      if (Number((request as any).assigned_bank_agent_id) !== Number(userInfo.userId)) {
+        return c.redirect('/admin/requests')
+      }
+    }
+
+    const isBankAgentViewer = normalizeRoleId(userInfo.roleId) === 5
+
+    try {
+      const customerAttachments = await c.env.DB.prepare(`
+        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        FROM customers
+        WHERE id = ?
+      `).bind((request as any).customer_id).first() as {
+        id_attachment_url?: string | null
+        bank_statement_attachment_url?: string | null
+        salary_attachment_url?: string | null
+        additional_attachment_url?: string | null
+      } | null
+      if (customerAttachments) {
+        ;(request as any).id_attachment_url = (request as any).id_attachment_url || customerAttachments.id_attachment_url || null
+        ;(request as any).bank_statement_attachment_url = (request as any).bank_statement_attachment_url || customerAttachments.bank_statement_attachment_url || null
+        ;(request as any).salary_attachment_url = (request as any).salary_attachment_url || customerAttachments.salary_attachment_url || null
+        ;(request as any).additional_attachment_url = (request as any).additional_attachment_url || customerAttachments.additional_attachment_url || null
+      }
+    } catch (attachmentLoadError) {
+      if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
     }
     
     return c.html(`
@@ -13793,6 +15880,7 @@ app.get('/admin/requests/:id', async (c) => {
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة الطلبات
             </a>
+            ${!isBankAgentViewer ? `
             <div class="flex gap-2">
               <a href="/admin/requests/${id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded transition-all">
                 <i class="fas fa-edit ml-1"></i> تعديل
@@ -13801,6 +15889,7 @@ app.get('/admin/requests/:id', async (c) => {
                 <i class="fas fa-trash ml-1"></i> حذف
               </a>
             </div>
+            ` : ''}
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-8">
@@ -14232,7 +16321,14 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف *</label>
-                  <input type="tel" name="phone" value="${(customer as any).phone || ''}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden">
+                    <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
+                    <input type="tel" name="phone" value="${customerPhoneInputValue((customer as any).phone)}" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl" class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
+                           placeholder="5xxxxxxxx"
+                           oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
+                           oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -14327,13 +16423,79 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 </label>
                 <textarea name="notes" rows="2" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="أي ملاحظات إضافية (اختياري)">${((customer as any).notes || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
               </div>
+              <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h2 class="text-xl font-bold text-gray-700 mb-4">
+                  <i class="fas fa-paperclip ml-2"></i>
+                  المرفقات
+                </h2>
+                <div class="mb-6 bg-white p-4 rounded-lg">
+                  <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="border-r pr-4">
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-id-card ml-1"></i> صورة الهوية:</p>
+                      ${(customer as any).id_attachment_url ? `<a href="${(customer as any).id_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                    <div>
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-invoice ml-1"></i> كشف الحساب:</p>
+                      ${(customer as any).bank_statement_attachment_url ? `<a href="${(customer as any).bank_statement_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                    <div class="border-r pr-4">
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-money-check ml-1"></i> تعريف الراتب:</p>
+                      ${(customer as any).salary_attachment_url ? `<a href="${(customer as any).salary_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                    <div>
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-alt ml-1"></i> مرفقات إضافية:</p>
+                      ${(customer as any).additional_attachment_url ? `<a href="${(customer as any).additional_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                  </div>
+                </div>
+                <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
+                <input type="hidden" name="id_attachment_url" id="edit_customer_id_attachment_url" value="${((customer as any).id_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="bank_statement_attachment_url" id="edit_customer_bank_statement_attachment_url" value="${((customer as any).bank_statement_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="salary_attachment_url" id="edit_customer_salary_attachment_url" value="${((customer as any).salary_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="additional_attachment_url" id="edit_customer_additional_attachment_url" value="${((customer as any).additional_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                    </label>
+                    <input type="file" id="edit_customer_id_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_id_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                    </label>
+                    <input type="file" id="edit_customer_bank_statement_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_bank_statement_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                    </label>
+                    <input type="file" id="edit_customer_salary_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_salary_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                    </label>
+                    <input type="file" id="edit_customer_additional_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_attachment_preview" class="mt-2"></div>
+                  </div>
+                </div>
+              </div>
               <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
                 <h3 class="text-sm font-bold text-gray-700 mb-3">
                   <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
                   الحلول المقترحة
                 </h3>
                 <input type="hidden" name="solutions_json" id="edit_solutions_json" value="[]">
-                <div class="overflow-x-auto">
+            <div class="overflow-x-auto requests-table-scroll">
                   <table class="w-full text-sm">
                     <thead>
                       <tr class="border-b border-gray-300 text-right">
@@ -14385,10 +16547,87 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   إلغاء
                 </a>
               </div>
+              <div id="customer-edit-message" class="mt-2"></div>
             </form>
             <script>
               (function(){
                 var cust = ${JSON.stringify({ birthdate: (customer as any).birthdate, dob_calendar_type: (customer as any).dob_calendar_type, job_type: (customer as any).job_type, military_rank: (customer as any).military_rank })};
+                var editForm = document.getElementById('edit-customer-form');
+                var editMessageEl = document.getElementById('customer-edit-message');
+                var editAttachmentFiles = {
+                  id: null,
+                  bank_statement: null,
+                  salary: null,
+                  additional: null
+                };
+                var editAttachmentInputs = {
+                  id: document.getElementById('edit_customer_id_attachment'),
+                  bank_statement: document.getElementById('edit_customer_bank_statement_attachment'),
+                  salary: document.getElementById('edit_customer_salary_attachment'),
+                  additional: document.getElementById('edit_customer_additional_attachment')
+                };
+                var editAttachmentPreviewIds = {
+                  id: 'edit_customer_id_attachment_preview',
+                  bank_statement: 'edit_customer_bank_statement_attachment_preview',
+                  salary: 'edit_customer_salary_attachment_preview',
+                  additional: 'edit_customer_additional_attachment_preview'
+                };
+                var editAttachmentHiddenIds = {
+                  id: 'edit_customer_id_attachment_url',
+                  bank_statement: 'edit_customer_bank_statement_attachment_url',
+                  salary: 'edit_customer_salary_attachment_url',
+                  additional: 'edit_customer_additional_attachment_url'
+                };
+                function setEditMessage(type, text) {
+                  if (!editMessageEl) return;
+                  var className = type === 'error'
+                    ? 'bg-red-100 border-red-300 text-red-700'
+                    : (type === 'success' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-blue-100 border-blue-300 text-blue-700');
+                  editMessageEl.innerHTML = '<div class="border px-4 py-3 rounded ' + className + '">' +
+                    '<i class="fas ' + (type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin')) + ' ml-2"></i>' +
+                    text +
+                    '</div>';
+                }
+                function handleEditAttachmentSelect(type) {
+                  var input = editAttachmentInputs[type];
+                  var preview = document.getElementById(editAttachmentPreviewIds[type]);
+                  if (!input || !preview) return;
+                  var file = input.files && input.files[0] ? input.files[0] : null;
+                  if (!file) {
+                    editAttachmentFiles[type] = null;
+                    preview.innerHTML = '';
+                    return;
+                  }
+                  if (file.size > 2 * 1024 * 1024) {
+                    input.value = '';
+                    editAttachmentFiles[type] = null;
+                    preview.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>';
+                    return;
+                  }
+                  editAttachmentFiles[type] = file;
+                  preview.innerHTML = '<div class="text-sm text-green-600"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' +
+                    file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</div>';
+                }
+                Object.keys(editAttachmentInputs).forEach(function(type) {
+                  var input = editAttachmentInputs[type];
+                  if (!input) return;
+                  input.addEventListener('change', function() { handleEditAttachmentSelect(type); });
+                });
+                async function uploadEditAttachment(file, attachmentType) {
+                  var uploadData = new FormData();
+                  uploadData.append('file', file);
+                  uploadData.append('attachmentType', attachmentType);
+                  var response = await fetch('/api/attachments/upload', {
+                    method: 'POST',
+                    body: uploadData,
+                    credentials: 'include'
+                  });
+                  var payload = await response.json();
+                  if (!response.ok || !payload.success || !payload.url) {
+                    throw new Error(payload.error || 'فشل رفع المرفق');
+                  }
+                  return payload.url;
+                }
                 var g=document.getElementById('edit_date_of_birth_gregorian'),h=document.getElementById('edit_date_of_birth_hijri'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri');
                 if(!g||!h||!hidden||!type) return;
                 hidden.value = cust.birthdate || '';
@@ -14468,7 +16707,8 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   editObligationsInitial.forEach(function(o){ addEditRow(o); });
                   if(editObligationsInitial.length===0) addEditRow();
                   editAddBtn.onclick=function(){ addEditRow(); };
-                  document.getElementById('edit-customer-form').addEventListener('submit',function(){
+                  editForm.addEventListener('submit',async function(event){
+                    event.preventDefault();
                     var rows=editTbody.querySelectorAll('tr');
                     var arr=[];
                     rows.forEach(function(tr){
@@ -14490,6 +16730,30 @@ app.get('/admin/customers/:id/edit', async (c) => {
                         sarr.push({ note: (ne.value||'').trim() });
                       });
                       esh.value=JSON.stringify(sarr);
+                    }
+                    var submitBtn = editForm.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = true;
+                    try {
+                      var uploadOrder = [
+                        { key: 'id', label: 'صورة الهوية' },
+                        { key: 'bank_statement', label: 'كشف الحساب' },
+                        { key: 'salary', label: 'تعريف الراتب' },
+                        { key: 'additional', label: 'المرفقات الإضافية' }
+                      ];
+                      for (var i = 0; i < uploadOrder.length; i++) {
+                        var item = uploadOrder[i];
+                        var file = editAttachmentFiles[item.key];
+                        if (!file) continue;
+                        var hiddenInput = document.getElementById(editAttachmentHiddenIds[item.key]);
+                        if (!hiddenInput) continue;
+                        setEditMessage('loading', 'جاري رفع ' + item.label + '...');
+                        hiddenInput.value = await uploadEditAttachment(file, item.key);
+                      }
+                      editForm.submit();
+                    } catch (uploadError) {
+                      console.error('[CustomerEdit] Attachment upload failed:', uploadError);
+                      setEditMessage('error', 'فشل رفع أحد المرفقات: ' + (uploadError.message || uploadError));
+                      if (submitBtn) submitBtn.disabled = false;
                     }
                   });
                 }
@@ -14734,7 +16998,46 @@ app.get('/admin/customers/:id/report', async (c) => {
             </div>
           </div>
           
-          <!-- القسم 2: بيانات الحاسبة المالية -->
+          <!-- القسم 2: المرفقات -->
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-cyan-500 pb-2">
+              <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
+              المرفقات
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${cust.id_attachment_url ? `
+              <a href="${cust.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
+                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${cust.bank_statement_attachment_url ? `
+              <a href="${cust.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
+                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
+                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${cust.salary_attachment_url ? `
+              <a href="${cust.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
+                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
+                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${cust.additional_attachment_url ? `
+              <a href="${cust.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
+                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
+                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${!cust.id_attachment_url && !cust.bank_statement_attachment_url && !cust.salary_attachment_url && !cust.additional_attachment_url ? `
+              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                لا توجد مرفقات مرفوعة لهذا العميل
+              </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- القسم 3: بيانات الحاسبة المالية -->
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-green-500 pb-2">
               <i class="fas fa-calculator text-green-600 ml-2"></i>
@@ -14952,6 +17255,27 @@ app.get('/admin/requests/:id/report', async (c) => {
     }
     
     const req = request as any
+
+    try {
+      const customerAttachments = await c.env.DB.prepare(`
+        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        FROM customers
+        WHERE id = ?
+      `).bind(req.customer_id).first() as {
+        id_attachment_url?: string | null
+        bank_statement_attachment_url?: string | null
+        salary_attachment_url?: string | null
+        additional_attachment_url?: string | null
+      } | null
+      if (customerAttachments) {
+        req.id_attachment_url = req.id_attachment_url || customerAttachments.id_attachment_url || null
+        req.bank_statement_attachment_url = req.bank_statement_attachment_url || customerAttachments.bank_statement_attachment_url || null
+        req.salary_attachment_url = req.salary_attachment_url || customerAttachments.salary_attachment_url || null
+        req.additional_attachment_url = req.additional_attachment_url || customerAttachments.additional_attachment_url || null
+      }
+    } catch (attachmentLoadError) {
+      if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
+    }
     
     // تنسيق التواريخ
     const formatDate = (date: string) => {
@@ -15041,76 +17365,7 @@ app.get('/admin/requests/:id/report', async (c) => {
             </div>
           </div>
           
-          <!-- القسم 1: معلومات العميل -->
-          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
-            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">
-              <i class="fas fa-user text-blue-600 ml-2"></i>
-              معلومات العميل
-            </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-blue-100 p-3 rounded-lg">
-                  <i class="fas fa-user text-blue-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">اسم العميل</p>
-                  <p class="text-xl font-bold text-gray-800">${req.customer_name || 'غير محدد'}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-green-100 p-3 rounded-lg">
-                  <i class="fas fa-phone text-green-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">رقم الهاتف</p>
-                  <p class="text-xl font-bold text-gray-800" dir="ltr">${req.customer_phone || 'غير محدد'}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-purple-100 p-3 rounded-lg">
-                  <i class="fas fa-envelope text-purple-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">البريد الإلكتروني</p>
-                  <p class="text-xl font-bold text-gray-800">${req.customer_email || 'غير محدد'}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-red-100 p-3 rounded-lg">
-                  <i class="fas fa-calendar text-red-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">تاريخ الميلاد</p>
-                  <p class="text-xl font-bold text-gray-800">${formatDate(req.customer_birthdate)}${(req.customer_dob_calendar_type === 'hijri' ? ' هـ' : ' م')}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-yellow-100 p-3 rounded-lg">
-                  <i class="fas fa-money-bill-wave text-yellow-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">الراتب الشهري</p>
-                  <p class="text-xl font-bold text-yellow-600">${formatNumber(req.customer_salary)} ريال</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-indigo-100 p-3 rounded-lg">
-                  <i class="fas fa-id-badge text-indigo-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">رقم الهوية</p>
-                  <p class="text-xl font-bold text-gray-800">${req.customer_national_id && !req.customer_national_id.startsWith('TEMP-') ? req.customer_national_id : 'غير محدد'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- القسم 2: تفاصيل طلب التمويل -->
+          <!-- القسم 1: تفاصيل طلب التمويل -->
           <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-lg p-6 mb-6 report-section border-2 border-purple-400">
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-purple-500 pb-2">
               <i class="fas fa-file-invoice-dollar text-purple-600 ml-2"></i>
@@ -15191,7 +17446,115 @@ app.get('/admin/requests/:id/report', async (c) => {
             </div>
           </div>
           
-          <!-- القسم 3: معلومات إضافية -->
+          <!-- القسم 2: معلومات العميل -->
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">
+              <i class="fas fa-user text-blue-600 ml-2"></i>
+              معلومات العميل
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-blue-100 p-3 rounded-lg">
+                  <i class="fas fa-user text-blue-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">اسم العميل</p>
+                  <p class="text-xl font-bold text-gray-800">${req.customer_name || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-green-100 p-3 rounded-lg">
+                  <i class="fas fa-phone text-green-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">رقم الهاتف</p>
+                  <p class="text-xl font-bold text-gray-800" dir="ltr">${req.customer_phone || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-purple-100 p-3 rounded-lg">
+                  <i class="fas fa-envelope text-purple-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">البريد الإلكتروني</p>
+                  <p class="text-xl font-bold text-gray-800">${req.customer_email || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-red-100 p-3 rounded-lg">
+                  <i class="fas fa-calendar text-red-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">تاريخ الميلاد</p>
+                  <p class="text-xl font-bold text-gray-800">${formatDate(req.customer_birthdate)}${(req.customer_dob_calendar_type === 'hijri' ? ' هـ' : ' م')}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-yellow-100 p-3 rounded-lg">
+                  <i class="fas fa-money-bill-wave text-yellow-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">الراتب الشهري</p>
+                  <p class="text-xl font-bold text-yellow-600">${formatNumber(req.customer_salary)} ريال</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-indigo-100 p-3 rounded-lg">
+                  <i class="fas fa-id-badge text-indigo-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">رقم الهوية</p>
+                  <p class="text-xl font-bold text-gray-800">${req.customer_national_id && !req.customer_national_id.startsWith('TEMP-') ? req.customer_national_id : 'غير محدد'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- القسم 3: المرفقات -->
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-cyan-500 pb-2">
+              <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
+              المرفقات
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${req.id_attachment_url ? `
+              <a href="${req.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
+                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${req.bank_statement_attachment_url ? `
+              <a href="${req.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
+                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
+                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${req.salary_attachment_url ? `
+              <a href="${req.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
+                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
+                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${req.additional_attachment_url ? `
+              <a href="${req.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
+                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
+                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              ` : ''}
+              ${!req.id_attachment_url && !req.bank_statement_attachment_url && !req.salary_attachment_url && !req.additional_attachment_url ? `
+              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                لا توجد مرفقات مرفوعة لهذا الطلب/العميل
+              </div>
+              ` : ''}
+            </div>
+          </div>
+          
+          <!-- القسم 4: معلومات إضافية -->
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-gray-500 pb-2">
               <i class="fas fa-info-circle text-gray-600 ml-2"></i>
@@ -18026,6 +20389,28 @@ app.get('/admin/users/:id/edit', async (c) => {
     if (currentUserRoleId === 1) {
       tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()
     }
+
+    const tidForBanks = user.tenant_id != null ? Number(user.tenant_id) : NaN
+    let bankRows: Array<{ id: number; bank_name: string }> = []
+    if (tidForBanks && !Number.isNaN(tidForBanks)) {
+      try {
+        const br = await c.env.DB
+          .prepare(
+            `SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name`
+          )
+          .bind(tidForBanks)
+          .all()
+        bankRows = (br.results || []) as Array<{ id: number; bank_name: string }>
+      } catch {
+        const br = await c.env.DB
+          .prepare(`SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`)
+          .bind(tidForBanks)
+          .all()
+        bankRows = (br.results || []) as Array<{ id: number; bank_name: string }>
+      }
+    }
+    const assignedBankIdUser = (user as { assigned_bank_id?: number | null }).assigned_bank_id
+    const showBankRow = normalizeRoleId(user.role_id) === 5
     
     return c.html(`
       <!DOCTYPE html>
@@ -18127,6 +20512,23 @@ app.get('/admin/users/:id/edit', async (c) => {
                 <input type="hidden" name="tenant_id" value="${user.tenant_id || ''}">
                 `}
                 
+                <div id="editBankAgentWrap" class="md:col-span-2" style="display: ${showBankRow ? 'block' : 'none'};">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-university text-amber-600 ml-1"></i>
+                    البنك <span class="text-red-600">*</span>
+                  </label>
+                  <select name="assigned_bank_id" id="editAssignedBankSelect"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">-- اختر البنك --</option>
+                    ${bankRows
+                      .map(
+                        (b: any) => `
+                      <option value="${b.id}" ${Number(assignedBankIdUser) === Number(b.id) ? 'selected' : ''}>${String(b.bank_name || '').replace(/</g, '')}</option>`
+                      )
+                      .join('')}
+                  </select>
+                </div>
+                
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     الحالة <span class="text-red-500">*</span>
@@ -18150,7 +20552,26 @@ app.get('/admin/users/:id/edit', async (c) => {
             </form>
           </div>
         </div>
-        
+        <script>
+          (function () {
+            var roleSelect = document.getElementById('roleSelect');
+            var wrap = document.getElementById('editBankAgentWrap');
+            var bankSel = document.getElementById('editAssignedBankSelect');
+            if (!roleSelect || !wrap || !bankSel) return;
+            function sync() {
+              var rid = parseInt(roleSelect.value, 10);
+              if (rid === 5) {
+                wrap.style.display = 'block';
+                bankSel.setAttribute('required', 'required');
+              } else {
+                wrap.style.display = 'none';
+                bankSel.removeAttribute('required');
+              }
+            }
+            roleSelect.addEventListener('change', sync);
+            sync();
+          })();
+        </script>
       </body>
       </html>
     `)
@@ -18208,23 +20629,48 @@ app.post('/admin/users/:id', async (c) => {
     }
 
     const finalTenantId = requesterIsSuperAdmin ? tenant_id : requester.tenantId
+    const tidNum =
+      finalTenantId != null && String(finalTenantId).trim() !== ''
+        ? parseInt(String(finalTenantId), 10)
+        : NaN
+
+    const assignedBankRaw = formData.get('assigned_bank_id')
+    let assigned_bank_id: number | null = null
+    if (requestedRoleId === 5) {
+      const canSetBankAgent = requesterIsSuperAdmin || requester.roleId === 2
+      if (!canSetBankAgent) {
+        return c.html('<h1>غير مسموح</h1><p>لا يمكنك ضبط دور وكيل البنك.</p>', 403 as any)
+      }
+      if (!tidNum || Number.isNaN(tidNum)) {
+        return c.html('<h1>خطأ</h1><p>يجب ربط وكيل البنك بشركة.</p>', 400 as any)
+      }
+      const bid = Number.parseInt(String(assignedBankRaw || ''), 10)
+      if (Number.isNaN(bid) || bid <= 0) {
+        return c.html('<h1>خطأ</h1><p>يجب اختيار البنك لوكيل البنك.</p>', 400 as any)
+      }
+      const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tidNum, bid)
+      if (!okBank) {
+        return c.html('<h1>خطأ</h1><p>البنك غير صالح لهذه الشركة.</p>', 400 as any)
+      }
+      assigned_bank_id = bid
+    }
     
     // Build UPDATE query
     let query = `
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
-          role_id = ?, tenant_id = ?, is_active = ?
+          role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
     `
-    let params = [username, full_name, email, phone, requestedRoleId, finalTenantId, is_active]
+    let params = [username, full_name, email, phone, requestedRoleId, finalTenantId, is_active, assigned_bank_id]
     
     // Only update password if provided
     if (password && password.toString().trim() !== '') {
       query = `
         UPDATE users 
         SET username = ?, full_name = ?, email = ?, phone = ?, 
-            password = ?, role_id = ?, tenant_id = ?, is_active = ?
+            password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
       `
-      params = [username, full_name, email, phone, password, requestedRoleId, finalTenantId, is_active]
+      params = [username, full_name, email, phone, password, requestedRoleId, finalTenantId, is_active, assigned_bank_id]
     }
     
     query += ` WHERE id = ?`
@@ -18531,6 +20977,18 @@ app.get('/admin/users-new', async (c) => {
                   </select>
                 </div>
                 
+                <div id="bankAgentBankWrap" class="md:col-span-2" style="display: none;">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-university text-amber-600 ml-1"></i>
+                    البنك <span class="text-red-600">*</span>
+                  </label>
+                  <select name="assigned_bank_id" id="assignedBankSelect"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">-- اختر البنك --</option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور وكيل البنك، ويقتصر على بنوك الشركة المختارة.</p>
+                </div>
+                
                 <!-- الحالة -->
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -18613,33 +21071,84 @@ app.get('/admin/users-new', async (c) => {
           loadUserData();
           document.addEventListener('DOMContentLoaded', loadUserData);
           
-          // Update tenant requirement based on role_id
+          // Update tenant + bank-agent fields based on role_id
+          async function loadBanksForTenant(tenantId) {
+            const bankSelect = document.getElementById('assignedBankSelect');
+            if (!bankSelect || !tenantId) return;
+            bankSelect.innerHTML = '<option value="">-- جاري التحميل --</option>';
+            const token = localStorage.getItem('authToken');
+            try {
+              const res = await fetch('/api/admin/company-banks?tenant_id=' + encodeURIComponent(String(tenantId)), {
+                headers: token ? { Authorization: 'Bearer ' + token } : {}
+              });
+              const data = await res.json();
+              if (!data.success || !Array.isArray(data.data)) {
+                bankSelect.innerHTML = '<option value="">تعذر تحميل البنوك</option>';
+                return;
+              }
+              bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
+              data.data.forEach(function (b) {
+                const opt = document.createElement('option');
+                opt.value = String(b.id);
+                opt.textContent = b.bank_name || ('بنك #' + b.id);
+                bankSelect.appendChild(opt);
+              });
+            } catch (e) {
+              bankSelect.innerHTML = '<option value="">خطأ في التحميل</option>';
+            }
+          }
+          
           function updateTenantRequirement() {
             const roleSelect = document.getElementById('roleSelect');
             const subscriptionDiv = document.getElementById('subscriptionDiv');
             const tenantSelect = document.getElementById('tenantSelect');
+            const bankWrap = document.getElementById('bankAgentBankWrap');
+            const bankSelect = document.getElementById('assignedBankSelect');
             
             if (!roleSelect || !subscriptionDiv) return;
             
-            const selectedRoleId = parseInt(roleSelect.value);
+            const selectedRoleId = parseInt(roleSelect.value, 10);
             
             // Super Admin (role_id = 1) doesn't need a tenant
             if (selectedRoleId === 1) {
               subscriptionDiv.style.display = 'none';
               if (tenantSelect) tenantSelect.removeAttribute('required');
             } else {
-              // All other roles need a tenant
               subscriptionDiv.style.display = 'block';
               if (tenantSelect) tenantSelect.setAttribute('required', 'required');
             }
+            
+            if (bankWrap && bankSelect) {
+              if (selectedRoleId === 5) {
+                bankWrap.style.display = 'block';
+                bankSelect.setAttribute('required', 'required');
+                const tid = tenantSelect && tenantSelect.value ? tenantSelect.value : '';
+                if (tid) loadBanksForTenant(tid);
+                else {
+                  bankSelect.innerHTML = '<option value="">اختر الشركة أولاً</option>';
+                }
+              } else {
+                bankWrap.style.display = 'none';
+                bankSelect.removeAttribute('required');
+                bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
+              }
+            }
           }
           
-          // Add event listener to role select
           document.addEventListener('DOMContentLoaded', () => {
             const roleSelect = document.getElementById('roleSelect');
+            const tenantSelect = document.getElementById('tenantSelect');
             if (roleSelect) {
               roleSelect.addEventListener('change', updateTenantRequirement);
-              updateTenantRequirement(); // Run on page load
+              updateTenantRequirement();
+            }
+            if (tenantSelect) {
+              tenantSelect.addEventListener('change', function () {
+                const roleSelect2 = document.getElementById('roleSelect');
+                if (roleSelect2 && parseInt(roleSelect2.value, 10) === 5) {
+                  loadBanksForTenant(tenantSelect.value);
+                }
+              });
             }
           });
           
@@ -20671,6 +23180,1624 @@ app.get('/api/test/bindings', async (c) => {
   }
   
   return c.json(result)
+})
+
+// Public contact form submit (tenant slug at root path)
+app.post('/api/public/:slug/contact-submissions', async (c) => {
+  try {
+    const slug = normalizeTenantSlug(c.req.param('slug'))
+    if (!slug || isReservedRootSlug(slug)) {
+      return c.json({ success: false, error: 'Invalid slug' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const customerName = String(payload?.customer_name ?? '').trim()
+    const customerPhone = String(payload?.customer_phone ?? '').trim()
+    const customerMessage = String(payload?.customer_message ?? '').trim()
+    const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
+
+    if (!customerName || !customerPhone || !customerMessage) {
+      return c.json({ success: false, error: 'الاسم ورقم الجوال والرسالة مطلوبة' }, 400)
+    }
+
+    const tenant = await c.env.DB.prepare(`
+      SELECT id
+      FROM tenants
+      WHERE slug = ? AND status = 'active'
+      LIMIT 1
+    `).bind(slug).first()
+
+    if (!tenant?.id) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    let affiliatePathSegment: string | null = null
+    let affiliateLabel: string | null = null
+    if (affiliatePathRaw) {
+      if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
+        return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
+      }
+      const affRow = await c.env.DB.prepare(`
+        SELECT path_segment, label
+        FROM tenant_contact_affiliate_links
+        WHERE tenant_id = ? AND path_segment = ?
+        LIMIT 1
+      `)
+        .bind(tenant.id, affiliatePathRaw)
+        .first<{ path_segment: string; label: string }>()
+      if (!affRow) {
+        return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
+      }
+      affiliatePathSegment = affRow.path_segment
+      affiliateLabel = affRow.label
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_contact_followups (
+        tenant_id, customer_name, customer_phone, customer_message, source_slug,
+        affiliate_path_segment, affiliate_label
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+      .bind(
+        tenant.id,
+        customerName,
+        customerPhone,
+        customerMessage,
+        slug,
+        affiliatePathSegment,
+        affiliateLabel
+      )
+      .run()
+
+    return c.json({ success: true, message: 'تم إرسال طلبك بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/tenant-contact-affiliates', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    let tenantId: number | null = userInfo.roleId === 2 ? userInfo.tenantId : null
+    if (userInfo.roleId === 1) {
+      const q = c.req.query('tenant_id')
+      tenantId = q && /^\d+$/.test(String(q)) ? parseInt(String(q), 10) : null
+    }
+    if (!tenantId) {
+      return c.json(
+        { success: false, error: userInfo.roleId === 1 ? 'tenant_id مطلوب' : 'لا شركة مرتبطة' },
+        400
+      )
+    }
+
+    if (userInfo.roleId === 2 && userInfo.tenantId !== tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, tenant_id, path_segment, label, created_at
+      FROM tenant_contact_affiliate_links
+      WHERE tenant_id = ?
+      ORDER BY created_at DESC, id DESC
+    `).bind(tenantId).all()
+
+    const tenantRow = await c.env.DB.prepare(`SELECT slug FROM tenants WHERE id = ? LIMIT 1`).bind(tenantId).first<{ slug: string }>()
+
+    return c.json({
+      success: true,
+      data: results || [],
+      tenant_slug: tenantRow?.slug ?? null
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/tenant-contact-affiliates', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const pathSegment = normalizeAffiliatePathSegment(payload?.path_segment)
+    const label = String(payload?.label ?? '').trim()
+
+    let tenantId: number | null = userInfo.roleId === 2 ? userInfo.tenantId : null
+    if (userInfo.roleId === 1) {
+      const raw = payload?.tenant_id
+      const n = parseInt(String(raw ?? ''), 10)
+      tenantId = Number.isFinite(n) && n > 0 ? n : null
+    }
+
+    if (!tenantId) {
+      return c.json(
+        { success: false, error: userInfo.roleId === 1 ? 'tenant_id مطلوب' : 'لا شركة مرتبطة' },
+        400
+      )
+    }
+
+    if (userInfo.roleId === 2 && userInfo.tenantId !== tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    if (!pathSegment || !isValidAffiliatePathSegment(pathSegment)) {
+      return c.json(
+        {
+          success: false,
+          error:
+            'مسار غير صالح. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية أو وسطية فقط (مثل facebook أو fb-ads)'
+        },
+        400
+      )
+    }
+    if (!label || label.length > 120) {
+      return c.json({ success: false, error: 'العنوان مطلوب (حتى 120 حرفاً)' }, 400)
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO tenant_contact_affiliate_links (tenant_id, path_segment, label)
+      VALUES (?, ?, ?)
+    `).bind(tenantId, pathSegment, label).run()
+
+    return c.json({ success: true, message: 'تم إنشاء رابط الإحالة' })
+  } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (msg.includes('UNIQUE') || msg.toLowerCase().includes('unique')) {
+      return c.json({ success: false, error: 'هذا المسار مستخدم بالفعل لهذه الشركة' }, 400)
+    }
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.delete('/api/tenant-contact-affiliates/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) {
+      return c.json({ success: false, error: 'Invalid id' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `).bind(linkId).first<{ id: number; tenant_id: number }>()
+
+    if (!row) return c.json({ success: false, error: 'Not found' }, 404)
+
+    if (userInfo.roleId === 2) {
+      if (!userInfo.tenantId || row.tenant_id !== userInfo.tenantId) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+    }
+
+    await c.env.DB.prepare(`DELETE FROM tenant_contact_affiliate_links WHERE id = ?`).bind(linkId).run()
+    return c.json({ success: true, message: 'تم حذف الرابط' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Follow-up module data (roles 1,2,3 only)
+app.get('/api/follow-ups', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const roleId = userInfo.roleId
+    if (roleId === 1) {
+      const tenantFilter = c.req.query('tenant_id')
+      if (tenantFilter && /^\d+$/.test(String(tenantFilter))) {
+        const { results } = await c.env.DB.prepare(`
+          SELECT f.*, t.company_name
+          FROM company_contact_followups f
+          LEFT JOIN tenants t ON t.id = f.tenant_id
+          WHERE f.tenant_id = ?
+          ORDER BY f.created_at DESC
+          LIMIT 300
+        `).bind(parseInt(String(tenantFilter), 10)).all()
+        return c.json({ success: true, data: results || [] })
+      }
+
+      const { results } = await c.env.DB.prepare(`
+        SELECT f.*, t.company_name
+        FROM company_contact_followups f
+        LEFT JOIN tenants t ON t.id = f.tenant_id
+        ORDER BY f.created_at DESC
+        LIMIT 300
+      `).all()
+      return c.json({ success: true, data: results || [] })
+    }
+
+    if (!userInfo.tenantId) {
+      return c.json({ success: true, data: [] })
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT f.*, t.company_name
+      FROM company_contact_followups f
+      LEFT JOIN tenants t ON t.id = f.tenant_id
+      WHERE f.tenant_id = ?
+      ORDER BY f.created_at DESC
+      LIMIT 300
+    `).bind(userInfo.tenantId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/follow-ups/:id/notes', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id
+      FROM company_contact_followups
+      WHERE id = ?
+      LIMIT 1
+    `).bind(followupId).first()
+
+    if (!followup?.id) {
+      return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    }
+
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT n.id, n.note_text, n.created_at, n.created_by_user_id, u.full_name as created_by_name
+      FROM company_contact_followup_notes n
+      LEFT JOIN users u ON u.id = n.created_by_user_id
+      WHERE n.followup_id = ?
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT 200
+    `).bind(followupId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/follow-ups/:id/notes', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const noteText = String(payload?.note_text ?? '').trim()
+    if (!noteText) {
+      return c.json({ success: false, error: 'يرجى إدخال الملاحظة' }, 400)
+    }
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id
+      FROM company_contact_followups
+      WHERE id = ?
+      LIMIT 1
+    `).bind(followupId).first()
+
+    if (!followup?.id) {
+      return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    }
+
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_contact_followup_notes (
+        followup_id, tenant_id, note_text, created_by_user_id
+      ) VALUES (?, ?, ?, ?)
+    `).bind(followupId, followup.tenant_id, noteText, userInfo.userId).run()
+
+    return c.json({ success: true, message: 'تمت إضافة الملاحظة' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/follow-ups/:id/staff', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(followupId).first()
+
+    if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, full_name FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      ORDER BY full_name
+    `).bind(followup.tenant_id).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/follow-ups/:id/tasks', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(followupId).first()
+
+    if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT t.id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
+             t.priority, t.status, t.created_at,
+             t.assigned_user_id, au.full_name as assigned_user_name,
+             t.created_by_user_id, cu.full_name as created_by_name
+      FROM company_contact_followup_tasks t
+      LEFT JOIN users au ON au.id = t.assigned_user_id
+      LEFT JOIN users cu ON cu.id = t.created_by_user_id
+      WHERE t.followup_id = ?
+      ORDER BY t.created_at DESC, t.id DESC
+      LIMIT 200
+    `).bind(followupId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/follow-ups/:id/tasks', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const taskTitle = String(payload?.task_title ?? '').trim()
+    if (!taskTitle) return c.json({ success: false, error: 'يرجى إدخال عنوان المهمة' }, 400)
+
+    const scheduledAt = String(payload?.scheduled_at_gregorian ?? '').trim()
+    if (!scheduledAt || Number.isNaN(new Date(scheduledAt).getTime())) {
+      return c.json({ success: false, error: 'تاريخ غير صالح' }, 400)
+    }
+
+    const priority = String(payload?.priority ?? '').trim()
+    if (!['regular', 'important'].includes(priority)) {
+      return c.json({ success: false, error: 'الأولوية غير صالحة' }, 400)
+    }
+
+    const scheduledAtHijri = String(payload?.scheduled_at_hijri ?? '').trim() || null
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(followupId).first()
+
+    if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    let assignedUserId: number | null = null
+    if (payload?.assigned_user_id != null && String(payload.assigned_user_id).trim() !== '') {
+      const uid = parseInt(String(payload.assigned_user_id), 10)
+      if (!Number.isFinite(uid) || uid <= 0) {
+        return c.json({ success: false, error: 'معرّف الموظف غير صالح' }, 400)
+      }
+      const staffUser = await c.env.DB.prepare(`
+        SELECT id FROM users WHERE id = ? AND role_id = 4 AND tenant_id = ? LIMIT 1
+      `).bind(uid, followup.tenant_id).first()
+      if (!staffUser?.id) return c.json({ success: false, error: 'الموظف غير موجود في هذه الشركة' }, 400)
+      assignedUserId = uid
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_contact_followup_tasks
+        (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
+         assigned_user_id, priority, created_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      followupId, followup.tenant_id, taskTitle, scheduledAt,
+      scheduledAtHijri, assignedUserId, priority, userInfo.userId
+    ).run()
+
+    return c.json({ success: true, message: 'تمت إضافة المهمة' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Follow-up tasks assigned to the logged-in employee (role 4)
+app.get('/api/my-followup-tasks', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const filter = String(c.req.query('status') ?? '').trim().toLowerCase()
+    const statusClause =
+      filter === 'pending'
+        ? " AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending') "
+        : filter === 'completed'
+          ? " AND LOWER(TRIM(t.status)) = 'completed' "
+          : ''
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
+             t.priority, t.status, t.created_at,
+             f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
+             f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
+             tn.company_name
+      FROM company_contact_followup_tasks t
+      INNER JOIN company_contact_followups f ON f.id = t.followup_id
+      LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      WHERE t.assigned_user_id = ? AND t.tenant_id = ?
+      ${statusClause}
+      ORDER BY
+        CASE WHEN LOWER(TRIM(COALESCE(t.status, ''))) = 'completed' THEN 1 ELSE 0 END,
+        t.scheduled_at_gregorian ASC,
+        t.id DESC
+      LIMIT 300
+    `).bind(userInfo.userId, userInfo.tenantId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.patch('/api/my-followup-tasks/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const taskId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const status = String(payload?.status ?? '').trim().toLowerCase()
+    if (!['pending', 'completed'].includes(status)) {
+      return c.json({ success: false, error: 'حالة غير صالحة' }, 400)
+    }
+
+    const task = await c.env.DB.prepare(`
+      SELECT id, tenant_id, assigned_user_id FROM company_contact_followup_tasks WHERE id = ? LIMIT 1
+    `).bind(taskId).first<{ id: number; tenant_id: number; assigned_user_id: number | null }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found' }, 404)
+    if (task.tenant_id !== userInfo.tenantId || task.assigned_user_id !== userInfo.userId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followup_tasks SET status = ? WHERE id = ?
+    `).bind(status, taskId).run()
+
+    return c.json({ success: true, message: status === 'completed' ? 'تم إكمال المهمة' : 'أعيدت المهمة إلى قيد التنفيذ' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/admin/my-tasks', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (userInfo.roleId !== 4) return c.redirect('/admin/panel')
+  if (!userInfo.tenantId) {
+    return c.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title></head><body class="p-6"><p>لم يُعرّف حسابك على شركة.</p><a href="/admin/panel">العودة</a></body></html>', 400 as any)
+  }
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>مهام المتابعة</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-5xl mx-auto p-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>مهام المتابعة</h1>
+            <p class="text-gray-600 mt-2 text-sm">المهام المعيّنة لك من وحدة متابعة التواصل</p>
+          </div>
+          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+          </a>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
+          <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
+          <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+        </div>
+
+        <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
+        <div id="cards" class="space-y-3"></div>
+      </div>
+
+      <script>
+        let activeFilter = 'all';
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA');
+        }
+
+        function isCompleted(task) {
+          return String(task.status || '').trim().toLowerCase() === 'completed';
+        }
+
+        function priorityBadge(priority) {
+          return priority === 'important'
+            ? '<span class="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">مهم</span>'
+            : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+        }
+
+        function statusBadge(task) {
+          return isCompleted(task)
+            ? '<span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">مكتملة</span>'
+            : '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">قيد التنفيذ</span>';
+        }
+
+        function setListStatus(msg, type) {
+          const el = document.getElementById('listStatus');
+          el.textContent = msg || '';
+          el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function renderTasks(tasks) {
+          const root = document.getElementById('cards');
+          if (!Array.isArray(tasks) || !tasks.length) {
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد مهام في هذا القسم.</div>';
+            return;
+          }
+          root.innerHTML = tasks.map(function (task) {
+            const done = isCompleted(task);
+            var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
+              '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
+            var enrollCustomerBtn =
+              '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
+              '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
+            const actionBtn = done
+              ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
+                enrollCustomerBtn +
+                '<button type="button" data-reopen="' + task.id + '" class="text-sm text-indigo-700 hover:underline font-medium py-2 sm:py-0">إعادة إلى قيد التنفيذ</button></div>'
+              : '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
+                enrollCustomerBtn +
+                '<button type="button" data-complete="' + task.id + '" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">تعليم كمكتملة</button></div>';
+            return (
+              '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">' +
+                '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                  '<div class="min-w-0 flex-1">' +
+                    '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
+                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) + statusBadge(task) +
+                    (task.affiliate_label ? '<span class="inline-block bg-amber-100 text-amber-900 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-200"><i class="fas fa-tag ml-1"></i>' + escapeHtml(task.affiliate_label) + '</span>' : '') +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                  '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — ' + escapeHtml(task.customer_phone || '-') + '</div>' +
+                  '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message || '') + '</span></div>' +
+                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+                '</div>' +
+                actionBtn +
+              '</div>'
+            );
+          }).join('');
+
+          root.querySelectorAll('[data-complete]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-complete'), 'completed'); });
+          });
+          root.querySelectorAll('[data-reopen]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-reopen'), 'pending'); });
+          });
+        }
+
+        async function loadTasks() {
+          setListStatus('جاري التحميل...', 'neutral');
+          document.getElementById('cards').innerHTML = '';
+          try {
+            var url = '/api/my-followup-tasks';
+            if (activeFilter === 'pending' || activeFilter === 'completed') url += '?status=' + encodeURIComponent(activeFilter);
+            const res = await axios.get(url);
+            const tasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            setListStatus('', 'neutral');
+            renderTasks(tasks);
+          } catch (e) {
+            setListStatus('تعذر تحميل المهام', 'error');
+            document.getElementById('cards').innerHTML = '';
+          }
+        }
+
+        async function patchTask(id, status) {
+          if (!id) return;
+          try {
+            await axios.patch('/api/my-followup-tasks/' + id, { status: status }, { headers: { 'Content-Type': 'application/json' } });
+            await loadTasks();
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تحديث المهمة';
+            alert(msg);
+          }
+        }
+
+        function setActiveFilterButtons() {
+          document.querySelectorAll('.filter-btn').forEach(function (btn) {
+            var f = btn.getAttribute('data-filter');
+            var on = f === activeFilter;
+            btn.className = 'filter-btn px-4 py-2 rounded-lg text-sm font-medium border ' +
+              (on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300');
+          });
+        }
+
+        document.querySelectorAll('.filter-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            activeFilter = btn.getAttribute('data-filter') || 'all';
+            setActiveFilterButtons();
+            loadTasks();
+          });
+        });
+
+        setActiveFilterButtons();
+        loadTasks();
+      </script>
+    </body>
+    </html>
+  `)
+})
+
+app.get('/admin/contact-affiliates', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.redirect('/admin/panel')
+
+  const isSuper = userInfo.roleId === 1
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>روابط التواصل التسويقية</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-4xl mx-auto p-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">
+              <i class="fas fa-link ml-2 text-amber-600"></i>روابط التواصل التسويقية
+            </h1>
+            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل (مثل /facebook) لتتبع مصدر كل طلب في بطاقات المتابعة.</p>
+          </div>
+          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+          </a>
+        </div>
+
+        <div id="superTenantWrap" class="${isSuper ? '' : 'hidden'} mb-6 bg-white rounded-xl border p-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">الشركة</label>
+          <select id="superTenantSelect" class="w-full border rounded-lg px-3 py-2"></select>
+        </div>
+
+        <div class="bg-white rounded-xl border p-5 mb-6">
+          <h2 class="text-lg font-bold text-gray-900 mb-4">إضافة رابط</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">المسار (بالإنجليزية، بدون شرطة مائلة)</label>
+              <input id="pathInput" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="facebook" dir="ltr" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">التسمية (تظهر في بطاقة المتابعة)</label>
+              <input id="labelInput" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="إعلان فيسبوك" />
+            </div>
+          </div>
+          <button id="saveBtn" type="button" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-lg text-sm font-medium">
+            <i class="fas fa-plus ml-2"></i>حفظ
+          </button>
+          <p id="formMsg" class="text-sm mt-2"></p>
+        </div>
+
+        <div id="listWrap" class="bg-white rounded-xl border overflow-hidden">
+          <div class="px-4 py-3 border-b font-semibold text-gray-800">الروابط الحالية</div>
+          <div id="listBody" class="p-4 text-sm text-gray-500">جاري التحميل...</div>
+        </div>
+      </div>
+
+      <script>
+        const IS_SUPERADMIN = ${isSuper ? 'true' : 'false'};
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function currentTenantId() {
+          if (IS_SUPERADMIN) {
+            var sel = document.getElementById('superTenantSelect');
+            var v = sel && sel.value ? parseInt(sel.value, 10) : 0;
+            return v > 0 ? v : null;
+          }
+          return 'me';
+        }
+
+        function affiliatesApiUrl() {
+          if (IS_SUPERADMIN) {
+            var tid = currentTenantId();
+            return tid ? '/api/tenant-contact-affiliates?tenant_id=' + tid : '/api/tenant-contact-affiliates';
+          }
+          return '/api/tenant-contact-affiliates';
+        }
+
+        async function loadTenantsIfSuper() {
+          if (!IS_SUPERADMIN) return;
+          var sel = document.getElementById('superTenantSelect');
+          var res = await axios.get('/api/tenants');
+          var rows = Array.isArray(res.data && res.data.data) ? res.data.data : [];
+          sel.innerHTML = '<option value="">-- اختر شركة --</option>' +
+            rows.map(function (t) {
+              return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.company_name || t.slug) + '</option>';
+            }).join('');
+          sel.addEventListener('change', loadList);
+        }
+
+        async function loadList() {
+          var body = document.getElementById('listBody');
+          body.textContent = 'جاري التحميل...';
+          try {
+            if (IS_SUPERADMIN && !currentTenantId()) {
+              body.textContent = 'اختر شركة لعرض الروابط.';
+              return;
+            }
+            var res = await axios.get(affiliatesApiUrl());
+            if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
+            var rows = Array.isArray(res.data.data) ? res.data.data : [];
+            var slug = res.data.tenant_slug || '';
+            var origin = window.location.origin;
+            if (!rows.length) {
+              body.innerHTML = '<p class="text-gray-500">لا توجد روابط بعد.</p>';
+              return;
+            }
+            body.innerHTML =
+              '<ul class="divide-y">' +
+              rows
+                .map(function (r) {
+                  var full = slug ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment) : '';
+                  return (
+                    '<li class="py-3 flex flex-wrap items-center justify-between gap-2">' +
+                    '<div>' +
+                    '<div class="font-medium text-gray-900">' +
+                    escapeHtml(r.label) +
+                    '</div>' +
+                    '<div class="text-xs text-gray-500 mt-1" dir="ltr">' +
+                    escapeHtml(full || '/' + slug + '/' + r.path_segment) +
+                    '</div>' +
+                    '</div>' +
+                    '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' +
+                    Number(r.id) +
+                    '">حذف</button>' +
+                    '</li>'
+                  );
+                })
+                .join('') +
+              '</ul>';
+            body.querySelectorAll('[data-del]').forEach(function (btn) {
+              btn.addEventListener('click', async function () {
+                if (!confirm('حذف هذا الرابط؟')) return;
+                var id = btn.getAttribute('data-del');
+                var resDel = await axios.delete('/api/tenant-contact-affiliates/' + id);
+                if (!resDel.data || !resDel.data.success) {
+                  alert(resDel.data && resDel.data.error ? resDel.data.error : 'تعذر الحذف');
+                  return;
+                }
+                loadList();
+              });
+            });
+          } catch (e) {
+            body.innerHTML = '<p class="text-red-600">' + escapeHtml(e.message || 'خطأ') + '</p>';
+          }
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', async function () {
+          var msg = document.getElementById('formMsg');
+          msg.textContent = '';
+          var path = (document.getElementById('pathInput').value || '').trim().toLowerCase().replace(/^\/+/, '');
+          var label = (document.getElementById('labelInput').value || '').trim();
+          if (!path || !label) {
+            msg.className = 'text-sm text-red-600';
+            msg.textContent = 'أدخل المسار والتسمية';
+            return;
+          }
+          try {
+            var payload = { path_segment: path, label: label };
+            if (IS_SUPERADMIN) {
+              var tid = currentTenantId();
+              if (!tid) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'اختر شركة أولاً';
+                return;
+              }
+              payload.tenant_id = tid;
+            }
+            var res = await axios.post('/api/tenant-contact-affiliates', payload);
+            if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
+            msg.className = 'text-sm text-green-700';
+            msg.textContent = res.data.message || 'تم';
+            document.getElementById('pathInput').value = '';
+            document.getElementById('labelInput').value = '';
+            loadList();
+          } catch (e) {
+            msg.className = 'text-sm text-red-600';
+            msg.textContent = e.message || 'خطأ';
+          }
+        });
+
+        (async function init() {
+          await loadTenantsIfSuper();
+          await loadList();
+        })();
+      </script>
+    </body>
+    </html>
+  `)
+})
+
+app.get('/admin/follow-ups', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (userInfo.roleId === 4) return c.redirect('/admin/panel')
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>متابعة طلبات التواصل</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-7xl mx-auto p-6">
+        <div class="mb-6 flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900"><i class="fas fa-address-card ml-2 text-purple-600"></i>متابعة طلبات التواصل</h1>
+            <p class="text-gray-600 mt-2">الطلبات القادمة من صفحات التواصل العامة للشركات</p>
+          </div>
+          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg">
+            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+          </a>
+        </div>
+
+        <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Notes Modal -->
+      <div id="notesModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-4 border-b">
+            <h2 class="text-xl font-bold text-gray-900">ملاحظات المتابعة</h2>
+            <button id="closeNotesModalBtn" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <div id="notesHistory" class="max-h-72 overflow-y-auto space-y-3 bg-gray-50 border rounded-xl p-3"></div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">إضافة ملاحظة</label>
+              <textarea id="noteInput" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-500" placeholder="اكتب ملاحظتك هنا..."></textarea>
+            </div>
+            <div class="flex items-center justify-end gap-3">
+              <button id="saveNoteBtn" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-5 py-2 rounded-lg">
+                <i class="fas fa-plus ml-2"></i>إضافة ملاحظة
+              </button>
+            </div>
+            <p id="noteStatus" class="text-sm"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tasks Modal -->
+      <div id="tasksModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col" style="max-height:90vh">
+          <div class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
+            <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>مهام المتابعة</h2>
+            <button id="closeTasksModalBtn" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-5">
+            <div id="tasksHistory" class="space-y-3 bg-gray-50 border rounded-xl p-3 min-h-16"></div>
+          </div>
+          <div class="p-5 border-t bg-gray-50 space-y-3 flex-shrink-0">
+            <h3 class="text-sm font-semibold text-gray-800">إضافة مهمة جديدة</h3>
+            <input id="taskTitleInput" type="text" placeholder="عنوان المهمة *" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">التاريخ والوقت (ميلادي) *</label>
+                <input id="taskScheduledGregorian" type="text" placeholder="YYYY-MM-DD HH:mm" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">التاريخ والوقت (هجري)</label>
+                <input id="taskScheduledHijri" type="text" placeholder="YYYY-MM-DD HH:mm" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-600">التقويم المستخدم:</span>
+              <button type="button" id="taskCalGregorianBtn" class="px-3 py-1.5 text-xs rounded-md bg-indigo-600 text-white">ميلادي</button>
+              <button type="button" id="taskCalHijriBtn" class="px-3 py-1.5 text-xs rounded-md text-gray-700 border border-gray-300">هجري</button>
+            </div>
+            <div>
+              <label class="text-xs text-gray-600 mb-1 block">تحديد سريع</label>
+              <select id="taskQuickAction" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">-- اختر تحديد سريع --</option>
+                <option value="1h">بعد ساعة</option>
+                <option value="3h">بعد 3 ساعات</option>
+                <option value="1d">بعد يوم</option>
+                <option value="1w">بعد أسبوع</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">الموظف المسؤول</label>
+                <select id="taskStaffSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">-- بدون تعيين --</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">الأولوية</label>
+                <select id="taskPrioritySelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="regular">عادي</option>
+                  <option value="important">مهم</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-1">
+              <button id="saveTaskBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium">
+                <i class="fas fa-plus ml-2"></i>حفظ المهمة
+              </button>
+            </div>
+            <p id="taskStatus" class="text-sm"></p>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        let activeFollowupId = null;
+        let activeTaskFollowupId = null;
+        let taskDatePicker = null;
+        let taskHijriPicker = null;
+        let isTaskSyncing = false;
+        let activeTaskCalendarType = 'gregorian';
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA');
+        }
+
+        function formatGregorianDateTime(date) {
+          const y = date.getFullYear();
+          const mo = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          const hh = String(date.getHours()).padStart(2, '0');
+          const mm = String(date.getMinutes()).padStart(2, '0');
+          return y + '-' + mo + '-' + d + ' ' + hh + ':' + mm;
+        }
+
+        function formatHijriDateTimeFromGregorian(datetimeStr) {
+          if (!datetimeStr) return '';
+          try {
+            const parts = String(datetimeStr).split(/[T ]/);
+            const datePart = parts[0];
+            const timePart = parts[1] ? parts[1].substring(0, 5) : '';
+            const dp = datePart.split('-').map(Number);
+            if (dp.length < 3 || !dp[0] || !dp[1] || !dp[2]) return '';
+            const d = new Date(dp[0], dp[1] - 1, dp[2], 12, 0, 0);
+            if (Number.isNaN(d.getTime())) return '';
+            const hijri = d.toLocaleDateString('ar-SA-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            return hijri + (timePart ? ' ' + timePart : '');
+          } catch (_) { return ''; }
+        }
+
+        function normalizeArabicDigits(value) {
+          if (!value) return '';
+          const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+          const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+          return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+            const arabicIndex = arabicDigits.indexOf(char);
+            if (arabicIndex >= 0) return String(arabicIndex);
+            const easternArabicIndex = easternArabicDigits.indexOf(char);
+            return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+          });
+        }
+
+        function parseHijriDateTimeInput(value) {
+          const normalized = normalizeArabicDigits(value).replace(/\u200f/g, '').replace(/\u200e/g, '').trim();
+          if (!normalized) return null;
+          const [datePartRaw, timePartRaw = '00:00'] = normalized.split(/\s+/);
+          const dateParts = datePartRaw.split(/[^\d]+/).filter(Boolean);
+          if (dateParts.length !== 3) return null;
+
+          let year, month, day;
+          if (dateParts[0].length === 4) {
+            year = Number(dateParts[0]); month = Number(dateParts[1]); day = Number(dateParts[2]);
+          } else if (dateParts[2].length === 4) {
+            day = Number(dateParts[0]); month = Number(dateParts[1]); year = Number(dateParts[2]);
+          } else return null;
+
+          const t = timePartRaw.split(':');
+          const hour = Number(t[0] ?? '0');
+          const minute = Number(t[1] ?? '0');
+          if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+          if (year < 1200 || year > 1700 || month < 1 || month > 12 || day < 1 || day > 30) return null;
+          if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+          return { year, month, day, hour, minute };
+        }
+
+        function extractHijriPartsFromDate(dateObject) {
+          const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+          }).formatToParts(dateObject);
+          const year = Number((parts.find((p) => p.type === 'year') || {}).value);
+          const month = Number((parts.find((p) => p.type === 'month') || {}).value);
+          const day = Number((parts.find((p) => p.type === 'day') || {}).value);
+          if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+          return { year, month, day };
+        }
+
+        function findGregorianFromHijriDate(hijriParts) {
+          const approxGregorianYear = hijriParts.year + 579;
+          const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+          const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+          for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+            const current = extractHijriPartsFromDate(cursor);
+            if (!current) continue;
+            if (current.year === hijriParts.year && current.month === hijriParts.month && current.day === hijriParts.day) {
+              return new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), hijriParts.hour, hijriParts.minute, 0);
+            }
+          }
+          return null;
+        }
+
+        function syncTaskFromGregorian(gregValue) {
+          if (isTaskSyncing) return;
+          isTaskSyncing = true;
+          document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(gregValue);
+          if (taskHijriPicker && gregValue) taskHijriPicker.setDate(gregValue, false, 'Y-m-d H:i');
+          isTaskSyncing = false;
+        }
+
+        function syncTaskFromHijri(hijriValue) {
+          if (isTaskSyncing) return;
+          const parsed = parseHijriDateTimeInput(hijriValue);
+          if (!parsed) return;
+          const gregDate = findGregorianFromHijriDate(parsed);
+          if (!gregDate) return;
+          const greg = formatGregorianDateTime(gregDate);
+          isTaskSyncing = true;
+          document.getElementById('taskScheduledGregorian').value = greg;
+          document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(greg);
+          if (taskDatePicker) taskDatePicker.setDate(gregDate, false, 'Y-m-d H:i');
+          isTaskSyncing = false;
+        }
+
+        function setTaskCalendarType(type) {
+          activeTaskCalendarType = type;
+          const g = document.getElementById('taskScheduledGregorian');
+          const h = document.getElementById('taskScheduledHijri');
+          const gBtn = document.getElementById('taskCalGregorianBtn');
+          const hBtn = document.getElementById('taskCalHijriBtn');
+          const isG = type === 'gregorian';
+          g.style.display = isG ? '' : 'none';
+          h.style.display = isG ? 'none' : '';
+          gBtn.className = 'px-3 py-1.5 text-xs rounded-md ' + (isG ? 'bg-indigo-600 text-white' : 'text-gray-700 border border-gray-300');
+          hBtn.className = 'px-3 py-1.5 text-xs rounded-md ' + (!isG ? 'bg-indigo-600 text-white' : 'text-gray-700 border border-gray-300');
+        }
+
+        function setNoteStatus(message, type) {
+          const el = document.getElementById('noteStatus');
+          el.textContent = message || '';
+          el.className = 'text-sm ' + (type === 'error' ? 'text-red-700' : type === 'success' ? 'text-green-700' : 'text-gray-600');
+        }
+
+        function setTaskStatus(message, type) {
+          const el = document.getElementById('taskStatus');
+          el.textContent = message || '';
+          el.className = 'text-sm ' + (type === 'error' ? 'text-red-700' : type === 'success' ? 'text-green-700' : 'text-gray-600');
+        }
+
+        function priorityBadge(priority) {
+          return priority === 'important'
+            ? '<span class="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">مهم</span>'
+            : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+        }
+
+        function renderNotes(notes) {
+          const history = document.getElementById('notesHistory');
+          if (!Array.isArray(notes) || !notes.length) {
+            history.innerHTML = '<div class="text-sm text-gray-500">لا توجد ملاحظات حتى الآن.</div>';
+            return;
+          }
+          history.innerHTML = notes.map((note) => \`
+            <div class="bg-white border border-gray-200 rounded-lg p-3">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="text-xs text-gray-600">\${escapeHtml(note.created_by_name || 'مستخدم')}</span>
+                <span class="text-xs text-gray-500">\${formatDate(note.created_at)}</span>
+              </div>
+              <div class="text-sm text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(note.note_text || '')}</div>
+            </div>
+          \`).join('');
+        }
+
+        function renderTasksInModal(tasks) {
+          const history = document.getElementById('tasksHistory');
+          if (!Array.isArray(tasks) || !tasks.length) {
+            history.innerHTML = '<div class="text-sm text-gray-500">لا توجد مهام.</div>';
+            return;
+          }
+          history.innerHTML = tasks.map((task) => \`
+            <div class="bg-white border border-gray-200 rounded-lg p-3">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <span class="text-sm font-medium text-gray-800">\${escapeHtml(task.task_title || '')}</span>
+                \${priorityBadge(task.priority)}
+              </div>
+              <div class="text-xs text-gray-600 space-y-0.5 mt-1">
+                <div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>\${escapeHtml(task.scheduled_at_gregorian || '-')}\${task.scheduled_at_hijri ? ' | ' + escapeHtml(task.scheduled_at_hijri) : ''}</div>
+                <div><i class="fas fa-user ml-1 text-indigo-400"></i>\${escapeHtml(task.assigned_user_name || 'غير محدد')}</div>
+                <div class="text-gray-400">أضافه: \${escapeHtml(task.created_by_name || '-')} · \${formatDate(task.created_at)}</div>
+              </div>
+            </div>
+          \`).join('');
+        }
+
+        function renderCardTasks(followupId, tasks) {
+          const el = document.getElementById('card-tasks-' + followupId);
+          if (!el) return;
+          if (!Array.isArray(tasks) || !tasks.length) {
+            el.innerHTML = '<div class="text-xs text-gray-400 mt-1">لا توجد مهام</div>';
+            return;
+          }
+          const shown = tasks.slice(0, 3);
+          const extra = tasks.length > 3 ? \`<div class="text-xs text-gray-400">+\${tasks.length - 3} مهام أخرى</div>\` : '';
+          el.innerHTML = '<div class="mt-1 space-y-1">' +
+            shown.map((t) => \`
+              <div class="flex items-center gap-2 text-xs text-gray-700">
+                <i class="fas fa-circle text-indigo-400" style="font-size:5px;flex-shrink:0"></i>
+                <span class="truncate flex-1">\${escapeHtml(t.assigned_user_name || 'غير محدد')}</span>
+                \${priorityBadge(t.priority)}
+              </div>
+            \`).join('') + extra + '</div>';
+        }
+
+        async function loadCardTasks(followupId) {
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/tasks');
+            renderCardTasks(followupId, Array.isArray(res?.data?.data) ? res.data.data : []);
+          } catch (_) {
+            const el = document.getElementById('card-tasks-' + followupId);
+            if (el) el.innerHTML = '';
+          }
+        }
+
+        async function loadNotes(followupId) {
+          const history = document.getElementById('notesHistory');
+          history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل الملاحظات...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/notes');
+            renderNotes(Array.isArray(res?.data?.data) ? res.data.data : []);
+          } catch (e) {
+            history.innerHTML = '<div class="text-sm text-red-700">تعذر تحميل الملاحظات</div>';
+          }
+        }
+
+        async function loadTasksInModal(followupId) {
+          const history = document.getElementById('tasksHistory');
+          history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل المهام...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/tasks');
+            renderTasksInModal(Array.isArray(res?.data?.data) ? res.data.data : []);
+          } catch (e) {
+            history.innerHTML = '<div class="text-sm text-red-700">تعذر تحميل المهام</div>';
+          }
+        }
+
+        async function loadStaffSelect(followupId) {
+          const sel = document.getElementById('taskStaffSelect');
+          sel.innerHTML = '<option value="">-- جاري التحميل... --</option>';
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/staff');
+            const staff = Array.isArray(res?.data?.data) ? res.data.data : [];
+            sel.innerHTML = '<option value="">-- بدون تعيين --</option>' +
+              staff.map((u) => \`<option value="\${Number(u.id)}">\${escapeHtml(u.full_name || '')}</option>\`).join('');
+          } catch (_) {
+            sel.innerHTML = '<option value="">-- تعذر التحميل --</option>';
+          }
+        }
+
+        function initTaskDatePicker() {
+          if (taskDatePicker) { taskDatePicker.destroy(); taskDatePicker = null; }
+          if (taskHijriPicker) { taskHijriPicker.destroy(); taskHijriPicker = null; }
+          if (typeof flatpickr !== 'function') return;
+          taskDatePicker = flatpickr(document.getElementById('taskScheduledGregorian'), {
+            enableTime: true,
+            dateFormat: 'Y-m-d H:i',
+            time_24hr: true,
+            disableMobile: true,
+            onChange: function(selectedDates) {
+              if (!selectedDates || !selectedDates.length) return;
+              const greg = formatGregorianDateTime(selectedDates[0]);
+              syncTaskFromGregorian(greg);
+            }
+          });
+          if (typeof hijriCalendarPlugin === 'function' && window.luxon && window.luxon.DateTime) {
+            taskHijriPicker = flatpickr(document.getElementById('taskScheduledHijri'), {
+              locale: 'ar',
+              disableMobile: true,
+              dateFormat: 'Y-m-d H:i',
+              enableTime: true,
+              time_24hr: true,
+              allowInput: true,
+              plugins: [
+                hijriCalendarPlugin(window.luxon.DateTime, {
+                  showHijriDates: true,
+                  showHijriToggle: false
+                })
+              ],
+              onChange: [function(selectedDates) {
+                if (!selectedDates || !selectedDates.length || isTaskSyncing) return;
+                const greg = formatGregorianDateTime(selectedDates[0]);
+                isTaskSyncing = true;
+                document.getElementById('taskScheduledGregorian').value = greg;
+                document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(greg);
+                if (taskDatePicker) taskDatePicker.setDate(selectedDates[0], false, 'Y-m-d H:i');
+                isTaskSyncing = false;
+              }]
+            });
+          }
+        }
+
+        function openNotesModal(followupId) {
+          activeFollowupId = followupId;
+          document.getElementById('noteInput').value = '';
+          setNoteStatus('', 'neutral');
+          document.getElementById('notesModal').classList.remove('hidden');
+          document.getElementById('notesModal').classList.add('flex');
+          loadNotes(followupId);
+        }
+
+        function closeNotesModal() {
+          activeFollowupId = null;
+          document.getElementById('notesModal').classList.add('hidden');
+          document.getElementById('notesModal').classList.remove('flex');
+        }
+
+        function openTasksModal(followupId) {
+          activeTaskFollowupId = followupId;
+          document.getElementById('taskTitleInput').value = '';
+          document.getElementById('taskScheduledGregorian').value = '';
+          document.getElementById('taskScheduledHijri').value = '';
+          document.getElementById('taskQuickAction').value = '';
+          document.getElementById('taskPrioritySelect').value = 'regular';
+          setTaskStatus('', 'neutral');
+          document.getElementById('tasksModal').classList.remove('hidden');
+          document.getElementById('tasksModal').classList.add('flex');
+          initTaskDatePicker();
+          setTaskCalendarType('gregorian');
+          loadTasksInModal(followupId);
+          loadStaffSelect(followupId);
+        }
+
+        function closeTasksModal() {
+          activeTaskFollowupId = null;
+          if (taskDatePicker) { taskDatePicker.destroy(); taskDatePicker = null; }
+          if (taskHijriPicker) { taskHijriPicker.destroy(); taskHijriPicker = null; }
+          document.getElementById('tasksModal').classList.add('hidden');
+          document.getElementById('tasksModal').classList.remove('flex');
+        }
+
+        async function loadFollowUps() {
+          const cards = document.getElementById('cards');
+          cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups');
+            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+            if (!rows.length) {
+              cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات تواصل حالياً.</div>';
+              return;
+            }
+
+            cards.innerHTML = rows.map((row) => \`
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                      \${row.affiliate_label ? '<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>' + escapeHtml(row.affiliate_label) + '</span>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                  </div>
+                  <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                </div>
+                <div class="space-y-2">
+                  <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(row.customer_phone || '-')}</p>
+                  <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${row.affiliate_path_segment ? '/' + escapeHtml(row.source_slug || '') + '/' + escapeHtml(row.affiliate_path_segment) : '/' + escapeHtml(row.source_slug || '-')}</p>
+                  <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                  <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
+                    <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
+                  </div>
+                  <div class="pt-2 grid grid-cols-2 gap-2">
+                    <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                      <i class="fas fa-sticky-note ml-2"></i>الملاحظات
+                    </button>
+                    <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                      <i class="fas fa-tasks ml-2"></i>المهام
+                    </button>
+                  </div>
+                </div>
+              </div>
+            \`).join('');
+
+            rows.forEach((row) => loadCardTasks(Number(row.id)));
+          } catch (e) {
+            cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
+          }
+        }
+
+        document.getElementById('closeNotesModalBtn').addEventListener('click', closeNotesModal);
+        document.getElementById('notesModal').addEventListener('click', (event) => {
+          if (event.target.id === 'notesModal') closeNotesModal();
+        });
+        document.getElementById('saveNoteBtn').addEventListener('click', async () => {
+          if (!activeFollowupId) return;
+          const noteInput = document.getElementById('noteInput');
+          const noteText = String(noteInput.value || '').trim();
+          if (!noteText) {
+            setNoteStatus('يرجى كتابة الملاحظة أولاً', 'error');
+            return;
+          }
+          setNoteStatus('جاري الحفظ...', 'neutral');
+          try {
+            const res = await axios.post('/api/follow-ups/' + activeFollowupId + '/notes', { note_text: noteText });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ الملاحظة');
+            noteInput.value = '';
+            setNoteStatus('تمت إضافة الملاحظة بنجاح', 'success');
+            await loadNotes(activeFollowupId);
+          } catch (err) {
+            setNoteStatus(err?.message || 'حدث خطأ أثناء حفظ الملاحظة', 'error');
+          }
+        });
+
+        document.getElementById('closeTasksModalBtn').addEventListener('click', closeTasksModal);
+        document.getElementById('tasksModal').addEventListener('click', (event) => {
+          if (event.target.id === 'tasksModal') closeTasksModal();
+        });
+
+        document.getElementById('taskScheduledGregorian').addEventListener('change', function() {
+          syncTaskFromGregorian(this.value);
+        });
+        document.getElementById('taskScheduledGregorian').addEventListener('input', function() {
+          syncTaskFromGregorian(this.value);
+        });
+        document.getElementById('taskScheduledHijri').addEventListener('change', function() {
+          syncTaskFromHijri(this.value);
+        });
+        document.getElementById('taskScheduledHijri').addEventListener('input', function() {
+          syncTaskFromHijri(this.value);
+        });
+
+        document.getElementById('taskQuickAction').addEventListener('change', function() {
+          const val = this.value;
+          if (!val) return;
+          const deltas = { '1h': 3600000, '3h': 10800000, '1d': 86400000, '1w': 604800000 };
+          const delta = deltas[val];
+          if (!delta) return;
+          const newDate = new Date(Date.now() + delta);
+          const greg = formatGregorianDateTime(newDate);
+          document.getElementById('taskScheduledGregorian').value = greg;
+          document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(greg);
+          if (taskDatePicker) taskDatePicker.setDate(newDate, false);
+          if (taskHijriPicker) taskHijriPicker.setDate(newDate, false, 'Y-m-d H:i');
+          this.value = '';
+        });
+
+        document.getElementById('taskCalGregorianBtn').addEventListener('click', () => setTaskCalendarType('gregorian'));
+        document.getElementById('taskCalHijriBtn').addEventListener('click', () => setTaskCalendarType('hijri'));
+
+        document.getElementById('saveTaskBtn').addEventListener('click', async () => {
+          if (!activeTaskFollowupId) return;
+          const title = String(document.getElementById('taskTitleInput').value || '').trim();
+          const scheduledGreg = String(document.getElementById('taskScheduledGregorian').value || '').trim();
+          const scheduledHijri = String(document.getElementById('taskScheduledHijri').value || '').trim();
+          const staffId = document.getElementById('taskStaffSelect').value;
+          const priority = document.getElementById('taskPrioritySelect').value;
+
+          if (!title) { setTaskStatus('يرجى إدخال عنوان المهمة', 'error'); return; }
+          if (!scheduledGreg) { setTaskStatus('يرجى تحديد التاريخ والوقت', 'error'); return; }
+
+          setTaskStatus('جاري الحفظ...', 'neutral');
+          try {
+            const res = await axios.post('/api/follow-ups/' + activeTaskFollowupId + '/tasks', {
+              task_title: title,
+              scheduled_at_gregorian: scheduledGreg,
+              scheduled_at_hijri: scheduledHijri || null,
+              assigned_user_id: staffId ? Number(staffId) : null,
+              priority: priority
+            });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ المهمة');
+            document.getElementById('taskTitleInput').value = '';
+            document.getElementById('taskScheduledGregorian').value = '';
+            document.getElementById('taskScheduledHijri').value = '';
+            if (taskDatePicker) taskDatePicker.clear();
+            document.getElementById('taskPrioritySelect').value = 'regular';
+            setTaskStatus('تمت إضافة المهمة بنجاح', 'success');
+            await loadTasksInModal(activeTaskFollowupId);
+            loadCardTasks(activeTaskFollowupId);
+          } catch (err) {
+            setTaskStatus(err?.message || 'حدث خطأ أثناء حفظ المهمة', 'error');
+          }
+        });
+
+        loadFollowUps();
+      </script>
+    </body>
+    </html>
+  `)
+})
+
+// Public company contact with affiliate path (example: /mawad/facebook) — register before /:slug
+app.get('/:slug/:affiliatePath', async (c) => {
+  const slug = normalizeTenantSlug(c.req.param('slug'))
+  const affiliatePath = normalizeAffiliatePathSegment(c.req.param('affiliatePath'))
+  if (!slug || isReservedRootSlug(slug) || !affiliatePath || !isValidAffiliatePathSegment(affiliatePath)) {
+    return c.notFound()
+  }
+
+  const tenant = await c.env.DB.prepare(`
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color
+    FROM tenants
+    WHERE slug = ? AND status = 'active'
+    LIMIT 1
+  `).bind(slug).first<PublicContactTenantRow & { id: number }>()
+
+  if (!tenant?.id) {
+    return c.notFound()
+  }
+
+  const affiliate = await c.env.DB.prepare(`
+    SELECT path_segment, label
+    FROM tenant_contact_affiliate_links
+    WHERE tenant_id = ? AND path_segment = ?
+    LIMIT 1
+  `)
+    .bind(tenant.id, affiliatePath)
+    .first<{ path_segment: string; label: string }>()
+
+  if (!affiliate) {
+    return c.notFound()
+  }
+
+  return c.html(buildPublicContactPageHtml(tenant, affiliate))
+})
+
+// Public company contact page via root slug (example: /mawad)
+app.get('/:slug', async (c) => {
+  const slug = normalizeTenantSlug(c.req.param('slug'))
+  if (!slug || isReservedRootSlug(slug)) {
+    return c.notFound()
+  }
+
+  const tenant = await c.env.DB.prepare(`
+    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color
+    FROM tenants
+    WHERE slug = ? AND status = 'active'
+    LIMIT 1
+  `).bind(slug).first<PublicContactTenantRow>()
+
+  if (!tenant) {
+    return c.notFound()
+  }
+
+  return c.html(buildPublicContactPageHtml(tenant, null))
 })
 
 export default app

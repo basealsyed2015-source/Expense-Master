@@ -146,12 +146,40 @@ body {
   font-size: 20px; color: var(--primary);
   cursor: pointer;
 }
-.topbar-title { flex: 1; }
+/* RTL row: title rightmost, then home, menu; trailing (date + CTAs) pinned to physical left */
+.topbar-title { flex: 0 1 auto; min-width: 0; }
 .topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
 .topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
-.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
 .current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.contracts-home-btn { flex-shrink: 0; }
+
+/* Slim back strip — aligns with admin pages, minimal vertical space */
+.contracts-page-back {
+  padding: 6px 28px 7px;
+  margin: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 100%);
+}
+.contracts-page-back a {
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #2563eb;
+}
+.contracts-page-back a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(37, 99, 235, 0.45);
+}
 
 /* ===== PAGE CONTENT ===== */
 .page-content { padding: 28px; flex: 1; }
@@ -691,8 +719,9 @@ body {
   .form-grid { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
   .topbar { padding: 14px 16px; }
+  .contracts-page-back { padding: 5px 16px 6px; }
   .topbar-title { min-width: 100%; }
-  .topbar-actions { width: 100%; }
+  .topbar-trailing { width: 100%; margin-inline-start: 0; justify-content: flex-end; }
   .current-date { display: none; }
   .contract-preview { padding: 30px 20px; }
   .contract-parties { grid-template-columns: 1fr; }
@@ -938,11 +967,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         <button type="button" class="btn btn-primary" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
       </div>
@@ -1054,7 +1085,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260405"></script>
+  <script src="/contracts-module/js/app.js?v=20260401"></script>
   <script>
     let editingId = null;
 

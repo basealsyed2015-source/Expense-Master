@@ -27,9 +27,9 @@ export const performanceReportPage = `
         <!-- Header -->
         <div class="flex justify-between items-center mb-6 no-print">
             <div>
-                <a href="/admin/panel" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
-                    <i class="fas fa-arrow-right ml-2"></i> العودة للوحة التحكم
-                </a>
+                <div class="mb-2 pb-1 border-b border-gray-100">
+                    <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+                </div>
                 <h1 class="text-4xl font-bold text-gray-800">
                     <i class="fas fa-chart-line text-green-600 ml-3"></i>
                     تقرير الأداء الشامل

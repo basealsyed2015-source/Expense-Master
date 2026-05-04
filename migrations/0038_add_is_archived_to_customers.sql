@@ -1,9 +1,11 @@
--- Migration: Add is_archived column to customers
--- Date: 2026-04-08
--- Description: Soft-archive customers so they disappear from the main list
-
-ALTER TABLE customers ADD COLUMN is_archived INTEGER DEFAULT 0 NOT NULL;
-ALTER TABLE customers ADD COLUMN archived_at DATETIME;
-ALTER TABLE customers ADD COLUMN archived_by INTEGER;
-
-CREATE INDEX IF NOT EXISTS idx_customers_is_archived ON customers(is_archived);
+-- customers archive columns: many databases already have these fields
+-- (manual ALTER, partial apply, or an earlier deploy), so ADD COLUMN fails with
+-- "duplicate column". D1 SQLite does not support ADD COLUMN IF NOT EXISTS.
+-- This migration is a recorded no-op so later migrations can run.
+--
+-- If your database is missing these fields, run once (local or remote) before relying on archiving:
+--   npx wrangler d1 execute tamweel-production-v2 --remote --command="ALTER TABLE customers ADD COLUMN is_archived INTEGER DEFAULT 0 NOT NULL;"
+--   npx wrangler d1 execute tamweel-production-v2 --remote --command="ALTER TABLE customers ADD COLUMN archived_at DATETIME;"
+--   npx wrangler d1 execute tamweel-production-v2 --remote --command="ALTER TABLE customers ADD COLUMN archived_by INTEGER;"
+--   npx wrangler d1 execute tamweel-production-v2 --remote --command="CREATE INDEX IF NOT EXISTS idx_customers_is_archived ON customers(is_archived);"
+SELECT 1;

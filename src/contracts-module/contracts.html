@@ -33,11 +33,13 @@
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1><i class="fas fa-file-alt"></i> قائمة العقود</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         <a href="new-contract.html" class="btn btn-primary"><i class="fas fa-plus"></i> عقد جديد</a>
       </div>

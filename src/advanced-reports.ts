@@ -117,17 +117,16 @@ export const customersReportPage = `<!DOCTYPE html>
     </style>
 </head>
 <body class="bg-gray-50">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-            <a href="/admin/reports" class="text-blue-600 hover:text-blue-800">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة للتقارير
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">
                 <i class="fas fa-users text-blue-600 ml-2"></i>
                 تقرير العملاء الشامل
             </h1>
-        </div>
 
         <div class="bg-white rounded-xl shadow-lg p-6">
             <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
@@ -311,17 +310,16 @@ export const requestsReportPage = `<!DOCTYPE html>
     </style>
 </head>
 <body class="bg-gray-50">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-            <a href="/admin/reports" class="text-blue-600 hover:text-blue-800">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة للتقارير
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">
                 <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                 تقرير طلبات التمويل
             </h1>
-        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow-lg p-6">
@@ -535,17 +533,16 @@ export const financialReportPage = `<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="bg-gray-50">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-            <a href="/admin/reports" class="text-blue-600 hover:text-blue-800">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة للتقارير
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">
                 <i class="fas fa-dollar-sign text-yellow-600 ml-2"></i>
                 التقرير المالي
             </h1>
-        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg p-6">

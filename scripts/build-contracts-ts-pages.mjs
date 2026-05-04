@@ -47,12 +47,6 @@ function patchHtml(html) {
   h = h.replace(/`new-contract\.html\?edit=/g, '`/admin/contracts/new?edit=')
   h = h.replace(/`notes\.html\?search=/g, '`/admin/contracts/notes?search=')
   h = h.replace(/`contract-view\.html\?id=/g, '`/admin/contracts/view?id=')
-  if (!h.includes('contracts-home-btn')) {
-    h = h.replace(
-      /<div class="topbar-actions">/,
-      '<div class="topbar-actions"><a href="/admin/panel" class="btn btn-ghost contracts-home-btn" title="العودة للنظام الرئيسي"><i class="fas fa-home"></i> الرئيسية</a>'
-    )
-  }
   return h
 }
 

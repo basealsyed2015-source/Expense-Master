@@ -324,11 +324,13 @@
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back no-print">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar no-print">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1 id="topbarTitle"><i class="fas fa-file-contract"></i> عرض العقد</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn no-print"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
       </div>
     </header>
@@ -406,6 +408,7 @@
 
     function renderContractDoc(c) {
       const dayName = getDayName(c.date_gregorian);
+      const hijriDate = getHijriFromGregorian(c.date_gregorian) || c.date_hijri || '—';
       const financeAmountFormatted = formatMoney(c.finance_amount);
       const commissionFormatted = formatMoney(c.commission_amount);
       const commissionWords = numberToArabicWords(c.commission_amount);
@@ -440,7 +443,7 @@
           <div class="doc-contract-title">${c.template_name || 'عقد وساطة مقابل أجر (سعي)'}</div>
           <div class="doc-contract-meta">
             <span><i class="fas fa-calendar-alt" style="color:#c8a84b;"></i> ${c.date_gregorian || '—'} م</span>
-            <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> ${c.date_hijri || '—'} هـ</span>
+            <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> ${hijriDate} هـ</span>
             <span><i class="fas fa-hashtag" style="color:#888;"></i> ${c.contract_number || '—'}</span>
           </div>
         </div>
@@ -451,7 +454,7 @@
         <!-- ===== INTRO ===== -->
         <div class="doc-intro">
           بعون الله وتوفيقه أنه في يوم <strong>${dayName}</strong> - بتاريخ:
-          <strong>${c.date_hijri || '—'} هـ</strong> الموافق:
+          <strong>${hijriDate} هـ</strong> الموافق:
           <strong>${c.date_gregorian || '—'} م</strong>
           تم الاتفاق بين كلا من: -
         </div>
@@ -618,7 +621,7 @@
 
           <div class="doc-city-date">
             حُرِّر في مدينة الرياض بتاريخ ${c.date_gregorian || '——/——/——'} م
-            الموافق ${c.date_hijri || '——/——/——'} هـ
+            الموافق ${hijriDate || '——/——/——'} هـ
           </div>
         </div>
 
@@ -635,6 +638,23 @@
         const d = new Date(dateStr);
         return d.toLocaleDateString('ar-SA', { weekday: 'long' });
       } catch { return '—'; }
+    }
+
+    function getHijriFromGregorian(dateStr) {
+      if (!dateStr) return '';
+      try {
+        const [year, month, day] = String(dateStr).split('-').map(Number);
+        if (!year || !month || !day) return '';
+        const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+        if (Number.isNaN(gregorianDate.getTime())) return '';
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      } catch (_) {
+        return '';
+      }
     }
 
     // ======= SIGNATURE PADS =======

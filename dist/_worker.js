@@ -1,4 +1,4 @@
-var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw new Error("next() called multiple times");r=i;let o,d=!1,c;if(e[i]?(c=e[i][0][0],s.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{o=await c(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},Ke=Symbol(),Ze=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,r=(e instanceof Ce?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?et(e,{all:a,dot:s}):{}};async function et(e,t){const a=await e.formData();return a?tt(a,t):{}}function tt(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?at(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(st(a,s,n),delete a[s])}),a}var at=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},st=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((r,l)=>{l===n.length-1?s[r]=a:((!s[r]||typeof s[r]!="object"||Array.isArray(s[r])||s[r]instanceof File)&&(s[r]=Object.create(null)),s=s[r])})},Ee=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},nt=e=>{const{groups:t,path:a}=rt(e),s=Ee(a);return ot(s,t)},rt=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},ot=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},Q={},it=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return Q[s]||(a[2]?Q[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:Q[s]=[e,a[1],!0]),Q[s]}return null},le=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},lt=e=>le(e,decodeURI),ke=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const r=t.indexOf("?",s),l=t.slice(a,r===-1?void 0:r);return lt(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(n===63)break}return t.slice(a,s)},dt=e=>{const t=ke(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},H=(e,t,...a)=>(a.length&&(t=H(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Ie=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const r=n.replace("?","");s+="/"+r,a.push(s)}else s+="/"+n}),a.filter((n,r,l)=>l.indexOf(n)===r)},re=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?le(e,Te):e):e,Se=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const o=l+t.length+2,d=e.indexOf("&",o);return re(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){const l=e.indexOf("&",r+1);let i=e.indexOf("=",r);i>l&&l!==-1&&(i=-1);let o=e.slice(r+1,i===-1?l===-1?void 0:l:i);if(s&&(o=re(o)),r=l,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=re(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},ct=Se,pt=(e,t)=>Se(e,t,!0),Te=decodeURIComponent,ue=e=>le(e,Te),Ce=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?ue(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?ue(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return ct(this.url,e)}queries(e){return pt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await Ze(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(r=>(n==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[Ke](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},ut={Stringify:1},De=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const r=e.callbacks;return r?.length?(n?n[0]+=e:n=[e],Promise.all(r.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>De(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},mt="text/plain; charset=UTF-8",oe=(e,t)=>({"Content-Type":e,...t}),gt=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Ce(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#i??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of r)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[r,l]of Object.entries(a))if(typeof l=="string")s.set(r,l);else{s.delete(r);for(const i of l)s.append(r,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,oe(mt,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,oe("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,oe("text/html; charset=UTF-8",a));return typeof e=="object"?De(e,ut.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},k="ALL",ft="all",bt=["get","post","put","delete","options","patch"],Re="Can not add a route since the matcher is already built.",Be=class extends Error{},xt="__COMPOSED_HANDLER",ht=e=>e.text("404 Not Found",404),me=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},yt=class Le{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...bt,ft].forEach(r=>{this[r]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#r(r,this.#t,l),i.forEach(o=>{this.#r(r,this.#t,o)}),this)}),this.on=(r,l,...i)=>{for(const o of[l].flat()){this.#t=o;for(const d of[r].flat())i.map(c=>{this.#r(d.toUpperCase(),this.#t,c)})}return this},this.use=(r,...l)=>(typeof r=="string"?this.#t=r:(this.#t="*",l.unshift(r)),l.forEach(i=>{this.#r(k,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??ke:dt}#e(){const t=new Le({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=ht;errorHandler=me;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let r;a.errorHandler===me?r=n.handler:(r=async(l,i)=>(await pe([],a.errorHandler)(l,()=>n.handler(l,i))).res,r[xt]=n.handler),s.#r(n.method,n.path,r)}),this}basePath(t){const a=this.#e();return a._basePath=H(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,r;s&&(typeof s=="function"?r=s:(r=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const l=r?o=>{const d=r(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=H(this._basePath,t),d=o==="/"?0:o.length;return c=>{const u=new URL(c.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,c)}})();const i=async(o,d)=>{const c=await a(n(o.req.raw),...l(o));if(c)return c;await d()};return this.#r(k,H(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=H(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const r=this.getPath(t,{env:s}),l=this.router.match(n,r),i=new gt(t,{path:r,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const o=pe(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${H("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},je=[];function vt(e,t){const a=this.buildAllMatchers(),s=((n,r)=>{const l=a[n]||a[k],i=l[2][r];if(i)return i;const o=r.match(l[0]);if(!o)return[[],je];const d=o.indexOf("",1);return[l[1][d],o]});return this.match=s,s(e,t)}var K="[^/]+",Y=".*",G="(?:|/.*)",U=Symbol(),wt=new Set(".\\+*[^]$()");function _t(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===Y||e===G?1:t===Y||t===G?-1:e===K?1:t===K?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Et=class ie{#t;#e;#a=Object.create(null);insert(t,a,s,n,r){if(t.length===0){if(this.#t!==void 0)throw U;if(r)return;this.#t=a;return}const[l,...i]=t,o=l==="*"?i.length===0?["","",Y]:["","",K]:l==="/*"?["","",G]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const c=o[1];let u=o[2]||K;if(c&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw U;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==Y&&m!==G))throw U;if(r)return;d=this.#a[u]=new ie,c!==""&&(d.#e=n.varIndex++)}!r&&c!==""&&s.push([c,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==Y&&c!==G))throw U;if(r)return;d=this.#a[l]=new ie}d.insert(i,a,s,n,r)}buildRegExpStr(){const a=Object.keys(this.#a).sort(_t).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:wt.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},kt=class{#t={varIndex:0};#e=new Et;insert(e,t,a){const s=[],n=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${l}`;return n[l]=[d,o],l++,i=!0,d}),!i)break}const r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=n.length-1;l>=0;l--){const[i]=n[l];for(let o=r.length-1;o>=0;o--)if(r[o].indexOf(i)!==-1){r[o]=r[o].replace(i,n[l][1]);break}}return this.#e.insert(r,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,r,l)=>r!==void 0?(a[++t]=Number(r),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},It=[/^$/,[],Object.create(null)],Ae=Object.create(null);function $e(e){return Ae[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function St(){Ae=Object.create(null)}function Tt(e){const t=new kt,a=[];if(e.length===0)return It;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[u,m])=>d?1:u?-1:c.length-m.length),n=Object.create(null);for(let d=0,c=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?n[f]=[g.map(([y])=>[y,Object.create(null)]),je]:c++;let b;try{b=t.insert(f,c,m)}catch(y){throw y===U?new Be(f):y}m||(a[c]=g.map(([y,h])=>{const w=Object.create(null);for(h-=1;h>=0;h--){const[v,_]=b[h];w[v]=_}return[y,w]}))}const[r,l,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,y=g.length;b<y;b++)f[g[b]]=i[f[g[b]]]}const o=[];for(const d in l)o[d]=a[l[d]];return[r,o,n]}function P(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if($e(a).test(t))return[...e[a]]}}var Ct=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[k]:Object.create(null)},this.#e={[k]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(Re);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[k]).forEach(o=>{i[e][o]=[...i[k][o]]})}),t==="/*"&&(t="*");const r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=$e(t);e===k?Object.keys(s).forEach(o=>{s[o][t]||=P(s[o],t)||P(s[k],t)||[]}):s[e][t]||=P(s[e],t)||P(s[k],t)||[],Object.keys(s).forEach(o=>{(e===k||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,r])})}),Object.keys(n).forEach(o=>{(e===k||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,r]))});return}const l=Ie(t)||[t];for(let i=0,o=l.length;i<o;i++){const d=l[i];Object.keys(n).forEach(c=>{(e===k||e===c)&&(n[c][d]||=[...P(s[c],d)||P(s[k],d)||[]],n[c][d].push([a,r-o+i+1]))})}}match=vt;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,St(),e}#a(e){const t=[];let a=e===k;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(r=>[r,s[e][r]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==k&&t.push(...Object.keys(s[k]).map(r=>[r,s[k][r]]))}),a?Tt(t):null}},Dt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Re);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let r=0,l;for(;r<n;r++){const i=a[r];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);l=i.match(e,t)}catch(o){if(o instanceof Be)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(r===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},W=Object.create(null),Rt=class Oe{#t;#e;#a;#r=0;#n=W;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const r=nt(a),l=[];for(let i=0,o=r.length;i<o;i++){const d=r[i],c=r[i+1],u=it(d,c),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&l.push(u[1]);continue}n.#e[m]=new Oe,u&&(n.#a.push(u),l.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const r=[];for(let l=0,i=t.#t.length;l<i;l++){const o=t.#t[l],d=o[a]||o[k],c={};if(d!==void 0&&(d.params=Object.create(null),r.push(d),s!==W||n&&n!==W))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=c[d.score];d.params[f]=n?.[f]&&!g?n[f]:s[f]??n?.[f],c[d.score]=!0}}return r}search(t,a){const s=[];this.#n=W;let r=[this];const l=Ee(a),i=[];for(let o=0,d=l.length;o<d;o++){const c=l[o],u=o===d-1,m=[];for(let f=0,g=r.length;f<g;f++){const b=r[f],y=b.#e[c];y&&(y.#n=b.#n,u?(y.#e["*"]&&s.push(...this.#s(y.#e["*"],t,b.#n)),s.push(...this.#s(y,t,b.#n))):m.push(y));for(let h=0,w=b.#a.length;h<w;h++){const v=b.#a[h],_=b.#n===W?{}:{...b.#n};if(v==="*"){const D=b.#e["*"];D&&(s.push(...this.#s(D,t,b.#n)),D.#n=_,m.push(D));continue}const[S,T,B]=v;if(!c&&!(B instanceof RegExp))continue;const I=b.#e[S],C=l.slice(o).join("/");if(B instanceof RegExp){const D=B.exec(C);if(D){if(_[T]=D[0],s.push(...this.#s(I,t,b.#n,_)),Object.keys(I.#e).length){I.#n=_;const E=D[0].match(/\//)?.length??0;(i[E]||=[]).push(I)}continue}}(B===!0||B.test(c))&&(_[T]=c,u?(s.push(...this.#s(I,t,_,b.#n)),I.#e["*"]&&s.push(...this.#s(I.#e["*"],t,_,b.#n))):(I.#n=_,m.push(I)))}}r=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},Bt=class{name="TrieRouter";#t;constructor(){this.#t=new Rt}add(e,t,a){const s=Ie(t);if(s){for(let n=0,r=s.length;n<r;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},Ne=class extends yt{constructor(e={}){super(e),this.router=e.router??new Dt({routers:[new Ct,new Bt]})}},Lt=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(r=>typeof r=="string"?r==="*"?()=>r:l=>r===l?l:null:typeof r=="function"?r:l=>r.includes(l)?l:null)(a.origin),n=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(a.allowMethods);return async function(l,i){function o(c,u){l.res.headers.set(c,u)}const d=await s(l.req.header("origin")||"",l);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const c=await n(l.req.header("origin")||"",l);c.length&&o("Access-Control-Allow-Methods",c.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const jt=`<!DOCTYPE html>
+var De=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw new Error("next() called multiple times");r=i;let o,d=!1,c;if(e[i]?(c=e[i][0][0],s.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{o=await c(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},yt=Symbol(),vt=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,r=(e instanceof We?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?wt(e,{all:a,dot:s}):{}};async function wt(e,t){const a=await e.formData();return a?_t(a,t):{}}function _t(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?kt(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(Et(a,s,n),delete a[s])}),a}var kt=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Et=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((r,l)=>{l===n.length-1?s[r]=a:((!s[r]||typeof s[r]!="object"||Array.isArray(s[r])||s[r]instanceof File)&&(s[r]=Object.create(null)),s=s[r])})},Fe=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},It=e=>{const{groups:t,path:a}=St(e),s=Fe(a);return Tt(s,t)},St=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},Tt=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},ce={},Dt=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return ce[s]||(a[2]?ce[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:ce[s]=[e,a[1],!0]),ce[s]}return null},_e=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Bt=e=>_e(e,decodeURI),Pe=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const r=t.indexOf("?",s),l=t.slice(a,r===-1?void 0:r);return Bt(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(n===63)break}return t.slice(a,s)},Ct=e=>{const t=Pe(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},K=(e,t,...a)=>(a.length&&(t=K(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),He=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const r=n.replace("?","");s+="/"+r,a.push(s)}else s+="/"+n}),a.filter((n,r,l)=>l.indexOf(n)===r)},ye=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?_e(e,ze):e):e,Ue=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const o=l+t.length+2,d=e.indexOf("&",o);return ye(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){const l=e.indexOf("&",r+1);let i=e.indexOf("=",r);i>l&&l!==-1&&(i=-1);let o=e.slice(r+1,i===-1?l===-1?void 0:l:i);if(s&&(o=ye(o)),r=l,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=ye(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},Rt=Ue,jt=(e,t)=>Ue(e,t,!0),ze=decodeURIComponent,Be=e=>_e(e,ze),We=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?Be(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Be(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Rt(this.url,e)}queries(e){return jt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await vt(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(r=>(n==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[yt](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Lt={Stringify:1},Ve=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const r=e.callbacks;return r?.length?(n?n[0]+=e:n=[e],Promise.all(r.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>Ve(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},At="text/plain; charset=UTF-8",ve=(e,t)=>({"Content-Type":e,...t}),Nt=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new We(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#i??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of r)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[r,l]of Object.entries(a))if(typeof l=="string")s.set(r,l);else{s.delete(r);for(const i of l)s.append(r,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,ve(At,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,ve("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,ve("text/html; charset=UTF-8",a));return typeof e=="object"?Ve(e,Lt.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},T="ALL",Ot="all",$t=["get","post","put","delete","options","patch"],Ge="Can not add a route since the matcher is already built.",Ye=class extends Error{},qt="__COMPOSED_HANDLER",Mt=e=>e.text("404 Not Found",404),Ce=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Ft=class Je{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...$t,Ot].forEach(r=>{this[r]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#r(r,this.#t,l),i.forEach(o=>{this.#r(r,this.#t,o)}),this)}),this.on=(r,l,...i)=>{for(const o of[l].flat()){this.#t=o;for(const d of[r].flat())i.map(c=>{this.#r(d.toUpperCase(),this.#t,c)})}return this},this.use=(r,...l)=>(typeof r=="string"?this.#t=r:(this.#t="*",l.unshift(r)),l.forEach(i=>{this.#r(T,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??Pe:Ct}#e(){const t=new Je({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Mt;errorHandler=Ce;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let r;a.errorHandler===Ce?r=n.handler:(r=async(l,i)=>(await De([],a.errorHandler)(l,()=>n.handler(l,i))).res,r[qt]=n.handler),s.#r(n.method,n.path,r)}),this}basePath(t){const a=this.#e();return a._basePath=K(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,r;s&&(typeof s=="function"?r=s:(r=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const l=r?o=>{const d=r(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=K(this._basePath,t),d=o==="/"?0:o.length;return c=>{const u=new URL(c.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,c)}})();const i=async(o,d)=>{const c=await a(n(o.req.raw),...l(o));if(c)return c;await d()};return this.#r(T,K(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=K(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const r=this.getPath(t,{env:s}),l=this.router.match(n,r),i=new Nt(t,{path:r,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const o=De(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${K("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},Xe=[];function Pt(e,t){const a=this.buildAllMatchers(),s=((n,r)=>{const l=a[n]||a[T],i=l[2][r];if(i)return i;const o=r.match(l[0]);if(!o)return[[],Xe];const d=o.indexOf("",1);return[l[1][d],o]});return this.match=s,s(e,t)}var pe="[^/]+",re=".*",oe="(?:|/.*)",Z=Symbol(),Ht=new Set(".\\+*[^]$()");function Ut(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===re||e===oe?1:t===re||t===oe?-1:e===pe?1:t===pe?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var zt=class we{#t;#e;#a=Object.create(null);insert(t,a,s,n,r){if(t.length===0){if(this.#t!==void 0)throw Z;if(r)return;this.#t=a;return}const[l,...i]=t,o=l==="*"?i.length===0?["","",re]:["","",pe]:l==="/*"?["","",oe]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const c=o[1];let u=o[2]||pe;if(c&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw Z;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==re&&m!==oe))throw Z;if(r)return;d=this.#a[u]=new we,c!==""&&(d.#e=n.varIndex++)}!r&&c!==""&&s.push([c,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==re&&c!==oe))throw Z;if(r)return;d=this.#a[l]=new we}d.insert(i,a,s,n,r)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Ut).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:Ht.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Wt=class{#t={varIndex:0};#e=new zt;insert(e,t,a){const s=[],n=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${l}`;return n[l]=[d,o],l++,i=!0,d}),!i)break}const r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=n.length-1;l>=0;l--){const[i]=n[l];for(let o=r.length-1;o>=0;o--)if(r[o].indexOf(i)!==-1){r[o]=r[o].replace(i,n[l][1]);break}}return this.#e.insert(r,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,r,l)=>r!==void 0?(a[++t]=Number(r),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Vt=[/^$/,[],Object.create(null)],Qe=Object.create(null);function Ke(e){return Qe[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Gt(){Qe=Object.create(null)}function Yt(e){const t=new Wt,a=[];if(e.length===0)return Vt;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[u,m])=>d?1:u?-1:c.length-m.length),n=Object.create(null);for(let d=0,c=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?n[f]=[g.map(([y])=>[y,Object.create(null)]),Xe]:c++;let b;try{b=t.insert(f,c,m)}catch(y){throw y===Z?new Ye(f):y}m||(a[c]=g.map(([y,h])=>{const w=Object.create(null);for(h-=1;h>=0;h--){const[v,_]=b[h];w[v]=_}return[y,w]}))}const[r,l,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,y=g.length;b<y;b++)f[g[b]]=i[f[g[b]]]}const o=[];for(const d in l)o[d]=a[l[d]];return[r,o,n]}function Q(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if(Ke(a).test(t))return[...e[a]]}}var Jt=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[T]:Object.create(null)},this.#e={[T]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(Ge);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[T]).forEach(o=>{i[e][o]=[...i[T][o]]})}),t==="/*"&&(t="*");const r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=Ke(t);e===T?Object.keys(s).forEach(o=>{s[o][t]||=Q(s[o],t)||Q(s[T],t)||[]}):s[e][t]||=Q(s[e],t)||Q(s[T],t)||[],Object.keys(s).forEach(o=>{(e===T||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,r])})}),Object.keys(n).forEach(o=>{(e===T||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,r]))});return}const l=He(t)||[t];for(let i=0,o=l.length;i<o;i++){const d=l[i];Object.keys(n).forEach(c=>{(e===T||e===c)&&(n[c][d]||=[...Q(s[c],d)||Q(s[T],d)||[]],n[c][d].push([a,r-o+i+1]))})}}match=Pt;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Gt(),e}#a(e){const t=[];let a=e===T;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(r=>[r,s[e][r]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==T&&t.push(...Object.keys(s[T]).map(r=>[r,s[T][r]]))}),a?Yt(t):null}},Xt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ge);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let r=0,l;for(;r<n;r++){const i=a[r];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);l=i.match(e,t)}catch(o){if(o instanceof Ye)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(r===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},se=Object.create(null),Qt=class Ze{#t;#e;#a;#r=0;#n=se;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const r=It(a),l=[];for(let i=0,o=r.length;i<o;i++){const d=r[i],c=r[i+1],u=Dt(d,c),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&l.push(u[1]);continue}n.#e[m]=new Ze,u&&(n.#a.push(u),l.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const r=[];for(let l=0,i=t.#t.length;l<i;l++){const o=t.#t[l],d=o[a]||o[T],c={};if(d!==void 0&&(d.params=Object.create(null),r.push(d),s!==se||n&&n!==se))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=c[d.score];d.params[f]=n?.[f]&&!g?n[f]:s[f]??n?.[f],c[d.score]=!0}}return r}search(t,a){const s=[];this.#n=se;let r=[this];const l=Fe(a),i=[];for(let o=0,d=l.length;o<d;o++){const c=l[o],u=o===d-1,m=[];for(let f=0,g=r.length;f<g;f++){const b=r[f],y=b.#e[c];y&&(y.#n=b.#n,u?(y.#e["*"]&&s.push(...this.#s(y.#e["*"],t,b.#n)),s.push(...this.#s(y,t,b.#n))):m.push(y));for(let h=0,w=b.#a.length;h<w;h++){const v=b.#a[h],_=b.#n===se?{}:{...b.#n};if(v==="*"){const C=b.#e["*"];C&&(s.push(...this.#s(C,t,b.#n)),C.#n=_,m.push(C));continue}const[R,B,j]=v;if(!c&&!(j instanceof RegExp))continue;const E=b.#e[R],S=l.slice(o).join("/");if(j instanceof RegExp){const C=j.exec(S);if(C){if(_[B]=C[0],s.push(...this.#s(E,t,b.#n,_)),Object.keys(E.#e).length){E.#n=_;const O=C[0].match(/\//)?.length??0;(i[O]||=[]).push(E)}continue}}(j===!0||j.test(c))&&(_[B]=c,u?(s.push(...this.#s(E,t,_,b.#n)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,_,b.#n))):(E.#n=_,m.push(E)))}}r=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},Kt=class{name="TrieRouter";#t;constructor(){this.#t=new Qt}add(e,t,a){const s=He(t);if(s){for(let n=0,r=s.length;n<r;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},et=class extends Ft{constructor(e={}){super(e),this.router=e.router??new Xt({routers:[new Jt,new Kt]})}},Zt=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(r=>typeof r=="string"?r==="*"?()=>r:l=>r===l?l:null:typeof r=="function"?r:l=>r.includes(l)?l:null)(a.origin),n=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(a.allowMethods);return async function(l,i){function o(c,u){l.res.headers.set(c,u)}const d=await s(l.req.header("origin")||"",l);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const c=await n(l.req.header("origin")||"",l);c.length&&o("Access-Control-Allow-Methods",c.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const ea=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,At=`<!DOCTYPE html>
+`,ta=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,qe=`<!DOCTYPE html>
+`,tt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -420,7 +420,13 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <title>حاسبة التمويل الذكية</title>
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"><\/script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
     <style>
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); overflow-y: auto; }
         .modal.active { display: flex; align-items: center; justify-content: center; }
@@ -568,63 +574,6 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         <p class="text-sm text-gray-500 mt-1">الحد الأدنى: 3,000 ريال</p>
                     </div>
                     
-                    <!-- الحلول المقترحة (رقم تلقائي + نص) -->
-                    <div id="calcSolutionsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h3 class="text-sm font-bold text-gray-700 mb-2">
-                            <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
-                            الحلول المقترحة
-                        </h3>
-                        <div class="overflow-x-auto mb-2">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-gray-300 text-right">
-                                        <th class="py-2 px-2 w-20">رقم الحل</th>
-                                        <th class="py-2 px-2">نص الحل</th>
-                                        <th class="py-2 px-2 w-16"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="calcSolutionsTbody"></tbody>
-                            </table>
-                        </div>
-                        <button type="button" id="calcAddSolutionRow" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                            <i class="fas fa-plus ml-1"></i>
-                            إضافة صف
-                        </button>
-                    </div>
-                    
-                    <!-- الالتزامات المالية (جدول + إجمالي شهري) -->
-                    <div id="calcObligationsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h3 class="text-sm font-bold text-gray-700 mb-2">
-                            <i class="fas fa-credit-card text-red-600 ml-1"></i>
-                            الالتزامات المالية
-                        </h3>
-                        <div class="overflow-x-auto mb-2">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-gray-300 text-right">
-                                        <th class="py-2 px-2">نوع الالتزام</th>
-                                        <th class="py-2 px-2">إجمالي المبلغ</th>
-                                        <th class="py-2 px-2">القسط الشهري</th>
-                                        <th class="py-2 px-2">تاريخ الاستحقاق</th>
-                                        <th class="py-2 px-2 w-16"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="calcObligationsTbody"></tbody>
-                            </table>
-                        </div>
-                        <p class="text-sm font-bold text-red-700 mb-2">
-                            إجمالي الالتزامات الشهرية: <span id="calcObligationsTotal">0</span> ريال
-                        </p>
-                        <div class="flex gap-2 flex-wrap">
-                            <button type="button" id="calcAddAdHocObligation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                <i class="fas fa-plus ml-1"></i> إضافة التزام 
-                            </button>
-                            <button type="button" id="calcSaveObligationsToClient" class="text-green-600 hover:text-green-800 text-sm font-medium hidden">
-                                <i class="fas fa-save ml-1"></i> حفظ الالتزامات على العميل
-                            </button>
-                        </div>
-                    </div>
-                    
                     <!-- زر الحساب -->
                     <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-lg font-bold text-xl hover:shadow-xl transition transform hover:scale-105">
                         <i class="fas fa-calculator ml-2"></i>
@@ -670,8 +619,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 
                 <div>
                     <label class="block text-gray-700 font-bold mb-2">
+                        <i class="fas fa-calendar-alt text-indigo-600 ml-2"></i>
+                        تاريخ الميلاد (هجري)
+                    </label>
+                    <input type="text" id="customerBirthdateHijri" autocomplete="off"
+                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                           placeholder="اختر التاريخ من التقويم الهجري">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2">
                         <i class="fas fa-calendar text-purple-600 ml-2"></i>
-                        تاريخ الميلاد
+                        تاريخ الميلاد (ميلادي)
                     </label>
                     <input type="date" id="customerBirthdate" required max="2006-12-31"
                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
@@ -981,16 +940,11 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script>
         let calculationData = {};
         let customerData = {};
-        let selectedCustomer = null;
-        let savedObligations = [];
-        let adHocObligations = [];
-        let calcSolutionRows = [{ note: '' }];
         let selectedBestOffer = null;
         let allBanks = [];
         let financingTypes = [];
-        let obligationTypeList = [];
         let allRates = [];
-        const showFilterDebug = true;
+        const showFilterDebug = false;
         
         function toNumber(value, fallback = null) {
             const numeric = Number(value);
@@ -1004,6 +958,188 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
 
             const numeric = Number(value);
             return Number.isFinite(numeric) ? numeric : null;
+        }
+
+        let isBirthdateSyncing = false;
+        let hijriBirthdatePicker = null;
+
+        const hijriDisplayFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const hijriPartsFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+
+        function normalizeArabicDigits(value) {
+            if (!value) return '';
+            const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+            const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+            return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+                const arabicIndex = arabicDigits.indexOf(char);
+                if (arabicIndex >= 0) return String(arabicIndex);
+                const easternArabicIndex = easternArabicDigits.indexOf(char);
+                return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+            });
+        }
+
+        function parseHijriInput(value) {
+            const normalized = normalizeArabicDigits(value)
+                .replace(/‏/g, '')
+                .replace(/‎/g, '')
+                .trim();
+            if (!normalized) return null;
+
+            const parts = normalized.split(/[^d]+/).filter(Boolean);
+            if (parts.length !== 3) return null;
+
+            let year;
+            let month;
+            let day;
+
+            if (parts[0].length === 4) {
+                year = Number(parts[0]);
+                month = Number(parts[1]);
+                day = Number(parts[2]);
+            } else if (parts[2].length === 4) {
+                day = Number(parts[0]);
+                month = Number(parts[1]);
+                year = Number(parts[2]);
+            } else {
+                return null;
+            }
+
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+            if (year < 1200 || year > 1700) return null;
+            if (month < 1 || month > 12) return null;
+            if (day < 1 || day > 30) return null;
+
+            return { year, month, day };
+        }
+
+        function extractHijriPartsFromDate(dateObject) {
+            const parts = hijriPartsFormatter.formatToParts(dateObject);
+            const year = Number(parts.find((part) => part.type === 'year')?.value);
+            const month = Number(parts.find((part) => part.type === 'month')?.value);
+            const day = Number(parts.find((part) => part.type === 'day')?.value);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+            return { year, month, day };
+        }
+
+        function formatGregorianValue(dateObject) {
+            const year = dateObject.getFullYear();
+            const month = String(dateObject.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObject.getDate()).padStart(2, '0');
+            return \`\${year}-\${month}-\${day}\`;
+        }
+
+        function formatHijriDateFromGregorian(dateValue) {
+            if (!dateValue) return '';
+            const [year, month, day] = String(dateValue).split('-').map(Number);
+            if (!year || !month || !day) return '';
+            const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+            if (Number.isNaN(gregorianDate.getTime())) return '';
+            return hijriDisplayFormatter.format(gregorianDate);
+        }
+
+        function findGregorianFromHijri(hijriParts) {
+            const approxGregorianYear = hijriParts.year + 579;
+            const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+            const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+
+            for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                const currentHijriParts = extractHijriPartsFromDate(cursor);
+                if (!currentHijriParts) continue;
+
+                if (
+                    currentHijriParts.year === hijriParts.year &&
+                    currentHijriParts.month === hijriParts.month &&
+                    currentHijriParts.day === hijriParts.day
+                ) {
+                    return formatGregorianValue(cursor);
+                }
+            }
+
+            return '';
+        }
+
+        function initHijriBirthdatePicker() {
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            const gregorianInput = document.getElementById('customerBirthdate');
+            if (!hijriInput || !gregorianInput) return;
+
+            if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
+                console.warn('Hijri picker dependencies not loaded, fallback to manual conversion.');
+                return;
+            }
+
+            hijriBirthdatePicker = flatpickr(hijriInput, {
+                locale: 'ar',
+                disableMobile: true,
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                plugins: [
+                    hijriCalendarPlugin(window.luxon.DateTime, {
+                        showHijriDates: true,
+                        showHijriToggle: false
+                    })
+                ],
+                onOpen: [(_, __, instance) => {
+                    if (gregorianInput.value) {
+                        instance.setDate(gregorianInput.value, false, 'Y-m-d');
+                    }
+                }],
+                onChange: [(selectedDates) => {
+                    if (!selectedDates.length || isBirthdateSyncing) return;
+                    const gregorianValue = formatGregorianValue(selectedDates[0]);
+                    isBirthdateSyncing = true;
+                    gregorianInput.value = gregorianValue;
+                    hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+                    isBirthdateSyncing = false;
+                }]
+            });
+
+            if (gregorianInput.value) {
+                syncBirthdateFromGregorian();
+            }
+        }
+
+        function syncBirthdateFromGregorian() {
+            if (isBirthdateSyncing) return;
+            const gregorianInput = document.getElementById('customerBirthdate');
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            if (!gregorianInput || !hijriInput) return;
+
+            isBirthdateSyncing = true;
+            hijriInput.value = formatHijriDateFromGregorian(gregorianInput.value);
+            if (hijriBirthdatePicker && gregorianInput.value) {
+                hijriBirthdatePicker.setDate(gregorianInput.value, false, 'Y-m-d');
+            }
+            isBirthdateSyncing = false;
+        }
+
+        function syncBirthdateFromHijri() {
+            if (isBirthdateSyncing) return;
+            const gregorianInput = document.getElementById('customerBirthdate');
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            if (!gregorianInput || !hijriInput) return;
+
+            const parsedHijri = parseHijriInput(hijriInput.value);
+            if (!parsedHijri) return;
+
+            const gregorianValue = findGregorianFromHijri(parsedHijri);
+            if (!gregorianValue) return;
+
+            isBirthdateSyncing = true;
+            gregorianInput.value = gregorianValue;
+            hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+            if (hijriBirthdatePicker) {
+                hijriBirthdatePicker.setDate(gregorianValue, false, 'Y-m-d');
+            }
+            isBirthdateSyncing = false;
         }
         
         function sanitizeRequestData(data) {
@@ -1089,13 +1225,11 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 // Build API URLs with tenant_id if available
                 const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}&include_global=0\` : '/api/banks';
                 const ratesUrl = tenantId ? \`/api/rates?tenant_id=\${tenantId}\` : '/api/rates';
-                const obligTypesUrl = tenantId ? \`/api/obligation-types?tenant_id=\${tenantId}\` : '/api/obligation-types';
                 
-                const [banksRes, typesRes, ratesRes, obligTypesRes] = await Promise.all([
+                const [banksRes, typesRes, ratesRes] = await Promise.all([
                     axios.get(banksUrl),
                     axios.get('/api/financing-types'),
-                    axios.get(ratesUrl),
-                    axios.get(obligTypesUrl)
+                    axios.get(ratesUrl)
                 ]);
                 
                 allBanks = (banksRes.data.data || []).map((bank) => ({
@@ -1103,12 +1237,6 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     id: toNumber(bank.id, bank.id)
                 }));
                 financingTypes = typesRes.data.data || [];
-                obligationTypeList = (obligTypesRes.data && obligTypesRes.data.success && Array.isArray(obligTypesRes.data.data))
-                    ? obligTypesRes.data.data.map((row) => row.type_name).filter(Boolean)
-                    : [];
-                if (!obligationTypeList.length) {
-                    obligationTypeList = ['قرض شخصي', 'قرض عقاري', 'تمويل سيارة قائم', 'بطاقة ائتمان', 'تمويل تعاوني', 'تقسيط / شراء بالأقساط', 'سلفة راتب', 'التزامات أخرى'];
-                }
                 allRates = (ratesRes.data.data || []).map((rate) => ({
                     ...rate,
                     bank_id: toNumber(rate.bank_id, rate.bank_id),
@@ -1146,162 +1274,22 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             }
         }
         
-        function syncCalcSolutionRowsFromDom() {
-            const tbody = document.getElementById('calcSolutionsTbody');
-            if (!tbody) return;
-            const next = [];
-            tbody.querySelectorAll('tr').forEach((tr) => {
-                const el = tr.querySelector('.calc-sol-note');
-                next.push({ note: el ? el.value : '' });
-            });
-            calcSolutionRows = next.length ? next : [{ note: '' }];
-        }
-        
-        function renderCalcSolutionsTable() {
-            const tbody = document.getElementById('calcSolutionsTbody');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-            (calcSolutionRows || []).forEach((row, i) => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200';
-                tr.innerHTML = '<td class="py-1 px-2 text-center text-gray-700 font-medium w-20">' + (i + 1) + '</td>' +
-                    '<td class="py-1 px-2"><input type="text" class="calc-sol-note w-full px-2 py-1.5 border rounded"></td>' +
-                    '<td class="py-1 px-2"><button type="button" class="calc-sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                tr.querySelector('.calc-sol-note').value = row.note || '';
-                tr.querySelector('.calc-sol-remove').addEventListener('click', () => {
-                    syncCalcSolutionRowsFromDom();
-                    calcSolutionRows.splice(i, 1);
-                    if (!calcSolutionRows.length) calcSolutionRows.push({ note: '' });
-                    renderCalcSolutionsTable();
-                });
-                tbody.appendChild(tr);
-            });
-        }
-        
-        function getCalcSolutionsForSave() {
-            syncCalcSolutionRowsFromDom();
-            return calcSolutionRows.map((r) => ({ note: (r.note || '').trim() }));
-        }
-        
-        function getCalcObligationsTotal() {
-            const saved = (savedObligations || []).reduce((s, o) => s + (Number(o.monthly_installment) || 0), 0);
-            let adhoc = 0;
-            const tbody = document.getElementById('calcObligationsTbody');
-            if (tbody) {
-                tbody.querySelectorAll('tr.calc-adhoc-row').forEach(tr => {
-                    const el = tr.querySelector('.calc-adhoc-monthly');
-                    if (el) adhoc += parseFloat(el.value) || 0;
-                });
-            }
-            return saved + adhoc;
-        }
-        
-        function renderCalcObligationsTable() {
-            const tbody = document.getElementById('calcObligationsTbody');
-            const totalEl = document.getElementById('calcObligationsTotal');
-            const saveBtn = document.getElementById('calcSaveObligationsToClient');
-            if (!tbody || !totalEl) return;
-            tbody.innerHTML = '';
-            (savedObligations || []).forEach(o => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200';
-                tr.innerHTML = \`<td class="py-1 px-2">\${escapeHtml(o.obligation_type || '')}</td><td class="py-1 px-2">\${formatNumber(Number(o.total_amount) || 0)}</td><td class="py-1 px-2">\${formatNumber(Number(o.monthly_installment) || 0)}</td><td class="py-1 px-2">\${o.due_date || '-'}</td><td class="py-1 px-2"></td>\`;
-                tbody.appendChild(tr);
-            });
-            (adHocObligations || []).forEach((o, i) => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200 calc-adhoc-row';
-                tr.innerHTML = \`<td class="py-1 px-2">\${buildCalcObligSelectHtml(o.obligation_type || '')}</td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
-                const removeBtn = tr.querySelector('.calc-adhoc-remove');
-                removeBtn.addEventListener('click', () => { adHocObligations.splice(i, 1); renderCalcObligationsTable(); });
-                tbody.appendChild(tr);
-            });
-            const total = getCalcObligationsTotal();
-            totalEl.textContent = total.toLocaleString('ar-SA');
-            if (saveBtn) saveBtn.classList.toggle('hidden', !selectedCustomer);
-        }
-        
-        function escapeHtml(s) {
-            const div = document.createElement('div');
-            div.textContent = s;
-            return div.innerHTML;
-        }
-        
-        function buildCalcObligSelectHtml(selectedValue) {
-            const sel = selectedValue == null ? '' : String(selectedValue);
-            let opts = '<option value="">— اختر النوع —</option>';
-            obligationTypeList.forEach(function (name) {
-                const e = escapeHtml(name);
-                opts += '<option value="' + e.replace(/"/g, '&quot;') + '"' + (sel === name ? ' selected' : '') + '>' + e + '</option>';
-            });
-            if (sel && obligationTypeList.indexOf(sel) === -1) {
-                const e = escapeHtml(sel);
-                opts += '<option value="' + e.replace(/"/g, '&quot;') + '" selected>' + e + '</option>';
-            }
-            return '<select class="calc-adhoc-type w-full px-2 py-1 border rounded">' + opts + '</select>';
-        }
-        
-        function formatNumber(n) {
-            return Number(n).toLocaleString('ar-SA');
-        }
-        
-        document.getElementById('calcAddSolutionRow').addEventListener('click', () => {
-            syncCalcSolutionRowsFromDom();
-            calcSolutionRows.push({ note: '' });
-            renderCalcSolutionsTable();
-        });
-        
-        document.getElementById('calcAddAdHocObligation').addEventListener('click', () => {
-            adHocObligations = adHocObligations || [];
-            adHocObligations.push({ obligation_type: '', total_amount: 0, monthly_installment: 0, due_date: null });
-            renderCalcObligationsTable();
-        });
-        
-        document.getElementById('calcSaveObligationsToClient').addEventListener('click', async () => {
-            if (!selectedCustomer || !selectedCustomer.id) return;
-            const rows = [];
-            (savedObligations || []).forEach(o => rows.push({ obligation_type: o.obligation_type || '', total_amount: Number(o.total_amount) || 0, monthly_installment: Number(o.monthly_installment) || 0, due_date: o.due_date || null }));
-            document.querySelectorAll('#calcObligationsTbody tr.calc-adhoc-row').forEach(tr => {
-                const typeEl = tr.querySelector('.calc-adhoc-type');
-                const totalEl = tr.querySelector('.calc-adhoc-total');
-                const monthlyEl = tr.querySelector('.calc-adhoc-monthly');
-                const dueEl = tr.querySelector('.calc-adhoc-due');
-                if (typeEl && totalEl && monthlyEl) rows.push({ obligation_type: typeEl.value || '', total_amount: parseFloat(totalEl.value) || 0, monthly_installment: parseFloat(monthlyEl.value) || 0, due_date: (dueEl && dueEl.value) || null });
-            });
-            try {
-                await axios.post(\`/api/customers/\${selectedCustomer.id}/obligations\`, { obligations: rows }, { withCredentials: true });
-                alert('تم حفظ الالتزامات على العميل بنجاح');
-                savedObligations = rows;
-                adHocObligations = [];
-                renderCalcObligationsTable();
-            } catch (err) {
-                console.error(err);
-                alert(err.response && err.response.data && err.response.data.error ? err.response.data.error : 'فشل حفظ الالتزامات. قد تحتاج لتسجيل الدخول.');
-            }
-        });
-        
-        renderCalcObligationsTable();
-        renderCalcSolutionsTable();
-        
         // Step 1: Main form submission
         document.getElementById('calculatorForm').addEventListener('submit', (e) => {
             e.preventDefault();
             
-            const obligationsTotal = getCalcObligationsTotal();
-            // Get form data
+            // Get form data (obligations not collected on calculator; affordability uses full salary)
             calculationData = {
                 financing_type_id: parseInt(document.getElementById('financingType').value, 10),
                 amount: parseFloat(document.getElementById('amount').value),
                 salary: parseFloat(document.getElementById('salary').value),
-                obligations: obligationsTotal
+                obligations: 0
             };
             
-            // Calculate available income
-            const availableIncome = calculationData.salary - calculationData.obligations;
+            const availableIncome = calculationData.salary;
             
-            // Check if customer can afford
             if (availableIncome < 1000) {
-                alert('عذراً، الراتب المتاح بعد خصم الالتزامات غير كافٍ (يجب أن يكون 1000 ريال على الأقل)');
+                alert('عذراً، الراتب الشهري غير كافٍ (يجب أن يكون 1000 ريال على الأقل)');
                 return;
             }
             
@@ -1312,6 +1300,8 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         // Step 2: Customer info submission
         document.getElementById('customerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            syncBirthdateFromHijri();
+            syncBirthdateFromGregorian();
             
             // Get customer info
             customerData = {
@@ -1347,7 +1337,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     obligations: calculationData.obligations,
                     financing_type_id: calculationData.financing_type_id,
                     tenant_slug: tenantSlug,
-                    solutions: getCalcSolutionsForSave()
+                    solutions: []
                 });
                 
                 console.log('✅ تم حفظ بيانات العميل في قاعدة البيانات:', response.data);
@@ -2036,13 +2026,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             document.getElementById('calculatorForm').reset();
             calculationData = {};
             customerData = {};
-            selectedCustomer = null;
-            savedObligations = [];
-            adHocObligations = [];
-            calcSolutionRows = [{ note: '' }];
             selectedBestOffer = null;
-            if (typeof renderCalcObligationsTable === 'function') renderCalcObligationsTable();
-            if (typeof renderCalcSolutionsTable === 'function') renderCalcSolutionsTable();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         
@@ -2086,6 +2070,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             modal.classList.add('hidden');
             modal.style.display = 'none';
         }
+
+        const customerBirthdateInput = document.getElementById('customerBirthdate');
+        const customerBirthdateHijriInput = document.getElementById('customerBirthdateHijri');
+        if (customerBirthdateInput) {
+            customerBirthdateInput.addEventListener('change', syncBirthdateFromGregorian);
+            customerBirthdateInput.addEventListener('input', syncBirthdateFromGregorian);
+        }
+        if (customerBirthdateHijriInput) {
+            customerBirthdateHijriInput.addEventListener('change', syncBirthdateFromHijri);
+            customerBirthdateHijriInput.addEventListener('blur', syncBirthdateFromHijri);
+        }
+        initHijriBirthdatePicker();
         
         // Load data on page load
         loadData();
@@ -2093,7 +2089,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,$t=`<!DOCTYPE html>
+`,aa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2344,7 +2340,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ot=`<!DOCTYPE html>
+`,sa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2680,7 +2676,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Nt=`<!DOCTYPE html>
+`,na=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2979,7 +2975,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,qt=`<!DOCTYPE html>
+`,ra=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3468,7 +3464,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Me=`<!DOCTYPE html>
+`,at=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3642,7 +3638,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 <!-- Dashboard -->
                 <a href="/admin/dashboard" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-tachometer-alt text-xl text-blue-600 group-hover:text-blue-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-blue-700">مخلص العملاء</span>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">ملخص العملاء</span>
                 </a>
 
                 <!-- Customers -->
@@ -3657,10 +3653,23 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     <span class="font-medium text-gray-700 group-hover:text-purple-700">طلبات التمويل</span>
                 </a>
 
+                <a href="/admin/my-tasks" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-indigo-50 rounded-lg transition-all group">
+                    <i class="fas fa-tasks text-xl text-indigo-600 group-hover:text-indigo-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-indigo-700">مهام المتابعة</span>
+                </a>
+
                 <!-- Reports -->
                 <a href="/admin/reports" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-teal-50 rounded-lg transition-all group">
                     <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
+                </a>
+                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-fuchsia-50 rounded-lg transition-all group">
+                    <i class="fas fa-address-card text-xl text-fuchsia-600 group-hover:text-fuchsia-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-fuchsia-700">متابعة التواصل</span>
+                </a>
+                <a href="/admin/contact-affiliates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-funnel-dollar text-xl text-amber-600 group-hover:text-amber-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-700">روابط التواصل التسويقية</span>
                 </a>
 
                 <!-- Rates -->
@@ -3791,10 +3800,10 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 </h2>
                 
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <!-- زر مخلص العملاء -->
+                    <!-- زر ملخص العملاء -->
                     <a href="/admin/dashboard" class="quick-access-btn bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-tachometer-alt text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">مخلص العملاء</div>
+                        <div class="text-sm font-bold">ملخص العملاء</div>
                     </a>
                     
                     <!-- زر العملاء -->
@@ -3808,11 +3817,25 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         <i class="fas fa-file-invoice text-3xl mb-2"></i>
                         <div class="text-sm font-bold">طلبات التمويل</div>
                     </a>
+
+                    <a href="/admin/my-tasks" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-tasks text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">مهام المتابعة</div>
+                    </a>
                     
                     <!-- زر التقارير -->
                     <a href="/admin/reports" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-chart-line text-3xl mb-2"></i>
                         <div class="text-sm font-bold">التقارير</div>
+                    </a>
+                    
+                    <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 hover:from-fuchsia-600 hover:to-fuchsia-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-address-card text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">متابعة التواصل</div>
+                    </a>
+                    <a href="/admin/contact-affiliates" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-funnel-dollar text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">روابط التواصل التسويقية</div>
                     </a>
                     
                     <!-- زر نسب التمويل -->
@@ -3911,7 +3934,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             <div id="dashboard-section" class="content-section active">
                 <h1 class="text-3xl font-bold mb-6 text-gray-800">
                     <i class="fas fa-tachometer-alt text-blue-600 ml-2"></i>
-                    مخلص العملاء
+                    ملخص العملاء
                 </h1>
                 
                 <!-- Stats Cards -->
@@ -4049,6 +4072,46 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                 <i class="fas fa-external-link-alt ml-2"></i>
                                 فتح الحاسبة في نافذة جديدة
                             </button>
+
+                            <label class="block text-sm font-medium text-gray-700 mb-2 mt-5">
+                                <i class="fas fa-address-card ml-1"></i>
+                                رابط صفحة التواصل (المسار الجذر)
+                            </label>
+                            <div class="flex gap-2">
+                                <input
+                                    type="text"
+                                    id="contactRootLinkInput"
+                                    value="جاري التحميل..."
+                                    readonly
+                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-blue-500"
+                                >
+                                <button
+                                    onclick="copyContactRootLink()"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
+                                    title="نسخ الرابط"
+                                >
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <div id="contactRootCopySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
+                                <i class="fas fa-check-circle ml-1"></i>
+                                تم نسخ رابط صفحة التواصل بنجاح!
+                            </div>
+                            <button
+                                onclick="openContactRootLink()"
+                                class="w-full mt-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+                            >
+                                <i class="fas fa-external-link-alt ml-2"></i>
+                                فتح صفحة التواصل في نافذة جديدة
+                            </button>
+                            <div id="contactAffiliateLinksWrap" class="mt-6 border-t border-gray-200 pt-4" style="display:none;">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i class="fas fa-funnel-dollar ml-1"></i>روابط التواصل التسويقية
+                                </label>
+                                <ul id="contactAffiliateLinksList" class="space-y-2 text-sm text-gray-700 max-h-48 overflow-y-auto"></ul>
+                                <p class="text-xs text-gray-500 mt-2">لإضافة أو حذف مسار (مثل /facebook) استخدم صفحة الإدارة.</p>
+                                <a href="/admin/contact-affiliates" class="inline-block mt-1 text-amber-700 hover:underline text-sm font-medium">إدارة روابط الإحالة</a>
+                            </div>
                         </div>
                         
                         <!-- Right Side: QR Code -->
@@ -5265,7 +5328,8 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         roleId === 1 ? 'مدير النظام' :
                         roleId === 2 ? 'مدير الشركة' :
                         roleId === 3 ? 'مشرف المبيعات' :
-                        roleId === 4 ? 'موظف' : '';
+                        roleId === 4 ? 'موظف' :
+                        roleId === 5 ? 'وكيل بنك' : '';
                     const finalRoleLabel = roleName || roleLabelFromId || 'مستخدم';
 
                     console.log('👤 بيانات المستخدم المحملة:');
@@ -5402,6 +5466,8 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         '/admin/tenant-calculators',
                         '/admin/saas-settings',
                         '/admin/reports',
+                        '/admin/follow-ups',
+                        '/admin/contact-affiliates',
                         '/admin/payments',
                         '/admin/settings',
                         '/admin/hr',
@@ -5412,6 +5478,8 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         '/admin/customers',
                         '/admin/requests',
                         '/admin/reports',
+                        '/admin/follow-ups',
+                        '/admin/contact-affiliates',
                         '/admin/banks',
                         '/admin/rates',
                         '/admin/payments',
@@ -5427,6 +5495,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         '/admin/customers',
                         '/admin/requests',
                         '/admin/reports',
+                        '/admin/follow-ups',
                         '/admin/banks',
                         '/admin/rates',
                         // Logical entry + list URL: href is rewritten to /admin/contracts/list before allowlist runs
@@ -5439,8 +5508,12 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
+                        '/admin/my-tasks',
                         '/calculator',
                         '/'
+                    ],
+                    '5': [ // Bank agent — funding requests for assigned bank only
+                        '/admin/requests'
                     ]
                 };
                 
@@ -5516,8 +5589,9 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         return;
                     }
                     
-                    // Always keep calculator links visible if present
-                    const isAlways = (normalizedHref === '/calculator' || normalizedHref.startsWith('/c/'));
+                    // Always keep calculator links visible if present (bank agents: no calculator/home shortcuts)
+                    const isAlways =
+                        roleId !== 5 && (normalizedHref === '/calculator' || normalizedHref.startsWith('/c/'));
                     
                     // Check if href is in allowed links
                     if (isAlways || userAllowedLinks.includes(normalizedHref)) {
@@ -5538,9 +5612,9 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 // إخفاء الكروت الإضافية للموظفين والمشرفين
                 const adminOnlyStats = document.querySelector('.admin-only-stats');
                 if (adminOnlyStats) {
-                    if (roleId === 4 || roleId === 3) { // Employee or Supervisor
+                    if (roleId === 4 || roleId === 3 || roleId === 5) {
                         adminOnlyStats.style.display = 'none';
-                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف)');
+                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو وكيل بنك)');
                     } else {
                         adminOnlyStats.style.display = 'grid';
                         console.log('✅ عرض الكروت الإضافية');
@@ -5552,7 +5626,12 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 const employeeCalculatorSection = document.getElementById('employeeCalculatorSection');
                 
                 if (calculatorLinkSection) {
-                    if (roleId === 3 || roleId === 5) { // Employee or Supervisor
+                    if (roleId === 5) {
+                        calculatorLinkSection.style.display = 'none';
+                        if (employeeCalculatorSection) employeeCalculatorSection.style.display = 'none';
+                        console.log('🚫 إخفاء قسم رابط الحاسبة (وكيل بنك)');
+                    } else if (roleId === 3 || roleId === 4) {
+                        // Supervisor or employee
                         calculatorLinkSection.style.display = 'none';
                         console.log('🚫 إخفاء قسم رابط الحاسبة (موظف أو مشرف)');
                         
@@ -5599,7 +5678,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', applyUserPermissions);
         
         // دالة تحديث رابط الحاسبة حسب الشركة
-        function updateCalculatorLink() {
+        async function updateCalculatorLink() {
             console.log('🔗 تحديث رابط الحاسبة...');
             
             try {
@@ -5616,10 +5695,12 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 const sidebarCalculatorLink = document.getElementById('sidebarCalculatorLink');
                 
                 // تحديد رابط الحاسبة حسب الشركة
-                let calculatorHref = '/calculator';
-                if (user.tenant_slug) {
-                    calculatorHref = \`/c/\${user.tenant_slug}/calculator\`;
-                    console.log(\`✅ تم تحديث رابط الحاسبة إلى: /c/\${user.tenant_slug}/calculator\`);
+                const tenantSlug = resolveTenantSlug(user);
+                const calculatorHref = await resolveCalculatorPathFromTenantSettings(user);
+                if (calculatorHref.startsWith('/c/')) {
+                    console.log('✅ تم تحديث رابط الحاسبة المخصص للشركة:', calculatorHref);
+                } else if (tenantSlug) {
+                    console.log('✅ تم تحديث رابط الحاسبة إلى: /c/' + tenantSlug + '/calculator');
                 } else {
                     console.log('✅ تم تحديث رابط الحاسبة إلى: /calculator (حاسبة عامة)');
                 }
@@ -5715,6 +5796,43 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             }
         });
 
+        function normalizePhoneDigits(phoneValue) {
+            const raw = String(phoneValue || '').trim();
+            return raw
+                .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+                .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); })
+                .replace(/[^\\d]/g, '');
+        }
+
+        function localSaudiPhone(phoneValue) {
+            const digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) return digits.slice(5);
+            if (digits.startsWith('966')) return digits.slice(3);
+            if (digits.startsWith('05') && digits.length === 10) return digits.slice(1);
+            return digits;
+        }
+
+        function toSaudiWaNumber(phoneValue) {
+            let digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) digits = digits.slice(2);
+            if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+            if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+            if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+            return '';
+        }
+
+        function openCustomerWhatsApp(whatsAppPhone, fallbackPhone) {
+            const normalizedPhone = toSaudiWaNumber(whatsAppPhone) || toSaudiWaNumber(fallbackPhone);
+            if (!normalizedPhone) {
+                alert('لا يوجد رقم واتساب صالح لهذا العميل');
+                return;
+            }
+
+            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+        }
+
         // Load Customers
         async function loadCustomers() {
             try {
@@ -5757,7 +5875,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                     </button>
                                 </div>
                             </td>
-                            <td class="px-4 py-3">\${customer.phone}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <span dir="ltr">\${localSaudiPhone(customer.phone) || '-'}</span>
+                                    <button
+                                        onclick="openCustomerWhatsApp('\${String(customer.whatsapp_phone || customer.whatsapp_phone_number || customer.phone || '').replace(/'/g, "\\\\'")}', '\${String(customer.phone || '').replace(/'/g, "\\\\'")}')"
+                                        class="inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors"
+                                        title="فتح واتساب">
+                                        <i class="fab fa-whatsapp"></i>
+                                        <span>واتساب</span>
+                                    </button>
+                                </div>
+                            </td>
                             <td class="px-4 py-3 text-sm">\${customer.birthdate ? customer.birthdate + (customer.dob_calendar_type === 'hijri' ? ' هـ' : ' م') : '-'}</td>
                             <td class="px-4 py-3 font-medium text-green-600">\${customer.monthly_salary ? customer.monthly_salary.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 font-medium text-purple-600">\${customer.financing_amount ? customer.financing_amount.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
@@ -5937,7 +6066,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                     
                                     <div class="bg-gray-50 p-4 rounded-lg">
                                         <p class="text-sm text-gray-600 mb-1">رقم الجوال</p>
-                                        <p class="text-lg font-bold text-gray-800">\${customer.phone || '-'}</p>
+                                        <p class="text-lg font-bold text-gray-800">\${localSaudiPhone(customer.phone) || '-'}</p>
                                     </div>
                                     
                                     <div class="bg-gray-50 p-4 rounded-lg">
@@ -7428,8 +7557,155 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         // Calculator Link & QR Code Functions
         // ==========================================
         
+        function resolveTenantSlug(userData = {}) {
+            const slugCandidates = [
+                userData.tenant_slug,
+                userData.tenantSlug,
+                userData.slug,
+                userData.company_slug,
+                userData.companySlug,
+                userData.tenant && userData.tenant.slug,
+                userData.company && userData.company.slug
+            ];
+            
+            for (const candidate of slugCandidates) {
+                if (typeof candidate !== 'string') continue;
+                
+                const normalized = candidate.trim();
+                if (!normalized || normalized.toLowerCase() === 'unknown') continue;
+                
+                return normalized;
+            }
+            
+            return null;
+        }
+        
+        function buildCalculatorPath(userData = {}) {
+            const tenantSlug = resolveTenantSlug(userData);
+            return tenantSlug ? '/c/' + encodeURIComponent(tenantSlug) + '/calculator' : '/calculator';
+        }
+
+        function buildContactRootPath(userData = {}) {
+            const tenantSlug = resolveTenantSlug(userData);
+            return tenantSlug ? '/' + encodeURIComponent(tenantSlug) : '/';
+        }
+
+        async function resolveCalculatorPathFromTenantSettings(userData = {}) {
+            const localPath = buildCalculatorPath(userData);
+            if (localPath !== '/calculator') {
+                return localPath;
+            }
+
+            const tenantIdCandidates = [
+                userData.tenant_id,
+                userData.tenantId,
+                userData.tenant && userData.tenant.id
+            ];
+            const tenantId = tenantIdCandidates
+                .map((value) => parseInt(value, 10))
+                .find((value) => Number.isInteger(value) && value > 0);
+
+            const tenantNameCandidates = [
+                userData.tenant_name,
+                userData.company_name,
+                userData.companyName,
+                userData.tenant && userData.tenant.company_name
+            ];
+            const tenantName = tenantNameCandidates
+                .find((value) => typeof value === 'string' && value.trim())
+                ?.trim()
+                .toLowerCase();
+
+            try {
+                const response = await axios.get('/api/tenants');
+                const tenants = Array.isArray(response?.data?.data) ? response.data.data : [];
+
+                const matchedTenant = tenants.find((tenant) => {
+                    const currentId = parseInt(tenant?.id, 10);
+                    if (tenantId && currentId === tenantId) return true;
+
+                    if (tenantName && typeof tenant?.company_name === 'string') {
+                        return tenant.company_name.trim().toLowerCase() === tenantName;
+                    }
+
+                    return false;
+                });
+
+                if (!matchedTenant) {
+                    return localPath;
+                }
+
+                const matchedSlug = resolveTenantSlug(matchedTenant);
+                if (!matchedSlug) {
+                    return localPath;
+                }
+
+                return '/c/' + encodeURIComponent(matchedSlug) + '/calculator';
+            } catch (error) {
+                console.warn('⚠️ تعذر تحميل رابط الحاسبة المخصص من إعدادات الشركات:', error);
+                return localPath;
+            }
+        }
+
+        async function resolveContactRootPathFromTenantSettings(userData = {}) {
+            const localPath = buildContactRootPath(userData);
+            if (localPath !== '/') {
+                return localPath;
+            }
+
+            const tenantIdCandidates = [
+                userData.tenant_id,
+                userData.tenantId,
+                userData.tenant && userData.tenant.id
+            ];
+            const tenantId = tenantIdCandidates
+                .map((value) => parseInt(value, 10))
+                .find((value) => Number.isInteger(value) && value > 0);
+
+            const tenantNameCandidates = [
+                userData.tenant_name,
+                userData.company_name,
+                userData.companyName,
+                userData.tenant && userData.tenant.company_name
+            ];
+            const tenantName = tenantNameCandidates
+                .find((value) => typeof value === 'string' && value.trim())
+                ?.trim()
+                .toLowerCase();
+
+            try {
+                const response = await axios.get('/api/tenants');
+                const tenants = Array.isArray(response?.data?.data) ? response.data.data : [];
+
+                const matchedTenant = tenants.find((tenant) => {
+                    const currentId = parseInt(tenant?.id, 10);
+                    if (tenantId && currentId === tenantId) return true;
+
+                    if (tenantName && typeof tenant?.company_name === 'string') {
+                        return tenant.company_name.trim().toLowerCase() === tenantName;
+                    }
+
+                    return false;
+                });
+
+                if (!matchedTenant) {
+                    return localPath;
+                }
+
+                const matchedSlug = resolveTenantSlug(matchedTenant);
+                if (!matchedSlug) {
+                    return localPath;
+                }
+
+                return '/' + encodeURIComponent(matchedSlug);
+            } catch (error) {
+                console.warn('⚠️ تعذر تحميل رابط صفحة التواصل من إعدادات الشركات:', error);
+                return localPath;
+            }
+        }
+        
         // Generate and display calculator link and QR code
-        function loadCalculatorLink() {
+        async function loadCalculatorLink() {
             console.log('📱 بدء تحميل رابط الحاسبة...');
             
             const userDataStr = localStorage.getItem('userData');
@@ -7443,14 +7719,17 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             const userData = JSON.parse(userDataStr);
             console.log('👤 بيانات المستخدم:', userData);
             
-            const tenantSlug = userData.tenant_slug || 'unknown';
-            const tenantName = userData.tenant_name || 'الشركة';
+            const tenantSlug = resolveTenantSlug(userData);
+            const tenantName = userData.tenant_name || userData.company_name || 'الشركة';
             
             console.log('🏢 معلومات الشركة:', { tenantSlug, tenantName });
             
             // Build calculator URL
             const baseUrl = window.location.origin;
-            const calculatorUrl = \`\${baseUrl}/c/\${tenantSlug}/calculator\`;
+            const calculatorPath = await resolveCalculatorPathFromTenantSettings(userData);
+            const calculatorUrl = baseUrl + calculatorPath;
+            const contactRootPath = await resolveContactRootPathFromTenantSettings(userData);
+            const contactRootUrl = baseUrl + contactRootPath;
             
             console.log('🔗 رابط الحاسبة المولد:', calculatorUrl);
             
@@ -7458,6 +7737,10 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             const linkInput = document.getElementById('calculatorLinkInput');
             if (linkInput) {
                 linkInput.value = calculatorUrl;
+            }
+            const contactLinkInput = document.getElementById('contactRootLinkInput');
+            if (contactLinkInput) {
+                contactLinkInput.value = contactRootUrl;
             }
             
             // Generate QR Code using QR Server API
@@ -7475,6 +7758,58 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 qrImg.id = 'qrcodeImage';
                 
                 qrcodeContainer.appendChild(qrImg);
+            }
+
+            const affWrap = document.getElementById('contactAffiliateLinksWrap');
+            const affList = document.getElementById('contactAffiliateLinksList');
+            if (affWrap && affList) {
+                affList.innerHTML = '';
+                let rid = parseInt(userData.role_id, 10);
+                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+                if (roleLegacy[rid]) rid = roleLegacy[rid];
+                if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
+                    const w = parseInt(window.USER_ROLE_ID, 10);
+                    rid = roleLegacy[w] || w;
+                }
+                let showAff = (rid === 1 || rid === 2) && contactRootPath && contactRootPath !== '/';
+                if (rid === 1) {
+                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
+                }
+                if (!showAff) {
+                    affWrap.style.display = 'none';
+                } else {
+                    affWrap.style.display = 'block';
+                    try {
+                        let u = '/api/tenant-contact-affiliates';
+                        if (rid === 1) {
+                            const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            u += '?tenant_id=' + tid;
+                        }
+                        const res = await axios.get(u);
+                        const rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
+                        function escAff(s) {
+                            return String(s ?? '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;');
+                        }
+                        if (!rows.length) {
+                            affList.innerHTML = '<li class="text-gray-500 text-sm">لا توجد روابط تسويقية بعد.</li>';
+                        } else {
+                            affList.innerHTML = rows.map(function (r) {
+                                var pathSeg = encodeURIComponent(r.path_segment || '');
+                                var full = baseUrl + String(contactRootPath).replace(//$/, '') + '/' + pathSeg;
+                                return '<li class="pb-3 mb-3 border-b border-gray-100 last:border-0 last:mb-0 last:pb-0">' +
+                                    '<div class="font-medium text-gray-900">' + escAff(r.label) + '</div>' +
+                                    '<div class="text-xs text-gray-500 break-all mt-1" dir="ltr">' + escAff(full) + '</div></li>';
+                            }).join('');
+                        }
+                    } catch (e) {
+                        affList.innerHTML = '<li class="text-red-600 text-xs">تعذر تحميل الروابط</li>';
+                    }
+                }
             }
         }
         
@@ -7526,6 +7861,33 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             
             // Open in new tab
             window.open(calculatorUrl, '_blank');
+        };
+
+        window.copyContactRootLink = function() {
+            const linkInput = document.getElementById('contactRootLinkInput');
+            if (!linkInput) return;
+            linkInput.select();
+            linkInput.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                const successMessage = document.getElementById('contactRootCopySuccessMessage');
+                if (successMessage) {
+                    successMessage.classList.remove('hidden');
+                    setTimeout(() => successMessage.classList.add('hidden'), 3000);
+                }
+            } catch (err) {
+                console.error('❌ فشل نسخ رابط صفحة التواصل:', err);
+                alert('❌ فشل نسخ الرابط');
+            }
+        };
+
+        window.openContactRootLink = function() {
+            const linkInput = document.getElementById('contactRootLinkInput');
+            if (!linkInput || !linkInput.value || linkInput.value === 'جاري التحميل...') {
+                alert('❌ الرجاء الانتظار حتى يتم تحميل الرابط');
+                return;
+            }
+            window.open(linkInput.value, '_blank');
         };
         
         // Download QR Code as image
@@ -7624,15 +7986,15 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             
             try {
                 const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-                const tenantSlug = userData.tenant_slug;
-                
-                if (!tenantSlug) {
-                    console.error('❌ لا يوجد tenant_slug');
-                    return;
-                }
+                const tenantSlug = resolveTenantSlug(userData);
                 
                 const baseUrl = window.location.origin;
-                const calculatorUrl = \`\${baseUrl}/c/\${tenantSlug}/calculator\`;
+                const calculatorPath = await resolveCalculatorPathFromTenantSettings(userData);
+                const calculatorUrl = baseUrl + calculatorPath;
+                
+                if (!tenantSlug && calculatorPath === '/calculator') {
+                    console.warn('⚠️ tenant_slug غير متوفر - استخدام الحاسبة العامة');
+                }
                 
                 console.log('✅ رابط الحاسبة:', calculatorUrl);
                 
@@ -7811,7 +8173,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <div id="sidebar-overlay"></div>
 </body>
 </html>
-`,Mt=`<!DOCTYPE html>
+`,oa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -7906,7 +8268,6 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">اسم الشركة</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Subdomain</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المستخدمين</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">رابط الحاسبة</th>
@@ -7946,9 +8307,6 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             <code class="bg-gray-100 px-2 py-1 rounded">\${tenant.slug}</code>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            <code class="bg-gray-100 px-2 py-1 rounded">\${tenant.subdomain || '-'}</code>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -8023,7 +8381,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ft=`<!DOCTYPE html>
+`,ia=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8091,7 +8449,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Fe=`<!DOCTYPE html>
+`,st=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8328,7 +8686,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Pt=`<!DOCTYPE html>
+`,la=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8339,19 +8697,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
 </head>
 <body class="bg-gray-50">
+    <div class="border-b border-slate-200/90 bg-slate-50/90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-6 py-4">
-            <div class="flex items-center justify-between">
-                <h1 class="text-2xl font-bold flex items-center">
-                    <i class="fas fa-chart-line ml-3"></i>
-                    منظومة التقارير والإحصائيات
-                </h1>
-                <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-all">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للوحة التحكم
-                </a>
-            </div>
+            <h1 class="text-2xl font-bold flex items-center">
+                <i class="fas fa-chart-line ml-3"></i>
+                منظومة التقارير والإحصائيات
+            </h1>
         </div>
     </div>
 
@@ -8612,7 +8969,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Pe=()=>`
+`,nt=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -8671,7 +9028,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,Ht=`<!DOCTYPE html>
+`,da=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8722,21 +9079,20 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${Pe()}
+        ${nt()}
     </style>
 </head>
 <body class="bg-gray-50">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-            <a href="/admin/reports" class="text-blue-600 hover:text-blue-800">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة للتقارير
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">
                 <i class="fas fa-users text-blue-600 ml-2"></i>
                 تقرير العملاء الشامل
             </h1>
-        </div>
 
         <div class="bg-white rounded-xl shadow-lg p-6">
             <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
@@ -8862,7 +9218,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,Ut=`<!DOCTYPE html>
+</html>`,ca=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8914,21 +9270,20 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${Pe()}
+        ${nt()}
     </style>
 </head>
 <body class="bg-gray-50">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-            <a href="/admin/reports" class="text-blue-600 hover:text-blue-800">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة للتقارير
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">
                 <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                 تقرير طلبات التمويل
             </h1>
-        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow-lg p-6">
@@ -9128,7 +9483,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,zt=`<!DOCTYPE html>
+</html>`,pa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9140,17 +9495,16 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>
 </head>
 <body class="bg-gray-50">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-            <a href="/admin/reports" class="text-blue-600 hover:text-blue-800">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة للتقارير
-            </a>
-            <h1 class="text-3xl font-bold text-gray-800">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">
                 <i class="fas fa-dollar-sign text-yellow-600 ml-2"></i>
                 التقرير المالي
             </h1>
-        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg p-6">
@@ -9256,7 +9610,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,Wt=()=>`
+</html>`,ua=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -9303,7 +9657,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,Vt=`<!DOCTYPE html>
+`,ma=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9354,7 +9708,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${Wt()}
+        ${ua()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9799,7 +10153,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,Yt=`<!DOCTYPE html>
+</html>`,ga=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9810,19 +10164,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
 </head>
 <body class="bg-gray-50">
+    <div class="border-b border-slate-200/90 bg-slate-50/90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-yellow-600 to-yellow-800 text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-6 py-4">
-            <div class="flex items-center justify-between">
-                <h1 class="text-2xl font-bold flex items-center">
-                    <i class="fas fa-university ml-3"></i>
-                    إدارة البنوك
-                </h1>
-                <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-all">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للوحة التحكم
-                </a>
-            </div>
+            <h1 class="text-2xl font-bold flex items-center">
+                <i class="fas fa-university ml-3"></i>
+                إدارة البنوك
+            </h1>
         </div>
     </div>
 
@@ -10164,7 +10517,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,He=()=>`
+`,rt=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -10195,7 +10548,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function Gt(e,t,a){return`
+`;function fa(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10205,7 +10558,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${He()}
+        ${rt()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10364,7 +10717,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <\/script>
     </body>
     </html>
-  `}function Jt(e,t,a,s){return`
+  `}function ba(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10374,7 +10727,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${He()}
+        ${rt()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10517,7 +10870,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <\/script>
     </body>
     </html>
-  `}function Xt(e,t,a,s){const{transitions:n=[],actions:r=[],tasks:l=[]}=s,i=(o,d)=>{const c=new Date(o),m=new Date(d).getTime()-c.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
+  `}function xa(e,t,a,s){const{transitions:n=[],actions:r=[],tasks:l=[]}=s,i=(o,d)=>{const c=new Date(o),m=new Date(d).getTime()-c.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11017,7 +11370,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   
 </body>
 </html>
-  `}const Qt=`
+  `}const ha=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11046,9 +11399,9 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         <!-- Header -->
         <div class="flex justify-between items-center mb-6 no-print">
             <div>
-                <a href="/admin/panel" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
-                    <i class="fas fa-arrow-right ml-2"></i> العودة للوحة التحكم
-                </a>
+                <div class="mb-2 pb-1 border-b border-gray-100">
+                    <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+                </div>
                 <h1 class="text-4xl font-bold text-gray-800">
                     <i class="fas fa-university text-blue-600 ml-3"></i>
                     تقرير البنوك الشامل
@@ -11327,7 +11680,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Kt=`
+`,ya=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11356,9 +11709,9 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         <!-- Header -->
         <div class="flex justify-between items-center mb-6 no-print">
             <div>
-                <a href="/admin/panel" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
-                    <i class="fas fa-arrow-right ml-2"></i> العودة للوحة التحكم
-                </a>
+                <div class="mb-2 pb-1 border-b border-gray-100">
+                    <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+                </div>
                 <h1 class="text-4xl font-bold text-gray-800">
                     <i class="fas fa-chart-line text-green-600 ml-3"></i>
                     تقرير الأداء الشامل
@@ -11741,7 +12094,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Zt=`
+`,va=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11754,21 +12107,20 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-4 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-xl">
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-mouse-pointer ml-3"></i>
-                        تقرير النقرات على روابط الحاسبات
-                    </h1>
-                    <p class="text-blue-100 mt-2">تتبع وتحليل زيارات الحاسبات حسب نوع الجهاز والمنصة</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة إلى التقارير
-                </a>
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-mouse-pointer ml-3"></i>
+                    تقرير النقرات على روابط الحاسبات
+                </h1>
+                <p class="text-blue-100 mt-2">تتبع وتحليل زيارات الحاسبات حسب نوع الجهاز والمنصة</p>
             </div>
         </div>
     </div>
@@ -12185,7 +12537,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ea=`
+`,wa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12197,21 +12549,20 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-green-50 to-blue-50">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-4 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-xl">
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-route ml-3"></i>
-                        تقرير سير العمل للعملاء
-                    </h1>
-                    <p class="text-green-100 mt-2">تتبع رحلة العملاء من التسجيل حتى اكتمال الطلب</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للتقارير
-                </a>
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-route ml-3"></i>
+                    تقرير سير العمل للعملاء
+                </h1>
+                <p class="text-green-100 mt-2">تتبع رحلة العملاء من التسجيل حتى اكتمال الطلب</p>
             </div>
         </div>
     </div>
@@ -12411,7 +12762,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ta=`
+`,_a=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12423,21 +12774,20 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-4 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl">
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-chart-line ml-3"></i>
-                        تقرير أداء الموظفين
-                    </h1>
-                    <p class="text-purple-100 mt-2">تحليل شامل لأداء الموظفين والعملاء والطلبات والعمولات</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للتقارير
-                </a>
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-chart-line ml-3"></i>
+                    تقرير أداء الموظفين
+                </h1>
+                <p class="text-purple-100 mt-2">تحليل شامل لأداء الموظفين والعملاء والطلبات والعمولات</p>
             </div>
         </div>
     </div>
@@ -12651,7 +13001,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,aa=`<!DOCTYPE html>
+`,ka=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12663,14 +13013,21 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
+    <div class="border-b border-slate-200/90 bg-white/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Page Header -->
     <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center gap-4 h-16">
-                <i class="fas fa-users-cog text-2xl"></i>
-                <div>
-                    <h1 class="text-xl font-bold leading-tight">نظام إدارة الموارد البشرية</h1>
-                    <p class="text-xs text-blue-100">إدارة الموظفين والحضور والإجازات والرواتب</p>
+            <div class="flex items-center gap-4 h-16 w-full flex-wrap">
+                <div class="flex items-center gap-4 min-w-0">
+                    <i class="fas fa-users-cog text-2xl flex-shrink-0"></i>
+                    <div>
+                        <h1 class="text-xl font-bold leading-tight">نظام إدارة الموارد البشرية</h1>
+                        <p class="text-xs text-blue-100">إدارة الموظفين والحضور والإجازات والرواتب</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -12997,7 +13354,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Z=`
+`,ue=`
 <style>
     .stat-card {
         transition: all 0.3s ease;
@@ -13056,19 +13413,26 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         overflow-y: auto;
     }
 </style>
-`;function ee(e,t,a){return`
+`;function me(e,t,a){return`
+    <div class="border-b border-slate-200/90 bg-white/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center gap-4 h-16">
-                <i class="${a} text-2xl"></i>
-                <div>
-                    <h1 class="text-xl font-bold leading-tight">${e}</h1>
-                    <p class="text-xs text-blue-100">${t}</p>
+            <div class="flex items-center gap-4 h-16 w-full flex-wrap">
+                <div class="flex items-center gap-4 min-w-0">
+                    <i class="${a} text-2xl flex-shrink-0"></i>
+                    <div>
+                        <h1 class="text-xl font-bold leading-tight">${e}</h1>
+                        <p class="text-xs text-blue-100">${t}</p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-    `}function te(e){return""}const ae=`
+    `}function ge(e){return""}const fe=`
 <script>
     const token = localStorage.getItem('authToken') || getCookie('authToken');
     if (!token) {
@@ -13103,7 +13467,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         alert('❌ ' + message);
     }
 <\/script>
-`,sa=`<!DOCTYPE html>
+`,Ea=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13112,11 +13476,11 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${Z}
+    ${ue}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${ee("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
-    ${te()}
+    ${me("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
+    ${ge()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics Cards -->
@@ -13332,7 +13696,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${ae}
+    ${fe}
     <script>
         async function loadEmployees() {
             try {
@@ -13463,7 +13827,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,na=`<!DOCTYPE html>
+`,Ia=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13472,11 +13836,11 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${Z}
+    ${ue}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${ee("تفاصيل الموظف","عرض معلومات الموظف الكاملة","fas fa-user")}
-    ${te()}
+    ${me("تفاصيل الموظف","عرض معلومات الموظف الكاملة","fas fa-user")}
+    ${ge()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-6">
@@ -13494,7 +13858,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${ae}
+    ${fe}
     <script>
         const employeeId = window.location.pathname.split('/').pop();
         
@@ -13647,7 +14011,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ra=`<!DOCTYPE html>
+`,Sa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13656,11 +14020,11 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${Z}
+    ${ue}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${ee("تعديل الموظف","تعديل بيانات الموظف","fas fa-user-edit")}
-    ${te()}
+    ${me("تعديل الموظف","تعديل بيانات الموظف","fas fa-user-edit")}
+    ${ge()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-6">
@@ -13770,7 +14134,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${ae}
+    ${fe}
     <script>
         const employeeId = window.location.pathname.split('/').slice(0, -1).pop();
         
@@ -13856,7 +14220,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,oa=`<!DOCTYPE html>
+`,Ta=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13865,11 +14229,11 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${Z}
+    ${ue}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${ee("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
-    ${te()}
+    ${me("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
+    ${ge()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics -->
@@ -14057,7 +14421,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${ae}
+    ${fe}
     <script>
         // Set today's date as default
         document.getElementById('dateFilter').valueAsDate = new Date();
@@ -14187,7 +14551,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ia=`
+`,Da=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14199,23 +14563,28 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الإجازات</h1>
-            <p class="text-blue-100 text-sm">طلبات الإجازات والموافقات</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">إدارة الإجازات</h1>
+          <p class="text-blue-100 text-sm">طلبات الإجازات والموافقات</p>
         </div>
-        <button onclick="showAddLeaveModal()" class="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          طلب إجازة جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddLeaveModal()" class="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            طلب إجازة جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -14573,7 +14942,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,la=`
+`,Ba=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14585,24 +14954,29 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الرواتب</h1>
-            <p class="text-green-100 text-sm">رواتب الموظفين والاستحقاقات</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">إدارة الرواتب</h1>
+          <p class="text-green-100 text-sm">رواتب الموظفين والاستحقاقات</p>
         </div>
-        <button onclick="showAddSalaryModal()" class="bg-white text-green-600 px-6 py-2 rounded-lg font-bold hover:bg-green-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة راتب جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddSalaryModal()" class="bg-white text-green-600 px-6 py-2 rounded-lg font-bold hover:bg-green-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة راتب جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -14875,7 +15249,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,da=`
+`,Ca=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14888,24 +15262,29 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">تقييم الأداء</h1>
-            <p class="text-indigo-100 text-sm">تقييمات أداء الموظفين</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">تقييم الأداء</h1>
+          <p class="text-indigo-100 text-sm">تقييمات أداء الموظفين</p>
         </div>
-        <button onclick="showAddReviewModal()" class="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة تقييم جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddReviewModal()" class="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة تقييم جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -15122,7 +15501,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,ca=`
+`,Ra=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15134,24 +15513,29 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-orange-600 to-red-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">الترقيات</h1>
-            <p class="text-orange-100 text-sm">ترقيات وتطورات الموظفين</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">الترقيات</h1>
+          <p class="text-orange-100 text-sm">ترقيات وتطورات الموظفين</p>
         </div>
-        <button onclick="showAddPromotionModal()" class="bg-white text-orange-600 px-6 py-2 rounded-lg font-bold hover:bg-orange-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة ترقية جديدة
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddPromotionModal()" class="bg-white text-orange-600 px-6 py-2 rounded-lg font-bold hover:bg-orange-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة ترقية جديدة
+          </button>
+        </div>
       </div>
     </div>
 
@@ -15380,7 +15764,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,pa=`
+`,ja=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -15392,13 +15776,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
 </head>
 <body class="bg-gray-100">
+  <div class="border-b border-slate-200/90 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div>
+        <div class="flex flex-wrap items-center gap-4 py-4">
+          <div class="min-w-0 flex-1">
             <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
               <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
             </a>
@@ -15408,10 +15797,12 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             </h1>
             <p class="text-gray-600 mt-1">تتبع مستندات الموظفين وتنبيهات انتهاء الصلاحيات</p>
           </div>
-          <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-            <i class="fas fa-plus ml-2"></i>
-            إضافة مستند
-          </button>
+          <div class="ms-auto shrink-0">
+            <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              <i class="fas fa-plus ml-2"></i>
+              إضافة مستند
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -15867,7 +16258,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,ua=`
+`,La=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -15880,13 +16271,18 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
 </head>
 <body class="bg-gray-100">
+  <div class="border-b border-slate-200/90 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div>
+        <div class="flex flex-wrap items-center gap-4 py-4">
+          <div class="min-w-0 flex-1">
             <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
               <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
             </a>
@@ -15896,10 +16292,12 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             </h1>
             <p class="text-gray-600 mt-1">تقارير شاملة ومفصلة عن الموارد البشرية</p>
           </div>
-          <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-            <i class="fas fa-file-export ml-2"></i>
-            تصدير التقرير
-          </button>
+          <div class="ms-auto shrink-0">
+            <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              <i class="fas fa-file-export ml-2"></i>
+              تصدير التقرير
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -16247,7 +16645,7 @@ var pe=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,ma=`/* =============================================
+`,Aa=`/* =============================================
    نظام إدارة العقود - شركة الموعد للمقاولات العامة
    ============================================= */
 
@@ -16387,12 +16785,40 @@ body {
   font-size: 20px; color: var(--primary);
   cursor: pointer;
 }
-.topbar-title { flex: 1; }
+/* RTL row: title rightmost, then home, menu; trailing (date + CTAs) pinned to physical left */
+.topbar-title { flex: 0 1 auto; min-width: 0; }
 .topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
 .topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
-.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
 .current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.contracts-home-btn { flex-shrink: 0; }
+
+/* Slim back strip — aligns with admin pages, minimal vertical space */
+.contracts-page-back {
+  padding: 6px 28px 7px;
+  margin: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 100%);
+}
+.contracts-page-back a {
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #2563eb;
+}
+.contracts-page-back a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(37, 99, 235, 0.45);
+}
 
 /* ===== PAGE CONTENT ===== */
 .page-content { padding: 28px; flex: 1; }
@@ -16932,8 +17358,9 @@ body {
   .form-grid { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
   .topbar { padding: 14px 16px; }
+  .contracts-page-back { padding: 5px 16px 6px; }
   .topbar-title { min-width: 100%; }
-  .topbar-actions { width: 100%; }
+  .topbar-trailing { width: 100%; margin-inline-start: 0; justify-content: flex-end; }
   .current-date { display: none; }
   .contract-preview { padding: 30px 20px; }
   .contract-parties { grid-template-columns: 1fr; }
@@ -17071,7 +17498,7 @@ body {
 html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([href="/admin/contracts/list"]):not([href="/admin/contracts/new"]) {
   display: none !important;
 }
-`,ga=`<!DOCTYPE html>
+`,Na=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -17397,11 +17824,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back no-print">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar no-print">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1 id="topbarTitle"><i class="fas fa-file-contract"></i> عرض العقد</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn no-print"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
       </div>
     </header>
@@ -17479,6 +17908,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
     function renderContractDoc(c) {
       const dayName = getDayName(c.date_gregorian);
+      const hijriDate = getHijriFromGregorian(c.date_gregorian) || c.date_hijri || '—';
       const financeAmountFormatted = formatMoney(c.finance_amount);
       const commissionFormatted = formatMoney(c.commission_amount);
       const commissionWords = numberToArabicWords(c.commission_amount);
@@ -17513,7 +17943,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           <div class="doc-contract-title">\${c.template_name || 'عقد وساطة مقابل أجر (سعي)'}</div>
           <div class="doc-contract-meta">
             <span><i class="fas fa-calendar-alt" style="color:#c8a84b;"></i> \${c.date_gregorian || '—'} م</span>
-            <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> \${c.date_hijri || '—'} هـ</span>
+            <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> \${hijriDate} هـ</span>
             <span><i class="fas fa-hashtag" style="color:#888;"></i> \${c.contract_number || '—'}</span>
           </div>
         </div>
@@ -17524,7 +17954,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         <!-- ===== INTRO ===== -->
         <div class="doc-intro">
           بعون الله وتوفيقه أنه في يوم <strong>\${dayName}</strong> - بتاريخ:
-          <strong>\${c.date_hijri || '—'} هـ</strong> الموافق:
+          <strong>\${hijriDate} هـ</strong> الموافق:
           <strong>\${c.date_gregorian || '—'} م</strong>
           تم الاتفاق بين كلا من: -
         </div>
@@ -17691,7 +18121,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
           <div class="doc-city-date">
             حُرِّر في مدينة الرياض بتاريخ \${c.date_gregorian || '——/——/——'} م
-            الموافق \${c.date_hijri || '——/——/——'} هـ
+            الموافق \${hijriDate || '——/——/——'} هـ
           </div>
         </div>
 
@@ -17708,6 +18138,23 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         const d = new Date(dateStr);
         return d.toLocaleDateString('ar-SA', { weekday: 'long' });
       } catch { return '—'; }
+    }
+
+    function getHijriFromGregorian(dateStr) {
+      if (!dateStr) return '';
+      try {
+        const [year, month, day] = String(dateStr).split('-').map(Number);
+        if (!year || !month || !day) return '';
+        const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+        if (Number.isNaN(gregorianDate.getTime())) return '';
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      } catch (_) {
+        return '';
+      }
     }
 
     // ======= SIGNATURE PADS =======
@@ -17805,7 +18252,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,fa=`<!DOCTYPE html>
+`,Oa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -18146,13 +18593,15 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 <!-- ════════════════ MAIN ════════════════ -->
 <main class="main-content">
 
+  <div class="contracts-page-back no-print">
+    <a href="/admin">← العودة للوحة الرئيسية</a>
+  </div>
   <header class="topbar">
-    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
     <div class="topbar-title">
       <h1><i class="fas fa-money-check-alt"></i> سندات الأمر</h1>
     </div>
-    <div class="topbar-actions">
-      <a href="/admin/panel" class="btn btn-ghost contracts-home-btn no-print"><i class="fas fa-home"></i> الرئيسية</a>
+    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <div class="topbar-trailing">
       <div class="current-date" id="currentDate"></div>
       <button class="btn btn-outline btn-sm no-print" onclick="doExportCSV()" title="تصدير CSV">
         <i class="fas fa-file-csv"></i> CSV
@@ -19712,7 +20161,7 @@ document.addEventListener('DOMContentLoaded', boot);
 <\/script>
 </body>
 </html>
-`,ba=`<!DOCTYPE html>
+`,$a=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -19746,10 +20195,15 @@ document.addEventListener('DOMContentLoaded', boot);
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1><i class="fas fa-archive"></i> أرشيف العقود</h1></div>
-      <div class="topbar-actions"><a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a><div class="current-date" id="currentDate"></div></div>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
+        <div class="current-date" id="currentDate"></div>
+      </div>
     </header>
 
     <div class="page-content">
@@ -19863,7 +20317,7 @@ document.addEventListener('DOMContentLoaded', boot);
   <\/script>
 </body>
 </html>
-`,xa=`<!DOCTYPE html>
+`,qa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
@@ -19979,11 +20433,13 @@ document.addEventListener('DOMContentLoaded', boot);
 </aside>
 
 <main class="main-content">
+  <div class="contracts-page-back">
+    <a href="/admin">← العودة للوحة الرئيسية</a>
+  </div>
   <header class="topbar">
-    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
     <div class="topbar-title"><h1><i class="fas fa-cog"></i> الإعدادات</h1></div>
-    <div class="topbar-actions">
-      <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+    <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <div class="topbar-trailing">
       <div class="current-date" id="currentDate"></div>
       <button class="btn btn-primary" onclick="saveAll()">
         <i class="fas fa-save"></i> حفظ الإعدادات
@@ -21066,7 +21522,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <\/script>
 </body>
 </html>
-`,ha=`<!DOCTYPE html>
+`,Ma=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -21210,12 +21666,40 @@ body {
   font-size: 20px; color: var(--primary);
   cursor: pointer;
 }
-.topbar-title { flex: 1; }
+/* RTL row: title rightmost, then home, menu; trailing (date + CTAs) pinned to physical left */
+.topbar-title { flex: 0 1 auto; min-width: 0; }
 .topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
 .topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
-.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
 .current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.contracts-home-btn { flex-shrink: 0; }
+
+/* Slim back strip — aligns with admin pages, minimal vertical space */
+.contracts-page-back {
+  padding: 6px 28px 7px;
+  margin: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 100%);
+}
+.contracts-page-back a {
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #2563eb;
+}
+.contracts-page-back a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(37, 99, 235, 0.45);
+}
 
 /* ===== PAGE CONTENT ===== */
 .page-content { padding: 28px; flex: 1; }
@@ -21755,8 +22239,9 @@ body {
   .form-grid { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
   .topbar { padding: 14px 16px; }
+  .contracts-page-back { padding: 5px 16px 6px; }
   .topbar-title { min-width: 100%; }
-  .topbar-actions { width: 100%; }
+  .topbar-trailing { width: 100%; margin-inline-start: 0; justify-content: flex-end; }
   .current-date { display: none; }
   .contract-preview { padding: 30px 20px; }
   .contract-parties { grid-template-columns: 1fr; }
@@ -21944,14 +22429,16 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
   <!-- Main Content -->
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <!-- Top Bar -->
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title">
         <h1><i class="fas fa-chart-pie"></i> لوحة التحكم</h1>
       </div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         <a href="/admin/contracts/new" class="btn btn-primary"><i class="fas fa-plus"></i> عقد جديد</a>
       </div>
@@ -22062,11 +22549,11 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-  <script src="/contracts-module/js/app.js?v=20260405"><\/script>
-  <script src="/contracts-module/js/dashboard.js?v=20260405"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
+  <script src="/contracts-module/js/dashboard.js?v=20260401"><\/script>
 </body>
 </html>
-`,ge=`<!DOCTYPE html>
+`,Re=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -22210,12 +22697,40 @@ body {
   font-size: 20px; color: var(--primary);
   cursor: pointer;
 }
-.topbar-title { flex: 1; }
+/* RTL row: title rightmost, then home, menu; trailing (date + CTAs) pinned to physical left */
+.topbar-title { flex: 0 1 auto; min-width: 0; }
 .topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
 .topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
-.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
 .current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.contracts-home-btn { flex-shrink: 0; }
+
+/* Slim back strip — aligns with admin pages, minimal vertical space */
+.contracts-page-back {
+  padding: 6px 28px 7px;
+  margin: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 100%);
+}
+.contracts-page-back a {
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #2563eb;
+}
+.contracts-page-back a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(37, 99, 235, 0.45);
+}
 
 /* ===== PAGE CONTENT ===== */
 .page-content { padding: 28px; flex: 1; }
@@ -22755,8 +23270,9 @@ body {
   .form-grid { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
   .topbar { padding: 14px 16px; }
+  .contracts-page-back { padding: 5px 16px 6px; }
   .topbar-title { min-width: 100%; }
-  .topbar-actions { width: 100%; }
+  .topbar-trailing { width: 100%; margin-inline-start: 0; justify-content: flex-end; }
   .current-date { display: none; }
   .contract-preview { padding: 30px 20px; }
   .contract-parties { grid-template-columns: 1fr; }
@@ -22928,11 +23444,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1><i class="fas fa-file-alt"></i> قائمة العقود</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         <a href="/admin/contracts/new" class="btn btn-primary"><i class="fas fa-plus"></i> عقد جديد</a>
       </div>
@@ -23021,7 +23539,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260405"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
   <script>
     let allContracts = [];
     let filteredContracts = [];
@@ -23178,7 +23696,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,ya=`<!DOCTYPE html>
+`,Fa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -23322,12 +23840,40 @@ body {
   font-size: 20px; color: var(--primary);
   cursor: pointer;
 }
-.topbar-title { flex: 1; }
+/* RTL row: title rightmost, then home, menu; trailing (date + CTAs) pinned to physical left */
+.topbar-title { flex: 0 1 auto; min-width: 0; }
 .topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
 .topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
-.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
 .current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.contracts-home-btn { flex-shrink: 0; }
+
+/* Slim back strip — aligns with admin pages, minimal vertical space */
+.contracts-page-back {
+  padding: 6px 28px 7px;
+  margin: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 100%);
+}
+.contracts-page-back a {
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #2563eb;
+}
+.contracts-page-back a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(37, 99, 235, 0.45);
+}
 
 /* ===== PAGE CONTENT ===== */
 .page-content { padding: 28px; flex: 1; }
@@ -23867,8 +24413,9 @@ body {
   .form-grid { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
   .topbar { padding: 14px 16px; }
+  .contracts-page-back { padding: 5px 16px 6px; }
   .topbar-title { min-width: 100%; }
-  .topbar-actions { width: 100%; }
+  .topbar-trailing { width: 100%; margin-inline-start: 0; justify-content: flex-end; }
   .current-date { display: none; }
   .contract-preview { padding: 30px 20px; }
   .contract-parties { grid-template-columns: 1fr; }
@@ -24014,6 +24561,12 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <title>عقد جديد | شركة الموعد للمقاولات العامة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
 </head>
 <body>
 
@@ -24041,11 +24594,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1 id="pageTitle"><i class="fas fa-plus-circle"></i> عقد جديد</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         <a href="/admin/contracts/list" class="btn btn-ghost"><i class="fas fa-arrow-right"></i> العقود</a>
       </div>
@@ -24172,7 +24727,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
               </div>
               <div class="form-group">
                 <label class="form-label">التاريخ الميلادي</label>
-                <input type="date" class="form-control" id="date_gregorian" onchange="autoFillDay()" />
+                <input type="date" class="form-control" id="date_gregorian" onchange="autoFillDay(); syncContractDateFromGregorian()" />
               </div>
               <div class="form-group">
                 <label class="form-label">اليوم</label>
@@ -24180,7 +24735,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
               </div>
               <div class="form-group">
                 <label class="form-label">التاريخ الهجري</label>
-                <input type="text" class="form-control" id="date_hijri" placeholder="1447/06/04" />
+                <input type="text" class="form-control" id="date_hijri" placeholder="1447/06/04" autocomplete="off" onblur="syncContractDateFromHijri()" />
               </div>
               <div class="form-group">
                 <label class="form-label">المحكمة المختصة</label>
@@ -24314,13 +24869,15 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
     </div>
   </main>
 
-  <script src="/contracts-module/js/app.js?v=20260405"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
   <script>
     /** Rows from GET /api/contract-tables/templates (قوالب العقود) */
     let loadedTemplates = [];
     let selectedContractTypeKey = null;
     let selectedTemplate = null;
     let editingContractId = null;
+    let isContractDateSyncing = false;
+    let contractHijriPicker = null;
 
     function isTemplateActive(t) {
       return t.is_active === true || t.is_active === 1 || t.is_active === '1';
@@ -24397,11 +24954,9 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       }
       if (!document.getElementById('date_gregorian').value) {
         document.getElementById('date_gregorian').value = new Date().toISOString().split('T')[0];
-        autoFillDay();
       }
-      if (!document.getElementById('date_hijri').value) {
-        document.getElementById('date_hijri').value = getHijriDate();
-      }
+      autoFillDay();
+      syncContractDateFromGregorian();
       // options are already in the DOM — nothing to load
     }
 
@@ -24429,6 +24984,173 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         const dayAr = d.toLocaleDateString('ar-SA', { weekday: 'long' });
         document.getElementById('day_name').value = dayAr;
       } catch(e) {}
+    }
+
+    function normalizeArabicDigits(value) {
+      if (!value) return '';
+      const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+      const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+      return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+        const arabicIndex = arabicDigits.indexOf(char);
+        if (arabicIndex >= 0) return String(arabicIndex);
+        const easternArabicIndex = easternArabicDigits.indexOf(char);
+        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+      });
+    }
+
+    function formatHijriDateFromGregorian(dateValue) {
+      if (!dateValue) return '';
+      try {
+        const [year, month, day] = String(dateValue).split('-').map(Number);
+        if (!year || !month || !day) return '';
+        const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+        if (Number.isNaN(gregorianDate.getTime())) return '';
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function parseHijriInput(value) {
+      const normalized = normalizeArabicDigits(value)
+        .replace(/\\u200f/g, '')
+        .replace(/\\u200e/g, '')
+        .trim();
+      if (!normalized) return null;
+      const parts = normalized.split(/[^\\d]+/).filter(Boolean);
+      if (parts.length !== 3) return null;
+
+      let year;
+      let month;
+      let day;
+
+      if (parts[0].length === 4) {
+        year = Number(parts[0]);
+        month = Number(parts[1]);
+        day = Number(parts[2]);
+      } else if (parts[2].length === 4) {
+        day = Number(parts[0]);
+        month = Number(parts[1]);
+        year = Number(parts[2]);
+      } else {
+        return null;
+      }
+
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      if (year < 1200 || year > 1700) return null;
+      if (month < 1 || month > 12) return null;
+      if (day < 1 || day > 30) return null;
+      return { year, month, day };
+    }
+
+    function extractHijriPartsFromDate(dateObject) {
+      const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(dateObject);
+      const year = Number(parts.find((part) => part.type === 'year')?.value);
+      const month = Number(parts.find((part) => part.type === 'month')?.value);
+      const day = Number(parts.find((part) => part.type === 'day')?.value);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      return { year, month, day };
+    }
+
+    function findGregorianFromHijri(hijriParts) {
+      const approxGregorianYear = hijriParts.year + 579;
+      const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+      const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+      for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+        const currentHijriParts = extractHijriPartsFromDate(cursor);
+        if (!currentHijriParts) continue;
+        if (
+          currentHijriParts.year === hijriParts.year &&
+          currentHijriParts.month === hijriParts.month &&
+          currentHijriParts.day === hijriParts.day
+        ) {
+          const year = cursor.getFullYear();
+          const month = String(cursor.getMonth() + 1).padStart(2, '0');
+          const day = String(cursor.getDate()).padStart(2, '0');
+          return year + '-' + month + '-' + day;
+        }
+      }
+      return '';
+    }
+
+    function syncContractDateFromGregorian() {
+      if (isContractDateSyncing) return;
+      const gregorianInput = document.getElementById('date_gregorian');
+      const hijriInput = document.getElementById('date_hijri');
+      if (!gregorianInput || !hijriInput) return;
+      isContractDateSyncing = true;
+      hijriInput.value = formatHijriDateFromGregorian(gregorianInput.value);
+      if (contractHijriPicker && gregorianInput.value) {
+        contractHijriPicker.setDate(gregorianInput.value, false, 'Y-m-d');
+      }
+      isContractDateSyncing = false;
+    }
+
+    function syncContractDateFromHijri() {
+      if (isContractDateSyncing) return;
+      const gregorianInput = document.getElementById('date_gregorian');
+      const hijriInput = document.getElementById('date_hijri');
+      if (!gregorianInput || !hijriInput) return;
+      const parsedHijri = parseHijriInput(hijriInput.value);
+      if (!parsedHijri) return;
+      const gregorianValue = findGregorianFromHijri(parsedHijri);
+      if (!gregorianValue) return;
+      isContractDateSyncing = true;
+      gregorianInput.value = gregorianValue;
+      autoFillDay();
+      hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+      if (contractHijriPicker) {
+        contractHijriPicker.setDate(gregorianValue, false, 'Y-m-d');
+      }
+      isContractDateSyncing = false;
+    }
+
+    function initContractHijriDatePicker() {
+      const hijriInput = document.getElementById('date_hijri');
+      const gregorianInput = document.getElementById('date_gregorian');
+      if (!hijriInput || !gregorianInput) return;
+      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
+        return;
+      }
+
+      contractHijriPicker = flatpickr(hijriInput, {
+        locale: 'ar',
+        disableMobile: true,
+        dateFormat: 'Y-m-d',
+        allowInput: true,
+        plugins: [
+          hijriCalendarPlugin(window.luxon.DateTime, {
+            showHijriDates: true,
+            showHijriToggle: false
+          })
+        ],
+        onOpen: [(_, __, instance) => {
+          if (gregorianInput.value) {
+            instance.setDate(gregorianInput.value, false, 'Y-m-d');
+          }
+        }],
+        onChange: [(selectedDates) => {
+          if (!selectedDates.length || isContractDateSyncing) return;
+          const d = selectedDates[0];
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const gregorianValue = year + '-' + month + '-' + day;
+          isContractDateSyncing = true;
+          gregorianInput.value = gregorianValue;
+          autoFillDay();
+          hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+          isContractDateSyncing = false;
+        }]
+      });
     }
 
     function goStep1() {
@@ -24484,6 +25206,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
     function buildReview() {
       const data = getFormData();
+      const reviewHijriDate = formatHijriDateFromGregorian(data.date_gregorian) || '—';
       document.getElementById('reviewContent').innerHTML = \`
         <div style="display:grid;gap:16px;">
           <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
@@ -24500,7 +25223,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
               <div class="info-item"><label>رقم العقد</label><span><strong>\${data.contract_number}</strong></span></div>
               <div class="info-item"><label>اليوم</label><span>\${data.day_name || '—'}</span></div>
               <div class="info-item"><label>التاريخ الميلادي</label><span>\${data.date_gregorian}</span></div>
-              <div class="info-item"><label>التاريخ الهجري</label><span>\${data.date_hijri}</span></div>
+              <div class="info-item"><label>التاريخ الهجري</label><span>\${reviewHijriDate}</span></div>
               <div class="info-item"><label>نوع القالب</label><span>\${selectedTemplate?.template_name || '—'}</span></div>
             </div>
           </div>
@@ -24659,7 +25382,6 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         template_name: selectedTemplate?.template_name || '',
         customer_id: selectedCustomerId ? Number(selectedCustomerId) : null,
         date_gregorian: document.getElementById('date_gregorian').value,
-        date_hijri: document.getElementById('date_hijri').value,
         day_name: document.getElementById('day_name')?.value || '',
         party_one_name: document.getElementById('party_one_name')?.value || '',
         party_one_phone: document.getElementById('party_one_phone')?.value || '',
@@ -24755,6 +25477,12 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       document.getElementById('finance_amount')?.addEventListener('input', () => {
         if (document.getElementById('commission_type').value === 'نسبة مئوية') calcCommission();
       });
+      document.getElementById('date_gregorian')?.addEventListener('input', () => {
+        autoFillDay();
+        syncContractDateFromGregorian();
+      });
+      document.getElementById('date_hijri')?.addEventListener('blur', syncContractDateFromHijri);
+      initContractHijriDatePicker();
 
       // Manual edits to any Party Two field after autofill → clear dropdown so customer_id becomes null
       ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach(fieldId => {
@@ -24800,6 +25528,15 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           document.getElementById('contract_number').value = c.contract_number || '';
           document.getElementById('date_gregorian').value = c.date_gregorian || '';
           document.getElementById('date_hijri').value = c.date_hijri || '';
+          autoFillDay();
+          if (!c.date_gregorian && c.date_hijri) {
+            syncContractDateFromHijri();
+          } else {
+            syncContractDateFromGregorian();
+          }
+          if (contractHijriPicker && c.date_gregorian) {
+            contractHijriPicker.setDate(c.date_gregorian, false, 'Y-m-d');
+          }
           const p1n = document.getElementById('party_one_name');
           const p1p = document.getElementById('party_one_phone');
           if (p1n) p1n.value = c.party_one_name || '';
@@ -24831,7 +25568,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,va=`<!DOCTYPE html>
+`,Pa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -24975,12 +25712,40 @@ body {
   font-size: 20px; color: var(--primary);
   cursor: pointer;
 }
-.topbar-title { flex: 1; }
+/* RTL row: title rightmost, then home, menu; trailing (date + CTAs) pinned to physical left */
+.topbar-title { flex: 0 1 auto; min-width: 0; }
 .topbar-title h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
 .topbar-title h1 i { color: var(--secondary); margin-left: 8px; }
-.topbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.topbar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
 .current-date { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.contracts-home-btn { flex-shrink: 0; }
+
+/* Slim back strip — aligns with admin pages, minimal vertical space */
+.contracts-page-back {
+  padding: 6px 28px 7px;
+  margin: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 100%);
+}
+.contracts-page-back a {
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: #2563eb;
+}
+.contracts-page-back a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(37, 99, 235, 0.45);
+}
 
 /* ===== PAGE CONTENT ===== */
 .page-content { padding: 28px; flex: 1; }
@@ -25520,8 +26285,9 @@ body {
   .form-grid { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
   .topbar { padding: 14px 16px; }
+  .contracts-page-back { padding: 5px 16px 6px; }
   .topbar-title { min-width: 100%; }
-  .topbar-actions { width: 100%; }
+  .topbar-trailing { width: 100%; margin-inline-start: 0; justify-content: flex-end; }
   .current-date { display: none; }
   .contract-preview { padding: 30px 20px; }
   .contract-parties { grid-template-columns: 1fr; }
@@ -25767,11 +26533,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   </aside>
 
   <main class="main-content">
+    <div class="contracts-page-back">
+      <a href="/admin">← العودة للوحة الرئيسية</a>
+    </div>
     <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
-      <div class="topbar-actions">
-        <a href="/admin/panel" class="btn btn-ghost contracts-home-btn"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         <button type="button" class="btn btn-primary" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
       </div>
@@ -25883,7 +26651,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260405"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
   <script>
     let editingId = null;
 
@@ -26102,23 +26870,23 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,fe="?v=20260405";function wa(e){const t=`
+`,je="?v=20260405";function Ha(e){const t=`
   <style id="contracts-module-styles">
-${ma}
+${Aa}
   </style>
-`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function _a(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function Ue(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function se(e){let t=wa(_a(e.replace(/\r\n/g,`
-`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${fe}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${fe}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t.includes("contracts-home-btn")||(t=t.replace(/<div class="topbar-actions">/,'<div class="topbar-actions"><a href="/admin/panel" class="btn btn-ghost contracts-home-btn" title="العودة للنظام الرئيسي"><i class="fas fa-home"></i> الرئيسية</a>')),t}const Ea=se(ga),ka=se(fa),Ia=se(ba),Sa=se(xa);function V(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function be(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function M(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Ta(e){return e.roleId===4}function xe(e){return e.roleId===3}async function q(e,t){const a=await t(e);return a.userId?Ta(a)?{info:a,error:e.json({error:"Forbidden"},403)}:{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function he(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(M(e)){const s=t?.tenant_id;if(typeof s=="number"&&s>0)return{tenantId:s,error:null};if(typeof s=="string"&&/^\d+$/.test(s))return{tenantId:parseInt(s,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const Ca=2e5;function ye(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>Ca?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function ve(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:M(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:M(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function Da(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:r}=await q(s,t);if(r)return r;let l="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&M(n)){const c=s.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(o=parseInt(String(c),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)l+=" WHERE tenant_id = ?",i.push(o);else return M(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(l+=" AND assigned_to = ?",i.push(n.userId)),l+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(l).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await q(s,t);if(r)return r;const l=s.req.param("table"),i=V(l);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:c}=ve(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...c,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await q(s,t);if(r)return r;const l=s.req.param("table"),i=V(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:c}=ve(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...c).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await q(s,t);if(r)return r;const l=s.req.param("table"),i=V(l);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:c}=he(n,o,s);if(c)return c;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const f=(await s.env.DB.prepare(`INSERT INTO contract_templates (
+`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function Ua(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function ot(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function be(e){let t=Ha(Ua(e.replace(/\r\n/g,`
+`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${je}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${je}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const za=be(Na),Wa=be(Oa),Va=be($a),Ga=be(qa);function ne(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function Le(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function G(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Ya(e){return e.roleId===4}function Ae(e){return e.roleId===3}async function V(e,t){const a=await t(e);return a.userId?Ya(a)?{info:a,error:e.json({error:"Forbidden"},403)}:{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function Ne(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(G(e)){const s=t?.tenant_id;if(typeof s=="number"&&s>0)return{tenantId:s,error:null};if(typeof s=="string"&&/^\d+$/.test(s))return{tenantId:parseInt(s,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const Ja=2e5;function Oe(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>Ja?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function $e(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:G(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:G(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function Xa(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;let l="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&G(n)){const c=s.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(o=parseInt(String(c),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)l+=" WHERE tenant_id = ?",i.push(o);else return G(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(l+=" AND assigned_to = ?",i.push(n.userId)),l+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(l).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:c}=$e(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...c,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:c}=$e(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...c).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:c}=Ne(n,o,s);if(c)return c;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const f=(await s.env.DB.prepare(`INSERT INTO contract_templates (
           tenant_id, template_name, template_type, header_content, body_content, footer_content,
           variables_list, is_active, court_city
-        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,be(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="contracts"){const u=ye(o);if(!u.ok)return u.response;let m;try{m=await s.env.DB.prepare(`INSERT INTO contracts (
-          tenant_id, contract_number, template_id, template_name, date_gregorian, date_hijri, day_name,
+        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,Le(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="contracts"){const u=Oe(o);if(!u.ok)return u.response;let m;try{m=await s.env.DB.prepare(`INSERT INTO contracts (
+          tenant_id, contract_number, template_id, template_name, date_gregorian, day_name,
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(d,o.contract_number??null,o.template_id!=null?Number(o.template_id):null,o.template_name??null,o.date_gregorian??null,o.date_hijri??null,o.day_name??null,o.party_one_name??null,o.party_one_phone??null,u.value,o.customer_id!=null?Number(o.customer_id):null,o.party_two_name??null,o.party_two_id??null,o.party_two_phone??null,o.party_two_address??null,o.finance_type??null,o.finance_amount!=null?Number(o.finance_amount):null,o.commission_amount!=null?Number(o.commission_amount):null,o.commission_type??null,o.commission_rate!=null?Number(o.commission_rate):null,o.note_order_number??null,o.note_due_date??null,o.status??"نشط",o.property_description??null,o.property_location??null,o.bank_name??null,o.notes??null,o.is_archived?1:0).run()}catch(b){const y=b instanceof Error?b.message:String(b);return/no such column/i.test(y)?s.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:y},500)}const f=m.meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="promissory_notes"){const u=o.contract_id!=null?Number(o.contract_id):NaN;if(!u)return s.json({error:"contract_id required"},400);const m=await s.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!m||m.tenant_id!==d)return s.json({error:"Invalid contract"},400);const f=String(o.note_number??"");if(!f.trim())return s.json({error:"note_number required"},400);const b=(await s.env.DB.prepare(`INSERT INTO promissory_notes (
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(d,o.contract_number??null,o.template_id!=null?Number(o.template_id):null,o.template_name??null,o.date_gregorian??null,o.day_name??null,o.party_one_name??null,o.party_one_phone??null,u.value,o.customer_id!=null?Number(o.customer_id):null,o.party_two_name??null,o.party_two_id??null,o.party_two_phone??null,o.party_two_address??null,o.finance_type??null,o.finance_amount!=null?Number(o.finance_amount):null,o.commission_amount!=null?Number(o.commission_amount):null,o.commission_type??null,o.commission_rate!=null?Number(o.commission_rate):null,o.note_order_number??null,o.note_due_date??null,o.status??"نشط",o.property_description??null,o.property_location??null,o.bank_name??null,o.notes??null,o.is_archived?1:0).run()}catch(b){const y=b instanceof Error?b.message:String(b);return/no such column/i.test(y)?s.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:y},500)}const f=m.meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="promissory_notes"){const u=o.contract_id!=null?Number(o.contract_id):NaN;if(!u)return s.json({error:"contract_id required"},400);const m=await s.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!m||m.tenant_id!==d)return s.json({error:"Invalid contract"},400);const f=String(o.note_number??"");if(!f.trim())return s.json({error:"note_number required"},400);const b=(await s.env.DB.prepare(`INSERT INTO promissory_notes (
           tenant_id, note_number, contract_id, debtor_name, debtor_id, amount, due_date, issue_date, payment_place, status
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,f,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(b).first();return s.json({...y,id:b})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:r,error:l}=await q(s,t);if(l)return l;if(xe(r))return s.json({error:"Forbidden"},403);const i=s.req.param("table"),o=V(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const c=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(r.tenantId&&u.tenant_id!==r.tenantId)return s.json({error:"Forbidden"},403);if(!r.tenantId&&!M(r))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="is_active"?f.push(c[h]?1:0):h==="variables_list"?f.push(be(c[h])):f.push(c[h]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(b)}if(o==="contracts"){if(c.party_one_logo!==void 0){const y=ye(c);if(!y.ok)return y.response;c.party_one_logo=y.value}const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="finance_amount"||h==="commission_amount"||h==="commission_rate"||h==="customer_id"||h==="template_id"?f.push(c[h]!=null?Number(c[h]):null):h==="is_archived"?f.push(c[h]?1:0):f.push(c[h]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("date_hijri","date_hijri"),g("day_name","day_name"),g("party_one_name","party_one_name"),g("party_one_phone","party_one_phone"),g("party_one_logo","party_one_logo"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(y)}try{await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run()}catch(y){const h=y instanceof Error?y.message:String(y);return/no such column/i.test(h)?s.json({error:"database_schema",detail:"العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:h},500)}const b=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(b)}if(o==="promissory_notes"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="amount"||h==="contract_id"?f.push(c[h]!=null?Number(c[h]):null):f.push(c[h]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(b)}return s.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async s=>{const{info:n,error:r}=await q(s,t);if(r)return r;const l=s.env.ATTACHMENTS;if(!l)return s.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let i;try{i=await s.req.formData()}catch{return s.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const o=i.get("file");if(!o||!(o instanceof File))return s.json({error:"no_file",detail:"No file provided"},400);const d=o,c=2*1024*1024;if(d.size>c)return s.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(d.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return s.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const m=i.get("tenant_id"),f={};m!=null&&String(m).trim()!==""&&(f.tenant_id=m);const{tenantId:g,error:b}=he(n,f,s);if(b)return b;if(g==null)return s.json({error:"missing_tenant",detail:"Missing tenant"},400);const y=Date.now(),h=Math.random().toString(36).slice(2,9),w=(d.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",v=["jpg","jpeg","png","gif","webp"].includes(w)?w:"jpg",_=`contracts/${g}/party_logo_${y}_${h}.${v}`,S=await d.arrayBuffer();await l.put(_,S,{httpMetadata:{contentType:d.type||`image/${v==="jpg"?"jpeg":v}`}});const T=`/api/attachments/view/${_}`;return s.json({success:!0,url:T,filename:_})}),e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await q(s,t);if(r)return r;if(xe(n))return s.json({error:"Forbidden"},403);const l=s.req.param("table"),i=V(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!M(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const Ra=`/* =============================================
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,f,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(b).first();return s.json({...y,id:b})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:r,error:l}=await V(s,t);if(l)return l;if(Ae(r))return s.json({error:"Forbidden"},403);const i=s.req.param("table"),o=ne(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const c=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(r.tenantId&&u.tenant_id!==r.tenantId)return s.json({error:"Forbidden"},403);if(!r.tenantId&&!G(r))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="is_active"?f.push(c[h]?1:0):h==="variables_list"?f.push(Le(c[h])):f.push(c[h]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(b)}if(o==="contracts"){if(c.party_one_logo!==void 0){const y=Oe(c);if(!y.ok)return y.response;c.party_one_logo=y.value}const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="finance_amount"||h==="commission_amount"||h==="commission_rate"||h==="customer_id"||h==="template_id"?f.push(c[h]!=null?Number(c[h]):null):h==="is_archived"?f.push(c[h]?1:0):f.push(c[h]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("day_name","day_name"),g("party_one_name","party_one_name"),g("party_one_phone","party_one_phone"),g("party_one_logo","party_one_logo"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(y)}try{await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run()}catch(y){const h=y instanceof Error?y.message:String(y);return/no such column/i.test(h)?s.json({error:"database_schema",detail:"العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:h},500)}const b=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(b)}if(o==="promissory_notes"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="amount"||h==="contract_id"?f.push(c[h]!=null?Number(c[h]):null):f.push(c[h]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(b)}return s.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.env.ATTACHMENTS;if(!l)return s.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let i;try{i=await s.req.formData()}catch{return s.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const o=i.get("file");if(!o||!(o instanceof File))return s.json({error:"no_file",detail:"No file provided"},400);const d=o,c=2*1024*1024;if(d.size>c)return s.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(d.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return s.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const m=i.get("tenant_id"),f={};m!=null&&String(m).trim()!==""&&(f.tenant_id=m);const{tenantId:g,error:b}=Ne(n,f,s);if(b)return b;if(g==null)return s.json({error:"missing_tenant",detail:"Missing tenant"},400);const y=Date.now(),h=Math.random().toString(36).slice(2,9),w=(d.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",v=["jpg","jpeg","png","gif","webp"].includes(w)?w:"jpg",_=`contracts/${g}/party_logo_${y}_${h}.${v}`,R=await d.arrayBuffer();await l.put(_,R,{httpMetadata:{contentType:d.type||`image/${v==="jpg"?"jpeg":v}`}});const B=`/api/attachments/view/${_}`;return s.json({success:!0,url:B,filename:_})}),e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;if(Ae(n))return s.json({error:"Forbidden"},403);const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!G(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const Qa=`/* =============================================
    app.js - الوظائف المشتركة للنظام
    ============================================= */
 
@@ -26521,7 +27289,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setCurrentDate();
   applyRole3ContractsRestrictions();
 });
-`,Ba=`/* =============================================
+`,Ka=`/* =============================================
    dashboard.js - لوحة التحكم
    ============================================= */
 
@@ -26752,7 +27520,116 @@ function sendWA(phone, name, contractNum) {
 }
 
 document.addEventListener('DOMContentLoaded', loadDashboard);
-`;function La(e,t){e.get("/contracts-module/js/app.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Ra,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)}),e.get("/contracts-module/js/dashboard.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Ba,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)})}function ze(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function J(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}async function We(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function ja(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const p=new Ne;La(p,x);const $=()=>`
+`;function Za(e,t){e.get("/contracts-module/js/app.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Qa,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)}),e.get("/contracts-module/js/dashboard.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Ka,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)})}function it(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function Y(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function M(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("id_attachment_url")||t.includes("bank_statement_attachment_url")||t.includes("salary_attachment_url")||t.includes("additional_attachment_url"):!1}async function ke(e,t,a){if(!t)return;const s=Object.entries(a).filter(([,l])=>l!==void 0);if(s.length===0)return;const n=s.map(([l])=>`${l} = ?`).join(", "),r=s.map(([,l])=>l??null);try{await e.prepare(`
+      UPDATE customers
+      SET ${n}
+      WHERE id = ?
+    `).bind(...r,t).run()}catch(l){if(!M(l))throw l}await e.prepare(`
+    UPDATE financing_requests
+    SET ${n}
+    WHERE customer_id = ?
+  `).bind(...r,t).run()}function lt(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function dt(e){let a=lt(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const s=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(s)?{normalized:`966${s}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678"}}function ie(e){const t=lt(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const ct=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function le(e){return String(e??"").trim().toLowerCase()}function de(e){return ct.has(e)}function U(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function Ee(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function Ie(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||ct.has(e))}function pt(e,t){const a=U(e.company_name),s=U(e.contact_email||""),n=U(e.contact_phone||""),r=U(e.primary_color||"#0f766e"),l=U(e.secondary_color||"#14b8a6"),i=JSON.stringify(t?.path_segment??null),o=t?U(t.label):"",d=t?`<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
+         <i class="fas fa-bullhorn ml-1"></i> المصدر: <strong>${o}</strong>
+       </div>`:"";return`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>تواصل مع ${a}</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    </head>
+    <body class="min-h-screen bg-gray-50">
+      <div class="min-h-screen p-6" style="background: linear-gradient(135deg, ${r}, ${l});">
+        <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div class="lg:col-span-2 bg-white rounded-2xl shadow-2xl p-8">
+            <div class="text-center mb-8">
+              <div class="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl" style="background: ${r};">
+                <i class="fas fa-comments"></i>
+              </div>
+              <h1 class="text-3xl font-bold text-gray-900 mb-2">${a}</h1>
+              <p class="text-gray-600">أرسل بياناتك وسيتم التواصل معك</p>
+            </div>
+            ${d}
+            <form id="contactForm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">الاسم</label>
+                <input id="customer_name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب اسمك" required />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال</label>
+                <input id="customer_phone" type="tel" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="05xxxxxxxx" required />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">رسالتك</label>
+                <textarea id="customer_message" rows="5" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب رسالتك هنا..." required></textarea>
+              </div>
+              <button id="submitBtn" type="submit" class="w-full text-white font-semibold py-3 rounded-lg" style="background:${r};">
+                <i class="fas fa-paper-plane ml-2"></i>إرسال
+              </button>
+              <p id="formStatus" class="text-sm"></p>
+            </form>
+          </div>
+
+          <div class="space-y-4">
+            <div class="bg-white rounded-xl shadow-lg p-5">
+              <p class="text-sm text-gray-500 mb-1">رقم التواصل</p>
+              <p class="text-lg font-semibold text-gray-900 break-words">${n||"غير متوفر"}</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-5">
+              <p class="text-sm text-gray-500 mb-1">البريد الإلكتروني</p>
+              <p class="text-lg font-semibold text-gray-900 break-words">${s||"غير متوفر"}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <script>
+        const AFFILIATE_PATH = ${i};
+        const form = document.getElementById('contactForm');
+        const statusEl = document.getElementById('formStatus');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          statusEl.textContent = '';
+          statusEl.className = 'text-sm';
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'جاري الإرسال...';
+
+          const payload = {
+            customer_name: document.getElementById('customer_name').value.trim(),
+            customer_phone: document.getElementById('customer_phone').value.trim(),
+            customer_message: document.getElementById('customer_message').value.trim()
+          };
+          if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
+
+          try {
+            const res = await fetch('/api/public/${e.slug}/contact-submissions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'تعذر إرسال الطلب');
+            }
+
+            statusEl.textContent = data.message || 'تم الإرسال بنجاح';
+            statusEl.className = 'text-sm text-green-700';
+            form.reset();
+          } catch (err) {
+            statusEl.textContent = err?.message || 'حدث خطأ أثناء الإرسال';
+            statusEl.className = 'text-sm text-red-700';
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i>إرسال';
+          }
+        });
+      <\/script>
+    </body>
+    </html>
+  `}async function ut(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function es(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const p=new et;Za(p,x);const F=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -26953,7 +27830,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       min-width: 60px !important;
     }
   }
-`;p.use("*",Lt());p.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});async function Aa(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let r=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(r=await e.env.DB.prepare(`
+`;p.use("*",Zt());p.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});p.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}const s=await x(e);if(k(s.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});p.use("*",async(e,t)=>{if(e.req.method==="OPTIONS"){await t();return}const a=e.req.path||"";if(a.startsWith("/admin/")){await t();return}if(a.startsWith("/api/")){await t();return}const s=await x(e);if(!s.userId||k(s.roleId)!==5){await t();return}if(a==="/login"||a==="/forgot-password"||a.startsWith("/.well-known")){await t();return}return e.redirect("/admin/requests")});async function ts(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let r=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(r=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -26963,9 +27840,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LIMIT 1
     `).bind(n).first()),r||(r=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),r}function $a(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const r=n===0?"":"=".repeat(4-n);return s+r}function O(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}const we=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function de(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...we]}catch{return[...we]}}function Oa(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function A(e){const t=Oa(e);return t===null?null:{11:1,12:2,13:3,14:4}[t]??t}function F(e,t){const a=A(e),s=(t||"").trim(),n=s.toLowerCase();return a===1?"مدير النظام":a===2?s||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":s==="موظف"?"موظف":s==="مشرف"||s.includes("مشرف")?"مشرف المبيعات":s||"غير محدد"}function z(e){return e===1||e===2}async function X(e,t,a){return!t.userId||!t.roleId||!a?!1:t.roleId===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:t.roleId===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:t.roleId===2||t.roleId===3}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const m=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",m?"Present":"Missing"),m){const g=m.split(";").map(b=>b.trim()).find(b=>b.startsWith("authToken="));g?(t=g.startsWith("authToken=")?g.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const m=e.req.query("tenant_id");return{userId:null,tenantId:m?parseInt(m):null,roleId:null,tokenRoleId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=$a(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const r=O(n[0]);if(!r)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null};const l=O(n[1]),i=A(O(n[2]));if(console.log("🔍 [getUserInfo] Parsed:",{userId:r,tenantIdFromToken:l,tokenRoleId:i}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("🔍 [getUserInfo] Querying database for user:",r);const o=await e.env.DB.prepare(`
-      SELECT id, tenant_id, role_id FROM users WHERE id = ?
-    `).bind(r).first();if(!o)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i};console.log("✅ [getUserInfo] User found:",{id:o.id,tenant_id:o.tenant_id,role_id:o.role_id});const d=A(o.role_id);if(d===1){const m=e.req.query("tenant_id"),f={userId:o.id,tenantId:m?parseInt(m):null,roleId:1,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning super admin info:",f),f}const c=o.tenant_id,u={userId:o.id,tenantId:c??l,roleId:d,tokenRoleId:i};return console.log("✅ [getUserInfo] Returning user info:",u),u}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null}}}async function Ve(e,t,a){let s="SELECT id, full_name, phone, national_id, city FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let l=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(l=parseInt(String(i),10)),l==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(l=o.tenant_id)}if(l==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(l)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function R(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const Na=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function qa(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
+    `).bind().first()),r}function as(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const r=n===0?"":"=".repeat(4-n);return s+r}function q(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function ss(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,s=Date.parse(a);return Number.isNaN(s)?null:s}const qe=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function Se(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...qe]}catch{return[...qe]}}function ns(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function k(e){const t=ns(e);return t===null?null:{11:1,12:2,13:3,14:4}[t]??t}function J(e,t){const a=k(e),s=(t||"").trim(),n=s.toLowerCase();return a===1?"مدير النظام":a===2?s||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"وكيل بنك":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":s==="موظف"?"موظف":s==="مشرف"||s.includes("مشرف")?"مشرف المبيعات":s||"غير محدد"}function ee(e){return e===1||e===2}async function te(e,t,a){return!t.userId||!t.roleId||!a?!1:t.roleId===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:t.roleId===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:t.roleId===2||t.roleId===3}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const y=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",y?"Present":"Missing"),y){const w=y.split(";").map(v=>v.trim()).find(v=>v.startsWith("authToken="));w?(t=w.startsWith("authToken=")?w.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const y=e.req.query("tenant_id");return{userId:null,tenantId:y?parseInt(y):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=as(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const r=q(n[0]);if(!r)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const l=q(n[1]),i=k(q(n[2])),o=q(n[3]);if(!o)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:r,tenantIdFromToken:l,tokenRoleId:i,tokenIssuedAtMs:o}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",r);const d=await e.env.DB.prepare(`
+      SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
+    `).bind(r).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const c=ss(d.last_login??null);if(c&&o<c)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:o,userLastLoginMs:c}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const u=k(d.role_id),m=d.assigned_bank_id,f=m!=null&&!Number.isNaN(Number(m))?Number(m):null;if(u===1){const y=e.req.query("tenant_id"),h={userId:d.id,tenantId:y?parseInt(y):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",h),h}const g=d.tenant_id,b={userId:d.id,tenantId:g??l,roleId:u,tokenRoleId:i,assignedBankId:u===5?f:null};return console.log("✅ [getUserInfo] Returning user info:",b),b}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}async function rs(e,t,a,s){return!!await e.prepare(`SELECT 1 AS ok FROM users
+       WHERE id = ? AND is_active = 1 AND role_id = 5
+         AND tenant_id = ? AND assigned_bank_id = ?`).bind(s,t,a).first()}async function xe(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function mt(e,t,a){let s="SELECT id, full_name, phone, national_id, city, tenant_id FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let l=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(l=parseInt(String(i),10)),l==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(l=o.tenant_id)}if(l==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(l)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};s+=` WHERE tenant_id = ? AND EXISTS (
+      SELECT 1 FROM customer_assignments ca
+      WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+    )`,n.push(t.tenantId,t.userId)}else s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function D(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const os=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function is(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
 <style>
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
@@ -26974,7 +27856,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
   [href^="/admin/saas-settings"],
   [href^="/admin/tenant-calculators"] { display: none !important; }
 </style>
-</head>`),s}const Ma={1:["/admin/dashboard","/admin/customers","/admin/requests","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts"],2:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/notifications","/calculator","/"],3:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/calculator","/"],4:["/admin/dashboard","/admin/customers","/admin/requests","/calculator","/"]};function Fa(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/panel"||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const s=a?.roleId??4,n=JSON.stringify(Ma),r=`
+</head>`),s}const ls={1:["/admin/dashboard","/admin/customers","/admin/requests","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups"],2:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/"],3:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/calculator","/"],4:["/admin/dashboard","/admin/customers","/admin/requests","/admin/my-tasks","/calculator","/"],5:["/admin/requests"]};function ds(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/panel"||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const s=a?.roleId??4,n=JSON.stringify(ls),r=`
 <style>
   #global-persistent-sidebar {
     position: fixed;
@@ -27027,6 +27909,56 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
   #global-persistent-sidebar .gps-nav button:hover { background: #eff6ff; color: #1d4ed8; }
   #global-persistent-sidebar .gps-nav a.gps-active { background: #eff6ff; color: #1d4ed8; font-weight: 700; }
   #global-persistent-sidebar .gps-nav i { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
+  #global-persistent-sidebar .gps-collapsible { margin-bottom: 2px; }
+  #global-persistent-sidebar .gps-collapsible-row { display: flex; align-items: center; gap: 4px; width: 100%; }
+  #global-persistent-sidebar .gps-collapsible-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: calc(100% - 36px);
+  }
+  #global-persistent-sidebar .gps-nav button.gps-collapsible-arrow {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+  }
+  #global-persistent-sidebar .gps-nav button.gps-collapsible-arrow i.gps-chevron { width: auto; font-size: 12px; transition: transform 0.2s ease; }
+  #global-persistent-sidebar .gps-nav button.gps-collapsible-arrow:hover { background: #e2e8f0; color: #1e40af; }
+  #global-persistent-sidebar .gps-collapsible.gps-open .gps-collapsible-arrow i.gps-chevron { transform: rotate(180deg); }
+  #global-persistent-sidebar .gps-submenu { display: none; margin: 2px 0 4px; padding-right: 18px; }
+  #global-persistent-sidebar .gps-collapsible.gps-open .gps-submenu { display: block; }
+  #global-persistent-sidebar .gps-submenu a {
+    font-size: 12.5px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    margin-bottom: 2px;
+    color: #475569;
+  }
+  #global-persistent-sidebar .gps-count-badge {
+    margin-inline-start: auto;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
   #global-persistent-sidebar .gps-divider { margin: 4px 8px; border: 0; border-top: 1px solid #f1f5f9; }
   body { margin-right: 260px !important; }
   @media (max-width: 768px) {
@@ -27044,10 +27976,60 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     </div>
   </div>
   <nav class="gps-nav">
-    <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>مخلص العملاء</a>
-    <a href="/admin/customers"><i class="fas fa-users"></i>العملاء</a>
-    <a href="/admin/requests"><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
+    <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>ملخص العملاء</a>
+    <a href="/admin/customers" data-customers-main-link><i class="fas fa-users"></i>العملاء</a>
+    <div class="gps-collapsible gps-open" data-customers-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/customers?ratingFilter=all" class="gps-collapsible-main">
+        <i class="fas fa-users"></i>
+        <span>العملاء</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-customers-toggle aria-label="توسيع أو طي قائمة تقييم العملاء">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <a href="/admin/customers?ratingFilter=all" data-customer-rating-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/customers?ratingFilter=0" data-customer-rating-filter="0"><i class="fas fa-minus-circle"></i>بدون تقييم</a>
+        <a href="/admin/customers?ratingFilter=5" data-customer-rating-filter="5"><i class="fas fa-star"></i>عميل ممتاز</a>
+        <a href="/admin/customers?ratingFilter=4" data-customer-rating-filter="4"><i class="fas fa-thumbs-up"></i>عميل جيد</a>
+        <a href="/admin/customers?ratingFilter=3" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل مقبول</a>
+        <a href="/admin/customers?ratingFilter=2" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
+        <a href="/admin/customers?ratingFilter=1" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
+      </div>
+    </div>
+    <a href="/admin/requests" data-requests-main-link><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
+    <div class="gps-collapsible gps-open" data-requests-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/requests?requestStatusFilter=all" class="gps-collapsible-main">
+        <i class="fas fa-file-invoice-dollar"></i>
+        <span>طلبات التمويل</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-requests-toggle aria-label="توسيع أو طي قائمة حالات طلبات التمويل">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <a href="/admin/requests?requestStatusFilter=all" data-request-status-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D8%B3%D9%88%D8%AF%D8%A9" data-request-status-filter="مسودة"><i class="fas fa-file"></i>مسودة</a>
+        <a href="/admin/requests?requestStatusFilter=%D8%AA%D9%85%20%D8%A7%D9%84%D8%A5%D8%B1%D8%B3%D8%A7%D9%84" data-request-status-filter="تم الإرسال"><i class="fas fa-paper-plane"></i>تم الإرسال</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%86%D9%88%D8%A7%D9%82%D8%B5%20%D9%85%D8%B3%D8%AA%D9%86%D8%AF%D8%A7%D8%AA" data-request-status-filter="نواقص مستندات"><i class="fas fa-file-alt"></i>نواقص مستندات</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D8%B1%D9%81%D9%88%D8%B6" data-request-status-filter="مرفوض"><i class="fas fa-times-circle"></i>مرفوض</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%84%D8%BA%D9%8A%20%D9%85%D9%86%20%D8%A7%D9%84%D8%B9%D9%85%D9%8A%D9%84" data-request-status-filter="ملغي من العميل"><i class="fas fa-ban"></i>ملغي من العميل</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D9%85%D8%B9%D8%A7%D9%84%D8%AC%D8%A9" data-request-status-filter="قيد المعالجة"><i class="fas fa-cogs"></i>قيد المعالجة</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%AF%D8%B1%D8%A7%D8%B3%D8%A9%20%D8%A7%D9%84%D8%A7%D8%A6%D8%AA%D9%85%D8%A7%D9%86%D9%8A%D8%A9" data-request-status-filter="قيد الدراسة الائتمانية"><i class="fas fa-search"></i>قيد الدراسة الائتمانية</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%85%D8%B4%D8%B1%D9%88%D8%B7%D8%A9" data-request-status-filter="موافقة مشروطة"><i class="fas fa-check-double"></i>موافقة مشروطة</a>
+        <a href="/admin/requests?requestStatusFilter=%D8%AC%D8%A7%D9%87%D8%B2%20%D9%84%D9%84%D8%AA%D9%88%D9%82%D9%8A%D8%B9%2F%D8%AA%D9%88%D8%AB%D9%8A%D9%82" data-request-status-filter="جاهز للتوقيع/توثيق"><i class="fas fa-pen-fancy"></i>جاهز للتوقيع/توثيق</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%20%D8%B9%D9%84%D9%8A%D9%87" data-request-status-filter="موافق عليه"><i class="fas fa-check-circle"></i>موافق عليه</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%86%D9%87%D8%A7%D8%A6%D9%8A%D8%A9" data-request-status-filter="موافقة نهائية"><i class="fas fa-check-circle"></i>موافقة نهائية</a>
+        <a href="/admin/requests?requestStatusFilter=%D8%AA%D9%85%20%D8%A7%D9%84%D8%B5%D8%B1%D9%81" data-request-status-filter="تم الصرف"><i class="fas fa-money-bill-wave"></i>تم الصرف</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%86%D8%B4%D8%B7%2F%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%B3%D8%AF%D8%A7%D8%AF" data-request-status-filter="نشط/قيد السداد"><i class="fas fa-sync"></i>نشط/قيد السداد</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%8F%D8%BA%D9%84%D9%82%2F%D9%85%D8%B3%D8%AF%D8%AF" data-request-status-filter="مُغلق/مسدد"><i class="fas fa-archive"></i>مُغلق/مسدد</a>
+      </div>
+    </div>
+    <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>مهام المتابعة</a>
     <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
+    <a href="/admin/follow-ups"><i class="fas fa-address-card"></i>متابعة التواصل</a>
     <a href="/admin/rates"><i class="fas fa-percentage"></i>نسب التمويل</a>
     <a href="/admin/payments"><i class="fas fa-receipt"></i>سندات القبض</a>
     <a href="/admin/banks"><i class="fas fa-university"></i>البنوك</a>
@@ -27089,17 +28071,42 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       }
 
       var userAllowed = ALLOWED[String(ROLE_ID)] || ALLOWED['4'];
+      var customersMainLink = sidebar.querySelector('[data-customers-main-link]');
+      var customersCollapsible = sidebar.querySelector('[data-customers-collapsible]');
+      var requestsMainLink = sidebar.querySelector('[data-requests-main-link]');
+      var requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]');
+
+      if (customersMainLink && customersCollapsible) {
+        customersMainLink.style.display = 'none';
+        customersCollapsible.style.display = 'block';
+        customersCollapsible.classList.remove('gps-open');
+      }
+
+      if (requestsMainLink && requestsCollapsible) {
+        requestsMainLink.style.display = 'none';
+        requestsCollapsible.style.display = 'block';
+        requestsCollapsible.classList.remove('gps-open');
+      }
 
       sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (link) {
         var href = link.getAttribute('href');
         if (!href) return;
+        if (link.hasAttribute('data-customers-main-link')) {
+          link.style.display = 'none';
+          return;
+        }
+        if (link.hasAttribute('data-requests-main-link')) {
+          link.style.display = 'none';
+          return;
+        }
         var normalizedHref = href.split('?')[0];
         var isSuperAdminOnly = link.getAttribute('data-superadmin-only') === 'true';
         if (isSuperAdminOnly && ROLE_ID !== 1) {
           link.style.display = 'none';
           return;
         }
-        var isAlways = normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0;
+        var isAlways =
+          ROLE_ID !== 5 && (normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0);
         if (isAlways || userAllowed.indexOf(normalizedHref) !== -1) {
           link.style.display = 'flex';
         } else {
@@ -27108,36 +28115,107 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       });
 
       var path = window.location.pathname;
+      var query = new URLSearchParams(window.location.search);
       sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (a) {
         a.classList.remove('gps-active');
         var h = a.getAttribute('href');
         if (!h || h === '/') return;
-        if (path === h || path.indexOf(h + '/') === 0) {
+        var url = new URL(h, window.location.origin);
+        var hrefPath = url.pathname;
+        var hrefRatingFilter = url.searchParams.get('ratingFilter');
+        var hrefRequestStatusFilter = url.searchParams.get('requestStatusFilter');
+        var activeMatch = path === hrefPath || path.indexOf(hrefPath + '/') === 0;
+        if (activeMatch && hrefRatingFilter && query.get('ratingFilter') !== hrefRatingFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch && hrefRequestStatusFilter && query.get('requestStatusFilter') !== hrefRequestStatusFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch) {
           a.classList.add('gps-active');
         }
       });
     }
 
+    function renderSidebarCount(link, count) {
+      if (!link) return;
+      var badge = link.querySelector('.gps-count-badge');
+      if (count == null) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'gps-count-badge';
+        link.appendChild(badge);
+      }
+      badge.textContent = String(count || 0);
+    }
+
+    function hydrateSidebarFilterCounts() {
+      fetch('/api/sidebar-filter-counts', { credentials: 'same-origin' })
+        .then(function (res) { return res.ok ? res.json() : Promise.reject(new Error('Failed to load sidebar counts')); })
+        .then(function (payload) {
+          if (!payload || payload.success !== true) return;
+
+          var customers = payload.customers || {};
+          var requests = payload.requests || {};
+          var requestStatusCounts = requests.byState || {};
+
+          document.querySelectorAll('#global-persistent-sidebar [data-customer-rating-filter]').forEach(function (link) {
+            var key = link.getAttribute('data-customer-rating-filter') || 'all';
+            var value = customers[key];
+            if (typeof value !== 'number') value = null;
+            renderSidebarCount(link, value);
+          });
+
+          document.querySelectorAll('#global-persistent-sidebar [data-request-status-filter]').forEach(function (link) {
+            var key = link.getAttribute('data-request-status-filter') || 'all';
+            var value = key === 'all' ? requests.all : requestStatusCounts[key];
+            if (typeof value !== 'number') value = null;
+            renderSidebarCount(link, value);
+          });
+        })
+        .catch(function () {});
+    }
+
+    document.addEventListener('click', function (event) {
+      var toggle = event.target.closest('#global-persistent-sidebar [data-customers-collapsible] [data-customers-toggle]');
+      if (!toggle) {
+        toggle = event.target.closest('#global-persistent-sidebar [data-requests-collapsible] [data-requests-toggle]');
+      }
+      if (!toggle) return;
+      var wrapper = toggle.closest('[data-customers-collapsible]') || toggle.closest('[data-requests-collapsible]');
+      if (!wrapper) return;
+      event.preventDefault();
+      event.stopPropagation();
+      wrapper.classList.toggle('gps-open');
+    });
+
     applyGlobalSidebarPermissions();
+    hydrateSidebarFilterCounts();
     document.addEventListener('DOMContentLoaded', applyGlobalSidebarPermissions);
+    document.addEventListener('DOMContentLoaded', hydrateSidebarFilterCounts);
   })();
 <\/script>
-`;let i=t;return i=i.includes("</head>")?i.replace("</head>",`${r}</head>`):`${r}${i}`,i=i.includes("</body>")?i.replace("</body>",`${l}</body>`):`${i}${l}`,i}p.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=R(a),n=e.req.path||"";if(Na.some(l=>n===l||n.startsWith(l+"/"))&&!s)return e.redirect("/admin/dashboard");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const l=e.res;if(l.status>=300&&l.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(l.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const i=l.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",i),i.includes("text/html")&&l.body){console.log("🔒 [RBAC] Processing HTML response...");const d=await l.clone().text();console.log("🔒 [RBAC] HTML length:",d.length);let c=d;s||(c=qa(c));const u=A(a.roleId)??4;c=Fa(n,c,{roleId:u}),console.log("🔒 [RBAC] HTML processed, updated length:",c.length);const m=new Headers(l.headers);m.set("content-type","text/html; charset=UTF-8"),e.res=new Response(c,{status:l.status,statusText:l.statusText,headers:m}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(l){const i={message:l?.message||"Unknown error",name:l?.name||"Error",stack:l?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(l,Object.getOwnPropertyNames(l),2)}catch(o){return`Failed to stringify: ${o}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",i)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});p.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:A(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});p.use("/c/:tenant/*",async(e,t)=>{const a=await Aa(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function Pa(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function ne(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
+`;let i=t;return i=i.includes("</head>")?i.replace("</head>",`${r}</head>`):`${r}${i}`,i=i.includes("</body>")?i.replace("</body>",`${l}</body>`):`${i}${l}`,i}p.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=D(a),n=e.req.path||"";if(os.some(i=>n===i||n.startsWith(i+"/"))&&!s)return e.redirect("/admin/dashboard");if(k(a.roleId)===5&&!(n==="/admin/requests"||n.startsWith("/admin/requests/")&&n!=="/admin/requests/new"&&!n.includes("/edit")&&!n.includes("/delete")&&!n.includes("/workflow")&&!n.includes("/report")))return e.redirect("/admin/requests");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const i=e.res;if(i.status>=300&&i.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(i.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const o=i.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",o),o.includes("text/html")&&i.body){console.log("🔒 [RBAC] Processing HTML response...");const c=await i.clone().text();console.log("🔒 [RBAC] HTML length:",c.length);let u=c;s||(u=is(u));const m=k(a.roleId)??4;u=ds(n,u,{roleId:m}),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const f=new Headers(i.headers);f.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:i.status,statusText:i.statusText,headers:f}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(i){const o={message:i?.message||"Unknown error",name:i?.name||"Error",stack:i?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(i,Object.getOwnPropertyNames(i),2)}catch(d){return`Failed to stringify: ${d}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",o)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});p.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:k(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});p.use("/c/:tenant/*",async(e,t)=>{const a=await ts(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function cs(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function he(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
     SELECT id FROM tenants WHERE public_uuid = ? LIMIT 1
   `).bind(t).first())?.id??null}p.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/tenants",async e=>{try{const t=await e.req.json();if(!t.company_name||!t.slug)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/tenants",async e=>{try{const t=await e.req.json(),a=le(t.slug);if(!t.company_name||!a)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(de(a))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
-    `).bind(t.slug).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const s=Pa(),n=await e.env.DB.prepare(`
+    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=cs(),r=await e.env.DB.prepare(`
       INSERT INTO tenants (
         public_uuid,
         company_name, slug, subdomain, status, max_users, 
         max_customers, max_requests, contact_email, contact_phone,
         primary_color, secondary_color
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(s,t.company_name,t.slug,t.subdomain||t.slug,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:n.meta.last_row_id,public_uuid:s,...t},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await ne(e,t),s=await e.req.json();if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const n=await e.env.DB.prepare(`
+    `).bind(n,t.company_name,a,t.subdomain||a,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:r.meta.last_row_id,public_uuid:n,...t,slug:a},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t),s=await e.req.json(),n=le(s.slug);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);if(!s.company_name||!n)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(de(n))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);const r=await e.env.DB.prepare(`
       SELECT id, public_uuid FROM tenants WHERE id = ?
-    `).bind(a).first();return n?(await e.env.DB.prepare(`
+    `).bind(a).first();if(!r)return e.json({success:!1,error:"الشركة غير موجودة"},404);if(await e.env.DB.prepare(`
+      SELECT id FROM tenants WHERE slug = ? AND id != ?
+    `).bind(n,a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const i={company_name:s.company_name,slug:n,subdomain:s.subdomain||n||null,status:s.status||"active",max_users:typeof s.max_users=="number"?s.max_users:10,max_customers:typeof s.max_customers=="number"?s.max_customers:500,max_requests:typeof s.max_requests=="number"?s.max_requests:2e3,contact_email:s.contact_email??null,contact_phone:s.contact_phone??null,primary_color:s.primary_color||"#667eea",secondary_color:s.secondary_color||"#764ba2"};return await e.env.DB.prepare(`
       UPDATE tenants SET
         company_name = ?,
         slug = ?,
@@ -27151,14 +28229,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         primary_color = ?,
         secondary_color = ?
       WHERE id = ?
-    `).bind(s.company_name,s.slug,s.subdomain,s.status,s.max_users,s.max_customers,s.max_requests,s.contact_email,s.contact_phone,s.primary_color||"#667eea",s.secondary_color||"#764ba2",a).run(),e.json({success:!0,data:{id:a,public_uuid:n?.public_uuid,...s},message:"تم تحديث الشركة بنجاح"})):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await ne(e,t);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const s=await e.env.DB.prepare(`
+    `).bind(i.company_name,i.slug,i.subdomain,i.status,i.max_users,i.max_customers,i.max_requests,i.contact_email,i.contact_phone,i.primary_color,i.secondary_color,a).run(),e.json({success:!0,data:{id:a,public_uuid:r?.public_uuid,...i},message:"تم تحديث الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const s=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE tenant_id = ?
     `).bind(a).first();return s&&s.count>0?e.json({success:!1,error:`لا يمكن حذف الشركة لأنها تحتوي على ${s.count} مستخدم/مستخدمين`},400):(await e.env.DB.prepare(`
       DELETE FROM tenants WHERE id = ?
     `).bind(a).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/auth/login",async e=>{try{if(console.log("🔐 [LOGIN] Starting login process..."),console.log("🔐 [LOGIN] Request URL:",e.req.url),console.log("🔐 [LOGIN] Request method:",e.req.method),!e.env.DB)return console.error("❌ [LOGIN] DB binding is not available"),console.error("❌ [LOGIN] c.env:",JSON.stringify(Object.keys(e.env||{}))),e.json({success:!1,error:"Database connection not available. Please check bindings configuration.",debug:{env_keys:Object.keys(e.env||{})}},500);console.log("🔐 [LOGIN] DB binding available, parsing request body...");const{username:t,password:a}=await e.req.json();if(console.log(`🔐 [LOGIN] Login attempt: ${t}`),console.log(`🔍 [LOGIN] DB binding check: ${!!e.env.DB}`),!e.env?.DB)return console.error("❌ DB binding check failed in login query"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const s=await e.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.subscription_id, u.is_active, 
-             u.tenant_id,
+             u.tenant_id, u.assigned_bank_id,
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
              t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
@@ -27167,7 +28245,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),e.env?.DB?(console.log("✅ [LOGIN] Updating last_login timestamp..."),await e.env.DB.prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?").bind(s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")):console.error("❌ [LOGIN] DB binding lost after user query"),console.log("🔐 [LOGIN] Creating authentication token...");const n=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",n);const r=btoa(n);console.log("🔐 [LOGIN] Token created:",r.substring(0,30)+"...");const l=10080*60,i=`authToken=${r}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,o="/admin/panel";console.log(`🎯 Redirect to: ${o}`),console.log(`🍪 Cookie set: authToken=${r.substring(0,20)}...`);const d=e.json({success:!0,token:r,redirect:o,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role_id:s.role_id,role_name:F(s.role_id,s.role_name),role_description:s.role_description,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug}});return console.log("🍪 [LOGIN] Setting cookie header..."),d.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),d}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,n)=>{try{s[n]=String(t[n])}catch{s[n]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});p.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});p.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
+    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);if(console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),!e.env?.DB)console.error("❌ [LOGIN] DB binding lost after user query");else{console.log("✅ [LOGIN] Updating last_login timestamp...");const c=new Date().toISOString();await e.env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(c,s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")}console.log("🔐 [LOGIN] Creating authentication token...");const n=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",n);const r=btoa(n);console.log("🔐 [LOGIN] Token created:",r.substring(0,30)+"...");const l=10080*60,i=`authToken=${r}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,o=k(s.role_id)===5?"/admin/requests":"/admin/panel";console.log(`🎯 Redirect to: ${o}`),console.log(`🍪 Cookie set: authToken=${r.substring(0,20)}...`);const d=e.json({success:!0,token:r,redirect:o,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role_id:s.role_id,role_name:J(s.role_id,s.role_name),role_description:s.role_description,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug,assigned_bank_id:s.assigned_bank_id??null}});return console.log("🍪 [LOGIN] Setting cookie header..."),d.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),d}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,n)=>{try{s[n]=String(t[n])}catch{s[n]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});p.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});p.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!a)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const s=Math.floor(1e5+Math.random()*9e5).toString(),n=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
@@ -27191,7 +28269,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       VALUES (?, ?, ?, ?, ?)
     `).bind(a,s,n,r,i).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:n,logo_url:r,is_active:l}=a,o=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(o){const m=atob(o).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let c="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(c+=" AND tenant_id = ?",await e.env.DB.prepare(c).bind(s,n,r,l,t,d).run()):await e.env.DB.prepare(c).bind(s,n,r,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),n=a.get("bank_code"),r=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(s,n,r,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,r=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,r=o[2]?parseInt(o[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(r!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await We(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await ja(e.env.DB),r=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${r} بنك عام`,deleted_count:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await x(e),n=Number.isFinite(a)?a:s.tenantId,l=(await de(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(r=a);let l=`
+    `).bind(s,n,r,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,r=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,r=o[2]?parseInt(o[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(r!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await ut(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await es(e.env.DB),r=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${r} بنك عام`,deleted_count:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await x(e),n=Number.isFinite(a)?a:s.tenantId,l=(await Se(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(r=a);let l=`
       SELECT 
         r.*,
         b.bank_name,
@@ -27305,18 +28383,22 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
              (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(n+=` WHERE u.tenant_id = ${s}`),n+=`
-      ORDER BY u.id DESC`;const{results:r}=await e.env.DB.prepare(n).all(),l=(r||[]).map(i=>({...i,role_name:F(i.role_id,i.role_name)}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),r=t.get("email"),l=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",c=await x(e);if(!c.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!R(c))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=t.get("tenant_id");if(R(c))m&&m!==""?m=parseInt(m):m=null;else{if(!c.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=c.tenantId}if(await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:r}=await e.env.DB.prepare(n).all(),l=(r||[]).map(i=>({...i,role_name:J(i.role_id,i.role_name)}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),r=t.get("email"),l=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",c=await x(e);if(!c.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!D(c))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=null;const f=t.get("tenant_id");if(D(c))if(f!=null&&String(f).trim()!==""){const w=parseInt(String(f),10);m=Number.isNaN(w)?null:w}else m=null;else{if(!c.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=c.tenantId}const g=t.get("assigned_bank_id");let b=null;if(u===5){if(!(D(c)||c.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء وكيل بنك"},403);const v=typeof m=="number"?m:parseInt(String(m||""),10);if(!v||Number.isNaN(v))return e.json({success:!1,error:"يجب اختيار الشركة لوكيل البنك"},400);const _=Number.parseInt(String(g||""),10);if(Number.isNaN(_)||_<=0)return e.json({success:!1,error:"يجب اختيار البنك لوكيل البنك"},400);if(!await xe(e.env.DB,v,_))return e.json({success:!1,error:"البنك غير صالح لهذه الشركة"},400);b=_}if(await e.env.DB.prepare(`
       SELECT id FROM users WHERE username = ?
     `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(r&&await e.env.DB.prepare(`
         SELECT id FROM users WHERE email = ?
-      `).bind(r).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const g=await e.env.DB.prepare(`
-      INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,n,r,l,u,o,d,m).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:g.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});p.put("/api/users/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),{username:s,full_name:n,email:r,phone:l,role_id:i,subscription_id:o,is_active:d}=await e.req.json(),c=Number.parseInt(String(i??""),10);return Number.isNaN(c)?e.json({success:!1,error:"Invalid role_id"},400):c===1&&!R(t)?e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403):(await e.env.DB.prepare(`
+      `).bind(r).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const h=await e.env.DB.prepare(`
+      INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id, assigned_bank_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(a,s,n,r,l,u,o,d,m,b).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:h.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});p.get("/api/admin/company-banks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t)&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.query("tenant_id"),s=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!s||Number.isNaN(s))return e.json({success:!1,error:"tenant_id required"},400);if(!D(t)&&t.tenantId!==s)return e.json({success:!1,error:"Forbidden"},403);try{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(s).all();return e.json({success:!0,data:n||[]})}catch{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(s).all();return e.json({success:!0,data:n||[]})}}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/admin/bank-agents",async e=>{try{const t=await x(e);if(!t.userId||k(t.roleId)===5)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),s=e.req.query("bank_id"),n=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN,r=s!=null&&String(s).trim()!==""?parseInt(String(s),10):NaN;if(!n||Number.isNaN(n)||!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id and bank_id required"},400);if(!D(t)&&t.tenantId!==n)return e.json({success:!1,error:"Forbidden"},403);if(!await xe(e.env.DB,n,r))return e.json({success:!1,error:"Invalid bank for tenant"},400);const{results:i}=await e.env.DB.prepare(`SELECT u.id, u.full_name, u.username, u.email
+         FROM users u
+         WHERE u.role_id = 5 AND u.is_active = 1
+           AND u.tenant_id = ? AND u.assigned_bank_id = ?
+         ORDER BY u.full_name`).bind(n,r).all();return e.json({success:!0,data:i||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/users/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.req.json(),{username:n,full_name:r,email:l,phone:i,role_id:o,subscription_id:d,is_active:c,assigned_bank_id:u}=s,m=Number.parseInt(String(o??""),10);if(Number.isNaN(m))return e.json({success:!1,error:"Invalid role_id"},400);if(m===1&&!D(t))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);const f=await e.env.DB.prepare("SELECT id, tenant_id FROM users WHERE id = ?").bind(a).first();if(!f)return e.json({success:!1,error:"User not found"},404);let g=null;if(m===5){if(!(D(t)||t.roleId===2))return e.json({success:!1,error:"Forbidden"},403);const y=f.tenant_id!=null?Number(f.tenant_id):null;if(!y)return e.json({success:!1,error:"Bank agent requires a company (tenant)"},400);const h=Number.parseInt(String(u??""),10);if(Number.isNaN(h)||h<=0)return e.json({success:!1,error:"assigned_bank_id required for bank agent"},400);if(!await xe(e.env.DB,y,h))return e.json({success:!1,error:"Invalid bank for tenant"},400);g=h}return await e.env.DB.prepare(`
       UPDATE users 
-      SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?
+      SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?, assigned_bank_id = ?
       WHERE id = ?
-    `).bind(s,n,r,l,c,o,d,a).run(),e.json({success:!0}))}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers",async e=>{try{const t=await x(e);let a=`
+    `).bind(n,r,l,i,m,d,c,g,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers",async e=>{try{const t=await x(e);let a=`
       SELECT 
         c.*,
         COUNT(f.id) as total_requests,
@@ -27328,9 +28410,39 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           WHERE ca.customer_id = c.id AND ca.employee_id = ${t.userId}
         )`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=t.get("email")||null,r=t.get("national_id")||null,l=t.get("date_of_birth")||null,i=t.get("dob_calendar_type")||"gregorian",o=t.get("employer_name")||null,d=t.get("job_type")||"civilian",c=t.get("job_title")||null,u=t.get("military_rank")||null,m=t.get("work_start_date")||null,f=t.get("city")||null,g=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,b=parseFloat(t.get("monthly_salary")||"0"),y=t.get("notes")?.trim()||null,h=ze(t.get("solutions_json")),w=await x(e);let v=w.tenantId;if(!v&&w.roleId===1){const E=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(E)&&E>0&&(v=E)}if(!v){const E=await e.env.DB.prepare(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=dt(s);if(!n.normalized)return e.html(`
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>تنسيق رقم الجوال غير صحيح</title>
+          <script src="https://cdn.tailwindcss.com"><\/script>
+          <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        </head>
+        <body class="bg-gray-50">
+          <div class="max-w-2xl mx-auto p-6 mt-20">
+            <div class="bg-amber-50 border-r-4 border-amber-500 rounded-lg p-6 shadow-lg">
+              <div class="flex items-center mb-3">
+                <i class="fas fa-phone-slash text-amber-600 text-3xl ml-3"></i>
+                <h1 class="text-2xl font-bold text-amber-800">تنسيق رقم الجوال غير صحيح</h1>
+              </div>
+              <p class="text-amber-700 mb-3">${n.error||"يرجى مراجعة رقم الجوال"}</p>
+              <div class="bg-white rounded-lg p-3 text-sm text-gray-700 mb-4">
+                <p><strong>الطريقة الصحيحة:</strong> أدخل فقط 9 أرقام تبدأ بـ <span dir="ltr">5</span>.</p>
+                <p><strong>مثال:</strong> <span dir="ltr">512345678</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">966512345678</span>).</p>
+              </div>
+              <a href="/admin/customers/add" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold transition-all">
+                <i class="fas fa-arrow-right ml-2"></i>
+                العودة للنموذج
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,400);const r=n.normalized,l=t.get("email")||null,i=t.get("national_id")||null,o=t.get("date_of_birth")||null,d=t.get("dob_calendar_type")||"gregorian",c=t.get("employer_name")||null,u=t.get("job_type")||"civilian",m=t.get("job_title")||null,f=t.get("military_rank")||null,g=t.get("work_start_date")||null,b=t.get("city")||null,y=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,h=parseFloat(t.get("monthly_salary")||"0"),w=t.get("notes")?.trim()||null,v=it(t.get("solutions_json")),_=(t.get("id_attachment_url")||"").trim()||null,R=(t.get("bank_statement_attachment_url")||"").trim()||null,B=(t.get("salary_attachment_url")||"").trim()||null,j=(t.get("additional_attachment_url")||"").trim()||null,E=await x(e);let S=E.tenantId;if(!S&&E.roleId===1){const I=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(I)&&I>0&&(S=I)}if(!S){const I=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
-      `).first();E?.id&&(v=E.id)}if(!v)throw new Error("Missing tenant context for customer creation");if(r){let E="SELECT id, full_name FROM customers WHERE national_id = ?",j=[r];v&&(E+=" AND tenant_id = ?",j.push(v));const L=await e.env.DB.prepare(E).bind(...j).first();if(L)return e.html(`
+      `).first();I?.id&&(S=I.id)}if(!S)throw new Error("Missing tenant context for customer creation");if(i){let I="SELECT id, full_name FROM customers WHERE national_id = ?",A=[i];S&&(I+=" AND tenant_id = ?",A.push(S));const $=await e.env.DB.prepare(I).bind(...A).first();if($)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -27351,16 +28463,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   </div>
                 </div>
                 <div class="bg-white rounded-lg p-4 mb-4">
-                  <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${r}</p>
-                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${L.full_name}</p>
-                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${L.id}</p>
+                  <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${i}</p>
+                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${$.full_name}</p>
+                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${$.id}</p>
                 </div>
                 <div class="flex gap-3">
                   <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-arrow-right ml-2"></i>
                     العودة للنموذج
                   </a>
-                  <a href="/admin/customers/${L.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <a href="/admin/customers/${$.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-eye ml-2"></i>
                     عرض العميل الموجود
                   </a>
@@ -27373,7 +28485,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </body>
           </html>
-        `)}let _="SELECT id, full_name FROM customers WHERE phone = ?",S=[s];v&&(_+=" AND tenant_id = ?",S.push(v));const T=await e.env.DB.prepare(_).bind(...S).first();if(T)return e.html(`
+        `)}const C=r.slice(3),O=`0${C}`;let L="SELECT id, full_name FROM customers WHERE (phone = ? OR phone = ? OR phone = ?)",X=[r,C,O];S&&(L+=" AND tenant_id = ?",X.push(S));const W=await e.env.DB.prepare(L).bind(...X).first();if(W)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -27394,16 +28506,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
               </div>
               <div class="bg-white rounded-lg p-4 mb-4">
-                <p class="text-gray-700"><strong>رقم الهاتف:</strong> ${s}</p>
-                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${T.full_name}</p>
-                <p class="text-gray-700"><strong>رقم العميل:</strong> #${T.id}</p>
+                <p class="text-gray-700"><strong>رقم الهاتف:</strong> ${r}</p>
+                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${W.full_name}</p>
+                <p class="text-gray-700"><strong>رقم العميل:</strong> #${W.id}</p>
               </div>
               <div class="flex gap-3">
                 <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-arrow-right ml-2"></i>
                   العودة للنموذج
                 </a>
-                <a href="/admin/customers/${T.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/customers/${W.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-eye ml-2"></i>
                   عرض العميل الموجود
                 </a>
@@ -27412,19 +28524,28 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
         </body>
         </html>
-      `);const B=[a,s,n,r,l,i==="hijri"?"hijri":"gregorian",o,d==="military"?"military":"civilian",c,d==="military"?u:null,m,f,g,b,v,y];let I;try{I=await e.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...B,h).run()}catch(E){if(!J(E))throw E;I=await e.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...B).run()}const C=I.meta?.last_row_id,D=t.get("obligations_json");if(C&&D)try{const E=JSON.parse(D);if(Array.isArray(E)&&E.length>0){let j=0;for(const L of E){const Je=L.obligation_type??"",Xe=Number(L.total_amount)||0,ce=Number(L.monthly_installment)||0,Qe=L.due_date||null;j+=ce,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(C,Je,Xe,ce,Qe,v).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(j,C).run()}}catch{}if(C&&w.roleId===4&&w.userId&&w.tenantId!=null&&w.tenantId===v)try{await e.env.DB.prepare(`
+      `);const N=[a,r,l,i,o,d==="hijri"?"hijri":"gregorian",c,u==="military"?"military":"civilian",m,u==="military"?f:null,g,b,y,h,S,w,_,R,B,j];let P;try{P=await e.env.DB.prepare(`
+      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url, solutions_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...N,v).run()}catch(I){if(Y(I))try{P=await e.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...N).run()}catch(A){if(!M(A))throw A;P=await e.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...N.slice(0,16)).run()}else if(M(I))try{P=await e.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...N.slice(0,16),v).run()}catch(A){if(!Y(A))throw A;P=await e.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...N.slice(0,16)).run()}else throw I}const H=P.meta?.last_row_id,ae=t.get("obligations_json");if(H&&ae)try{const I=JSON.parse(ae);if(Array.isArray(I)&&I.length>0){let A=0;for(const $ of I){const bt=$.obligation_type??"",xt=Number($.total_amount)||0,Te=Number($.monthly_installment)||0,ht=$.due_date||null;A+=Te,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(H,bt,xt,Te,ht,S).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(A,H).run()}}catch{}if(H&&E.roleId===4&&E.userId&&E.tenantId!=null&&E.tenantId===S)try{await e.env.DB.prepare(`
           INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
           VALUES (?, ?, ?, ?)
-        `).bind(C,w.userId,w.userId,"").run(),await e.env.DB.prepare(`
+        `).bind(H,E.userId,E.userId,"").run(),await e.env.DB.prepare(`
           INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
           VALUES (?, NULL, ?, ?, ?)
-        `).bind(C,w.userId,w.userId,"").run()}catch(E){console.error("Auto-assign new customer to employee (role 4) failed:",E)}return e.redirect("/admin/customers")}catch(t){return e.html(`
+        `).bind(H,E.userId,E.userId,"").run()}catch(I){console.error("Auto-assign new customer to employee (role 4) failed:",I)}return e.redirect("/admin/customers")}catch(t){return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -27455,17 +28576,64 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),r=a.get("email")||null,l=a.get("national_id")||null,i=a.get("date_of_birth")||null,o=a.get("dob_calendar_type")||"gregorian",d=a.get("employer_name")||null,c=a.get("job_type")||"civilian",u=a.get("job_title")||null,m=a.get("military_rank")||null,f=a.get("work_start_date")||null,g=a.get("city")||null,b=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,y=parseFloat(a.get("monthly_salary")||"0"),h=a.get("notes")?.trim()||null,w=ze(a.get("solutions_json")),v=[s,n,r,l,i,o==="hijri"?"hijri":"gregorian",d,c==="military"?"military":"civilian",u,c==="military"?m:null,f,g,b,y,h];try{await e.env.DB.prepare(`
+    `)}});p.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),r=dt(n);if(!r.normalized)return e.html(`
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>تنسيق رقم الجوال غير صحيح</title>
+          <script src="https://cdn.tailwindcss.com"><\/script>
+          <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        </head>
+        <body class="bg-gray-50">
+          <div class="max-w-2xl mx-auto p-6 mt-20">
+            <div class="bg-amber-50 border-r-4 border-amber-500 rounded-lg p-6 shadow-lg">
+              <div class="flex items-center mb-3">
+                <i class="fas fa-phone-slash text-amber-600 text-3xl ml-3"></i>
+                <h1 class="text-2xl font-bold text-amber-800">تنسيق رقم الجوال غير صحيح</h1>
+              </div>
+              <p class="text-amber-700 mb-3">${r.error||"يرجى مراجعة رقم الجوال"}</p>
+              <div class="bg-white rounded-lg p-3 text-sm text-gray-700 mb-4">
+                <p><strong>الطريقة الصحيحة:</strong> أدخل فقط 9 أرقام تبدأ بـ <span dir="ltr">5</span>.</p>
+                <p><strong>مثال:</strong> <span dir="ltr">512345678</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">966512345678</span>).</p>
+              </div>
+              <a href="/admin/customers/${t}/edit" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold transition-all">
+                <i class="fas fa-arrow-right ml-2"></i>
+                العودة للتعديل
+              </a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,400);const l=r.normalized,i=a.get("email")||null,o=a.get("national_id")||null,d=a.get("date_of_birth")||null,c=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,m=a.get("job_type")||"civilian",f=a.get("job_title")||null,g=a.get("military_rank")||null,b=a.get("work_start_date")||null,y=a.get("city")||null,h=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,w=parseFloat(a.get("monthly_salary")||"0"),v=a.get("notes")?.trim()||null,_=it(a.get("solutions_json")),R=(a.get("id_attachment_url")||"").trim()||null,B=(a.get("bank_statement_attachment_url")||"").trim()||null,j=(a.get("salary_attachment_url")||"").trim()||null,E=(a.get("additional_attachment_url")||"").trim()||null,S=[s,l,i,o,d,c==="hijri"?"hijri":"gregorian",u,m==="military"?"military":"civilian",f,m==="military"?g:null,b,y,h,w,v,R,B,j,E];try{await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
-          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
+          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
+          id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?, solutions_json = ?
       WHERE id = ?
-    `).bind(...v,w,t).run()}catch(S){if(!J(S))throw S;await e.env.DB.prepare(`
-      UPDATE customers 
-      SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
-          employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
-      WHERE id = ?
-    `).bind(...v,t).run()}const _=a.get("obligations_json");if(_)try{const T=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const B=JSON.parse(_);if(Array.isArray(B)&&B.length>0){let I=0;for(const C of B){const D=C.obligation_type??"",E=Number(C.total_amount)||0,j=Number(C.monthly_installment)||0,L=C.due_date||null;I+=j,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,D,E,j,L,T).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(I,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!J(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:l,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let r=null;if(n!=null?r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!r)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(r.id).all()).results||[];return e.json({success:!0,customer:r,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await X(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await X(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),r=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of r){const o=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,u=i.due_date||null;l+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,c,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-requests",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let n=`
+    `).bind(...S,_,t).run()}catch(O){if(Y(O))try{await e.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
+              id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?
+          WHERE id = ?
+        `).bind(...S,t).run()}catch(L){if(!M(L))throw L;await e.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
+          WHERE id = ?
+        `).bind(...S.slice(0,15),t).run()}else if(M(O))try{await e.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
+          WHERE id = ?
+        `).bind(...S.slice(0,15),_,t).run()}catch(L){if(!Y(L))throw L;await e.env.DB.prepare(`
+          UPDATE customers 
+          SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
+              employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
+          WHERE id = ?
+        `).bind(...S.slice(0,15),t).run()}else throw O}const C=a.get("obligations_json");if(C)try{const L=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const X=JSON.parse(C);if(Array.isArray(X)&&X.length>0){let W=0;for(const N of X){const P=N.obligation_type??"",H=Number(N.total_amount)||0,ae=Number(N.monthly_installment)||0,I=N.due_date||null;W+=ae,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,P,H,ae,I,L).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(W,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return await ke(e.env.DB,t,{id_attachment_url:R,bank_statement_attachment_url:B,salary_attachment_url:j,additional_attachment_url:E}),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!Y(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:l,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let r=null;if(n!=null?r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!r)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(r.id).all()).results||[];return e.json({success:!0,customer:r,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),r=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of r){const o=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,u=i.due_date||null;l+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,c,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-requests",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
       SELECT 
         f.*,
         c.full_name as customer_name,
@@ -27482,15 +28650,72 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN banks b ON f.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id`;s&&(n+=` WHERE f.tenant_id = ${s}`),n+=" ORDER BY f.created_at DESC";const{results:r}=await e.env.DB.prepare(n).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),n=s.get("customer_id"),r=s.get("financing_type_id"),l=s.get("requested_amount"),i=s.get("duration_months"),o=s.get("salary_at_request"),d=s.get("selected_bank_id")||null,c=s.get("status")||"pending",u=s.get("notes")||"",m=await x(e);if(!m.userId||!m.roleId)return e.json({success:!1,error:"غير مصرح"},401);const f=await e.env.DB.prepare(`
+      LEFT JOIN users u ON ca.employee_id = u.id`;const s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(a+=" WHERE f.tenant_id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0":t.roleId===4?t.tenantId&&t.userId?(a+=` WHERE f.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca2
+          WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
+        )`,s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0":k(t.roleId)===5&&t.tenantId&&t.userId?(a+=" WHERE f.tenant_id = ? AND f.assigned_bank_agent_id = ?",s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY f.created_at DESC";const{results:n}=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.json({success:!0,data:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/sidebar-filter-counts",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);const a=[],s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(a.push("c.tenant_id = ?"),s.push(t.tenantId)):a.push("1 = 0"):t.roleId===4?t.tenantId&&t.userId?(a.push("c.tenant_id = ?"),a.push(`EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`),s.push(t.tenantId,t.userId)):a.push("1 = 0"):(k(t.roleId),a.push("1 = 0")));const n=a.length>0?`WHERE ${a.join(" AND ")}`:"",r=await e.env.DB.prepare(`
+      WITH scoped_customers AS (
+        SELECT c.id
+        FROM customers c
+        ${n}
+      ),
+      latest_reviews AS (
+        SELECT cr.customer_id, cr.rating
+        FROM customer_reviews cr
+        INNER JOIN (
+          SELECT customer_id, MAX(created_at) AS max_created
+          FROM customer_reviews
+          GROUP BY customer_id
+        ) latest
+          ON latest.customer_id = cr.customer_id
+         AND latest.max_created = cr.created_at
+      )
+      SELECT
+        COUNT(sc.id) AS all_count,
+        SUM(CASE WHEN lr.rating = 1 THEN 1 ELSE 0 END) AS rating_1,
+        SUM(CASE WHEN lr.rating = 2 THEN 1 ELSE 0 END) AS rating_2,
+        SUM(CASE WHEN lr.rating = 3 THEN 1 ELSE 0 END) AS rating_3,
+        SUM(CASE WHEN lr.rating = 4 THEN 1 ELSE 0 END) AS rating_4,
+        SUM(CASE WHEN lr.rating = 5 THEN 1 ELSE 0 END) AS rating_5
+      FROM scoped_customers sc
+      LEFT JOIN latest_reviews lr ON lr.customer_id = sc.id
+    `).bind(...s).first(),l=Number(r?.all_count||0),i=Number(r?.rating_1||0)+Number(r?.rating_2||0)+Number(r?.rating_3||0)+Number(r?.rating_4||0)+Number(r?.rating_5||0),o=Math.max(0,l-i),d=[],c=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(d.push("c.tenant_id = ?"),c.push(t.tenantId)):d.push("1 = 0"):t.roleId===4?t.tenantId&&t.userId?(d.push("c.tenant_id = ?"),d.push(`EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`),c.push(t.tenantId,t.userId)):d.push("1 = 0"):k(t.roleId)===5&&t.tenantId&&t.userId?(d.push("c.tenant_id = ?"),d.push("fr.assigned_bank_agent_id = ?"),c.push(t.tenantId,t.userId)):d.push("1 = 0"));const u=d.length>0?`WHERE ${d.join(" AND ")}`:"",m=(await e.env.DB.prepare(`
+      SELECT
+        COALESCE(
+          ws.stage_name_ar,
+          CASE fr.status
+            WHEN 'pending' THEN 'قيد الانتظار'
+            WHEN 'under_review' THEN 'قيد المراجعة'
+            WHEN 'approved' THEN 'موافق عليه'
+            WHEN 'rejected' THEN 'مرفوض'
+            WHEN 'processing' THEN 'قيد المعالجة'
+            WHEN 'completed' THEN 'مكتمل'
+            WHEN 'cancelled' THEN 'ملغي'
+            ELSE fr.status
+          END,
+          'غير محدد'
+        ) AS status_label,
+        COUNT(*) AS count
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      ${u}
+      GROUP BY status_label
+    `).bind(...c).all()).results,f={};let g=0;return m.forEach(b=>{const y=String(b?.status_label||"").trim(),h=Number(b?.count||0);y&&(f[y]=h,g+=h)}),e.json({success:!0,customers:{all:l,0:o,1:Number(r?.rating_1||0),2:Number(r?.rating_2||0),3:Number(r?.rating_3||0),4:Number(r?.rating_4||0),5:Number(r?.rating_5||0)},requests:{all:g,byState:f}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),n=s.get("customer_id"),r=s.get("financing_type_id"),l=s.get("requested_amount"),i=s.get("duration_months"),o=s.get("salary_at_request"),d=s.get("selected_bank_id");let c=d!=null&&String(d).trim()!==""?parseInt(String(d),10):null;c!=null&&Number.isNaN(c)&&(c=null);const u=s.get("assigned_bank_agent_id");let m=u!=null&&String(u).trim()!==""?parseInt(String(u),10):null;m!=null&&Number.isNaN(m)&&(m=null);const f=s.get("status")||"pending",g=s.get("notes")||"",b=await x(e);if(!b.userId||!b.roleId)return e.json({success:!1,error:"غير مصرح"},401);const y=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM customers WHERE id = ?
-    `).bind(n).first();if(!f)return e.json({success:!1,error:"العميل غير موجود"},400);if(m.roleId!==1){if(!m.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(f.tenant_id!==m.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}const g=m.roleId===1?f.tenant_id:m.tenantId,b=await e.env.DB.prepare(`
+    `).bind(n).first();if(!y)return e.json({success:!1,error:"العميل غير موجود"},400);if(b.roleId!==1){if(!b.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(y.tenant_id!==b.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}if(b.roleId===4&&!await te(e.env.DB,b,y))return e.json({success:!1,error:"غير مصرح: العميل غير مخصص لك"},403);const h=b.roleId===1?y.tenant_id:b.tenantId;if(m!=null){if(!c||Number.isNaN(c))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين وكيل بنك"},400);const v=h!=null?Number(h):NaN;if(!v||Number.isNaN(v))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين وكيل البنك"},400);if(!await rs(e.env.DB,v,c,m))return e.json({success:!1,error:"وكيل البنك غير صالح لهذا البنك والشركة"},400)}const w=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
-        status, notes, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(n,r,d,l,o,i,c,u,g).run();return a?e.json({success:!0,id:b.meta.last_row_id},201):e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});p.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+        status, notes, tenant_id, assigned_bank_agent_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(n,r,c,l,o,i,f,g,h,m).run();return a?e.json({success:!0,id:w.meta.last_row_id},201):e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});p.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
       ORDER BY stage_order ASC
@@ -27534,18 +28759,24 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
       WHERE wst.request_id = ?
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});const ps={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function us(e){return e&&ps[e]||null}p.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:n}=await e.req.json(),r=await e.env.DB.prepare(`
+      SELECT stage_name FROM workflow_stages WHERE id = ?
+    `).bind(a).first(),l=await e.env.DB.prepare(`
+      SELECT status FROM financing_requests WHERE id = ?
+    `).bind(t).first(),i=us(r?.stage_name||null),o=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],d=[a];return i&&(o.push("status = ?"),d.push(i),i==="pending"?o.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):i==="under_review"?o.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):i==="approved"?o.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):i==="rejected"&&o.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(i==="approved"||i==="rejected"||i==="under_review")&&o.push("reviewed_at = CURRENT_TIMESTAMP")),d.push(t),await e.env.DB.prepare(`
       UPDATE financing_requests 
-      SET current_stage_id = ?, 
-          stage_entered_at = CURRENT_TIMESTAMP
+      SET ${o.join(", ")}
       WHERE id = ?
-    `).bind(a,t).run(),s&&await e.env.DB.prepare(`
+    `).bind(...d).run(),s&&await e.env.DB.prepare(`
         UPDATE workflow_stage_transitions 
         SET notes = ?, transitioned_by = ?
         WHERE request_id = ? AND to_stage_id = ?
         ORDER BY created_at DESC
         LIMIT 1
-      `).bind(s,n,t,a).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:n,performedBy:r,notes:l}=await e.req.json();return await e.env.DB.prepare(`
+      `).bind(s,n,t,a).run(),i&&l?.status&&l.status!==i&&await e.env.DB.prepare(`
+        INSERT INTO financing_request_status_history (request_id, old_status, new_status, changed_by, notes)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(t,l.status,i,n||null,s||"").run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:n,performedBy:r,notes:l}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_actions 
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -27645,7 +28876,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             tenant_id = COALESCE(?, tenant_id),
             solutions_json = IFNULL(?, solutions_json)
         WHERE id = ?
-      `).bind(...i).run()}catch(o){if(!J(o))throw o;await e.env.DB.prepare(`
+      `).bind(...i).run()}catch(o){if(!Y(o))throw o;await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, 
             birthdate = ?, 
@@ -27669,7 +28900,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           monthly_payment, total_payment, calculation_date,
           national_id, tenant_id, solutions_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
-      `).bind(...o,l??"[]").run()}catch(c){if(!J(c))throw c;d=await e.env.DB.prepare(`
+      `).bind(...o,l??"[]").run()}catch(c){if(!Y(c))throw c;d=await e.env.DB.prepare(`
         INSERT INTO customers (
           full_name, phone, birthdate, monthly_salary,
           financing_amount, monthly_obligations, financing_type_id,
@@ -27709,11 +28940,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(r,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:r,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});p.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const w=a.substring(7).split(".");w.length===3&&(s=JSON.parse(atob(w[1])).tenant_id||null)}const{requested_amount:n,duration_months:r,salary_at_request:l,monthly_obligations:i,status:o,notes:d,id_attachment_url:c,bank_statement_attachment_url:u,salary_attachment_url:m,additional_attachment_url:f}=await e.req.json();let g=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?","status = ?","notes = ?"];const b=[n,r,l||0,i||0,o||"pending",d||""];c&&(g.push("id_attachment_url = ?"),b.push(c)),u&&(g.push("bank_statement_attachment_url = ?"),b.push(u)),m&&(g.push("salary_attachment_url = ?"),b.push(m)),f&&(g.push("additional_attachment_url = ?"),b.push(f)),b.push(t);let y=`
+    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:r,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});p.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const w=a.substring(7).split(".");w.length===3&&(s=JSON.parse(atob(w[1])).tenant_id||null)}const{requested_amount:n,duration_months:r,salary_at_request:l,monthly_obligations:i,id_attachment_url:o,bank_statement_attachment_url:d,salary_attachment_url:c,additional_attachment_url:u}=await e.req.json();let m=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?"];const f=[n,r,l||0,i||0];o&&(m.push("id_attachment_url = ?"),f.push(o)),d&&(m.push("bank_statement_attachment_url = ?"),f.push(d)),c&&(m.push("salary_attachment_url = ?"),f.push(c)),u&&(m.push("additional_attachment_url = ?"),f.push(u)),f.push(t);let g=`
       UPDATE financing_requests 
-      SET ${g.join(", ")}
+      SET ${m.join(", ")}
       WHERE id = ?
-    `;return s!==null&&(y+=" AND tenant_id = ?",b.push(s)),await e.env.DB.prepare(y).bind(...b).run(),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),n=await e.env.DB.prepare(`
+    `;s!==null&&(g+=" AND tenant_id = ?",f.push(s)),await e.env.DB.prepare(g).bind(...f).run();const y=(await e.env.DB.prepare(`
+      SELECT customer_id FROM financing_requests WHERE id = ?
+    `).bind(t).first())?.customer_id;return await ke(e.env.DB,y,{id_attachment_url:o,bank_statement_attachment_url:d,salary_attachment_url:c,additional_attachment_url:u}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
     `).bind(t).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];l?await e.env.DB.prepare(`
         UPDATE financing_requests 
@@ -27733,11 +28966,17 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         UPDATE financing_requests 
         SET ${h} = ? 
         WHERE id = ?
-      `).bind(b,s).run();console.log("✅ Update result:",w)}return e.json({success:!0,url:b,filename:f})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let r=null;n.startsWith("id_")?r="id_attachment_url":n.startsWith("salary_")?r="salary_attachment_url":n.startsWith("bank_statement_")?r="bank_statement_attachment_url":n.startsWith("additional_")&&(r="additional_attachment_url"),r&&await e.env.DB.prepare(`
+      `).bind(b,s).run();console.log("✅ Update result:",w);const v=await e.env.DB.prepare(`
+        SELECT customer_id FROM financing_requests WHERE id = ?
+      `).bind(s).first(),_={};h==="id_attachment_url"&&(_.id_attachment_url=b),h==="bank_statement_attachment_url"&&(_.bank_statement_attachment_url=b),h==="salary_attachment_url"&&(_.salary_attachment_url=b),h==="additional_attachment_url"&&(_.additional_attachment_url=b),await ke(e.env.DB,v?.customer_id,{..._})}return e.json({success:!0,url:b,filename:f})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let r=null;if(n.startsWith("id_")?r="id_attachment_url":n.startsWith("salary_")?r="salary_attachment_url":n.startsWith("bank_statement_")?r="bank_statement_attachment_url":n.startsWith("additional_")&&(r="additional_attachment_url"),r){await e.env.DB.prepare(`
           UPDATE financing_requests 
           SET ${r} = NULL 
           WHERE id = ?
-        `).bind(s).run()}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/customer-reviews",async e=>{try{const t=await x(e),{customer_id:a,customer_name:s,rating:n,note:r}=await e.req.json();if(!a||!s||!n)return e.json({success:!1,error:"customer_id, customer_name, and rating are required"},400);const l=parseInt(n,10);if(l<1||l>5)return e.json({success:!1,error:"rating must be 1–5"},400);const i=await e.env.DB.prepare(`
+        `).bind(s).run();try{await e.env.DB.prepare(`
+            UPDATE customers
+            SET ${r} = NULL
+            WHERE id = (SELECT customer_id FROM financing_requests WHERE id = ?)
+          `).bind(s).run()}catch(l){if(!M(l))throw l}}}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/customer-reviews",async e=>{try{const t=await x(e),{customer_id:a,customer_name:s,rating:n,note:r}=await e.req.json();if(!a||!s||!n)return e.json({success:!1,error:"customer_id, customer_name, and rating are required"},400);const l=parseInt(n,10);if(l<1||l>5)return e.json({success:!1,error:"rating must be 1–5"},400);const i=await e.env.DB.prepare(`
       INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?)
     `).bind(a,s,l,r||null,t.userId||null,t.tenantId||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating customer review:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/customer-reviews",async e=>{try{const t=await x(e),a=e.req.query("latest_per_customer")==="1";let s;const n=[];a?(s=`SELECT cr.* FROM customer_reviews cr
@@ -27824,7 +29063,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/permissions",async e=>{try{const a=((await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results||[]).map(s=>({...s,role_name:F(s.id,s.role_name)}));return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(n=>{s[n.category]||(s[n.category]=[]),s[n.category].push(n)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/permissions",async e=>{try{const a=((await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results||[]).map(s=>({...s,role_name:J(s.id,s.role_name)}));return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(n=>{s[n.category]||(s[n.category]=[]),s[n.category].push(n)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
       SELECT p.* FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = ?
@@ -27835,7 +29074,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       INNER JOIN users u ON u.role_id = rp.role_id
       WHERE u.id = ?
       ORDER BY p.category, p.id
-    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/roles/:roleId/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("roleId"),{permission_ids:s}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(a).run();for(const n of s)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(a,n).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/roles/:roleId/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("roleId"),{permission_ids:s}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(a).run();for(const n of s)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(a,n).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as has_permission FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       INNER JOIN users u ON u.role_id = rp.role_id
@@ -27847,14 +29086,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       GROUP BY r.id
       ORDER BY r.id
-    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/roles",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const{role_name:a,description:s}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/roles",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const{role_name:a,description:s}=await e.req.json(),n=await e.env.DB.prepare(`
       INSERT INTO roles (role_name, description, created_at)
       VALUES (?, ?, datetime('now'))
-    `).bind(a,s).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_name:s,description:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_name:s,description:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE roles 
       SET role_name = ?, description = ?
       WHERE id = ?
-    `).bind(s,n,a).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),s=await e.env.DB.prepare(`
+    `).bind(s,n,a).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE role_id = ?
     `).bind(a).first();return s&&s.count>0?e.json({success:!1,error:"لا يمكن حذف هذا الدور لأنه مرتبط بمستخدمين"},400):(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
@@ -27864,9 +29103,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,n,r,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(jt));p.get("/calculator",e=>e.html(qe));p.get("/calculator-old",e=>e.html(At));p.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(a,s,n,r,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(ea));p.get("/calculator",e=>e.html(tt));p.get("/calculator-old",e=>e.html(ta));p.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(qe.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+  `).bind(t).first();return a?e.html(tt.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
         // Tenant information for company-specific calculator
         window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
     `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
@@ -27891,7 +29130,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)});p.get("/login",e=>e.html($t));p.get("/forgot-password",e=>e.html(Ot));p.get("/packages",e=>e.html(Nt));p.get("/subscribe",e=>e.html(qt));p.get("/admin",e=>e.html(`
+    `)});p.get("/login",e=>e.html(aa));p.get("/forgot-password",e=>e.html(sa));p.get("/packages",e=>e.html(na));p.get("/subscribe",e=>e.html(ra));p.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -28116,7 +29355,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       WHERE ${i}
       ORDER BY fr.created_at DESC
       LIMIT 500
-    `,{results:u}=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all(),{results:m}=l.length>0?await e.env.DB.prepare(d).bind(...l).all():await e.env.DB.prepare(d).all(),{results:f}=l.length>0?await e.env.DB.prepare(c).bind(...l).all():await e.env.DB.prepare(c).all(),g={approved:"مكتمل",rejected:"مرفوض",pending:"قيد المعالجة",under_review:"قيد المراجعة",reviewed:"تمت المراجعة",submitted:"مقدم"},b=v=>{const _=Number(v||0);if(!Number.isFinite(_)||_<=0)return"0 دقيقة";const S=Math.floor(_/60),T=Math.round(_%60);return S<=0?`${T} دقيقة`:`${S} ساعة ${T} دقيقة`},y=(f||[]).map(v=>({customerId:v.customer_id,customerName:v.customer_name||"-",requestId:v.request_id,amount:Number(v.requested_amount||0),stage:v.current_stage||"غير محدد",transitions:Number(v.transitions||0),duration:b(v.total_duration_minutes),status:g[v.status]||v.status||"غير محدد"})),h=(m||[]).map(v=>({stage:v.stage||"غير محدد",duration:Number(v.duration||0)})),w=(u||[]).map(v=>({name:v.name||"غير محدد",count:Number(v.count||0)}));return e.json({success:!0,data:{stages:w,durations:h,details:y}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});p.get("/admin/panel",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
+    `,{results:u}=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all(),{results:m}=l.length>0?await e.env.DB.prepare(d).bind(...l).all():await e.env.DB.prepare(d).all(),{results:f}=l.length>0?await e.env.DB.prepare(c).bind(...l).all():await e.env.DB.prepare(c).all(),g={approved:"مكتمل",rejected:"مرفوض",pending:"قيد المعالجة",under_review:"قيد المراجعة",reviewed:"تمت المراجعة",submitted:"مقدم"},b=v=>{const _=Number(v||0);if(!Number.isFinite(_)||_<=0)return"0 دقيقة";const R=Math.floor(_/60),B=Math.round(_%60);return R<=0?`${B} دقيقة`:`${R} ساعة ${B} دقيقة`},y=(f||[]).map(v=>({customerId:v.customer_id,customerName:v.customer_name||"-",requestId:v.request_id,amount:Number(v.requested_amount||0),stage:v.current_stage||"غير محدد",transitions:Number(v.transitions||0),duration:b(v.total_duration_minutes),status:g[v.status]||v.status||"غير محدد"})),h=(m||[]).map(v=>({stage:v.stage||"غير محدد",duration:Number(v.duration||0)})),w=(u||[]).map(v=>({name:v.name||"غير محدد",count:Number(v.count||0)}));return e.json({success:!0,data:{stages:w,durations:h,details:y}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});p.get("/admin/panel",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -28164,11 +29403,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
-  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let r=Me;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(o,"")}r=r.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return r=r.replace("<script>",`<script>
-      window.USER_DATA = ${JSON.stringify({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:F(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
+  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let r=at;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(o,"")}r=r.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return r=r.replace("<script>",`<script>
+      window.USER_DATA = ${JSON.stringify({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:J(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
       window.USER_PERMISSIONS = ${JSON.stringify(n.map(l=>l.permission_key))};
       window.USER_PERMISSIONS_FULL = ${JSON.stringify(n)};
-      window.USER_ROLE_ID = ${t.roleId};
+      window.USER_ROLE_ID = ${k(t.roleId)??4};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
     <\/script>
@@ -28239,7 +29478,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             width: max-content;
           }
           
-          ${$()}
+          ${F()}
           
           /* Scroll Buttons for Tables */
           .scroll-btn {
@@ -28830,16 +30069,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                 >
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Subdomain (اختياري)</label>
-                                <input 
-                                    type="text" 
-                                    id="subdomain"
-                                    pattern="[a-z0-9-]*"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="company1"
-                                >
-                            </div>
                         </div>
                     </div>
                     
@@ -28914,7 +30143,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     slug: document.getElementById('slug').value,
                     status: document.getElementById('status').value,
                     max_users: parseInt(document.getElementById('max_users').value),
-                    subdomain: document.getElementById('subdomain').value || null,
+                    subdomain: null,
                     contact_email: document.getElementById('contact_email').value || null,
                     contact_phone: document.getElementById('contact_phone').value || null
                 };
@@ -28947,7 +30176,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
     </body>
     </html>
-  `));p.get("/admin/tenants/:tenantRef/edit",async e=>{try{const t=e.req.param("tenantRef"),a=await ne(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
+  `));p.get("/admin/tenants/:tenantRef/edit",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(a).first();return s?e.html(`
       <!DOCTYPE html>
@@ -29040,16 +30269,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                   >
                               </div>
-                              <div>
-                                  <label class="block text-sm font-medium text-gray-700 mb-2">Subdomain (اختياري)</label>
-                                  <input 
-                                      type="text" 
-                                      id="subdomain"
-                                      value="${s.subdomain||""}"
-                                      pattern="[a-z0-9-]*"
-                                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                                  >
-                              </div>
                           </div>
                       </div>
                       
@@ -29113,7 +30332,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                       slug: document.getElementById('slug').value,
                       status: document.getElementById('status').value,
                       max_users: parseInt(document.getElementById('max_users').value),
-                      subdomain: document.getElementById('subdomain').value || null,
+                      subdomain: null,
                       contact_email: document.getElementById('contact_email').value || null,
                       contact_phone: document.getElementById('contact_phone').value || null
                   };
@@ -29146,7 +30365,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           <\/script>
       </body>
       </html>
-    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await ne(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
+    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(a).first();if(!s)return e.html("<h1>الشركة غير موجودة</h1>");const n=await e.env.DB.prepare(`
       SELECT 
@@ -29291,7 +30510,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                       <i class="fas fa-bolt ml-2"></i>
                       إجراءات سريعة
                   </h2>
-                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                       <a href="/c/${s.slug}/admin" target="_blank" 
                          class="flex flex-col items-center justify-center p-4 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all">
                           <i class="fas fa-tachometer-alt text-2xl text-emerald-600 mb-2"></i>
@@ -29307,6 +30526,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                           <i class="fas fa-edit text-2xl text-yellow-600 mb-2"></i>
                           <span class="text-sm font-medium text-gray-700">تعديل البيانات</span>
                       </a>
+                      <a href="/${s.slug}" target="_blank"
+                         class="flex flex-col items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-all">
+                          <i class="fas fa-address-card text-2xl text-purple-600 mb-2"></i>
+                          <span class="text-sm font-medium text-gray-700">صفحة التواصل</span>
+                      </a>
                       <button onclick="if(confirm('هل أنت متأكد من الحذف؟')) window.location.href='/admin/tenants'" 
                          class="flex flex-col items-center justify-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-all">
                           <i class="fas fa-trash text-2xl text-red-600 mb-2"></i>
@@ -29317,9 +30541,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants",e=>e.html(Mt));p.get("/admin/tenant-calculators",e=>e.html(Ft));p.get("/admin/saas-settings",e=>e.html(Fe));p.get("/admin/settings",e=>e.html(Fe));p.get("/admin/reports",e=>e.html(Pt));p.get("/admin/reports/customers",e=>e.html(Ht));p.get("/admin/reports/requests",e=>e.html(Ut));p.get("/admin/reports/financial",e=>e.html(zt));p.get("/admin/reports/banks",e=>e.html(Qt));p.get("/admin/reports/performance",e=>e.html(Kt));p.get("/admin/reports/clicks",e=>e.html(Zt));p.get("/admin/reports/workflow",e=>e.html(ea));p.get("/admin/reports/employee-performance",e=>e.html(ta));p.get("/admin/payments",e=>e.html(Vt));p.get("/admin/banks",e=>e.html(Yt));p.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants",e=>e.html(oa));p.get("/admin/tenant-calculators",e=>e.html(ia));p.get("/admin/saas-settings",e=>e.html(st));p.get("/admin/settings",e=>e.html(st));p.get("/admin/reports",e=>e.html(la));p.get("/admin/reports/customers",e=>e.html(da));p.get("/admin/reports/requests",e=>e.html(ca));p.get("/admin/reports/financial",e=>e.html(pa));p.get("/admin/reports/banks",e=>e.html(ha));p.get("/admin/reports/performance",e=>e.html(ya));p.get("/admin/reports/clicks",e=>e.html(va));p.get("/admin/reports/workflow",e=>e.html(wa));p.get("/admin/reports/employee-performance",e=>e.html(_a));p.get("/admin/payments",e=>e.html(ma));p.get("/admin/banks",e=>e.html(ga));p.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(Me.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(at.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -29423,7 +30647,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>مخلص العملاء</title>
+        <title>ملخص العملاء</title>
         <script src="https://cdn.tailwindcss.com"><\/script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>
@@ -29433,7 +30657,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             .print-full-width { width: 100%; }
           }
           
-          ${$()}
+          ${F()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -29447,7 +30671,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </a>
               <h1 class="text-4xl font-bold text-gray-800">
                 <i class="fas fa-chart-line text-blue-600 ml-2"></i>
-                مخلص العملاء
+                ملخص العملاء
               </h1>
               <p class="text-gray-600 mt-2">تحليلات وإحصائيات شاملة لنظام حاسبة التمويل</p>
             </div>
@@ -29945,7 +31169,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/add",async e=>{const t=await x(e),a=await de(e.env.DB,t.tenantId);return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/add",async e=>{const t=await x(e),s=String(e.req.query("full_name")??e.req.query("name")??"").trim().slice(0,400),n=ie(e.req.query("phone")),r=await Se(e.env.DB,t.tenantId);return e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -29954,6 +31178,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <title>إضافة عميل جديد</title>
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
     </head>
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
@@ -29976,7 +31206,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </label>
                 <input type="text" name="full_name" required 
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="مثال: أحمد محمد السعيد">
+                       placeholder="مثال: أحمد محمد السعيد"
+                       value="${U(s)}">
               </div>
               
               <div>
@@ -29984,9 +31215,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <i class="fas fa-phone text-green-600 ml-1"></i>
                   رقم الهاتف *
                 </label>
-                <input type="tel" name="phone" required 
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       placeholder="05xxxxxxxx">
+                <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden">
+                  <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
+                  <input type="tel" name="phone" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl"
+                         class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
+                         placeholder="5xxxxxxxx"
+                         value="${U(n)}"
+                         oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
+                         oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
               </div>
             </div>
             
@@ -30024,12 +31262,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                     <input type="date" id="date_of_birth_gregorian"
                            class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                    <div id="hijri_dob_wrap" style="display:none" class="flex flex-1 min-w-0 items-stretch divide-x divide-gray-200 rtl:divide-x-reverse">
-                      <select id="hijri_dob_year" aria-label="السنة الهجرية" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
-                      <select id="hijri_dob_month" aria-label="الشهر الهجري" class="flex-1 min-w-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
-                      <select id="hijri_dob_day" aria-label="اليوم الهجري" class="w-[4.5rem] shrink-0 px-2 py-3 border-0 bg-transparent text-sm focus:ring-2 focus:ring-blue-500 focus:ring-inset cursor-pointer"></select>
-                    </div>
-                    <input type="hidden" id="date_of_birth_hijri" value="">
+                    <input type="text" id="date_of_birth_hijri" style="display:none"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                           placeholder="اختر التاريخ الهجري" autocomplete="off">
                   </div>
                   <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
                     <button type="button" id="dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
@@ -30037,117 +31272,177 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1"><span id="dob_calendar_label">ميلادي</span></p>
-                <script type="module">
-                  import umalqura from 'https://esm.sh/@umalqura/core@0.0.7';
-                  const U = umalqura.$;
-                  try { umalqura.locale('ar'); } catch (e) {}
-                  const monthNames = umalqura.months();
-                  const yearSel = document.getElementById('hijri_dob_year');
-                  const monthSel = document.getElementById('hijri_dob_month');
-                  const daySel = document.getElementById('hijri_dob_day');
-                  const hHidden = document.getElementById('date_of_birth_hijri');
-                  if (!yearSel || !monthSel || !daySel || !hHidden) {
-                    window.syncHijriDobFromSelects = function () {};
-                  } else {
-                    function pad(n) { return String(n).padStart(2, '0'); }
-                    function clearSelect(el) {
-                      while (el.firstChild) el.removeChild(el.firstChild);
-                    }
-                    function fillDays() {
-                      const y = parseInt(yearSel.value, 10);
-                      const m = parseInt(monthSel.value, 10);
-                      const prev = daySel.value;
-                      clearSelect(daySel);
-                      const ph = document.createElement('option');
-                      ph.value = '';
-                      ph.textContent = 'اليوم';
-                      daySel.appendChild(ph);
-                      if (!y || !m || y !== y || m !== m) return;
-                      let dim = 30;
-                      try {
-                        dim = U.getDaysInMonth(y, m);
-                      } catch (e) {
-                        console.warn('[hijri dob] getDaysInMonth', e);
-                      }
-                      if (dim !== 29 && dim !== 30) dim = 30;
-                      for (let d = 1; d <= dim; d++) {
-                        const opt = document.createElement('option');
-                        opt.value = String(d);
-                        opt.textContent = String(d);
-                        daySel.appendChild(opt);
-                      }
-                      const prevN = parseInt(prev, 10);
-                      if (prev && !isNaN(prevN) && prevN >= 1 && prevN <= dim) daySel.value = String(prevN);
-                    }
-                    function syncHijriDobFromSelects() {
-                      fillDays();
-                      const y = yearSel.value;
-                      const m = monthSel.value;
-                      const d = daySel.value;
-                      if (!y || !m || !d) {
-                        hHidden.value = '';
-                      } else {
-                        hHidden.value = y + '-' + pad(parseInt(m, 10)) + '-' + pad(parseInt(d, 10));
-                      }
-                      const type = document.getElementById('dob_calendar_type');
-                      const mainHidden = document.getElementById('date_of_birth');
-                      if (type && type.value === 'hijri' && mainHidden) mainHidden.value = hHidden.value;
-                    }
-                    window.syncHijriDobFromSelects = syncHijriDobFromSelects;
-                    const nowH = U.gregorianToHijri(new Date());
-                    const maxY = nowH.hy;
-                    const minY = Math.max(U.minCalendarYear, nowH.hy - 120);
-                    clearSelect(yearSel);
-                    const yPh = document.createElement('option');
-                    yPh.value = '';
-                    yPh.textContent = 'السنة';
-                    yearSel.appendChild(yPh);
-                    for (let y = maxY; y >= minY; y--) {
-                      const opt = document.createElement('option');
-                      opt.value = String(y);
-                      opt.textContent = String(y);
-                      yearSel.appendChild(opt);
-                    }
-                    clearSelect(monthSel);
-                    const mPh = document.createElement('option');
-                    mPh.value = '';
-                    mPh.textContent = 'الشهر';
-                    monthSel.appendChild(mPh);
-                    for (let m = 1; m <= 12; m++) {
-                      const opt = document.createElement('option');
-                      opt.value = String(m);
-                      opt.textContent = monthNames[m - 1] || String(m);
-                      monthSel.appendChild(opt);
-                    }
-                    clearSelect(daySel);
-                    const dPh = document.createElement('option');
-                    dPh.value = '';
-                    dPh.textContent = 'اليوم';
-                    daySel.appendChild(dPh);
-                    function onYearOrMonth() {
-                      syncHijriDobFromSelects();
-                    }
-                    yearSel.addEventListener('change', onYearOrMonth);
-                    monthSel.addEventListener('change', onYearOrMonth);
-                    yearSel.addEventListener('input', onYearOrMonth);
-                    monthSel.addEventListener('input', onYearOrMonth);
-                    daySel.addEventListener('change', syncHijriDobFromSelects);
-                  }
-                <\/script>
                 <script>
                   document.addEventListener('DOMContentLoaded', function () {
                     var g = document.getElementById('date_of_birth_gregorian');
-                    var hWrap = document.getElementById('hijri_dob_wrap');
-                    var hHidden = document.getElementById('date_of_birth_hijri');
+                    var h = document.getElementById('date_of_birth_hijri');
                     var hidden = document.getElementById('date_of_birth');
                     var type = document.getElementById('dob_calendar_type');
                     var lbl = document.getElementById('dob_calendar_label');
                     var btnG = document.getElementById('dob_toggle_gregorian');
                     var btnH = document.getElementById('dob_toggle_hijri');
-                    if (!g || !hWrap || !hHidden || !hidden || !type || !lbl || !btnG || !btnH) return;
+                    var isDobSyncing = false;
+                    var hijriDobPicker = null;
+
+                    if (!g || !h || !hidden || !type || !lbl || !btnG || !btnH) return;
+
+                    function normalizeArabicDigits(value) {
+                      if (!value) return '';
+                      var arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+                      var easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+                      return String(value).replace(/[٠-٩۰-۹]/g, function(char) {
+                        var arabicIndex = arabicDigits.indexOf(char);
+                        if (arabicIndex >= 0) return String(arabicIndex);
+                        var easternArabicIndex = easternArabicDigits.indexOf(char);
+                        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+                      });
+                    }
+
+                    function formatHijriDateFromGregorian(dateValue) {
+                      if (!dateValue) return '';
+                      try {
+                        var parts = String(dateValue).split('-').map(Number);
+                        var year = parts[0], month = parts[1], day = parts[2];
+                        if (!year || !month || !day) return '';
+                        var gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+                        if (Number.isNaN(gregorianDate.getTime())) return '';
+                        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        });
+                      } catch (_) {
+                        return '';
+                      }
+                    }
+
+                    function parseHijriInput(value) {
+                      var normalized = normalizeArabicDigits(value).replace(/‏/g, '').replace(/‎/g, '').trim();
+                      if (!normalized) return null;
+                      var parts = normalized.split(/[^d]+/).filter(Boolean);
+                      if (parts.length !== 3) return null;
+
+                      var year, month, day;
+                      if (parts[0].length === 4) {
+                        year = Number(parts[0]);
+                        month = Number(parts[1]);
+                        day = Number(parts[2]);
+                      } else if (parts[2].length === 4) {
+                        day = Number(parts[0]);
+                        month = Number(parts[1]);
+                        year = Number(parts[2]);
+                      } else {
+                        return null;
+                      }
+
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      if (year < 1200 || year > 1700) return null;
+                      if (month < 1 || month > 12) return null;
+                      if (day < 1 || day > 30) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function extractHijriPartsFromDate(dateObject) {
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                      }).formatToParts(dateObject);
+                      var year = Number((parts.find(function(part) { return part.type === 'year'; }) || {}).value);
+                      var month = Number((parts.find(function(part) { return part.type === 'month'; }) || {}).value);
+                      var day = Number((parts.find(function(part) { return part.type === 'day'; }) || {}).value);
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function formatGregorianValue(dateObject) {
+                      var year = dateObject.getFullYear();
+                      var month = String(dateObject.getMonth() + 1).padStart(2, '0');
+                      var day = String(dateObject.getDate()).padStart(2, '0');
+                      return year + '-' + month + '-' + day;
+                    }
+
+                    function findGregorianFromHijri(hijriParts) {
+                      var approxGregorianYear = hijriParts.year + 579;
+                      var start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+                      var end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+                      for (var cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                        var currentHijriParts = extractHijriPartsFromDate(cursor);
+                        if (!currentHijriParts) continue;
+                        if (
+                          currentHijriParts.year === hijriParts.year &&
+                          currentHijriParts.month === hijriParts.month &&
+                          currentHijriParts.day === hijriParts.day
+                        ) {
+                          return formatGregorianValue(cursor);
+                        }
+                      }
+                      return '';
+                    }
+
+                    function syncFromGregorian() {
+                      if (isDobSyncing) return;
+                      isDobSyncing = true;
+                      h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
+                      type.value = 'gregorian';
+                      if (hijriDobPicker && g.value) {
+                        hijriDobPicker.setDate(g.value, false, 'Y-m-d');
+                      }
+                      isDobSyncing = false;
+                    }
+
+                    function syncFromHijri() {
+                      if (isDobSyncing) return;
+                      var parsedHijri = parseHijriInput(h.value);
+                      if (!parsedHijri) return;
+                      var gregorianValue = findGregorianFromHijri(parsedHijri);
+                      if (!gregorianValue) return;
+                      isDobSyncing = true;
+                      g.value = gregorianValue;
+                      h.value = formatHijriDateFromGregorian(gregorianValue);
+                      hidden.value = gregorianValue;
+                      type.value = 'gregorian';
+                      if (hijriDobPicker) {
+                        hijriDobPicker.setDate(gregorianValue, false, 'Y-m-d');
+                      }
+                      isDobSyncing = false;
+                    }
+
+                    function initHijriDobPicker() {
+                      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon || !window.luxon.DateTime) {
+                        return;
+                      }
+                      hijriDobPicker = flatpickr(h, {
+                        locale: 'ar',
+                        disableMobile: true,
+                        dateFormat: 'Y-m-d',
+                        allowInput: true,
+                        plugins: [
+                          hijriCalendarPlugin(window.luxon.DateTime, {
+                            showHijriDates: true,
+                            showHijriToggle: false
+                          })
+                        ],
+                        onOpen: [function(_, __, instance) {
+                          if (g.value) instance.setDate(g.value, false, 'Y-m-d');
+                        }],
+                        onChange: [function(selectedDates) {
+                          if (!selectedDates || !selectedDates.length || isDobSyncing) return;
+                          var gregorianValue = formatGregorianValue(selectedDates[0]);
+                          isDobSyncing = true;
+                          g.value = gregorianValue;
+                          h.value = formatHijriDateFromGregorian(gregorianValue);
+                          hidden.value = gregorianValue;
+                          type.value = 'gregorian';
+                          isDobSyncing = false;
+                        }]
+                      });
+                    }
+
                     function setGregorian() {
                       g.style.display = '';
-                      hWrap.style.display = 'none';
+                      h.style.display = 'none';
                       type.value = 'gregorian';
                       lbl.textContent = 'ميلادي';
                       hidden.value = g.value || '';
@@ -30156,18 +31451,22 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     }
                     function setHijri() {
                       g.style.display = 'none';
-                      hWrap.style.display = 'flex';
+                      h.style.display = '';
                       type.value = 'hijri';
                       lbl.textContent = 'هجري';
-                      if (typeof window.syncHijriDobFromSelects === 'function') window.syncHijriDobFromSelects();
-                      hidden.value = hHidden.value || '';
+                      if (g.value) h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
                       btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
                       btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
                     }
                     btnG.onclick = setGregorian;
                     btnH.onclick = setHijri;
-                    g.onchange = function () { if (type.value === 'gregorian') hidden.value = g.value || ''; };
-                    hidden.value = type.value === 'hijri' ? (hHidden.value || '') : (g.value || '');
+                    g.onchange = syncFromGregorian;
+                    g.oninput = syncFromGregorian;
+                    h.onblur = syncFromHijri;
+                    initHijriDobPicker();
+                    syncFromGregorian();
+                    setGregorian();
                   });
                 <\/script>
               </div>
@@ -30237,8 +31536,218 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <i class="fas fa-calendar-check text-pink-600 ml-1"></i>
                   تاريخ بدء العمل
                 </label>
-                <input type="date" name="work_start_date" 
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <input type="hidden" name="work_start_calendar_type" id="work_start_calendar_type" value="gregorian">
+                <input type="hidden" name="work_start_date" id="work_start_date">
+                <div class="flex gap-2 items-center flex-wrap">
+                  <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                    <input type="date" id="work_start_date_gregorian"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <input type="text" id="work_start_date_hijri" style="display:none"
+                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset"
+                           placeholder="اختر التاريخ الهجري" autocomplete="off">
+                  </div>
+                  <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
+                    <button type="button" id="work_start_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                    <button type="button" id="work_start_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1"><span id="work_start_calendar_label">ميلادي</span></p>
+                <script>
+                  document.addEventListener('DOMContentLoaded', function () {
+                    var g = document.getElementById('work_start_date_gregorian');
+                    var h = document.getElementById('work_start_date_hijri');
+                    var hidden = document.getElementById('work_start_date');
+                    var type = document.getElementById('work_start_calendar_type');
+                    var lbl = document.getElementById('work_start_calendar_label');
+                    var btnG = document.getElementById('work_start_toggle_gregorian');
+                    var btnH = document.getElementById('work_start_toggle_hijri');
+                    var isWorkStartSyncing = false;
+                    var hijriWorkStartPicker = null;
+                    if (!g || !h || !hidden || !type || !lbl || !btnG || !btnH) return;
+
+                    function normalizeArabicDigits(value) {
+                      if (!value) return '';
+                      var arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+                      var easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+                      return String(value).replace(/[٠-٩۰-۹]/g, function(char) {
+                        var arabicIndex = arabicDigits.indexOf(char);
+                        if (arabicIndex >= 0) return String(arabicIndex);
+                        var easternArabicIndex = easternArabicDigits.indexOf(char);
+                        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+                      });
+                    }
+
+                    function formatHijriDateFromGregorian(dateValue) {
+                      if (!dateValue) return '';
+                      try {
+                        var parts = String(dateValue).split('-').map(Number);
+                        var year = parts[0], month = parts[1], day = parts[2];
+                        if (!year || !month || !day) return '';
+                        var gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+                        if (Number.isNaN(gregorianDate.getTime())) return '';
+                        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        });
+                      } catch (_) {
+                        return '';
+                      }
+                    }
+
+                    function parseHijriInput(value) {
+                      var normalized = normalizeArabicDigits(value).replace(/‏/g, '').replace(/‎/g, '').trim();
+                      if (!normalized) return null;
+                      var parts = normalized.split(/[^d]+/).filter(Boolean);
+                      if (parts.length !== 3) return null;
+
+                      var year, month, day;
+                      if (parts[0].length === 4) {
+                        year = Number(parts[0]);
+                        month = Number(parts[1]);
+                        day = Number(parts[2]);
+                      } else if (parts[2].length === 4) {
+                        day = Number(parts[0]);
+                        month = Number(parts[1]);
+                        year = Number(parts[2]);
+                      } else {
+                        return null;
+                      }
+
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      if (year < 1200 || year > 1700) return null;
+                      if (month < 1 || month > 12) return null;
+                      if (day < 1 || day > 30) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function extractHijriPartsFromDate(dateObject) {
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                      }).formatToParts(dateObject);
+                      var year = Number((parts.find(function(part) { return part.type === 'year'; }) || {}).value);
+                      var month = Number((parts.find(function(part) { return part.type === 'month'; }) || {}).value);
+                      var day = Number((parts.find(function(part) { return part.type === 'day'; }) || {}).value);
+                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+                      return { year: year, month: month, day: day };
+                    }
+
+                    function formatGregorianValue(dateObject) {
+                      var year = dateObject.getFullYear();
+                      var month = String(dateObject.getMonth() + 1).padStart(2, '0');
+                      var day = String(dateObject.getDate()).padStart(2, '0');
+                      return year + '-' + month + '-' + day;
+                    }
+
+                    function findGregorianFromHijri(hijriParts) {
+                      var approxGregorianYear = hijriParts.year + 579;
+                      var start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+                      var end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+                      for (var cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                        var currentHijriParts = extractHijriPartsFromDate(cursor);
+                        if (!currentHijriParts) continue;
+                        if (
+                          currentHijriParts.year === hijriParts.year &&
+                          currentHijriParts.month === hijriParts.month &&
+                          currentHijriParts.day === hijriParts.day
+                        ) {
+                          return formatGregorianValue(cursor);
+                        }
+                      }
+                      return '';
+                    }
+
+                    function syncFromGregorian() {
+                      if (isWorkStartSyncing) return;
+                      isWorkStartSyncing = true;
+                      h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
+                      type.value = 'gregorian';
+                      if (hijriWorkStartPicker && g.value) {
+                        hijriWorkStartPicker.setDate(g.value, false, 'Y-m-d');
+                      }
+                      isWorkStartSyncing = false;
+                    }
+
+                    function syncFromHijri() {
+                      if (isWorkStartSyncing) return;
+                      var parsedHijri = parseHijriInput(h.value);
+                      if (!parsedHijri) return;
+                      var gregorianValue = findGregorianFromHijri(parsedHijri);
+                      if (!gregorianValue) return;
+                      isWorkStartSyncing = true;
+                      g.value = gregorianValue;
+                      h.value = formatHijriDateFromGregorian(gregorianValue);
+                      hidden.value = gregorianValue;
+                      type.value = 'gregorian';
+                      if (hijriWorkStartPicker) {
+                        hijriWorkStartPicker.setDate(gregorianValue, false, 'Y-m-d');
+                      }
+                      isWorkStartSyncing = false;
+                    }
+
+                    function initHijriWorkStartPicker() {
+                      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon || !window.luxon.DateTime) {
+                        return;
+                      }
+                      hijriWorkStartPicker = flatpickr(h, {
+                        locale: 'ar',
+                        disableMobile: true,
+                        dateFormat: 'Y-m-d',
+                        allowInput: true,
+                        plugins: [
+                          hijriCalendarPlugin(window.luxon.DateTime, {
+                            showHijriDates: true,
+                            showHijriToggle: false
+                          })
+                        ],
+                        onOpen: [function(_, __, instance) {
+                          if (g.value) instance.setDate(g.value, false, 'Y-m-d');
+                        }],
+                        onChange: [function(selectedDates) {
+                          if (!selectedDates || !selectedDates.length || isWorkStartSyncing) return;
+                          var gregorianValue = formatGregorianValue(selectedDates[0]);
+                          isWorkStartSyncing = true;
+                          g.value = gregorianValue;
+                          h.value = formatHijriDateFromGregorian(gregorianValue);
+                          hidden.value = gregorianValue;
+                          type.value = 'gregorian';
+                          isWorkStartSyncing = false;
+                        }]
+                      });
+                    }
+
+                    function setGregorian() {
+                      g.style.display = '';
+                      h.style.display = 'none';
+                      type.value = 'gregorian';
+                      lbl.textContent = 'ميلادي';
+                      hidden.value = g.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
+                    }
+                    function setHijri() {
+                      g.style.display = 'none';
+                      h.style.display = '';
+                      type.value = 'hijri';
+                      lbl.textContent = 'هجري';
+                      if (g.value) h.value = formatHijriDateFromGregorian(g.value);
+                      hidden.value = g.value || '';
+                      btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
+                      btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
+                    }
+                    btnG.onclick = setGregorian;
+                    btnH.onclick = setHijri;
+                    g.onchange = syncFromGregorian;
+                    g.oninput = syncFromGregorian;
+                    h.onblur = syncFromHijri;
+                    initHijriWorkStartPicker();
+                    syncFromGregorian();
+                    setGregorian();
+                  });
+                <\/script>
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -30277,6 +31786,56 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               <textarea name="notes" rows="2"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
                         placeholder="أي ملاحظات إضافية عن العميل (اختياري)"></textarea>
+            </div>
+
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <h2 class="text-xl font-bold text-gray-700 mb-4">
+                <i class="fas fa-paperclip ml-2"></i>
+                المرفقات
+              </h2>
+              <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
+              <input type="hidden" name="id_attachment_url" id="customer_id_attachment_url">
+              <input type="hidden" name="bank_statement_attachment_url" id="customer_bank_statement_attachment_url">
+              <input type="hidden" name="salary_attachment_url" id="customer_salary_attachment_url">
+              <input type="hidden" name="additional_attachment_url" id="customer_additional_attachment_url">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                  </label>
+                  <input type="file" id="customer_id_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_id_attachment_preview" class="mt-2"></div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                  </label>
+                  <input type="file" id="customer_bank_statement_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_bank_statement_attachment_preview" class="mt-2"></div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                  </label>
+                  <input type="file" id="customer_salary_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_salary_attachment_preview" class="mt-2"></div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                  </label>
+                  <input type="file" id="customer_additional_attachment" accept="image/*,application/pdf"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                  <div id="customer_additional_attachment_preview" class="mt-2"></div>
+                </div>
+              </div>
             </div>
 
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
@@ -30339,6 +31898,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 إلغاء
               </a>
             </div>
+            <div id="customer-create-message" class="mt-2"></div>
           </form>
         </div>
       </div>
@@ -30346,6 +31906,85 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         (function () {
           const form = document.getElementById('add-customer-form');
           if (!form) return;
+          var messageEl = document.getElementById('customer-create-message');
+          var attachmentFiles = {
+            id: null,
+            bank_statement: null,
+            salary: null,
+            additional: null
+          };
+          var attachmentInputs = {
+            id: document.getElementById('customer_id_attachment'),
+            bank_statement: document.getElementById('customer_bank_statement_attachment'),
+            salary: document.getElementById('customer_salary_attachment'),
+            additional: document.getElementById('customer_additional_attachment')
+          };
+          var attachmentPreviewIds = {
+            id: 'customer_id_attachment_preview',
+            bank_statement: 'customer_bank_statement_attachment_preview',
+            salary: 'customer_salary_attachment_preview',
+            additional: 'customer_additional_attachment_preview'
+          };
+          var attachmentHiddenIds = {
+            id: 'customer_id_attachment_url',
+            bank_statement: 'customer_bank_statement_attachment_url',
+            salary: 'customer_salary_attachment_url',
+            additional: 'customer_additional_attachment_url'
+          };
+
+          function setMessage(type, text) {
+            if (!messageEl) return;
+            var className = type === 'error'
+              ? 'bg-red-100 border-red-300 text-red-700'
+              : (type === 'success' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-blue-100 border-blue-300 text-blue-700');
+            messageEl.innerHTML = '<div class="border px-4 py-3 rounded ' + className + '">' +
+              '<i class="fas ' + (type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin')) + ' ml-2"></i>' +
+              text +
+              '</div>';
+          }
+
+          function handleAttachmentSelect(type) {
+            var input = attachmentInputs[type];
+            var preview = document.getElementById(attachmentPreviewIds[type]);
+            if (!input || !preview) return;
+            var file = input.files && input.files[0] ? input.files[0] : null;
+            if (!file) {
+              attachmentFiles[type] = null;
+              preview.innerHTML = '';
+              return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+              input.value = '';
+              attachmentFiles[type] = null;
+              preview.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>';
+              return;
+            }
+            attachmentFiles[type] = file;
+            preview.innerHTML = '<div class="text-sm text-green-600"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' +
+              file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</div>';
+          }
+
+          Object.keys(attachmentInputs).forEach(function(type) {
+            var input = attachmentInputs[type];
+            if (!input) return;
+            input.addEventListener('change', function() { handleAttachmentSelect(type); });
+          });
+
+          async function uploadAttachment(file, attachmentType) {
+            var uploadData = new FormData();
+            uploadData.append('file', file);
+            uploadData.append('attachmentType', attachmentType);
+            const response = await fetch('/api/attachments/upload', {
+              method: 'POST',
+              body: uploadData,
+              credentials: 'include'
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.url) {
+              throw new Error(payload.error || 'فشل رفع المرفق');
+            }
+            return payload.url;
+          }
 
           (function jobTypeToggle() {
             var jobType = document.getElementById('job_type');
@@ -30398,7 +32037,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             var addBtn = document.getElementById('add-obligation-row');
             var hidden = document.getElementById('obligations_json');
             if (!tbody || !addBtn || !hidden) return;
-            var obligationTypeNames = ${JSON.stringify(a)};
+            var obligationTypeNames = ${JSON.stringify(r)};
             function esc(s) {
               return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
             }
@@ -30438,9 +32077,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             var dobType = document.getElementById('dob_calendar_type');
             var dobHidden = document.getElementById('date_of_birth');
             if (dobType && dobHidden) {
-              dobHidden.value = dobType.value === 'hijri'
-                ? (document.getElementById('date_of_birth_hijri').value || '')
-                : (document.getElementById('date_of_birth_gregorian').value || '');
+              dobType.value = 'gregorian';
+              dobHidden.value = document.getElementById('date_of_birth_gregorian').value || '';
+            }
+            var workStartType = document.getElementById('work_start_calendar_type');
+            var workStartHidden = document.getElementById('work_start_date');
+            if (workStartType && workStartHidden) {
+              workStartType.value = 'gregorian';
+              workStartHidden.value = document.getElementById('work_start_date_gregorian').value || '';
             }
             var jobType = document.getElementById('job_type');
             var jobTitleInput = document.getElementById('job_title_input');
@@ -30479,6 +32123,30 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) submitBtn.disabled = true;
 
+            try {
+              var uploadOrder = [
+                { key: 'id', label: 'صورة الهوية' },
+                { key: 'bank_statement', label: 'كشف الحساب' },
+                { key: 'salary', label: 'تعريف الراتب' },
+                { key: 'additional', label: 'المرفقات الإضافية' }
+              ];
+              for (var i = 0; i < uploadOrder.length; i++) {
+                var item = uploadOrder[i];
+                var file = attachmentFiles[item.key];
+                var hiddenInput = document.getElementById(attachmentHiddenIds[item.key]);
+                if (!hiddenInput) continue;
+                hiddenInput.value = '';
+                if (!file) continue;
+                setMessage('loading', 'جاري رفع ' + item.label + '...');
+                hiddenInput.value = await uploadAttachment(file, item.key);
+              }
+            } catch (uploadError) {
+              console.error('[CustomerCreate] Attachment upload failed:', uploadError);
+              setMessage('error', 'فشل رفع أحد المرفقات: ' + (uploadError.message || uploadError));
+              if (submitBtn) submitBtn.disabled = false;
+              return;
+            }
+
             const formData = new FormData(form);
             const payload = Object.fromEntries(formData.entries());
             console.log('[CustomerCreate] Submitting payload:', payload);
@@ -30509,6 +32177,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               document.close();
             } catch (error) {
               console.error('[CustomerCreate] Request failed:', error);
+              setMessage('error', 'حدث خطأ أثناء إضافة العميل.');
               alert('حدث خطأ أثناء إضافة العميل. راجع Console للمزيد من التفاصيل.');
             } finally {
               if (submitBtn) submitBtn.disabled = false;
@@ -30518,7 +32187,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `)});p.get("/admin/customer-assignment",async e=>{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(!z(t.roleId))return e.html("<h1>خطأ: ليس لديك صلاحية لإدارة توزيع العملاء</h1>",403);const a=t.roleId===1,s=t.roleId===1||t.roleId===2,n=t.roleId===1||t.roleId===2||t.roleId===3,r=O(e.req.query("tenant_id"))??null,l=a?r??1:t.tenantId??1,i=await e.env.DB.prepare(`
+  `)});p.get("/admin/customer-assignment",async e=>{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(!ee(t.roleId))return e.html("<h1>خطأ: ليس لديك صلاحية لإدارة توزيع العملاء</h1>",403);const a=t.roleId===1,s=t.roleId===1||t.roleId===2,n=t.roleId===1||t.roleId===2||t.roleId===3,r=q(e.req.query("tenant_id"))??null,l=a?r??1:t.tenantId??1,i=await e.env.DB.prepare(`
     SELECT id, username, full_name, email
     FROM users 
     WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
@@ -30572,14 +32241,17 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
         
-        ${$()}
+        ${F()}
       </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
       <div class="max-w-7xl mx-auto">
+        <div class="border-b border-slate-200/90 bg-white/90 px-4 py-1.5 mb-4 rounded-md">
+          <a href="/admin/customers" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة إلى صفحة العملاء</a>
+        </div>
         <!-- Header -->
         <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center">
             <div>
               <h1 class="text-3xl font-bold text-gray-800 mb-2">
                 <i class="fas fa-users-cog text-indigo-600"></i>
@@ -30587,10 +32259,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </h1>
               <p class="text-gray-600">قم بتوزيع العملاء على الموظفين لتنظيم العمل</p>
             </div>
-            <a href="/admin/customers" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all">
-              <i class="fas fa-arrow-right ml-2"></i>
-              العودة للعملاء
-            </a>
           </div>
         </div>
       </div>
@@ -30621,11 +32289,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </a>
             <a href="/admin/dashboard" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-chart-line text-green-600 group-hover:scale-110 transition-transform"></i>
-              <span>مخلص العملاء</span>
+              <span>ملخص العملاء</span>
             </a>
             <a href="/admin/reports" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-file-alt text-purple-600 group-hover:scale-110 transition-transform"></i>
               <span>التقارير</span>
+            </a>
+            <a href="/admin/follow-ups" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
+              <i class="fas fa-address-card text-fuchsia-600 group-hover:scale-110 transition-transform"></i>
+              <span>متابعة التواصل</span>
             </a>
           </div>
 
@@ -30818,7 +32490,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                       </td>
                       <td class="px-4 py-3">#${u.id}</td>
                       <td class="px-4 py-3 font-semibold">${u.full_name||"غير محدد"}</td>
-                      <td class="px-4 py-3">${u.phone||"غير محدد"}</td>
+                      <td class="px-4 py-3">${ie(u.phone)||"غير محدد"}</td>
                       <td class="px-4 py-3">${u.email||"غير محدد"}</td>
                       <td class="px-4 py-3">
                         ${u.assigned_employee_name?`<span class="employee-badge assigned">${u.assigned_employee_name}</span>`:'<span class="employee-badge unassigned">غير مخصص</span>'}
@@ -31176,9 +32848,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `;return e.html(c)});p.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json(),n=await x(e);if(!n.userId||!n.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!z(n.roleId))return e.json({success:!1,error:"غير مصرح"},403);const r=n.roleId===1,l=r?O(e.req.query("tenant_id"))??n.tenantId??1:n.tenantId??1;if(!a){const u=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();return u?!r&&u.tenant_id!==l?e.json({success:!1,error:"غير مصرح"},403):(await e.env.DB.prepare(`
+  `;return e.html(c)});p.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json(),n=await x(e);if(!n.userId||!n.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(n.roleId))return e.json({success:!1,error:"غير مصرح"},403);const r=n.roleId===1,l=r?q(e.req.query("tenant_id"))??n.tenantId??1:n.tenantId??1;if(!a){const u=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();return u?!r&&u.tenant_id!==l?e.json({success:!1,error:"غير مصرح"},403):(await e.env.DB.prepare(`
         DELETE FROM customer_assignments WHERE customer_id = ?
-      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"})):e.json({success:!1,error:"العميل غير موجود"},404)}const i=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!i)return e.json({success:!1,error:"الموظف غير موجود"},404);const o=A(i.role_id);if(o!==3&&o!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!r&&i.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const d=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();if(!d)return e.json({success:!1,error:"العميل غير موجود"},404);if(!r&&d.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const c=await e.env.DB.prepare(`
+      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"})):e.json({success:!1,error:"العميل غير موجود"},404)}const i=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!i)return e.json({success:!1,error:"الموظف غير موجود"},404);const o=k(i.role_id);if(o!==3&&o!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!r&&i.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const d=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();if(!d)return e.json({success:!1,error:"العميل غير موجود"},404);if(!r&&d.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const c=await e.env.DB.prepare(`
       SELECT * FROM customer_assignments WHERE customer_id = ?
     `).bind(t).first();return c?(await e.env.DB.prepare(`
         INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
@@ -31193,7 +32865,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       `).bind(t,a,s||"").run(),await e.env.DB.prepare(`
         INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
         VALUES (?, NULL, ?, 1, ?)
-      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/auto-distribute",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!z(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=t.roleId===1,s=await e.req.json().catch(()=>({})),n=O(s?.tenant_id?.toString?.())??O(e.req.query("tenant_id"))??null,r=a?n??1:t.tenantId??1,l=await e.env.DB.prepare(`
+      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/auto-distribute",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=t.roleId===1,s=await e.req.json().catch(()=>({})),n=q(s?.tenant_id?.toString?.())??q(e.req.query("tenant_id"))??null,r=a?n??1:t.tenantId??1,l=await e.env.DB.prepare(`
       SELECT id FROM users 
       WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
       ORDER BY id
@@ -31206,9 +32878,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(r).all();let o=0;const d=l.results.length;for(let c=0;c<i.results.length;c++){const u=i.results[c],m=l.results[c%d];await e.env.DB.prepare(`
         INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
         VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(u.id,m.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:d})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/clear-all",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!z(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=await e.env.DB.prepare(`
+      `).bind(u.id,m.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:d})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/clear-all",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=await e.env.DB.prepare(`
       DELETE FROM customer_assignments
-    `).run();return e.json({success:!0,cleared_count:a.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json(),s=await x(e);if(!s.userId||!s.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!z(s.roleId))return e.json({success:!1,error:"غير مصرح"},403);const n=s.roleId===1,r=n?O(e.req.query("tenant_id"))??s.tenantId??1:s.tenantId??1,l=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!l)return e.json({success:!1,error:"الموظف غير موجود"},404);const i=A(l.role_id);if(i!==3&&i!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!n&&l.tenant_id!==r)return e.json({success:!1,error:"غير مصرح"},403);let o=0;for(const d of t){const c=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(d).first();if(!c||!n&&c.tenant_id!==r)continue;await e.env.DB.prepare(`
+    `).run();return e.json({success:!0,cleared_count:a.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json(),s=await x(e);if(!s.userId||!s.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(s.roleId))return e.json({success:!1,error:"غير مصرح"},403);const n=s.roleId===1,r=n?q(e.req.query("tenant_id"))??s.tenantId??1:s.tenantId??1,l=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!l)return e.json({success:!1,error:"الموظف غير موجود"},404);const i=k(l.role_id);if(i!==3&&i!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!n&&l.tenant_id!==r)return e.json({success:!1,error:"غير مصرح"},403);let o=0;for(const d of t){const c=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(d).first();if(!c||!n&&c.tenant_id!==r)continue;await e.env.DB.prepare(`
         SELECT * FROM customer_assignments WHERE customer_id = ?
       `).bind(d).first()?await e.env.DB.prepare(`
           UPDATE customer_assignments 
@@ -31337,7 +33009,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             width: max-content;
           }
           
-          ${$()}
+          ${F()}
           
           /* Dropdown menu styles */
           .csv-dropdown {
@@ -32030,13 +33702,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});p.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Gt(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});p.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});p.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(fa(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});p.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Jt(a,s,n.results,r.results))});p.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ba(a,s,n.results,r.results))});p.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -32070,10 +33742,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
         </body>
         </html>
-      `);let a="SELECT * FROM customers WHERE (is_archived = 0 OR is_archived IS NULL)",s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" AND tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.tenantId&&t.userId?(a+=` AND tenant_id = ? AND EXISTS (
-          SELECT 1 FROM customer_assignments ca
-          WHERE ca.customer_id = customers.id AND ca.employee_id = ?
-        )`,s.push(t.tenantId,t.userId)):a+=" AND 1 = 0"),a+=" ORDER BY created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();let r="SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1";const l=[];t.roleId!==1&&(t.tenantId?(r+=" AND tenant_id = ?",l.push(t.tenantId)):t.userId&&(r+=" AND user_id = ?",l.push(t.userId)));const i=l.length>0?await e.env.DB.prepare(r).bind(...l).all():await e.env.DB.prepare(r).all(),o=new Set(i.results.map(c=>c.customer_id)),d=t.roleId!==3;return e.html(`
+      `);let a=`
+      SELECT customers.*, u.full_name AS assigned_employee_name
+      FROM customers
+      LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 14)
+      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" AND customers.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.tenantId&&t.userId?(a+=` AND customers.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca2
+          WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?
+        )`,s.push(t.tenantId,t.userId)):a+=" AND 1 = 0"),a+=" ORDER BY customers.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();let r="SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1";const l=[];t.roleId!==1&&(t.tenantId?(r+=" AND tenant_id = ?",l.push(t.tenantId)):t.userId&&(r+=" AND user_id = ?",l.push(t.userId)));const i=l.length>0?await e.env.DB.prepare(r).bind(...l).all():await e.env.DB.prepare(r).all(),o=new Set(i.results.map(c=>c.customer_id)),d=t.roleId!==3;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -32083,7 +33760,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <script src="https://cdn.tailwindcss.com"><\/script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
-          .overflow-x-auto { overflow-x: scroll !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
+          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
           .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
           .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
           .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
@@ -32100,7 +33777,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           #tableBody tr[style*="background-color"]:hover { filter: brightness(0.97); }
           #tableBody.dropdown-open tr:not(.dropdown-active-row) { pointer-events: none !important; }
           #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td { background-color: inherit !important; }
-          ${$()}
+          ${F()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -32126,7 +33803,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   التنبيهات
                   <span id="notifDot" class="alarm-unread-dot hidden"></span>
                 </button>
-                ${z(t.roleId)?`
+                ${ee(t.roleId)?`
                 <a href="/admin/customer-assignment${t.tenantId?"?tenant_id="+t.tenantId:""}" 
                    class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
                   <i class="fas fa-users-cog ml-2"></i>
@@ -32228,7 +33905,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div class="bg-white rounded-xl shadow-lg overflow-visible">
             <table class="min-w-full" id="dataTable">
               <thead class="bg-gray-50">
                 <tr>
@@ -32236,6 +33913,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموظف المخصص</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
@@ -32244,11 +33922,26 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${n.results.map(c=>`
-                  <tr class="hover:bg-gray-50" data-customer-id="${c.id}" data-name="${c.full_name||""}" data-phone="${c.phone||""}" data-email="${c.email||""}" data-created-at="${c.created_at||""}" data-has-request="${o.has(c.id)?"1":"0"}" data-rating="0">
+                  <tr class="hover:bg-gray-50" data-customer-id="${c.id}" data-name="${c.full_name||""}" data-phone="${ie(c.phone)||""}" data-email="${c.email||""}" data-assigned="${(c.assigned_employee_name||"").replace(/"/g,"&quot;")}" data-created-at="${c.created_at||""}" data-has-request="${o.has(c.id)?"1":"0"}" data-rating="0">
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${c.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${c.full_name||"-"}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${c.phone||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="inline-flex items-center gap-2">
+                        <span dir="ltr">${ie(c.phone)||"-"}</span>
+                        <button
+                          type="button"
+                          onclick="openCustomerWhatsApp('${String(c.whatsapp_phone||c.whatsapp_phone_number||"").replace(/'/g,"\\'")}', '${String(c.phone||"").replace(/'/g,"\\'")}')"
+                          class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
+                          title="فتح واتساب"
+                        >
+                          <i class="fab fa-whatsapp"></i>
+                        </button>
+                      </div>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">${c.email||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      ${c.assigned_employee_name?`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">${c.assigned_employee_name}</span>`:'<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>'}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(c.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
                       ${o.has(c.id)?'<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 font-bold text-base" title="يوجد طلب تمويل">✓</span>':'<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-500 font-bold text-base" title="لا يوجد طلب تمويل">✗</span>'}
@@ -32411,6 +34104,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
         <script>
           const customerIdsWithRequests = new Set(${JSON.stringify([...o])});
+          const pageParams = new URLSearchParams(window.location.search);
+          const presetRatingFilter = pageParams.get('ratingFilter');
 
           function openNewRequest(customerId, customerName) {
             document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
@@ -32549,6 +34244,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               const data = await resp.json();
               if (data.success && data.data) {
                 data.data.forEach(function(r) { applyRowRating(r.customer_id, r.rating); });
+                if (presetRatingFilter) filterTable();
               }
             } catch(e) {}
           }
@@ -32775,6 +34471,34 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             }
           });
 
+          function normalizePhoneDigits(phoneValue) {
+            const raw = String(phoneValue || '').trim();
+            const westernDigits = raw
+              .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+              .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+            return westernDigits.replace(/[^\\d]/g, '');
+          }
+
+          function toSaudiWaNumber(phoneValue) {
+            let digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) digits = digits.slice(2);
+            if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+            if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+            if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+            return '';
+          }
+
+          function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+            const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+            if (!normalizedPhone) {
+              alert('لا يوجد رقم واتساب صالح لهذا العميل');
+              return;
+            }
+
+            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+          }
+
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
             const filterField = document.getElementById('filterField').value;
@@ -32788,11 +34512,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               const name = row.getAttribute('data-name') || '';
               const phone = row.getAttribute('data-phone') || '';
               const email = row.getAttribute('data-email') || '';
+              const assigned = row.getAttribute('data-assigned') || '';
               const createdAt = row.getAttribute('data-created-at') || '';
               const hasRequest = row.getAttribute('data-has-request') || '0';
               const rating = row.getAttribute('data-rating') || '0';
 
-              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput));
+              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput));
 
               let matchesDateRange = true;
               if (dateRangeFilter !== 'all') {
@@ -32813,6 +34538,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             document.getElementById('totalCount').textContent = visibleCount;
           }
 
+          function applyPresetFiltersFromUrl() {
+            if (!presetRatingFilter) return;
+            const ratingFilterEl = document.getElementById('ratingFilter');
+            const allowed = ['all', '0', '1', '2', '3', '4', '5'];
+            if (!ratingFilterEl || allowed.indexOf(presetRatingFilter) === -1) return;
+            ratingFilterEl.value = presetRatingFilter;
+            filterTable();
+          }
+
           function resetFilters() {
             document.getElementById('searchInput').value = '';
             document.getElementById('filterField').value = 'all';
@@ -32824,8 +34558,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
           function exportToCSV() {
             const data = [
-              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${n.results.map(c=>`['${c.id}', '${c.full_name||"-"}', '${c.phone||"-"}', '${c.email||"-"}', '${c.national_id||"-"}', '${new Date(c.created_at).toLocaleDateString("ar-SA")}']`).join(`,
+              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الموظف المخصص', 'الرقم الوطني', 'تاريخ التسجيل'],
+              ${n.results.map(c=>`['${c.id}', '${c.full_name||"-"}', '${c.phone||"-"}', '${c.email||"-"}', '${(c.assigned_employee_name||"غير مخصص").replace(/'/g,"\\'")}', '${c.national_id||"-"}', '${new Date(c.created_at).toLocaleDateString("ar-SA")}']`).join(`,
               `)}
             ];
             let csv = '\\uFEFF';
@@ -32839,6 +34573,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
           refreshUnreadDot();
           loadCustomerRatings();
+          applyPresetFiltersFromUrl();
         <\/script>
       </body>
       </html>
@@ -33231,13 +34966,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             50% { opacity: .5; }
           }
           
-          ${$()}
+          ${F()}
         </style>
       </head>
       <body class="bg-gray-50">
-        <div class="container mx-auto px-4 py-8">
-          <!-- Header -->
-          <div class="flex justify-between items-center mb-8">
+        <div class="container mx-auto px-4 py-6">
+          <div class="border-b border-slate-200/90 bg-slate-50/80 -mx-4 px-4 py-1.5 mb-5 sm:mx-0 sm:rounded-md">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+          </div>
+          <div class="flex flex-wrap items-center gap-4 mb-8">
             <div>
               <h1 class="text-4xl font-bold text-gray-800 flex items-center gap-3">
                 <i class="fas fa-bell text-blue-600"></i>
@@ -33245,15 +34982,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </h1>
               <p class="text-gray-600 mt-2">إدارة جميع إشعارات النظام</p>
             </div>
-            <div class="flex gap-3">
+            <div class="flex flex-wrap gap-3 ms-auto">
               <button onclick="markAllAsRead()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition font-bold">
                 <i class="fas fa-check-double ml-2"></i>
                 تحديد الكل كمقروء
               </button>
-              <a href="/admin" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition font-bold">
-                <i class="fas fa-arrow-right ml-2"></i>
-                العودة
-              </a>
             </div>
           </div>
 
@@ -33510,7 +35243,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=await e.env.DB.prepare(`
+    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");try{const n=await e.env.DB.prepare(`
+        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        FROM customers
+        WHERE id = ?
+      `).bind(a.customer_id).first();n&&(a.id_attachment_url=n.id_attachment_url||a.id_attachment_url||null,a.bank_statement_attachment_url=n.bank_statement_attachment_url||a.bank_statement_attachment_url||null,a.salary_attachment_url=n.salary_attachment_url||a.salary_attachment_url||null,a.additional_attachment_url=n.additional_attachment_url||a.additional_attachment_url||null)}catch(n){if(!M(n))throw n}const s=await e.env.DB.prepare(`
       SELECT id, bank_name FROM banks ORDER BY bank_name
     `).all();return e.html(`
       <!DOCTYPE html>
@@ -33725,38 +35462,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
               </div>
               
-              <!-- Status and Notes -->
-              <div>
-                <h2 class="text-xl font-bold text-gray-700 mb-4">
-                  <i class="fas fa-clipboard ml-2"></i>
-                  الحالة والملاحظات
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">الحالة</label>
-                    <select 
-                      id="status"
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="pending" ${a.status==="pending"?"selected":""}>قيد الانتظار</option>
-                      <option value="under_review" ${a.status==="under_review"?"selected":""}>قيد المراجعة</option>
-                      <option value="approved" ${a.status==="approved"?"selected":""}>موافق عليه</option>
-                      <option value="rejected" ${a.status==="rejected"?"selected":""}>مرفوض</option>
-                    </select>
-                  </div>
-                  <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">الملاحظات</label>
-                    <textarea 
-                      id="notes"
-                      rows="3"
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="أضف ملاحظات..."
-                    >${a.notes||""}</textarea>
-                  </div>
-                </div>
-              </div>
-              
               <!-- Submit Buttons -->
               <div class="flex gap-4">
                 <button 
@@ -33850,9 +35555,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               requested_amount: parseFloat(document.getElementById('requested_amount').value),
               duration_months: parseInt(document.getElementById('duration_months').value),
               salary_at_request: parseFloat(document.getElementById('salary_at_request').value) || 0,
-              monthly_obligations: parseFloat(document.getElementById('monthly_obligations').value) || 0,
-              status: document.getElementById('status').value,
-              notes: document.getElementById('notes').value
+              monthly_obligations: parseFloat(document.getElementById('monthly_obligations').value) || 0
             }
             
             try {
@@ -33940,14 +35643,27 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         fr.requested_amount,
         fr.duration_months,
         fr.status,
+        fr.current_stage_id,
         fr.created_at,
         c.full_name as customer_name,
         c.assigned_to as customer_assigned_to,
-        b.bank_name as bank_name
+        b.bank_name as bank_name,
+        ws.stage_name as workflow_stage_name,
+        ws.stage_name_ar as workflow_stage_name_ar,
+        ws.stage_color as workflow_stage_color
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
-    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.tenantId?(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),r=t.roleId!==3,l=[1,2,3,4].includes(Number(t.roleId));return e.html(`
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+    `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4?t.tenantId&&t.userId?(a+=` WHERE c.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`,s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0":k(t.roleId)===5&&t.tenantId&&t.userId?(a+=" WHERE c.tenant_id = ? AND fr.assigned_bank_agent_id = ?",s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=((await e.env.DB.prepare(`
+      SELECT stage_name_ar
+      FROM workflow_stages
+      WHERE is_active = 1
+      ORDER BY stage_order ASC, id ASC
+    `).all())?.results||[]).map(g=>String(g?.stage_name_ar||"").trim()).filter(g=>g.length>0),i=["قيد الانتظار","قيد المراجعة","مقبول","موافق عليه","مرفوض","قيد المعالجة","مكتمل","ملغي","غير محدد"],o=Array.from(new Set([...l,...i])),d=JSON.stringify(o).replace(/</g,"\\u003c"),c=k(t.roleId),u=t.roleId!==3&&c!==5,m=[1,2,3,4].includes(Number(t.roleId)),f=c===5;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -33959,7 +35675,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <style>
           /* Custom Scrollbar - Enhanced */
           .overflow-x-auto {
-            overflow-x: scroll !important;
+            overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: #3b82f6 #f7fafc;
@@ -33988,11 +35704,41 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
           
           .overflow-x-auto table {
-            min-width: 1200px;
-            width: max-content;
+            min-width: 100%;
+            width: 100%;
+          }
+
+          @media (max-width: 1024px) {
+            .overflow-x-auto table {
+              min-width: 1200px;
+              width: max-content;
+            }
+          }
+
+          .requests-table-scroll {
+            overflow: visible !important;
+          }
+
+          @media (max-width: 1024px) {
+            .requests-table-scroll {
+              overflow-x: auto !important;
+              overflow-y: visible !important;
+            }
+          }
+
+          #tableBody tr:last-child td {
+            border-bottom: 0 !important;
+          }
+
+          #tableBody.dropdown-open tr:not(.dropdown-active-row) {
+            pointer-events: none !important;
+          }
+
+          #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td {
+            background-color: inherit !important;
           }
           
-          ${$()}
+          ${F()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -34006,7 +35752,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 try {
                   const user = JSON.parse(userData);
                   if (user.tenant_id) {
-                    window.location.replace('/admin/requests?tenant_id=' + user.tenant_id);
+                    urlParams.set('tenant_id', String(user.tenant_id));
+                    window.location.replace('/admin/requests?' + urlParams.toString());
                   }
                 } catch (e) {
                   console.error('Error parsing userData:', e);
@@ -34017,7 +35764,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            ${f?"":'<a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>'}
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -34028,7 +35775,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </h1>
               
               <div class="flex gap-3">
-                ${l?`
+                ${m?`
                 <a href="/admin/requests/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
@@ -34039,17 +35786,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
+                ${f?"":`
                 <a href="/admin/reports/requests-followup" 
                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all inline-block text-center">
                   <i class="fas fa-chart-line ml-2"></i>
                   تقرير سير العمل
                 </a>
+                `}
               </div>
             </div>
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="relative">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
                   <input 
@@ -34073,6 +35822,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     <option value="status">الحالة فقط</option>
                   </select>
                 </div>
+
+                <div>
+                  <select
+                    id="statusFilter"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    onchange="filterTable()"
+                  >
+                    <option value="all">تصفية الحالة: الكل</option>
+                  </select>
+                </div>
                 
                 <button 
                   onclick="resetFilters()" 
@@ -34085,8 +35844,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
           
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="overflow-x-auto">
+          <div class="bg-white rounded-xl shadow-lg overflow-visible">
+            <div>
               <table class="min-w-full" id="dataTable">
                 <thead class="bg-gray-50">
                   <tr>
@@ -34100,42 +35859,44 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${n.results.map(i=>{const d={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[i.status]||i.status,u={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"}[i.status]||"bg-gray-100 text-gray-800";return`
+                ${n.results.map(g=>{const b={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"},y=g.workflow_stage_name_ar||b[g.status]||g.status||"غير محدد",h={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"},w=g.workflow_stage_color?"":h[g.status]||"bg-gray-100 text-gray-800",v=g.workflow_stage_color?`background-color: ${g.workflow_stage_color}20; color: ${g.workflow_stage_color};`:"";return`
                   <tr class="hover:bg-gray-50" 
-                      data-customer="${i.customer_name||""}" 
-                      data-bank="${i.bank_name||""}" 
-                      data-status="${d}">
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${i.customer_name||"عميل #"+i.customer_id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${i.bank_name||"بنك #"+(i.selected_bank_id||"-")}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${i.requested_amount?.toLocaleString("ar-SA")} ريال</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${i.duration_months} شهر</td>
+                      data-customer="${g.customer_name||""}" 
+                      data-bank="${g.bank_name||""}" 
+                      data-status="${y}">
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${g.customer_name||"عميل #"+g.customer_id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${g.bank_name||"بنك #"+(g.selected_bank_id||"-")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${g.requested_amount?.toLocaleString("ar-SA")} ريال</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${g.duration_months} شهر</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="px-2 py-1 text-xs rounded-full ${u}">
-                        ${d}
+                      <span class="px-2 py-1 text-xs rounded-full ${w}" style="${v}">
+                        ${y}
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(i.created_at).toLocaleDateString("ar-SA")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(g.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right relative">
                       <div class="relative inline-block text-right">
                         <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
                           الإجراءات <i class="fas fa-chevron-down text-xs"></i>
                         </button>
-                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
-                          <a href="/admin/requests/${i.id}/workflow" class="flex items-center gap-2 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">
+                        <div class="actions-dropdown-menu hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                          ${f?"":`
+                          <a href="/admin/requests/${g.id}/workflow" class="flex items-center gap-2 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">
                             <i class="fas fa-clock w-4"></i> الجدول الزمني
                           </a>
-                          <a href="/admin/requests/${i.id}/report" class="flex items-center gap-2 px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">
+                          <a href="/admin/requests/${g.id}/report" class="flex items-center gap-2 px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">
                             <i class="fas fa-file-alt w-4"></i> تقرير
                           </a>
-                          <a href="/admin/requests/${i.id}" class="flex items-center gap-2 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">
+                          `}
+                          <a href="/admin/requests/${g.id}" class="flex items-center gap-2 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">
                             <i class="fas fa-eye w-4"></i> عرض
                           </a>
-                          ${r?`
+                          ${u?`
                           <div class="border-t border-gray-100 my-1"></div>
-                          <a href="/admin/requests/${i.id}/edit" class="flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
+                          <a href="/admin/requests/${g.id}/edit" class="flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
                             <i class="fas fa-edit w-4"></i> تعديل
                           </a>
-                          <a href="/admin/requests/${i.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="flex items-center gap-2 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                          <a href="/admin/requests/${g.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="flex items-center gap-2 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
                             <i class="fas fa-trash w-4"></i> حذف
                           </a>
                           `:""}
@@ -34151,6 +35912,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
         
         <script>
+          const REQUEST_STATUS_OPTIONS = ${d};
           function closeAllDropdowns() {
             document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
               m.classList.add('hidden');
@@ -34169,12 +35931,25 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
 
           function positionDropdownMenu(menu) {
+            const triggerBtn = menu.previousElementSibling;
+            if (!triggerBtn) return;
+            const triggerRect = triggerBtn.getBoundingClientRect();
+            const menuHeight = menu.offsetHeight || 220;
+            const viewportTop = 8;
+            const viewportBottom = window.innerHeight - 8;
+            let boundsTop = viewportTop;
+            let boundsBottom = viewportBottom;
+
+            const spaceBelow = boundsBottom - triggerRect.bottom;
+            const spaceAbove = triggerRect.top - boundsTop;
+            const shouldOpenDown = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
+
             menu.style.top = '100%';
             menu.style.bottom = 'auto';
             menu.style.marginTop = '0.25rem';
             menu.style.marginBottom = '0';
-            const rect = menu.getBoundingClientRect();
-            if (rect.bottom > (window.innerHeight - 8)) {
+
+            if (!shouldOpenDown) {
               menu.style.top = 'auto';
               menu.style.bottom = '100%';
               menu.style.marginTop = '0';
@@ -34212,6 +35987,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
             const filterField = document.getElementById('filterField').value
+            const statusFilter = document.getElementById('statusFilter').value
             const tableBody = document.getElementById('tableBody')
             const rows = tableBody.getElementsByTagName('tr')
             let visibleCount = 0
@@ -34244,23 +36020,103 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 }
               }
               
-              row.style.display = shouldShow ? '' : 'none'
-              if (shouldShow) visibleCount++
+              const statusMatches = statusFilter === 'all' || status === statusFilter
+              const visible = shouldShow && statusMatches
+
+              row.style.display = visible ? '' : 'none'
+              if (visible) visibleCount++
             }
             
             document.getElementById('totalCount').textContent = visibleCount
+          }
+
+          function hydrateStatusFilterOptions() {
+            const statusFilter = document.getElementById('statusFilter')
+            if (!statusFilter) return
+            const states = new Set((Array.isArray(REQUEST_STATUS_OPTIONS) ? REQUEST_STATUS_OPTIONS : []).map((s) => String(s || '').trim()).filter((s) => s))
+            document.querySelectorAll('#tableBody tr').forEach((row) => {
+              const state = (row.getAttribute('data-status') || '').trim()
+              if (state) states.add(state)
+            })
+            const sortedStates = Array.from(states).sort((a, b) => a.localeCompare(b, 'ar'))
+            statusFilter.innerHTML = [
+              '<option value="all">تصفية الحالة: الكل</option>',
+              ...sortedStates.map((state) => '<option value="' + state.replace(/"/g, '&quot;') + '">' + state + '</option>')
+            ].join('')
+          }
+
+          function applyRequestStatusFilterFromUrl() {
+            const params = new URLSearchParams(window.location.search)
+            const requestStatusFilter = (params.get('requestStatusFilter') || '').trim()
+            if (!requestStatusFilter || requestStatusFilter === 'all') return
+            const searchInputEl = document.getElementById('searchInput')
+            const filterFieldEl = document.getElementById('filterField')
+            const statusFilterEl = document.getElementById('statusFilter')
+            if (!searchInputEl || !filterFieldEl || !statusFilterEl) return
+            searchInputEl.value = requestStatusFilter
+            filterFieldEl.value = 'status'
+            statusFilterEl.value = requestStatusFilter
+            filterTable()
+          }
+
+          function hydrateRequestsSidebarStatuses() {
+            const sidebar = document.getElementById('global-persistent-sidebar')
+            if (!sidebar) return
+            const requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]')
+            if (!requestsCollapsible) return
+            const submenu = requestsCollapsible.querySelector('.gps-submenu')
+            if (!submenu) return
+
+            const params = new URLSearchParams(window.location.search)
+            const tenantId = params.get('tenant_id')
+            const states = new Set((Array.isArray(REQUEST_STATUS_OPTIONS) ? REQUEST_STATUS_OPTIONS : []).map((s) => String(s || '').trim()).filter((s) => s))
+            document.querySelectorAll('#tableBody tr').forEach((row) => {
+              const state = (row.getAttribute('data-status') || '').trim()
+              if (state) states.add(state)
+            })
+
+            const statusIconMap = {
+              'قيد الانتظار': 'fa-hourglass-half',
+              'قيد المراجعة': 'fa-search',
+              'مقبول': 'fa-check-circle',
+              'مرفوض': 'fa-times-circle',
+              'قيد المعالجة': 'fa-cogs',
+              'مكتمل': 'fa-flag-checkered',
+              'ملغي': 'fa-ban'
+            }
+
+            const makeHref = (statusValue) => {
+              const q = new URLSearchParams()
+              if (tenantId) q.set('tenant_id', tenantId)
+              q.set('requestStatusFilter', statusValue)
+              return '/admin/requests?' + q.toString()
+            }
+
+            const sortedStates = Array.from(states).sort((a, b) => a.localeCompare(b, 'ar'))
+            submenu.innerHTML = [
+              '<a href="' + makeHref('all') + '"><i class="fas fa-list"></i>الكل</a>',
+              ...sortedStates.map((state) => {
+                const iconClass = statusIconMap[state] || 'fa-tag'
+                return '<a href="' + makeHref(state) + '"><i class="fas ' + iconClass + '"></i>' + state + '</a>'
+              })
+            ].join('')
           }
           
           function resetFilters() {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
+            document.getElementById('statusFilter').value = 'all'
             filterTable()
           }
+
+          hydrateStatusFilterOptions()
+          hydrateRequestsSidebarStatuses()
+          applyRequestStatusFilterFromUrl()
           
           function exportToCSV() {
             const data = [
               ['العميل', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
-              ${n.results.map(i=>{const d={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[i.status]||i.status,c=i.customer_name||`عميل #${i.customer_id}`,u=i.bank_name||`بنك #${i.selected_bank_id||"-"}`;return`['${c}', '${u}', '${i.requested_amount||0}', '${i.duration_months}', '${d}', '${new Date(i.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
+              ${n.results.map(g=>{const y={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[g.status]||g.status,h=g.customer_name||`عميل #${g.customer_id}`,w=g.bank_name||`بنك #${g.selected_bank_id||"-"}`;return`['${h}', '${w}', '${g.requested_amount||0}', '${g.duration_months}', '${y}', '${new Date(g.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
               `)}
             ];
             
@@ -34278,7 +36134,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});p.get("/admin/requests/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});p.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await Ve(e,t),s=e.req.query("customer_id");let n=null;if(s!=null&&String(s).trim()!==""){const u=parseInt(String(s),10);!Number.isNaN(u)&&u>0&&(n=u)}const r=n!=null&&a.some(u=>Number(u.id)===n);let l="SELECT id, bank_name FROM banks WHERE is_active = 1";const i=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);l+=" AND (tenant_id = ? OR tenant_id IS NULL)",i.push(t.tenantId)}l+=" ORDER BY bank_name";let o;try{o=i.length?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all()}catch(u){console.error("Error loading banks for /admin/requests/new:",u),o=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const d=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),c=JSON.stringify(a.map(u=>({id:u.id,name:u.full_name||"",text:`${u.full_name} - ${u.phone}`}))).replace(/</g,"\\u003c");return e.html(`
+    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});p.get("/admin/requests/:id/delete",async e=>{try{if((await x(e)).roleId===5)return e.redirect("/admin/requests");const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});p.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(k(t.roleId)===5)return e.redirect("/admin/requests");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await mt(e,t),s=e.req.query("customer_id");let n=null;if(s!=null&&String(s).trim()!==""){const m=parseInt(String(s),10);!Number.isNaN(m)&&m>0&&(n=m)}const r=n!=null&&a.some(m=>Number(m.id)===n);let l="SELECT id, bank_name FROM banks WHERE is_active = 1";const i=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);l+=" AND (tenant_id = ? OR tenant_id IS NULL)",i.push(t.tenantId)}l+=" ORDER BY bank_name";let o;try{o=i.length?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all()}catch(m){console.error("Error loading banks for /admin/requests/new:",m),o=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const d=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),c=JSON.stringify(a.map(m=>({id:m.id,name:m.full_name||"",text:`${m.full_name} - ${m.phone}`,tenant_id:m.tenant_id!=null?Number(m.tenant_id):null}))).replace(/</g,"\\u003c"),u=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -34341,8 +36197,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   </label>
                   <select name="financing_type_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">-- اختر نوع التمويل --</option>
-                    ${d.results.map(u=>`
-                      <option value="${u.id}">${u.type_name}</option>
+                    ${d.results.map(m=>`
+                      <option value="${m.id}">${m.type_name}</option>
                     `).join("")}
                   </select>
                 </div>
@@ -34416,12 +36272,24 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     <i class="fas fa-university text-yellow-600 ml-1"></i>
                     البنك المختار
                   </label>
-                  <select name="selected_bank_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                  <select name="selected_bank_id" id="newRequestSelectedBank" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                     <option value="">-- اختر البنك (اختياري) --</option>
-                    ${o.results.map(u=>`
-                      <option value="${u.id}">${u.bank_name}</option>
+                    ${o.results.map(m=>`
+                      <option value="${m.id}">${m.bank_name}</option>
                     `).join("")}
                   </select>
+                </div>
+                
+                <div id="bankAgentAssignWrap" class="md:col-span-2" style="display: none;">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-user-tie text-amber-600 ml-1"></i>
+                    وكيل البنك (اختياري)
+                  </label>
+                  <select name="assigned_bank_agent_id" id="newRequestBankAgentSelect"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <option value="">-- اختر وكيل البنك بعد اختيار البنك --</option>
+                  </select>
+                  <p id="bankAgentAssignHint" class="text-xs text-gray-500 mt-1 hidden"></p>
                 </div>
                 
                 <!-- الحالة -->
@@ -34464,6 +36332,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
         <script type="application/json" id="newRequestCustomersJSON">${c}<\/script>
         <script type="application/json" id="newRequestPrefillCustomerId">${JSON.stringify(r?n:null)}<\/script>
+        <script type="application/json" id="newRequestPageCtx">${u}<\/script>
         <script>
           (function() {
             const form = document.getElementById('newRequestForm');
@@ -34476,9 +36345,93 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             const filterInput = document.getElementById('newRequestCustomerFilter');
             const listEl = document.getElementById('newRequestCustomerOptions');
             const jsonEl = document.getElementById('newRequestCustomersJSON');
+            const ctxEl = document.getElementById('newRequestPageCtx');
             var customerRows = [];
+            var pageCtx = { viewerRoleId: null, viewerTenantId: null };
             if (jsonEl && jsonEl.textContent) {
               try { customerRows = JSON.parse(jsonEl.textContent); } catch (e) { customerRows = []; }
+            }
+            if (ctxEl && ctxEl.textContent) {
+              try { pageCtx = JSON.parse(ctxEl.textContent); } catch (e) { pageCtx = { viewerRoleId: null, viewerTenantId: null }; }
+            }
+            const bankSelect = document.getElementById('newRequestSelectedBank');
+            const bankAgentWrap = document.getElementById('bankAgentAssignWrap');
+            const bankAgentSelect = document.getElementById('newRequestBankAgentSelect');
+            const bankAgentHint = document.getElementById('bankAgentAssignHint');
+            function resolveTenantIdForBankAgents() {
+              var custId = hidden ? String(hidden.value || '') : '';
+              for (var i = 0; i < customerRows.length; i++) {
+                if (String(customerRows[i].id) === custId && customerRows[i].tenant_id != null) {
+                  return Number(customerRows[i].tenant_id);
+                }
+              }
+              if (pageCtx && pageCtx.viewerTenantId != null) return Number(pageCtx.viewerTenantId);
+              return null;
+            }
+            function resetBankAgentSelect(placeholder) {
+              if (!bankAgentSelect) return;
+              bankAgentSelect.innerHTML = '';
+              var opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = placeholder || '-- بدون --';
+              bankAgentSelect.appendChild(opt);
+            }
+            async function loadBankAgentsForBank(bankId) {
+              if (!bankAgentWrap || !bankAgentSelect) return;
+              var tid = resolveTenantIdForBankAgents();
+              if (!bankId) {
+                bankAgentWrap.style.display = 'none';
+                resetBankAgentSelect('-- اختر وكيل البنك بعد اختيار البنك --');
+                if (bankAgentHint) { bankAgentHint.classList.add('hidden'); bankAgentHint.textContent = ''; }
+                return;
+              }
+              bankAgentWrap.style.display = 'block';
+              if (tid == null || isNaN(tid)) {
+                resetBankAgentSelect('-- اختر العميل أولاً (لتحديد الشركة) --');
+                if (bankAgentHint) {
+                  bankAgentHint.textContent = 'لإسناد وكيل بنك، اختر عميلاً تابعاً لشركة أو سجّل الدخول بحساب شركة.';
+                  bankAgentHint.classList.remove('hidden');
+                }
+                return;
+              }
+              if (bankAgentHint) { bankAgentHint.classList.add('hidden'); bankAgentHint.textContent = ''; }
+              resetBankAgentSelect('... جاري التحميل');
+              var token = localStorage.getItem('authToken');
+              try {
+                var url = '/api/admin/bank-agents?tenant_id=' + encodeURIComponent(String(tid)) + '&bank_id=' + encodeURIComponent(String(bankId));
+                var res = await fetch(url, {
+                  credentials: 'same-origin',
+                  headers: token ? { Authorization: 'Bearer ' + token } : {}
+                });
+                var data = await res.json();
+                bankAgentSelect.innerHTML = '';
+                var emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.textContent = '-- بدون وكيل بنك --';
+                bankAgentSelect.appendChild(emptyOpt);
+                if (data && data.success && Array.isArray(data.data)) {
+                  data.data.forEach(function (u) {
+                    var o = document.createElement('option');
+                    o.value = String(u.id);
+                    o.textContent = (u.full_name || u.username || ('#' + u.id)) + (u.email ? (' — ' + u.email) : '');
+                    bankAgentSelect.appendChild(o);
+                  });
+                  if (data.data.length === 0 && bankAgentHint) {
+                    bankAgentHint.textContent = 'لا يوجد وكلاء بنك مفعّلون لهذا البنك في هذه الشركة.';
+                    bankAgentHint.classList.remove('hidden');
+                  }
+                } else {
+                  resetBankAgentSelect('-- تعذر التحميل --');
+                }
+              } catch (err) {
+                resetBankAgentSelect('-- خطأ في التحميل --');
+              }
+            }
+            if (bankSelect) {
+              bankSelect.addEventListener('change', function () {
+                var bid = bankSelect.value ? parseInt(bankSelect.value, 10) : NaN;
+                loadBankAgentsForBank(!isNaN(bid) && bid > 0 ? bid : null);
+              });
             }
             function isOpen() { return panel && !panel.classList.contains('hidden'); }
             function setOpen(open) {
@@ -34521,6 +36474,10 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     triggerLabel.classList.add('text-gray-900');
                   }
                   setOpen(false);
+                  if (bankSelect && bankSelect.value) {
+                    var bnk = parseInt(bankSelect.value, 10);
+                    if (!isNaN(bnk) && bnk > 0) loadBankAgentsForBank(bnk);
+                  }
                 });
                 listEl.appendChild(li);
               });
@@ -34566,6 +36523,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               triggerLabel.textContent = found.text;
               triggerLabel.classList.remove('text-gray-500');
               triggerLabel.classList.add('text-gray-900');
+              var bsPre = document.getElementById('newRequestSelectedBank');
+              if (bsPre && bsPre.value) {
+                var bPre = parseInt(bsPre.value, 10);
+                if (!isNaN(bPre) && bPre > 0) loadBankAgentsForBank(bPre);
+              }
             })();
             form.addEventListener('submit', async (event) => {
               event.preventDefault();
@@ -34597,16 +36559,21 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests/new:",t),e.html('<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">'+(t?.message||t)+'</p><pre style="direction:ltr; text-align:left;">'+(t?.stack||"No stack")+"</pre>")}});p.get("/admin/requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("Error in /admin/requests/new:",t),e.html('<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">'+(t?.message||t)+'</p><pre style="direction:ltr; text-align:left;">'+(t?.stack||"No stack")+"</pre>")}});p.get("/admin/requests/:id",async e=>{try{const t=e.req.param("id"),a=await x(e);if(!a.userId)return e.redirect("/login");const s=await e.env.DB.prepare(`
       SELECT fr.*, 
              c.full_name as customer_name, c.phone as customer_phone, c.email as customer_email,
+             c.tenant_id as customer_tenant_id,
              b.bank_name, ft.type_name as financing_type_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(t).first();return a?e.html(`
+    `).bind(t).first();if(!s)return e.html("<h1>الطلب غير موجود</h1>");if(k(a.roleId)===5){const r=a.tenantId;if(!r||!a.userId||Number(s.customer_tenant_id)!==Number(r)||Number(s.assigned_bank_agent_id)!==Number(a.userId))return e.redirect("/admin/requests")}const n=k(a.roleId)===5;try{const r=await e.env.DB.prepare(`
+        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        FROM customers
+        WHERE id = ?
+      `).bind(s.customer_id).first();r&&(s.id_attachment_url=s.id_attachment_url||r.id_attachment_url||null,s.bank_statement_attachment_url=s.bank_statement_attachment_url||r.bank_statement_attachment_url||null,s.salary_attachment_url=s.salary_attachment_url||r.salary_attachment_url||null,s.additional_attachment_url=s.additional_attachment_url||r.additional_attachment_url||null)}catch(r){if(!M(r))throw r}return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -34623,6 +36590,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة الطلبات
             </a>
+            ${n?"":`
             <div class="flex gap-2">
               <a href="/admin/requests/${t}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded transition-all">
                 <i class="fas fa-edit ml-1"></i> تعديل
@@ -34631,6 +36599,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 <i class="fas fa-trash ml-1"></i> حذف
               </a>
             </div>
+            `}
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-8">
@@ -34650,17 +36619,17 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">الاسم الكامل</label>
-                <p class="text-lg text-gray-900">${a.customer_name||"-"}</p>
+                <p class="text-lg text-gray-900">${s.customer_name||"-"}</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">رقم الجوال</label>
-                <p class="text-lg text-gray-900">${a.customer_phone||"-"}</p>
+                <p class="text-lg text-gray-900">${s.customer_phone||"-"}</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">البريد الإلكتروني</label>
-                <p class="text-lg text-gray-900">${a.customer_email||"-"}</p>
+                <p class="text-lg text-gray-900">${s.customer_email||"-"}</p>
               </div>
               
               <!-- معلومات التمويل -->
@@ -34673,48 +36642,48 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">نوع التمويل</label>
-                <p class="text-lg text-gray-900">${a.financing_type_name||"-"}</p>
+                <p class="text-lg text-gray-900">${s.financing_type_name||"-"}</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">المبلغ المطلوب</label>
-                <p class="text-lg font-bold text-green-600">${a.requested_amount?.toLocaleString()||"0"} ريال</p>
+                <p class="text-lg font-bold text-green-600">${s.requested_amount?.toLocaleString()||"0"} ريال</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">مدة التمويل</label>
-                <p class="text-lg text-gray-900">${a.duration_months||"0"} شهر</p>
+                <p class="text-lg text-gray-900">${s.duration_months||"0"} شهر</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">الراتب عند الطلب</label>
-                <p class="text-lg text-gray-900">${a.salary_at_request?.toLocaleString()||"0"} ريال</p>
+                <p class="text-lg text-gray-900">${s.salary_at_request?.toLocaleString()||"0"} ريال</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">البنك المختار</label>
-                <p class="text-lg text-gray-900">${a.bank_name||"غير محدد"}</p>
+                <p class="text-lg text-gray-900">${s.bank_name||"غير محدد"}</p>
               </div>
               
               <div>
                 <label class="block text-sm font-bold text-gray-600 mb-1">الحالة</label>
                 <p>
-                  <span class="px-4 py-2 rounded-full text-sm font-bold ${a.status==="approved"?"bg-green-100 text-green-800":a.status==="pending"?"bg-yellow-100 text-yellow-800":"bg-red-100 text-red-800"}">
-                    ${a.status==="approved"?"مقبول":a.status==="pending"?"قيد المراجعة":"مرفوض"}
+                  <span class="px-4 py-2 rounded-full text-sm font-bold ${s.status==="approved"?"bg-green-100 text-green-800":s.status==="pending"?"bg-yellow-100 text-yellow-800":"bg-red-100 text-red-800"}">
+                    ${s.status==="approved"?"مقبول":s.status==="pending"?"قيد المراجعة":"مرفوض"}
                   </span>
                 </p>
               </div>
               
-              ${a.notes?`
+              ${s.notes?`
                 <div class="md:col-span-2 mt-4">
                   <label class="block text-sm font-bold text-gray-600 mb-1">ملاحظات</label>
-                  <p class="text-gray-900 bg-gray-50 p-4 rounded">${a.notes}</p>
+                  <p class="text-gray-900 bg-gray-50 p-4 rounded">${s.notes}</p>
                 </div>
               `:""}
               
               <div class="md:col-span-2 mt-4">
                 <label class="block text-sm font-bold text-gray-600 mb-1">تاريخ الإنشاء</label>
-                <p class="text-gray-900">${new Date(a.created_at).toLocaleString("ar-SA")}</p>
+                <p class="text-gray-900">${new Date(s.created_at).toLocaleString("ar-SA")}</p>
               </div>
             </div>
           </div>
@@ -34727,7 +36696,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              ${a.id_attachment_url?`
+              ${s.id_attachment_url?`
                 <div class="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition">
                   <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center">
@@ -34737,15 +36706,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                   </div>
                   <div class="grid grid-cols-3 gap-2">
-                    <a href="${a.id_attachment_url}" target="_blank" 
+                    <a href="${s.id_attachment_url}" target="_blank" 
                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-eye"></i> عرض
                     </a>
-                    <a href="${a.id_attachment_url}" download 
+                    <a href="${s.id_attachment_url}" download 
                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-download"></i> تنزيل
                     </a>
-                    <button onclick="deleteAttachment('${a.id_attachment_url}', 'id')" 
+                    <button onclick="deleteAttachment('${s.id_attachment_url}', 'id')" 
                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-trash"></i> حذف
                     </button>
@@ -34761,7 +36730,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
               `}
               
-              ${a.salary_attachment_url?`
+              ${s.salary_attachment_url?`
                 <div class="border-2 border-green-200 rounded-lg p-4 hover:shadow-md transition">
                   <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center">
@@ -34771,15 +36740,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                   </div>
                   <div class="grid grid-cols-3 gap-2">
-                    <a href="${a.salary_attachment_url}" target="_blank" 
+                    <a href="${s.salary_attachment_url}" target="_blank" 
                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-eye"></i> عرض
                     </a>
-                    <a href="${a.salary_attachment_url}" download 
+                    <a href="${s.salary_attachment_url}" download 
                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-download"></i> تنزيل
                     </a>
-                    <button onclick="deleteAttachment('${a.salary_attachment_url}', 'salary')" 
+                    <button onclick="deleteAttachment('${s.salary_attachment_url}', 'salary')" 
                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-trash"></i> حذف
                     </button>
@@ -34795,7 +36764,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
               `}
               
-              ${a.bank_statement_attachment_url?`
+              ${s.bank_statement_attachment_url?`
                 <div class="border-2 border-purple-200 rounded-lg p-4 hover:shadow-md transition">
                   <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center">
@@ -34805,15 +36774,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                   </div>
                   <div class="grid grid-cols-3 gap-2">
-                    <a href="${a.bank_statement_attachment_url}" target="_blank" 
+                    <a href="${s.bank_statement_attachment_url}" target="_blank" 
                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-eye"></i> عرض
                     </a>
-                    <a href="${a.bank_statement_attachment_url}" download 
+                    <a href="${s.bank_statement_attachment_url}" download 
                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-download"></i> تنزيل
                     </a>
-                    <button onclick="deleteAttachment('${a.bank_statement_attachment_url}', 'bank_statement')" 
+                    <button onclick="deleteAttachment('${s.bank_statement_attachment_url}', 'bank_statement')" 
                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-trash"></i> حذف
                     </button>
@@ -34829,7 +36798,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
               `}
               
-              ${a.additional_attachment_url?`
+              ${s.additional_attachment_url?`
                 <div class="border-2 border-orange-200 rounded-lg p-4 hover:shadow-md transition">
                   <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center">
@@ -34839,15 +36808,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                   </div>
                   <div class="grid grid-cols-3 gap-2">
-                    <a href="${a.additional_attachment_url}" target="_blank" 
+                    <a href="${s.additional_attachment_url}" target="_blank" 
                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-eye"></i> عرض
                     </a>
-                    <a href="${a.additional_attachment_url}" download 
+                    <a href="${s.additional_attachment_url}" download 
                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-download"></i> تنزيل
                     </a>
-                    <button onclick="deleteAttachment('${a.additional_attachment_url}', 'additional')" 
+                    <button onclick="deleteAttachment('${s.additional_attachment_url}', 'additional')" 
                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
                       <i class="fas fa-trash"></i> حذف
                     </button>
@@ -34864,7 +36833,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               `}
             </div>
             
-            ${!a.id_attachment_url&&!a.salary_attachment_url&&!a.bank_statement_attachment_url&&!a.additional_attachment_url?`
+            ${!s.id_attachment_url&&!s.salary_attachment_url&&!s.bank_statement_attachment_url&&!s.additional_attachment_url?`
               <div class="text-center mt-6 text-gray-500">
                 <i class="fas fa-inbox text-4xl mb-2"></i>
                 <p>لا توجد مرفقات لهذا الطلب</p>
@@ -34900,7 +36869,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `):e.html("<h1>الطلب غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();return s?await X(e.env.DB,t,s)?e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();return s?await te(e.env.DB,t,s)?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -34968,7 +36937,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>غير مصرح بعرض هذا العميل</h1>",403):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id/edit",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await X(e.env.DB,t,s))return e.html("<h1>غير مصرح بتعديل هذا العميل</h1>",403);const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[],l=await de(e.env.DB,s.tenant_id??null);let i=[];try{const o=s.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.html(`
+    `):e.html("<h1>غير مصرح بعرض هذا العميل</h1>",403):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id/edit",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await te(e.env.DB,t,s))return e.html("<h1>غير مصرح بتعديل هذا العميل</h1>",403);const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[],l=await Se(e.env.DB,s.tenant_id??null);let i=[];try{const o=s.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -34998,7 +36967,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف *</label>
-                  <input type="tel" name="phone" value="${s.phone||""}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden">
+                    <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
+                    <input type="tel" name="phone" value="${ie(s.phone)}" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl" class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
+                           placeholder="5xxxxxxxx"
+                           oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
+                           oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -35093,13 +37069,79 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </label>
                 <textarea name="notes" rows="2" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="أي ملاحظات إضافية (اختياري)">${(s.notes||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}</textarea>
               </div>
+              <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h2 class="text-xl font-bold text-gray-700 mb-4">
+                  <i class="fas fa-paperclip ml-2"></i>
+                  المرفقات
+                </h2>
+                <div class="mb-6 bg-white p-4 rounded-lg">
+                  <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="border-r pr-4">
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-id-card ml-1"></i> صورة الهوية:</p>
+                      ${s.id_attachment_url?`<a href="${s.id_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                    <div>
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-invoice ml-1"></i> كشف الحساب:</p>
+                      ${s.bank_statement_attachment_url?`<a href="${s.bank_statement_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                    <div class="border-r pr-4">
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-money-check ml-1"></i> تعريف الراتب:</p>
+                      ${s.salary_attachment_url?`<a href="${s.salary_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                    <div>
+                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-alt ml-1"></i> مرفقات إضافية:</p>
+                      ${s.additional_attachment_url?`<a href="${s.additional_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                    </div>
+                  </div>
+                </div>
+                <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
+                <input type="hidden" name="id_attachment_url" id="edit_customer_id_attachment_url" value="${(s.id_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="bank_statement_attachment_url" id="edit_customer_bank_statement_attachment_url" value="${(s.bank_statement_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="salary_attachment_url" id="edit_customer_salary_attachment_url" value="${(s.salary_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="additional_attachment_url" id="edit_customer_additional_attachment_url" value="${(s.additional_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                    </label>
+                    <input type="file" id="edit_customer_id_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_id_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                    </label>
+                    <input type="file" id="edit_customer_bank_statement_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_bank_statement_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                    </label>
+                    <input type="file" id="edit_customer_salary_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_salary_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                    </label>
+                    <input type="file" id="edit_customer_additional_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_attachment_preview" class="mt-2"></div>
+                  </div>
+                </div>
+              </div>
               <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
                 <h3 class="text-sm font-bold text-gray-700 mb-3">
                   <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
                   الحلول المقترحة
                 </h3>
                 <input type="hidden" name="solutions_json" id="edit_solutions_json" value="[]">
-                <div class="overflow-x-auto">
+            <div class="overflow-x-auto requests-table-scroll">
                   <table class="w-full text-sm">
                     <thead>
                       <tr class="border-b border-gray-300 text-right">
@@ -35151,10 +37193,87 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   إلغاء
                 </a>
               </div>
+              <div id="customer-edit-message" class="mt-2"></div>
             </form>
             <script>
               (function(){
                 var cust = ${JSON.stringify({birthdate:s.birthdate,dob_calendar_type:s.dob_calendar_type,job_type:s.job_type,military_rank:s.military_rank})};
+                var editForm = document.getElementById('edit-customer-form');
+                var editMessageEl = document.getElementById('customer-edit-message');
+                var editAttachmentFiles = {
+                  id: null,
+                  bank_statement: null,
+                  salary: null,
+                  additional: null
+                };
+                var editAttachmentInputs = {
+                  id: document.getElementById('edit_customer_id_attachment'),
+                  bank_statement: document.getElementById('edit_customer_bank_statement_attachment'),
+                  salary: document.getElementById('edit_customer_salary_attachment'),
+                  additional: document.getElementById('edit_customer_additional_attachment')
+                };
+                var editAttachmentPreviewIds = {
+                  id: 'edit_customer_id_attachment_preview',
+                  bank_statement: 'edit_customer_bank_statement_attachment_preview',
+                  salary: 'edit_customer_salary_attachment_preview',
+                  additional: 'edit_customer_additional_attachment_preview'
+                };
+                var editAttachmentHiddenIds = {
+                  id: 'edit_customer_id_attachment_url',
+                  bank_statement: 'edit_customer_bank_statement_attachment_url',
+                  salary: 'edit_customer_salary_attachment_url',
+                  additional: 'edit_customer_additional_attachment_url'
+                };
+                function setEditMessage(type, text) {
+                  if (!editMessageEl) return;
+                  var className = type === 'error'
+                    ? 'bg-red-100 border-red-300 text-red-700'
+                    : (type === 'success' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-blue-100 border-blue-300 text-blue-700');
+                  editMessageEl.innerHTML = '<div class="border px-4 py-3 rounded ' + className + '">' +
+                    '<i class="fas ' + (type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin')) + ' ml-2"></i>' +
+                    text +
+                    '</div>';
+                }
+                function handleEditAttachmentSelect(type) {
+                  var input = editAttachmentInputs[type];
+                  var preview = document.getElementById(editAttachmentPreviewIds[type]);
+                  if (!input || !preview) return;
+                  var file = input.files && input.files[0] ? input.files[0] : null;
+                  if (!file) {
+                    editAttachmentFiles[type] = null;
+                    preview.innerHTML = '';
+                    return;
+                  }
+                  if (file.size > 2 * 1024 * 1024) {
+                    input.value = '';
+                    editAttachmentFiles[type] = null;
+                    preview.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>';
+                    return;
+                  }
+                  editAttachmentFiles[type] = file;
+                  preview.innerHTML = '<div class="text-sm text-green-600"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' +
+                    file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</div>';
+                }
+                Object.keys(editAttachmentInputs).forEach(function(type) {
+                  var input = editAttachmentInputs[type];
+                  if (!input) return;
+                  input.addEventListener('change', function() { handleEditAttachmentSelect(type); });
+                });
+                async function uploadEditAttachment(file, attachmentType) {
+                  var uploadData = new FormData();
+                  uploadData.append('file', file);
+                  uploadData.append('attachmentType', attachmentType);
+                  var response = await fetch('/api/attachments/upload', {
+                    method: 'POST',
+                    body: uploadData,
+                    credentials: 'include'
+                  });
+                  var payload = await response.json();
+                  if (!response.ok || !payload.success || !payload.url) {
+                    throw new Error(payload.error || 'فشل رفع المرفق');
+                  }
+                  return payload.url;
+                }
                 var g=document.getElementById('edit_date_of_birth_gregorian'),h=document.getElementById('edit_date_of_birth_hijri'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri');
                 if(!g||!h||!hidden||!type) return;
                 hidden.value = cust.birthdate || '';
@@ -35234,7 +37353,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   editObligationsInitial.forEach(function(o){ addEditRow(o); });
                   if(editObligationsInitial.length===0) addEditRow();
                   editAddBtn.onclick=function(){ addEditRow(); };
-                  document.getElementById('edit-customer-form').addEventListener('submit',function(){
+                  editForm.addEventListener('submit',async function(event){
+                    event.preventDefault();
                     var rows=editTbody.querySelectorAll('tr');
                     var arr=[];
                     rows.forEach(function(tr){
@@ -35256,6 +37376,30 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                         sarr.push({ note: (ne.value||'').trim() });
                       });
                       esh.value=JSON.stringify(sarr);
+                    }
+                    var submitBtn = editForm.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.disabled = true;
+                    try {
+                      var uploadOrder = [
+                        { key: 'id', label: 'صورة الهوية' },
+                        { key: 'bank_statement', label: 'كشف الحساب' },
+                        { key: 'salary', label: 'تعريف الراتب' },
+                        { key: 'additional', label: 'المرفقات الإضافية' }
+                      ];
+                      for (var i = 0; i < uploadOrder.length; i++) {
+                        var item = uploadOrder[i];
+                        var file = editAttachmentFiles[item.key];
+                        if (!file) continue;
+                        var hiddenInput = document.getElementById(editAttachmentHiddenIds[item.key]);
+                        if (!hiddenInput) continue;
+                        setEditMessage('loading', 'جاري رفع ' + item.label + '...');
+                        hiddenInput.value = await uploadEditAttachment(file, item.key);
+                      }
+                      editForm.submit();
+                    } catch (uploadError) {
+                      console.error('[CustomerEdit] Attachment upload failed:', uploadError);
+                      setEditMessage('error', 'فشل رفع أحد المرفقات: ' + (uploadError.message || uploadError));
+                      if (submitBtn) submitBtn.disabled = false;
                     }
                   });
                 }
@@ -35325,7 +37469,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN financing_types ft ON c.financing_type_id = ft.id
       LEFT JOIN banks b ON c.best_bank_id = b.id
       WHERE c.id = ?
-    `).bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await X(e.env.DB,t,s))return e.html("<h1>غير مصرح بعرض تقرير هذا العميل</h1>",403);const n=s,r=i=>i?new Date(i).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=i=>i?i.toLocaleString("ar-SA"):"غير محدد";return e.html(`
+    `).bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await te(e.env.DB,t,s))return e.html("<h1>غير مصرح بعرض تقرير هذا العميل</h1>",403);const n=s,r=i=>i?new Date(i).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=i=>i?i.toLocaleString("ar-SA"):"غير محدد";return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -35343,7 +37487,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             page-break-inside: avoid;
           }
           
-          ${$()}
+          ${F()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -35441,7 +37585,46 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
           
-          <!-- القسم 2: بيانات الحاسبة المالية -->
+          <!-- القسم 2: المرفقات -->
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-cyan-500 pb-2">
+              <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
+              المرفقات
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${n.id_attachment_url?`
+              <a href="${n.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
+                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${n.bank_statement_attachment_url?`
+              <a href="${n.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
+                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
+                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${n.salary_attachment_url?`
+              <a href="${n.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
+                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
+                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${n.additional_attachment_url?`
+              <a href="${n.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
+                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
+                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${!n.id_attachment_url&&!n.bank_statement_attachment_url&&!n.salary_attachment_url&&!n.additional_attachment_url?`
+              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                لا توجد مرفقات مرفوعة لهذا العميل
+              </div>
+              `:""}
+            </div>
+          </div>
+
+          <!-- القسم 3: بيانات الحاسبة المالية -->
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-green-500 pb-2">
               <i class="fas fa-calculator text-green-600 ml-2"></i>
@@ -35639,7 +37822,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a,n=o=>o?new Date(o).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",r=o=>o?o.toLocaleString("ar-SA"):"غير محدد",l={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=l[s.status]||l.pending;return e.html(`
+    `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a;try{const o=await e.env.DB.prepare(`
+        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        FROM customers
+        WHERE id = ?
+      `).bind(s.customer_id).first();o&&(s.id_attachment_url=s.id_attachment_url||o.id_attachment_url||null,s.bank_statement_attachment_url=s.bank_statement_attachment_url||o.bank_statement_attachment_url||null,s.salary_attachment_url=s.salary_attachment_url||o.salary_attachment_url||null,s.additional_attachment_url=s.additional_attachment_url||o.additional_attachment_url||null)}catch(o){if(!M(o))throw o}const n=o=>o?new Date(o).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",r=o=>o?o.toLocaleString("ar-SA"):"غير محدد",l={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=l[s.status]||l.pending;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -35657,7 +37844,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             page-break-inside: avoid;
           }
           
-          ${$()}
+          ${F()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -35703,76 +37890,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
           
-          <!-- القسم 1: معلومات العميل -->
-          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
-            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">
-              <i class="fas fa-user text-blue-600 ml-2"></i>
-              معلومات العميل
-            </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-blue-100 p-3 rounded-lg">
-                  <i class="fas fa-user text-blue-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">اسم العميل</p>
-                  <p class="text-xl font-bold text-gray-800">${s.customer_name||"غير محدد"}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-green-100 p-3 rounded-lg">
-                  <i class="fas fa-phone text-green-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">رقم الهاتف</p>
-                  <p class="text-xl font-bold text-gray-800" dir="ltr">${s.customer_phone||"غير محدد"}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-purple-100 p-3 rounded-lg">
-                  <i class="fas fa-envelope text-purple-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">البريد الإلكتروني</p>
-                  <p class="text-xl font-bold text-gray-800">${s.customer_email||"غير محدد"}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-red-100 p-3 rounded-lg">
-                  <i class="fas fa-calendar text-red-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">تاريخ الميلاد</p>
-                  <p class="text-xl font-bold text-gray-800">${n(s.customer_birthdate)}${s.customer_dob_calendar_type==="hijri"?" هـ":" م"}</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-yellow-100 p-3 rounded-lg">
-                  <i class="fas fa-money-bill-wave text-yellow-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">الراتب الشهري</p>
-                  <p class="text-xl font-bold text-yellow-600">${r(s.customer_salary)} ريال</p>
-                </div>
-              </div>
-              
-              <div class="flex items-start space-x-3 space-x-reverse">
-                <div class="bg-indigo-100 p-3 rounded-lg">
-                  <i class="fas fa-id-badge text-indigo-600 text-xl"></i>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">رقم الهوية</p>
-                  <p class="text-xl font-bold text-gray-800">${s.customer_national_id&&!s.customer_national_id.startsWith("TEMP-")?s.customer_national_id:"غير محدد"}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- القسم 2: تفاصيل طلب التمويل -->
+          <!-- القسم 1: تفاصيل طلب التمويل -->
           <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-lg p-6 mb-6 report-section border-2 border-purple-400">
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-purple-500 pb-2">
               <i class="fas fa-file-invoice-dollar text-purple-600 ml-2"></i>
@@ -35853,7 +37971,115 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
           
-          <!-- القسم 3: معلومات إضافية -->
+          <!-- القسم 2: معلومات العميل -->
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">
+              <i class="fas fa-user text-blue-600 ml-2"></i>
+              معلومات العميل
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-blue-100 p-3 rounded-lg">
+                  <i class="fas fa-user text-blue-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">اسم العميل</p>
+                  <p class="text-xl font-bold text-gray-800">${s.customer_name||"غير محدد"}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-green-100 p-3 rounded-lg">
+                  <i class="fas fa-phone text-green-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">رقم الهاتف</p>
+                  <p class="text-xl font-bold text-gray-800" dir="ltr">${s.customer_phone||"غير محدد"}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-purple-100 p-3 rounded-lg">
+                  <i class="fas fa-envelope text-purple-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">البريد الإلكتروني</p>
+                  <p class="text-xl font-bold text-gray-800">${s.customer_email||"غير محدد"}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-red-100 p-3 rounded-lg">
+                  <i class="fas fa-calendar text-red-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">تاريخ الميلاد</p>
+                  <p class="text-xl font-bold text-gray-800">${n(s.customer_birthdate)}${s.customer_dob_calendar_type==="hijri"?" هـ":" م"}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-yellow-100 p-3 rounded-lg">
+                  <i class="fas fa-money-bill-wave text-yellow-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">الراتب الشهري</p>
+                  <p class="text-xl font-bold text-yellow-600">${r(s.customer_salary)} ريال</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-indigo-100 p-3 rounded-lg">
+                  <i class="fas fa-id-badge text-indigo-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">رقم الهوية</p>
+                  <p class="text-xl font-bold text-gray-800">${s.customer_national_id&&!s.customer_national_id.startsWith("TEMP-")?s.customer_national_id:"غير محدد"}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- القسم 3: المرفقات -->
+          <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-cyan-500 pb-2">
+              <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
+              المرفقات
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${s.id_attachment_url?`
+              <a href="${s.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
+                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${s.bank_statement_attachment_url?`
+              <a href="${s.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
+                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
+                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${s.salary_attachment_url?`
+              <a href="${s.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
+                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
+                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${s.additional_attachment_url?`
+              <a href="${s.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
+                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
+                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+              </a>
+              `:""}
+              ${!s.id_attachment_url&&!s.bank_statement_attachment_url&&!s.salary_attachment_url&&!s.additional_attachment_url?`
+              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                لا توجد مرفقات مرفوعة لهذا الطلب/العميل
+              </div>
+              `:""}
+            </div>
+          </div>
+          
+          <!-- القسم 4: معلومات إضافية -->
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6 report-section">
             <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-gray-500 pb-2">
               <i class="fas fa-info-circle text-gray-600 ml-2"></i>
@@ -35935,7 +38161,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
     `).bind(t).all(),{results:l}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(t).all(),i={data:{transitions:n,actions:r,tasks:l}},o=Xt(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).all(),i={data:{transitions:n,actions:r,tasks:l}},o=xa(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
     `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});p.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
@@ -36056,7 +38282,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       UPDATE banks 
       SET bank_name = ?, description = ?
       WHERE id = ?
-    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});p.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await We(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});p.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
+    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});p.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await ut(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});p.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38341,12 +40567,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),a=await x(e),s=a.roleId,n=R(a),r=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),a=await x(e),s=a.roleId,n=D(a),r=`
       SELECT u.*, r.role_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       WHERE u.id = ?
-    `,{results:l}=await e.env.DB.prepare(r).bind(t).all();if(!l||l.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const i=l[0];if(!n){if(A(i.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(a.tenantId&&i.tenant_id&&i.tenant_id!==a.tenantId)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>",403)}const o=n?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",d=await e.env.DB.prepare(o).all();let c={results:[]};return s===1&&(c=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()),e.html(`
+    `,{results:l}=await e.env.DB.prepare(r).bind(t).all();if(!l||l.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const i=l[0];if(!n){if(k(i.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(a.tenantId&&i.tenant_id&&i.tenant_id!==a.tenantId)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>",403)}const o=n?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",d=await e.env.DB.prepare(o).all();let c={results:[]};s===1&&(c=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all());const u=i.tenant_id!=null?Number(i.tenant_id):NaN;let m=[];if(u&&!Number.isNaN(u))try{m=(await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(u).all()).results||[]}catch{m=(await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(u).all()).results||[]}const f=i.assigned_bank_id,g=k(i.role_id)===5;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38419,9 +40645,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   </label>
                   <select name="role_id" id="roleSelect" required
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    ${d.results?.map(u=>`
-                      <option value="${u.id}" ${i.role_id===u.id?"selected":""}>
-                        ${F(u.id,u.role_name)}
+                    ${d.results?.map(b=>`
+                      <option value="${b.id}" ${i.role_id===b.id?"selected":""}>
+                        ${J(b.id,b.role_name)}
                       </option>
                     `).join("")||""}
                   </select>
@@ -38435,9 +40661,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <select name="tenant_id"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">لا توجد شركة (Super Admin فقط)</option>
-                    ${c.results?.map(u=>`
-                      <option value="${u.id}" ${i.tenant_id===u.id?"selected":""}>
-                        ${u.company_name}
+                    ${c.results?.map(b=>`
+                      <option value="${b.id}" ${i.tenant_id===b.id?"selected":""}>
+                        ${b.company_name}
                       </option>
                     `).join("")||""}
                   </select>
@@ -38445,6 +40671,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 `:`
                 <input type="hidden" name="tenant_id" value="${i.tenant_id||""}">
                 `}
+                
+                <div id="editBankAgentWrap" class="md:col-span-2" style="display: ${g?"block":"none"};">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-university text-amber-600 ml-1"></i>
+                    البنك <span class="text-red-600">*</span>
+                  </label>
+                  <select name="assigned_bank_id" id="editAssignedBankSelect"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">-- اختر البنك --</option>
+                    ${m.map(b=>`
+                      <option value="${b.id}" ${Number(f)===Number(b.id)?"selected":""}>${String(b.bank_name||"").replace(/</g,"")}</option>`).join("")}
+                  </select>
+                </div>
                 
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -38469,18 +40708,37 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </form>
           </div>
         </div>
-        
+        <script>
+          (function () {
+            var roleSelect = document.getElementById('roleSelect');
+            var wrap = document.getElementById('editBankAgentWrap');
+            var bankSel = document.getElementById('editAssignedBankSelect');
+            if (!roleSelect || !wrap || !bankSel) return;
+            function sync() {
+              var rid = parseInt(roleSelect.value, 10);
+              if (rid === 5) {
+                wrap.style.display = 'block';
+                bankSel.setAttribute('required', 'required');
+              } else {
+                wrap.style.display = 'none';
+                bankSel.removeAttribute('required');
+              }
+            }
+            roleSelect.addEventListener('change', sync);
+            sync();
+          })();
+        <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=R(s),r=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(A(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const b=n?u:s.tenantId;let y=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=D(s),r=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(k(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const b=n?u:s.tenantId,y=b!=null&&String(b).trim()!==""?parseInt(String(b),10):NaN,h=a.get("assigned_bank_id");let w=null;if(f===5){if(!(n||s.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور وكيل البنك.</p>",403);if(!y||Number.isNaN(y))return e.html("<h1>خطأ</h1><p>يجب ربط وكيل البنك بشركة.</p>",400);const B=Number.parseInt(String(h||""),10);if(Number.isNaN(B)||B<=0)return e.html("<h1>خطأ</h1><p>يجب اختيار البنك لوكيل البنك.</p>",400);if(!await xe(e.env.DB,y,B))return e.html("<h1>خطأ</h1><p>البنك غير صالح لهذه الشركة.</p>",400);w=B}let v=`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
-          role_id = ?, tenant_id = ?, is_active = ?
-    `,h=[r,l,i,o,f,b,m];return d&&d.toString().trim()!==""&&(y=`
+          role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
+    `,_=[r,l,i,o,f,b,m,w];return d&&d.toString().trim()!==""&&(v=`
         UPDATE users 
         SET username = ?, full_name = ?, email = ?, phone = ?, 
-            password = ?, role_id = ?, tenant_id = ?, is_active = ?
-      `,h=[r,l,i,o,d,f,b,m]),y+=" WHERE id = ?",h.push(t),await e.env.DB.prepare(y).bind(...h).run(),e.html(`
+            password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
+      `,_=[r,l,i,o,d,f,b,m,w]),v+=" WHERE id = ?",_.push(t),await e.env.DB.prepare(v).bind(..._).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38590,7 +40848,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.get("/admin/users-new",async e=>{try{const t=await x(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const n=R(t)?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",r=await e.env.DB.prepare(n).all(),l=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
+    `)}});p.get("/admin/users-new",async e=>{try{const t=await x(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const n=D(t)?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",r=await e.env.DB.prepare(n).all(),l=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38700,7 +40958,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الدور --</option>
                     ${r.results.map(i=>`
-                      <option value="${i.id}" data-role-name="${F(i.id,i.role_name)}">${F(i.id,i.role_name)}</option>
+                      <option value="${i.id}" data-role-name="${J(i.id,i.role_name)}">${J(i.id,i.role_name)}</option>
                     `).join("")}
                   </select>
                 </div>
@@ -38718,6 +40976,18 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                       <option value="${i.id}">${i.company_name}</option>
                     `).join("")}
                   </select>
+                </div>
+                
+                <div id="bankAgentBankWrap" class="md:col-span-2" style="display: none;">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-university text-amber-600 ml-1"></i>
+                    البنك <span class="text-red-600">*</span>
+                  </label>
+                  <select name="assigned_bank_id" id="assignedBankSelect"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">-- اختر البنك --</option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور وكيل البنك، ويقتصر على بنوك الشركة المختارة.</p>
                 </div>
                 
                 <!-- الحالة -->
@@ -38802,33 +41072,84 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           loadUserData();
           document.addEventListener('DOMContentLoaded', loadUserData);
           
-          // Update tenant requirement based on role_id
+          // Update tenant + bank-agent fields based on role_id
+          async function loadBanksForTenant(tenantId) {
+            const bankSelect = document.getElementById('assignedBankSelect');
+            if (!bankSelect || !tenantId) return;
+            bankSelect.innerHTML = '<option value="">-- جاري التحميل --</option>';
+            const token = localStorage.getItem('authToken');
+            try {
+              const res = await fetch('/api/admin/company-banks?tenant_id=' + encodeURIComponent(String(tenantId)), {
+                headers: token ? { Authorization: 'Bearer ' + token } : {}
+              });
+              const data = await res.json();
+              if (!data.success || !Array.isArray(data.data)) {
+                bankSelect.innerHTML = '<option value="">تعذر تحميل البنوك</option>';
+                return;
+              }
+              bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
+              data.data.forEach(function (b) {
+                const opt = document.createElement('option');
+                opt.value = String(b.id);
+                opt.textContent = b.bank_name || ('بنك #' + b.id);
+                bankSelect.appendChild(opt);
+              });
+            } catch (e) {
+              bankSelect.innerHTML = '<option value="">خطأ في التحميل</option>';
+            }
+          }
+          
           function updateTenantRequirement() {
             const roleSelect = document.getElementById('roleSelect');
             const subscriptionDiv = document.getElementById('subscriptionDiv');
             const tenantSelect = document.getElementById('tenantSelect');
+            const bankWrap = document.getElementById('bankAgentBankWrap');
+            const bankSelect = document.getElementById('assignedBankSelect');
             
             if (!roleSelect || !subscriptionDiv) return;
             
-            const selectedRoleId = parseInt(roleSelect.value);
+            const selectedRoleId = parseInt(roleSelect.value, 10);
             
             // Super Admin (role_id = 1) doesn't need a tenant
             if (selectedRoleId === 1) {
               subscriptionDiv.style.display = 'none';
               if (tenantSelect) tenantSelect.removeAttribute('required');
             } else {
-              // All other roles need a tenant
               subscriptionDiv.style.display = 'block';
               if (tenantSelect) tenantSelect.setAttribute('required', 'required');
             }
+            
+            if (bankWrap && bankSelect) {
+              if (selectedRoleId === 5) {
+                bankWrap.style.display = 'block';
+                bankSelect.setAttribute('required', 'required');
+                const tid = tenantSelect && tenantSelect.value ? tenantSelect.value : '';
+                if (tid) loadBanksForTenant(tid);
+                else {
+                  bankSelect.innerHTML = '<option value="">اختر الشركة أولاً</option>';
+                }
+              } else {
+                bankWrap.style.display = 'none';
+                bankSelect.removeAttribute('required');
+                bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
+              }
+            }
           }
           
-          // Add event listener to role select
           document.addEventListener('DOMContentLoaded', () => {
             const roleSelect = document.getElementById('roleSelect');
+            const tenantSelect = document.getElementById('tenantSelect');
             if (roleSelect) {
               roleSelect.addEventListener('change', updateTenantRequirement);
-              updateTenantRequirement(); // Run on page load
+              updateTenantRequirement();
+            }
+            if (tenantSelect) {
+              tenantSelect.addEventListener('change', function () {
+                const roleSelect2 = document.getElementById('roleSelect');
+                if (roleSelect2 && parseInt(roleSelect2.value, 10) === 5) {
+                  loadBanksForTenant(tenantSelect.value);
+                }
+              });
             }
           });
           
@@ -38971,7 +41292,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>المستخدم غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id"),a=await x(e);if(!a.userId)return e.html("<h1>Unauthorized</h1>",401);if(!R(a))return e.html("<h1>غير مسموح</h1><p>هذه الصفحة متاحة لمدير SaaS فقط.</p>",403);const s=await e.env.DB.prepare(`
+    `):e.html("<h1>المستخدم غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id"),a=await x(e);if(!a.userId)return e.html("<h1>Unauthorized</h1>",401);if(!D(a))return e.html("<h1>غير مسموح</h1><p>هذه الصفحة متاحة لمدير SaaS فقط.</p>",403);const s=await e.env.DB.prepare(`
       SELECT u.*, r.role_name 
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
@@ -39109,7 +41430,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});p.post("/api/users/:id/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_id:s,permission_ids:n}=await e.req.json();if(await e.env.DB.prepare(`
+    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});p.post("/api/users/:id/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_id:s,permission_ids:n}=await e.req.json();if(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(s).run(),n&&n.length>0)for(const r of n)await e.env.DB.prepare(`
           INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
@@ -39259,8 +41580,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return l.salariesLabels=c.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=c.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Da(p,x);async function N(e,t="all"){const a=await x(e);return!a.userId||!a.roleId?e.redirect("/login"):a.roleId===4?e.redirect("/admin/panel"):a.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}p.get("/admin/contracts",async e=>{const t=await N(e,"all");return t||e.html(ha)});p.get("/admin/contracts/list",async e=>{const t=await N(e,"list-new-only");if(t)return t;const s=(await x(e)).roleId===3?Ue(ge):ge;return e.html(s)});p.get("/admin/contracts/new",async e=>{const t=await N(e,"list-new-only");if(t)return t;const a=await x(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:s}=await Ve(e,a,{scopeSuperAdminToTenant:!0}),n=m=>(m||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),r=m=>(m||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=s.map(m=>{const f=m.national_id&&!String(m.national_id).startsWith("TEMP-")?String(m.national_id):"",g=r(m.full_name||"")+(m.phone?" — "+r(m.phone):"")+(f?" ("+r(f)+")":"");return`<option value="${n(String(m.id))}" data-name="${n(m.full_name||"")}" data-national_id="${n(f)}" data-phone="${n(m.phone||"")}" data-city="${n(m.city||"")}">${g}</option>`}).join(`
-`);let i="",o="",d="";const c=a.tenantId;if(c){const m=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(c).first();if(m&&(o=n(m.company_name||""),d=n((m.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',m.company_name)){const f=(m.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${r(m.company_name)}</strong>${f?` — ${r(f)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let u=ya.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",o).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d);return a.roleId===3&&(u=Ue(u)),e.html(u)});p.get("/admin/contracts/view",async e=>{const t=await N(e,"list-new-only");return t||e.html(Ea)});p.get("/admin/contracts/templates",async e=>{const t=await N(e,"all");return t||e.html(va)});p.get("/admin/contracts/notes",async e=>{const t=await N(e,"all");return t||e.html(ka)});p.get("/admin/contracts/archive",async e=>{const t=await N(e,"all");return t||e.html(Ia)});p.get("/admin/contracts/settings",async e=>{const t=await N(e,"all");return t||e.html(Sa)});p.get("/admin/hr",e=>e.html(aa));p.get("/admin/hr/employees",e=>e.html(sa));p.get("/admin/hr/employees/:id",e=>e.html(na));p.get("/admin/hr/employees/:id/edit",e=>e.html(ra));p.get("/admin/hr/attendance",e=>e.html(oa));p.get("/admin/hr/leaves",e=>e.html(ia));p.get("/admin/hr/salaries",e=>e.html(la));p.get("/admin/hr/performance",e=>e.html(da));p.get("/admin/hr/promotions",e=>e.html(ca));p.get("/admin/hr/documents",e=>e.html(pa));p.get("/admin/hr/reports",e=>e.html(ua));p.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),r=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(r).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),c=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(c).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
+    `).bind(a).all();return l.salariesLabels=c.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=c.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Xa(p,x);async function z(e,t="all"){const a=await x(e);return!a.userId||!a.roleId?e.redirect("/login"):a.roleId===4?e.redirect("/admin/panel"):a.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}p.get("/admin/contracts",async e=>{const t=await z(e,"all");return t||e.html(Ma)});p.get("/admin/contracts/list",async e=>{const t=await z(e,"list-new-only");if(t)return t;const s=(await x(e)).roleId===3?ot(Re):Re;return e.html(s)});p.get("/admin/contracts/new",async e=>{const t=await z(e,"list-new-only");if(t)return t;const a=await x(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:s}=await mt(e,a,{scopeSuperAdminToTenant:!0}),n=m=>(m||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),r=m=>(m||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=s.map(m=>{const f=m.national_id&&!String(m.national_id).startsWith("TEMP-")?String(m.national_id):"",g=r(m.full_name||"")+(m.phone?" — "+r(m.phone):"")+(f?" ("+r(f)+")":"");return`<option value="${n(String(m.id))}" data-name="${n(m.full_name||"")}" data-national_id="${n(f)}" data-phone="${n(m.phone||"")}" data-city="${n(m.city||"")}">${g}</option>`}).join(`
+`);let i="",o="",d="";const c=a.tenantId;if(c){const m=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(c).first();if(m&&(o=n(m.company_name||""),d=n((m.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',m.company_name)){const f=(m.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${r(m.company_name)}</strong>${f?` — ${r(f)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let u=Fa.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",o).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d);return a.roleId===3&&(u=ot(u)),e.html(u)});p.get("/admin/contracts/view",async e=>{const t=await z(e,"list-new-only");return t||e.html(za)});p.get("/admin/contracts/templates",async e=>{const t=await z(e,"all");return t||e.html(Pa)});p.get("/admin/contracts/notes",async e=>{const t=await z(e,"all");return t||e.html(Wa)});p.get("/admin/contracts/archive",async e=>{const t=await z(e,"all");return t||e.html(Va)});p.get("/admin/contracts/settings",async e=>{const t=await z(e,"all");return t||e.html(Ga)});p.get("/admin/hr",e=>e.html(ka));p.get("/admin/hr/employees",e=>e.html(Ea));p.get("/admin/hr/employees/:id",e=>e.html(Ia));p.get("/admin/hr/employees/:id/edit",e=>e.html(Sa));p.get("/admin/hr/attendance",e=>e.html(Ta));p.get("/admin/hr/leaves",e=>e.html(Da));p.get("/admin/hr/salaries",e=>e.html(Ba));p.get("/admin/hr/performance",e=>e.html(Ca));p.get("/admin/hr/promotions",e=>e.html(Ra));p.get("/admin/hr/documents",e=>e.html(ja));p.get("/admin/hr/reports",e=>e.html(La));p.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),r=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(r).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),c=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(c).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -39360,7 +41681,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           a.working_hours as work_hours
         FROM hr_attendance a 
         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function Ye(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[r,l]=t.split(":").map(Number),i=s*60+n;let o=r*60+l;o<i&&(o+=1440);const d=o-i,c=Math.round(d/60*100)/100,u=Math.floor(c),m=Math.round((c-u)*60),f=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:f}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}p.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:n,workHoursFormatted:r}=Ye(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function gt(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[r,l]=t.split(":").map(Number),i=s*60+n;let o=r*60+l;o<i&&(o+=1440);const d=o-i,c=Math.round(d/60*100)/100,u=Math.floor(c),m=Math.round((c-u)*60),f=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:f}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}p.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:n,workHoursFormatted:r}=gt(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
         employee_id,
         attendance_date,
@@ -39377,7 +41698,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,n,r,s).run();return e.json({success:!0,id:l.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=(await x(e)).tenantId,r=await e.env.DB.prepare(`
       SELECT check_in_time, attendance_date FROM hr_attendance 
       WHERE id = ? AND tenant_id = ?
-    `).bind(t,n).first();if(!r)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||r.check_in_time,i=a.check_out_time||null,o=a.attendance_date||r.attendance_date,{workingHours:d,workHoursFormatted:c}=Ye(l,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,c)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
+    `).bind(t,n).first();if(!r)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||r.check_in_time,i=a.check_out_time||null,o=a.attendance_date||r.attendance_date,{workingHours:d,workHoursFormatted:c}=gt(l,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,c)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
       UPDATE hr_attendance 
       SET ${u.join(", ")}
       WHERE id = ? AND tenant_id = ?
@@ -39400,4 +41721,1110 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(a,s,n,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});p.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});const _e=new Ne,Ha=Object.assign({"/src/index.tsx":p});let Ge=!1;for(const[,e]of Object.entries(Ha))e&&(_e.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),_e.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Ge=!0);if(!Ge)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{_e as default};
+    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});p.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});p.post("/api/public/:slug/contact-submissions",async e=>{try{const t=le(e.req.param("slug"));if(!t||de(t))return e.json({success:!1,error:"Invalid slug"},400);const a=await e.req.json().catch(()=>({})),s=String(a?.customer_name??"").trim(),n=String(a?.customer_phone??"").trim(),r=String(a?.customer_message??"").trim(),l=Ee(a?.affiliate_path);if(!s||!n||!r)return e.json({success:!1,error:"الاسم ورقم الجوال والرسالة مطلوبة"},400);const i=await e.env.DB.prepare(`
+      SELECT id
+      FROM tenants
+      WHERE slug = ? AND status = 'active'
+      LIMIT 1
+    `).bind(t).first();if(!i?.id)return e.json({success:!1,error:"الشركة غير موجودة"},404);let o=null,d=null;if(l){if(!Ie(l))return e.json({success:!1,error:"مسار الإحالة غير صالح"},400);const c=await e.env.DB.prepare(`
+        SELECT path_segment, label
+        FROM tenant_contact_affiliate_links
+        WHERE tenant_id = ? AND path_segment = ?
+        LIMIT 1
+      `).bind(i.id,l).first();if(!c)return e.json({success:!1,error:"رابط الإحالة غير معروف"},400);o=c.path_segment,d=c.label}return await e.env.DB.prepare(`
+      INSERT INTO company_contact_followups (
+        tenant_id, customer_name, customer_phone, customer_message, source_slug,
+        affiliate_path_segment, affiliate_label
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(i.id,s,n,r,t,o,d).run(),e.json({success:!0,message:"تم إرسال طلبك بنجاح"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);let a=t.roleId===2?t.tenantId:null;if(t.roleId===1){const r=e.req.query("tenant_id");a=r&&/^\d+$/.test(String(r))?parseInt(String(r),10):null}if(!a)return e.json({success:!1,error:t.roleId===1?"tenant_id مطلوب":"لا شركة مرتبطة"},400);if(t.roleId===2&&t.tenantId!==a)return e.json({success:!1,error:"Forbidden"},403);const{results:s}=await e.env.DB.prepare(`
+      SELECT id, tenant_id, path_segment, label, created_at
+      FROM tenant_contact_affiliate_links
+      WHERE tenant_id = ?
+      ORDER BY created_at DESC, id DESC
+    `).bind(a).all(),n=await e.env.DB.prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1").bind(a).first();return e.json({success:!0,data:s||[],tenant_slug:n?.slug??null})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>({})),s=Ee(a?.path_segment),n=String(a?.label??"").trim();let r=t.roleId===2?t.tenantId:null;if(t.roleId===1){const l=a?.tenant_id,i=parseInt(String(l??""),10);r=Number.isFinite(i)&&i>0?i:null}return r?t.roleId===2&&t.tenantId!==r?e.json({success:!1,error:"Forbidden"},403):!s||!Ie(s)?e.json({success:!1,error:"مسار غير صالح. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية أو وسطية فقط (مثل facebook أو fb-ads)"},400):!n||n.length>120?e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400):(await e.env.DB.prepare(`
+      INSERT INTO tenant_contact_affiliate_links (tenant_id, path_segment, label)
+      VALUES (?, ?, ?)
+    `).bind(r,s,n).run(),e.json({success:!0,message:"تم إنشاء رابط الإحالة"})):e.json({success:!1,error:t.roleId===1?"tenant_id مطلوب":"لا شركة مرتبطة"},400)}catch(t){const a=String(t?.message||"");return a.includes("UNIQUE")||a.toLowerCase().includes("unique")?e.json({success:!1,error:"هذا المسار مستخدم بالفعل لهذه الشركة"},400):e.json({success:!1,error:t?.message||"Server error"},500)}});p.delete("/api/tenant-contact-affiliates/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid id"},400);const s=await e.env.DB.prepare(`
+      SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `).bind(a).first();return s?t.roleId===2&&(!t.tenantId||s.tenant_id!==t.tenantId)?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare("DELETE FROM tenant_contact_affiliate_links WHERE id = ?").bind(a).run(),e.json({success:!0,message:"تم حذف الرابط"})):e.json({success:!1,error:"Not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);if(t.roleId===1){const n=e.req.query("tenant_id");if(n&&/^\d+$/.test(String(n))){const{results:l}=await e.env.DB.prepare(`
+          SELECT f.*, t.company_name
+          FROM company_contact_followups f
+          LEFT JOIN tenants t ON t.id = f.tenant_id
+          WHERE f.tenant_id = ?
+          ORDER BY f.created_at DESC
+          LIMIT 300
+        `).bind(parseInt(String(n),10)).all();return e.json({success:!0,data:l||[]})}const{results:r}=await e.env.DB.prepare(`
+        SELECT f.*, t.company_name
+        FROM company_contact_followups f
+        LEFT JOIN tenants t ON t.id = f.tenant_id
+        ORDER BY f.created_at DESC
+        LIMIT 300
+      `).all();return e.json({success:!0,data:r||[]})}if(!t.tenantId)return e.json({success:!0,data:[]});const{results:s}=await e.env.DB.prepare(`
+      SELECT f.*, t.company_name
+      FROM company_contact_followups f
+      LEFT JOIN tenants t ON t.id = f.tenant_id
+      WHERE f.tenant_id = ?
+      ORDER BY f.created_at DESC
+      LIMIT 300
+    `).bind(t.tenantId).all();return e.json({success:!0,data:s||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups/:id/notes",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
+      SELECT id, tenant_id
+      FROM company_contact_followups
+      WHERE id = ?
+      LIMIT 1
+    `).bind(a).first();if(!s?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(`
+      SELECT n.id, n.note_text, n.created_at, n.created_by_user_id, u.full_name as created_by_name
+      FROM company_contact_followup_notes n
+      LEFT JOIN users u ON u.id = n.created_by_user_id
+      WHERE n.followup_id = ?
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT 200
+    `).bind(a).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/follow-ups/:id/notes",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.note_text??"").trim();if(!n)return e.json({success:!1,error:"يرجى إدخال الملاحظة"},400);const r=await e.env.DB.prepare(`
+      SELECT id, tenant_id
+      FROM company_contact_followups
+      WHERE id = ?
+      LIMIT 1
+    `).bind(a).first();return r?.id?t.roleId!==1&&r.tenant_id!==t.tenantId?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare(`
+      INSERT INTO company_contact_followup_notes (
+        followup_id, tenant_id, note_text, created_by_user_id
+      ) VALUES (?, ?, ?, ?)
+    `).bind(a,r.tenant_id,n,t.userId).run(),e.json({success:!0,message:"تمت إضافة الملاحظة"})):e.json({success:!1,error:"Follow-up not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups/:id/staff",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(a).first();if(!s?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(`
+      SELECT id, full_name FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      ORDER BY full_name
+    `).bind(s.tenant_id).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups/:id/tasks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(a).first();if(!s?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(`
+      SELECT t.id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
+             t.priority, t.status, t.created_at,
+             t.assigned_user_id, au.full_name as assigned_user_name,
+             t.created_by_user_id, cu.full_name as created_by_name
+      FROM company_contact_followup_tasks t
+      LEFT JOIN users au ON au.id = t.assigned_user_id
+      LEFT JOIN users cu ON cu.id = t.created_by_user_id
+      WHERE t.followup_id = ?
+      ORDER BY t.created_at DESC, t.id DESC
+      LIMIT 200
+    `).bind(a).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/follow-ups/:id/tasks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.task_title??"").trim();if(!n)return e.json({success:!1,error:"يرجى إدخال عنوان المهمة"},400);const r=String(s?.scheduled_at_gregorian??"").trim();if(!r||Number.isNaN(new Date(r).getTime()))return e.json({success:!1,error:"تاريخ غير صالح"},400);const l=String(s?.priority??"").trim();if(!["regular","important"].includes(l))return e.json({success:!1,error:"الأولوية غير صالحة"},400);const i=String(s?.scheduled_at_hijri??"").trim()||null,o=await e.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(a).first();if(!o?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&o.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);let d=null;if(s?.assigned_user_id!=null&&String(s.assigned_user_id).trim()!==""){const c=parseInt(String(s.assigned_user_id),10);if(!Number.isFinite(c)||c<=0)return e.json({success:!1,error:"معرّف الموظف غير صالح"},400);if(!(await e.env.DB.prepare(`
+        SELECT id FROM users WHERE id = ? AND role_id = 4 AND tenant_id = ? LIMIT 1
+      `).bind(c,o.tenant_id).first())?.id)return e.json({success:!1,error:"الموظف غير موجود في هذه الشركة"},400);d=c}return await e.env.DB.prepare(`
+      INSERT INTO company_contact_followup_tasks
+        (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
+         assigned_user_id, priority, created_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(a,o.tenant_id,n,r,i,d,l,t.userId).run(),e.json({success:!0,message:"تمت إضافة المهمة"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/my-followup-tasks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!0,data:[]});const a=String(e.req.query("status")??"").trim().toLowerCase(),s=a==="pending"?" AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending') ":a==="completed"?" AND LOWER(TRIM(t.status)) = 'completed' ":"",{results:n}=await e.env.DB.prepare(`
+      SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
+             t.priority, t.status, t.created_at,
+             f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
+             f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
+             tn.company_name
+      FROM company_contact_followup_tasks t
+      INNER JOIN company_contact_followups f ON f.id = t.followup_id
+      LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      WHERE t.assigned_user_id = ? AND t.tenant_id = ?
+      ${s}
+      ORDER BY
+        CASE WHEN LOWER(TRIM(COALESCE(t.status, ''))) = 'completed' THEN 1 ELSE 0 END,
+        t.scheduled_at_gregorian ASC,
+        t.id DESC
+      LIMIT 300
+    `).bind(t.userId,t.tenantId).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.patch("/api/my-followup-tasks/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid task id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.status??"").trim().toLowerCase();if(!["pending","completed"].includes(n))return e.json({success:!1,error:"حالة غير صالحة"},400);const r=await e.env.DB.prepare(`
+      SELECT id, tenant_id, assigned_user_id FROM company_contact_followup_tasks WHERE id = ? LIMIT 1
+    `).bind(a).first();return r?.id?r.tenant_id!==t.tenantId||r.assigned_user_id!==t.userId?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare(`
+      UPDATE company_contact_followup_tasks SET status = ? WHERE id = ?
+    `).bind(n,a).run(),e.json({success:!0,message:n==="completed"?"تم إكمال المهمة":"أعيدت المهمة إلى قيد التنفيذ"})):e.json({success:!1,error:"Task not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/admin/my-tasks",async e=>{const t=await x(e);return t.userId?t.roleId!==4?e.redirect("/admin/panel"):t.tenantId?e.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>مهام المتابعة</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-5xl mx-auto p-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>مهام المتابعة</h1>
+            <p class="text-gray-600 mt-2 text-sm">المهام المعيّنة لك من وحدة متابعة التواصل</p>
+          </div>
+          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+          </a>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
+          <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
+          <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+        </div>
+
+        <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
+        <div id="cards" class="space-y-3"></div>
+      </div>
+
+      <script>
+        let activeFilter = 'all';
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA');
+        }
+
+        function isCompleted(task) {
+          return String(task.status || '').trim().toLowerCase() === 'completed';
+        }
+
+        function priorityBadge(priority) {
+          return priority === 'important'
+            ? '<span class="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">مهم</span>'
+            : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+        }
+
+        function statusBadge(task) {
+          return isCompleted(task)
+            ? '<span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">مكتملة</span>'
+            : '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">قيد التنفيذ</span>';
+        }
+
+        function setListStatus(msg, type) {
+          const el = document.getElementById('listStatus');
+          el.textContent = msg || '';
+          el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function renderTasks(tasks) {
+          const root = document.getElementById('cards');
+          if (!Array.isArray(tasks) || !tasks.length) {
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد مهام في هذا القسم.</div>';
+            return;
+          }
+          root.innerHTML = tasks.map(function (task) {
+            const done = isCompleted(task);
+            var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
+              '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
+            var enrollCustomerBtn =
+              '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
+              '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
+            const actionBtn = done
+              ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
+                enrollCustomerBtn +
+                '<button type="button" data-reopen="' + task.id + '" class="text-sm text-indigo-700 hover:underline font-medium py-2 sm:py-0">إعادة إلى قيد التنفيذ</button></div>'
+              : '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
+                enrollCustomerBtn +
+                '<button type="button" data-complete="' + task.id + '" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">تعليم كمكتملة</button></div>';
+            return (
+              '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">' +
+                '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                  '<div class="min-w-0 flex-1">' +
+                    '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
+                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) + statusBadge(task) +
+                    (task.affiliate_label ? '<span class="inline-block bg-amber-100 text-amber-900 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-200"><i class="fas fa-tag ml-1"></i>' + escapeHtml(task.affiliate_label) + '</span>' : '') +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                  '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — ' + escapeHtml(task.customer_phone || '-') + '</div>' +
+                  '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message || '') + '</span></div>' +
+                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+                '</div>' +
+                actionBtn +
+              '</div>'
+            );
+          }).join('');
+
+          root.querySelectorAll('[data-complete]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-complete'), 'completed'); });
+          });
+          root.querySelectorAll('[data-reopen]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-reopen'), 'pending'); });
+          });
+        }
+
+        async function loadTasks() {
+          setListStatus('جاري التحميل...', 'neutral');
+          document.getElementById('cards').innerHTML = '';
+          try {
+            var url = '/api/my-followup-tasks';
+            if (activeFilter === 'pending' || activeFilter === 'completed') url += '?status=' + encodeURIComponent(activeFilter);
+            const res = await axios.get(url);
+            const tasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            setListStatus('', 'neutral');
+            renderTasks(tasks);
+          } catch (e) {
+            setListStatus('تعذر تحميل المهام', 'error');
+            document.getElementById('cards').innerHTML = '';
+          }
+        }
+
+        async function patchTask(id, status) {
+          if (!id) return;
+          try {
+            await axios.patch('/api/my-followup-tasks/' + id, { status: status }, { headers: { 'Content-Type': 'application/json' } });
+            await loadTasks();
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تحديث المهمة';
+            alert(msg);
+          }
+        }
+
+        function setActiveFilterButtons() {
+          document.querySelectorAll('.filter-btn').forEach(function (btn) {
+            var f = btn.getAttribute('data-filter');
+            var on = f === activeFilter;
+            btn.className = 'filter-btn px-4 py-2 rounded-lg text-sm font-medium border ' +
+              (on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300');
+          });
+        }
+
+        document.querySelectorAll('.filter-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            activeFilter = btn.getAttribute('data-filter') || 'all';
+            setActiveFilterButtons();
+            loadTasks();
+          });
+        });
+
+        setActiveFilterButtons();
+        loadTasks();
+      <\/script>
+    </body>
+    </html>
+  `):e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title></head><body class="p-6"><p>لم يُعرّف حسابك على شركة.</p><a href="/admin/panel">العودة</a></body></html>',400):e.redirect("/login")});p.get("/admin/contact-affiliates",async e=>{const t=await x(e);if(!t.userId)return e.redirect("/login");if(t.roleId!==1&&t.roleId!==2)return e.redirect("/admin/panel");const a=t.roleId===1;return e.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>روابط التواصل التسويقية</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-4xl mx-auto p-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">
+              <i class="fas fa-link ml-2 text-amber-600"></i>روابط التواصل التسويقية
+            </h1>
+            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل (مثل /facebook) لتتبع مصدر كل طلب في بطاقات المتابعة.</p>
+          </div>
+          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+          </a>
+        </div>
+
+        <div id="superTenantWrap" class="${a?"":"hidden"} mb-6 bg-white rounded-xl border p-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">الشركة</label>
+          <select id="superTenantSelect" class="w-full border rounded-lg px-3 py-2"></select>
+        </div>
+
+        <div class="bg-white rounded-xl border p-5 mb-6">
+          <h2 class="text-lg font-bold text-gray-900 mb-4">إضافة رابط</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">المسار (بالإنجليزية، بدون شرطة مائلة)</label>
+              <input id="pathInput" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="facebook" dir="ltr" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">التسمية (تظهر في بطاقة المتابعة)</label>
+              <input id="labelInput" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="إعلان فيسبوك" />
+            </div>
+          </div>
+          <button id="saveBtn" type="button" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-lg text-sm font-medium">
+            <i class="fas fa-plus ml-2"></i>حفظ
+          </button>
+          <p id="formMsg" class="text-sm mt-2"></p>
+        </div>
+
+        <div id="listWrap" class="bg-white rounded-xl border overflow-hidden">
+          <div class="px-4 py-3 border-b font-semibold text-gray-800">الروابط الحالية</div>
+          <div id="listBody" class="p-4 text-sm text-gray-500">جاري التحميل...</div>
+        </div>
+      </div>
+
+      <script>
+        const IS_SUPERADMIN = ${a?"true":"false"};
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function currentTenantId() {
+          if (IS_SUPERADMIN) {
+            var sel = document.getElementById('superTenantSelect');
+            var v = sel && sel.value ? parseInt(sel.value, 10) : 0;
+            return v > 0 ? v : null;
+          }
+          return 'me';
+        }
+
+        function affiliatesApiUrl() {
+          if (IS_SUPERADMIN) {
+            var tid = currentTenantId();
+            return tid ? '/api/tenant-contact-affiliates?tenant_id=' + tid : '/api/tenant-contact-affiliates';
+          }
+          return '/api/tenant-contact-affiliates';
+        }
+
+        async function loadTenantsIfSuper() {
+          if (!IS_SUPERADMIN) return;
+          var sel = document.getElementById('superTenantSelect');
+          var res = await axios.get('/api/tenants');
+          var rows = Array.isArray(res.data && res.data.data) ? res.data.data : [];
+          sel.innerHTML = '<option value="">-- اختر شركة --</option>' +
+            rows.map(function (t) {
+              return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.company_name || t.slug) + '</option>';
+            }).join('');
+          sel.addEventListener('change', loadList);
+        }
+
+        async function loadList() {
+          var body = document.getElementById('listBody');
+          body.textContent = 'جاري التحميل...';
+          try {
+            if (IS_SUPERADMIN && !currentTenantId()) {
+              body.textContent = 'اختر شركة لعرض الروابط.';
+              return;
+            }
+            var res = await axios.get(affiliatesApiUrl());
+            if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
+            var rows = Array.isArray(res.data.data) ? res.data.data : [];
+            var slug = res.data.tenant_slug || '';
+            var origin = window.location.origin;
+            if (!rows.length) {
+              body.innerHTML = '<p class="text-gray-500">لا توجد روابط بعد.</p>';
+              return;
+            }
+            body.innerHTML =
+              '<ul class="divide-y">' +
+              rows
+                .map(function (r) {
+                  var full = slug ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment) : '';
+                  return (
+                    '<li class="py-3 flex flex-wrap items-center justify-between gap-2">' +
+                    '<div>' +
+                    '<div class="font-medium text-gray-900">' +
+                    escapeHtml(r.label) +
+                    '</div>' +
+                    '<div class="text-xs text-gray-500 mt-1" dir="ltr">' +
+                    escapeHtml(full || '/' + slug + '/' + r.path_segment) +
+                    '</div>' +
+                    '</div>' +
+                    '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' +
+                    Number(r.id) +
+                    '">حذف</button>' +
+                    '</li>'
+                  );
+                })
+                .join('') +
+              '</ul>';
+            body.querySelectorAll('[data-del]').forEach(function (btn) {
+              btn.addEventListener('click', async function () {
+                if (!confirm('حذف هذا الرابط؟')) return;
+                var id = btn.getAttribute('data-del');
+                var resDel = await axios.delete('/api/tenant-contact-affiliates/' + id);
+                if (!resDel.data || !resDel.data.success) {
+                  alert(resDel.data && resDel.data.error ? resDel.data.error : 'تعذر الحذف');
+                  return;
+                }
+                loadList();
+              });
+            });
+          } catch (e) {
+            body.innerHTML = '<p class="text-red-600">' + escapeHtml(e.message || 'خطأ') + '</p>';
+          }
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', async function () {
+          var msg = document.getElementById('formMsg');
+          msg.textContent = '';
+          var path = (document.getElementById('pathInput').value || '').trim().toLowerCase().replace(/^/+/, '');
+          var label = (document.getElementById('labelInput').value || '').trim();
+          if (!path || !label) {
+            msg.className = 'text-sm text-red-600';
+            msg.textContent = 'أدخل المسار والتسمية';
+            return;
+          }
+          try {
+            var payload = { path_segment: path, label: label };
+            if (IS_SUPERADMIN) {
+              var tid = currentTenantId();
+              if (!tid) {
+                msg.className = 'text-sm text-red-600';
+                msg.textContent = 'اختر شركة أولاً';
+                return;
+              }
+              payload.tenant_id = tid;
+            }
+            var res = await axios.post('/api/tenant-contact-affiliates', payload);
+            if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
+            msg.className = 'text-sm text-green-700';
+            msg.textContent = res.data.message || 'تم';
+            document.getElementById('pathInput').value = '';
+            document.getElementById('labelInput').value = '';
+            loadList();
+          } catch (e) {
+            msg.className = 'text-sm text-red-600';
+            msg.textContent = e.message || 'خطأ';
+          }
+        });
+
+        (async function init() {
+          await loadTenantsIfSuper();
+          await loadList();
+        })();
+      <\/script>
+    </body>
+    </html>
+  `)});p.get("/admin/follow-ups",async e=>{const t=await x(e);return t.userId?t.roleId===4?e.redirect("/admin/panel"):e.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>متابعة طلبات التواصل</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-7xl mx-auto p-6">
+        <div class="mb-6 flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900"><i class="fas fa-address-card ml-2 text-purple-600"></i>متابعة طلبات التواصل</h1>
+            <p class="text-gray-600 mt-2">الطلبات القادمة من صفحات التواصل العامة للشركات</p>
+          </div>
+          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg">
+            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+          </a>
+        </div>
+
+        <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Notes Modal -->
+      <div id="notesModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-4 border-b">
+            <h2 class="text-xl font-bold text-gray-900">ملاحظات المتابعة</h2>
+            <button id="closeNotesModalBtn" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <div id="notesHistory" class="max-h-72 overflow-y-auto space-y-3 bg-gray-50 border rounded-xl p-3"></div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">إضافة ملاحظة</label>
+              <textarea id="noteInput" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-500" placeholder="اكتب ملاحظتك هنا..."></textarea>
+            </div>
+            <div class="flex items-center justify-end gap-3">
+              <button id="saveNoteBtn" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-5 py-2 rounded-lg">
+                <i class="fas fa-plus ml-2"></i>إضافة ملاحظة
+              </button>
+            </div>
+            <p id="noteStatus" class="text-sm"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tasks Modal -->
+      <div id="tasksModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col" style="max-height:90vh">
+          <div class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
+            <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>مهام المتابعة</h2>
+            <button id="closeTasksModalBtn" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-5">
+            <div id="tasksHistory" class="space-y-3 bg-gray-50 border rounded-xl p-3 min-h-16"></div>
+          </div>
+          <div class="p-5 border-t bg-gray-50 space-y-3 flex-shrink-0">
+            <h3 class="text-sm font-semibold text-gray-800">إضافة مهمة جديدة</h3>
+            <input id="taskTitleInput" type="text" placeholder="عنوان المهمة *" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">التاريخ والوقت (ميلادي) *</label>
+                <input id="taskScheduledGregorian" type="text" placeholder="YYYY-MM-DD HH:mm" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">التاريخ والوقت (هجري)</label>
+                <input id="taskScheduledHijri" type="text" placeholder="YYYY-MM-DD HH:mm" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-600">التقويم المستخدم:</span>
+              <button type="button" id="taskCalGregorianBtn" class="px-3 py-1.5 text-xs rounded-md bg-indigo-600 text-white">ميلادي</button>
+              <button type="button" id="taskCalHijriBtn" class="px-3 py-1.5 text-xs rounded-md text-gray-700 border border-gray-300">هجري</button>
+            </div>
+            <div>
+              <label class="text-xs text-gray-600 mb-1 block">تحديد سريع</label>
+              <select id="taskQuickAction" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">-- اختر تحديد سريع --</option>
+                <option value="1h">بعد ساعة</option>
+                <option value="3h">بعد 3 ساعات</option>
+                <option value="1d">بعد يوم</option>
+                <option value="1w">بعد أسبوع</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">الموظف المسؤول</label>
+                <select id="taskStaffSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">-- بدون تعيين --</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">الأولوية</label>
+                <select id="taskPrioritySelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="regular">عادي</option>
+                  <option value="important">مهم</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-1">
+              <button id="saveTaskBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium">
+                <i class="fas fa-plus ml-2"></i>حفظ المهمة
+              </button>
+            </div>
+            <p id="taskStatus" class="text-sm"></p>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        let activeFollowupId = null;
+        let activeTaskFollowupId = null;
+        let taskDatePicker = null;
+        let taskHijriPicker = null;
+        let isTaskSyncing = false;
+        let activeTaskCalendarType = 'gregorian';
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA');
+        }
+
+        function formatGregorianDateTime(date) {
+          const y = date.getFullYear();
+          const mo = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          const hh = String(date.getHours()).padStart(2, '0');
+          const mm = String(date.getMinutes()).padStart(2, '0');
+          return y + '-' + mo + '-' + d + ' ' + hh + ':' + mm;
+        }
+
+        function formatHijriDateTimeFromGregorian(datetimeStr) {
+          if (!datetimeStr) return '';
+          try {
+            const parts = String(datetimeStr).split(/[T ]/);
+            const datePart = parts[0];
+            const timePart = parts[1] ? parts[1].substring(0, 5) : '';
+            const dp = datePart.split('-').map(Number);
+            if (dp.length < 3 || !dp[0] || !dp[1] || !dp[2]) return '';
+            const d = new Date(dp[0], dp[1] - 1, dp[2], 12, 0, 0);
+            if (Number.isNaN(d.getTime())) return '';
+            const hijri = d.toLocaleDateString('ar-SA-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            return hijri + (timePart ? ' ' + timePart : '');
+          } catch (_) { return ''; }
+        }
+
+        function normalizeArabicDigits(value) {
+          if (!value) return '';
+          const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+          const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+          return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+            const arabicIndex = arabicDigits.indexOf(char);
+            if (arabicIndex >= 0) return String(arabicIndex);
+            const easternArabicIndex = easternArabicDigits.indexOf(char);
+            return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+          });
+        }
+
+        function parseHijriDateTimeInput(value) {
+          const normalized = normalizeArabicDigits(value).replace(/‏/g, '').replace(/‎/g, '').trim();
+          if (!normalized) return null;
+          const [datePartRaw, timePartRaw = '00:00'] = normalized.split(/s+/);
+          const dateParts = datePartRaw.split(/[^d]+/).filter(Boolean);
+          if (dateParts.length !== 3) return null;
+
+          let year, month, day;
+          if (dateParts[0].length === 4) {
+            year = Number(dateParts[0]); month = Number(dateParts[1]); day = Number(dateParts[2]);
+          } else if (dateParts[2].length === 4) {
+            day = Number(dateParts[0]); month = Number(dateParts[1]); year = Number(dateParts[2]);
+          } else return null;
+
+          const t = timePartRaw.split(':');
+          const hour = Number(t[0] ?? '0');
+          const minute = Number(t[1] ?? '0');
+          if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+          if (year < 1200 || year > 1700 || month < 1 || month > 12 || day < 1 || day > 30) return null;
+          if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+          return { year, month, day, hour, minute };
+        }
+
+        function extractHijriPartsFromDate(dateObject) {
+          const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+          }).formatToParts(dateObject);
+          const year = Number((parts.find((p) => p.type === 'year') || {}).value);
+          const month = Number((parts.find((p) => p.type === 'month') || {}).value);
+          const day = Number((parts.find((p) => p.type === 'day') || {}).value);
+          if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+          return { year, month, day };
+        }
+
+        function findGregorianFromHijriDate(hijriParts) {
+          const approxGregorianYear = hijriParts.year + 579;
+          const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+          const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+          for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+            const current = extractHijriPartsFromDate(cursor);
+            if (!current) continue;
+            if (current.year === hijriParts.year && current.month === hijriParts.month && current.day === hijriParts.day) {
+              return new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), hijriParts.hour, hijriParts.minute, 0);
+            }
+          }
+          return null;
+        }
+
+        function syncTaskFromGregorian(gregValue) {
+          if (isTaskSyncing) return;
+          isTaskSyncing = true;
+          document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(gregValue);
+          if (taskHijriPicker && gregValue) taskHijriPicker.setDate(gregValue, false, 'Y-m-d H:i');
+          isTaskSyncing = false;
+        }
+
+        function syncTaskFromHijri(hijriValue) {
+          if (isTaskSyncing) return;
+          const parsed = parseHijriDateTimeInput(hijriValue);
+          if (!parsed) return;
+          const gregDate = findGregorianFromHijriDate(parsed);
+          if (!gregDate) return;
+          const greg = formatGregorianDateTime(gregDate);
+          isTaskSyncing = true;
+          document.getElementById('taskScheduledGregorian').value = greg;
+          document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(greg);
+          if (taskDatePicker) taskDatePicker.setDate(gregDate, false, 'Y-m-d H:i');
+          isTaskSyncing = false;
+        }
+
+        function setTaskCalendarType(type) {
+          activeTaskCalendarType = type;
+          const g = document.getElementById('taskScheduledGregorian');
+          const h = document.getElementById('taskScheduledHijri');
+          const gBtn = document.getElementById('taskCalGregorianBtn');
+          const hBtn = document.getElementById('taskCalHijriBtn');
+          const isG = type === 'gregorian';
+          g.style.display = isG ? '' : 'none';
+          h.style.display = isG ? 'none' : '';
+          gBtn.className = 'px-3 py-1.5 text-xs rounded-md ' + (isG ? 'bg-indigo-600 text-white' : 'text-gray-700 border border-gray-300');
+          hBtn.className = 'px-3 py-1.5 text-xs rounded-md ' + (!isG ? 'bg-indigo-600 text-white' : 'text-gray-700 border border-gray-300');
+        }
+
+        function setNoteStatus(message, type) {
+          const el = document.getElementById('noteStatus');
+          el.textContent = message || '';
+          el.className = 'text-sm ' + (type === 'error' ? 'text-red-700' : type === 'success' ? 'text-green-700' : 'text-gray-600');
+        }
+
+        function setTaskStatus(message, type) {
+          const el = document.getElementById('taskStatus');
+          el.textContent = message || '';
+          el.className = 'text-sm ' + (type === 'error' ? 'text-red-700' : type === 'success' ? 'text-green-700' : 'text-gray-600');
+        }
+
+        function priorityBadge(priority) {
+          return priority === 'important'
+            ? '<span class="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">مهم</span>'
+            : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+        }
+
+        function renderNotes(notes) {
+          const history = document.getElementById('notesHistory');
+          if (!Array.isArray(notes) || !notes.length) {
+            history.innerHTML = '<div class="text-sm text-gray-500">لا توجد ملاحظات حتى الآن.</div>';
+            return;
+          }
+          history.innerHTML = notes.map((note) => \`
+            <div class="bg-white border border-gray-200 rounded-lg p-3">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="text-xs text-gray-600">\${escapeHtml(note.created_by_name || 'مستخدم')}</span>
+                <span class="text-xs text-gray-500">\${formatDate(note.created_at)}</span>
+              </div>
+              <div class="text-sm text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(note.note_text || '')}</div>
+            </div>
+          \`).join('');
+        }
+
+        function renderTasksInModal(tasks) {
+          const history = document.getElementById('tasksHistory');
+          if (!Array.isArray(tasks) || !tasks.length) {
+            history.innerHTML = '<div class="text-sm text-gray-500">لا توجد مهام.</div>';
+            return;
+          }
+          history.innerHTML = tasks.map((task) => \`
+            <div class="bg-white border border-gray-200 rounded-lg p-3">
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <span class="text-sm font-medium text-gray-800">\${escapeHtml(task.task_title || '')}</span>
+                \${priorityBadge(task.priority)}
+              </div>
+              <div class="text-xs text-gray-600 space-y-0.5 mt-1">
+                <div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>\${escapeHtml(task.scheduled_at_gregorian || '-')}\${task.scheduled_at_hijri ? ' | ' + escapeHtml(task.scheduled_at_hijri) : ''}</div>
+                <div><i class="fas fa-user ml-1 text-indigo-400"></i>\${escapeHtml(task.assigned_user_name || 'غير محدد')}</div>
+                <div class="text-gray-400">أضافه: \${escapeHtml(task.created_by_name || '-')} · \${formatDate(task.created_at)}</div>
+              </div>
+            </div>
+          \`).join('');
+        }
+
+        function renderCardTasks(followupId, tasks) {
+          const el = document.getElementById('card-tasks-' + followupId);
+          if (!el) return;
+          if (!Array.isArray(tasks) || !tasks.length) {
+            el.innerHTML = '<div class="text-xs text-gray-400 mt-1">لا توجد مهام</div>';
+            return;
+          }
+          const shown = tasks.slice(0, 3);
+          const extra = tasks.length > 3 ? \`<div class="text-xs text-gray-400">+\${tasks.length - 3} مهام أخرى</div>\` : '';
+          el.innerHTML = '<div class="mt-1 space-y-1">' +
+            shown.map((t) => \`
+              <div class="flex items-center gap-2 text-xs text-gray-700">
+                <i class="fas fa-circle text-indigo-400" style="font-size:5px;flex-shrink:0"></i>
+                <span class="truncate flex-1">\${escapeHtml(t.assigned_user_name || 'غير محدد')}</span>
+                \${priorityBadge(t.priority)}
+              </div>
+            \`).join('') + extra + '</div>';
+        }
+
+        async function loadCardTasks(followupId) {
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/tasks');
+            renderCardTasks(followupId, Array.isArray(res?.data?.data) ? res.data.data : []);
+          } catch (_) {
+            const el = document.getElementById('card-tasks-' + followupId);
+            if (el) el.innerHTML = '';
+          }
+        }
+
+        async function loadNotes(followupId) {
+          const history = document.getElementById('notesHistory');
+          history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل الملاحظات...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/notes');
+            renderNotes(Array.isArray(res?.data?.data) ? res.data.data : []);
+          } catch (e) {
+            history.innerHTML = '<div class="text-sm text-red-700">تعذر تحميل الملاحظات</div>';
+          }
+        }
+
+        async function loadTasksInModal(followupId) {
+          const history = document.getElementById('tasksHistory');
+          history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل المهام...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/tasks');
+            renderTasksInModal(Array.isArray(res?.data?.data) ? res.data.data : []);
+          } catch (e) {
+            history.innerHTML = '<div class="text-sm text-red-700">تعذر تحميل المهام</div>';
+          }
+        }
+
+        async function loadStaffSelect(followupId) {
+          const sel = document.getElementById('taskStaffSelect');
+          sel.innerHTML = '<option value="">-- جاري التحميل... --</option>';
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/staff');
+            const staff = Array.isArray(res?.data?.data) ? res.data.data : [];
+            sel.innerHTML = '<option value="">-- بدون تعيين --</option>' +
+              staff.map((u) => \`<option value="\${Number(u.id)}">\${escapeHtml(u.full_name || '')}</option>\`).join('');
+          } catch (_) {
+            sel.innerHTML = '<option value="">-- تعذر التحميل --</option>';
+          }
+        }
+
+        function initTaskDatePicker() {
+          if (taskDatePicker) { taskDatePicker.destroy(); taskDatePicker = null; }
+          if (taskHijriPicker) { taskHijriPicker.destroy(); taskHijriPicker = null; }
+          if (typeof flatpickr !== 'function') return;
+          taskDatePicker = flatpickr(document.getElementById('taskScheduledGregorian'), {
+            enableTime: true,
+            dateFormat: 'Y-m-d H:i',
+            time_24hr: true,
+            disableMobile: true,
+            onChange: function(selectedDates) {
+              if (!selectedDates || !selectedDates.length) return;
+              const greg = formatGregorianDateTime(selectedDates[0]);
+              syncTaskFromGregorian(greg);
+            }
+          });
+          if (typeof hijriCalendarPlugin === 'function' && window.luxon && window.luxon.DateTime) {
+            taskHijriPicker = flatpickr(document.getElementById('taskScheduledHijri'), {
+              locale: 'ar',
+              disableMobile: true,
+              dateFormat: 'Y-m-d H:i',
+              enableTime: true,
+              time_24hr: true,
+              allowInput: true,
+              plugins: [
+                hijriCalendarPlugin(window.luxon.DateTime, {
+                  showHijriDates: true,
+                  showHijriToggle: false
+                })
+              ],
+              onChange: [function(selectedDates) {
+                if (!selectedDates || !selectedDates.length || isTaskSyncing) return;
+                const greg = formatGregorianDateTime(selectedDates[0]);
+                isTaskSyncing = true;
+                document.getElementById('taskScheduledGregorian').value = greg;
+                document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(greg);
+                if (taskDatePicker) taskDatePicker.setDate(selectedDates[0], false, 'Y-m-d H:i');
+                isTaskSyncing = false;
+              }]
+            });
+          }
+        }
+
+        function openNotesModal(followupId) {
+          activeFollowupId = followupId;
+          document.getElementById('noteInput').value = '';
+          setNoteStatus('', 'neutral');
+          document.getElementById('notesModal').classList.remove('hidden');
+          document.getElementById('notesModal').classList.add('flex');
+          loadNotes(followupId);
+        }
+
+        function closeNotesModal() {
+          activeFollowupId = null;
+          document.getElementById('notesModal').classList.add('hidden');
+          document.getElementById('notesModal').classList.remove('flex');
+        }
+
+        function openTasksModal(followupId) {
+          activeTaskFollowupId = followupId;
+          document.getElementById('taskTitleInput').value = '';
+          document.getElementById('taskScheduledGregorian').value = '';
+          document.getElementById('taskScheduledHijri').value = '';
+          document.getElementById('taskQuickAction').value = '';
+          document.getElementById('taskPrioritySelect').value = 'regular';
+          setTaskStatus('', 'neutral');
+          document.getElementById('tasksModal').classList.remove('hidden');
+          document.getElementById('tasksModal').classList.add('flex');
+          initTaskDatePicker();
+          setTaskCalendarType('gregorian');
+          loadTasksInModal(followupId);
+          loadStaffSelect(followupId);
+        }
+
+        function closeTasksModal() {
+          activeTaskFollowupId = null;
+          if (taskDatePicker) { taskDatePicker.destroy(); taskDatePicker = null; }
+          if (taskHijriPicker) { taskHijriPicker.destroy(); taskHijriPicker = null; }
+          document.getElementById('tasksModal').classList.add('hidden');
+          document.getElementById('tasksModal').classList.remove('flex');
+        }
+
+        async function loadFollowUps() {
+          const cards = document.getElementById('cards');
+          cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups');
+            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+            if (!rows.length) {
+              cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات تواصل حالياً.</div>';
+              return;
+            }
+
+            cards.innerHTML = rows.map((row) => \`
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                      \${row.affiliate_label ? '<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>' + escapeHtml(row.affiliate_label) + '</span>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                  </div>
+                  <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                </div>
+                <div class="space-y-2">
+                  <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(row.customer_phone || '-')}</p>
+                  <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${row.affiliate_path_segment ? '/' + escapeHtml(row.source_slug || '') + '/' + escapeHtml(row.affiliate_path_segment) : '/' + escapeHtml(row.source_slug || '-')}</p>
+                  <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                  <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
+                    <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
+                  </div>
+                  <div class="pt-2 grid grid-cols-2 gap-2">
+                    <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                      <i class="fas fa-sticky-note ml-2"></i>الملاحظات
+                    </button>
+                    <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                      <i class="fas fa-tasks ml-2"></i>المهام
+                    </button>
+                  </div>
+                </div>
+              </div>
+            \`).join('');
+
+            rows.forEach((row) => loadCardTasks(Number(row.id)));
+          } catch (e) {
+            cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
+          }
+        }
+
+        document.getElementById('closeNotesModalBtn').addEventListener('click', closeNotesModal);
+        document.getElementById('notesModal').addEventListener('click', (event) => {
+          if (event.target.id === 'notesModal') closeNotesModal();
+        });
+        document.getElementById('saveNoteBtn').addEventListener('click', async () => {
+          if (!activeFollowupId) return;
+          const noteInput = document.getElementById('noteInput');
+          const noteText = String(noteInput.value || '').trim();
+          if (!noteText) {
+            setNoteStatus('يرجى كتابة الملاحظة أولاً', 'error');
+            return;
+          }
+          setNoteStatus('جاري الحفظ...', 'neutral');
+          try {
+            const res = await axios.post('/api/follow-ups/' + activeFollowupId + '/notes', { note_text: noteText });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ الملاحظة');
+            noteInput.value = '';
+            setNoteStatus('تمت إضافة الملاحظة بنجاح', 'success');
+            await loadNotes(activeFollowupId);
+          } catch (err) {
+            setNoteStatus(err?.message || 'حدث خطأ أثناء حفظ الملاحظة', 'error');
+          }
+        });
+
+        document.getElementById('closeTasksModalBtn').addEventListener('click', closeTasksModal);
+        document.getElementById('tasksModal').addEventListener('click', (event) => {
+          if (event.target.id === 'tasksModal') closeTasksModal();
+        });
+
+        document.getElementById('taskScheduledGregorian').addEventListener('change', function() {
+          syncTaskFromGregorian(this.value);
+        });
+        document.getElementById('taskScheduledGregorian').addEventListener('input', function() {
+          syncTaskFromGregorian(this.value);
+        });
+        document.getElementById('taskScheduledHijri').addEventListener('change', function() {
+          syncTaskFromHijri(this.value);
+        });
+        document.getElementById('taskScheduledHijri').addEventListener('input', function() {
+          syncTaskFromHijri(this.value);
+        });
+
+        document.getElementById('taskQuickAction').addEventListener('change', function() {
+          const val = this.value;
+          if (!val) return;
+          const deltas = { '1h': 3600000, '3h': 10800000, '1d': 86400000, '1w': 604800000 };
+          const delta = deltas[val];
+          if (!delta) return;
+          const newDate = new Date(Date.now() + delta);
+          const greg = formatGregorianDateTime(newDate);
+          document.getElementById('taskScheduledGregorian').value = greg;
+          document.getElementById('taskScheduledHijri').value = formatHijriDateTimeFromGregorian(greg);
+          if (taskDatePicker) taskDatePicker.setDate(newDate, false);
+          if (taskHijriPicker) taskHijriPicker.setDate(newDate, false, 'Y-m-d H:i');
+          this.value = '';
+        });
+
+        document.getElementById('taskCalGregorianBtn').addEventListener('click', () => setTaskCalendarType('gregorian'));
+        document.getElementById('taskCalHijriBtn').addEventListener('click', () => setTaskCalendarType('hijri'));
+
+        document.getElementById('saveTaskBtn').addEventListener('click', async () => {
+          if (!activeTaskFollowupId) return;
+          const title = String(document.getElementById('taskTitleInput').value || '').trim();
+          const scheduledGreg = String(document.getElementById('taskScheduledGregorian').value || '').trim();
+          const scheduledHijri = String(document.getElementById('taskScheduledHijri').value || '').trim();
+          const staffId = document.getElementById('taskStaffSelect').value;
+          const priority = document.getElementById('taskPrioritySelect').value;
+
+          if (!title) { setTaskStatus('يرجى إدخال عنوان المهمة', 'error'); return; }
+          if (!scheduledGreg) { setTaskStatus('يرجى تحديد التاريخ والوقت', 'error'); return; }
+
+          setTaskStatus('جاري الحفظ...', 'neutral');
+          try {
+            const res = await axios.post('/api/follow-ups/' + activeTaskFollowupId + '/tasks', {
+              task_title: title,
+              scheduled_at_gregorian: scheduledGreg,
+              scheduled_at_hijri: scheduledHijri || null,
+              assigned_user_id: staffId ? Number(staffId) : null,
+              priority: priority
+            });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ المهمة');
+            document.getElementById('taskTitleInput').value = '';
+            document.getElementById('taskScheduledGregorian').value = '';
+            document.getElementById('taskScheduledHijri').value = '';
+            if (taskDatePicker) taskDatePicker.clear();
+            document.getElementById('taskPrioritySelect').value = 'regular';
+            setTaskStatus('تمت إضافة المهمة بنجاح', 'success');
+            await loadTasksInModal(activeTaskFollowupId);
+            loadCardTasks(activeTaskFollowupId);
+          } catch (err) {
+            setTaskStatus(err?.message || 'حدث خطأ أثناء حفظ المهمة', 'error');
+          }
+        });
+
+        loadFollowUps();
+      <\/script>
+    </body>
+    </html>
+  `):e.redirect("/login")});p.get("/:slug/:affiliatePath",async e=>{const t=le(e.req.param("slug")),a=Ee(e.req.param("affiliatePath"));if(!t||de(t)||!a||!Ie(a))return e.notFound();const s=await e.env.DB.prepare(`
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color
+    FROM tenants
+    WHERE slug = ? AND status = 'active'
+    LIMIT 1
+  `).bind(t).first();if(!s?.id)return e.notFound();const n=await e.env.DB.prepare(`
+    SELECT path_segment, label
+    FROM tenant_contact_affiliate_links
+    WHERE tenant_id = ? AND path_segment = ?
+    LIMIT 1
+  `).bind(s.id,a).first();return n?e.html(pt(s,n)):e.notFound()});p.get("/:slug",async e=>{const t=le(e.req.param("slug"));if(!t||de(t))return e.notFound();const a=await e.env.DB.prepare(`
+    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color
+    FROM tenants
+    WHERE slug = ? AND status = 'active'
+    LIMIT 1
+  `).bind(t).first();return a?e.html(pt(a,null)):e.notFound()});const Me=new et,ms=Object.assign({"/src/index.tsx":p});let ft=!1;for(const[,e]of Object.entries(ms))e&&(Me.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Me.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),ft=!0);if(!ft)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Me as default};

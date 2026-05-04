@@ -10,14 +10,21 @@ export const hrMainPage = `<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
+    <div class="border-b border-slate-200/90 bg-white/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Page Header -->
     <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center gap-4 h-16">
-                <i class="fas fa-users-cog text-2xl"></i>
-                <div>
-                    <h1 class="text-xl font-bold leading-tight">نظام إدارة الموارد البشرية</h1>
-                    <p class="text-xs text-blue-100">إدارة الموظفين والحضور والإجازات والرواتب</p>
+            <div class="flex items-center gap-4 h-16 w-full flex-wrap">
+                <div class="flex items-center gap-4 min-w-0">
+                    <i class="fas fa-users-cog text-2xl flex-shrink-0"></i>
+                    <div>
+                        <h1 class="text-xl font-bold leading-tight">نظام إدارة الموارد البشرية</h1>
+                        <p class="text-xs text-blue-100">إدارة الموظفين والحضور والإجازات والرواتب</p>
+                    </div>
                 </div>
             </div>
         </div>

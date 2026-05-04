@@ -9,19 +9,18 @@ export const reportsPage = `<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+    <div class="border-b border-slate-200/90 bg-slate-50/90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-6 py-4">
-            <div class="flex items-center justify-between">
-                <h1 class="text-2xl font-bold flex items-center">
-                    <i class="fas fa-chart-line ml-3"></i>
-                    منظومة التقارير والإحصائيات
-                </h1>
-                <a href="/admin/panel" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-all">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للوحة التحكم
-                </a>
-            </div>
+            <h1 class="text-2xl font-bold flex items-center">
+                <i class="fas fa-chart-line ml-3"></i>
+                منظومة التقارير والإحصائيات
+            </h1>
         </div>
     </div>
 

@@ -104,13 +104,12 @@ export function contractsSidebarNav(active: ContractsNavKey): string {
 `
 }
 
-/** Top bar with home, date, and optional right-side HTML (CTA button or group). */
+/** Top bar: title (RTL right), menu toggle, then date + CTAs on the left. Back link is above the bar (see contracts-page-back). */
 export function contractsTopbar(titleHtml: string, actionsHtml: string): string {
   return `    <header class="topbar">
-      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-title">${titleHtml}</div>
-      <div class="topbar-actions">
-        <a href="${R.panel}" class="btn btn-ghost contracts-home-btn" title="العودة للنظام الرئيسي"><i class="fas fa-home"></i> الرئيسية</a>
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
         ${actionsHtml}
       </div>

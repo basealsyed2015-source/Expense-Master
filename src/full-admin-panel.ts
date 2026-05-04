@@ -172,7 +172,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 <!-- Dashboard -->
                 <a href="/admin/dashboard" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
                     <i class="fas fa-tachometer-alt text-xl text-blue-600 group-hover:text-blue-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-blue-700">مخلص العملاء</span>
+                    <span class="font-medium text-gray-700 group-hover:text-blue-700">ملخص العملاء</span>
                 </a>
 
                 <!-- Customers -->
@@ -187,10 +187,23 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <span class="font-medium text-gray-700 group-hover:text-purple-700">طلبات التمويل</span>
                 </a>
 
+                <a href="/admin/my-tasks" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-indigo-50 rounded-lg transition-all group">
+                    <i class="fas fa-tasks text-xl text-indigo-600 group-hover:text-indigo-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-indigo-700">مهام المتابعة</span>
+                </a>
+
                 <!-- Reports -->
                 <a href="/admin/reports" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-teal-50 rounded-lg transition-all group">
                     <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
+                </a>
+                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-fuchsia-50 rounded-lg transition-all group">
+                    <i class="fas fa-address-card text-xl text-fuchsia-600 group-hover:text-fuchsia-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-fuchsia-700">متابعة التواصل</span>
+                </a>
+                <a href="/admin/contact-affiliates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-funnel-dollar text-xl text-amber-600 group-hover:text-amber-700"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-700">روابط التواصل التسويقية</span>
                 </a>
 
                 <!-- Rates -->
@@ -321,10 +334,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </h2>
                 
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <!-- زر مخلص العملاء -->
+                    <!-- زر ملخص العملاء -->
                     <a href="/admin/dashboard" class="quick-access-btn bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-tachometer-alt text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">مخلص العملاء</div>
+                        <div class="text-sm font-bold">ملخص العملاء</div>
                     </a>
                     
                     <!-- زر العملاء -->
@@ -338,11 +351,25 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <i class="fas fa-file-invoice text-3xl mb-2"></i>
                         <div class="text-sm font-bold">طلبات التمويل</div>
                     </a>
+
+                    <a href="/admin/my-tasks" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-tasks text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">مهام المتابعة</div>
+                    </a>
                     
                     <!-- زر التقارير -->
                     <a href="/admin/reports" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-chart-line text-3xl mb-2"></i>
                         <div class="text-sm font-bold">التقارير</div>
+                    </a>
+                    
+                    <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 hover:from-fuchsia-600 hover:to-fuchsia-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-address-card text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">متابعة التواصل</div>
+                    </a>
+                    <a href="/admin/contact-affiliates" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-funnel-dollar text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">روابط التواصل التسويقية</div>
                     </a>
                     
                     <!-- زر نسب التمويل -->
@@ -441,7 +468,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
             <div id="dashboard-section" class="content-section active">
                 <h1 class="text-3xl font-bold mb-6 text-gray-800">
                     <i class="fas fa-tachometer-alt text-blue-600 ml-2"></i>
-                    مخلص العملاء
+                    ملخص العملاء
                 </h1>
                 
                 <!-- Stats Cards -->
@@ -579,6 +606,46 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                 <i class="fas fa-external-link-alt ml-2"></i>
                                 فتح الحاسبة في نافذة جديدة
                             </button>
+
+                            <label class="block text-sm font-medium text-gray-700 mb-2 mt-5">
+                                <i class="fas fa-address-card ml-1"></i>
+                                رابط صفحة التواصل (المسار الجذر)
+                            </label>
+                            <div class="flex gap-2">
+                                <input
+                                    type="text"
+                                    id="contactRootLinkInput"
+                                    value="جاري التحميل..."
+                                    readonly
+                                    class="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-blue-500"
+                                >
+                                <button
+                                    onclick="copyContactRootLink()"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
+                                    title="نسخ الرابط"
+                                >
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <div id="contactRootCopySuccessMessage" class="hidden mt-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
+                                <i class="fas fa-check-circle ml-1"></i>
+                                تم نسخ رابط صفحة التواصل بنجاح!
+                            </div>
+                            <button
+                                onclick="openContactRootLink()"
+                                class="w-full mt-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+                            >
+                                <i class="fas fa-external-link-alt ml-2"></i>
+                                فتح صفحة التواصل في نافذة جديدة
+                            </button>
+                            <div id="contactAffiliateLinksWrap" class="mt-6 border-t border-gray-200 pt-4" style="display:none;">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i class="fas fa-funnel-dollar ml-1"></i>روابط التواصل التسويقية
+                                </label>
+                                <ul id="contactAffiliateLinksList" class="space-y-2 text-sm text-gray-700 max-h-48 overflow-y-auto"></ul>
+                                <p class="text-xs text-gray-500 mt-2">لإضافة أو حذف مسار (مثل /facebook) استخدم صفحة الإدارة.</p>
+                                <a href="/admin/contact-affiliates" class="inline-block mt-1 text-amber-700 hover:underline text-sm font-medium">إدارة روابط الإحالة</a>
+                            </div>
                         </div>
                         
                         <!-- Right Side: QR Code -->
@@ -1795,7 +1862,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         roleId === 1 ? 'مدير النظام' :
                         roleId === 2 ? 'مدير الشركة' :
                         roleId === 3 ? 'مشرف المبيعات' :
-                        roleId === 4 ? 'موظف' : '';
+                        roleId === 4 ? 'موظف' :
+                        roleId === 5 ? 'وكيل بنك' : '';
                     const finalRoleLabel = roleName || roleLabelFromId || 'مستخدم';
 
                     console.log('👤 بيانات المستخدم المحملة:');
@@ -1932,6 +2000,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/tenant-calculators',
                         '/admin/saas-settings',
                         '/admin/reports',
+                        '/admin/follow-ups',
+                        '/admin/contact-affiliates',
                         '/admin/payments',
                         '/admin/settings',
                         '/admin/hr',
@@ -1942,6 +2012,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/customers',
                         '/admin/requests',
                         '/admin/reports',
+                        '/admin/follow-ups',
+                        '/admin/contact-affiliates',
                         '/admin/banks',
                         '/admin/rates',
                         '/admin/payments',
@@ -1957,6 +2029,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/customers',
                         '/admin/requests',
                         '/admin/reports',
+                        '/admin/follow-ups',
                         '/admin/banks',
                         '/admin/rates',
                         // Logical entry + list URL: href is rewritten to /admin/contracts/list before allowlist runs
@@ -1969,8 +2042,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
+                        '/admin/my-tasks',
                         '/calculator',
                         '/'
+                    ],
+                    '5': [ // Bank agent — funding requests for assigned bank only
+                        '/admin/requests'
                     ]
                 };
                 
@@ -2046,8 +2123,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         return;
                     }
                     
-                    // Always keep calculator links visible if present
-                    const isAlways = (normalizedHref === '/calculator' || normalizedHref.startsWith('/c/'));
+                    // Always keep calculator links visible if present (bank agents: no calculator/home shortcuts)
+                    const isAlways =
+                        roleId !== 5 && (normalizedHref === '/calculator' || normalizedHref.startsWith('/c/'));
                     
                     // Check if href is in allowed links
                     if (isAlways || userAllowedLinks.includes(normalizedHref)) {
@@ -2068,47 +2146,30 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 // إخفاء الكروت الإضافية للموظفين والمشرفين
                 const adminOnlyStats = document.querySelector('.admin-only-stats');
                 if (adminOnlyStats) {
-                    if (roleId === 4 || roleId === 3) { // Employee or Supervisor
+                    if (roleId === 4 || roleId === 3 || roleId === 5) {
                         adminOnlyStats.style.display = 'none';
-                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف)');
+                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو وكيل بنك)');
                     } else {
                         adminOnlyStats.style.display = 'grid';
                         console.log('✅ عرض الكروت الإضافية');
                     }
                 }
                 
-                // إخفاء قسم رابط الحاسبة للموظفين والمشرفين
+                // قسم روابط الحاسبة و QR: لجميع الأدوار ما عدا وكيل البنك (5)
                 const calculatorLinkSection = document.getElementById('calculatorLinkSection');
                 const employeeCalculatorSection = document.getElementById('employeeCalculatorSection');
                 
                 if (calculatorLinkSection) {
-                    if (roleId === 3 || roleId === 5) { // Employee or Supervisor
+                    if (roleId === 5) {
                         calculatorLinkSection.style.display = 'none';
-                        console.log('🚫 إخفاء قسم رابط الحاسبة (موظف أو مشرف)');
-                        
-                        // عرض قسم الباركود للموظفين فقط
-                        if (userRole === 'employee' && employeeCalculatorSection) {
-                            employeeCalculatorSection.style.display = 'block';
-                            console.log('✅ عرض قسم الباركود للموظف');
-                            
-                            // تحميل رابط الحاسبة للموظف
-                            setTimeout(() => {
-                                if (typeof loadEmployeeCalculatorLink === 'function') {
-                                    loadEmployeeCalculatorLink();
-                                }
-                            }, 500);
-                        }
+                        if (employeeCalculatorSection) employeeCalculatorSection.style.display = 'none';
+                        console.log('🚫 إخفاء قسم رابط الحاسبة (وكيل بنك)');
                     } else {
-                        // عرض القسم لـ superadmin، admin، manager، company
                         calculatorLinkSection.style.display = 'block';
-                        console.log('✅ عرض قسم رابط الحاسبة');
-                        
-                        // إخفاء قسم الموظف
+                        console.log('✅ عرض قسم رابط الحاسبة و QR');
                         if (employeeCalculatorSection) {
                             employeeCalculatorSection.style.display = 'none';
                         }
-                        
-                        // تحميل رابط الحاسبة و QR Code
                         setTimeout(() => {
                             if (typeof loadCalculatorLink === 'function') {
                                 loadCalculatorLink();
@@ -2129,7 +2190,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         document.addEventListener('DOMContentLoaded', applyUserPermissions);
         
         // دالة تحديث رابط الحاسبة حسب الشركة
-        function updateCalculatorLink() {
+        async function updateCalculatorLink() {
             console.log('🔗 تحديث رابط الحاسبة...');
             
             try {
@@ -2146,10 +2207,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 const sidebarCalculatorLink = document.getElementById('sidebarCalculatorLink');
                 
                 // تحديد رابط الحاسبة حسب الشركة
-                let calculatorHref = '/calculator';
-                if (user.tenant_slug) {
-                    calculatorHref = \`/c/\${user.tenant_slug}/calculator\`;
-                    console.log(\`✅ تم تحديث رابط الحاسبة إلى: /c/\${user.tenant_slug}/calculator\`);
+                const tenantSlug = resolveTenantSlug(user);
+                const calculatorHref = await resolveCalculatorPathFromTenantSettings(user);
+                if (calculatorHref.startsWith('/c/')) {
+                    console.log('✅ تم تحديث رابط الحاسبة المخصص للشركة:', calculatorHref);
+                } else if (tenantSlug) {
+                    console.log('✅ تم تحديث رابط الحاسبة إلى: /c/' + tenantSlug + '/calculator');
                 } else {
                     console.log('✅ تم تحديث رابط الحاسبة إلى: /calculator (حاسبة عامة)');
                 }
@@ -2245,6 +2308,43 @@ export const fullAdminPanel = `<!DOCTYPE html>
             }
         });
 
+        function normalizePhoneDigits(phoneValue) {
+            const raw = String(phoneValue || '').trim();
+            return raw
+                .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+                .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); })
+                .replace(/[^\\d]/g, '');
+        }
+
+        function localSaudiPhone(phoneValue) {
+            const digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) return digits.slice(5);
+            if (digits.startsWith('966')) return digits.slice(3);
+            if (digits.startsWith('05') && digits.length === 10) return digits.slice(1);
+            return digits;
+        }
+
+        function toSaudiWaNumber(phoneValue) {
+            let digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) digits = digits.slice(2);
+            if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+            if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+            if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+            return '';
+        }
+
+        function openCustomerWhatsApp(whatsAppPhone, fallbackPhone) {
+            const normalizedPhone = toSaudiWaNumber(whatsAppPhone) || toSaudiWaNumber(fallbackPhone);
+            if (!normalizedPhone) {
+                alert('لا يوجد رقم واتساب صالح لهذا العميل');
+                return;
+            }
+
+            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+        }
+
         // Load Customers
         async function loadCustomers() {
             try {
@@ -2287,7 +2387,18 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     </button>
                                 </div>
                             </td>
-                            <td class="px-4 py-3">\${customer.phone}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <span dir="ltr">\${localSaudiPhone(customer.phone) || '-'}</span>
+                                    <button
+                                        onclick="openCustomerWhatsApp('\${String(customer.whatsapp_phone || customer.whatsapp_phone_number || customer.phone || '').replace(/'/g, "\\\\'")}', '\${String(customer.phone || '').replace(/'/g, "\\\\'")}')"
+                                        class="inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors"
+                                        title="فتح واتساب">
+                                        <i class="fab fa-whatsapp"></i>
+                                        <span>واتساب</span>
+                                    </button>
+                                </div>
+                            </td>
                             <td class="px-4 py-3 text-sm">\${customer.birthdate ? customer.birthdate + (customer.dob_calendar_type === 'hijri' ? ' هـ' : ' م') : '-'}</td>
                             <td class="px-4 py-3 font-medium text-green-600">\${customer.monthly_salary ? customer.monthly_salary.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 font-medium text-purple-600">\${customer.financing_amount ? customer.financing_amount.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
@@ -2467,7 +2578,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     
                                     <div class="bg-gray-50 p-4 rounded-lg">
                                         <p class="text-sm text-gray-600 mb-1">رقم الجوال</p>
-                                        <p class="text-lg font-bold text-gray-800">\${customer.phone || '-'}</p>
+                                        <p class="text-lg font-bold text-gray-800">\${localSaudiPhone(customer.phone) || '-'}</p>
                                     </div>
                                     
                                     <div class="bg-gray-50 p-4 rounded-lg">
@@ -3958,8 +4069,155 @@ export const fullAdminPanel = `<!DOCTYPE html>
         // Calculator Link & QR Code Functions
         // ==========================================
         
+        function resolveTenantSlug(userData = {}) {
+            const slugCandidates = [
+                userData.tenant_slug,
+                userData.tenantSlug,
+                userData.slug,
+                userData.company_slug,
+                userData.companySlug,
+                userData.tenant && userData.tenant.slug,
+                userData.company && userData.company.slug
+            ];
+            
+            for (const candidate of slugCandidates) {
+                if (typeof candidate !== 'string') continue;
+                
+                const normalized = candidate.trim();
+                if (!normalized || normalized.toLowerCase() === 'unknown') continue;
+                
+                return normalized;
+            }
+            
+            return null;
+        }
+        
+        function buildCalculatorPath(userData = {}) {
+            const tenantSlug = resolveTenantSlug(userData);
+            return tenantSlug ? '/c/' + encodeURIComponent(tenantSlug) + '/calculator' : '/calculator';
+        }
+
+        function buildContactRootPath(userData = {}) {
+            const tenantSlug = resolveTenantSlug(userData);
+            return tenantSlug ? '/' + encodeURIComponent(tenantSlug) : '/';
+        }
+
+        async function resolveCalculatorPathFromTenantSettings(userData = {}) {
+            const localPath = buildCalculatorPath(userData);
+            if (localPath !== '/calculator') {
+                return localPath;
+            }
+
+            const tenantIdCandidates = [
+                userData.tenant_id,
+                userData.tenantId,
+                userData.tenant && userData.tenant.id
+            ];
+            const tenantId = tenantIdCandidates
+                .map((value) => parseInt(value, 10))
+                .find((value) => Number.isInteger(value) && value > 0);
+
+            const tenantNameCandidates = [
+                userData.tenant_name,
+                userData.company_name,
+                userData.companyName,
+                userData.tenant && userData.tenant.company_name
+            ];
+            const tenantName = tenantNameCandidates
+                .find((value) => typeof value === 'string' && value.trim())
+                ?.trim()
+                .toLowerCase();
+
+            try {
+                const response = await axios.get('/api/tenants');
+                const tenants = Array.isArray(response?.data?.data) ? response.data.data : [];
+
+                const matchedTenant = tenants.find((tenant) => {
+                    const currentId = parseInt(tenant?.id, 10);
+                    if (tenantId && currentId === tenantId) return true;
+
+                    if (tenantName && typeof tenant?.company_name === 'string') {
+                        return tenant.company_name.trim().toLowerCase() === tenantName;
+                    }
+
+                    return false;
+                });
+
+                if (!matchedTenant) {
+                    return localPath;
+                }
+
+                const matchedSlug = resolveTenantSlug(matchedTenant);
+                if (!matchedSlug) {
+                    return localPath;
+                }
+
+                return '/c/' + encodeURIComponent(matchedSlug) + '/calculator';
+            } catch (error) {
+                console.warn('⚠️ تعذر تحميل رابط الحاسبة المخصص من إعدادات الشركات:', error);
+                return localPath;
+            }
+        }
+
+        async function resolveContactRootPathFromTenantSettings(userData = {}) {
+            const localPath = buildContactRootPath(userData);
+            if (localPath !== '/') {
+                return localPath;
+            }
+
+            const tenantIdCandidates = [
+                userData.tenant_id,
+                userData.tenantId,
+                userData.tenant && userData.tenant.id
+            ];
+            const tenantId = tenantIdCandidates
+                .map((value) => parseInt(value, 10))
+                .find((value) => Number.isInteger(value) && value > 0);
+
+            const tenantNameCandidates = [
+                userData.tenant_name,
+                userData.company_name,
+                userData.companyName,
+                userData.tenant && userData.tenant.company_name
+            ];
+            const tenantName = tenantNameCandidates
+                .find((value) => typeof value === 'string' && value.trim())
+                ?.trim()
+                .toLowerCase();
+
+            try {
+                const response = await axios.get('/api/tenants');
+                const tenants = Array.isArray(response?.data?.data) ? response.data.data : [];
+
+                const matchedTenant = tenants.find((tenant) => {
+                    const currentId = parseInt(tenant?.id, 10);
+                    if (tenantId && currentId === tenantId) return true;
+
+                    if (tenantName && typeof tenant?.company_name === 'string') {
+                        return tenant.company_name.trim().toLowerCase() === tenantName;
+                    }
+
+                    return false;
+                });
+
+                if (!matchedTenant) {
+                    return localPath;
+                }
+
+                const matchedSlug = resolveTenantSlug(matchedTenant);
+                if (!matchedSlug) {
+                    return localPath;
+                }
+
+                return '/' + encodeURIComponent(matchedSlug);
+            } catch (error) {
+                console.warn('⚠️ تعذر تحميل رابط صفحة التواصل من إعدادات الشركات:', error);
+                return localPath;
+            }
+        }
+        
         // Generate and display calculator link and QR code
-        function loadCalculatorLink() {
+        async function loadCalculatorLink() {
             console.log('📱 بدء تحميل رابط الحاسبة...');
             
             const userDataStr = localStorage.getItem('userData');
@@ -3973,14 +4231,17 @@ export const fullAdminPanel = `<!DOCTYPE html>
             const userData = JSON.parse(userDataStr);
             console.log('👤 بيانات المستخدم:', userData);
             
-            const tenantSlug = userData.tenant_slug || 'unknown';
-            const tenantName = userData.tenant_name || 'الشركة';
+            const tenantSlug = resolveTenantSlug(userData);
+            const tenantName = userData.tenant_name || userData.company_name || 'الشركة';
             
             console.log('🏢 معلومات الشركة:', { tenantSlug, tenantName });
             
             // Build calculator URL
             const baseUrl = window.location.origin;
-            const calculatorUrl = \`\${baseUrl}/c/\${tenantSlug}/calculator\`;
+            const calculatorPath = await resolveCalculatorPathFromTenantSettings(userData);
+            const calculatorUrl = baseUrl + calculatorPath;
+            const contactRootPath = await resolveContactRootPathFromTenantSettings(userData);
+            const contactRootUrl = baseUrl + contactRootPath;
             
             console.log('🔗 رابط الحاسبة المولد:', calculatorUrl);
             
@@ -3988,6 +4249,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
             const linkInput = document.getElementById('calculatorLinkInput');
             if (linkInput) {
                 linkInput.value = calculatorUrl;
+            }
+            const contactLinkInput = document.getElementById('contactRootLinkInput');
+            if (contactLinkInput) {
+                contactLinkInput.value = contactRootUrl;
             }
             
             // Generate QR Code using QR Server API
@@ -4005,6 +4270,58 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 qrImg.id = 'qrcodeImage';
                 
                 qrcodeContainer.appendChild(qrImg);
+            }
+
+            const affWrap = document.getElementById('contactAffiliateLinksWrap');
+            const affList = document.getElementById('contactAffiliateLinksList');
+            if (affWrap && affList) {
+                affList.innerHTML = '';
+                let rid = parseInt(userData.role_id, 10);
+                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+                if (roleLegacy[rid]) rid = roleLegacy[rid];
+                if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
+                    const w = parseInt(window.USER_ROLE_ID, 10);
+                    rid = roleLegacy[w] || w;
+                }
+                let showAff = rid !== 5 && contactRootPath && contactRootPath !== '/';
+                if (rid === 1) {
+                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
+                }
+                if (!showAff) {
+                    affWrap.style.display = 'none';
+                } else {
+                    affWrap.style.display = 'block';
+                    try {
+                        let u = '/api/tenant-contact-affiliates';
+                        if (rid === 1) {
+                            const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            u += '?tenant_id=' + tid;
+                        }
+                        const res = await axios.get(u);
+                        const rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
+                        function escAff(s) {
+                            return String(s ?? '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;');
+                        }
+                        if (!rows.length) {
+                            affList.innerHTML = '<li class="text-gray-500 text-sm">لا توجد روابط تسويقية بعد.</li>';
+                        } else {
+                            affList.innerHTML = rows.map(function (r) {
+                                var pathSeg = encodeURIComponent(r.path_segment || '');
+                                var full = baseUrl + String(contactRootPath).replace(/\/$/, '') + '/' + pathSeg;
+                                return '<li class="pb-3 mb-3 border-b border-gray-100 last:border-0 last:mb-0 last:pb-0">' +
+                                    '<div class="font-medium text-gray-900">' + escAff(r.label) + '</div>' +
+                                    '<div class="text-xs text-gray-500 break-all mt-1" dir="ltr">' + escAff(full) + '</div></li>';
+                            }).join('');
+                        }
+                    } catch (e) {
+                        affList.innerHTML = '<li class="text-red-600 text-xs">تعذر تحميل الروابط</li>';
+                    }
+                }
             }
         }
         
@@ -4056,6 +4373,33 @@ export const fullAdminPanel = `<!DOCTYPE html>
             
             // Open in new tab
             window.open(calculatorUrl, '_blank');
+        };
+
+        window.copyContactRootLink = function() {
+            const linkInput = document.getElementById('contactRootLinkInput');
+            if (!linkInput) return;
+            linkInput.select();
+            linkInput.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                const successMessage = document.getElementById('contactRootCopySuccessMessage');
+                if (successMessage) {
+                    successMessage.classList.remove('hidden');
+                    setTimeout(() => successMessage.classList.add('hidden'), 3000);
+                }
+            } catch (err) {
+                console.error('❌ فشل نسخ رابط صفحة التواصل:', err);
+                alert('❌ فشل نسخ الرابط');
+            }
+        };
+
+        window.openContactRootLink = function() {
+            const linkInput = document.getElementById('contactRootLinkInput');
+            if (!linkInput || !linkInput.value || linkInput.value === 'جاري التحميل...') {
+                alert('❌ الرجاء الانتظار حتى يتم تحميل الرابط');
+                return;
+            }
+            window.open(linkInput.value, '_blank');
         };
         
         // Download QR Code as image
@@ -4154,15 +4498,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
             
             try {
                 const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-                const tenantSlug = userData.tenant_slug;
-                
-                if (!tenantSlug) {
-                    console.error('❌ لا يوجد tenant_slug');
-                    return;
-                }
+                const tenantSlug = resolveTenantSlug(userData);
                 
                 const baseUrl = window.location.origin;
-                const calculatorUrl = \`\${baseUrl}/c/\${tenantSlug}/calculator\`;
+                const calculatorPath = await resolveCalculatorPathFromTenantSettings(userData);
+                const calculatorUrl = baseUrl + calculatorPath;
+                
+                if (!tenantSlug && calculatorPath === '/calculator') {
+                    console.warn('⚠️ tenant_slug غير متوفر - استخدام الحاسبة العامة');
+                }
                 
                 console.log('✅ رابط الحاسبة:', calculatorUrl);
                 
@@ -4207,20 +4551,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-                const userRole = userData.role || userData.user_type;
-                
-                if (userRole === 'employee') {
-                    console.log('🔗 تحميل رابط الحاسبة للموظف:', userRole);
-                    if (typeof loadEmployeeCalculatorLink === 'function') {
-                        loadEmployeeCalculatorLink();
-                    }
-                } else if (userRole === 'company' || userRole === 'admin' || userRole === 'superadmin' || userRole === 'manager') {
-                    console.log('🔗 تحميل رابط الحاسبة للمستخدم:', userRole);
-                    if (typeof loadCalculatorLink === 'function') {
-                        loadCalculatorLink();
-                    }
-                } else {
-                    console.log('⚠️ دور المستخدم لا يسمح بعرض رابط الحاسبة:', userRole);
+                const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
+                let rid = legacyMap[parseInt(userData.role_id, 10)] || parseInt(userData.role_id, 10) || null;
+                if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
+                    const w = parseInt(window.USER_ROLE_ID, 10);
+                    rid = legacyMap[w] || w;
+                }
+                if (!rid) rid = 4;
+                if (rid !== 5 && typeof loadCalculatorLink === 'function') {
+                    loadCalculatorLink();
                 }
             }, 1000);
         });

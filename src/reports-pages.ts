@@ -16,21 +16,20 @@ export const clicksReportPage = `
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-4 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-xl">
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-mouse-pointer ml-3"></i>
-                        تقرير النقرات على روابط الحاسبات
-                    </h1>
-                    <p class="text-blue-100 mt-2">تتبع وتحليل زيارات الحاسبات حسب نوع الجهاز والمنصة</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة إلى التقارير
-                </a>
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-mouse-pointer ml-3"></i>
+                    تقرير النقرات على روابط الحاسبات
+                </h1>
+                <p class="text-blue-100 mt-2">تتبع وتحليل زيارات الحاسبات حسب نوع الجهاز والمنصة</p>
             </div>
         </div>
     </div>
@@ -462,21 +461,20 @@ export const workflowReportPage = `
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-green-50 to-blue-50">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-4 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-xl">
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-route ml-3"></i>
-                        تقرير سير العمل للعملاء
-                    </h1>
-                    <p class="text-green-100 mt-2">تتبع رحلة العملاء من التسجيل حتى اكتمال الطلب</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للتقارير
-                </a>
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-route ml-3"></i>
+                    تقرير سير العمل للعملاء
+                </h1>
+                <p class="text-green-100 mt-2">تتبع رحلة العملاء من التسجيل حتى اكتمال الطلب</p>
             </div>
         </div>
     </div>
@@ -691,21 +689,20 @@ export const employeePerformanceReportPage = `
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50">
+    <div class="border-b border-slate-200/90 bg-white/90">
+        <div class="max-w-7xl mx-auto px-4 py-1.5">
+            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+    </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl">
         <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold flex items-center">
-                        <i class="fas fa-chart-line ml-3"></i>
-                        تقرير أداء الموظفين
-                    </h1>
-                    <p class="text-purple-100 mt-2">تحليل شامل لأداء الموظفين والعملاء والطلبات والعمولات</p>
-                </div>
-                <a href="/admin/reports" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-all flex items-center">
-                    <i class="fas fa-arrow-right ml-2"></i>
-                    العودة للتقارير
-                </a>
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-chart-line ml-3"></i>
+                    تقرير أداء الموظفين
+                </h1>
+                <p class="text-purple-100 mt-2">تحليل شامل لأداء الموظفين والعملاء والطلبات والعمولات</p>
             </div>
         </div>
     </div>

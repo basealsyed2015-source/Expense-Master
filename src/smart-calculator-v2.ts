@@ -6,7 +6,13 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
     <title>حاسبة التمويل الذكية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
     <style>
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
         .modal.active { display: flex; align-items: center; justify-content: center; }
@@ -152,8 +158,18 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
                 
                 <div>
                     <label class="block text-gray-700 font-bold mb-2">
+                        <i class="fas fa-calendar-alt text-indigo-600 ml-2"></i>
+                        تاريخ الميلاد (هجري)
+                    </label>
+                    <input type="text" id="customerBirthdateHijri" autocomplete="off"
+                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                           placeholder="اختر التاريخ من التقويم الهجري">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2">
                         <i class="fas fa-calendar text-purple-600 ml-2"></i>
-                        تاريخ الميلاد
+                        تاريخ الميلاد (ميلادي)
                     </label>
                     <input type="date" id="customerBirthdate" required max="2006-12-31"
                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
@@ -342,6 +358,188 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
         let allRates = [];
         let bestOffer = null;
         let allOffers = [];
+
+        let isBirthdateSyncing = false;
+        let hijriBirthdatePicker = null;
+
+        const hijriDisplayFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const hijriPartsFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+
+        function normalizeArabicDigits(value) {
+            if (!value) return '';
+            const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+            const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+            return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+                const arabicIndex = arabicDigits.indexOf(char);
+                if (arabicIndex >= 0) return String(arabicIndex);
+                const easternArabicIndex = easternArabicDigits.indexOf(char);
+                return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+            });
+        }
+
+        function parseHijriInput(value) {
+            const normalized = normalizeArabicDigits(value)
+                .replace(/\u200f/g, '')
+                .replace(/\u200e/g, '')
+                .trim();
+            if (!normalized) return null;
+
+            const parts = normalized.split(/[^\d]+/).filter(Boolean);
+            if (parts.length !== 3) return null;
+
+            let year;
+            let month;
+            let day;
+
+            if (parts[0].length === 4) {
+                year = Number(parts[0]);
+                month = Number(parts[1]);
+                day = Number(parts[2]);
+            } else if (parts[2].length === 4) {
+                day = Number(parts[0]);
+                month = Number(parts[1]);
+                year = Number(parts[2]);
+            } else {
+                return null;
+            }
+
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+            if (year < 1200 || year > 1700) return null;
+            if (month < 1 || month > 12) return null;
+            if (day < 1 || day > 30) return null;
+
+            return { year, month, day };
+        }
+
+        function extractHijriPartsFromDate(dateObject) {
+            const parts = hijriPartsFormatter.formatToParts(dateObject);
+            const year = Number(parts.find((part) => part.type === 'year')?.value);
+            const month = Number(parts.find((part) => part.type === 'month')?.value);
+            const day = Number(parts.find((part) => part.type === 'day')?.value);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+            return { year, month, day };
+        }
+
+        function formatGregorianValue(dateObject) {
+            const year = dateObject.getFullYear();
+            const month = String(dateObject.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObject.getDate()).padStart(2, '0');
+            return \`\${year}-\${month}-\${day}\`;
+        }
+
+        function formatHijriDateFromGregorian(dateValue) {
+            if (!dateValue) return '';
+            const [year, month, day] = String(dateValue).split('-').map(Number);
+            if (!year || !month || !day) return '';
+            const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+            if (Number.isNaN(gregorianDate.getTime())) return '';
+            return hijriDisplayFormatter.format(gregorianDate);
+        }
+
+        function findGregorianFromHijri(hijriParts) {
+            const approxGregorianYear = hijriParts.year + 579;
+            const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+            const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+
+            for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                const currentHijriParts = extractHijriPartsFromDate(cursor);
+                if (!currentHijriParts) continue;
+
+                if (
+                    currentHijriParts.year === hijriParts.year &&
+                    currentHijriParts.month === hijriParts.month &&
+                    currentHijriParts.day === hijriParts.day
+                ) {
+                    return formatGregorianValue(cursor);
+                }
+            }
+
+            return '';
+        }
+
+        function initHijriBirthdatePicker() {
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            const gregorianInput = document.getElementById('customerBirthdate');
+            if (!hijriInput || !gregorianInput) return;
+
+            if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
+                console.warn('Hijri picker dependencies not loaded, fallback to manual conversion.');
+                return;
+            }
+
+            hijriBirthdatePicker = flatpickr(hijriInput, {
+                locale: 'ar',
+                disableMobile: true,
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                plugins: [
+                    hijriCalendarPlugin(window.luxon.DateTime, {
+                        showHijriDates: true,
+                        showHijriToggle: false
+                    })
+                ],
+                onOpen: [(_, __, instance) => {
+                    if (gregorianInput.value) {
+                        instance.setDate(gregorianInput.value, false, 'Y-m-d');
+                    }
+                }],
+                onChange: [(selectedDates) => {
+                    if (!selectedDates.length || isBirthdateSyncing) return;
+                    const gregorianValue = formatGregorianValue(selectedDates[0]);
+                    isBirthdateSyncing = true;
+                    gregorianInput.value = gregorianValue;
+                    hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+                    isBirthdateSyncing = false;
+                }]
+            });
+
+            if (gregorianInput.value) {
+                syncBirthdateFromGregorian();
+            }
+        }
+
+        function syncBirthdateFromGregorian() {
+            if (isBirthdateSyncing) return;
+            const gregorianInput = document.getElementById('customerBirthdate');
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            if (!gregorianInput || !hijriInput) return;
+
+            isBirthdateSyncing = true;
+            hijriInput.value = formatHijriDateFromGregorian(gregorianInput.value);
+            if (hijriBirthdatePicker && gregorianInput.value) {
+                hijriBirthdatePicker.setDate(gregorianInput.value, false, 'Y-m-d');
+            }
+            isBirthdateSyncing = false;
+        }
+
+        function syncBirthdateFromHijri() {
+            if (isBirthdateSyncing) return;
+            const gregorianInput = document.getElementById('customerBirthdate');
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            if (!gregorianInput || !hijriInput) return;
+
+            const parsedHijri = parseHijriInput(hijriInput.value);
+            if (!parsedHijri) return;
+
+            const gregorianValue = findGregorianFromHijri(parsedHijri);
+            if (!gregorianValue) return;
+
+            isBirthdateSyncing = true;
+            gregorianInput.value = gregorianValue;
+            hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+            if (hijriBirthdatePicker) {
+                hijriBirthdatePicker.setDate(gregorianValue, false, 'Y-m-d');
+            }
+            isBirthdateSyncing = false;
+        }
         
         // Load initial data
         async function loadData() {
@@ -415,6 +613,8 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
         // Step 2: Customer info submission
         document.getElementById('customerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            syncBirthdateFromHijri();
+            syncBirthdateFromGregorian();
             
             // Get customer info
             customerInfo = {
@@ -661,6 +861,18 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
             allOffers = [];
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+
+        const customerBirthdateInput = document.getElementById('customerBirthdate');
+        const customerBirthdateHijriInput = document.getElementById('customerBirthdateHijri');
+        if (customerBirthdateInput) {
+            customerBirthdateInput.addEventListener('change', syncBirthdateFromGregorian);
+            customerBirthdateInput.addEventListener('input', syncBirthdateFromGregorian);
+        }
+        if (customerBirthdateHijriInput) {
+            customerBirthdateHijriInput.addEventListener('change', syncBirthdateFromHijri);
+            customerBirthdateHijriInput.addEventListener('blur', syncBirthdateFromHijri);
+        }
+        initHijriBirthdatePicker();
         
         loadData();
     </script>

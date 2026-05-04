@@ -16,23 +16,28 @@ export const hrLeavesPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الإجازات</h1>
-            <p class="text-blue-100 text-sm">طلبات الإجازات والموافقات</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">إدارة الإجازات</h1>
+          <p class="text-blue-100 text-sm">طلبات الإجازات والموافقات</p>
         </div>
-        <button onclick="showAddLeaveModal()" class="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          طلب إجازة جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddLeaveModal()" class="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            طلب إجازة جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -405,24 +410,29 @@ export const hrSalariesPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-green-600 to-teal-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الرواتب</h1>
-            <p class="text-green-100 text-sm">رواتب الموظفين والاستحقاقات</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">إدارة الرواتب</h1>
+          <p class="text-green-100 text-sm">رواتب الموظفين والاستحقاقات</p>
         </div>
-        <button onclick="showAddSalaryModal()" class="bg-white text-green-600 px-6 py-2 rounded-lg font-bold hover:bg-green-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة راتب جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddSalaryModal()" class="bg-white text-green-600 px-6 py-2 rounded-lg font-bold hover:bg-green-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة راتب جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -710,24 +720,29 @@ export const hrDepartmentsPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">إدارة الأقسام</h1>
-            <p class="text-purple-100 text-sm">أقسام الشركة والموظفين</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">إدارة الأقسام</h1>
+          <p class="text-purple-100 text-sm">أقسام الشركة والموظفين</p>
         </div>
-        <button onclick="showAddDepartmentModal()" class="bg-white text-purple-600 px-6 py-2 rounded-lg font-bold hover:bg-purple-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة قسم جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddDepartmentModal()" class="bg-white text-purple-600 px-6 py-2 rounded-lg font-bold hover:bg-purple-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة قسم جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -903,24 +918,29 @@ export const hrPerformancePage = `
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">تقييم الأداء</h1>
-            <p class="text-indigo-100 text-sm">تقييمات أداء الموظفين</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">تقييم الأداء</h1>
+          <p class="text-indigo-100 text-sm">تقييمات أداء الموظفين</p>
         </div>
-        <button onclick="showAddReviewModal()" class="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة تقييم جديد
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddReviewModal()" class="bg-white text-indigo-600 px-6 py-2 rounded-lg font-bold hover:bg-indigo-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة تقييم جديد
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1152,24 +1172,29 @@ export const hrPromotionsPage = `
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-orange-600 to-red-600 text-white py-6 px-8 shadow-lg">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
-            <i class="fas fa-arrow-right text-xl"></i>
-          </a>
-          <div>
-            <h1 class="text-2xl font-bold">الترقيات</h1>
-            <p class="text-orange-100 text-sm">ترقيات وتطورات الموظفين</p>
-          </div>
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">الترقيات</h1>
+          <p class="text-orange-100 text-sm">ترقيات وتطورات الموظفين</p>
         </div>
-        <button onclick="showAddPromotionModal()" class="bg-white text-orange-600 px-6 py-2 rounded-lg font-bold hover:bg-orange-50 transition">
-          <i class="fas fa-plus ml-2"></i>
-          إضافة ترقية جديدة
-        </button>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة لـ HR">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+        <div class="ms-auto shrink-0">
+          <button onclick="showAddPromotionModal()" class="bg-white text-orange-600 px-6 py-2 rounded-lg font-bold hover:bg-orange-50 transition">
+            <i class="fas fa-plus ml-2"></i>
+            إضافة ترقية جديدة
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1413,13 +1438,18 @@ export const hrDocumentsPage = `
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-100">
+  <div class="border-b border-slate-200/90 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div>
+        <div class="flex flex-wrap items-center gap-4 py-4">
+          <div class="min-w-0 flex-1">
             <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
               <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
             </a>
@@ -1429,10 +1459,12 @@ export const hrDocumentsPage = `
             </h1>
             <p class="text-gray-600 mt-1">تتبع مستندات الموظفين وتنبيهات انتهاء الصلاحيات</p>
           </div>
-          <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-            <i class="fas fa-plus ml-2"></i>
-            إضافة مستند
-          </button>
+          <div class="ms-auto shrink-0">
+            <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              <i class="fas fa-plus ml-2"></i>
+              إضافة مستند
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1904,13 +1936,18 @@ export const hrReportsPage = `
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-100">
+  <div class="border-b border-slate-200/90 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
+      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    </div>
+  </div>
 
   <div class="min-h-screen">
     <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div>
+        <div class="flex flex-wrap items-center gap-4 py-4">
+          <div class="min-w-0 flex-1">
             <a href="/admin/hr" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">
               <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
             </a>
@@ -1920,10 +1957,12 @@ export const hrReportsPage = `
             </h1>
             <p class="text-gray-600 mt-1">تقارير شاملة ومفصلة عن الموارد البشرية</p>
           </div>
-          <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-            <i class="fas fa-file-export ml-2"></i>
-            تصدير التقرير
-          </button>
+          <div class="ms-auto shrink-0">
+            <button onclick="exportReport()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+              <i class="fas fa-file-export ml-2"></i>
+              تصدير التقرير
+            </button>
+          </div>
         </div>
       </div>
     </div>

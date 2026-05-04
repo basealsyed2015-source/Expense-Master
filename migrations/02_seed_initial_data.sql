@@ -6,7 +6,8 @@ INSERT OR IGNORE INTO roles (id, role_name, role_name_ar, description, is_system
 (1, 'super_admin', 'سوبر أدمن', 'مدير النظام الكامل - يرى جميع الشركات وبيانات SaaS', 1),
 (2, 'company_admin', 'مدير شركة', 'إدارة كاملة للشركة (عدا SaaS)', 1),
 (3, 'supervisor', 'مشرف', 'عرض جميع بيانات الشركة (قراءة فقط)', 1),
-(4, 'employee', 'موظف', 'إدارة العملاء والطلبات المخصصة فقط', 1);
+(4, 'employee', 'موظف', 'إدارة العملاء والطلبات المخصصة فقط', 1),
+(5, 'bank_agent', 'وكيل بنك', 'عرض طلبات التمويل المرتبطة بالبنك المخصص فقط', 1);
 
 -- Insert tenant
 INSERT OR IGNORE INTO tenants (id, company_name, slug, subdomain, status, max_users, max_customers, max_requests) VALUES

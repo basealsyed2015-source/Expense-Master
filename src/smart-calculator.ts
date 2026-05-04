@@ -6,7 +6,13 @@ export const smartCalculator = `<!DOCTYPE html>
     <title>حاسبة التمويل الذكية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
     <style>
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); overflow-y: auto; }
         .modal.active { display: flex; align-items: center; justify-content: center; }
@@ -154,63 +160,6 @@ export const smartCalculator = `<!DOCTYPE html>
                         <p class="text-sm text-gray-500 mt-1">الحد الأدنى: 3,000 ريال</p>
                     </div>
                     
-                    <!-- الحلول المقترحة (رقم تلقائي + نص) -->
-                    <div id="calcSolutionsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h3 class="text-sm font-bold text-gray-700 mb-2">
-                            <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
-                            الحلول المقترحة
-                        </h3>
-                        <div class="overflow-x-auto mb-2">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-gray-300 text-right">
-                                        <th class="py-2 px-2 w-20">رقم الحل</th>
-                                        <th class="py-2 px-2">نص الحل</th>
-                                        <th class="py-2 px-2 w-16"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="calcSolutionsTbody"></tbody>
-                            </table>
-                        </div>
-                        <button type="button" id="calcAddSolutionRow" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                            <i class="fas fa-plus ml-1"></i>
-                            إضافة صف
-                        </button>
-                    </div>
-                    
-                    <!-- الالتزامات المالية (جدول + إجمالي شهري) -->
-                    <div id="calcObligationsSection" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <h3 class="text-sm font-bold text-gray-700 mb-2">
-                            <i class="fas fa-credit-card text-red-600 ml-1"></i>
-                            الالتزامات المالية
-                        </h3>
-                        <div class="overflow-x-auto mb-2">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="border-b border-gray-300 text-right">
-                                        <th class="py-2 px-2">نوع الالتزام</th>
-                                        <th class="py-2 px-2">إجمالي المبلغ</th>
-                                        <th class="py-2 px-2">القسط الشهري</th>
-                                        <th class="py-2 px-2">تاريخ الاستحقاق</th>
-                                        <th class="py-2 px-2 w-16"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="calcObligationsTbody"></tbody>
-                            </table>
-                        </div>
-                        <p class="text-sm font-bold text-red-700 mb-2">
-                            إجمالي الالتزامات الشهرية: <span id="calcObligationsTotal">0</span> ريال
-                        </p>
-                        <div class="flex gap-2 flex-wrap">
-                            <button type="button" id="calcAddAdHocObligation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                <i class="fas fa-plus ml-1"></i> إضافة التزام 
-                            </button>
-                            <button type="button" id="calcSaveObligationsToClient" class="text-green-600 hover:text-green-800 text-sm font-medium hidden">
-                                <i class="fas fa-save ml-1"></i> حفظ الالتزامات على العميل
-                            </button>
-                        </div>
-                    </div>
-                    
                     <!-- زر الحساب -->
                     <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-lg font-bold text-xl hover:shadow-xl transition transform hover:scale-105">
                         <i class="fas fa-calculator ml-2"></i>
@@ -256,8 +205,18 @@ export const smartCalculator = `<!DOCTYPE html>
                 
                 <div>
                     <label class="block text-gray-700 font-bold mb-2">
+                        <i class="fas fa-calendar-alt text-indigo-600 ml-2"></i>
+                        تاريخ الميلاد (هجري)
+                    </label>
+                    <input type="text" id="customerBirthdateHijri" autocomplete="off"
+                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                           placeholder="اختر التاريخ من التقويم الهجري">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2">
                         <i class="fas fa-calendar text-purple-600 ml-2"></i>
-                        تاريخ الميلاد
+                        تاريخ الميلاد (ميلادي)
                     </label>
                     <input type="date" id="customerBirthdate" required max="2006-12-31"
                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
@@ -567,16 +526,11 @@ export const smartCalculator = `<!DOCTYPE html>
     <script>
         let calculationData = {};
         let customerData = {};
-        let selectedCustomer = null;
-        let savedObligations = [];
-        let adHocObligations = [];
-        let calcSolutionRows = [{ note: '' }];
         let selectedBestOffer = null;
         let allBanks = [];
         let financingTypes = [];
-        let obligationTypeList = [];
         let allRates = [];
-        const showFilterDebug = true;
+        const showFilterDebug = false;
         
         function toNumber(value, fallback = null) {
             const numeric = Number(value);
@@ -590,6 +544,188 @@ export const smartCalculator = `<!DOCTYPE html>
 
             const numeric = Number(value);
             return Number.isFinite(numeric) ? numeric : null;
+        }
+
+        let isBirthdateSyncing = false;
+        let hijriBirthdatePicker = null;
+
+        const hijriDisplayFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const hijriPartsFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+
+        function normalizeArabicDigits(value) {
+            if (!value) return '';
+            const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+            const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+            return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+                const arabicIndex = arabicDigits.indexOf(char);
+                if (arabicIndex >= 0) return String(arabicIndex);
+                const easternArabicIndex = easternArabicDigits.indexOf(char);
+                return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+            });
+        }
+
+        function parseHijriInput(value) {
+            const normalized = normalizeArabicDigits(value)
+                .replace(/\u200f/g, '')
+                .replace(/\u200e/g, '')
+                .trim();
+            if (!normalized) return null;
+
+            const parts = normalized.split(/[^\d]+/).filter(Boolean);
+            if (parts.length !== 3) return null;
+
+            let year;
+            let month;
+            let day;
+
+            if (parts[0].length === 4) {
+                year = Number(parts[0]);
+                month = Number(parts[1]);
+                day = Number(parts[2]);
+            } else if (parts[2].length === 4) {
+                day = Number(parts[0]);
+                month = Number(parts[1]);
+                year = Number(parts[2]);
+            } else {
+                return null;
+            }
+
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+            if (year < 1200 || year > 1700) return null;
+            if (month < 1 || month > 12) return null;
+            if (day < 1 || day > 30) return null;
+
+            return { year, month, day };
+        }
+
+        function extractHijriPartsFromDate(dateObject) {
+            const parts = hijriPartsFormatter.formatToParts(dateObject);
+            const year = Number(parts.find((part) => part.type === 'year')?.value);
+            const month = Number(parts.find((part) => part.type === 'month')?.value);
+            const day = Number(parts.find((part) => part.type === 'day')?.value);
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+            return { year, month, day };
+        }
+
+        function formatGregorianValue(dateObject) {
+            const year = dateObject.getFullYear();
+            const month = String(dateObject.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObject.getDate()).padStart(2, '0');
+            return \`\${year}-\${month}-\${day}\`;
+        }
+
+        function formatHijriDateFromGregorian(dateValue) {
+            if (!dateValue) return '';
+            const [year, month, day] = String(dateValue).split('-').map(Number);
+            if (!year || !month || !day) return '';
+            const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+            if (Number.isNaN(gregorianDate.getTime())) return '';
+            return hijriDisplayFormatter.format(gregorianDate);
+        }
+
+        function findGregorianFromHijri(hijriParts) {
+            const approxGregorianYear = hijriParts.year + 579;
+            const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+            const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+
+            for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+                const currentHijriParts = extractHijriPartsFromDate(cursor);
+                if (!currentHijriParts) continue;
+
+                if (
+                    currentHijriParts.year === hijriParts.year &&
+                    currentHijriParts.month === hijriParts.month &&
+                    currentHijriParts.day === hijriParts.day
+                ) {
+                    return formatGregorianValue(cursor);
+                }
+            }
+
+            return '';
+        }
+
+        function initHijriBirthdatePicker() {
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            const gregorianInput = document.getElementById('customerBirthdate');
+            if (!hijriInput || !gregorianInput) return;
+
+            if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
+                console.warn('Hijri picker dependencies not loaded, fallback to manual conversion.');
+                return;
+            }
+
+            hijriBirthdatePicker = flatpickr(hijriInput, {
+                locale: 'ar',
+                disableMobile: true,
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                plugins: [
+                    hijriCalendarPlugin(window.luxon.DateTime, {
+                        showHijriDates: true,
+                        showHijriToggle: false
+                    })
+                ],
+                onOpen: [(_, __, instance) => {
+                    if (gregorianInput.value) {
+                        instance.setDate(gregorianInput.value, false, 'Y-m-d');
+                    }
+                }],
+                onChange: [(selectedDates) => {
+                    if (!selectedDates.length || isBirthdateSyncing) return;
+                    const gregorianValue = formatGregorianValue(selectedDates[0]);
+                    isBirthdateSyncing = true;
+                    gregorianInput.value = gregorianValue;
+                    hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+                    isBirthdateSyncing = false;
+                }]
+            });
+
+            if (gregorianInput.value) {
+                syncBirthdateFromGregorian();
+            }
+        }
+
+        function syncBirthdateFromGregorian() {
+            if (isBirthdateSyncing) return;
+            const gregorianInput = document.getElementById('customerBirthdate');
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            if (!gregorianInput || !hijriInput) return;
+
+            isBirthdateSyncing = true;
+            hijriInput.value = formatHijriDateFromGregorian(gregorianInput.value);
+            if (hijriBirthdatePicker && gregorianInput.value) {
+                hijriBirthdatePicker.setDate(gregorianInput.value, false, 'Y-m-d');
+            }
+            isBirthdateSyncing = false;
+        }
+
+        function syncBirthdateFromHijri() {
+            if (isBirthdateSyncing) return;
+            const gregorianInput = document.getElementById('customerBirthdate');
+            const hijriInput = document.getElementById('customerBirthdateHijri');
+            if (!gregorianInput || !hijriInput) return;
+
+            const parsedHijri = parseHijriInput(hijriInput.value);
+            if (!parsedHijri) return;
+
+            const gregorianValue = findGregorianFromHijri(parsedHijri);
+            if (!gregorianValue) return;
+
+            isBirthdateSyncing = true;
+            gregorianInput.value = gregorianValue;
+            hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+            if (hijriBirthdatePicker) {
+                hijriBirthdatePicker.setDate(gregorianValue, false, 'Y-m-d');
+            }
+            isBirthdateSyncing = false;
         }
         
         function sanitizeRequestData(data) {
@@ -675,13 +811,11 @@ export const smartCalculator = `<!DOCTYPE html>
                 // Build API URLs with tenant_id if available
                 const banksUrl = tenantId ? \`/api/banks?tenant_id=\${tenantId}&include_global=0\` : '/api/banks';
                 const ratesUrl = tenantId ? \`/api/rates?tenant_id=\${tenantId}\` : '/api/rates';
-                const obligTypesUrl = tenantId ? \`/api/obligation-types?tenant_id=\${tenantId}\` : '/api/obligation-types';
                 
-                const [banksRes, typesRes, ratesRes, obligTypesRes] = await Promise.all([
+                const [banksRes, typesRes, ratesRes] = await Promise.all([
                     axios.get(banksUrl),
                     axios.get('/api/financing-types'),
-                    axios.get(ratesUrl),
-                    axios.get(obligTypesUrl)
+                    axios.get(ratesUrl)
                 ]);
                 
                 allBanks = (banksRes.data.data || []).map((bank) => ({
@@ -689,12 +823,6 @@ export const smartCalculator = `<!DOCTYPE html>
                     id: toNumber(bank.id, bank.id)
                 }));
                 financingTypes = typesRes.data.data || [];
-                obligationTypeList = (obligTypesRes.data && obligTypesRes.data.success && Array.isArray(obligTypesRes.data.data))
-                    ? obligTypesRes.data.data.map((row) => row.type_name).filter(Boolean)
-                    : [];
-                if (!obligationTypeList.length) {
-                    obligationTypeList = ['قرض شخصي', 'قرض عقاري', 'تمويل سيارة قائم', 'بطاقة ائتمان', 'تمويل تعاوني', 'تقسيط / شراء بالأقساط', 'سلفة راتب', 'التزامات أخرى'];
-                }
                 allRates = (ratesRes.data.data || []).map((rate) => ({
                     ...rate,
                     bank_id: toNumber(rate.bank_id, rate.bank_id),
@@ -732,162 +860,22 @@ export const smartCalculator = `<!DOCTYPE html>
             }
         }
         
-        function syncCalcSolutionRowsFromDom() {
-            const tbody = document.getElementById('calcSolutionsTbody');
-            if (!tbody) return;
-            const next = [];
-            tbody.querySelectorAll('tr').forEach((tr) => {
-                const el = tr.querySelector('.calc-sol-note');
-                next.push({ note: el ? el.value : '' });
-            });
-            calcSolutionRows = next.length ? next : [{ note: '' }];
-        }
-        
-        function renderCalcSolutionsTable() {
-            const tbody = document.getElementById('calcSolutionsTbody');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-            (calcSolutionRows || []).forEach((row, i) => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200';
-                tr.innerHTML = '<td class="py-1 px-2 text-center text-gray-700 font-medium w-20">' + (i + 1) + '</td>' +
-                    '<td class="py-1 px-2"><input type="text" class="calc-sol-note w-full px-2 py-1.5 border rounded"></td>' +
-                    '<td class="py-1 px-2"><button type="button" class="calc-sol-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                tr.querySelector('.calc-sol-note').value = row.note || '';
-                tr.querySelector('.calc-sol-remove').addEventListener('click', () => {
-                    syncCalcSolutionRowsFromDom();
-                    calcSolutionRows.splice(i, 1);
-                    if (!calcSolutionRows.length) calcSolutionRows.push({ note: '' });
-                    renderCalcSolutionsTable();
-                });
-                tbody.appendChild(tr);
-            });
-        }
-        
-        function getCalcSolutionsForSave() {
-            syncCalcSolutionRowsFromDom();
-            return calcSolutionRows.map((r) => ({ note: (r.note || '').trim() }));
-        }
-        
-        function getCalcObligationsTotal() {
-            const saved = (savedObligations || []).reduce((s, o) => s + (Number(o.monthly_installment) || 0), 0);
-            let adhoc = 0;
-            const tbody = document.getElementById('calcObligationsTbody');
-            if (tbody) {
-                tbody.querySelectorAll('tr.calc-adhoc-row').forEach(tr => {
-                    const el = tr.querySelector('.calc-adhoc-monthly');
-                    if (el) adhoc += parseFloat(el.value) || 0;
-                });
-            }
-            return saved + adhoc;
-        }
-        
-        function renderCalcObligationsTable() {
-            const tbody = document.getElementById('calcObligationsTbody');
-            const totalEl = document.getElementById('calcObligationsTotal');
-            const saveBtn = document.getElementById('calcSaveObligationsToClient');
-            if (!tbody || !totalEl) return;
-            tbody.innerHTML = '';
-            (savedObligations || []).forEach(o => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200';
-                tr.innerHTML = \`<td class="py-1 px-2">\${escapeHtml(o.obligation_type || '')}</td><td class="py-1 px-2">\${formatNumber(Number(o.total_amount) || 0)}</td><td class="py-1 px-2">\${formatNumber(Number(o.monthly_installment) || 0)}</td><td class="py-1 px-2">\${o.due_date || '-'}</td><td class="py-1 px-2"></td>\`;
-                tbody.appendChild(tr);
-            });
-            (adHocObligations || []).forEach((o, i) => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-gray-200 calc-adhoc-row';
-                tr.innerHTML = \`<td class="py-1 px-2">\${buildCalcObligSelectHtml(o.obligation_type || '')}</td><td class="py-1 px-2"><input type="number" class="calc-adhoc-total w-full px-2 py-1 border rounded" step="0.01" value="\${o.total_amount || ''}"></td><td class="py-1 px-2"><input type="number" class="calc-adhoc-monthly w-full px-2 py-1 border rounded" step="0.01" value="\${o.monthly_installment || ''}"></td><td class="py-1 px-2"><input type="date" class="calc-adhoc-due w-full px-2 py-1 border rounded" value="\${o.due_date || ''}"></td><td class="py-1 px-2"><button type="button" class="calc-adhoc-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>\`;
-                const removeBtn = tr.querySelector('.calc-adhoc-remove');
-                removeBtn.addEventListener('click', () => { adHocObligations.splice(i, 1); renderCalcObligationsTable(); });
-                tbody.appendChild(tr);
-            });
-            const total = getCalcObligationsTotal();
-            totalEl.textContent = total.toLocaleString('ar-SA');
-            if (saveBtn) saveBtn.classList.toggle('hidden', !selectedCustomer);
-        }
-        
-        function escapeHtml(s) {
-            const div = document.createElement('div');
-            div.textContent = s;
-            return div.innerHTML;
-        }
-        
-        function buildCalcObligSelectHtml(selectedValue) {
-            const sel = selectedValue == null ? '' : String(selectedValue);
-            let opts = '<option value="">— اختر النوع —</option>';
-            obligationTypeList.forEach(function (name) {
-                const e = escapeHtml(name);
-                opts += '<option value="' + e.replace(/"/g, '&quot;') + '"' + (sel === name ? ' selected' : '') + '>' + e + '</option>';
-            });
-            if (sel && obligationTypeList.indexOf(sel) === -1) {
-                const e = escapeHtml(sel);
-                opts += '<option value="' + e.replace(/"/g, '&quot;') + '" selected>' + e + '</option>';
-            }
-            return '<select class="calc-adhoc-type w-full px-2 py-1 border rounded">' + opts + '</select>';
-        }
-        
-        function formatNumber(n) {
-            return Number(n).toLocaleString('ar-SA');
-        }
-        
-        document.getElementById('calcAddSolutionRow').addEventListener('click', () => {
-            syncCalcSolutionRowsFromDom();
-            calcSolutionRows.push({ note: '' });
-            renderCalcSolutionsTable();
-        });
-        
-        document.getElementById('calcAddAdHocObligation').addEventListener('click', () => {
-            adHocObligations = adHocObligations || [];
-            adHocObligations.push({ obligation_type: '', total_amount: 0, monthly_installment: 0, due_date: null });
-            renderCalcObligationsTable();
-        });
-        
-        document.getElementById('calcSaveObligationsToClient').addEventListener('click', async () => {
-            if (!selectedCustomer || !selectedCustomer.id) return;
-            const rows = [];
-            (savedObligations || []).forEach(o => rows.push({ obligation_type: o.obligation_type || '', total_amount: Number(o.total_amount) || 0, monthly_installment: Number(o.monthly_installment) || 0, due_date: o.due_date || null }));
-            document.querySelectorAll('#calcObligationsTbody tr.calc-adhoc-row').forEach(tr => {
-                const typeEl = tr.querySelector('.calc-adhoc-type');
-                const totalEl = tr.querySelector('.calc-adhoc-total');
-                const monthlyEl = tr.querySelector('.calc-adhoc-monthly');
-                const dueEl = tr.querySelector('.calc-adhoc-due');
-                if (typeEl && totalEl && monthlyEl) rows.push({ obligation_type: typeEl.value || '', total_amount: parseFloat(totalEl.value) || 0, monthly_installment: parseFloat(monthlyEl.value) || 0, due_date: (dueEl && dueEl.value) || null });
-            });
-            try {
-                await axios.post(\`/api/customers/\${selectedCustomer.id}/obligations\`, { obligations: rows }, { withCredentials: true });
-                alert('تم حفظ الالتزامات على العميل بنجاح');
-                savedObligations = rows;
-                adHocObligations = [];
-                renderCalcObligationsTable();
-            } catch (err) {
-                console.error(err);
-                alert(err.response && err.response.data && err.response.data.error ? err.response.data.error : 'فشل حفظ الالتزامات. قد تحتاج لتسجيل الدخول.');
-            }
-        });
-        
-        renderCalcObligationsTable();
-        renderCalcSolutionsTable();
-        
         // Step 1: Main form submission
         document.getElementById('calculatorForm').addEventListener('submit', (e) => {
             e.preventDefault();
             
-            const obligationsTotal = getCalcObligationsTotal();
-            // Get form data
+            // Get form data (obligations not collected on calculator; affordability uses full salary)
             calculationData = {
                 financing_type_id: parseInt(document.getElementById('financingType').value, 10),
                 amount: parseFloat(document.getElementById('amount').value),
                 salary: parseFloat(document.getElementById('salary').value),
-                obligations: obligationsTotal
+                obligations: 0
             };
             
-            // Calculate available income
-            const availableIncome = calculationData.salary - calculationData.obligations;
+            const availableIncome = calculationData.salary;
             
-            // Check if customer can afford
             if (availableIncome < 1000) {
-                alert('عذراً، الراتب المتاح بعد خصم الالتزامات غير كافٍ (يجب أن يكون 1000 ريال على الأقل)');
+                alert('عذراً، الراتب الشهري غير كافٍ (يجب أن يكون 1000 ريال على الأقل)');
                 return;
             }
             
@@ -898,6 +886,8 @@ export const smartCalculator = `<!DOCTYPE html>
         // Step 2: Customer info submission
         document.getElementById('customerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            syncBirthdateFromHijri();
+            syncBirthdateFromGregorian();
             
             // Get customer info
             customerData = {
@@ -933,7 +923,7 @@ export const smartCalculator = `<!DOCTYPE html>
                     obligations: calculationData.obligations,
                     financing_type_id: calculationData.financing_type_id,
                     tenant_slug: tenantSlug,
-                    solutions: getCalcSolutionsForSave()
+                    solutions: []
                 });
                 
                 console.log('✅ تم حفظ بيانات العميل في قاعدة البيانات:', response.data);
@@ -1622,13 +1612,7 @@ export const smartCalculator = `<!DOCTYPE html>
             document.getElementById('calculatorForm').reset();
             calculationData = {};
             customerData = {};
-            selectedCustomer = null;
-            savedObligations = [];
-            adHocObligations = [];
-            calcSolutionRows = [{ note: '' }];
             selectedBestOffer = null;
-            if (typeof renderCalcObligationsTable === 'function') renderCalcObligationsTable();
-            if (typeof renderCalcSolutionsTable === 'function') renderCalcSolutionsTable();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         
@@ -1672,6 +1656,18 @@ export const smartCalculator = `<!DOCTYPE html>
             modal.classList.add('hidden');
             modal.style.display = 'none';
         }
+
+        const customerBirthdateInput = document.getElementById('customerBirthdate');
+        const customerBirthdateHijriInput = document.getElementById('customerBirthdateHijri');
+        if (customerBirthdateInput) {
+            customerBirthdateInput.addEventListener('change', syncBirthdateFromGregorian);
+            customerBirthdateInput.addEventListener('input', syncBirthdateFromGregorian);
+        }
+        if (customerBirthdateHijriInput) {
+            customerBirthdateHijriInput.addEventListener('change', syncBirthdateFromHijri);
+            customerBirthdateHijriInput.addEventListener('blur', syncBirthdateFromHijri);
+        }
+        initHijriBirthdatePicker();
         
         // Load data on page load
         loadData();
