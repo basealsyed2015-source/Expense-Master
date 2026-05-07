@@ -79,18 +79,26 @@ function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
   const m = String((e as Error)?.message ?? e ?? '')
   if (!(m.includes('no such column') || m.includes('no column named'))) return false
   return (
-    m.includes('id_attachment_url') ||
-    m.includes('bank_statement_attachment_url') ||
-    m.includes('salary_attachment_url') ||
-    m.includes('additional_attachment_url')
+    m.includes('identity_attachment_url') ||
+    m.includes('signature_attachment_url') ||
+    m.includes('salary_profile_attachment_url') ||
+    m.includes('gosi_attachment_url') ||
+    m.includes('tax_exemption_attachment_url') ||
+    m.includes('additional_1_attachment_url') ||
+    m.includes('additional_2_attachment_url') ||
+    m.includes('additional_3_attachment_url')
   )
 }
 
 type AttachmentSyncPayload = {
-  id_attachment_url?: string | null
-  bank_statement_attachment_url?: string | null
-  salary_attachment_url?: string | null
-  additional_attachment_url?: string | null
+  identity_attachment_url?: string | null
+  signature_attachment_url?: string | null
+  salary_profile_attachment_url?: string | null
+  gosi_attachment_url?: string | null
+  tax_exemption_attachment_url?: string | null
+  additional_1_attachment_url?: string | null
+  additional_2_attachment_url?: string | null
+  additional_3_attachment_url?: string | null
 }
 
 async function syncAttachmentsForCustomer(
@@ -245,8 +253,8 @@ function buildPublicContactPageHtml(
     </head>
     <body class="min-h-screen bg-gray-50">
       <div class="min-h-screen p-6" style="background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor});">
-        <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div class="lg:col-span-2 bg-white rounded-2xl shadow-2xl p-8">
+        <div class="w-full max-w-none grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-4 gap-6 items-start">
+          <div class="lg:col-span-2 2xl:col-span-3 bg-white rounded-2xl shadow-2xl p-8">
             <div class="text-center mb-8">
               <div class="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl" style="background: ${primaryColor};">
                 <i class="fas fa-comments"></i>
@@ -372,6 +380,33 @@ registerContractsStaticRoutes(app, getUserInfo)
 
 // Helper: Mobile-Responsive CSS Styles
 const getMobileResponsiveCSS = () => `
+  /* Wide-screen layout: let pages span available width (avoid big empty side whitespace) */
+  @media (min-width: 1024px) {
+    .max-w-7xl,
+    .max-w-6xl,
+    .max-w-5xl,
+    .max-w-4xl,
+    .max-w-3xl {
+      max-width: none !important;
+      width: 100% !important;
+    }
+
+    .max-w-7xl.mx-auto,
+    .max-w-6xl.mx-auto,
+    .max-w-5xl.mx-auto,
+    .max-w-4xl.mx-auto,
+    .max-w-3xl.mx-auto,
+    .container.mx-auto {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    .container {
+      max-width: none !important;
+      width: 100% !important;
+    }
+  }
+
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -586,7 +621,7 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-// Bank agents (role 5): only read scoped funding requests, sidebar request counts, and auth logout.
+// Bank agents (role 5): only read scoped funding requests/customers, sidebar request counts, and auth logout.
 app.use('/api/*', async (c, next) => {
   const p = c.req.path
   if (
@@ -605,6 +640,18 @@ app.use('/api/*', async (c, next) => {
   }
   const method = c.req.method
   if (p === '/api/financing-requests' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/customers' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/customer-reviews' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p.startsWith('/api/customer-reviews/') && method === 'GET') {
     await next()
     return
   }
@@ -842,6 +889,13 @@ async function canUserAccessCustomer(
       .first<{ ok: number }>()
     return Boolean(assignment?.ok)
   }
+  if (normalizeRoleId(userInfo.roleId) === 5) {
+    const assignment = await db
+      .prepare('SELECT 1 as ok FROM financing_requests WHERE customer_id = ? AND assigned_bank_agent_id = ? LIMIT 1')
+      .bind(customer.id, userInfo.userId)
+      .first<{ ok: number }>()
+    return Boolean(assignment?.ok)
+  }
   return userInfo.roleId === 2 || userInfo.roleId === 3
 }
 
@@ -999,16 +1053,15 @@ async function getUserInfo(
 async function validateBankAgentForFinancingRequest(
   db: D1Database,
   tenantId: number,
-  bankId: number,
   agentUserId: number
 ): Promise<boolean> {
   const row = await db
     .prepare(
       `SELECT 1 AS ok FROM users
        WHERE id = ? AND is_active = 1 AND role_id = 5
-         AND tenant_id = ? AND assigned_bank_id = ?`
+         AND tenant_id = ?`
     )
-    .bind(agentUserId, tenantId, bankId)
+    .bind(agentUserId, tenantId)
     .first()
   return Boolean(row)
 }
@@ -1089,6 +1142,15 @@ async function loadCustomersForAdminForms(
     customersQuery += ` WHERE tenant_id = ? AND EXISTS (
       SELECT 1 FROM customer_assignments ca
       WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+    )`
+    customersParams.push(userInfo.tenantId, userInfo.userId)
+  } else if (normalizeRoleId(userInfo.roleId) === 5) {
+    if (!userInfo.tenantId || !userInfo.userId) {
+      return { results: [] }
+    }
+    customersQuery += ` WHERE tenant_id = ? AND EXISTS (
+      SELECT 1 FROM financing_requests fr
+      WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
     )`
     customersParams.push(userInfo.tenantId, userInfo.userId)
   } else {
@@ -1204,10 +1266,20 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/customers',
     '/admin/requests',
     '/admin/my-tasks',
+    '/my-tasks',
     '/calculator',
     '/',
   ],
-  '5': ['/admin/requests'],
+  // Role 5 should mirror role 4 navigation (UI allowlist). Sensitive actions are still blocked server-side.
+  '5': [
+    '/admin/dashboard',
+    '/admin/customers',
+    '/admin/requests',
+    '/admin/my-tasks',
+    '/my-tasks',
+    '/calculator',
+    '/',
+  ],
 }
 
 function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number }): string {
@@ -1307,6 +1379,19 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     margin-bottom: 2px;
     color: #475569;
   }
+  #global-persistent-sidebar .gps-submenu .gps-segment-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: #94a3b8;
+    padding: 10px 10px 6px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  #global-persistent-sidebar .gps-submenu .gps-subdivider {
+    margin: 6px 10px;
+    border: 0;
+    border-top: 1px dashed #e2e8f0;
+  }
   #global-persistent-sidebar .gps-count-badge {
     margin-inline-start: auto;
     background: #e2e8f0;
@@ -1394,7 +1479,28 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     </div>
     <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>مهام المتابعة</a>
     <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
-    <a href="/admin/follow-ups"><i class="fas fa-address-card"></i>متابعة التواصل</a>
+    <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>التسويق</a>
+    <div class="gps-collapsible gps-open" data-followups-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=all" class="gps-collapsible-main">
+        <i class="fas fa-bullhorn"></i>
+        <span>التسويق</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-followups-toggle aria-label="توسيع أو طي قائمة فلاتر متابعة التواصل">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <div class="gps-segment-label">مصدر رابط التواصل</div>
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=all" data-followups-link-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/follow-ups?followupLinkFilter=company&followupPriorityFilter=all" data-followups-link-filter="company"><i class="fas fa-building"></i>رابط الشركة</a>
+        <a href="/admin/follow-ups?followupLinkFilter=affiliate&followupPriorityFilter=all" data-followups-link-filter="affiliate"><i class="fas fa-tag"></i>روابط الأفلييت</a>
+        <hr class="gps-subdivider">
+        <div class="gps-segment-label">الأولوية</div>
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=important" data-followups-priority-filter="important"><i class="fas fa-exclamation-circle"></i>مهم</a>
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=regular" data-followups-priority-filter="regular"><i class="fas fa-minus-circle"></i>عادي</a>
+      </div>
+    </div>
     <a href="/admin/rates"><i class="fas fa-percentage"></i>نسب التمويل</a>
     <a href="/admin/payments"><i class="fas fa-receipt"></i>سندات القبض</a>
     <a href="/admin/banks"><i class="fas fa-university"></i>البنوك</a>
@@ -1436,10 +1542,13 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
       }
 
       var userAllowed = ALLOWED[String(ROLE_ID)] || ALLOWED['4'];
+      var canAccessFollowups = userAllowed.indexOf('/admin/follow-ups') !== -1;
       var customersMainLink = sidebar.querySelector('[data-customers-main-link]');
       var customersCollapsible = sidebar.querySelector('[data-customers-collapsible]');
       var requestsMainLink = sidebar.querySelector('[data-requests-main-link]');
       var requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]');
+      var followupsMainLink = sidebar.querySelector('[data-followups-main-link]');
+      var followupsCollapsible = sidebar.querySelector('[data-followups-collapsible]');
 
       if (customersMainLink && customersCollapsible) {
         customersMainLink.style.display = 'none';
@@ -1451,6 +1560,18 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         requestsMainLink.style.display = 'none';
         requestsCollapsible.style.display = 'block';
         requestsCollapsible.classList.remove('gps-open');
+      }
+      if (followupsMainLink && followupsCollapsible) {
+        // Follow-ups is a manager-facing module. If the user can't access '/admin/follow-ups',
+        // hide the entire collapsible to avoid a broken row (arrow misalignment + empty submenu).
+        if (!canAccessFollowups) {
+          followupsMainLink.style.display = 'none';
+          followupsCollapsible.style.display = 'none';
+        } else {
+          followupsMainLink.style.display = 'none';
+          followupsCollapsible.style.display = 'block';
+          followupsCollapsible.classList.remove('gps-open');
+        }
       }
 
       sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (link) {
@@ -1464,6 +1585,10 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
           link.style.display = 'none';
           return;
         }
+        if (link.hasAttribute('data-followups-main-link')) {
+          link.style.display = 'none';
+          return;
+        }
         var normalizedHref = href.split('?')[0];
         var isSuperAdminOnly = link.getAttribute('data-superadmin-only') === 'true';
         if (isSuperAdminOnly && ROLE_ID !== 1) {
@@ -1472,7 +1597,9 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         }
         var isAlways =
           ROLE_ID !== 5 && (normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0);
-        if (isAlways || userAllowed.indexOf(normalizedHref) !== -1) {
+        var canShow = isAlways || userAllowed.indexOf(normalizedHref) !== -1;
+        var hiddenByCount = link.getAttribute('data-gps-hidden-by-count') === '1';
+        if (canShow && !hiddenByCount) {
           link.style.display = 'flex';
         } else {
           link.style.display = 'none';
@@ -1489,11 +1616,19 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         var hrefPath = url.pathname;
         var hrefRatingFilter = url.searchParams.get('ratingFilter');
         var hrefRequestStatusFilter = url.searchParams.get('requestStatusFilter');
+        var hrefFollowupLinkFilter = url.searchParams.get('followupLinkFilter');
+        var hrefFollowupPriorityFilter = url.searchParams.get('followupPriorityFilter');
         var activeMatch = path === hrefPath || path.indexOf(hrefPath + '/') === 0;
         if (activeMatch && hrefRatingFilter && query.get('ratingFilter') !== hrefRatingFilter) {
           activeMatch = false;
         }
         if (activeMatch && hrefRequestStatusFilter && query.get('requestStatusFilter') !== hrefRequestStatusFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch && hrefFollowupLinkFilter && query.get('followupLinkFilter') !== hrefFollowupLinkFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch && hrefFollowupPriorityFilter && query.get('followupPriorityFilter') !== hrefFollowupPriorityFilter) {
           activeMatch = false;
         }
         if (activeMatch) {
@@ -1505,16 +1640,34 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     function renderSidebarCount(link, count) {
       if (!link) return;
       var badge = link.querySelector('.gps-count-badge');
+
       if (count == null) {
         if (badge) badge.remove();
         return;
       }
+
+      var n = typeof count === 'number' ? count : 0;
+
+      if (!link.dataset.gpsPrevDisplay) {
+        link.dataset.gpsPrevDisplay = link.style.display || '';
+      }
+
+      if (n <= 0) {
+        link.setAttribute('data-gps-hidden-by-count', '1');
+        link.style.display = 'none';
+        if (badge) badge.remove();
+        return;
+      }
+
+      link.removeAttribute('data-gps-hidden-by-count');
+      link.style.display = link.dataset.gpsPrevDisplay;
+
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'gps-count-badge';
         link.appendChild(badge);
       }
-      badge.textContent = String(count || 0);
+      badge.textContent = String(n);
     }
 
     function hydrateSidebarFilterCounts() {
@@ -1530,14 +1683,16 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
           document.querySelectorAll('#global-persistent-sidebar [data-customer-rating-filter]').forEach(function (link) {
             var key = link.getAttribute('data-customer-rating-filter') || 'all';
             var value = customers[key];
-            if (typeof value !== 'number') value = null;
+            // If a key is absent from the payload, it effectively means 0 for this scope.
+            if (typeof value !== 'number') value = 0;
             renderSidebarCount(link, value);
           });
 
           document.querySelectorAll('#global-persistent-sidebar [data-request-status-filter]').forEach(function (link) {
             var key = link.getAttribute('data-request-status-filter') || 'all';
             var value = key === 'all' ? requests.all : requestStatusCounts[key];
-            if (typeof value !== 'number') value = null;
+            // Missing key => 0 requests for that status in this scope.
+            if (typeof value !== 'number') value = 0;
             renderSidebarCount(link, value);
           });
         })
@@ -1549,8 +1704,14 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
       if (!toggle) {
         toggle = event.target.closest('#global-persistent-sidebar [data-requests-collapsible] [data-requests-toggle]');
       }
+      if (!toggle) {
+        toggle = event.target.closest('#global-persistent-sidebar [data-followups-collapsible] [data-followups-toggle]');
+      }
       if (!toggle) return;
-      var wrapper = toggle.closest('[data-customers-collapsible]') || toggle.closest('[data-requests-collapsible]');
+      var wrapper =
+        toggle.closest('[data-customers-collapsible]') ||
+        toggle.closest('[data-requests-collapsible]') ||
+        toggle.closest('[data-followups-collapsible]');
       if (!wrapper) return;
       event.preventDefault();
       event.stopPropagation();
@@ -1603,16 +1764,21 @@ app.use('/admin/*', async (c, next) => {
 
   const rid = normalizeRoleId(info.roleId)
   if (rid === 5) {
+    // Role 5: same surface navigation as role 4. Sensitive mutations are blocked at the API layer.
     const ok =
+      pathname === '/admin' ||
+      pathname === '/admin/panel' ||
+      pathname === '/admin/dashboard' ||
+      pathname === '/admin/customers' ||
+      pathname.startsWith('/admin/customers/') ||
       pathname === '/admin/requests' ||
-      (pathname.startsWith('/admin/requests/') &&
-        pathname !== '/admin/requests/new' &&
-        !pathname.includes('/edit') &&
-        !pathname.includes('/delete') &&
-        !pathname.includes('/workflow') &&
-        !pathname.includes('/report'))
+      pathname.startsWith('/admin/requests/') ||
+      pathname === '/admin/my-tasks' ||
+      pathname === '/my-tasks' ||
+      pathname === '/calculator' ||
+      pathname === '/'
     if (!ok) {
-      return c.redirect('/admin/requests')
+      return c.redirect('/admin/panel')
     }
   }
 
@@ -2056,8 +2222,8 @@ app.post('/api/auth/login', async (c) => {
     const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
     const cookieValue = `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
     
-    // Determine redirect URL — bank agents go straight to funding requests
-    const redirect = normalizeRoleId(user.role_id) === 5 ? '/admin/requests' : '/admin/panel'
+    // Determine redirect URL
+    const redirect = '/admin/panel'
     
     console.log(`🎯 Redirect to: ${redirect}`)
     console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
@@ -3439,7 +3605,6 @@ app.post('/api/users', async (c) => {
       tenant_id = userInfo.tenantId
     }
 
-    const assignedBankRaw = formData.get('assigned_bank_id')
     let assigned_bank_id: number | null = null
     if (requestedRoleId === 5) {
       const canCreateBankAgent = isSuperAdminUser(userInfo) || userInfo.roleId === 2
@@ -3450,15 +3615,7 @@ app.post('/api/users', async (c) => {
       if (!tid || Number.isNaN(tid)) {
         return c.json({ success: false, error: 'يجب اختيار الشركة لموظف التمويل' }, 400)
       }
-      const bid = Number.parseInt(String(assignedBankRaw || ''), 10)
-      if (Number.isNaN(bid) || bid <= 0) {
-        return c.json({ success: false, error: 'يجب اختيار البنك لموظف التمويل' }, 400)
-      }
-      const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
-      if (!okBank) {
-        return c.json({ success: false, error: 'البنك غير صالح لهذه الشركة' }, 400)
-      }
-      assigned_bank_id = bid
+      assigned_bank_id = null
     }
     
     // Check for duplicate username
@@ -3544,7 +3701,7 @@ app.get('/api/admin/company-banks', async (c) => {
   }
 })
 
-/** Users with role bank_agent (5) for this company and bank. */
+/** Users with role bank_agent (5) for this company. */
 app.get('/api/admin/bank-agents', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -3552,28 +3709,22 @@ app.get('/api/admin/bank-agents', async (c) => {
       return c.json({ success: false, error: 'Unauthorized' }, 401)
     }
     const tidRaw = c.req.query('tenant_id')
-    const bidRaw = c.req.query('bank_id')
     const tid = tidRaw != null && String(tidRaw).trim() !== '' ? parseInt(String(tidRaw), 10) : NaN
-    const bid = bidRaw != null && String(bidRaw).trim() !== '' ? parseInt(String(bidRaw), 10) : NaN
-    if (!tid || Number.isNaN(tid) || !bid || Number.isNaN(bid)) {
-      return c.json({ success: false, error: 'tenant_id and bank_id required' }, 400)
+    if (!tid || Number.isNaN(tid)) {
+      return c.json({ success: false, error: 'tenant_id required' }, 400)
     }
     if (!isSuperAdminUser(userInfo) && userInfo.tenantId !== tid) {
       return c.json({ success: false, error: 'Forbidden' }, 403)
-    }
-    const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
-    if (!okBank) {
-      return c.json({ success: false, error: 'Invalid bank for tenant' }, 400)
     }
     const { results } = await c.env.DB
       .prepare(
         `SELECT u.id, u.full_name, u.username, u.email
          FROM users u
          WHERE u.role_id = 5 AND u.is_active = 1
-           AND u.tenant_id = ? AND u.assigned_bank_id = ?
+           AND u.tenant_id = ?
          ORDER BY u.full_name`
       )
-      .bind(tid, bid)
+      .bind(tid)
       .all()
     return c.json({ success: true, data: results || [] })
   } catch (error: any) {
@@ -3590,7 +3741,7 @@ app.put('/api/users/:id', async (c) => {
     }
     const id = c.req.param('id')
     const body = await c.req.json()
-    const { username, full_name, email, phone, role_id, subscription_id, is_active, assigned_bank_id: assignedBankBody } = body
+    const { username, full_name, email, phone, role_id, subscription_id, is_active } = body
 
     const requestedRoleId = Number.parseInt(String(role_id ?? ''), 10)
     if (Number.isNaN(requestedRoleId)) {
@@ -3617,15 +3768,7 @@ app.put('/api/users/:id', async (c) => {
       if (!tid) {
         return c.json({ success: false, error: 'Bank agent requires a company (tenant)' }, 400)
       }
-      const bid = Number.parseInt(String(assignedBankBody ?? ''), 10)
-      if (Number.isNaN(bid) || bid <= 0) {
-        return c.json({ success: false, error: 'assigned_bank_id required for bank agent' }, 400)
-      }
-      const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tid, bid)
-      if (!okBank) {
-        return c.json({ success: false, error: 'Invalid bank for tenant' }, 400)
-      }
-      assigned_bank_id = bid
+      assigned_bank_id = null
     }
 
     await c.env.DB.prepare(`
@@ -3674,6 +3817,15 @@ app.get('/api/customers', async (c) => {
         )`
       } else {
         query += ` WHERE 1 = 0` // No data if tenant scope is missing
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE c.tenant_id = ${userInfo.tenantId} AND EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ${userInfo.userId}
+        )`
+      } else {
+        query += ` WHERE 1 = 0`
       }
     } else {
       // Unknown role - no data
@@ -3745,11 +3897,25 @@ app.post('/api/customers', async (c) => {
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
+    const enrollment_source =
+      (() => {
+        const raw = String(formData.get('enrollment_source') ?? '').trim()
+        if (raw === 'affiliate' || raw === 'calculator') return raw
+        return null
+      })()
+    const enrollment_source_label =
+      enrollment_source === 'affiliate'
+        ? (String(formData.get('enrollment_source_label') ?? '').trim().slice(0, 200) || null)
+        : null
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
-    const id_attachment_url = (formData.get('id_attachment_url') as string || '').trim() || null
-    const bank_statement_attachment_url = (formData.get('bank_statement_attachment_url') as string || '').trim() || null
-    const salary_attachment_url = (formData.get('salary_attachment_url') as string || '').trim() || null
-    const additional_attachment_url = (formData.get('additional_attachment_url') as string || '').trim() || null
+    const identity_attachment_url = (formData.get('identity_attachment_url') as string || '').trim() || null
+    const signature_attachment_url = (formData.get('signature_attachment_url') as string || '').trim() || null
+    const salary_profile_attachment_url = (formData.get('salary_profile_attachment_url') as string || '').trim() || null
+    const gosi_attachment_url = (formData.get('gosi_attachment_url') as string || '').trim() || null
+    const tax_exemption_attachment_url = (formData.get('tax_exemption_attachment_url') as string || '').trim() || null
+    const additional_1_attachment_url = (formData.get('additional_1_attachment_url') as string || '').trim() || null
+    const additional_2_attachment_url = (formData.get('additional_2_attachment_url') as string || '').trim() || null
+    const additional_3_attachment_url = (formData.get('additional_3_attachment_url') as string || '').trim() || null
     
     // Resolve tenant from authenticated user (supports both cookie + bearer flows).
     const userInfo = await getUserInfo(c)
@@ -3910,23 +4076,42 @@ app.post('/api/customers', async (c) => {
       monthly_salary,
       tenant_id,
       notes,
-      id_attachment_url,
-      bank_statement_attachment_url,
-      salary_attachment_url,
-      additional_attachment_url
+      enrollment_source,
+      enrollment_source_label,
+      identity_attachment_url,
+      signature_attachment_url,
+      salary_profile_attachment_url,
+      gosi_attachment_url,
+      tax_exemption_attachment_url,
+      additional_1_attachment_url,
+      additional_2_attachment_url,
+      additional_3_attachment_url
     ] as const
     let result: { meta?: { last_row_id?: number } }
     try {
       result = await c.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url, solutions_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO customers (
+        full_name, phone, email, national_id, birthdate, dob_calendar_type,
+        employer_name, job_type, job_title, military_rank, work_start_date, city,
+        basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+        identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+        additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url,
+        solutions_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(...insertBind, solutions_json).run() as { meta?: { last_row_id?: number } }
     } catch (e: unknown) {
       if (isMissingCustomerSolutionsColumnError(e)) {
         try {
           result = await c.env.DB.prepare(`
-          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO customers (
+            full_name, phone, email, national_id, birthdate, dob_calendar_type,
+            employer_name, job_type, job_title, military_rank, work_start_date, city,
+            basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+            identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+            additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(...insertBind).run() as { meta?: { last_row_id?: number } }
         } catch (innerError: unknown) {
           if (!isMissingCustomerAttachmentsColumnError(innerError)) throw innerError
@@ -4085,10 +4270,28 @@ app.post('/api/customers/:id', async (c) => {
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
-    const id_attachment_url = (formData.get('id_attachment_url') as string || '').trim() || null
-    const bank_statement_attachment_url = (formData.get('bank_statement_attachment_url') as string || '').trim() || null
-    const salary_attachment_url = (formData.get('salary_attachment_url') as string || '').trim() || null
-    const additional_attachment_url = (formData.get('additional_attachment_url') as string || '').trim() || null
+
+    // Attachment URLs (new 8-doc model; keep legacy 4-doc inputs as fallback)
+    const identity_attachment_url =
+      (formData.get('identity_attachment_url') as string | null)?.trim() ||
+      (formData.get('id_attachment_url') as string | null)?.trim() ||
+      null
+    const signature_attachment_url =
+      (formData.get('signature_attachment_url') as string | null)?.trim() ||
+      (formData.get('bank_statement_attachment_url') as string | null)?.trim() ||
+      null
+    const salary_profile_attachment_url =
+      (formData.get('salary_profile_attachment_url') as string | null)?.trim() ||
+      (formData.get('salary_attachment_url') as string | null)?.trim() ||
+      null
+    const gosi_attachment_url = (formData.get('gosi_attachment_url') as string | null)?.trim() || null
+    const tax_exemption_attachment_url = (formData.get('tax_exemption_attachment_url') as string | null)?.trim() || null
+    const additional_1_attachment_url =
+      (formData.get('additional_1_attachment_url') as string | null)?.trim() ||
+      (formData.get('additional_attachment_url') as string | null)?.trim() ||
+      null
+    const additional_2_attachment_url = (formData.get('additional_2_attachment_url') as string | null)?.trim() || null
+    const additional_3_attachment_url = (formData.get('additional_3_attachment_url') as string | null)?.trim() || null
     
     const updateBind = [
       full_name,
@@ -4106,17 +4309,23 @@ app.post('/api/customers/:id', async (c) => {
       basic_salary,
       monthly_salary,
       notes,
-      id_attachment_url,
-      bank_statement_attachment_url,
-      salary_attachment_url,
-      additional_attachment_url
+      identity_attachment_url,
+      signature_attachment_url,
+      salary_profile_attachment_url,
+      gosi_attachment_url,
+      tax_exemption_attachment_url,
+      additional_1_attachment_url,
+      additional_2_attachment_url,
+      additional_3_attachment_url
     ] as const
     try {
       await c.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
           employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
-          id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?, solutions_json = ?
+          identity_attachment_url = ?, signature_attachment_url = ?, salary_profile_attachment_url = ?, gosi_attachment_url = ?, tax_exemption_attachment_url = ?,
+          additional_1_attachment_url = ?, additional_2_attachment_url = ?, additional_3_attachment_url = ?,
+          solutions_json = ?
       WHERE id = ?
     `).bind(...updateBind, solutions_json, id).run()
     } catch (e: unknown) {
@@ -4126,7 +4335,8 @@ app.post('/api/customers/:id', async (c) => {
           UPDATE customers 
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
-              id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?
+              identity_attachment_url = ?, signature_attachment_url = ?, salary_profile_attachment_url = ?, gosi_attachment_url = ?, tax_exemption_attachment_url = ?,
+              additional_1_attachment_url = ?, additional_2_attachment_url = ?, additional_3_attachment_url = ?
           WHERE id = ?
         `).bind(...updateBind, id).run()
         } catch (innerError: unknown) {
@@ -4183,10 +4393,14 @@ app.post('/api/customers/:id', async (c) => {
       } catch (_) {}
     }
     await syncAttachmentsForCustomer(c.env.DB, id, {
-      id_attachment_url,
-      bank_statement_attachment_url,
-      salary_attachment_url,
-      additional_attachment_url
+      identity_attachment_url,
+      signature_attachment_url,
+      salary_profile_attachment_url,
+      gosi_attachment_url,
+      tax_exemption_attachment_url,
+      additional_1_attachment_url,
+      additional_2_attachment_url,
+      additional_3_attachment_url
     })
     return c.redirect('/admin/customers')
   } catch (error: any) {
@@ -4385,10 +4599,16 @@ app.get('/api/financing-requests', async (c) => {
         query += ' WHERE 1 = 0'
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      // Bank agent: only requests explicitly assigned to this user
+      // Bank agent: assigned requests plus requests for customers assigned to them
       if (userInfo.tenantId && userInfo.userId) {
-        query += ' WHERE f.tenant_id = ? AND f.assigned_bank_agent_id = ?'
-        queryParams.push(userInfo.tenantId, userInfo.userId)
+        query += ` WHERE f.tenant_id = ? AND (
+          f.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca2
+            WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
+          )
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
       } else {
         query += ' WHERE 1 = 0'
       }
@@ -4438,7 +4658,18 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         customerWhereParts.push('1 = 0')
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      customerWhereParts.push('1 = 0')
+      // Role 5 mirrors role 4 navigation, but their customer scope is based on financing requests assigned to them.
+      // This keeps sidebar rating filters/counts consistent with what they can actually access.
+      if (userInfo.tenantId && userInfo.userId) {
+        customerWhereParts.push('c.tenant_id = ?')
+        customerWhereParts.push(`EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+        )`)
+        customerParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        customerWhereParts.push('1 = 0')
+      }
     } else {
       customerWhereParts.push('1 = 0')
     }
@@ -4512,10 +4743,15 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         requestWhereParts.push('1 = 0')
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      if (userInfo.tenantId && userInfo.userId) {
-        requestWhereParts.push('c.tenant_id = ?')
+      // Role 5: scope requests to those assigned to the bank agent.
+      // Don't fail closed on missing tenant_id, because role-5 visibility is primarily by assignment.
+      if (userInfo.userId) {
+        if (userInfo.tenantId) {
+          requestWhereParts.push('c.tenant_id = ?')
+          requestParams.push(userInfo.tenantId)
+        }
         requestWhereParts.push('fr.assigned_bank_agent_id = ?')
-        requestParams.push(userInfo.tenantId, userInfo.userId)
+        requestParams.push(userInfo.userId)
       } else {
         requestWhereParts.push('1 = 0')
       }
@@ -4648,14 +4884,9 @@ app.post('/api/requests', async (c) => {
       if (!tidNum || Number.isNaN(tidNum)) {
         return c.json({ success: false, error: 'تعذر تحديد الشركة لتعيين موظف التمويل' }, 400)
       }
-      const agentOk = await validateBankAgentForFinancingRequest(
-        c.env.DB,
-        tidNum,
-        selected_bank_id,
-        assigned_bank_agent_id
-      )
+      const agentOk = await validateBankAgentForFinancingRequest(c.env.DB, tidNum, assigned_bank_agent_id)
       if (!agentOk) {
-        return c.json({ success: false, error: 'موظف التمويل غير صالح لهذا البنك والشركة' }, 400)
+        return c.json({ success: false, error: 'موظف التمويل غير صالح لهذه الشركة' }, 400)
       }
     }
     
@@ -4798,6 +5029,11 @@ function mapWorkflowStageToRequestStatus(stageName?: string | null) {
 // Update request stage
 app.post('/api/workflow/update-stage', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(requester.roleId) === 5) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const { requestId, newStageId, notes, userId } = await c.req.json()
 
     const stage = await c.env.DB.prepare(`
@@ -5120,7 +5356,8 @@ app.post('/api/c/:tenant/calculator/submit-request', async (c) => {
             birthdate = ?, monthly_salary = ?,
             employer_name = ?, job_title = ?,
             work_start_date = ?, city = ?,
-            financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
+            financing_amount = ?, monthly_obligations = ?, financing_type_id = ?,
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(
         data.full_name || '',
@@ -5145,8 +5382,9 @@ app.post('/api/c/:tenant/calculator/submit-request', async (c) => {
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
             job_title, work_start_date, city, tenant_id,
-            financing_amount, monthly_obligations, financing_type_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            financing_amount, monthly_obligations, financing_type_id,
+            enrollment_source
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           data.full_name || '',
           data.phone || '',
@@ -5161,7 +5399,8 @@ app.post('/api/c/:tenant/calculator/submit-request', async (c) => {
           tenant_id,
           data.requested_amount || 0,
           data.monthly_obligations || 0,
-          data.financing_type_id || null
+          data.financing_type_id || null,
+          'calculator'
         ).run()
         
         customer_id = customerResult.meta.last_row_id
@@ -5336,7 +5575,8 @@ app.post('/api/calculator/save-customer', async (c) => {
             total_payment = ?,
             calculation_date = CURRENT_TIMESTAMP,
             tenant_id = COALESCE(?, tenant_id),
-            solutions_json = IFNULL(?, solutions_json)
+            solutions_json = IFNULL(?, solutions_json),
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(...saveCustUpdateBind).run()
       } catch (e: unknown) {
@@ -5355,7 +5595,8 @@ app.post('/api/calculator/save-customer', async (c) => {
             monthly_payment = ?,
             total_payment = ?,
             calculation_date = CURRENT_TIMESTAMP,
-            tenant_id = COALESCE(?, tenant_id)
+            tenant_id = COALESCE(?, tenant_id),
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(
           data.name,
@@ -5402,9 +5643,10 @@ app.post('/api/calculator/save-customer', async (c) => {
           financing_amount, monthly_obligations, financing_type_id,
           financing_duration_months, best_bank_id, best_rate,
           monthly_payment, total_payment, calculation_date,
-          national_id, tenant_id, solutions_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
-      `).bind(...saveCustInsertBind, solutionsEncoded ?? '[]').run() as { meta: { last_row_id: number } }
+          national_id, tenant_id, solutions_json,
+          enrollment_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+      `).bind(...saveCustInsertBind, solutionsEncoded ?? '[]', 'calculator').run() as { meta: { last_row_id: number } }
       } catch (e: unknown) {
         if (!isMissingCustomerSolutionsColumnError(e)) throw e
         result = await c.env.DB.prepare(`
@@ -5413,12 +5655,72 @@ app.post('/api/calculator/save-customer', async (c) => {
           financing_amount, monthly_obligations, financing_type_id,
           financing_duration_months, best_bank_id, best_rate,
           monthly_payment, total_payment, calculation_date,
-          national_id, tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-      `).bind(...saveCustInsertBind).run() as { meta: { last_row_id: number } }
+          national_id, tenant_id,
+          enrollment_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+      `).bind(...saveCustInsertBind, 'calculator').run() as { meta: { last_row_id: number } }
       }
 
       customer_id = result.meta.last_row_id
+    }
+
+    // Auto-assign calculator customers to a role-4 employee using the fair queue,
+    // but only if they don't already have an assignment.
+    if (tenant_id && customer_id) {
+      const existingAssignment = await c.env.DB.prepare(
+        `SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? LIMIT 1`
+      ).bind(customer_id).first<{ ok: number }>()
+
+      if (!existingAssignment?.ok) {
+        const { results: staffRows } = await c.env.DB.prepare(`
+          SELECT id FROM users
+          WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+          ORDER BY id ASC
+        `).bind(tenant_id).all<{ id: number }>()
+
+        const staff = (staffRows || []) as { id: number }[]
+        if (staff.length) {
+          const stateRow = await c.env.DB.prepare(`
+            SELECT last_auto_assigned_user_id
+            FROM tenant_customer_auto_assign_state
+            WHERE tenant_id = ?
+            LIMIT 1
+          `).bind(tenant_id).first<{ last_auto_assigned_user_id: number | null }>()
+
+          const staffIds = staff.map((s) => s.id)
+          const lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
+          function pickNextUserId(last: number | null): number {
+            if (last == null) return staffIds[0]
+            const idx = staffIds.indexOf(last)
+            if (idx === -1) return staffIds[0]
+            return staffIds[(idx + 1) % staffIds.length]
+          }
+
+          const employeeId = pickNextUserId(lastId)
+          const assignedBy = 1
+          const noteAr = 'تعيين تلقائي (الحاسبة)'
+
+          const ins = await c.env.DB.prepare(`
+            INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+            VALUES (?, ?, ?, ?)
+          `).bind(customer_id, employeeId, assignedBy, noteAr).run()
+
+          if (ins.meta.changes > 0) {
+            await c.env.DB.prepare(`
+              INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+              VALUES (?, NULL, ?, ?, ?)
+            `).bind(customer_id, employeeId, assignedBy, noteAr).run()
+
+            await c.env.DB.prepare(`
+              INSERT INTO tenant_customer_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+              VALUES (?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(tenant_id) DO UPDATE SET
+                last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+                updated_at = CURRENT_TIMESTAMP
+            `).bind(tenant_id, employeeId).run()
+          }
+        }
+      }
     }
     
     return c.json({ 
@@ -5484,7 +5786,8 @@ app.post('/api/calculator/submit-request', async (c) => {
             birthdate = ?, monthly_salary = ?,
             employer_name = ?, job_title = ?,
             work_start_date = ?, city = ?,
-            tenant_id = COALESCE(tenant_id, ?)
+            tenant_id = COALESCE(tenant_id, ?),
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(
         data.full_name,
@@ -5511,8 +5814,9 @@ app.post('/api/calculator/submit-request', async (c) => {
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
-            job_title, work_start_date, city, tenant_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            job_title, work_start_date, city, tenant_id,
+            enrollment_source
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           data.full_name,
           data.phone,
@@ -5524,7 +5828,8 @@ app.post('/api/calculator/submit-request', async (c) => {
           data.job_title,
           data.work_start_date,
           data.city,
-          tenant_id
+          tenant_id,
+          'calculator'
         ).run()
         
         customer_id = customerResult.meta.last_row_id
@@ -5624,10 +5929,14 @@ app.put('/api/financing-requests/:id', async (c) => {
       duration_months,
       salary_at_request,
       monthly_obligations,
-      id_attachment_url,
-      bank_statement_attachment_url,
-      salary_attachment_url,
-      additional_attachment_url
+      identity_attachment_url,
+      signature_attachment_url,
+      salary_profile_attachment_url,
+      gosi_attachment_url,
+      tax_exemption_attachment_url,
+      additional_1_attachment_url,
+      additional_2_attachment_url,
+      additional_3_attachment_url
     } = await c.req.json()
     
     // Build update query with tenant_id check
@@ -5646,25 +5955,14 @@ app.put('/api/financing-requests/:id', async (c) => {
     ]
     
     // Add attachment URLs if provided
-    if (id_attachment_url) {
-      updateFields.push('id_attachment_url = ?')
-      params.push(id_attachment_url)
-    }
-    
-    if (bank_statement_attachment_url) {
-      updateFields.push('bank_statement_attachment_url = ?')
-      params.push(bank_statement_attachment_url)
-    }
-    
-    if (salary_attachment_url) {
-      updateFields.push('salary_attachment_url = ?')
-      params.push(salary_attachment_url)
-    }
-    
-    if (additional_attachment_url) {
-      updateFields.push('additional_attachment_url = ?')
-      params.push(additional_attachment_url)
-    }
+    if (identity_attachment_url) { updateFields.push('identity_attachment_url = ?'); params.push(identity_attachment_url) }
+    if (signature_attachment_url) { updateFields.push('signature_attachment_url = ?'); params.push(signature_attachment_url) }
+    if (salary_profile_attachment_url) { updateFields.push('salary_profile_attachment_url = ?'); params.push(salary_profile_attachment_url) }
+    if (gosi_attachment_url) { updateFields.push('gosi_attachment_url = ?'); params.push(gosi_attachment_url) }
+    if (tax_exemption_attachment_url) { updateFields.push('tax_exemption_attachment_url = ?'); params.push(tax_exemption_attachment_url) }
+    if (additional_1_attachment_url) { updateFields.push('additional_1_attachment_url = ?'); params.push(additional_1_attachment_url) }
+    if (additional_2_attachment_url) { updateFields.push('additional_2_attachment_url = ?'); params.push(additional_2_attachment_url) }
+    if (additional_3_attachment_url) { updateFields.push('additional_3_attachment_url = ?'); params.push(additional_3_attachment_url) }
     
     params.push(id)
     
@@ -5688,10 +5986,14 @@ app.put('/api/financing-requests/:id', async (c) => {
     `).bind(id).first() as { customer_id?: number | null } | null
     const customerId = customerIdRow?.customer_id
     await syncAttachmentsForCustomer(c.env.DB, customerId, {
-      id_attachment_url,
-      bank_statement_attachment_url,
-      salary_attachment_url,
-      additional_attachment_url
+      identity_attachment_url,
+      signature_attachment_url,
+      salary_profile_attachment_url,
+      gosi_attachment_url,
+      tax_exemption_attachment_url,
+      additional_1_attachment_url,
+      additional_2_attachment_url,
+      additional_3_attachment_url
     })
     
     return c.json({ success: true })
@@ -5704,6 +6006,11 @@ app.put('/api/financing-requests/:id', async (c) => {
 // Update financing request status only
 app.put('/api/financing-requests/:id/status', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(requester.roleId) === 5) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const id = c.req.param('id')
     const { status, notes } = await c.req.json()
     
@@ -5795,7 +6102,16 @@ app.post('/api/attachments/upload', async (c) => {
     const fileEntry = formData.get('file')
     const requestId = String(formData.get('request_id') || '').trim()
     const rawAttachmentType = String(formData.get('attachmentType') || formData.get('attachment_type') || '').trim()
-    const allowedAttachmentTypes = new Set(['id', 'salary', 'bank_statement', 'additional'])
+    const allowedAttachmentTypes = new Set([
+      'identity',
+      'signature',
+      'salary_profile',
+      'gosi',
+      'tax_exemption',
+      'additional_1',
+      'additional_2',
+      'additional_3'
+    ])
     const attachmentType = rawAttachmentType.toLowerCase()
     
     if (!allowedAttachmentTypes.has(attachmentType)) {
@@ -5839,10 +6155,14 @@ app.post('/api/attachments/upload', async (c) => {
       }
 
       const attachmentColumns: Record<string, string> = {
-        id: 'id_attachment_url',
-        salary: 'salary_attachment_url',
-        bank_statement: 'bank_statement_attachment_url',
-        additional: 'additional_attachment_url'
+        identity: 'identity_attachment_url',
+        signature: 'signature_attachment_url',
+        salary_profile: 'salary_profile_attachment_url',
+        gosi: 'gosi_attachment_url',
+        tax_exemption: 'tax_exemption_attachment_url',
+        additional_1: 'additional_1_attachment_url',
+        additional_2: 'additional_2_attachment_url',
+        additional_3: 'additional_3_attachment_url'
       }
       const columnName = attachmentColumns[attachmentType]
       console.log('📎 Updating attachment:', { requestId, attachmentType, columnName, publicUrl })
@@ -5858,10 +6178,14 @@ app.post('/api/attachments/upload', async (c) => {
         SELECT customer_id FROM financing_requests WHERE id = ?
       `).bind(requestId).first() as { customer_id?: number | null } | null
       const attachmentSyncPayload: AttachmentSyncPayload = {}
-      if (columnName === 'id_attachment_url') attachmentSyncPayload.id_attachment_url = publicUrl
-      if (columnName === 'bank_statement_attachment_url') attachmentSyncPayload.bank_statement_attachment_url = publicUrl
-      if (columnName === 'salary_attachment_url') attachmentSyncPayload.salary_attachment_url = publicUrl
-      if (columnName === 'additional_attachment_url') attachmentSyncPayload.additional_attachment_url = publicUrl
+      if (columnName === 'identity_attachment_url') attachmentSyncPayload.identity_attachment_url = publicUrl
+      if (columnName === 'signature_attachment_url') attachmentSyncPayload.signature_attachment_url = publicUrl
+      if (columnName === 'salary_profile_attachment_url') attachmentSyncPayload.salary_profile_attachment_url = publicUrl
+      if (columnName === 'gosi_attachment_url') attachmentSyncPayload.gosi_attachment_url = publicUrl
+      if (columnName === 'tax_exemption_attachment_url') attachmentSyncPayload.tax_exemption_attachment_url = publicUrl
+      if (columnName === 'additional_1_attachment_url') attachmentSyncPayload.additional_1_attachment_url = publicUrl
+      if (columnName === 'additional_2_attachment_url') attachmentSyncPayload.additional_2_attachment_url = publicUrl
+      if (columnName === 'additional_3_attachment_url') attachmentSyncPayload.additional_3_attachment_url = publicUrl
       await syncAttachmentsForCustomer(c.env.DB, requestRow?.customer_id, {
         ...attachmentSyncPayload
       })
@@ -5924,15 +6248,14 @@ app.delete('/api/attachments/delete/:path{.+}', async (c) => {
       
       // Determine attachment type from filename
       let columnName = null
-      if (filename.startsWith('id_')) {
-        columnName = 'id_attachment_url'
-      } else if (filename.startsWith('salary_')) {
-        columnName = 'salary_attachment_url'
-      } else if (filename.startsWith('bank_statement_')) {
-        columnName = 'bank_statement_attachment_url'
-      } else if (filename.startsWith('additional_')) {
-        columnName = 'additional_attachment_url'
-      }
+      if (filename.startsWith('identity_')) columnName = 'identity_attachment_url'
+      else if (filename.startsWith('signature_')) columnName = 'signature_attachment_url'
+      else if (filename.startsWith('salary_profile_')) columnName = 'salary_profile_attachment_url'
+      else if (filename.startsWith('gosi_')) columnName = 'gosi_attachment_url'
+      else if (filename.startsWith('tax_exemption_')) columnName = 'tax_exemption_attachment_url'
+      else if (filename.startsWith('additional_1_')) columnName = 'additional_1_attachment_url'
+      else if (filename.startsWith('additional_2_')) columnName = 'additional_2_attachment_url'
+      else if (filename.startsWith('additional_3_')) columnName = 'additional_3_attachment_url'
       
       // Update database if we identified the column
       if (columnName) {
@@ -5965,6 +6288,10 @@ app.delete('/api/attachments/delete/:path{.+}', async (c) => {
 app.post('/api/customer-reviews', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const { customer_id, customer_name, rating, note } = await c.req.json()
     if (!customer_id || !customer_name || !rating) {
       return c.json({ success: false, error: 'customer_id, customer_name, and rating are required' }, 400)
@@ -5986,6 +6313,7 @@ app.get('/api/customer-reviews', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     const latestPerCustomer = c.req.query('latest_per_customer') === '1'
+    const rid = normalizeRoleId(userInfo.roleId)
     let query: string
     const params: any[] = []
     if (latestPerCustomer) {
@@ -6001,10 +6329,28 @@ app.get('/api/customer-reviews', async (c) => {
         ) latest ON cr.customer_id = latest.customer_id AND cr.created_at = latest.max_created`
       if (userInfo.tenantId) { query += ` WHERE cr.tenant_id = ?`; params.push(userInfo.tenantId) }
       else if (userInfo.userId) { query += ` WHERE cr.user_id = ?`; params.push(userInfo.userId) }
+      if (rid === 5 && userInfo.userId) {
+        query += ` AND EXISTS (
+          SELECT 1
+          FROM financing_requests fr
+          WHERE fr.customer_id = cr.customer_id
+            AND fr.assigned_bank_agent_id = ?
+        )`
+        params.push(userInfo.userId)
+      }
     } else {
       query = `SELECT * FROM customer_reviews WHERE 1=1`
       if (userInfo.tenantId) { query += ` AND tenant_id = ?`; params.push(userInfo.tenantId) }
       else if (userInfo.userId) { query += ` AND user_id = ?`; params.push(userInfo.userId) }
+      if (rid === 5 && userInfo.userId) {
+        query += ` AND EXISTS (
+          SELECT 1
+          FROM financing_requests fr
+          WHERE fr.customer_id = customer_reviews.customer_id
+            AND fr.assigned_bank_agent_id = ?
+        )`
+        params.push(userInfo.userId)
+      }
       query += ` ORDER BY created_at DESC`
     }
     const { results } = params.length > 0
@@ -6030,6 +6376,11 @@ app.get('/api/customer-reviews/:customerId', async (c) => {
 
 app.delete('/api/customer-reviews/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const id = c.req.param('id')
     await c.env.DB.prepare(`DELETE FROM customer_reviews WHERE id = ?`).bind(id).run()
     return c.json({ success: true })
@@ -9023,6 +9374,33 @@ app.get('/admin/dashboard', async (c) => {
         requestsWhere = 'WHERE 1 = 0';
         requestsJoinWhere = 'AND 1 = 0';
       }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      // Role 5: Bank agent - behaves like role 4, but scoped to customers/requests they can access
+      if (userInfo.tenantId && userInfo.userId) {
+        customersWhere = `WHERE tenant_id = ${userInfo.tenantId} AND EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ${userInfo.userId}
+        )`;
+        requestsWhere = `WHERE tenant_id = ${userInfo.tenantId} AND (
+          assigned_bank_agent_id = ${userInfo.userId}
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = financing_requests.customer_id AND ca.employee_id = ${userInfo.userId}
+          )
+        )`;
+        requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId} AND (
+          fr.assigned_bank_agent_id = ${userInfo.userId}
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = fr.customer_id AND ca.employee_id = ${userInfo.userId}
+          )
+        )`;
+        queryParams.push(userInfo.tenantId);
+      } else {
+        customersWhere = 'WHERE 1 = 0';
+        requestsWhere = 'WHERE 1 = 0';
+        requestsJoinWhere = 'AND 1 = 0';
+      }
     } else {
       // Unknown role - no data
       customersWhere = 'WHERE 1 = 0';
@@ -9671,6 +10049,12 @@ app.get('/admin/customers/add', async (c) => {
   const rawPrefillName = String(c.req.query('full_name') ?? c.req.query('name') ?? '').trim()
   const prefillFullName = rawPrefillName.slice(0, 400)
   const prefillPhone = customerPhoneInputValue(c.req.query('phone'))
+  const prefillEnrollmentSourceRaw = String(c.req.query('enrollment_source') ?? '').trim()
+  const prefillEnrollmentSource =
+    prefillEnrollmentSourceRaw === 'affiliate' || prefillEnrollmentSourceRaw === 'calculator'
+      ? prefillEnrollmentSourceRaw
+      : ''
+  const prefillEnrollmentSourceLabel = String(c.req.query('affiliate_label') ?? '').trim().slice(0, 200)
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
   return c.html(`
     <!DOCTYPE html>
@@ -9731,6 +10115,32 @@ app.get('/admin/customers/add', async (c) => {
               </div>
             </div>
             
+            ${
+              prefillEnrollmentSource
+                ? `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-tag text-amber-600 ml-1"></i>
+                  مصدر التسجيل
+                </label>
+                <input type="text"
+                       value="${
+                         prefillEnrollmentSource === 'calculator'
+                           ? 'الحاسبة'
+                           : escapeHtml(prefillEnrollmentSourceLabel || 'affiliate')
+                       }"
+                       class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800"
+                       disabled>
+                <input type="hidden" name="enrollment_source" value="${escapeHtml(prefillEnrollmentSource)}">
+                <input type="hidden" name="enrollment_source_label" value="${escapeHtml(prefillEnrollmentSourceLabel)}">
+                <p class="text-xs text-gray-500 mt-1">هذا الحقل تلقائي ولا يمكن تعديله.</p>
+              </div>
+            </div>
+            `
+                : ''
+            }
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -10292,51 +10702,107 @@ app.get('/admin/customers/add', async (c) => {
             </div>
 
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-              <h2 class="text-xl font-bold text-gray-700 mb-4">
-                <i class="fas fa-paperclip ml-2"></i>
-                المرفقات
-              </h2>
-              <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-              <input type="hidden" name="id_attachment_url" id="customer_id_attachment_url">
-              <input type="hidden" name="bank_statement_attachment_url" id="customer_bank_statement_attachment_url">
-              <input type="hidden" name="salary_attachment_url" id="customer_salary_attachment_url">
-              <input type="hidden" name="additional_attachment_url" id="customer_additional_attachment_url">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-id-card ml-1"></i> صورة الهوية
-                  </label>
-                  <input type="file" id="customer_id_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_id_attachment_preview" class="mt-2"></div>
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <h2 class="text-xl font-bold text-gray-700">
+                  <i class="fas fa-paperclip ml-2"></i>
+                  المرفقات
+                </h2>
+                <button type="button" id="openCustomerAttachmentsModal"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition">
+                  <i class="fas fa-paperclip ml-1"></i>
+                  إدارة المرفقات
+                </button>
+              </div>
+              <p class="text-sm text-gray-500 mt-2">يتم رفع المرفقات من خلال نافذة منبثقة داخل النموذج.</p>
+
+              <!-- hidden URLs (submitted with form) -->
+              <input type="hidden" name="identity_attachment_url" id="customer_identity_attachment_url">
+              <input type="hidden" name="signature_attachment_url" id="customer_signature_attachment_url">
+              <input type="hidden" name="salary_profile_attachment_url" id="customer_salary_profile_attachment_url">
+              <input type="hidden" name="gosi_attachment_url" id="customer_gosi_attachment_url">
+              <input type="hidden" name="tax_exemption_attachment_url" id="customer_tax_exemption_attachment_url">
+              <input type="hidden" name="additional_1_attachment_url" id="customer_additional_1_attachment_url">
+              <input type="hidden" name="additional_2_attachment_url" id="customer_additional_2_attachment_url">
+              <input type="hidden" name="additional_3_attachment_url" id="customer_additional_3_attachment_url">
+            </div>
+
+            <!-- Attachments Modal -->
+            <div id="customerAttachmentsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+              <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-paperclip ml-2 text-blue-600"></i>
+                    رفع المرفقات (اختياري)
+                  </h3>
+                  <button type="button" id="closeCustomerAttachmentsModal" class="text-gray-500 hover:text-gray-800">
+                    <i class="fas fa-times text-xl"></i>
+                  </button>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
-                  </label>
-                  <input type="file" id="customer_bank_statement_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_bank_statement_attachment_preview" class="mt-2"></div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-id-card ml-1"></i> ملف الهوية</label>
+                    <input type="file" id="customer_identity_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_identity_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-signature ml-1"></i> ملف السمة</label>
+                    <input type="file" id="customer_signature_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_signature_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب</label>
+                    <input type="file" id="customer_salary_profile_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_salary_profile_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية</label>
+                    <input type="file" id="customer_gosi_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_gosi_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-certificate ml-1"></i> شهادة الإعفاء الضريبي</label>
+                    <input type="file" id="customer_tax_exemption_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_tax_exemption_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 1</label>
+                    <input type="file" id="customer_additional_1_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_additional_1_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 2</label>
+                    <input type="file" id="customer_additional_2_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_additional_2_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 3</label>
+                    <input type="file" id="customer_additional_3_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_additional_3_attachment_preview" class="mt-2"></div>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-money-check ml-1"></i> تعريف الراتب
-                  </label>
-                  <input type="file" id="customer_salary_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_salary_attachment_preview" class="mt-2"></div>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
-                  </label>
-                  <input type="file" id="customer_additional_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_additional_attachment_preview" class="mt-2"></div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                  <button type="button" id="doneCustomerAttachmentsModal"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
+                    تم
+                  </button>
                 </div>
               </div>
             </div>
@@ -10409,30 +10875,65 @@ app.get('/admin/customers/add', async (c) => {
         (function () {
           const form = document.getElementById('add-customer-form');
           if (!form) return;
+          // Attachments modal controls (upload inputs live inside the modal; URLs are hidden fields in the main form)
+          (function initCustomerAttachmentsModal() {
+            var modal = document.getElementById('customerAttachmentsModal');
+            var openBtn = document.getElementById('openCustomerAttachmentsModal');
+            var closeBtn = document.getElementById('closeCustomerAttachmentsModal');
+            var doneBtn = document.getElementById('doneCustomerAttachmentsModal');
+            if (!modal || !openBtn) return;
+            function open() { modal.classList.remove('hidden'); }
+            function close() { modal.classList.add('hidden'); }
+            openBtn.addEventListener('click', open);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            if (doneBtn) doneBtn.addEventListener('click', close);
+            modal.addEventListener('click', function (e) {
+              if (e && e.target === modal) close();
+            });
+            document.addEventListener('keydown', function (e) {
+              if (e && e.key === 'Escape') close();
+            });
+          })();
           var messageEl = document.getElementById('customer-create-message');
           var attachmentFiles = {
-            id: null,
-            bank_statement: null,
-            salary: null,
-            additional: null
+            identity: null,
+            signature: null,
+            salary_profile: null,
+            gosi: null,
+            tax_exemption: null,
+            additional_1: null,
+            additional_2: null,
+            additional_3: null
           };
           var attachmentInputs = {
-            id: document.getElementById('customer_id_attachment'),
-            bank_statement: document.getElementById('customer_bank_statement_attachment'),
-            salary: document.getElementById('customer_salary_attachment'),
-            additional: document.getElementById('customer_additional_attachment')
+            identity: document.getElementById('customer_identity_attachment'),
+            signature: document.getElementById('customer_signature_attachment'),
+            salary_profile: document.getElementById('customer_salary_profile_attachment'),
+            gosi: document.getElementById('customer_gosi_attachment'),
+            tax_exemption: document.getElementById('customer_tax_exemption_attachment'),
+            additional_1: document.getElementById('customer_additional_1_attachment'),
+            additional_2: document.getElementById('customer_additional_2_attachment'),
+            additional_3: document.getElementById('customer_additional_3_attachment')
           };
           var attachmentPreviewIds = {
-            id: 'customer_id_attachment_preview',
-            bank_statement: 'customer_bank_statement_attachment_preview',
-            salary: 'customer_salary_attachment_preview',
-            additional: 'customer_additional_attachment_preview'
+            identity: 'customer_identity_attachment_preview',
+            signature: 'customer_signature_attachment_preview',
+            salary_profile: 'customer_salary_profile_attachment_preview',
+            gosi: 'customer_gosi_attachment_preview',
+            tax_exemption: 'customer_tax_exemption_attachment_preview',
+            additional_1: 'customer_additional_1_attachment_preview',
+            additional_2: 'customer_additional_2_attachment_preview',
+            additional_3: 'customer_additional_3_attachment_preview'
           };
           var attachmentHiddenIds = {
-            id: 'customer_id_attachment_url',
-            bank_statement: 'customer_bank_statement_attachment_url',
-            salary: 'customer_salary_attachment_url',
-            additional: 'customer_additional_attachment_url'
+            identity: 'customer_identity_attachment_url',
+            signature: 'customer_signature_attachment_url',
+            salary_profile: 'customer_salary_profile_attachment_url',
+            gosi: 'customer_gosi_attachment_url',
+            tax_exemption: 'customer_tax_exemption_attachment_url',
+            additional_1: 'customer_additional_1_attachment_url',
+            additional_2: 'customer_additional_2_attachment_url',
+            additional_3: 'customer_additional_3_attachment_url'
           };
 
           function setMessage(type, text) {
@@ -10628,10 +11129,14 @@ app.get('/admin/customers/add', async (c) => {
 
             try {
               var uploadOrder = [
-                { key: 'id', label: 'صورة الهوية' },
-                { key: 'bank_statement', label: 'كشف الحساب' },
-                { key: 'salary', label: 'تعريف الراتب' },
-                { key: 'additional', label: 'المرفقات الإضافية' }
+                { key: 'identity', label: 'ملف الهوية' },
+                { key: 'signature', label: 'ملف السمة' },
+                { key: 'salary_profile', label: 'ملف تعريف الراتب' },
+                { key: 'gosi', label: 'ملف التأمينات الاجتماعية' },
+                { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
+                { key: 'additional_1', label: 'مستند إضافي 1' },
+                { key: 'additional_2', label: 'مستند إضافي 2' },
+                { key: 'additional_3', label: 'مستند إضافي 3' }
               ];
               for (var i = 0; i < uploadOrder.length; i++) {
                 var item = uploadOrder[i];
@@ -10832,8 +11337,8 @@ app.get('/admin/customer-assignment', async (c) => {
               <span>التقارير</span>
             </a>
             <a href="/admin/follow-ups" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-address-card text-fuchsia-600 group-hover:scale-110 transition-transform"></i>
-              <span>متابعة التواصل</span>
+              <i class="fas fa-bullhorn text-amber-700 group-hover:scale-110 transition-transform"></i>
+              <span>التسويق</span>
             </a>
           </div>
 
@@ -10978,7 +11483,7 @@ app.get('/admin/customer-assignment', async (c) => {
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button onclick="autoDistribute()" class="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-6 py-4 rounded-lg transition-all shadow-md">
               <i class="fas fa-random ml-2"></i>
-              توزيع تلقائي متساوي
+              تعيين تلقائي عادل
             </button>
             <button onclick="clearAllAssignments()" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-4 rounded-lg transition-all shadow-md">
               <i class="fas fa-trash ml-2"></i>
@@ -11267,9 +11772,9 @@ app.get('/admin/customer-assignment', async (c) => {
           }
         }
 
-        // Auto distribute customers equally
+        // Auto-assign unassigned customers (fair round-robin among role-4 staff; cursor independent of manual assignments)
         async function autoDistribute() {
-          if (!confirm('سيتم توزيع العملاء بالتساوي على جميع الموظفين. هل تريد المتابعة؟')) return;
+          if (!confirm('سيتم تخصيص العملاء غير المخصصين لموظفي دور الموظف بالتناوب العادل (حسب آخر تعيين تلقائي). المتابعة؟')) return;
           
           try {
             // Get tenant_id from URL parameter
@@ -11279,12 +11784,14 @@ app.get('/admin/customer-assignment', async (c) => {
             const response = await fetch('/api/customer-assignment/auto-distribute', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tenant_id: tenantId })
+              body: JSON.stringify({ tenant_id: Number(tenantId) || undefined })
             });
             
             const data = await response.json();
             if (data.success) {
-              alert(\`تم توزيع \${data.assigned_count} عميل على \${data.employee_count} موظف!\`);
+              const n = typeof data.assigned_count === 'number' ? data.assigned_count : 0;
+              const ec = typeof data.employee_count === 'number' ? data.employee_count : 0;
+              alert(n > 0 ? ('تم تخصيص ' + n + ' عميلاً على ' + ec + ' موظفاً في الدور.') : (data.message || 'لا يوجد عملاء غير مخصصين.'));
               location.reload();
             } else {
               alert('حدث خطأ: ' + (data.error || 'خطأ غير معروف'));
@@ -11483,7 +11990,7 @@ app.post('/api/customer-assignment', async (c) => {
   }
 });
 
-// API: Auto distribute customers equally
+// API: Auto-assign unassigned customers — fair round-robin among role-4 staff (by user id), persisted per tenant; manual assignments do not move the cursor.
 app.post('/api/customer-assignment/auto-distribute', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -11494,56 +12001,107 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
       return c.json({ success: false, error: 'غير مصرح' }, 403)
     }
     const isSuperAdmin = userInfo.roleId === 1
-    const body = await c.req.json().catch(() => ({} as any));
+    const body = await c.req.json().catch(() => ({} as Record<string, unknown>))
     const requestedTenantId =
-      parseOptionalInt(body?.tenant_id?.toString?.()) ??
+      parseOptionalInt(String(body?.tenant_id ?? '')) ??
       parseOptionalInt(c.req.query('tenant_id')) ??
       null
-    const tenantId = isSuperAdmin ? (requestedTenantId ?? 1) : (userInfo.tenantId ?? 1)
-    
-    // Get employees of THIS tenant only
-    const employees = await c.env.DB.prepare(`
-      SELECT id FROM users 
-      WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
-      ORDER BY id
-    `).bind(tenantId).all();
-    
-    if (employees.results.length === 0) {
-      return c.json({ success: false, error: 'لا يوجد موظفين في هذه الشركة' });
+    const tenantId = isSuperAdmin ? requestedTenantId : userInfo.tenantId
+
+    if (tenantId == null || tenantId <= 0) {
+      return c.json({ success: false, error: 'تعذر تحديد الشركة' }, 400)
     }
-    
-    // Get unassigned customers of THIS tenant only
-    const customers = await c.env.DB.prepare(`
-      SELECT c.id 
+    if (!isSuperAdmin && userInfo.tenantId !== tenantId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+
+    const { results: staffRows } = await c.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      ORDER BY id ASC
+    `).bind(tenantId).all<{ id: number }>()
+
+    const staff = (staffRows || []) as { id: number }[]
+    if (!staff.length) {
+      return c.json({ success: false, error: 'لا يوجد موظفون نشطون بدور الموظف في هذه الشركة' }, 400)
+    }
+
+    const stateRow = await c.env.DB.prepare(`
+      SELECT last_auto_assigned_user_id
+      FROM tenant_customer_auto_assign_state
+      WHERE tenant_id = ?
+      LIMIT 1
+    `).bind(tenantId).first<{ last_auto_assigned_user_id: number | null }>()
+
+    let lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
+
+    const { results: customerRows } = await c.env.DB.prepare(`
+      SELECT c.id
       FROM customers c
-      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      WHERE ca.customer_id IS NULL AND c.tenant_id = ?
-      ORDER BY c.id
-    `).bind(tenantId).all();
-    
-    let assignedCount = 0;
-    const employeeCount = employees.results.length;
-    
-    // Distribute customers round-robin
-    for (let i = 0; i < customers.results.length; i++) {
-      const customer = customers.results[i];
-      const employee = employees.results[i % employeeCount];
-      
-      await c.env.DB.prepare(`
-        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-        VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(customer.id, employee.id).run();
-      
-      assignedCount++;
+      LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
+      WHERE c.tenant_id = ?
+        AND ca.customer_id IS NULL
+        AND (c.is_archived = 0 OR c.is_archived IS NULL)
+      ORDER BY c.id ASC
+      LIMIT 500
+    `).bind(tenantId).all<{ id: number }>()
+
+    const customers = (customerRows || []) as { id: number }[]
+    if (!customers.length) {
+      return c.json({
+        success: true,
+        assigned_count: 0,
+        employee_count: staff.length,
+        message: 'لا يوجد عملاء غير مخصصين',
+      })
     }
-    
-    return c.json({ 
-      success: true, 
+
+    const staffIds = staff.map((s) => s.id)
+    function pickNextUserId(last: number | null): number {
+      if (last == null) return staffIds[0]
+      const idx = staffIds.indexOf(last)
+      if (idx === -1) return staffIds[0]
+      return staffIds[(idx + 1) % staffIds.length]
+    }
+
+    const assignedBy = userInfo.userId ?? 1
+    let assignedCount = 0
+    const noteAr = 'تعيين تلقائي عادل'
+
+    for (const row of customers) {
+      const employeeId = pickNextUserId(lastId)
+      const ins = await c.env.DB.prepare(`
+        INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+        VALUES (?, ?, ?, ?)
+      `).bind(row.id, employeeId, assignedBy, noteAr).run()
+
+      if (ins.meta.changes > 0) {
+        await c.env.DB.prepare(`
+          INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+          VALUES (?, NULL, ?, ?, ?)
+        `).bind(row.id, employeeId, assignedBy, noteAr).run()
+        lastId = employeeId
+        assignedCount += 1
+      }
+    }
+
+    if (assignedCount > 0) {
+      await c.env.DB.prepare(`
+        INSERT INTO tenant_customer_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tenant_id) DO UPDATE SET
+          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(tenantId, lastId).run()
+    }
+
+    return c.json({
+      success: true,
       assigned_count: assignedCount,
-      employee_count: employeeCount
-    });
+      employee_count: staff.length,
+    })
   } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500);
+    return c.json({ success: false, error: error.message }, 500)
   }
 });
 
@@ -12672,7 +13230,7 @@ app.get('/admin/customers', async (c) => {
       SELECT customers.*, u.full_name AS assigned_employee_name
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 14)
+      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 14)
       WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`;
     let queryParams: any[] = [];
     
@@ -12696,6 +13254,17 @@ app.get('/admin/customers', async (c) => {
       } else {
         query += ' AND 1 = 0';
       }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND EXISTS (
+          SELECT 1
+          FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        )`;
+        queryParams.push(userInfo.tenantId, userInfo.userId);
+      } else {
+        query += ' AND 1 = 0';
+      }
     } else {
       query += ' AND 1 = 0';
     }
@@ -12710,16 +13279,67 @@ app.get('/admin/customers', async (c) => {
     let reqQuery = 'SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1';
     const reqParams: any[] = [];
     if (userInfo.roleId !== 1) {
-      if (userInfo.tenantId) { reqQuery += ' AND tenant_id = ?'; reqParams.push(userInfo.tenantId); }
+      if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
+        reqQuery += ' AND tenant_id = ? AND assigned_bank_agent_id = ?';
+        reqParams.push(userInfo.tenantId, userInfo.userId);
+      } else if (userInfo.tenantId) { reqQuery += ' AND tenant_id = ?'; reqParams.push(userInfo.tenantId); }
       else if (userInfo.userId) { reqQuery += ' AND user_id = ?'; reqParams.push(userInfo.userId); }
     }
     const reqRows = reqParams.length > 0
       ? await c.env.DB.prepare(reqQuery).bind(...reqParams).all()
       : await c.env.DB.prepare(reqQuery).all();
     const customerIdsWithRequests = new Set((reqRows.results as any[]).map((r: any) => r.customer_id));
+
+    // Latest financing request per customer (same tenant scope as request list) → role-5 bank agent on that request
+    let latestFrScope = 'WHERE 1=1'
+    const latestFrParams: any[] = []
+    if (userInfo.roleId !== 1) {
+      if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
+        latestFrScope += ' AND tenant_id = ? AND assigned_bank_agent_id = ?'
+        latestFrParams.push(userInfo.tenantId, userInfo.userId)
+      } else if (userInfo.tenantId) {
+        latestFrScope += ' AND tenant_id = ?'
+        latestFrParams.push(userInfo.tenantId)
+      } else if (userInfo.userId) {
+        latestFrScope += ' AND user_id = ?'
+        latestFrParams.push(userInfo.userId)
+      }
+    }
+    const bankAgentSql = `
+      SELECT
+        fr.customer_id,
+        u.id AS bank_agent_role5_user_id,
+        COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.username), '')) AS bank_agent_display_name
+      FROM financing_requests fr
+      LEFT JOIN users u ON u.id = fr.assigned_bank_agent_id AND u.role_id = 5
+      INNER JOIN (
+        SELECT customer_id, MAX(id) AS max_req_id
+        FROM financing_requests
+        ${latestFrScope}
+        GROUP BY customer_id
+      ) latest ON fr.id = latest.max_req_id
+    `
+    const bankAgentRows =
+      latestFrParams.length > 0
+        ? await c.env.DB.prepare(bankAgentSql).bind(...latestFrParams).all()
+        : await c.env.DB.prepare(bankAgentSql).all()
+    const bankAgentByCustomer = new Map<number, { agentUserId: number | null; agentName: string | null }>()
+    for (const row of (bankAgentRows.results || []) as any[]) {
+      const cid = Number(row.customer_id)
+      if (Number.isNaN(cid)) continue
+      bankAgentByCustomer.set(cid, {
+        agentUserId: row.bank_agent_role5_user_id != null ? Number(row.bank_agent_role5_user_id) : null,
+        agentName: row.bank_agent_display_name != null ? String(row.bank_agent_display_name) : null
+      })
+    }
     
     // Determine if user can edit/delete (not for Role 3 - Supervisor)
     const canEdit = userInfo.roleId !== 3;
+    const canReviewCustomers = normalizeRoleId(userInfo.roleId) !== 5
+
+    // Customer auto-assign is now automatic on calculator intake,
+    // so we remove the button from the customers list page UI.
+    const showCustomerAutoAssignButton = false
     
     return c.html(`
       <!DOCTYPE html>
@@ -12731,12 +13351,34 @@ app.get('/admin/customers', async (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
-          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
+          /* Horizontal scroll only; never clip rows vertically */
+          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; max-width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
           .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
           .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
           .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
           .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #059669 0%, #047857 100%); border-color: #d1d5db; }
-          .overflow-x-auto table { min-width: 1200px; width: max-content; }
+          .overflow-x-auto table { min-width: 100%; width: max-content; }
+          .truncate-cell { display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+          .truncate-cell.sm { max-width: 130px; }
+          .filter-hidden { display: none !important; }
+
+          /* Hover-to-reveal horizontal scroll arrows (customers table) */
+          .edge-scroll-wrap { position: relative; }
+          /* Don't block clicks on the table (actions buttons near edges) */
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 10; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 0; pointer-events: none; transition: opacity 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          /* Wrap hover (not zone — zone uses pointer-events:none so table buttons stay clickable) */
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+          .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
+          .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
+          .no-hscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+          .no-hscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
           @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0)} }
           .alarm-unread-dot { display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:50%; animation:pulse-glow 1.5s infinite; position:absolute; top:-3px; left:-3px; }
           .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
@@ -12780,6 +13422,12 @@ app.get('/admin/customers', async (c) => {
                   <i class="fas fa-users-cog ml-2"></i>
                   توزيع العملاء
                 </a>
+                ` : ''}
+                ${showCustomerAutoAssignButton ? `
+                <button type="button" id="customerAutoAssignOpenBtn" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md inline-flex items-center gap-2">
+                  <i class="fas fa-random"></i>
+                  تعيين تلقائي عادل
+                </button>
                 ` : ''}
                 <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
@@ -12876,24 +13524,90 @@ app.get('/admin/customers', async (c) => {
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-lg overflow-visible">
-            <table class="min-w-full" id="dataTable">
+          <div class="bg-white rounded-xl shadow-lg overflow-x-hidden overflow-y-visible">
+            <div class="edge-scroll-wrap">
+              <div class="edge-scroll-zone left">
+                <div id="customersEdgeLeft" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('customersTableScroll', 'left')" aria-label="scroll left">
+                    <i class="fas fa-chevron-left text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="edge-scroll-zone right">
+                <div id="customersEdgeRight" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('customersTableScroll', 'right')" aria-label="scroll right">
+                    <i class="fas fa-chevron-right text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div id="customersTableScroll" class="overflow-x-auto">
+            <table class="min-w-full w-max" id="dataTable">
               <thead class="bg-gray-50">
                 <tr>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الإجراءات</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">المصدر</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموظف المخصص</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="موظف البنك (دور 5) المعيّن على آخر طلب تمويل">موظف البنك</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
-                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${customers.results.map((customer: any) => `
-                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-created-at="${customer.created_at || ''}" data-has-request="${customerIdsWithRequests.has(customer.id) ? '1' : '0'}" data-rating="0">
+                ${customers.results.map((customer: any) => {
+                  const hasFr = customerIdsWithRequests.has(customer.id)
+                  const ba = bankAgentByCustomer.get(customer.id)
+                  const bankAgentSearch = hasFr
+                    ? `${ba?.agentName || ''} ${ba?.agentUserId != null ? '#' + ba.agentUserId : ''}`.trim()
+                    : ''
+                  const bankAgentDataEsc = bankAgentSearch.replace(/"/g, '&quot;')
+                  const enrollmentSource = String(customer.enrollment_source || '').trim()
+                  const enrollmentSourceLabel = String(customer.enrollment_source_label || '').trim()
+                  const enrollmentSourceSearch =
+                    enrollmentSource === 'calculator'
+                      ? 'الحاسبة'
+                      : enrollmentSource === 'affiliate'
+                        ? enrollmentSourceLabel
+                        : ''
+                  const enrollmentSourceDataEsc = String(enrollmentSourceSearch || '').replace(/"/g, '&quot;')
+                  return `
+                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-source="${enrollmentSourceDataEsc}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-bank-agent="${bankAgentDataEsc}" data-created-at="${customer.created_at || ''}" data-has-request="${hasFr ? '1' : '0'}" data-rating="0">
+                    <td class="px-3 py-3 whitespace-nowrap text-right align-middle relative">
+                      <div class="relative inline-block text-right">
+                        <button type="button" onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap w-full">
+                          <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div class="actions-dropdown-menu hidden absolute right-0 mt-1 min-w-[10rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                          <button type="button" onclick="openAlarmModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50 text-right">
+                            <i class="fas fa-bell w-4 flex-shrink-0"></i> إضافة تنبيه
+                          </button>
+                          ${canReviewCustomers ? `
+                          <button type="button" onclick="openReviewModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50 text-right">
+                            <i class="fas fa-star w-4 flex-shrink-0"></i> تقييم العميل
+                          </button>
+                          ` : ''}
+                          <a href="/admin/customers/${customer.id}/report" class="flex items-center gap-2 px-3 py-2 text-sm text-purple-700 hover:bg-purple-50">
+                            <i class="fas fa-file-alt w-4 flex-shrink-0"></i> تقرير
+                          </a>
+                          <a href="/admin/customers/${customer.id}" class="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">
+                            <i class="fas fa-eye w-4 flex-shrink-0"></i> عرض
+                          </a>
+                          <button type="button" onclick="openNewRequest(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50 text-right">
+                            <i class="fas fa-file-invoice w-4 flex-shrink-0"></i> طلب تمويل جديد
+                          </button>
+                          ${canEdit ? `
+                          <div class="border-t border-gray-100 my-1"></div>
+                          <a href="/admin/customers/${customer.id}/edit" class="flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
+                            <i class="fas fa-edit w-4 flex-shrink-0"></i> تعديل
+                          </a>
+                          ` : ''}
+                        </div>
+                      </div>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
@@ -12911,58 +13625,58 @@ app.get('/admin/customers', async (c) => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${customer.email || '-'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
+                      ${
+                        enrollmentSource === 'calculator'
+                          ? `<span class="inline-flex items-center rounded-full bg-blue-100 text-blue-900 px-2.5 py-0.5 text-xs font-semibold border border-blue-200"><i class="fas fa-calculator ml-1"></i>الحاسبة</span>`
+                          : enrollmentSource === 'affiliate' && enrollmentSourceLabel
+                            ? `<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>${escapeHtml(enrollmentSourceLabel)}</span>`
+                            : `<span class="text-gray-300 text-sm">—</span>`
+                      }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
                       ${customer.assigned_employee_name
-                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">${customer.assigned_employee_name}</span>`
+                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${customer.assigned_employee_name}</span></span>`
                         : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>`
                       }
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(customer.created_at).toLocaleDateString('ar-SA')}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                      ${customerIdsWithRequests.has(customer.id)
+                      ${hasFr
                         ? `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 font-bold text-base" title="يوجد طلب تمويل">✓</span>`
                         : `<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-500 font-bold text-base" title="لا يوجد طلب تمويل">✗</span>`
+                      }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${!hasFr
+                        ? `<span class="text-gray-300 text-sm">—</span>`
+                        : !ba?.agentUserId
+                          ? `<span class="text-xs text-amber-700">غير معيّن</span>`
+                          : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${ba.agentUserId}"><span class="truncate-cell sm">${(ba.agentName || '—')}</span></span>`
                       }
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${customer.id}">
                       <span class="text-gray-300 text-sm">—</span>
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap w-px text-right align-middle relative">
-                      <div class="relative inline-block text-right">
-                        <button type="button" onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap">
-                          <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
-                        </button>
-                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[10rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
-                          <button type="button" onclick="openAlarmModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50 text-right">
-                            <i class="fas fa-bell w-4 flex-shrink-0"></i> إضافة تنبيه
-                          </button>
-                          <button type="button" onclick="openReviewModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50 text-right">
-                            <i class="fas fa-star w-4 flex-shrink-0"></i> تقييم العميل
-                          </button>
-                          <a href="/admin/customers/${customer.id}/report" class="flex items-center gap-2 px-3 py-2 text-sm text-purple-700 hover:bg-purple-50">
-                            <i class="fas fa-file-alt w-4 flex-shrink-0"></i> تقرير
-                          </a>
-                          <a href="/admin/customers/${customer.id}" class="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">
-                            <i class="fas fa-eye w-4 flex-shrink-0"></i> عرض
-                          </a>
-                          <button type="button" onclick="openNewRequest(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50 text-right">
-                            <i class="fas fa-file-invoice w-4 flex-shrink-0"></i> طلب تمويل جديد
-                          </button>
-                          ${canEdit ? `
-                          <div class="border-t border-gray-100 my-1"></div>
-                          <a href="/admin/customers/${customer.id}/edit" class="flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
-                            <i class="fas fa-edit w-4 flex-shrink-0"></i> تعديل
-                          </a>
-                          <a href="/admin/customers/${customer.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
-                            <i class="fas fa-trash w-4 flex-shrink-0"></i> حذف
-                          </a>
-                          ` : ''}
-                        </div>
-                      </div>
-                    </td>
                   </tr>
-                `).join('')}
+                `
+                }).join('')}
               </tbody>
             </table>
+            </div>
+            </div>
+
+            <!-- Customers Pagination -->
+            <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="customersPrevBtn" onclick="setCustomersPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                <span id="customersPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                <button id="customersNextBtn" onclick="setCustomersPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -13078,6 +13792,26 @@ app.get('/admin/customers', async (c) => {
             <span id="toastText"></span>
           </div>
         </div>
+
+        ${showCustomerAutoAssignButton ? `
+        <div id="customerAutoAssignModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="customerAutoAssignTitle">
+          <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl mx-4 overflow-hidden" onclick="event.stopPropagation()">
+            <div class="px-5 py-4 border-b">
+              <h2 id="customerAutoAssignTitle" class="text-lg font-bold text-gray-900">تأكيد التعيين التلقائي</h2>
+            </div>
+            <div class="p-5">
+              <p id="customerAutoAssignBody" class="text-sm text-gray-700 leading-relaxed"></p>
+              <div id="customerAutoAssignActionsConfirm" class="mt-6 flex flex-wrap items-center justify-end gap-2">
+                <button type="button" id="customerAutoAssignCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+                <button type="button" id="customerAutoAssignConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white">متابعة</button>
+              </div>
+              <div id="customerAutoAssignActionsResult" class="hidden mt-6 flex justify-end">
+                <button type="button" id="customerAutoAssignOkBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-900 text-white">حسناً</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        ` : ''}
 
         <script>
           const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
@@ -13393,6 +14127,7 @@ app.get('/admin/customers', async (c) => {
 
           function closeAllDropdowns() {
             document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
+              restorePortaledMenu(m);
               m.classList.add('hidden');
               m.style.top = '';
               m.style.bottom = '';
@@ -13422,13 +14157,123 @@ app.get('/admin/customers', async (c) => {
             }
           }
 
+          function unbindActionsMenuRepos(menu) {
+            if (!menu._actionsRepos) return;
+            const scrollEl = menu._actionsRepos.scrollEl;
+            const reposition = menu._actionsRepos.reposition;
+            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
+            if (reposition) window.removeEventListener('resize', reposition);
+            delete menu._actionsRepos;
+          }
+
+          function restorePortaledMenu(menu) {
+            if (!menu || menu.dataset.portal !== '1') return;
+            unbindActionsMenuRepos(menu);
+            const placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
+            if (placeholder && placeholder.parentNode) {
+              placeholder.parentNode.replaceChild(menu, placeholder);
+            }
+            delete menu.dataset.portal;
+            delete menu.dataset.portalPlaceholderId;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.right = '';
+            menu.style.bottom = '';
+            menu.style.marginTop = '';
+            menu.style.marginBottom = '';
+            menu.style.zIndex = '';
+          }
+
+          /** Move menu onto .edge-scroll-wrap (outside horizontal scroll panel) — avoids scrollbar clipping without covering the navbar. */
+          function anchorActionsMenu(btn, menu) {
+            if (!menu || menu.dataset.portal === '1') return;
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            const wrap = scrollEl ? scrollEl.closest('.edge-scroll-wrap') : null;
+            const host = wrap || scrollEl;
+            if (!host || !menu.parentNode) return;
+            const placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
+            const placeholder = document.createElement('span');
+            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
+            menu.parentNode.insertBefore(placeholder, menu);
+            menu.dataset.portal = '1';
+            menu.dataset.portalPlaceholderId = placeholderId;
+            host.appendChild(menu);
+          }
+
+          function positionAnchoredActionsMenu(btn, menu) {
+            if (!btn || !menu || !menu.parentElement) return;
+            const host = menu.parentElement;
+            const hr = host.getBoundingClientRect();
+            const br = btn.getBoundingClientRect();
+
+            menu.style.position = 'absolute';
+            menu.style.marginTop = '0';
+            menu.style.marginBottom = '0';
+            menu.style.right = 'auto';
+            menu.style.bottom = 'auto';
+
+            let w = menu.offsetWidth || 176;
+            let h = menu.offsetHeight || 200;
+            if (w < 10) w = 176;
+            if (h < 10) h = 200;
+
+            const hw = hr.width || host.clientWidth || 0;
+            let left = br.right - hr.left - w;
+            if (hw > 0 && Number.isFinite(left)) left = Math.max(4, Math.min(hw - w - 4, left));
+            else left = Number.isFinite(left) ? Math.max(4, left) : 4;
+
+            let top = br.bottom - hr.top + 6;
+            const spaceBelow = hr.bottom - br.bottom;
+            if (spaceBelow < Math.min(h, 72) && (br.top - hr.top) > Math.min(h, 72)) {
+              top = br.top - hr.top - h - 6;
+            }
+
+            menu.style.left = String(Math.round(left)) + 'px';
+            menu.style.top = String(Math.round(top)) + 'px';
+            menu.style.zIndex = '40';
+          }
+
+          function bindActionsMenuRepos(btn, menu) {
+            unbindActionsMenuRepos(menu);
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            if (!scrollEl) return;
+            function reposition() {
+              if (menu.classList.contains('hidden')) return;
+              positionAnchoredActionsMenu(btn, menu);
+            }
+            menu._actionsRepos = { scrollEl: scrollEl, reposition: reposition };
+            scrollEl.addEventListener('scroll', reposition, { passive: true });
+            window.addEventListener('resize', reposition);
+          }
+
+          function getActionsMenuForButton(btn) {
+            if (!btn) return null;
+            const id = btn.dataset && btn.dataset.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
+            if (id) {
+              const found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
+              if (found) return found;
+            }
+            const sib = btn.nextElementSibling;
+            if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) return sib;
+            return null;
+          }
+
           function toggleActionsDropdown(btn) {
-            const menu = btn.nextElementSibling;
+            const menu = getActionsMenuForButton(btn);
+            if (!menu) return;
             const willOpen = menu.classList.contains('hidden');
             closeAllDropdowns();
             if (willOpen) {
               menu.classList.remove('hidden');
-              positionDropdownMenu(menu);
+              // ensure stable link for subsequent toggles even after re-parenting
+              if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
+              btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
+              anchorActionsMenu(btn, menu);
+              requestAnimationFrame(function() {
+                positionAnchoredActionsMenu(btn, menu);
+                bindActionsMenuRepos(btn, menu);
+              });
               const cell = btn.closest('td');
               if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
               const row = btn.closest('tr');
@@ -13476,6 +14321,228 @@ app.get('/admin/customers', async (c) => {
             window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
           }
 
+          // Pagination + edge-scroll (Customers list page)
+          const customersPaging = { page: 1, pageSize: 15, lastSig: '' }
+          function getPageSizeOptions(total) {
+            const base = [15, 30, 50, 100]
+            const totalNum = Number(total) || 0
+            const options = [base[0]]
+
+            for (let i = 1; i < base.length; i++) {
+              const size = base[i]
+              const prev = base[i - 1]
+
+              if (totalNum >= size) {
+                options.push(size)
+                continue
+              }
+
+              // If we have more than the previous bucket, allow the next higher option.
+              // Example: total=21 -> [15, 30]
+              if (totalNum > prev) options.push(size)
+              break
+            }
+
+            return options
+          }
+          function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
+
+          window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            const step = 360
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            let delta = visualDirection === 'left' ? -step : step
+            if (dir === 'rtl') delta = -delta
+            const current = getNormalizedScrollLeft(el)
+            animateNormalizedScrollLeft(el, current + delta, 260)
+            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'customersEdgeLeft', 'customersEdgeRight'))
+          }
+
+          function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth
+            const clamped = Math.max(0, Math.min(max, normalizedLeft))
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') { el.scrollLeft = clamped; return }
+            const type = getRtlScrollType()
+            if (type === 'negative') el.scrollLeft = -clamped
+            else if (type === 'reverse') el.scrollLeft = max - clamped
+            else el.scrollLeft = clamped
+          }
+
+          function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            if (prefersReduced) { setNormalizedScrollLeft(el, target); return }
+
+            const max = el.scrollWidth - el.clientWidth
+            const to = Math.max(0, Math.min(max, target))
+            const from = getNormalizedScrollLeft(el)
+            const delta = to - from
+            if (Math.abs(delta) < 1) return
+
+            const start = performance.now()
+            const duration = Math.max(120, Number(durationMs) || 260)
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1)
+            el.dataset.edgeScrollAnimToken = animToken
+
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+            const tick = (now) => {
+              if (el.dataset.edgeScrollAnimToken !== animToken) return
+              const t = Math.min(1, (now - start) / duration)
+              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t))
+              if (t < 1) requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          }
+
+          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId)
+            const arrow = document.getElementById(arrowBtnId)
+            if (!el || !arrow) return
+            const wrap = el.closest('.edge-scroll-wrap')
+            if (!wrap) return
+            const wrapRect = wrap.getBoundingClientRect()
+            const vhCenter = window.innerHeight / 2
+            const padding = 16
+            const minY = wrapRect.top + padding
+            const maxY = wrapRect.bottom - padding
+            const desired = vhCenter
+            const clamped = Math.max(minY, Math.min(maxY, desired))
+            const relativeTop = clamped - wrapRect.top
+            arrow.style.top = String(relativeTop) + 'px'
+          }
+
+          let __rtlScrollType = null
+          function getRtlScrollType() {
+            if (__rtlScrollType) return __rtlScrollType
+            const div = document.createElement('div')
+            div.style.width = '4px'
+            div.style.height = '1px'
+            div.style.overflow = 'scroll'
+            div.style.direction = 'rtl'
+            div.style.position = 'absolute'
+            div.style.top = '-9999px'
+            const inner = document.createElement('div')
+            inner.style.width = '8px'
+            inner.style.height = '1px'
+            div.appendChild(inner)
+            document.body.appendChild(div)
+            if (div.scrollLeft > 0) __rtlScrollType = 'reverse'
+            else {
+              div.scrollLeft = 1
+              __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default'
+            }
+            document.body.removeChild(div)
+            return __rtlScrollType
+          }
+
+          function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') return el.scrollLeft
+            const type = getRtlScrollType()
+            if (type === 'negative') return -el.scrollLeft
+            if (type === 'reverse') return max - el.scrollLeft
+            return el.scrollLeft
+          }
+
+          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            const leftWrap = document.getElementById(leftBtnId)
+            const rightWrap = document.getElementById(rightBtnId)
+            if (!el || !leftWrap || !rightWrap) return
+
+            const canScroll = el.scrollWidth > el.clientWidth + 2
+            if (!canScroll) {
+              leftWrap.classList.add('edge-hidden')
+              rightWrap.classList.add('edge-hidden')
+              return
+            }
+
+            const maxScrollLeft = el.scrollWidth - el.clientWidth
+            const sl = getNormalizedScrollLeft(el)
+            const canLeft = sl > 1
+            const canRight = sl < maxScrollLeft - 1
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            const showLeft = dir === 'rtl' ? canRight : canLeft
+            const showRight = dir === 'rtl' ? canLeft : canRight
+            leftWrap.classList.toggle('edge-hidden', !showLeft)
+            rightWrap.classList.toggle('edge-hidden', !showRight)
+
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId)
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId)
+          }
+
+          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            if (el.dataset.edgeScrollBound === '1') return
+            el.dataset.edgeScrollBound = '1'
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId)
+            el.addEventListener('scroll', tick, { passive: true })
+            window.addEventListener('resize', tick)
+            window.addEventListener('scroll', tick, { passive: true })
+            setTimeout(tick, 0)
+          }
+
+          function renderCustomersPaginationUI(total) {
+            const pageSizeSelect = document.getElementById('customersPageSize')
+            const prevBtn = document.getElementById('customersPrevBtn')
+            const nextBtn = document.getElementById('customersNextBtn')
+            const info = document.getElementById('customersPageInfo')
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return
+
+            const options = getPageSizeOptions(total)
+            if (options.indexOf(customersPaging.pageSize) === -1) customersPaging.pageSize = 15
+            pageSizeSelect.innerHTML = options
+              .map((n) => '<option value="' + n + '" ' + (n === customersPaging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+              .join('')
+
+            const totalPages = Math.max(1, Math.ceil(total / customersPaging.pageSize))
+            customersPaging.page = clampPage(customersPaging.page, totalPages)
+            const start = total === 0 ? 0 : (customersPaging.page - 1) * customersPaging.pageSize + 1
+            const end = Math.min(total, customersPaging.page * customersPaging.pageSize)
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total)
+            prevBtn.disabled = customersPaging.page <= 1
+            nextBtn.disabled = customersPaging.page >= totalPages
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled)
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled)
+          }
+
+          window.setCustomersPageSize = function(value) {
+            const parsed = Number(value)
+            customersPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
+            customersPaging.page = 1
+            filterTable()
+          }
+          window.setCustomersPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') customersPaging.page -= 1
+            else if (directionOrPage === 'next') customersPaging.page += 1
+            else {
+              const parsed = Number(directionOrPage)
+              if (Number.isFinite(parsed)) customersPaging.page = parsed
+            }
+            filterTable()
+          }
+
+          function applyCustomersPagination() {
+            const tableBody = document.getElementById('tableBody')
+            if (!tableBody) return
+            const rows = Array.from(tableBody.getElementsByTagName('tr'))
+            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
+            renderCustomersPaginationUI(visibleRows.length)
+            const totalPages = Math.max(1, Math.ceil(visibleRows.length / customersPaging.pageSize))
+            customersPaging.page = clampPage(customersPaging.page, totalPages)
+            const startIdx = (customersPaging.page - 1) * customersPaging.pageSize
+            const endIdx = startIdx + customersPaging.pageSize
+            visibleRows.forEach((row, idx) => {
+              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
+            })
+            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
+            setupEdgeScrollOnce('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
+            updateEdgeScrollControls('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
+          }
+
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
             const filterField = document.getElementById('filterField').value;
@@ -13484,17 +14551,21 @@ app.get('/admin/customers', async (c) => {
             const ratingFilter = document.getElementById('ratingFilter').value;
             const rows = document.getElementById('tableBody').getElementsByTagName('tr');
             let visibleCount = 0;
+            const sig = JSON.stringify({ searchInput, filterField, dateRangeFilter, requestsFilter, ratingFilter })
+            if (sig !== customersPaging.lastSig) { customersPaging.lastSig = sig; customersPaging.page = 1 }
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i];
               const name = row.getAttribute('data-name') || '';
               const phone = row.getAttribute('data-phone') || '';
               const email = row.getAttribute('data-email') || '';
+              const source = row.getAttribute('data-source') || '';
               const assigned = row.getAttribute('data-assigned') || '';
+              const bankAgent = row.getAttribute('data-bank-agent') || '';
               const createdAt = row.getAttribute('data-created-at') || '';
               const hasRequest = row.getAttribute('data-has-request') || '0';
               const rating = row.getAttribute('data-rating') || '0';
 
-              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput));
+              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||source.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput)||bankAgent.toLowerCase().includes(searchInput));
 
               let matchesDateRange = true;
               if (dateRangeFilter !== 'all') {
@@ -13509,10 +14580,11 @@ app.get('/admin/customers', async (c) => {
               let matchesRating = ratingFilter === 'all' || rating === ratingFilter;
 
               const visible = matchesSearch && matchesDateRange && matchesRequests && matchesRating;
-              row.style.display = visible ? '' : 'none';
+              row.classList.toggle('filter-hidden', !visible);
               if (visible) visibleCount++;
             }
             document.getElementById('totalCount').textContent = visibleCount;
+            applyCustomersPagination();
           }
 
           function applyPresetFiltersFromUrl() {
@@ -13535,8 +14607,22 @@ app.get('/admin/customers', async (c) => {
 
           function exportToCSV() {
             const data = [
-              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الموظف المخصص', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${customers.results.map((customer: any) => `['${customer.id}', '${customer.full_name || '-'}', '${customer.phone || '-'}', '${customer.email || '-'}', '${(customer.assigned_employee_name || 'غير مخصص').replace(/'/g, "\\'")}', '${customer.national_id || '-'}', '${new Date(customer.created_at).toLocaleDateString('ar-SA')}']`).join(',\n              ')}
+              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل'],
+              ${customers.results.map((customer: any) => {
+                const hasFr = customerIdsWithRequests.has(customer.id)
+                const ba = bankAgentByCustomer.get(customer.id)
+                const bankCol = !hasFr
+                  ? '—'
+                  : !ba?.agentUserId
+                    ? 'غير معيّن'
+                    : (ba.agentName || '—')
+                const src = customer.enrollment_source === 'calculator'
+                  ? 'الحاسبة'
+                  : customer.enrollment_source === 'affiliate'
+                    ? (customer.enrollment_source_label || 'affiliate')
+                    : ''
+                return `['${customer.id}', '${customer.full_name || '-'}', '${customer.phone || '-'}', '${customer.email || '-'}', '${String(src || '').replace(/'/g, "\\'")}', '${(customer.assigned_employee_name || 'غير مخصص').replace(/'/g, "\\'")}', '${String(bankCol).replace(/'/g, "\\'")}', '${customer.national_id || '-'}', '${new Date(customer.created_at).toLocaleDateString('ar-SA')}']`
+              }).join(',\n              ')}
             ];
             let csv = '\\uFEFF';
             data.forEach(row => { csv += row.join(',') + '\\n'; });
@@ -13548,6 +14634,8 @@ app.get('/admin/customers', async (c) => {
           }
 
           refreshUnreadDot();
+          // Initialize table paging + page-size dropdown on first load
+          filterTable();
           loadCustomerRatings();
           applyPresetFiltersFromUrl();
         </script>
@@ -14257,20 +15345,36 @@ app.get('/admin/requests/:id/edit', async (c) => {
 
     try {
       const customerAttachments = await c.env.DB.prepare(`
-        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        SELECT
+          identity_attachment_url,
+          signature_attachment_url,
+          salary_profile_attachment_url,
+          gosi_attachment_url,
+          tax_exemption_attachment_url,
+          additional_1_attachment_url,
+          additional_2_attachment_url,
+          additional_3_attachment_url
         FROM customers
         WHERE id = ?
       `).bind((request as any).customer_id).first() as {
-        id_attachment_url?: string | null
-        bank_statement_attachment_url?: string | null
-        salary_attachment_url?: string | null
-        additional_attachment_url?: string | null
+        identity_attachment_url?: string | null
+        signature_attachment_url?: string | null
+        salary_profile_attachment_url?: string | null
+        gosi_attachment_url?: string | null
+        tax_exemption_attachment_url?: string | null
+        additional_1_attachment_url?: string | null
+        additional_2_attachment_url?: string | null
+        additional_3_attachment_url?: string | null
       } | null
       if (customerAttachments) {
-        ;(request as any).id_attachment_url = customerAttachments.id_attachment_url || (request as any).id_attachment_url || null
-        ;(request as any).bank_statement_attachment_url = customerAttachments.bank_statement_attachment_url || (request as any).bank_statement_attachment_url || null
-        ;(request as any).salary_attachment_url = customerAttachments.salary_attachment_url || (request as any).salary_attachment_url || null
-        ;(request as any).additional_attachment_url = customerAttachments.additional_attachment_url || (request as any).additional_attachment_url || null
+        ;(request as any).identity_attachment_url = customerAttachments.identity_attachment_url || (request as any).identity_attachment_url || null
+        ;(request as any).signature_attachment_url = customerAttachments.signature_attachment_url || (request as any).signature_attachment_url || null
+        ;(request as any).salary_profile_attachment_url = customerAttachments.salary_profile_attachment_url || (request as any).salary_profile_attachment_url || null
+        ;(request as any).gosi_attachment_url = customerAttachments.gosi_attachment_url || (request as any).gosi_attachment_url || null
+        ;(request as any).tax_exemption_attachment_url = customerAttachments.tax_exemption_attachment_url || (request as any).tax_exemption_attachment_url || null
+        ;(request as any).additional_1_attachment_url = customerAttachments.additional_1_attachment_url || (request as any).additional_1_attachment_url || null
+        ;(request as any).additional_2_attachment_url = customerAttachments.additional_2_attachment_url || (request as any).additional_2_attachment_url || null
+        ;(request as any).additional_3_attachment_url = customerAttachments.additional_3_attachment_url || (request as any).additional_3_attachment_url || null
       }
     } catch (attachmentLoadError) {
       if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
@@ -14383,112 +15487,193 @@ app.get('/admin/requests/:id/edit', async (c) => {
                   المرفقات
                 </h2>
                 
-                <!-- Current Attachments -->
-                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                  <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-id-card ml-1"></i> صورة الهوية:</p>
-                      ${request.id_attachment_url ? `
-                        <a href="${request.id_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      ` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                <!-- Current Attachments (only show uploaded; hide if none) -->
+                ${(() => {
+                  const docs = [
+                    { label: 'ملف الهوية', icon: 'fa-id-card', url: request.identity_attachment_url },
+                    { label: 'ملف السمة', icon: 'fa-signature', url: request.signature_attachment_url },
+                    { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: request.salary_profile_attachment_url },
+                    { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: request.gosi_attachment_url },
+                    { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: request.tax_exemption_attachment_url },
+                    { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: request.additional_1_attachment_url },
+                    { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: request.additional_2_attachment_url },
+                    { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: request.additional_3_attachment_url }
+                  ].filter(d => d.url);
+                  if (docs.length === 0) return '';
+                  return `
+                    <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                      <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${docs.map(d => `
+                          <div class="border-r pr-4">
+                            <p class="text-sm text-gray-600 mb-2"><i class="fas ${d.icon} ml-1"></i> ${d.label}:</p>
+                            <a href="${d.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
+                              <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
+                            </a>
+                          </div>
+                        `).join('')}
+                      </div>
                     </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-invoice ml-1"></i> كشف الحساب:</p>
-                      ${request.bank_statement_attachment_url ? `
-                        <a href="${request.bank_statement_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      ` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-money-check ml-1"></i> تعريف الراتب:</p>
-                      ${request.salary_attachment_url ? `
-                        <a href="${request.salary_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      ` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-alt ml-1"></i> مرفقات إضافية:</p>
-                      ${request.additional_attachment_url ? `
-                        <a href="${request.additional_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      ` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                  </div>
-                </div>
+                  `
+                })()}
                 
-                <!-- Upload New Attachments -->
-                <div class="space-y-4">
-                  <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-                  
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- ID Attachment -->
+                <!-- Upload New Attachments (modal popup) -->
+                <div class="space-y-2">
+                  <button type="button" id="openRequestAttachmentsModal"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold transition inline-flex items-center gap-2">
+                    <i class="fas fa-paperclip"></i>
+                    إدارة المرفقات
+                  </button>
+                  <p class="text-sm text-gray-500">يتم رفع المرفقات من خلال نافذة منبثقة داخل النموذج.</p>
+                </div>
+
+                <div id="requestAttachmentsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+                  <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-paperclip ml-2 text-blue-600"></i>
+                        رفع المرفقات (اختياري)
+                      </h3>
+                      <button type="button" id="closeRequestAttachmentsModal" class="text-gray-500 hover:text-gray-800">
+                        <i class="fas fa-times text-xl"></i>
+                      </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 1. Identity -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                        <i class="fas fa-id-card ml-1"></i> ملف الهوية
                       </label>
                       <input 
                         type="file"
-                        id="id_attachment"
+                        id="identity_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('id_attachment')"
+                        onchange="handleFileSelect('identity_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="id_attachment_preview" class="mt-2"></div>
+                      <div id="identity_attachment_preview" class="mt-2"></div>
                     </div>
                     
-                    <!-- Bank Statement Attachment -->
+                    <!-- 2. Signature -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                        <i class="fas fa-signature ml-1"></i> ملف السمة
                       </label>
                       <input 
                         type="file"
-                        id="bank_statement_attachment"
+                        id="signature_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('bank_statement_attachment')"
+                        onchange="handleFileSelect('signature_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="bank_statement_attachment_preview" class="mt-2"></div>
+                      <div id="signature_attachment_preview" class="mt-2"></div>
                     </div>
                     
-                    <!-- Salary Attachment -->
+                    <!-- 3. Salary Profile -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                        <i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب
                       </label>
                       <input 
                         type="file"
-                        id="salary_attachment"
+                        id="salary_profile_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('salary_attachment')"
+                        onchange="handleFileSelect('salary_profile_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="salary_attachment_preview" class="mt-2"></div>
+                      <div id="salary_profile_attachment_preview" class="mt-2"></div>
                     </div>
                     
-                    <!-- Additional Attachment -->
+                    <!-- 4. GOSI -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                        <i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية
                       </label>
                       <input 
                         type="file"
-                        id="additional_attachment"
+                        id="gosi_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('additional_attachment')"
+                        onchange="handleFileSelect('gosi_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="additional_attachment_preview" class="mt-2"></div>
+                      <div id="gosi_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 5. Tax exemption -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-certificate ml-1"></i> شهادة الإعفاء الضريبي
+                      </label>
+                      <input
+                        type="file"
+                        id="tax_exemption_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('tax_exemption_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="tax_exemption_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 6. Additional 1 -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 1
+                      </label>
+                      <input
+                        type="file"
+                        id="additional_1_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('additional_1_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="additional_1_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 7. Additional 2 -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 2
+                      </label>
+                      <input
+                        type="file"
+                        id="additional_2_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('additional_2_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="additional_2_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 8. Additional 3 -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 3
+                      </label>
+                      <input
+                        type="file"
+                        id="additional_3_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('additional_3_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="additional_3_attachment_preview" class="mt-2"></div>
+                    </div>
+                    </div>
+
+                    <div class="flex justify-end gap-3 mt-6">
+                      <button type="button" id="doneRequestAttachmentsModal"
+                              class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
+                        تم
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -14518,11 +15703,33 @@ app.get('/admin/requests/:id/edit', async (c) => {
         </div>
         
         <script>
+          (function initRequestAttachmentsModal() {
+            var modal = document.getElementById('requestAttachmentsModal');
+            var openBtn = document.getElementById('openRequestAttachmentsModal');
+            var closeBtn = document.getElementById('closeRequestAttachmentsModal');
+            var doneBtn = document.getElementById('doneRequestAttachmentsModal');
+            if (!modal || !openBtn) return;
+            function open() { modal.classList.remove('hidden'); }
+            function close() { modal.classList.add('hidden'); }
+            openBtn.addEventListener('click', open);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            if (doneBtn) doneBtn.addEventListener('click', close);
+            modal.addEventListener('click', function (e) {
+              if (e && e.target === modal) close();
+            });
+            document.addEventListener('keydown', function (e) {
+              if (e && e.key === 'Escape') close();
+            });
+          })();
           const attachmentFiles = {
-            id_attachment: null,
-            bank_statement_attachment: null,
-            salary_attachment: null,
-            additional_attachment: null
+            identity_attachment: null,
+            signature_attachment: null,
+            salary_profile_attachment: null,
+            gosi_attachment: null,
+            tax_exemption_attachment: null,
+            additional_1_attachment: null,
+            additional_2_attachment: null,
+            additional_3_attachment: null
           }
           
           function handleFileSelect(fieldName) {
@@ -14592,44 +15799,84 @@ app.get('/admin/requests/:id/edit', async (c) => {
             
             try {
               // Upload attachments if selected
-              if (attachmentFiles.id_attachment) {
+              if (attachmentFiles.identity_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع صورة الهوية...
+                    جاري رفع ملف الهوية...
                   </div>
                 \`
-                data.id_attachment_url = await uploadAttachment(attachmentFiles.id_attachment, 'id')
+                data.identity_attachment_url = await uploadAttachment(attachmentFiles.identity_attachment, 'identity')
               }
               
-              if (attachmentFiles.bank_statement_attachment) {
+              if (attachmentFiles.signature_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع كشف الحساب...
+                    جاري رفع ملف السمة...
                   </div>
                 \`
-                data.bank_statement_attachment_url = await uploadAttachment(attachmentFiles.bank_statement_attachment, 'bank_statement')
+                data.signature_attachment_url = await uploadAttachment(attachmentFiles.signature_attachment, 'signature')
               }
               
-              if (attachmentFiles.salary_attachment) {
+              if (attachmentFiles.salary_profile_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع تعريف الراتب...
+                    جاري رفع ملف تعريف الراتب...
                   </div>
                 \`
-                data.salary_attachment_url = await uploadAttachment(attachmentFiles.salary_attachment, 'salary')
+                data.salary_profile_attachment_url = await uploadAttachment(attachmentFiles.salary_profile_attachment, 'salary_profile')
               }
               
-              if (attachmentFiles.additional_attachment) {
+              if (attachmentFiles.gosi_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع المرفقات الإضافية...
+                    جاري رفع ملف التأمينات الاجتماعية...
                   </div>
                 \`
-                data.additional_attachment_url = await uploadAttachment(attachmentFiles.additional_attachment, 'additional')
+                data.gosi_attachment_url = await uploadAttachment(attachmentFiles.gosi_attachment, 'gosi')
+              }
+
+              if (attachmentFiles.tax_exemption_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع شهادة الإعفاء الضريبي...
+                  </div>
+                \`
+                data.tax_exemption_attachment_url = await uploadAttachment(attachmentFiles.tax_exemption_attachment, 'tax_exemption')
+              }
+
+              if (attachmentFiles.additional_1_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع مستند إضافي 1...
+                  </div>
+                \`
+                data.additional_1_attachment_url = await uploadAttachment(attachmentFiles.additional_1_attachment, 'additional_1')
+              }
+
+              if (attachmentFiles.additional_2_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع مستند إضافي 2...
+                  </div>
+                \`
+                data.additional_2_attachment_url = await uploadAttachment(attachmentFiles.additional_2_attachment, 'additional_2')
+              }
+
+              if (attachmentFiles.additional_3_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع مستند إضافي 3...
+                  </div>
+                \`
+                data.additional_3_attachment_url = await uploadAttachment(attachmentFiles.additional_3_attachment, 'additional_3')
               }
               
               // Update financing request
@@ -14690,16 +15937,24 @@ app.get('/admin/requests', async (c) => {
         fr.status,
         fr.current_stage_id,
         fr.created_at,
+        fr.assigned_bank_agent_id,
+        bagent.id AS bank_agent_role5_user_id,
+        emp.id AS assigned_employee_id,
         c.full_name as customer_name,
         c.assigned_to as customer_assigned_to,
         b.bank_name as bank_name,
         ws.stage_name as workflow_stage_name,
         ws.stage_name_ar as workflow_stage_name_ar,
-        ws.stage_color as workflow_stage_color
+        ws.stage_color as workflow_stage_color,
+        COALESCE(NULLIF(TRIM(bagent.full_name), ''), NULLIF(TRIM(bagent.username), '')) as assigned_bank_agent_name,
+        COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) as assigned_employee_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
+      LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 14)
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      LEFT JOIN users bagent ON bagent.id = fr.assigned_bank_agent_id AND bagent.role_id = 5
     `;
     
     let queryParams: any[] = [];
@@ -14727,8 +15982,14 @@ app.get('/admin/requests', async (c) => {
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
-        query += ' WHERE c.tenant_id = ? AND fr.assigned_bank_agent_id = ?';
-        queryParams.push(userInfo.tenantId, userInfo.userId);
+        query += ` WHERE c.tenant_id = ? AND (
+          fr.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+        )`;
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
       } else {
         query += ' WHERE 1 = 0';
       }
@@ -14814,15 +16075,26 @@ app.get('/admin/requests', async (c) => {
           
           .overflow-x-auto table {
             min-width: 100%;
-            width: 100%;
+            width: max-content;
           }
 
-          @media (max-width: 1024px) {
-            .overflow-x-auto table {
-              min-width: 1200px;
-              width: max-content;
-            }
-          }
+          .truncate-cell { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+          .truncate-cell.sm { max-width: 160px; }
+          .filter-hidden { display: none !important; }
+
+          /* Hover-to-reveal horizontal scroll arrows (requests table) */
+          .edge-scroll-wrap { position: relative; }
+          /* Don't block clicks on the table (actions buttons near edges) */
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 10; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 0; pointer-events: none; transition: opacity 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          /* Wrap hover (not zone — zone uses pointer-events:none so table buttons stay clickable) */
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+          .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
+          .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
 
           .requests-table-scroll {
             overflow: visible !important;
@@ -14953,18 +16225,35 @@ app.get('/admin/requests', async (c) => {
             </div>
           </div>
           
-          <div class="bg-white rounded-xl shadow-lg overflow-visible">
-            <div>
-              <table class="min-w-full" id="dataTable">
+          <div class="bg-white rounded-xl shadow-lg overflow-x-hidden">
+            <div class="edge-scroll-wrap">
+              <div class="edge-scroll-zone left">
+                <div id="requestsEdgeLeft" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'left')" aria-label="scroll left">
+                    <i class="fas fa-chevron-left text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="edge-scroll-zone right">
+                <div id="requestsEdgeRight" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'right')" aria-label="scroll right">
+                    <i class="fas fa-chevron-right text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div id="requestsTableScroll" class="overflow-x-auto no-hscrollbar">
+              <table class="min-w-full w-max" id="dataTable">
                 <thead class="bg-gray-50">
                   <tr>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">العميل</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="الموظف (دور 4) المعيّن للعميل">الموظف المخصص</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="المستخدم بدور 5 المعيّن على الطلب">موظف البنك</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البنك</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المبلغ</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المدة</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
@@ -14997,22 +16286,18 @@ app.get('/admin/requests', async (c) => {
                   const statusInlineStyle = req.workflow_stage_color
                     ? `background-color: ${req.workflow_stage_color}20; color: ${req.workflow_stage_color};`
                     : '';
+                  const employeeName = req.assigned_employee_name ? String(req.assigned_employee_name) : ''
+                  const agentId = req.bank_agent_role5_user_id != null ? Number(req.bank_agent_role5_user_id) : null
+                  const agentName = req.assigned_bank_agent_name ? String(req.assigned_bank_agent_name) : ''
+                  const bankAgentRowSearch = (agentName + ' ' + (agentId != null && !Number.isNaN(agentId) ? '#' + agentId : '')).trim()
                   
                   return `
                   <tr class="hover:bg-gray-50" 
                       data-customer="${req.customer_name || ''}" 
+                      data-employee="${employeeName.replace(/"/g, '&quot;')}"
+                      data-bank-agent="${bankAgentRowSearch.replace(/"/g, '&quot;')}"
                       data-bank="${req.bank_name || ''}" 
                       data-status="${statusAr}">
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${req.customer_name || 'عميل #' + req.customer_id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${req.bank_name || 'بنك #' + (req.selected_bank_id || '-')}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${req.requested_amount?.toLocaleString('ar-SA')} ريال</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${req.duration_months} شهر</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="px-2 py-1 text-xs rounded-full ${statusColor}" style="${statusInlineStyle}">
-                        ${statusAr}
-                      </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right relative">
                       <div class="relative inline-block text-right">
                         <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
@@ -15042,18 +16327,255 @@ app.get('/admin/requests', async (c) => {
                         </div>
                       </div>
                     </td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="truncate-cell">${req.customer_name || 'عميل #' + req.customer_id}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${employeeName
+                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${employeeName}</span></span>`
+                        : `<span class="text-gray-300 text-sm">—</span>`
+                      }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${agentId != null && !Number.isNaN(agentId)
+                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${agentId}"><span class="truncate-cell sm">${agentName || '—'}</span></span>`
+                        : `<span class="text-gray-300 text-sm">—</span>`
+                      }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap"><span class="truncate-cell sm">${req.bank_name || 'بنك #' + (req.selected_bank_id || '-')}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap">${req.requested_amount?.toLocaleString('ar-SA')} ريال</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${req.duration_months} شهر</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="px-2 py-1 text-xs rounded-full ${statusColor}" style="${statusInlineStyle}">
+                        ${statusAr}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
                   </tr>
                 `}).join('')}
               </tbody>
               </table>
+            </div>
+            </div>
+
+            <!-- Requests Pagination -->
+            <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="requestsPrevBtn" onclick="setRequestsPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                <span id="requestsPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                <button id="requestsNextBtn" onclick="setRequestsPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+              </div>
             </div>
           </div>
         </div>
         
         <script>
           const REQUEST_STATUS_OPTIONS = ${requestStatusFiltersJson};
+          // Pagination + edge-scroll (Requests list page)
+          const requestsPaging = { page: 1, pageSize: 15, lastSig: '' }
+          function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
+          function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
+
+          window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            const step = 360
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            let delta = visualDirection === 'left' ? -step : step
+            if (dir === 'rtl') delta = -delta
+            const current = getNormalizedScrollLeft(el)
+            animateNormalizedScrollLeft(el, current + delta, 260)
+            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'requestsEdgeLeft', 'requestsEdgeRight'))
+          }
+
+          function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth
+            const clamped = Math.max(0, Math.min(max, normalizedLeft))
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') { el.scrollLeft = clamped; return }
+            const type = getRtlScrollType()
+            if (type === 'negative') el.scrollLeft = -clamped
+            else if (type === 'reverse') el.scrollLeft = max - clamped
+            else el.scrollLeft = clamped
+          }
+
+          function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            if (prefersReduced) { setNormalizedScrollLeft(el, target); return }
+
+            const max = el.scrollWidth - el.clientWidth
+            const to = Math.max(0, Math.min(max, target))
+            const from = getNormalizedScrollLeft(el)
+            const delta = to - from
+            if (Math.abs(delta) < 1) return
+
+            const start = performance.now()
+            const duration = Math.max(120, Number(durationMs) || 260)
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1)
+            el.dataset.edgeScrollAnimToken = animToken
+
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+            const tick = (now) => {
+              if (el.dataset.edgeScrollAnimToken !== animToken) return
+              const t = Math.min(1, (now - start) / duration)
+              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t))
+              if (t < 1) requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          }
+
+          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId)
+            const arrow = document.getElementById(arrowBtnId)
+            if (!el || !arrow) return
+            const wrap = el.closest('.edge-scroll-wrap')
+            if (!wrap) return
+            const wrapRect = wrap.getBoundingClientRect()
+            const vhCenter = window.innerHeight / 2
+            const padding = 16
+            const minY = wrapRect.top + padding
+            const maxY = wrapRect.bottom - padding
+            const desired = vhCenter
+            const clamped = Math.max(minY, Math.min(maxY, desired))
+            const relativeTop = clamped - wrapRect.top
+            arrow.style.top = String(relativeTop) + 'px'
+          }
+
+          let __rtlScrollType = null
+          function getRtlScrollType() {
+            if (__rtlScrollType) return __rtlScrollType
+            const div = document.createElement('div')
+            div.style.width = '4px'
+            div.style.height = '1px'
+            div.style.overflow = 'scroll'
+            div.style.direction = 'rtl'
+            div.style.position = 'absolute'
+            div.style.top = '-9999px'
+            const inner = document.createElement('div')
+            inner.style.width = '8px'
+            inner.style.height = '1px'
+            div.appendChild(inner)
+            document.body.appendChild(div)
+            if (div.scrollLeft > 0) __rtlScrollType = 'reverse'
+            else {
+              div.scrollLeft = 1
+              __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default'
+            }
+            document.body.removeChild(div)
+            return __rtlScrollType
+          }
+
+          function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') return el.scrollLeft
+            const type = getRtlScrollType()
+            if (type === 'negative') return -el.scrollLeft
+            if (type === 'reverse') return max - el.scrollLeft
+            return el.scrollLeft
+          }
+
+          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            const leftWrap = document.getElementById(leftBtnId)
+            const rightWrap = document.getElementById(rightBtnId)
+            if (!el || !leftWrap || !rightWrap) return
+
+            const canScroll = el.scrollWidth > el.clientWidth + 2
+            if (!canScroll) {
+              leftWrap.classList.add('edge-hidden')
+              rightWrap.classList.add('edge-hidden')
+              return
+            }
+
+            const maxScrollLeft = el.scrollWidth - el.clientWidth
+            const sl = getNormalizedScrollLeft(el)
+            const canLeft = sl > 1
+            const canRight = sl < maxScrollLeft - 1
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            const showLeft = dir === 'rtl' ? canRight : canLeft
+            const showRight = dir === 'rtl' ? canLeft : canRight
+            leftWrap.classList.toggle('edge-hidden', !showLeft)
+            rightWrap.classList.toggle('edge-hidden', !showRight)
+
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId)
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId)
+          }
+
+          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            if (el.dataset.edgeScrollBound === '1') return
+            el.dataset.edgeScrollBound = '1'
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId)
+            el.addEventListener('scroll', tick, { passive: true })
+            window.addEventListener('resize', tick)
+            window.addEventListener('scroll', tick, { passive: true })
+            setTimeout(tick, 0)
+          }
+
+          function renderRequestsPaginationUI(total) {
+            const pageSizeSelect = document.getElementById('requestsPageSize')
+            const prevBtn = document.getElementById('requestsPrevBtn')
+            const nextBtn = document.getElementById('requestsNextBtn')
+            const info = document.getElementById('requestsPageInfo')
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return
+
+            const options = getPageSizeOptions(total)
+            if (options.indexOf(requestsPaging.pageSize) === -1) requestsPaging.pageSize = 15
+            pageSizeSelect.innerHTML = options
+              .map((n) => '<option value="' + n + '" ' + (n === requestsPaging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+              .join('')
+
+            const totalPages = Math.max(1, Math.ceil(total / requestsPaging.pageSize))
+            requestsPaging.page = clampPage(requestsPaging.page, totalPages)
+            const start = total === 0 ? 0 : (requestsPaging.page - 1) * requestsPaging.pageSize + 1
+            const end = Math.min(total, requestsPaging.page * requestsPaging.pageSize)
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total)
+            prevBtn.disabled = requestsPaging.page <= 1
+            nextBtn.disabled = requestsPaging.page >= totalPages
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled)
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled)
+          }
+
+          window.setRequestsPageSize = function(value) {
+            const parsed = Number(value)
+            requestsPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
+            requestsPaging.page = 1
+            filterTable()
+          }
+          window.setRequestsPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') requestsPaging.page -= 1
+            else if (directionOrPage === 'next') requestsPaging.page += 1
+            else {
+              const parsed = Number(directionOrPage)
+              if (Number.isFinite(parsed)) requestsPaging.page = parsed
+            }
+            filterTable()
+          }
+
+          function applyRequestsPagination() {
+            const tableBody = document.getElementById('tableBody')
+            if (!tableBody) return
+            const rows = Array.from(tableBody.getElementsByTagName('tr'))
+            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
+            renderRequestsPaginationUI(visibleRows.length)
+            const totalPages = Math.max(1, Math.ceil(visibleRows.length / requestsPaging.pageSize))
+            requestsPaging.page = clampPage(requestsPaging.page, totalPages)
+            const startIdx = (requestsPaging.page - 1) * requestsPaging.pageSize
+            const endIdx = startIdx + requestsPaging.pageSize
+            visibleRows.forEach((row, idx) => {
+              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
+            })
+            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
+            setupEdgeScrollOnce('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
+            updateEdgeScrollControls('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
+          }
           function closeAllDropdowns() {
             document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
+              restorePortaledMenu(m);
               m.classList.add('hidden');
               m.style.top = '';
               m.style.bottom = '';
@@ -15067,6 +16589,96 @@ app.get('/admin/requests', async (c) => {
             document.querySelectorAll('tbody.dropdown-open').forEach(tb => tb.classList.remove('dropdown-open'));
             document.querySelectorAll('tr.dropdown-active-row').forEach(tr => tr.classList.remove('dropdown-active-row'));
             document.querySelectorAll('tbody .actions-dropdown-btn').forEach(b => { b.style.visibility = ''; });
+          }
+
+          function unbindActionsMenuRepos(menu) {
+            if (!menu._actionsRepos) return;
+            const scrollEl = menu._actionsRepos.scrollEl;
+            const reposition = menu._actionsRepos.reposition;
+            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
+            if (reposition) window.removeEventListener('resize', reposition);
+            delete menu._actionsRepos;
+          }
+
+          function restorePortaledMenu(menu) {
+            if (!menu || menu.dataset.portal !== '1') return;
+            unbindActionsMenuRepos(menu);
+            const placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
+            if (placeholder && placeholder.parentNode) {
+              placeholder.parentNode.replaceChild(menu, placeholder);
+            }
+            delete menu.dataset.portal;
+            delete menu.dataset.portalPlaceholderId;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.right = '';
+            menu.style.bottom = '';
+            menu.style.marginTop = '';
+            menu.style.marginBottom = '';
+            menu.style.zIndex = '';
+          }
+
+          /** Move menu onto .edge-scroll-wrap (outside horizontal scroll panel) — avoids scrollbar clipping without covering the navbar. */
+          function anchorActionsMenu(btn, menu) {
+            if (!menu || menu.dataset.portal === '1') return;
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            const wrap = scrollEl ? scrollEl.closest('.edge-scroll-wrap') : null;
+            const host = wrap || scrollEl;
+            if (!host || !menu.parentNode) return;
+            const placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
+            const placeholder = document.createElement('span');
+            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
+            menu.parentNode.insertBefore(placeholder, menu);
+            menu.dataset.portal = '1';
+            menu.dataset.portalPlaceholderId = placeholderId;
+            host.appendChild(menu);
+          }
+
+          function positionAnchoredActionsMenu(btn, menu) {
+            if (!btn || !menu || !menu.parentElement) return;
+            const host = menu.parentElement;
+            const hr = host.getBoundingClientRect();
+            const br = btn.getBoundingClientRect();
+
+            menu.style.position = 'absolute';
+            menu.style.marginTop = '0';
+            menu.style.marginBottom = '0';
+            menu.style.right = 'auto';
+            menu.style.bottom = 'auto';
+
+            let w = menu.offsetWidth || 176;
+            let h = menu.offsetHeight || 200;
+            if (w < 10) w = 176;
+            if (h < 10) h = 200;
+
+            const hw = hr.width || host.clientWidth || 0;
+            let left = br.right - hr.left - w;
+            if (hw > 0 && Number.isFinite(left)) left = Math.max(4, Math.min(hw - w - 4, left));
+            else left = Number.isFinite(left) ? Math.max(4, left) : 4;
+
+            let top = br.bottom - hr.top + 6;
+            const spaceBelow = hr.bottom - br.bottom;
+            if (spaceBelow < Math.min(h, 72) && (br.top - hr.top) > Math.min(h, 72)) {
+              top = br.top - hr.top - h - 6;
+            }
+
+            menu.style.left = String(Math.round(left)) + 'px';
+            menu.style.top = String(Math.round(top)) + 'px';
+            menu.style.zIndex = '40';
+          }
+
+          function bindActionsMenuRepos(btn, menu) {
+            unbindActionsMenuRepos(menu);
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            if (!scrollEl) return;
+            function reposition() {
+              if (menu.classList.contains('hidden')) return;
+              positionAnchoredActionsMenu(btn, menu);
+            }
+            menu._actionsRepos = { scrollEl: scrollEl, reposition: reposition };
+            scrollEl.addEventListener('scroll', reposition, { passive: true });
+            window.addEventListener('resize', reposition);
           }
 
           function positionDropdownMenu(menu) {
@@ -15097,12 +16709,28 @@ app.get('/admin/requests', async (c) => {
           }
 
           function toggleActionsDropdown(btn) {
-            const menu = btn.nextElementSibling;
+            let menu = null;
+            const id = btn?.dataset?.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
+            if (id) {
+              const found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
+              if (found) menu = found;
+            }
+            if (!menu) {
+              const sib = btn.nextElementSibling;
+              if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) menu = sib;
+            }
+            if (!menu) return;
             const willOpen = menu.classList.contains('hidden');
             closeAllDropdowns();
             if (willOpen) {
               menu.classList.remove('hidden');
-              positionDropdownMenu(menu);
+              if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
+              btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
+              anchorActionsMenu(btn, menu);
+              requestAnimationFrame(function() {
+                positionAnchoredActionsMenu(btn, menu);
+                bindActionsMenuRepos(btn, menu);
+              });
               const cell = btn.closest('td');
               if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
               const row = btn.closest('tr');
@@ -15130,10 +16758,14 @@ app.get('/admin/requests', async (c) => {
             const tableBody = document.getElementById('tableBody')
             const rows = tableBody.getElementsByTagName('tr')
             let visibleCount = 0
+            const sig = JSON.stringify({ searchInput, filterField, statusFilter })
+            if (sig !== requestsPaging.lastSig) { requestsPaging.lastSig = sig; requestsPaging.page = 1 }
             
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i]
               const customer = row.getAttribute('data-customer') || ''
+              const employee = row.getAttribute('data-employee') || ''
+              const bankAgent = row.getAttribute('data-bank-agent') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
               
@@ -15154,7 +16786,9 @@ app.get('/admin/requests', async (c) => {
                     break
                   default: // 'all'
                     shouldShow = customer.toLowerCase().includes(searchInput) || 
+                                employee.toLowerCase().includes(searchInput) ||
                                 bank.toLowerCase().includes(searchInput) || 
+                                bankAgent.toLowerCase().includes(searchInput) ||
                                 status.toLowerCase().includes(searchInput)
                 }
               }
@@ -15162,11 +16796,12 @@ app.get('/admin/requests', async (c) => {
               const statusMatches = statusFilter === 'all' || status === statusFilter
               const visible = shouldShow && statusMatches
 
-              row.style.display = visible ? '' : 'none'
+              row.classList.toggle('filter-hidden', !visible)
               if (visible) visibleCount++
             }
             
             document.getElementById('totalCount').textContent = visibleCount
+            applyRequestsPagination()
           }
 
           function hydrateStatusFilterOptions() {
@@ -15251,10 +16886,11 @@ app.get('/admin/requests', async (c) => {
           hydrateStatusFilterOptions()
           hydrateRequestsSidebarStatuses()
           applyRequestStatusFilterFromUrl()
+          filterTable()
           
           function exportToCSV() {
             const data = [
-              ['العميل', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
+              ['العميل', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
               ${requests.results.map((req: any) => {
                 const statusMap: Record<string, string> = {
                   'pending': 'قيد الانتظار',
@@ -15268,7 +16904,13 @@ app.get('/admin/requests', async (c) => {
                 const statusAr = statusMap[req.status] || req.status;
                 const customer = req.customer_name || `عميل #${req.customer_id}`;
                 const bank = req.bank_name || `بنك #${req.selected_bank_id || '-'}`;
-                return `['${customer}', '${bank}', '${req.requested_amount || 0}', '${req.duration_months}', '${statusAr}', '${new Date(req.created_at).toLocaleDateString('ar-SA')}']`;
+                const employeeCol = req.assigned_employee_name ? String(req.assigned_employee_name) : '—'
+                const aid = req.bank_agent_role5_user_id != null ? Number(req.bank_agent_role5_user_id) : null
+                const aname = req.assigned_bank_agent_name ? String(req.assigned_bank_agent_name) : ''
+                const agentCol = aid != null && !Number.isNaN(aid)
+                  ? (aname || '—')
+                  : '—'
+                return `['${String(customer).replace(/'/g, "\\'")}', '${String(employeeCol).replace(/'/g, "\\'")}', '${String(agentCol).replace(/'/g, "\\'")}', '${String(bank).replace(/'/g, "\\'")}', '${req.requested_amount || 0}', '${req.duration_months}', '${statusAr}', '${new Date(req.created_at).toLocaleDateString('ar-SA')}']`;
               }).join(',\n              ')}
             ];
             
@@ -15297,9 +16939,7 @@ app.get('/admin/requests', async (c) => {
 app.get('/admin/requests/:id/delete', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
-    if (userInfo.roleId === 5) {
-      return c.redirect('/admin/requests')
-    }
+    if (!userInfo.userId) return c.redirect('/login')
     const id = c.req.param('id')
     await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
     return c.redirect('/admin/requests?deleted=1')
@@ -15659,7 +17299,7 @@ app.get('/admin/requests/new', async (c) => {
                     bankAgentSelect.appendChild(o);
                   });
                   if (data.data.length === 0 && bankAgentHint) {
-                    bankAgentHint.textContent = 'لا يوجد وكلاء بنك مفعّلون لهذا البنك في هذه الشركة.';
+                    bankAgentHint.textContent = 'لا يوجد موظفو تمويل مفعّلون لهذه الشركة.';
                     bankAgentHint.classList.remove('hidden');
                   }
                 } else {
@@ -15838,7 +17478,14 @@ app.get('/admin/requests/:id', async (c) => {
       if (Number((request as any).customer_tenant_id) !== Number(tid)) {
         return c.redirect('/admin/requests')
       }
-      if (Number((request as any).assigned_bank_agent_id) !== Number(userInfo.userId)) {
+      const assignedAgentId = Number((request as any).assigned_bank_agent_id)
+      if (
+        assignedAgentId !== Number(userInfo.userId) &&
+        !(await canUserAccessCustomer(c.env.DB, userInfo, {
+          id: Number((request as any).customer_id),
+          tenant_id: (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null
+        }))
+      ) {
         return c.redirect('/admin/requests')
       }
     }
@@ -15847,20 +17494,36 @@ app.get('/admin/requests/:id', async (c) => {
 
     try {
       const customerAttachments = await c.env.DB.prepare(`
-        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        SELECT
+          identity_attachment_url,
+          signature_attachment_url,
+          salary_profile_attachment_url,
+          gosi_attachment_url,
+          tax_exemption_attachment_url,
+          additional_1_attachment_url,
+          additional_2_attachment_url,
+          additional_3_attachment_url
         FROM customers
         WHERE id = ?
       `).bind((request as any).customer_id).first() as {
-        id_attachment_url?: string | null
-        bank_statement_attachment_url?: string | null
-        salary_attachment_url?: string | null
-        additional_attachment_url?: string | null
+        identity_attachment_url?: string | null
+        signature_attachment_url?: string | null
+        salary_profile_attachment_url?: string | null
+        gosi_attachment_url?: string | null
+        tax_exemption_attachment_url?: string | null
+        additional_1_attachment_url?: string | null
+        additional_2_attachment_url?: string | null
+        additional_3_attachment_url?: string | null
       } | null
       if (customerAttachments) {
-        ;(request as any).id_attachment_url = (request as any).id_attachment_url || customerAttachments.id_attachment_url || null
-        ;(request as any).bank_statement_attachment_url = (request as any).bank_statement_attachment_url || customerAttachments.bank_statement_attachment_url || null
-        ;(request as any).salary_attachment_url = (request as any).salary_attachment_url || customerAttachments.salary_attachment_url || null
-        ;(request as any).additional_attachment_url = (request as any).additional_attachment_url || customerAttachments.additional_attachment_url || null
+        ;(request as any).identity_attachment_url = (request as any).identity_attachment_url || customerAttachments.identity_attachment_url || null
+        ;(request as any).signature_attachment_url = (request as any).signature_attachment_url || customerAttachments.signature_attachment_url || null
+        ;(request as any).salary_profile_attachment_url = (request as any).salary_profile_attachment_url || customerAttachments.salary_profile_attachment_url || null
+        ;(request as any).gosi_attachment_url = (request as any).gosi_attachment_url || customerAttachments.gosi_attachment_url || null
+        ;(request as any).tax_exemption_attachment_url = (request as any).tax_exemption_attachment_url || customerAttachments.tax_exemption_attachment_url || null
+        ;(request as any).additional_1_attachment_url = (request as any).additional_1_attachment_url || customerAttachments.additional_1_attachment_url || null
+        ;(request as any).additional_2_attachment_url = (request as any).additional_2_attachment_url || customerAttachments.additional_2_attachment_url || null
+        ;(request as any).additional_3_attachment_url = (request as any).additional_3_attachment_url || customerAttachments.additional_3_attachment_url || null
       }
     } catch (attachmentLoadError) {
       if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
@@ -15991,151 +17654,51 @@ app.get('/admin/requests/:id', async (c) => {
               <i class="fas fa-paperclip text-blue-600 ml-3"></i>
               المرفقات
             </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              ${request.id_attachment_url ? `
-                <div class="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-id-card text-2xl text-blue-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">صورة الهوية</span>
+            ${(() => {
+              const docs = [
+                { key: 'identity', label: 'ملف الهوية', icon: 'fa-id-card', url: (request as any).identity_attachment_url },
+                { key: 'signature', label: 'ملف السمة', icon: 'fa-signature', url: (request as any).signature_attachment_url },
+                { key: 'salary_profile', label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: (request as any).salary_profile_attachment_url },
+                { key: 'gosi', label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: (request as any).gosi_attachment_url },
+                { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: (request as any).tax_exemption_attachment_url },
+                { key: 'additional_1', label: 'مستند إضافي 1', icon: 'fa-file-alt', url: (request as any).additional_1_attachment_url },
+                { key: 'additional_2', label: 'مستند إضافي 2', icon: 'fa-file-alt', url: (request as any).additional_2_attachment_url },
+                { key: 'additional_3', label: 'مستند إضافي 3', icon: 'fa-file-alt', url: (request as any).additional_3_attachment_url }
+              ].filter(d => d.url);
+              if (docs.length === 0) {
+                return `<div class="text-center mt-2 text-gray-500">
+                  <i class="fas fa-inbox text-4xl mb-2"></i>
+                  <p>لا توجد مرفقات لهذا الطلب</p>
+                </div>`;
+              }
+              return `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                ${docs.map(d => `
+                  <div class="border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                    <div class="flex items-center justify-between mb-3">
+                      <div class="flex items-center">
+                        <i class="fas ${d.icon} text-2xl text-blue-600 ml-3"></i>
+                        <span class="font-bold text-gray-800">${d.label}</span>
+                      </div>
+                      <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                     </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${request.id_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${request.id_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${request.id_attachment_url}', 'id')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              ` : `
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-id-card text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">صورة الهوية</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-              
-              ${request.salary_attachment_url ? `
-                <div class="border-2 border-green-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-money-check-alt text-2xl text-green-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">كشف الراتب</span>
+                    <div class="grid grid-cols-3 gap-2">
+                      <a href="${d.url}" target="_blank"
+                         class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
+                        <i class="fas fa-eye"></i> عرض
+                      </a>
+                      <a href="${d.url}" download
+                         class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
+                        <i class="fas fa-download"></i> تنزيل
+                      </a>
+                      <button onclick="deleteAttachment('${d.url}', '${d.key}')"
+                         class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
+                        <i class="fas fa-trash"></i> حذف
+                      </button>
                     </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                   </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${request.salary_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${request.salary_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${request.salary_attachment_url}', 'salary')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              ` : `
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-money-check-alt text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">كشف الراتب</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-              
-              ${request.bank_statement_attachment_url ? `
-                <div class="border-2 border-purple-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-file-invoice-dollar text-2xl text-purple-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">كشف الحساب البنكي</span>
-                    </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${request.bank_statement_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${request.bank_statement_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${request.bank_statement_attachment_url}', 'bank_statement')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              ` : `
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-file-invoice-dollar text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">كشف الحساب البنكي</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-              
-              ${request.additional_attachment_url ? `
-                <div class="border-2 border-orange-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-file-alt text-2xl text-orange-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">مرفق إضافي</span>
-                    </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${request.additional_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${request.additional_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${request.additional_attachment_url}', 'additional')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              ` : `
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-file-alt text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">مرفق إضافي</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-            </div>
-            
-            ${!request.id_attachment_url && !request.salary_attachment_url && !request.bank_statement_attachment_url && !request.additional_attachment_url ? `
-              <div class="text-center mt-6 text-gray-500">
-                <i class="fas fa-inbox text-4xl mb-2"></i>
-                <p>لا توجد مرفقات لهذا الطلب</p>
-              </div>
-            ` : ''}
+                `).join('')}
+              </div>`;
+            })()}
           </div>
         </div>
         
@@ -16431,64 +17994,107 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <i class="fas fa-paperclip ml-2"></i>
                   المرفقات
                 </h2>
-                <div class="mb-6 bg-white p-4 rounded-lg">
-                  <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-id-card ml-1"></i> صورة الهوية:</p>
-                      ${(customer as any).id_attachment_url ? `<a href="${(customer as any).id_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                ${(() => {
+                  const docs = [
+                    { label: 'ملف الهوية', icon: 'fa-id-card', url: (customer as any).identity_attachment_url },
+                    { label: 'ملف السمة', icon: 'fa-signature', url: (customer as any).signature_attachment_url },
+                    { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: (customer as any).salary_profile_attachment_url },
+                    { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: (customer as any).gosi_attachment_url },
+                    { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: (customer as any).tax_exemption_attachment_url },
+                    { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: (customer as any).additional_1_attachment_url },
+                    { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: (customer as any).additional_2_attachment_url },
+                    { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: (customer as any).additional_3_attachment_url }
+                  ].filter(d => d.url);
+                  if (docs.length === 0) return '';
+                  return `
+                    <div class="mb-6 bg-white p-4 rounded-lg">
+                      <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${docs.map(d => `
+                          <div class="border-r pr-4">
+                            <p class="text-sm text-gray-600 mb-2"><i class="fas ${d.icon} ml-1"></i> ${d.label}:</p>
+                            <a href="${d.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
+                              <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
+                            </a>
+                          </div>
+                        `).join('')}
+                      </div>
                     </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-invoice ml-1"></i> كشف الحساب:</p>
-                      ${(customer as any).bank_statement_attachment_url ? `<a href="${(customer as any).bank_statement_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-money-check ml-1"></i> تعريف الراتب:</p>
-                      ${(customer as any).salary_attachment_url ? `<a href="${(customer as any).salary_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-alt ml-1"></i> مرفقات إضافية:</p>
-                      ${(customer as any).additional_attachment_url ? `<a href="${(customer as any).additional_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>` : '<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                  </div>
-                </div>
+                  `
+                })()}
                 <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-                <input type="hidden" name="id_attachment_url" id="edit_customer_id_attachment_url" value="${((customer as any).id_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="bank_statement_attachment_url" id="edit_customer_bank_statement_attachment_url" value="${((customer as any).bank_statement_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="salary_attachment_url" id="edit_customer_salary_attachment_url" value="${((customer as any).salary_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="additional_attachment_url" id="edit_customer_additional_attachment_url" value="${((customer as any).additional_attachment_url || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="identity_attachment_url" id="edit_customer_identity_attachment_url" value="${(((customer as any).identity_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="signature_attachment_url" id="edit_customer_signature_attachment_url" value="${(((customer as any).signature_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="salary_profile_attachment_url" id="edit_customer_salary_profile_attachment_url" value="${(((customer as any).salary_profile_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="gosi_attachment_url" id="edit_customer_gosi_attachment_url" value="${(((customer as any).gosi_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="tax_exemption_attachment_url" id="edit_customer_tax_exemption_attachment_url" value="${(((customer as any).tax_exemption_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="additional_1_attachment_url" id="edit_customer_additional_1_attachment_url" value="${(((customer as any).additional_1_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="additional_2_attachment_url" id="edit_customer_additional_2_attachment_url" value="${(((customer as any).additional_2_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+                <input type="hidden" name="additional_3_attachment_url" id="edit_customer_additional_3_attachment_url" value="${(((customer as any).additional_3_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                      <i class="fas fa-id-card ml-1"></i> ملف الهوية
                     </label>
-                    <input type="file" id="edit_customer_id_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_identity_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_id_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_identity_attachment_preview" class="mt-2"></div>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                      <i class="fas fa-signature ml-1"></i> ملف السمة
                     </label>
-                    <input type="file" id="edit_customer_bank_statement_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_signature_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_bank_statement_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_signature_attachment_preview" class="mt-2"></div>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                      <i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب
                     </label>
-                    <input type="file" id="edit_customer_salary_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_salary_profile_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_salary_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_salary_profile_attachment_preview" class="mt-2"></div>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                      <i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية
                     </label>
-                    <input type="file" id="edit_customer_additional_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_gosi_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_additional_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_gosi_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-certificate ml-1"></i> شهادة الإعفاء الضريبي
+                    </label>
+                    <input type="file" id="edit_customer_tax_exemption_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_tax_exemption_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 1
+                    </label>
+                    <input type="file" id="edit_customer_additional_1_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_1_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 2
+                    </label>
+                    <input type="file" id="edit_customer_additional_2_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_2_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 3
+                    </label>
+                    <input type="file" id="edit_customer_additional_3_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_3_attachment_preview" class="mt-2"></div>
                   </div>
                 </div>
               </div>
@@ -16558,28 +18164,44 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 var editForm = document.getElementById('edit-customer-form');
                 var editMessageEl = document.getElementById('customer-edit-message');
                 var editAttachmentFiles = {
-                  id: null,
-                  bank_statement: null,
-                  salary: null,
-                  additional: null
+                  identity: null,
+                  signature: null,
+                  salary_profile: null,
+                  gosi: null,
+                  tax_exemption: null,
+                  additional_1: null,
+                  additional_2: null,
+                  additional_3: null
                 };
                 var editAttachmentInputs = {
-                  id: document.getElementById('edit_customer_id_attachment'),
-                  bank_statement: document.getElementById('edit_customer_bank_statement_attachment'),
-                  salary: document.getElementById('edit_customer_salary_attachment'),
-                  additional: document.getElementById('edit_customer_additional_attachment')
+                  identity: document.getElementById('edit_customer_identity_attachment'),
+                  signature: document.getElementById('edit_customer_signature_attachment'),
+                  salary_profile: document.getElementById('edit_customer_salary_profile_attachment'),
+                  gosi: document.getElementById('edit_customer_gosi_attachment'),
+                  tax_exemption: document.getElementById('edit_customer_tax_exemption_attachment'),
+                  additional_1: document.getElementById('edit_customer_additional_1_attachment'),
+                  additional_2: document.getElementById('edit_customer_additional_2_attachment'),
+                  additional_3: document.getElementById('edit_customer_additional_3_attachment')
                 };
                 var editAttachmentPreviewIds = {
-                  id: 'edit_customer_id_attachment_preview',
-                  bank_statement: 'edit_customer_bank_statement_attachment_preview',
-                  salary: 'edit_customer_salary_attachment_preview',
-                  additional: 'edit_customer_additional_attachment_preview'
+                  identity: 'edit_customer_identity_attachment_preview',
+                  signature: 'edit_customer_signature_attachment_preview',
+                  salary_profile: 'edit_customer_salary_profile_attachment_preview',
+                  gosi: 'edit_customer_gosi_attachment_preview',
+                  tax_exemption: 'edit_customer_tax_exemption_attachment_preview',
+                  additional_1: 'edit_customer_additional_1_attachment_preview',
+                  additional_2: 'edit_customer_additional_2_attachment_preview',
+                  additional_3: 'edit_customer_additional_3_attachment_preview'
                 };
                 var editAttachmentHiddenIds = {
-                  id: 'edit_customer_id_attachment_url',
-                  bank_statement: 'edit_customer_bank_statement_attachment_url',
-                  salary: 'edit_customer_salary_attachment_url',
-                  additional: 'edit_customer_additional_attachment_url'
+                  identity: 'edit_customer_identity_attachment_url',
+                  signature: 'edit_customer_signature_attachment_url',
+                  salary_profile: 'edit_customer_salary_profile_attachment_url',
+                  gosi: 'edit_customer_gosi_attachment_url',
+                  tax_exemption: 'edit_customer_tax_exemption_attachment_url',
+                  additional_1: 'edit_customer_additional_1_attachment_url',
+                  additional_2: 'edit_customer_additional_2_attachment_url',
+                  additional_3: 'edit_customer_additional_3_attachment_url'
                 };
                 function setEditMessage(type, text) {
                   if (!editMessageEl) return;
@@ -16738,10 +18360,14 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     if (submitBtn) submitBtn.disabled = true;
                     try {
                       var uploadOrder = [
-                        { key: 'id', label: 'صورة الهوية' },
-                        { key: 'bank_statement', label: 'كشف الحساب' },
-                        { key: 'salary', label: 'تعريف الراتب' },
-                        { key: 'additional', label: 'المرفقات الإضافية' }
+                        { key: 'identity', label: 'ملف الهوية' },
+                        { key: 'signature', label: 'ملف السمة' },
+                        { key: 'salary_profile', label: 'ملف تعريف الراتب' },
+                        { key: 'gosi', label: 'ملف التأمينات الاجتماعية' },
+                        { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
+                        { key: 'additional_1', label: 'مستند إضافي 1' },
+                        { key: 'additional_2', label: 'مستند إضافي 2' },
+                        { key: 'additional_3', label: 'مستند إضافي 3' }
                       ];
                       for (var i = 0; i < uploadOrder.length; i++) {
                         var item = uploadOrder[i];
@@ -17007,37 +18633,31 @@ app.get('/admin/customers/:id/report', async (c) => {
               <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
               المرفقات
             </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${cust.id_attachment_url ? `
-              <a href="${cust.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
-                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
-                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${cust.bank_statement_attachment_url ? `
-              <a href="${cust.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
-                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
-                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${cust.salary_attachment_url ? `
-              <a href="${cust.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
-                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
-                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${cust.additional_attachment_url ? `
-              <a href="${cust.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
-                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
-                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${!cust.id_attachment_url && !cust.bank_statement_attachment_url && !cust.salary_attachment_url && !cust.additional_attachment_url ? `
-              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
-                لا توجد مرفقات مرفوعة لهذا العميل
-              </div>
-              ` : ''}
-            </div>
+            ${(() => {
+              const docs = [
+                { label: 'ملف الهوية', icon: 'fa-id-card', url: cust.identity_attachment_url },
+                { label: 'ملف السمة', icon: 'fa-signature', url: cust.signature_attachment_url },
+                { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: cust.salary_profile_attachment_url },
+                { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: cust.gosi_attachment_url },
+                { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: cust.tax_exemption_attachment_url },
+                { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: cust.additional_1_attachment_url },
+                { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: cust.additional_2_attachment_url },
+                { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: cust.additional_3_attachment_url }
+              ].filter(d => d.url);
+              if (docs.length === 0) {
+                return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                  لا توجد مرفقات مرفوعة لهذا العميل
+                </div>`;
+              }
+              return `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${docs.map(d => `
+                  <a href="${d.url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                    <span class="font-bold text-blue-800"><i class="fas ${d.icon} ml-2"></i>${d.label}</span>
+                    <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+                  </a>
+                `).join('')}
+              </div>`;
+            })()}
           </div>
 
           <!-- القسم 3: بيانات الحاسبة المالية -->
@@ -17261,20 +18881,36 @@ app.get('/admin/requests/:id/report', async (c) => {
 
     try {
       const customerAttachments = await c.env.DB.prepare(`
-        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        SELECT
+          identity_attachment_url,
+          signature_attachment_url,
+          salary_profile_attachment_url,
+          gosi_attachment_url,
+          tax_exemption_attachment_url,
+          additional_1_attachment_url,
+          additional_2_attachment_url,
+          additional_3_attachment_url
         FROM customers
         WHERE id = ?
       `).bind(req.customer_id).first() as {
-        id_attachment_url?: string | null
-        bank_statement_attachment_url?: string | null
-        salary_attachment_url?: string | null
-        additional_attachment_url?: string | null
+        identity_attachment_url?: string | null
+        signature_attachment_url?: string | null
+        salary_profile_attachment_url?: string | null
+        gosi_attachment_url?: string | null
+        tax_exemption_attachment_url?: string | null
+        additional_1_attachment_url?: string | null
+        additional_2_attachment_url?: string | null
+        additional_3_attachment_url?: string | null
       } | null
       if (customerAttachments) {
-        req.id_attachment_url = req.id_attachment_url || customerAttachments.id_attachment_url || null
-        req.bank_statement_attachment_url = req.bank_statement_attachment_url || customerAttachments.bank_statement_attachment_url || null
-        req.salary_attachment_url = req.salary_attachment_url || customerAttachments.salary_attachment_url || null
-        req.additional_attachment_url = req.additional_attachment_url || customerAttachments.additional_attachment_url || null
+        req.identity_attachment_url = req.identity_attachment_url || customerAttachments.identity_attachment_url || null
+        req.signature_attachment_url = req.signature_attachment_url || customerAttachments.signature_attachment_url || null
+        req.salary_profile_attachment_url = req.salary_profile_attachment_url || customerAttachments.salary_profile_attachment_url || null
+        req.gosi_attachment_url = req.gosi_attachment_url || customerAttachments.gosi_attachment_url || null
+        req.tax_exemption_attachment_url = req.tax_exemption_attachment_url || customerAttachments.tax_exemption_attachment_url || null
+        req.additional_1_attachment_url = req.additional_1_attachment_url || customerAttachments.additional_1_attachment_url || null
+        req.additional_2_attachment_url = req.additional_2_attachment_url || customerAttachments.additional_2_attachment_url || null
+        req.additional_3_attachment_url = req.additional_3_attachment_url || customerAttachments.additional_3_attachment_url || null
       }
     } catch (attachmentLoadError) {
       if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
@@ -17524,37 +19160,31 @@ app.get('/admin/requests/:id/report', async (c) => {
               <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
               المرفقات
             </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${req.id_attachment_url ? `
-              <a href="${req.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
-                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
-                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${req.bank_statement_attachment_url ? `
-              <a href="${req.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
-                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
-                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${req.salary_attachment_url ? `
-              <a href="${req.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
-                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
-                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${req.additional_attachment_url ? `
-              <a href="${req.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
-                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
-                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              ` : ''}
-              ${!req.id_attachment_url && !req.bank_statement_attachment_url && !req.salary_attachment_url && !req.additional_attachment_url ? `
-              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
-                لا توجد مرفقات مرفوعة لهذا الطلب/العميل
-              </div>
-              ` : ''}
-            </div>
+            ${(() => {
+              const docs = [
+                { label: 'ملف الهوية', icon: 'fa-id-card', url: req.identity_attachment_url },
+                { label: 'ملف السمة', icon: 'fa-signature', url: req.signature_attachment_url },
+                { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: req.salary_profile_attachment_url },
+                { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: req.gosi_attachment_url },
+                { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: req.tax_exemption_attachment_url },
+                { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: req.additional_1_attachment_url },
+                { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: req.additional_2_attachment_url },
+                { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: req.additional_3_attachment_url }
+              ].filter(d => d.url);
+              if (docs.length === 0) {
+                return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                  لا توجد مرفقات مرفوعة لهذا الطلب/العميل
+                </div>`;
+              }
+              return `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${docs.map(d => `
+                  <a href="${d.url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                    <span class="font-bold text-blue-800"><i class="fas ${d.icon} ml-2"></i>${d.label}</span>
+                    <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+                  </a>
+                `).join('')}
+              </div>`;
+            })()}
           </div>
           
           <!-- القسم 4: معلومات إضافية -->
@@ -20393,27 +22023,7 @@ app.get('/admin/users/:id/edit', async (c) => {
       tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()
     }
 
-    const tidForBanks = user.tenant_id != null ? Number(user.tenant_id) : NaN
-    let bankRows: Array<{ id: number; bank_name: string }> = []
-    if (tidForBanks && !Number.isNaN(tidForBanks)) {
-      try {
-        const br = await c.env.DB
-          .prepare(
-            `SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name`
-          )
-          .bind(tidForBanks)
-          .all()
-        bankRows = (br.results || []) as Array<{ id: number; bank_name: string }>
-      } catch {
-        const br = await c.env.DB
-          .prepare(`SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`)
-          .bind(tidForBanks)
-          .all()
-        bankRows = (br.results || []) as Array<{ id: number; bank_name: string }>
-      }
-    }
-    const assignedBankIdUser = (user as { assigned_bank_id?: number | null }).assigned_bank_id
-    const showBankRow = normalizeRoleId(user.role_id) === 5
+    const showBankRow = false
     
     return c.html(`
       <!DOCTYPE html>
@@ -20515,23 +22125,6 @@ app.get('/admin/users/:id/edit', async (c) => {
                 <input type="hidden" name="tenant_id" value="${user.tenant_id || ''}">
                 `}
                 
-                <div id="editBankAgentWrap" class="md:col-span-2" style="display: ${showBankRow ? 'block' : 'none'};">
-                  <label class="block text-sm font-bold text-gray-700 mb-2">
-                    <i class="fas fa-university text-amber-600 ml-1"></i>
-                    البنك <span class="text-red-600">*</span>
-                  </label>
-                  <select name="assigned_bank_id" id="editAssignedBankSelect"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="">-- اختر البنك --</option>
-                    ${bankRows
-                      .map(
-                        (b: any) => `
-                      <option value="${b.id}" ${Number(assignedBankIdUser) === Number(b.id) ? 'selected' : ''}>${String(b.bank_name || '').replace(/</g, '')}</option>`
-                      )
-                      .join('')}
-                  </select>
-                </div>
-                
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     الحالة <span class="text-red-500">*</span>
@@ -20558,21 +22151,7 @@ app.get('/admin/users/:id/edit', async (c) => {
         <script>
           (function () {
             var roleSelect = document.getElementById('roleSelect');
-            var wrap = document.getElementById('editBankAgentWrap');
-            var bankSel = document.getElementById('editAssignedBankSelect');
-            if (!roleSelect || !wrap || !bankSel) return;
-            function sync() {
-              var rid = parseInt(roleSelect.value, 10);
-              if (rid === 5) {
-                wrap.style.display = 'block';
-                bankSel.setAttribute('required', 'required');
-              } else {
-                wrap.style.display = 'none';
-                bankSel.removeAttribute('required');
-              }
-            }
-            roleSelect.addEventListener('change', sync);
-            sync();
+            if (!roleSelect) return;
           })();
         </script>
       </body>
@@ -20637,7 +22216,6 @@ app.post('/admin/users/:id', async (c) => {
         ? parseInt(String(finalTenantId), 10)
         : NaN
 
-    const assignedBankRaw = formData.get('assigned_bank_id')
     let assigned_bank_id: number | null = null
     if (requestedRoleId === 5) {
       const canSetBankAgent = requesterIsSuperAdmin || requester.roleId === 2
@@ -20647,15 +22225,7 @@ app.post('/admin/users/:id', async (c) => {
       if (!tidNum || Number.isNaN(tidNum)) {
         return c.html('<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>', 400 as any)
       }
-      const bid = Number.parseInt(String(assignedBankRaw || ''), 10)
-      if (Number.isNaN(bid) || bid <= 0) {
-        return c.html('<h1>خطأ</h1><p>يجب اختيار البنك لموظف التمويل.</p>', 400 as any)
-      }
-      const okBank = await validateAssignedBankBelongsToTenant(c.env.DB, tidNum, bid)
-      if (!okBank) {
-        return c.html('<h1>خطأ</h1><p>البنك غير صالح لهذه الشركة.</p>', 400 as any)
-      }
-      assigned_bank_id = bid
+      assigned_bank_id = null
     }
     
     // Build UPDATE query
@@ -20980,18 +22550,6 @@ app.get('/admin/users-new', async (c) => {
                   </select>
                 </div>
                 
-                <div id="bankAgentBankWrap" class="md:col-span-2" style="display: none;">
-                  <label class="block text-sm font-bold text-gray-700 mb-2">
-                    <i class="fas fa-university text-amber-600 ml-1"></i>
-                    البنك <span class="text-red-600">*</span>
-                  </label>
-                  <select name="assigned_bank_id" id="assignedBankSelect"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="">-- اختر البنك --</option>
-                  </select>
-                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور موظف التمويل، ويقتصر على بنوك الشركة المختارة.</p>
-                </div>
-                
                 <!-- الحالة -->
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -21074,39 +22632,10 @@ app.get('/admin/users-new', async (c) => {
           loadUserData();
           document.addEventListener('DOMContentLoaded', loadUserData);
           
-          // Update tenant + bank-agent fields based on role_id
-          async function loadBanksForTenant(tenantId) {
-            const bankSelect = document.getElementById('assignedBankSelect');
-            if (!bankSelect || !tenantId) return;
-            bankSelect.innerHTML = '<option value="">-- جاري التحميل --</option>';
-            const token = localStorage.getItem('authToken');
-            try {
-              const res = await fetch('/api/admin/company-banks?tenant_id=' + encodeURIComponent(String(tenantId)), {
-                headers: token ? { Authorization: 'Bearer ' + token } : {}
-              });
-              const data = await res.json();
-              if (!data.success || !Array.isArray(data.data)) {
-                bankSelect.innerHTML = '<option value="">تعذر تحميل البنوك</option>';
-                return;
-              }
-              bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
-              data.data.forEach(function (b) {
-                const opt = document.createElement('option');
-                opt.value = String(b.id);
-                opt.textContent = b.bank_name || ('بنك #' + b.id);
-                bankSelect.appendChild(opt);
-              });
-            } catch (e) {
-              bankSelect.innerHTML = '<option value="">خطأ في التحميل</option>';
-            }
-          }
-          
           function updateTenantRequirement() {
             const roleSelect = document.getElementById('roleSelect');
             const subscriptionDiv = document.getElementById('subscriptionDiv');
             const tenantSelect = document.getElementById('tenantSelect');
-            const bankWrap = document.getElementById('bankAgentBankWrap');
-            const bankSelect = document.getElementById('assignedBankSelect');
             
             if (!roleSelect || !subscriptionDiv) return;
             
@@ -21120,22 +22649,6 @@ app.get('/admin/users-new', async (c) => {
               subscriptionDiv.style.display = 'block';
               if (tenantSelect) tenantSelect.setAttribute('required', 'required');
             }
-            
-            if (bankWrap && bankSelect) {
-              if (selectedRoleId === 5) {
-                bankWrap.style.display = 'block';
-                bankSelect.setAttribute('required', 'required');
-                const tid = tenantSelect && tenantSelect.value ? tenantSelect.value : '';
-                if (tid) loadBanksForTenant(tid);
-                else {
-                  bankSelect.innerHTML = '<option value="">اختر الشركة أولاً</option>';
-                }
-              } else {
-                bankWrap.style.display = 'none';
-                bankSelect.removeAttribute('required');
-                bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
-              }
-            }
           }
           
           document.addEventListener('DOMContentLoaded', () => {
@@ -21144,14 +22657,6 @@ app.get('/admin/users-new', async (c) => {
             if (roleSelect) {
               roleSelect.addEventListener('change', updateTenantRequirement);
               updateTenantRequirement();
-            }
-            if (tenantSelect) {
-              tenantSelect.addEventListener('change', function () {
-                const roleSelect2 = document.getElementById('roleSelect');
-                if (roleSelect2 && parseInt(roleSelect2.value, 10) === 5) {
-                  loadBanksForTenant(tenantSelect.value);
-                }
-              });
             }
           });
           
@@ -23235,7 +24740,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       affiliateLabel = affRow.label
     }
 
-    await c.env.DB.prepare(`
+    const insertFollowupResult = await c.env.DB.prepare(`
       INSERT INTO company_contact_followups (
         tenant_id, customer_name, customer_phone, customer_message, source_slug,
         affiliate_path_segment, affiliate_label
@@ -23251,6 +24756,79 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         affiliateLabel
       )
       .run()
+
+    // Automatically create + assign a follow-up task to a role-4 staff member (fair queue).
+    // If there are no active role-4 staff members, we still create the task unassigned.
+    const createdFollowupIdRaw =
+      (insertFollowupResult as any)?.meta?.last_row_id ??
+      (insertFollowupResult as any)?.meta?.lastRowId ??
+      (insertFollowupResult as any)?.meta?.last_insert_rowid ??
+      null
+    const createdFollowupId = Number(createdFollowupIdRaw)
+
+    const scheduledAtNow = new Date().toISOString()
+    const taskTitle = `متابعة طلب تواصل: ${customerName}`
+
+    let assignedUserId: number | null = null
+    try {
+      const { results: staffRows } = await c.env.DB.prepare(`
+        SELECT id FROM users
+        WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+        ORDER BY id ASC
+      `).bind(tenant.id).all<{ id: number }>()
+
+      const staff = (staffRows || []) as { id: number }[]
+      if (staff.length) {
+        const stateRow = await c.env.DB.prepare(`
+          SELECT last_auto_assigned_user_id
+          FROM tenant_followup_auto_assign_state
+          WHERE tenant_id = ?
+          LIMIT 1
+        `).bind(tenant.id).first<{ last_auto_assigned_user_id: number | null }>()
+
+        const staffIds = staff.map((u) => u.id)
+        const lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
+        function pickNextUserId(last: number | null): number {
+          if (last == null) return staffIds[0]
+          const idx = staffIds.indexOf(last)
+          if (idx === -1) return staffIds[0]
+          return staffIds[(idx + 1) % staffIds.length]
+        }
+
+        assignedUserId = pickNextUserId(lastId)
+      }
+    } catch (assignError) {
+      // Don't block public submission on assignment failures.
+      assignedUserId = null
+    }
+
+    if (Number.isFinite(createdFollowupId) && createdFollowupId > 0) {
+      await c.env.DB.prepare(`
+        INSERT INTO company_contact_followup_tasks
+          (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
+           assigned_user_id, priority, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        createdFollowupId,
+        tenant.id,
+        taskTitle,
+        scheduledAtNow,
+        null,
+        assignedUserId,
+        'regular',
+        null
+      ).run()
+
+      if (assignedUserId != null) {
+        await c.env.DB.prepare(`
+          INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(tenant_id) DO UPDATE SET
+            last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+            updated_at = CURRENT_TIMESTAMP
+        `).bind(tenant.id, assignedUserId).run()
+      }
+    }
 
     return c.json({ success: true, message: 'تم إرسال طلبك بنجاح' })
   } catch (error: any) {
@@ -23396,28 +24974,58 @@ app.get('/api/follow-ups', async (c) => {
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
 
+    const linkFilterRaw = String(c.req.query('followupLinkFilter') ?? '').trim().toLowerCase()
+    const linkFilter = linkFilterRaw === 'company' || linkFilterRaw === 'affiliate' ? linkFilterRaw : 'all'
+
+    const priorityFilterRaw = String(c.req.query('followupPriorityFilter') ?? '').trim().toLowerCase()
+    const priorityFilter =
+      priorityFilterRaw === 'important' || priorityFilterRaw === 'regular' ? priorityFilterRaw : 'all'
+
+    const linkClause =
+      linkFilter === 'company'
+        ? ` AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') `
+        : linkFilter === 'affiliate'
+          ? ` AND (f.affiliate_path_segment IS NOT NULL AND TRIM(f.affiliate_path_segment) <> '') `
+          : ''
+
+    const priorityClause =
+      priorityFilter === 'important' || priorityFilter === 'regular'
+        ? ` AND EXISTS (SELECT 1 FROM company_contact_followup_tasks t WHERE t.followup_id = f.id AND t.priority = ?) `
+        : ''
+
     const roleId = userInfo.roleId
     if (roleId === 1) {
       const tenantFilter = c.req.query('tenant_id')
       if (tenantFilter && /^\d+$/.test(String(tenantFilter))) {
-        const { results } = await c.env.DB.prepare(`
+        const stmt = c.env.DB.prepare(`
           SELECT f.*, t.company_name
           FROM company_contact_followups f
           LEFT JOIN tenants t ON t.id = f.tenant_id
           WHERE f.tenant_id = ?
+          ${linkClause}
+          ${priorityClause}
           ORDER BY f.created_at DESC
           LIMIT 300
-        `).bind(parseInt(String(tenantFilter), 10)).all()
+        `)
+        const binds: any[] = [parseInt(String(tenantFilter), 10)]
+        if (priorityClause) binds.push(priorityFilter)
+        const { results } = await (stmt as any).bind(...binds).all()
         return c.json({ success: true, data: results || [] })
       }
 
-      const { results } = await c.env.DB.prepare(`
+      const stmt = c.env.DB.prepare(`
         SELECT f.*, t.company_name
         FROM company_contact_followups f
         LEFT JOIN tenants t ON t.id = f.tenant_id
+        WHERE 1=1
+        ${linkClause}
+        ${priorityClause}
         ORDER BY f.created_at DESC
         LIMIT 300
-      `).all()
+      `)
+      const binds: any[] = []
+      if (priorityClause) binds.push(priorityFilter)
+      const { results } = await (binds.length ? (stmt as any).bind(...binds) : stmt).all()
       return c.json({ success: true, data: results || [] })
     }
 
@@ -23425,14 +25033,19 @@ app.get('/api/follow-ups', async (c) => {
       return c.json({ success: true, data: [] })
     }
 
-    const { results } = await c.env.DB.prepare(`
+    const stmt = c.env.DB.prepare(`
       SELECT f.*, t.company_name
       FROM company_contact_followups f
       LEFT JOIN tenants t ON t.id = f.tenant_id
       WHERE f.tenant_id = ?
+      ${linkClause}
+      ${priorityClause}
       ORDER BY f.created_at DESC
       LIMIT 300
-    `).bind(userInfo.tenantId).all()
+    `)
+    const binds: any[] = [userInfo.tenantId]
+    if (priorityClause) binds.push(priorityFilter)
+    const { results } = await (stmt as any).bind(...binds).all()
 
     return c.json({ success: true, data: results || [] })
   } catch (error: any) {
@@ -23577,6 +25190,7 @@ app.get('/api/follow-ups/:id/tasks', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
 
+    // Single-task-per-followup: return newest task only.
     const { results } = await c.env.DB.prepare(`
       SELECT t.id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
              t.priority, t.status, t.created_at,
@@ -23586,8 +25200,8 @@ app.get('/api/follow-ups/:id/tasks', async (c) => {
       LEFT JOIN users au ON au.id = t.assigned_user_id
       LEFT JOIN users cu ON cu.id = t.created_by_user_id
       WHERE t.followup_id = ?
-      ORDER BY t.created_at DESC, t.id DESC
-      LIMIT 200
+      ORDER BY t.id DESC
+      LIMIT 1
     `).bind(followupId).all()
 
     return c.json({ success: true, data: results || [] })
@@ -23645,6 +25259,36 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
       assignedUserId = uid
     }
 
+    // Single-task-per-followup: update if exists, otherwise insert.
+    const existing = await c.env.DB.prepare(`
+      SELECT id FROM company_contact_followup_tasks
+      WHERE followup_id = ? AND tenant_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).bind(followupId, followup.tenant_id).first<{ id: number }>()
+
+    if (existing?.id) {
+      await c.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks
+        SET task_title = ?,
+            scheduled_at_gregorian = ?,
+            scheduled_at_hijri = ?,
+            assigned_user_id = ?,
+            priority = ?
+        WHERE id = ? AND tenant_id = ?
+      `).bind(
+        taskTitle,
+        scheduledAt,
+        scheduledAtHijri,
+        assignedUserId,
+        priority,
+        existing.id,
+        followup.tenant_id
+      ).run()
+
+      return c.json({ success: true, message: 'تم حفظ تغييرات المهمة' })
+    }
+
     await c.env.DB.prepare(`
       INSERT INTO company_contact_followup_tasks
         (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
@@ -23655,7 +25299,97 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
       scheduledAtHijri, assignedUserId, priority, userInfo.userId
     ).run()
 
-    return c.json({ success: true, message: 'تمت إضافة المهمة' })
+    return c.json({ success: true, message: 'تم إنشاء المهمة' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+/** Company admin (role 2): assign all unassigned pending follow-up tasks using fair round-robin among role-4 staff (ordered by user id). Manual assignments are unchanged; cursor advances only here. */
+app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) {
+      return c.json({ success: false, error: 'لم تُعرّف شركة للحساب' }, 400)
+    }
+
+    const tenantId = userInfo.tenantId
+
+    const { results: staffRows } = await c.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      ORDER BY id ASC
+    `).bind(tenantId).all<{ id: number }>()
+
+    const staff = (staffRows || []) as { id: number }[]
+    if (!staff.length) {
+      return c.json({ success: false, error: 'لا يوجد موظفون نشطون بدور الموظف في شركتك' }, 400)
+    }
+
+    const stateRow = await c.env.DB.prepare(`
+      SELECT last_auto_assigned_user_id
+      FROM tenant_followup_auto_assign_state
+      WHERE tenant_id = ?
+      LIMIT 1
+    `).bind(tenantId).first<{ last_auto_assigned_user_id: number | null }>()
+
+    let lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
+
+    const { results: taskRows } = await c.env.DB.prepare(`
+      SELECT t.id
+      FROM company_contact_followup_tasks t
+      WHERE t.tenant_id = ?
+        AND t.assigned_user_id IS NULL
+        AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending')
+      ORDER BY t.id ASC
+      LIMIT 500
+    `).bind(tenantId).all<{ id: number }>()
+
+    const tasks = (taskRows || []) as { id: number }[]
+    if (!tasks.length) {
+      return c.json({ success: true, assigned: 0, message: 'لا توجد مهام بلا تعيين' })
+    }
+
+    const staffIds = staff.map((u) => u.id)
+    function pickNextUserId(last: number | null): number {
+      if (last == null) return staffIds[0]
+      const idx = staffIds.indexOf(last)
+      if (idx === -1) return staffIds[0]
+      return staffIds[(idx + 1) % staffIds.length]
+    }
+
+    let assigned = 0
+    for (const t of tasks) {
+      const nextUser = pickNextUserId(lastId)
+      const runResult = await c.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks
+        SET assigned_user_id = ?
+        WHERE id = ? AND tenant_id = ? AND assigned_user_id IS NULL
+      `).bind(nextUser, t.id, tenantId).run()
+      const changed = runResult.meta.changes
+      if (changed > 0) {
+        lastId = nextUser
+        assigned += 1
+      }
+    }
+
+    if (assigned > 0) {
+      await c.env.DB.prepare(`
+        INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tenant_id) DO UPDATE SET
+          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(tenantId, lastId).run()
+    }
+
+    return c.json({
+      success: true,
+      assigned,
+      message: assigned ? `تم تعيين ${assigned} مهمة` : 'لم يُعيّن شيء (ربما عُيّنت المهام مؤخراً)',
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -23680,12 +25414,19 @@ app.get('/api/my-followup-tasks', async (c) => {
     const { results } = await c.env.DB.prepare(`
       SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
              t.priority, t.status, t.created_at,
+             t.employee_note_text, t.employee_note_updated_at,
              f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
              f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
-             tn.company_name
+             tn.company_name,
+             pr_out.id AS outgoing_pass_request_id,
+             pr_out.to_user_id AS outgoing_pass_to_user_id,
+             tu_out.full_name AS outgoing_pass_to_name
       FROM company_contact_followup_tasks t
       INNER JOIN company_contact_followups f ON f.id = t.followup_id
       LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      LEFT JOIN company_contact_followup_task_pass_requests pr_out
+        ON pr_out.task_id = t.id AND pr_out.status = 'pending' AND pr_out.from_user_id = ?
+      LEFT JOIN users tu_out ON tu_out.id = pr_out.to_user_id
       WHERE t.assigned_user_id = ? AND t.tenant_id = ?
       ${statusClause}
       ORDER BY
@@ -23693,7 +25434,7 @@ app.get('/api/my-followup-tasks', async (c) => {
         t.scheduled_at_gregorian ASC,
         t.id DESC
       LIMIT 300
-    `).bind(userInfo.userId, userInfo.tenantId).all()
+    `).bind(userInfo.userId, userInfo.userId, userInfo.tenantId).all()
 
     return c.json({ success: true, data: results || [] })
   } catch (error: any) {
@@ -23714,9 +25455,21 @@ app.patch('/api/my-followup-tasks/:id', async (c) => {
     }
 
     const payload = await c.req.json().catch(() => ({}))
-    const status = String(payload?.status ?? '').trim().toLowerCase()
-    if (!['pending', 'completed'].includes(status)) {
+    const hasStatus = payload?.status != null && String(payload.status).trim() !== ''
+    const status = hasStatus ? String(payload?.status ?? '').trim().toLowerCase() : null
+    if (hasStatus && !['pending', 'completed'].includes(String(status))) {
       return c.json({ success: false, error: 'حالة غير صالحة' }, 400)
+    }
+
+    const noteTextRaw = payload?.note_text
+    const hasNote = noteTextRaw != null
+    const noteText = hasNote ? String(noteTextRaw ?? '').trim() : null
+    if (!hasStatus && !hasNote) {
+      return c.json({ success: false, error: 'لا توجد بيانات للتحديث' }, 400)
+    }
+    // If the UI sends an explicit note_text, require it to be non-empty.
+    if (hasNote && !noteText) {
+      return c.json({ success: false, error: 'يرجى إدخال الملاحظة' }, 400)
     }
 
     const task = await c.env.DB.prepare(`
@@ -23728,20 +25481,276 @@ app.patch('/api/my-followup-tasks/:id', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
 
-    await c.env.DB.prepare(`
-      UPDATE company_contact_followup_tasks SET status = ? WHERE id = ?
-    `).bind(status, taskId).run()
+    if (hasStatus && status) {
+      await c.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks SET status = ? WHERE id = ?
+      `).bind(status, taskId).run()
 
-    return c.json({ success: true, message: status === 'completed' ? 'تم إكمال المهمة' : 'أعيدت المهمة إلى قيد التنفيذ' })
+      if (status === 'completed') {
+        await c.env.DB.prepare(`
+          UPDATE company_contact_followup_task_pass_requests
+          SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+          WHERE task_id = ? AND status = 'pending'
+        `).bind(taskId).run()
+      }
+    }
+
+    if (hasNote && noteText) {
+      await c.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks
+        SET employee_note_text = ?, employee_note_updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(noteText, taskId).run()
+    }
+
+    const msg =
+      hasStatus && status === 'completed'
+        ? 'تم إكمال المهمة'
+        : hasStatus && status === 'pending'
+          ? 'أعيدت المهمة إلى قيد التنفيذ'
+          : 'تم حفظ الملاحظة'
+
+    return c.json({ success: true, message: msg })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
 })
 
+app.get('/api/my-tenant-followup-staff', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, full_name FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1 AND id != ?
+      ORDER BY full_name
+    `).bind(userInfo.tenantId, userInfo.userId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const taskId = parseInt(c.req.param('taskId'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const toUserId = parseInt(String(payload?.to_user_id ?? ''), 10)
+    if (!Number.isFinite(toUserId) || toUserId <= 0) {
+      return c.json({ success: false, error: 'يرجى اختيار موظف' }, 400)
+    }
+    if (toUserId === userInfo.userId) {
+      return c.json({ success: false, error: 'لا يمكن التمرير إلى نفسك' }, 400)
+    }
+
+    const target = await c.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE id = ? AND role_id = 4 AND tenant_id = ? AND is_active = 1
+      LIMIT 1
+    `).bind(toUserId, userInfo.tenantId).first<{ id: number }>()
+    if (!target?.id) return c.json({ success: false, error: 'الموظف غير موجود في شركتك' }, 400)
+
+    const task = await c.env.DB.prepare(`
+      SELECT id, tenant_id, assigned_user_id, status
+      FROM company_contact_followup_tasks
+      WHERE id = ? LIMIT 1
+    `).bind(taskId).first<{
+      id: number
+      tenant_id: number
+      assigned_user_id: number | null
+      status: string | null
+    }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found' }, 404)
+    if (task.tenant_id !== userInfo.tenantId || task.assigned_user_id !== userInfo.userId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    const st = String(task.status ?? '').trim().toLowerCase()
+    if (st === 'completed') {
+      return c.json({ success: false, error: 'لا يمكن تمرير مهمة مكتملة' }, 400)
+    }
+
+    const passNote = String(payload?.note_text ?? '').trim()
+    if (!passNote) {
+      return c.json({ success: false, error: 'يرجى كتابة ملاحظة مع طلب التمرير' }, 400)
+    }
+
+    const existing = await c.env.DB.prepare(`
+      SELECT id FROM company_contact_followup_task_pass_requests
+      WHERE task_id = ? AND status = 'pending' LIMIT 1
+    `).bind(taskId).first<{ id: number }>()
+    if (existing?.id) {
+      return c.json({ success: false, error: 'توجد بالفعل طلب تمرير معلّق لهذه المهمة' }, 400)
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_contact_followup_task_pass_requests
+        (task_id, tenant_id, from_user_id, to_user_id, status, note_text)
+      VALUES (?, ?, ?, ?, 'pending', ?)
+    `).bind(taskId, userInfo.tenantId, userInfo.userId, toUserId, passNote).run()
+
+    return c.json({ success: true, message: 'تم إرسال طلب التمرير' })
+  } catch (error: any) {
+    const msg = error?.message || 'Server error'
+    if (String(msg).includes('UNIQUE constraint')) {
+      return c.json({ success: false, error: 'توجد بالفعل طلب تمرير معلّق لهذه المهمة' }, 400)
+    }
+    return c.json({ success: false, error: msg }, 500)
+  }
+})
+
+app.get('/api/my-followup-task-passes/incoming', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT pr.id AS pass_request_id, pr.task_id, pr.from_user_id, pr.created_at AS pass_created_at, pr.note_text AS pass_note_text,
+             fu.full_name AS from_user_name,
+             t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri, t.priority, t.status AS task_status,
+             f.customer_name, f.customer_phone, f.customer_message,
+             f.affiliate_label, tn.company_name
+      FROM company_contact_followup_task_pass_requests pr
+      INNER JOIN company_contact_followup_tasks t ON t.id = pr.task_id
+      INNER JOIN company_contact_followups f ON f.id = t.followup_id
+      LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      LEFT JOIN users fu ON fu.id = pr.from_user_id
+      WHERE pr.to_user_id = ? AND pr.tenant_id = ? AND pr.status = 'pending'
+      ORDER BY pr.created_at ASC, pr.id ASC
+      LIMIT 100
+    `).bind(userInfo.userId, userInfo.tenantId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.patch('/api/my-followup-task-passes/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const passId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(passId) || passId <= 0) {
+      return c.json({ success: false, error: 'Invalid pass id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const action = String(payload?.action ?? '').trim().toLowerCase()
+    if (!['accept', 'reject', 'cancel'].includes(action)) {
+      return c.json({ success: false, error: 'إجراء غير صالح' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(`
+      SELECT pr.id, pr.task_id, pr.tenant_id, pr.from_user_id, pr.to_user_id, pr.status
+      FROM company_contact_followup_task_pass_requests pr
+      WHERE pr.id = ? LIMIT 1
+    `).bind(passId).first<{
+      id: number
+      task_id: number
+      tenant_id: number
+      from_user_id: number
+      to_user_id: number
+      status: string
+    }>()
+
+    if (!row?.id) return c.json({ success: false, error: 'Not found' }, 404)
+    if (row.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (row.status !== 'pending') {
+      return c.json({ success: false, error: 'لم يعد هذا الطلب قابلاً للمعالجة' }, 400)
+    }
+
+    if (action === 'cancel') {
+      if (row.from_user_id !== userInfo.userId) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      await c.env.DB.prepare(`
+        UPDATE company_contact_followup_task_pass_requests
+        SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(passId).run()
+      return c.json({ success: true, message: 'تم إلغاء طلب التمرير' })
+    }
+
+    if (row.to_user_id !== userInfo.userId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    if (action === 'reject') {
+      await c.env.DB.prepare(`
+        UPDATE company_contact_followup_task_pass_requests
+        SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(passId).run()
+      return c.json({ success: true, message: 'تم رفض طلب التمرير' })
+    }
+
+    const task = await c.env.DB.prepare(`
+      SELECT id, assigned_user_id, status FROM company_contact_followup_tasks
+      WHERE id = ? AND tenant_id = ? LIMIT 1
+    `).bind(row.task_id, userInfo.tenantId).first<{
+      id: number
+      assigned_user_id: number | null
+      status: string | null
+    }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found' }, 404)
+    if (task.assigned_user_id !== row.from_user_id) {
+      return c.json({ success: false, error: 'تعيين المهمة تغيّر؛ لا يمكن القبول' }, 400)
+    }
+    const tst = String(task.status ?? '').trim().toLowerCase()
+    if (tst === 'completed') {
+      await c.env.DB.prepare(`
+        UPDATE company_contact_followup_task_pass_requests
+        SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(passId).run()
+      return c.json({ success: false, error: 'المهمة أصبحت مكتملة' }, 400)
+    }
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followup_tasks
+      SET assigned_user_id = ?
+      WHERE id = ? AND tenant_id = ?
+    `).bind(userInfo.userId, row.task_id, userInfo.tenantId).run()
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followup_task_pass_requests
+      SET status = 'accepted', resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(passId).run()
+
+    return c.json({ success: true, message: 'تم قبول المهمة ونقلها إليك' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/my-tasks', (c) => c.redirect('/admin/my-tasks'))
+
 app.get('/admin/my-tasks', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId) return c.redirect('/login')
-  if (userInfo.roleId !== 4) return c.redirect('/admin/panel')
+  const rid = normalizeRoleId(userInfo.roleId)
+  if (rid !== 4 && rid !== 5) return c.redirect('/admin/panel')
   if (!userInfo.tenantId) {
     return c.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title></head><body class="p-6"><p>لم يُعرّف حسابك على شركة.</p><a href="/admin/panel">العودة</a></body></html>', 400 as any)
   }
@@ -23769,18 +25778,59 @@ app.get('/admin/my-tasks', async (c) => {
           </a>
         </div>
 
-        <div class="flex flex-wrap gap-2 mb-4">
-          <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
-          <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
-          <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+        <div class="flex flex-wrap gap-2 mb-4 border-b border-gray-200 pb-3">
+          <button type="button" data-page-tab="tasks" id="tabTasks" class="page-tab px-4 py-2 rounded-lg text-sm font-medium border bg-indigo-600 text-white border-indigo-600">مهامي</button>
+          <button type="button" data-page-tab="passes" id="tabPasses" class="page-tab hidden px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">
+            <i class="fas fa-share ml-1 text-violet-600"></i>التمريرات الواردة
+            <span id="passesBadge" class="mr-1 inline-flex min-w-[1.25rem] justify-center rounded-full bg-violet-600 px-1.5 py-0.5 text-xs text-white hidden">0</span>
+          </button>
         </div>
 
-        <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
-        <div id="cards" class="space-y-3"></div>
+        <div id="tasksPage">
+          <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
+            <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
+            <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+          </div>
+          <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
+          <div id="cards" class="space-y-3"></div>
+        </div>
+
+        <div id="passesPage" class="hidden">
+          <p class="text-sm text-gray-600 mb-3">طلبات زميل لنقل مهمة إليك. قبولك ينقل التعيين إليك ويزيلها عن المرسل.</p>
+          <div id="passListStatus" class="text-sm text-gray-600 mb-3"></div>
+          <div id="passCards" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <!-- Note Modal (integrated, no browser prompts) -->
+      <div id="noteModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+          <div class="flex items-center justify-between px-5 py-4 border-b">
+            <h2 id="noteModalTitle" class="text-lg font-bold text-gray-900">ملاحظة</h2>
+            <button type="button" id="noteModalCloseBtn" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-5 space-y-3">
+            <p id="noteModalHint" class="text-sm text-gray-600"></p>
+            <textarea id="noteModalInput" rows="5" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder=""></textarea>
+            <p id="noteModalError" class="text-sm text-red-700 hidden"></p>
+            <div class="flex items-center justify-end gap-2 pt-1">
+              <button type="button" id="noteModalCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button type="button" id="noteModalSaveBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white">
+                <i class="fas fa-save ml-2"></i>حفظ
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <script>
         let activeFilter = 'all';
+        let activePageTab = 'tasks';
+        let tenantStaff = [];
+        let noteModalState = { open: false, required: false, resolve: null };
 
         function escapeHtml(v) {
           return String(v ?? '')
@@ -23813,10 +25863,141 @@ app.get('/admin/my-tasks', async (c) => {
             : '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">قيد التنفيذ</span>';
         }
 
+        function openNoteModal(opts) {
+          const modal = document.getElementById('noteModal');
+          const titleEl = document.getElementById('noteModalTitle');
+          const hintEl = document.getElementById('noteModalHint');
+          const inputEl = document.getElementById('noteModalInput');
+          const errEl = document.getElementById('noteModalError');
+          const saveBtn = document.getElementById('noteModalSaveBtn');
+          const cancelBtn = document.getElementById('noteModalCancelBtn');
+          const closeBtn = document.getElementById('noteModalCloseBtn');
+
+          const title = opts && opts.title ? String(opts.title) : 'ملاحظة';
+          const hint = opts && opts.hint ? String(opts.hint) : '';
+          const placeholder = opts && opts.placeholder ? String(opts.placeholder) : '';
+          const initialValue = opts && opts.initialValue != null ? String(opts.initialValue) : '';
+          const required = !!(opts && opts.required);
+
+          titleEl.textContent = title;
+          hintEl.textContent = hint;
+          inputEl.placeholder = placeholder;
+          inputEl.value = initialValue;
+          errEl.textContent = '';
+          errEl.classList.add('hidden');
+
+          noteModalState.open = true;
+          noteModalState.required = required;
+
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+
+          setTimeout(function () { inputEl.focus(); inputEl.select(); }, 0);
+
+          function cleanup() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            noteModalState.open = false;
+            noteModalState.required = false;
+            noteModalState.resolve = null;
+            // remove listeners
+            saveBtn.removeEventListener('click', onSave);
+            cancelBtn.removeEventListener('click', onCancel);
+            closeBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKeyDown);
+          }
+
+          function onBackdrop(e) {
+            if (e.target === modal) onCancel();
+          }
+
+          function onKeyDown(e) {
+            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSave();
+          }
+
+          function onCancel() {
+            if (noteModalState.resolve) noteModalState.resolve(null);
+            cleanup();
+          }
+
+          function onSave() {
+            const text = String(inputEl.value || '').trim();
+            if (required && !text) {
+              errEl.textContent = 'يرجى إدخال الملاحظة';
+              errEl.classList.remove('hidden');
+              inputEl.focus();
+              return;
+            }
+            if (noteModalState.resolve) noteModalState.resolve(text);
+            cleanup();
+          }
+
+          saveBtn.addEventListener('click', onSave);
+          cancelBtn.addEventListener('click', onCancel);
+          closeBtn.addEventListener('click', onCancel);
+          modal.addEventListener('click', onBackdrop);
+          document.addEventListener('keydown', onKeyDown);
+
+          return new Promise(function (resolve) {
+            noteModalState.resolve = resolve;
+          });
+        }
+
         function setListStatus(msg, type) {
           const el = document.getElementById('listStatus');
           el.textContent = msg || '';
           el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function setPassListStatus(msg, type) {
+          const el = document.getElementById('passListStatus');
+          el.textContent = msg || '';
+          el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function staffOptionsHtml() {
+          if (!tenantStaff.length) {
+            return '<option value="">لا يوجد موظفون آخرون في الشركة</option>';
+          }
+          return '<option value="">-- اختر موظفاً لتمرير المهمة --</option>' +
+            tenantStaff.map(function (u) {
+              return '<option value="' + escapeHtml(String(u.id)) + '">' + escapeHtml(u.full_name || '') + '</option>';
+            }).join('');
+        }
+
+        function updateIncomingPassTab(count) {
+          var n = typeof count === 'number' ? count : 0;
+          var badge = document.getElementById('passesBadge');
+          badge.textContent = String(n);
+          if (n > 0) {
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+            if (activePageTab === 'passes') {
+              activePageTab = 'tasks';
+            }
+          }
+          syncPassesTabStyle();
+        }
+
+        function syncPassesTabStyle() {
+          var tabTasks = document.getElementById('tabTasks');
+          var tabPasses = document.getElementById('tabPasses');
+          var badgeEl = document.getElementById('passesBadge');
+          var n = parseInt(badgeEl.textContent, 10) || 0;
+          tabTasks.className = 'page-tab px-4 py-2 rounded-lg text-sm font-medium border ' +
+            (activePageTab === 'tasks' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 bg-white text-gray-700');
+          if (n > 0) {
+            tabPasses.classList.remove('hidden');
+            tabPasses.className = 'page-tab px-4 py-2 rounded-lg text-sm font-medium border ' +
+              (activePageTab === 'passes' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 bg-white text-gray-700');
+          } else {
+            tabPasses.classList.add('hidden');
+          }
+          document.getElementById('tasksPage').classList.toggle('hidden', activePageTab !== 'tasks');
+          document.getElementById('passesPage').classList.toggle('hidden', activePageTab !== 'passes');
         }
 
         function renderTasks(tasks) {
@@ -23827,11 +26008,48 @@ app.get('/admin/my-tasks', async (c) => {
           }
           root.innerHTML = tasks.map(function (task) {
             const done = isCompleted(task);
+            var hasNote = task.employee_note_text != null && String(task.employee_note_text).trim() !== '';
+            var noteBlock =
+              '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+              '<div class="flex items-center justify-between gap-2">' +
+              '<div class="text-xs font-medium text-gray-700"><i class="fas fa-note-sticky ml-1 text-amber-600"></i>ملاحظتك على المهمة</div>' +
+              '<button type="button" data-note="' + task.id + '" class="text-sm font-medium text-amber-800 underline">ملاحظة</button>' +
+              '</div>' +
+              (hasNote
+                ? '<div class="mt-2 text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
+                  (task.employee_note_updated_at ? '<div class="mt-1 text-xs text-gray-400">' + escapeHtml(formatDate(task.employee_note_updated_at)) + '</div>' : '')
+                : '<div class="mt-2 text-sm text-gray-500">لا توجد ملاحظة محفوظة.</div>') +
+              '</div>';
             var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
               '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
+            if (task.affiliate_label) {
+              enrollHref +=
+                '&enrollment_source=affiliate' +
+                '&affiliate_label=' + encodeURIComponent(String(task.affiliate_label || '').trim());
+            }
             var enrollCustomerBtn =
               '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
               '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
+            var passBlock = '';
+            if (!done) {
+              var outId = task.outgoing_pass_request_id;
+              if (outId != null && outId !== '' && Number(outId) > 0) {
+                passBlock =
+                  '<div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">' +
+                  '<div class="mb-2"><i class="fas fa-hourglass-half ml-1"></i>طلب تمرير قيد الانتظار إلى: <strong>' +
+                  escapeHtml(task.outgoing_pass_to_name || '') + '</strong> (ما زلت المعيّن حتى يقبل زميلك)</div>' +
+                  '<button type="button" data-pass-cancel="' + escapeHtml(String(outId)) + '" class="text-sm font-medium text-violet-800 underline">إلغاء طلب التمرير</button></div>';
+              } else {
+                passBlock =
+                  '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                  '<div class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-share ml-1 text-violet-600"></i>تمرير المهمة لزميل</div>' +
+                  '<div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">' +
+                  '<select data-pass-select="' + task.id + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+                  staffOptionsHtml() + '</select>' +
+                  '<button type="button" data-pass-submit="' + task.id + '" class="whitespace-nowrap bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50" ' +
+                  (tenantStaff.length ? '' : 'disabled ') + '>إرسال طلب التمرير</button></div></div>';
+              }
+            }
             const actionBtn = done
               ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
                 enrollCustomerBtn +
@@ -23857,6 +26075,8 @@ app.get('/admin/my-tasks', async (c) => {
                     (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
                   '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
                 '</div>' +
+                noteBlock +
+                passBlock +
                 actionBtn +
               '</div>'
             );
@@ -23868,6 +26088,98 @@ app.get('/admin/my-tasks', async (c) => {
           root.querySelectorAll('[data-reopen]').forEach(function (btn) {
             btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-reopen'), 'pending'); });
           });
+          root.querySelectorAll('[data-note]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-note');
+              var task = (Array.isArray(tasks) ? tasks : []).find(function (t) { return String(t.id) === String(tid); });
+              var existing = task && task.employee_note_text != null ? String(task.employee_note_text) : '';
+              openNoteModal({
+                title: 'ملاحظة للمهمة',
+                hint: '',
+                placeholder: 'اكتب ملاحظتك هنا...',
+                initialValue: existing || '',
+                required: true
+              }).then(function (text) {
+                if (text == null) return;
+                patchTaskNote(tid, text);
+              });
+            });
+          });
+          root.querySelectorAll('[data-pass-submit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-pass-submit');
+              var sel = root.querySelector('[data-pass-select="' + tid + '"]');
+              var toId = sel ? sel.value : '';
+              submitPassRequest(tid, toId);
+            });
+          });
+          root.querySelectorAll('[data-pass-cancel]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchPass(btn.getAttribute('data-pass-cancel'), 'cancel'); });
+          });
+        }
+
+        function renderIncomingPasses(rows) {
+          const root = document.getElementById('passCards');
+          if (!Array.isArray(rows) || !rows.length) {
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد طلبات تمرير حالياً.</div>';
+            return;
+          }
+          root.innerHTML = rows.map(function (row) {
+            var note = row.pass_note_text != null ? String(row.pass_note_text).trim() : '';
+            var noteBlock = note
+              ? '<div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">' +
+                '<div class="text-xs font-medium text-violet-900 mb-1"><i class="fas fa-note-sticky ml-1"></i>ملاحظة الزميل</div>' +
+                '<div class="whitespace-pre-wrap break-words">' + escapeHtml(note) + '</div>' +
+                '</div>'
+              : '';
+            return (
+              '<div class="bg-white border border-violet-200 rounded-xl p-4 shadow-sm">' +
+                '<div class="text-base font-semibold text-gray-900">' + escapeHtml(row.task_title || '') + '</div>' +
+                '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(row.priority) + '</div>' +
+                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                  '<div><i class="fas fa-user ml-1 text-violet-500"></i>من: <strong>' + escapeHtml(row.from_user_name || '') + '</strong></div>' +
+                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(row.company_name || '-') + '</div>' +
+                  '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(row.customer_name || '-') + ' — ' + escapeHtml(row.customer_phone || '-') + '</div>' +
+                  '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(row.customer_message || '') + '</span></div>' +
+                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(row.scheduled_at_gregorian || '-') + '</div>' +
+                  '<div class="text-gray-400">' + formatDate(row.pass_created_at) + '</div>' +
+                '</div>' +
+                noteBlock +
+                '<div class="mt-3 flex flex-wrap gap-2">' +
+                  '<button type="button" data-pass-action="accept" data-pass-id="' + row.pass_request_id + '" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">قبول المهمة</button>' +
+                  '<button type="button" data-pass-action="reject" data-pass-id="' + row.pass_request_id + '" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium px-4 py-2 rounded-lg">رفض</button>' +
+                '</div></div>'
+            );
+          }).join('');
+          root.querySelectorAll('[data-pass-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              patchPass(btn.getAttribute('data-pass-id'), btn.getAttribute('data-pass-action'));
+            });
+          });
+        }
+
+        async function loadStaff() {
+          try {
+            const res = await axios.get('/api/my-tenant-followup-staff');
+            tenantStaff = Array.isArray(res?.data?.data) ? res.data.data : [];
+          } catch (e) {
+            tenantStaff = [];
+          }
+        }
+
+        async function loadIncomingPasses() {
+          setPassListStatus('جاري التحميل...', 'neutral');
+          document.getElementById('passCards').innerHTML = '';
+          try {
+            const res = await axios.get('/api/my-followup-task-passes/incoming');
+            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+            setPassListStatus('', 'neutral');
+            renderIncomingPasses(rows);
+            updateIncomingPassTab(rows.length);
+          } catch (e) {
+            setPassListStatus('تعذر تحميل طلبات التمرير', 'error');
+            updateIncomingPassTab(0);
+          }
         }
 
         async function loadTasks() {
@@ -23889,10 +26201,75 @@ app.get('/admin/my-tasks', async (c) => {
         async function patchTask(id, status) {
           if (!id) return;
           try {
-            await axios.patch('/api/my-followup-tasks/' + id, { status: status }, { headers: { 'Content-Type': 'application/json' } });
-            await loadTasks();
+            var payload = { status: status };
+            if (String(status).toLowerCase() === 'completed') {
+              const note = await openNoteModal({
+                title: 'ملاحظة عند إكمال المهمة',
+                hint: 'اختياري: اكتب ملاحظة تُحفظ مع المهمة عند الإكمال.',
+                placeholder: 'اكتب الملاحظة (اختياري)...',
+                initialValue: '',
+                required: false
+              });
+              if (note != null && String(note).trim()) {
+                payload.note_text = String(note).trim();
+              }
+            }
+            await axios.patch('/api/my-followup-tasks/' + id, payload, { headers: { 'Content-Type': 'application/json' } });
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
           } catch (e) {
             var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تحديث المهمة';
+            alert(msg);
+          }
+        }
+
+        async function submitPassRequest(taskId, toUserId) {
+          if (!taskId || !toUserId) {
+            alert('يرجى اختيار موظف من القائمة');
+            return;
+          }
+          try {
+            var note = await openNoteModal({
+              title: 'ملاحظة طلب التمرير',
+              hint: 'الملاحظة مطلوبة وسيشاهدها زميلك عند استلام الطلب.',
+              placeholder: 'اكتب الملاحظة المطلوبة...',
+              initialValue: '',
+              required: true
+            });
+            if (note == null) return;
+            await axios.post(
+              '/api/my-followup-tasks/' + taskId + '/pass',
+              { to_user_id: parseInt(toUserId, 10), note_text: String(note).trim() },
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر إرسال الطلب';
+            alert(msg);
+          }
+        }
+
+        async function patchTaskNote(id, noteText) {
+          if (!id) return;
+          try {
+            await axios.patch('/api/my-followup-tasks/' + id, { note_text: noteText }, { headers: { 'Content-Type': 'application/json' } });
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر حفظ الملاحظة';
+            alert(msg);
+          }
+        }
+
+        async function patchPass(passId, action) {
+          if (!passId) return;
+          try {
+            await axios.patch('/api/my-followup-task-passes/' + passId, { action: action }, { headers: { 'Content-Type': 'application/json' } });
+            if (action === 'accept') {
+              activePageTab = 'tasks';
+            }
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
+            syncPassesTabStyle();
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تنفيذ الإجراء';
             alert(msg);
           }
         }
@@ -23914,8 +26291,22 @@ app.get('/admin/my-tasks', async (c) => {
           });
         });
 
+        document.querySelectorAll('.page-tab').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var t = btn.getAttribute('data-page-tab');
+            if (!t || btn.classList.contains('hidden')) return;
+            activePageTab = t;
+            syncPassesTabStyle();
+            if (activePageTab === 'passes') loadIncomingPasses();
+          });
+        });
+
         setActiveFilterButtons();
-        loadTasks();
+        (async function init() {
+          await loadStaff();
+          await Promise.all([loadTasks(), loadIncomingPasses()]);
+          syncPassesTabStyle();
+        })();
       </script>
     </body>
     </html>
@@ -24130,6 +26521,11 @@ app.get('/admin/follow-ups', async (c) => {
   if (!userInfo.userId) return c.redirect('/login')
   if (userInfo.roleId === 4) return c.redirect('/admin/panel')
 
+  // Auto-assign is now triggered at follow-up creation time.
+  // Keep the backend endpoint as a safety net for legacy/unassigned tasks,
+  // but hide the button to avoid needing manual input.
+  const showAutoAssignBtn = false
+
   return c.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -24148,18 +26544,86 @@ app.get('/admin/follow-ups', async (c) => {
       <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
     </head>
     <body class="bg-gray-50 min-h-screen">
-      <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-gray-900"><i class="fas fa-address-card ml-2 text-purple-600"></i>متابعة طلبات التواصل</h1>
-            <p class="text-gray-600 mt-2">الطلبات القادمة من صفحات التواصل العامة للشركات</p>
+      <div class="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0">
+              <div class="flex items-center gap-3">
+                <div class="bg-white/15 p-2.5 rounded-xl border border-white/20">
+                  <i class="fas fa-bullhorn text-2xl"></i>
+                </div>
+                <div class="min-w-0">
+                  <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">التسويق - متابعة طلبات التواصل</h1>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/10 border border-white/15 rounded-2xl p-2">
+                <div class="min-w-[14rem]">
+                  <label class="block text-[11px] font-bold text-white/90 mb-1">مصدر الرابط</label>
+                  <div class="relative">
+                    <select id="followupLinkFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
+                      <option value="all">الكل</option>
+                      <option value="company">رابط الشركة</option>
+                      <option value="affiliate">روابط الأفلييت</option>
+                    </select>
+                    <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
+                  </div>
+                </div>
+                <div class="min-w-[14rem]">
+                  <label class="block text-[11px] font-bold text-white/90 mb-1">الأولوية</label>
+                  <div class="relative">
+                    <select id="followupPriorityFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
+                      <option value="all">الكل</option>
+                      <option value="important">مهم</option>
+                      <option value="regular">عادي</option>
+                    </select>
+                    <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" id="autoAssignTasksBtn" class="${showAutoAssignBtn ? 'inline-flex' : 'hidden'} items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
+                <i class="fas fa-random"></i>
+                <span>تعيين تلقائي</span>
+              </button>
+              <a href="/admin/contact-affiliates" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
+                <i class="fas fa-funnel-dollar"></i>روابط الأفلييت
+              </a>
+              <a href="/admin/panel" class="inline-flex items-center gap-2 bg-gray-900/70 hover:bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/10">
+                <i class="fas fa-arrow-right"></i>لوحة التحكم
+              </a>
+            </div>
           </div>
-          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg">
-            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
-          </a>
         </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <p id="autoAssignHint" class="${showAutoAssignBtn ? 'text-xs text-gray-500 mb-4 -mt-2 max-w-3xl' : 'hidden'}">
+          يعيّن المهام غير المعيّنة فقط لموظفي الشركة بالتناوب: بعد أن يحصل موظف على مهمة بالتعيين التلقائي، يُعاد الدور للبقية قبل أن يُعاد إليه. التعيين اليدوي لا يؤثر على هذا التوزيع.
+        </p>
 
         <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Auto-assign confirm / result -->
+      <div id="autoAssignFlowModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="autoAssignFlowTitle">
+          <div class="px-5 py-4 border-b">
+            <h2 id="autoAssignFlowTitle" class="text-lg font-bold text-gray-900">تأكيد التعيين التلقائي</h2>
+          </div>
+          <div class="p-5">
+            <p id="autoAssignFlowBody" class="text-sm text-gray-700 leading-relaxed"></p>
+            <div id="autoAssignFlowActionsConfirm" class="mt-6 flex flex-wrap items-center justify-end gap-2">
+              <button type="button" id="autoAssignCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button type="button" id="autoAssignConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white">متابعة</button>
+            </div>
+            <div id="autoAssignFlowActionsResult" class="hidden mt-6 flex justify-end">
+              <button type="button" id="autoAssignResultOkBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-900 text-white">حسناً</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Notes Modal -->
@@ -24255,6 +26719,8 @@ app.get('/admin/follow-ups', async (c) => {
       <script>
         let activeFollowupId = null;
         let activeTaskFollowupId = null;
+        let pendingDefaultTaskStaffId = null;
+        let activeEditingTaskId = null;
         let taskDatePicker = null;
         let taskHijriPicker = null;
         let isTaskSyncing = false;
@@ -24435,7 +26901,9 @@ app.get('/admin/follow-ups', async (c) => {
             history.innerHTML = '<div class="text-sm text-gray-500">لا توجد مهام.</div>';
             return;
           }
-          history.innerHTML = tasks.map((task) => \`
+          // Single-task mode: show the newest task only.
+          const task = tasks[0];
+          history.innerHTML = [task].map((task) => \`
             <div class="bg-white border border-gray-200 rounded-lg p-3">
               <div class="flex items-start justify-between gap-2 mb-1">
                 <span class="text-sm font-medium text-gray-800">\${escapeHtml(task.task_title || '')}</span>
@@ -24457,16 +26925,16 @@ app.get('/admin/follow-ups', async (c) => {
             el.innerHTML = '<div class="text-xs text-gray-400 mt-1">لا توجد مهام</div>';
             return;
           }
-          const shown = tasks.slice(0, 3);
-          const extra = tasks.length > 3 ? \`<div class="text-xs text-gray-400">+\${tasks.length - 3} مهام أخرى</div>\` : '';
-          el.innerHTML = '<div class="mt-1 space-y-1">' +
-            shown.map((t) => \`
-              <div class="flex items-center gap-2 text-xs text-gray-700">
-                <i class="fas fa-circle text-indigo-400" style="font-size:5px;flex-shrink:0"></i>
-                <span class="truncate flex-1">\${escapeHtml(t.assigned_user_name || 'غير محدد')}</span>
-                \${priorityBadge(t.priority)}
-              </div>
-            \`).join('') + extra + '</div>';
+          const t = tasks[0];
+          el.innerHTML =
+            '<div class="mt-1 flex items-center gap-2 text-xs text-gray-700">' +
+              '<i class="fas fa-circle text-indigo-400" style="font-size:5px;flex-shrink:0"></i>' +
+              '<span class="truncate flex-1">' + escapeHtml(t.task_title || '') + '</span>' +
+              priorityBadge(t.priority) +
+            '</div>' +
+            '<div class="mt-1 text-xs text-gray-500"><i class="fas fa-user ml-1 text-gray-400"></i>' +
+              escapeHtml(t.assigned_user_name || 'غير محدد') +
+            '</div>';
         }
 
         async function loadCardTasks(followupId) {
@@ -24495,7 +26963,40 @@ app.get('/admin/follow-ups', async (c) => {
           history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل المهام...</div>';
           try {
             const res = await axios.get('/api/follow-ups/' + followupId + '/tasks');
-            renderTasksInModal(Array.isArray(res?.data?.data) ? res.data.data : []);
+            const tasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            renderTasksInModal(tasks);
+            // Remember the "current" assignee (most recent assigned task) for default selection.
+            pendingDefaultTaskStaffId = null;
+            activeEditingTaskId = null;
+            if (Array.isArray(tasks) && tasks.length) {
+              activeEditingTaskId = tasks[0]?.id != null ? String(tasks[0].id) : null;
+              for (const t of tasks) {
+                const raw = t && t.assigned_user_id != null ? String(t.assigned_user_id).trim() : '';
+                const n = raw ? parseInt(raw, 10) : NaN;
+                if (Number.isFinite(n) && n > 0) {
+                  pendingDefaultTaskStaffId = String(n);
+                  break;
+                }
+              }
+            }
+            applyPendingDefaultTaskStaff();
+
+            // Prefill the form with the existing task (single-task mode).
+            const saveBtn = document.getElementById('saveTaskBtn');
+            if (Array.isArray(tasks) && tasks.length) {
+              const t0 = tasks[0] || {};
+              document.getElementById('taskTitleInput').value = String(t0.task_title || '');
+              document.getElementById('taskScheduledGregorian').value = String(t0.scheduled_at_gregorian || '');
+              document.getElementById('taskScheduledHijri').value = String(t0.scheduled_at_hijri || '');
+              document.getElementById('taskPrioritySelect').value = String(t0.priority || 'regular');
+              if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save ml-2"></i>حفظ التغييرات';
+            } else {
+              document.getElementById('taskTitleInput').value = '';
+              document.getElementById('taskScheduledGregorian').value = '';
+              document.getElementById('taskScheduledHijri').value = '';
+              document.getElementById('taskPrioritySelect').value = 'regular';
+              if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-plus ml-2"></i>إنشاء المهمة';
+            }
           } catch (e) {
             history.innerHTML = '<div class="text-sm text-red-700">تعذر تحميل المهام</div>';
           }
@@ -24509,9 +27010,22 @@ app.get('/admin/follow-ups', async (c) => {
             const staff = Array.isArray(res?.data?.data) ? res.data.data : [];
             sel.innerHTML = '<option value="">-- بدون تعيين --</option>' +
               staff.map((u) => \`<option value="\${Number(u.id)}">\${escapeHtml(u.full_name || '')}</option>\`).join('');
+            applyPendingDefaultTaskStaff();
           } catch (_) {
             sel.innerHTML = '<option value="">-- تعذر التحميل --</option>';
           }
+        }
+
+        function applyPendingDefaultTaskStaff() {
+          const sel = document.getElementById('taskStaffSelect');
+          if (!sel) return;
+          // Respect a user manual selection.
+          if (sel.value && String(sel.value).trim() !== '') return;
+          if (!pendingDefaultTaskStaffId) return;
+          // Only apply if the option exists.
+          const opt = sel.querySelector('option[value="' + String(pendingDefaultTaskStaffId) + '"]');
+          if (!opt) return;
+          sel.value = String(pendingDefaultTaskStaffId);
         }
 
         function initTaskDatePicker() {
@@ -24573,11 +27087,14 @@ app.get('/admin/follow-ups', async (c) => {
 
         function openTasksModal(followupId) {
           activeTaskFollowupId = followupId;
+          pendingDefaultTaskStaffId = null;
+          activeEditingTaskId = null;
           document.getElementById('taskTitleInput').value = '';
           document.getElementById('taskScheduledGregorian').value = '';
           document.getElementById('taskScheduledHijri').value = '';
           document.getElementById('taskQuickAction').value = '';
           document.getElementById('taskPrioritySelect').value = 'regular';
+          document.getElementById('taskStaffSelect').value = '';
           setTaskStatus('', 'neutral');
           document.getElementById('tasksModal').classList.remove('hidden');
           document.getElementById('tasksModal').classList.add('flex');
@@ -24599,7 +27116,13 @@ app.get('/admin/follow-ups', async (c) => {
           const cards = document.getElementById('cards');
           cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
           try {
-            const res = await axios.get('/api/follow-ups');
+            const params = new URLSearchParams(window.location.search);
+            const link = (params.get('followupLinkFilter') || 'all').toLowerCase();
+            const pr = (params.get('followupPriorityFilter') || 'all').toLowerCase();
+            const api = new URL('/api/follow-ups', window.location.origin);
+            if (link && link !== 'all') api.searchParams.set('followupLinkFilter', link);
+            if (pr && pr !== 'all') api.searchParams.set('followupPriorityFilter', pr);
+            const res = await axios.get(api.pathname + api.search);
             const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
             if (!rows.length) {
               cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات تواصل حالياً.</div>';
@@ -24641,6 +27164,66 @@ app.get('/admin/follow-ups', async (c) => {
           } catch (e) {
             cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
           }
+        }
+
+        function getFollowupFilterParamsFromUrl() {
+          const params = new URLSearchParams(window.location.search);
+          const link = String(params.get('followupLinkFilter') || 'all').trim().toLowerCase();
+          const pr = String(params.get('followupPriorityFilter') || 'all').trim().toLowerCase();
+          return {
+            link: (link === 'company' || link === 'affiliate' || link === 'all') ? link : 'all',
+            pr: (pr === 'important' || pr === 'regular' || pr === 'all') ? pr : 'all'
+          };
+        }
+
+        function setFollowupFilterParamsInUrl(next) {
+          const params = new URLSearchParams(window.location.search);
+          const link = String(next?.link || 'all').trim().toLowerCase();
+          const pr = String(next?.pr || 'all').trim().toLowerCase();
+
+          if (link && link !== 'all') params.set('followupLinkFilter', link);
+          else params.delete('followupLinkFilter');
+
+          if (pr && pr !== 'all') params.set('followupPriorityFilter', pr);
+          else params.delete('followupPriorityFilter');
+
+          const qs = params.toString();
+          const nextUrl = window.location.pathname + (qs ? ('?' + qs) : '');
+          window.history.replaceState({}, '', nextUrl);
+        }
+
+        function syncFollowupHeaderFiltersFromUrl() {
+          const linkSelect = document.getElementById('followupLinkFilterSelect');
+          const prSelect = document.getElementById('followupPriorityFilterSelect');
+          if (!linkSelect || !prSelect) return;
+          const current = getFollowupFilterParamsFromUrl();
+          linkSelect.value = current.link;
+          prSelect.value = current.pr;
+        }
+
+        function initFollowupHeaderFilters() {
+          const linkSelect = document.getElementById('followupLinkFilterSelect');
+          const prSelect = document.getElementById('followupPriorityFilterSelect');
+          if (!linkSelect || !prSelect) return;
+
+          syncFollowupHeaderFiltersFromUrl();
+
+          linkSelect.addEventListener('change', function() {
+            const current = getFollowupFilterParamsFromUrl();
+            setFollowupFilterParamsInUrl({ link: this.value, pr: current.pr });
+            loadFollowUps();
+          });
+
+          prSelect.addEventListener('change', function() {
+            const current = getFollowupFilterParamsFromUrl();
+            setFollowupFilterParamsInUrl({ link: current.link, pr: this.value });
+            loadFollowUps();
+          });
+
+          window.addEventListener('popstate', function() {
+            syncFollowupHeaderFiltersFromUrl();
+            loadFollowUps();
+          });
         }
 
         document.getElementById('closeNotesModalBtn').addEventListener('click', closeNotesModal);
@@ -24724,16 +27307,77 @@ app.get('/admin/follow-ups', async (c) => {
               priority: priority
             });
             if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ المهمة');
-            document.getElementById('taskTitleInput').value = '';
-            document.getElementById('taskScheduledGregorian').value = '';
-            document.getElementById('taskScheduledHijri').value = '';
-            if (taskDatePicker) taskDatePicker.clear();
-            document.getElementById('taskPrioritySelect').value = 'regular';
-            setTaskStatus('تمت إضافة المهمة بنجاح', 'success');
+            setTaskStatus(res?.data?.message || 'تم حفظ المهمة', 'success');
             await loadTasksInModal(activeTaskFollowupId);
             loadCardTasks(activeTaskFollowupId);
           } catch (err) {
             setTaskStatus(err?.message || 'حدث خطأ أثناء حفظ المهمة', 'error');
+          }
+        });
+
+        initFollowupHeaderFilters();
+
+        const autoAssignFlowModal = document.getElementById('autoAssignFlowModal');
+        const autoAssignFlowBody = document.getElementById('autoAssignFlowBody');
+        const autoAssignFlowTitle = document.getElementById('autoAssignFlowTitle');
+        const autoAssignFlowActionsConfirm = document.getElementById('autoAssignFlowActionsConfirm');
+        const autoAssignFlowActionsResult = document.getElementById('autoAssignFlowActionsResult');
+
+        function openAutoAssignConfirmModal() {
+          autoAssignFlowTitle.textContent = 'تأكيد التعيين التلقائي';
+          autoAssignFlowBody.textContent = 'سيتم تعيين جميع المهام غير المعيّنة (قيد التنفيذ) لموظفي الشركة بالتناوب العادل. المتابعة؟';
+          autoAssignFlowActionsConfirm.classList.remove('hidden');
+          autoAssignFlowActionsResult.classList.add('hidden');
+          autoAssignFlowModal.classList.remove('hidden');
+          autoAssignFlowModal.classList.add('flex');
+        }
+
+        function showAutoAssignResultModal(title, message) {
+          autoAssignFlowTitle.textContent = title;
+          autoAssignFlowBody.textContent = message;
+          autoAssignFlowActionsConfirm.classList.add('hidden');
+          autoAssignFlowActionsResult.classList.remove('hidden');
+          autoAssignFlowModal.classList.remove('hidden');
+          autoAssignFlowModal.classList.add('flex');
+        }
+
+        function closeAutoAssignFlowModal() {
+          autoAssignFlowModal.classList.add('hidden');
+          autoAssignFlowModal.classList.remove('flex');
+        }
+
+        document.getElementById('autoAssignCancelBtn').addEventListener('click', closeAutoAssignFlowModal);
+        document.getElementById('autoAssignResultOkBtn').addEventListener('click', closeAutoAssignFlowModal);
+        autoAssignFlowModal.addEventListener('click', function (e) {
+          if (e.target === autoAssignFlowModal) closeAutoAssignFlowModal();
+        });
+
+        const autoAssignBtn = document.getElementById('autoAssignTasksBtn');
+        if (autoAssignBtn && !autoAssignBtn.classList.contains('hidden')) {
+          autoAssignBtn.addEventListener('click', function () {
+            openAutoAssignConfirmModal();
+          });
+        }
+
+        document.getElementById('autoAssignConfirmBtn').addEventListener('click', async function () {
+          const btn = document.getElementById('autoAssignConfirmBtn');
+          const tealBtn = document.getElementById('autoAssignTasksBtn');
+          btn.disabled = true;
+          if (tealBtn) tealBtn.disabled = true;
+          try {
+            const res = await axios.post('/api/follow-ups/auto-assign-unassigned-tasks');
+            const data = res?.data || {};
+            if (!data.success) throw new Error(data.error || 'تعذر التنفيذ');
+            const n = typeof data.assigned === 'number' ? data.assigned : 0;
+            const msg = data.message || (n ? ('تم تعيين ' + n + ' مهمة') : 'لا توجد مهام للتعيين');
+            await loadFollowUps();
+            showAutoAssignResultModal('اكتمل', msg);
+          } catch (err) {
+            const msg = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : (err.message || 'حدث خطأ');
+            showAutoAssignResultModal('تعذر التنفيذ', msg);
+          } finally {
+            btn.disabled = false;
+            if (tealBtn) tealBtn.disabled = false;
           }
         });
 

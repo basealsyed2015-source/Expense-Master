@@ -12,7 +12,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
-        .content-section { display: none; }
+        .content-section { display: none; min-width: 0; }
         .content-section.active { display: block; animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .quick-access-btn { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -21,9 +21,43 @@ export const fullAdminPanel = `<!DOCTYPE html>
         /* Enhanced Scrollbar Styles */
         .overflow-x-auto {
             overflow-x: auto;
+            max-width: 100%;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: #cbd5e0 #f7fafc;
+        }
+
+        /* Prevent wide tables from stretching the whole page */
+        .overflow-x-auto > table {
+            width: max-content;
+            min-width: 100%;
+        }
+
+        /* Let header/content use full width on large screens */
+        .page-header-inner {
+            max-width: none;
+            margin-left: 0;
+            margin-right: 0;
+            width: 100%;
+        }
+
+        /* Truncate long names inside cells */
+        .truncate-cell {
+            display: inline-block;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+        .truncate-cell.sm {
+            max-width: 130px;
+        }
+
+        /* Make table rows visually consistent */
+        .overflow-x-auto > table th,
+        .overflow-x-auto > table td {
+            white-space: nowrap;
         }
         
         .overflow-x-auto::-webkit-scrollbar {
@@ -42,6 +76,67 @@ export const fullAdminPanel = `<!DOCTYPE html>
         
         .overflow-x-auto::-webkit-scrollbar-thumb:hover {
             background: #a0aec0;
+        }
+
+        /* Hide horizontal scrollbar (keep scroll) for edge-arrow tables */
+        .no-hscrollbar {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge legacy */
+        }
+        .no-hscrollbar::-webkit-scrollbar {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+
+        /* Hover-to-reveal horizontal scroll arrows (tables) */
+        .edge-scroll-wrap { position: relative; }
+        .edge-scroll-zone {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 64px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+        .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+        .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+        .edge-scroll-zone .edge-scroll-btn {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 160ms ease;
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .edge-scroll-zone:hover .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+
+        .edge-scroll-btn button {
+            width: 38px;
+            height: 96px;
+            border-radius: 9999px;
+            border: 1px solid rgba(209,213,219,1);
+            background: rgba(255,255,255,0.92);
+            box-shadow: 0 12px 36px rgba(0,0,0,0.14);
+            color: #111827;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+        .edge-scroll-btn.edge-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            display: none !important;
+        }
+        /* left/right positioning is handled by edge-scroll-zone */
+        .edge-scroll-wrap .overflow-x-auto {
+            padding-left: 8px;
+            padding-right: 8px;
         }
         
         /* Mobile Responsive Styles */
@@ -113,12 +208,16 @@ export const fullAdminPanel = `<!DOCTYPE html>
         @media (min-width: 769px) and (max-width: 1024px) {
             .grid-cols-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
+
+        .share-links-dropdown-chevron.open {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body class="bg-gray-50">
     <!-- Top Header -->
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
-        <div class="flex items-center justify-between px-6 py-4">
+        <div class="page-header-inner flex items-center justify-between px-6 py-4">
             <!-- Right Side: Menu Toggle (Always Visible) -->
             <button type="button" onclick="window.toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
                 <i class="fas fa-bars text-2xl"></i>
@@ -197,13 +296,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
                 </a>
-                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-fuchsia-50 rounded-lg transition-all group">
-                    <i class="fas fa-address-card text-xl text-fuchsia-600 group-hover:text-fuchsia-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-fuchsia-700">متابعة التواصل</span>
-                </a>
-                <a href="/admin/contact-affiliates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
-                    <i class="fas fa-funnel-dollar text-xl text-amber-600 group-hover:text-amber-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-amber-700">روابط التواصل التسويقية</span>
+                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-bullhorn text-xl text-amber-700 group-hover:text-amber-800"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-800">التسويق</span>
                 </a>
 
                 <!-- Rates -->
@@ -324,7 +419,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
     <!-- Main Content بدون Sidebar -->
     <div class="min-h-screen bg-gray-50">
-        <div class="max-w-7xl mx-auto p-6">
+        <div class="w-full px-6 py-6 2xl:px-10">
             
             <!-- لوحة الوصول السريع -->
             <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -363,13 +458,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <div class="text-sm font-bold">التقارير</div>
                     </a>
                     
-                    <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 hover:from-fuchsia-600 hover:to-fuchsia-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
-                        <i class="fas fa-address-card text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">متابعة التواصل</div>
-                    </a>
-                    <a href="/admin/contact-affiliates" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
-                        <i class="fas fa-funnel-dollar text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">روابط التواصل التسويقية</div>
+                    <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-bullhorn text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">التسويق</div>
                     </a>
                     
                     <!-- زر نسب التمويل -->
@@ -559,92 +650,160 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
                 </div>
                 
-                <!-- Calculator Link & QR Code Section -->
+                <!-- Calculator (always visible) + contact/affiliate (collapsible); QR column stays content-sized when dropdown expands -->
                 <div class="bg-white rounded-xl shadow-lg p-6 mt-6" id="calculatorLinkSection">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                        <div class="flex items-center">
-                            <i class="fas fa-share-alt text-blue-600 text-2xl ml-3"></i>
-                            <div>
-                                <h2 class="text-xl font-bold text-gray-800">روابط العملاء</h2>
-                                <p class="text-xs text-gray-500 mt-0.5">الحاسبة، صفحة التواصل، وروابط الإحالة التسويقية</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:items-start">
+                        <div class="flex flex-col gap-6">
+                            <!-- Calculator: always visible -->
+                            <div class="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                                <div class="flex flex-col justify-center px-4 py-4">
+                                    <section>
+                                        <h3 class="flex items-center text-sm font-bold text-gray-800 mb-3">
+                                            <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                                <i class="fas fa-calculator text-sm"></i>
+                                            </span>
+                                            حاسبة التمويل
+                                        </h3>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1.5">رابط الحاسبة</label>
+                                        <div class="flex gap-2">
+                                            <input 
+                                                type="text" 
+                                                id="calculatorLinkInput" 
+                                                value="جاري التحميل..." 
+                                                readonly 
+                                                class="flex-1 min-w-0 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500"
+                                            >
+                                            <button 
+                                                type="button"
+                                                onclick="copyCalculatorLink()" 
+                                                class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold transition-colors"
+                                                title="نسخ الرابط"
+                                            >
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-2">
+                                            <i class="fas fa-info-circle ml-1"></i>
+                                            للعملاء لاستخدام حاسبة التمويل
+                                        </p>
+                                        <div id="copySuccessMessage" class="hidden mt-2 p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+                                            <i class="fas fa-check-circle ml-1"></i>
+                                            تم نسخ الرابط
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onclick="openCalculatorLink()" 
+                                            class="w-full mt-3 bg-slate-700 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors shadow-sm"
+                                        >
+                                            <i class="fas fa-external-link-alt ml-2"></i>
+                                            فتح الحاسبة في نافذة جديدة
+                                        </button>
+                                    </section>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Left: collapsible share links -->
-                        <div>
-                            <details id="clientShareLinksDetails" class="group border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 bg-slate-50 hover:bg-slate-100 text-gray-900 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                                    <span class="flex items-center gap-2 min-w-0">
-                                        <i class="fas fa-copy text-blue-600 shrink-0"></i>
-                                        <span class="truncate">نسخ أو فتح الروابط</span>
+
+                            <!-- Contact + affiliate links (collapsible); flex-shrink-0 keeps bar below calculator -->
+                            <div class="share-links-dropdown flex-shrink-0 rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+                                <button
+                                    type="button"
+                                    id="shareLinksDropdownToggle"
+                                    class="w-full flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-start"
+                                    onclick="toggleShareLinksDropdown()"
+                                    aria-expanded="false"
+                                    aria-controls="shareLinksDropdownPanel"
+                                >
+                                    <span class="flex items-center gap-3 min-w-0">
+                                        <i class="fas fa-address-card text-blue-600 text-xl flex-shrink-0"></i>
+                                        <span class="text-base font-bold text-gray-800">صفحة التواصل وروابط التتبع</span>
                                     </span>
-                                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform group-open:rotate-180 shrink-0"></i>
-                                </summary>
-                                <div class="border-t border-gray-100 p-4 space-y-3 bg-white">
-                                    <p class="text-xs text-gray-500 -mt-1 mb-1">جميع الروابط أدناه بنفس الشكل: انسخ أو افتح في تبويب جديد.</p>
+                                    <i id="shareLinksDropdownChevron" class="fas fa-chevron-down share-links-dropdown-chevron text-gray-500 text-sm transition-transform duration-200 flex-shrink-0" aria-hidden="true"></i>
+                                </button>
+                                <div id="shareLinksDropdownPanel" class="hidden border-t border-gray-100 bg-white px-4 py-4" role="region" aria-label="التواصل والتتبع">
+                                    <div class="flex flex-col gap-8">
+                            <!-- Contact root -->
+                            <section>
+                                <h3 class="flex items-center text-sm font-bold text-gray-800 mb-3">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                        <i class="fas fa-address-card text-sm"></i>
+                                    </span>
+                                    صفحة التواصل
+                                </h3>
+                                <label class="block text-xs font-medium text-gray-600 mb-1.5">رابط صفحة التواصل (المسار الجذر)</label>
+                                <div class="flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="contactRootLinkInput"
+                                        value="جاري التحميل..."
+                                        readonly
+                                        class="flex-1 min-w-0 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500"
+                                    >
+                                    <button
+                                        type="button"
+                                        onclick="copyContactRootLink()"
+                                        class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold transition-colors"
+                                        title="نسخ الرابط"
+                                    >
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div id="contactRootCopySuccessMessage" class="hidden mt-2 p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+                                    <i class="fas fa-check-circle ml-1"></i>
+                                    تم نسخ رابط التواصل
+                                </div>
+                                <button
+                                    type="button"
+                                    onclick="openContactRootLink()"
+                                    class="w-full mt-3 bg-slate-700 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors shadow-sm"
+                                >
+                                    <i class="fas fa-external-link-alt ml-2"></i>
+                                    فتح صفحة التواصل في نافذة جديدة
+                                </button>
+                            </section>
 
-                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
-                                        <p class="text-xs font-semibold text-gray-600 mb-2">حاسبة التمويل</p>
-                                        <div class="flex flex-wrap gap-2">
-                                            <input type="text" id="calculatorLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                                            <button type="button" onclick="copyCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
-                                            <button type="button" onclick="openCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
-                                        </div>
-                                    </div>
-
-                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
-                                        <p class="text-xs font-semibold text-gray-600 mb-2">صفحة التواصل (الرابط الأساسي)</p>
-                                        <div class="flex flex-wrap gap-2">
-                                            <input type="text" id="contactRootLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                                            <button type="button" onclick="copyContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
-                                            <button type="button" onclick="openContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
-                                        </div>
-                                    </div>
-
-                                    <div id="affiliateSectionWrap" class="space-y-3" style="display:none">
-                                        <p class="text-xs font-semibold text-gray-600">روابط التواصل التسويقية</p>
-                                        <div id="affiliateLinksRowsContainer" class="space-y-3"></div>
-                                        <div id="contactAffiliatesManageBlock" class="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-3 text-center text-sm text-gray-600" style="display:none">
-                                            <a href="/admin/contact-affiliates" class="font-semibold text-blue-700 hover:underline">إدارة روابط الإحالة</a>
-                                        </div>
-                                    </div>
-
-                                    <div class="space-y-1 pt-1">
-                                        <div id="anyLinkCopyToast" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
-                                            <i class="fas fa-check-circle ml-1"></i><span id="anyLinkCopyToastText">تم النسخ</span>
-                                        </div>
-                                        <div id="copySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
-                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط الحاسبة
-                                        </div>
-                                        <div id="contactRootCopySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
-                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط التواصل
-                                        </div>
+                            <!-- Affiliate tracking links -->
+                            <section id="contactAffiliateLinksWrap" class="pt-6 border-t border-gray-100" style="display:none;">
+                                <h3 class="flex items-center text-sm font-bold text-gray-800 mb-2">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                        <i class="fas fa-bullhorn text-sm"></i>
+                                    </span>
+                                    روابط التتبع التسويقية
+                                </h3>
+                                <p class="text-xs text-gray-500 mb-4 leading-relaxed">مسار إضافي (مثل <span dir="ltr" class="font-mono text-gray-600">/facebook</span>) يظهر مصدر الطلب في المتابعة.</p>
+                                <div id="contactAffiliateLinksList" class="space-y-3 max-h-72 overflow-y-auto pr-1"></div>
+                                <div id="contactAffiliatesManageBlock" class="mt-4 pt-4 border-t border-gray-100">
+                                    <a href="/admin/contact-affiliates" class="inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-800">
+                                        <i class="fas fa-cog"></i>
+                                        إدارة روابط التتبع
+                                    </a>
+                                </div>
+                            </section>
                                     </div>
                                 </div>
-                            </details>
+                            </div>
                         </div>
                         
-                        <!-- Right Side: QR Code -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-qrcode ml-1"></i>
-                                رمز QR للمشاركة
-                            </label>
-                            <div class="flex flex-col items-center justify-center bg-gray-50 border border-gray-300 rounded-lg p-4">
+                        <!-- Right Side: QR Code (self-start: row height follows left column without stretching this panel) -->
+                        <div class="flex w-full flex-col md:self-start">
+                            <h3 class="flex items-center text-sm font-bold text-gray-800 mb-3">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                    <i class="fas fa-qrcode text-sm"></i>
+                                </span>
+                                رمز QR للحاسبة
+                            </h3>
+                            <div class="flex flex-col items-center justify-center bg-gray-50 border border-gray-300 rounded-xl p-5">
                                 <div id="qrcodeContainer" class="mb-3"></div>
                                 <button 
+                                    type="button"
                                     onclick="downloadQRCode()" 
-                                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                    class="w-full max-w-xs bg-slate-700 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
                                 >
                                     <i class="fas fa-download ml-1"></i>
                                     تحميل رمز QR
                                 </button>
                             </div>
-                            <p class="text-xs text-gray-500 mt-2 text-center">
+                            <p class="text-xs text-gray-500 mt-3 text-center leading-relaxed">
                                 <i class="fas fa-mobile-alt ml-1"></i>
-                                يمكن للعملاء مسح الرمز للوصول إلى الحاسبة مباشرة
+                                يوجّه مباشرة إلى رابط الحاسبة أعلاه
                             </p>
                         </div>
                     </div>
@@ -728,12 +887,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
             <!-- Customers Section -->
             <div id="customers-section" class="content-section">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center justify-between mb-6 min-w-0 w-full flex-wrap gap-2">
                     <h1 class="text-3xl font-bold text-gray-800">
                         <i class="fas fa-users text-blue-600 ml-2"></i>
                         إدارة العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3">
+                    <div class="flex space-x-reverse space-x-3 min-w-0 flex-wrap gap-2">
                         <button onclick="addCustomer()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold">
                             <i class="fas fa-plus ml-2"></i>
                             إضافة عميل جديد
@@ -749,9 +908,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full overflow-hidden">
                     <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." 
+                        <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." oninput="loadCustomers()" 
                                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
@@ -765,10 +924,26 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         </div>
                     </div>
                     
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
+                    <div id="customersEdgeScrollWrap" class="edge-scroll-wrap">
+                        <div class="edge-scroll-zone left">
+                            <div id="customersEdgeLeft" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('customersTableScroll', 'left')" aria-label="scroll left">
+                                    <i class="fas fa-chevron-left text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="edge-scroll-zone right">
+                            <div id="customersEdgeRight" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('customersTableScroll', 'right')" aria-label="scroll right">
+                                    <i class="fas fa-chevron-right text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="customersTableScroll" class="overflow-x-auto no-hscrollbar">
+                        <table class="min-w-full w-max">
                             <thead class="bg-gray-50">
                                 <tr>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">م</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الاسم</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الجوال</th>
@@ -777,7 +952,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">مبلغ التمويل</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الالتزامات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">نوع التمويل</th>
-                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="customersTable">
@@ -789,17 +963,31 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             </tbody>
                         </table>
                     </div>
+                    </div>
+
+                    <!-- Customers Pagination -->
+                    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                            <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="customersPrevBtn" onclick="setCustomersPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                            <span id="customersPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                            <button id="customersNextBtn" onclick="setCustomersPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Financing Requests Section -->
             <div id="financing-requests-section" class="content-section">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center justify-between mb-6 min-w-0 w-full flex-wrap gap-2">
                     <h1 class="text-3xl font-bold text-gray-800">
                         <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                         طلبات التمويل من العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2">
+                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2 min-w-0">
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
                             <input type="date" id="filterRequestDateFrom" onchange="loadFinancingRequests()" 
@@ -845,11 +1033,27 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
+                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full overflow-hidden">
+                    <div id="requestsEdgeScrollWrap" class="edge-scroll-wrap">
+                        <div class="edge-scroll-zone left">
+                            <div id="requestsEdgeLeft" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'left')" aria-label="scroll left">
+                                    <i class="fas fa-chevron-left text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="edge-scroll-zone right">
+                            <div id="requestsEdgeRight" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'right')" aria-label="scroll right">
+                                    <i class="fas fa-chevron-right text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="requestsTableScroll" class="overflow-x-auto no-hscrollbar">
+                        <table class="min-w-full w-max">
                             <thead class="bg-gray-50">
                                 <tr>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">م</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">العميل</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الجوال</th>
@@ -858,7 +1062,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">المدة</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">البنك</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الحالة</th>
-                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="requestsTable">
@@ -869,6 +1072,20 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    </div>
+
+                    <!-- Requests Pagination -->
+                    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                            <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="requestsPrevBtn" onclick="setRequestsPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                            <span id="requestsPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                            <button id="requestsNextBtn" onclick="setRequestsPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2039,11 +2256,18 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/customers',
                         '/admin/requests',
                         '/admin/my-tasks',
+                        '/my-tasks',
                         '/calculator',
                         '/'
                     ],
-                    '5': [ // Bank agent — funding requests for assigned bank only
-                        '/admin/requests'
+                    '5': [ // Bank agent
+                        '/admin/dashboard',
+                        '/admin/customers',
+                        '/admin/requests',
+                        '/admin/my-tasks',
+                        '/my-tasks',
+                        '/calculator',
+                        '/'
                     ]
                 };
                 
@@ -2346,6 +2570,273 @@ export const fullAdminPanel = `<!DOCTYPE html>
             window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
         }
 
+        // Pagination helpers (Customers + Financing Requests)
+        const customersPaging = { page: 1, pageSize: 15, lastSig: '' };
+        const requestsPaging = { page: 1, pageSize: 15, lastSig: '' };
+
+        function getPageSizeOptions(total) {
+            const base = [15, 30, 50, 100];
+            const totalNum = Number(total) || 0;
+            const options = [base[0]];
+
+            for (let i = 1; i < base.length; i++) {
+                const size = base[i];
+                const prev = base[i - 1];
+
+                if (totalNum >= size) {
+                    options.push(size);
+                    continue;
+                }
+
+                // If we have more than the previous bucket, allow the next higher option.
+                // Example: total=21 -> [15, 30]
+                if (totalNum > prev) options.push(size);
+                break;
+            }
+
+            return options;
+        }
+
+        function clampPage(page, totalPages) {
+            if (totalPages <= 1) return 1;
+            if (page < 1) return 1;
+            if (page > totalPages) return totalPages;
+            return page;
+        }
+
+        function renderPaginationUI(kind, total, paging) {
+            const pageSizeSelect = document.getElementById(kind + 'PageSize');
+            const prevBtn = document.getElementById(kind + 'PrevBtn');
+            const nextBtn = document.getElementById(kind + 'NextBtn');
+            const info = document.getElementById(kind + 'PageInfo');
+
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return;
+
+            const options = getPageSizeOptions(total);
+            if (!options.includes(paging.pageSize)) paging.pageSize = 15;
+
+            pageSizeSelect.innerHTML = options
+                .map((n) => '<option value="' + n + '" ' + (n === paging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+                .join('');
+
+            const totalPages = Math.max(1, Math.ceil(total / paging.pageSize));
+            paging.page = clampPage(paging.page, totalPages);
+
+            const start = total === 0 ? 0 : (paging.page - 1) * paging.pageSize + 1;
+            const end = Math.min(total, paging.page * paging.pageSize);
+
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total);
+            prevBtn.disabled = paging.page <= 1;
+            nextBtn.disabled = paging.page >= totalPages;
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+        }
+
+        // Edge scroll controls for horizontally-scrollable tables
+        function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth;
+            const clamped = Math.max(0, Math.min(max, normalizedLeft));
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') {
+                el.scrollLeft = clamped;
+                return;
+            }
+            const type = getRtlScrollType();
+            if (type === 'negative') el.scrollLeft = -clamped;
+            else if (type === 'reverse') el.scrollLeft = max - clamped;
+            else el.scrollLeft = clamped; // default
+        }
+
+        function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReduced) {
+                setNormalizedScrollLeft(el, target);
+                return;
+            }
+
+            const max = el.scrollWidth - el.clientWidth;
+            const to = Math.max(0, Math.min(max, target));
+            const from = getNormalizedScrollLeft(el);
+            const delta = to - from;
+            if (Math.abs(delta) < 1) return;
+
+            const start = performance.now();
+            const duration = Math.max(120, Number(durationMs) || 260);
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1);
+            el.dataset.edgeScrollAnimToken = animToken;
+
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+            const tick = (now) => {
+                if (el.dataset.edgeScrollAnimToken !== animToken) return; // cancelled by a newer anim
+                const t = Math.min(1, (now - start) / duration);
+                const eased = easeOutCubic(t);
+                setNormalizedScrollLeft(el, from + delta * eased);
+                if (t < 1) requestAnimationFrame(tick);
+            };
+
+            requestAnimationFrame(tick);
+        }
+
+        window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+
+            const step = 360;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+
+            // visualDirection means "move viewport towards that edge"
+            // normalized scrollLeft is always LTR-like (0..max)
+            let delta = visualDirection === 'left' ? -step : step;
+            if (dir === 'rtl') delta = -delta;
+
+            const current = getNormalizedScrollLeft(el);
+            animateNormalizedScrollLeft(el, current + delta, 260);
+
+            requestAnimationFrame(() => {
+                const leftId = scrollElId.indexOf('customers') >= 0 ? 'customersEdgeLeft' : 'requestsEdgeLeft';
+                const rightId = scrollElId.indexOf('customers') >= 0 ? 'customersEdgeRight' : 'requestsEdgeRight';
+                updateEdgeScrollControls(scrollElId, leftId, rightId);
+            });
+        }
+
+        let __rtlScrollType = null;
+        function getRtlScrollType() {
+            if (__rtlScrollType) return __rtlScrollType;
+            const div = document.createElement('div');
+            div.style.width = '4px';
+            div.style.height = '1px';
+            div.style.overflow = 'scroll';
+            div.style.direction = 'rtl';
+            div.style.position = 'absolute';
+            div.style.top = '-9999px';
+            const inner = document.createElement('div');
+            inner.style.width = '8px';
+            inner.style.height = '1px';
+            div.appendChild(inner);
+            document.body.appendChild(div);
+            // Standard RTL scrollLeft detection:
+            // - reverse: initial scrollLeft > 0 (starts at max)
+            // - negative: after setting scrollLeft=1, value becomes < 0 (Chrome) or stays 0 (older impls)
+            // - default: after setting scrollLeft=1, value becomes > 0
+            if (div.scrollLeft > 0) {
+                __rtlScrollType = 'reverse';
+            } else {
+                div.scrollLeft = 1;
+                __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default';
+            }
+
+            document.body.removeChild(div);
+            return __rtlScrollType;
+        }
+
+        function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') return el.scrollLeft;
+            const type = getRtlScrollType();
+            if (type === 'negative') return -el.scrollLeft;
+            if (type === 'reverse') return max - el.scrollLeft;
+            return el.scrollLeft; // default
+        }
+
+        function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId);
+            const arrow = document.getElementById(arrowBtnId);
+            if (!el || !arrow) return;
+
+            const wrap = el.closest('.edge-scroll-wrap');
+            if (!wrap) return;
+
+            const wrapRect = wrap.getBoundingClientRect();
+            const vhCenter = window.innerHeight / 2;
+            const padding = 16;
+            const minY = wrapRect.top + padding;
+            const maxY = wrapRect.bottom - padding;
+            const desired = vhCenter;
+            const clamped = Math.max(minY, Math.min(maxY, desired));
+            const relativeTop = clamped - wrapRect.top;
+            arrow.style.top = String(relativeTop) + 'px';
+        }
+
+        function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            const leftWrap = document.getElementById(leftBtnId);
+            const rightWrap = document.getElementById(rightBtnId);
+            if (!el || !leftWrap || !rightWrap) return;
+
+            const canScroll = el.scrollWidth > el.clientWidth + 2;
+            if (!canScroll) {
+                leftWrap.classList.add('edge-hidden');
+                rightWrap.classList.add('edge-hidden');
+                return;
+            }
+
+            const maxScrollLeft = el.scrollWidth - el.clientWidth;
+            const sl = getNormalizedScrollLeft(el);
+
+            const canLeft = sl > 1;
+            const canRight = sl < maxScrollLeft - 1;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            const showLeft = dir === 'rtl' ? canRight : canLeft;
+            const showRight = dir === 'rtl' ? canLeft : canRight;
+
+            // show only when there is room in that direction
+            leftWrap.classList.toggle('edge-hidden', !showLeft);
+            rightWrap.classList.toggle('edge-hidden', !showRight);
+
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId);
+        }
+
+        function setupEdgeScroll(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+            if (el.dataset.edgeScrollBound === '1') return;
+            el.dataset.edgeScrollBound = '1';
+
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId);
+            el.addEventListener('scroll', tick, { passive: true });
+            window.addEventListener('resize', tick);
+            window.addEventListener('scroll', tick, { passive: true });
+            // initial
+            setTimeout(tick, 0);
+        }
+
+        window.setCustomersPageSize = function(value) {
+            const parsed = Number(value);
+            customersPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+            customersPaging.page = 1;
+            loadCustomers();
+        }
+
+        window.setCustomersPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') customersPaging.page -= 1;
+            else if (directionOrPage === 'next') customersPaging.page += 1;
+            else {
+                const parsed = Number(directionOrPage);
+                if (Number.isFinite(parsed)) customersPaging.page = parsed;
+            }
+            loadCustomers();
+        }
+
+        window.setRequestsPageSize = function(value) {
+            const parsed = Number(value);
+            requestsPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+            requestsPaging.page = 1;
+            loadFinancingRequests();
+        }
+
+        window.setRequestsPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') requestsPaging.page -= 1;
+            else if (directionOrPage === 'next') requestsPaging.page += 1;
+            else {
+                const parsed = Number(directionOrPage);
+                if (Number.isFinite(parsed)) requestsPaging.page = parsed;
+            }
+            loadFinancingRequests();
+        }
+
         // Load Customers
         async function loadCustomers() {
             try {
@@ -2357,6 +2848,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     // Apply date filter
                     const filterDateFrom = document.getElementById('filterDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterDateTo')?.value;
+                    const searchQuery = (document.getElementById('searchCustomers')?.value || '').trim().toLowerCase();
+                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, searchQuery });
+                    if (sig !== customersPaging.lastSig) {
+                        customersPaging.lastSig = sig;
+                        customersPaging.page = 1;
+                    }
                     
                     if (filterDateFrom || filterDateTo) {
                         customers = customers.filter(customer => {
@@ -2369,18 +2866,52 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             return true;
                         });
                     }
+
+                    if (searchQuery) {
+                        customers = customers.filter((customer) => {
+                            const name = String(customer.full_name || '').toLowerCase();
+                            const phone = String(customer.phone || '').toLowerCase();
+                            return name.includes(searchQuery) || phone.includes(searchQuery);
+                        });
+                    }
                     
                     if (customers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
+                        renderPaginationUI('customers', 0, customersPaging);
                         return;
                     }
+
+                    const totalCustomers = customers.length;
+                    renderPaginationUI('customers', totalCustomers, customersPaging);
+                    const totalPages = Math.max(1, Math.ceil(totalCustomers / customersPaging.pageSize));
+                    customersPaging.page = clampPage(customersPaging.page, totalPages);
+                    const startIdx = (customersPaging.page - 1) * customersPaging.pageSize;
+                    const pageCustomers = customers.slice(startIdx, startIdx + customersPaging.pageSize);
                     
-                    tbody.innerHTML = customers.map((customer, index) => \`
+                    tbody.innerHTML = pageCustomers.map((customer, index) => \`
                         <tr class="border-b hover:bg-gray-50">
-                            <td class="px-4 py-3">\${index + 1}</td>
+                            <td class="px-4 py-3">
+                                <div class="relative inline-block text-right">
+                                    <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
+                                        <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
+                                    </button>
+                                    <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[11rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-50">
+                                        <button onclick="viewCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 text-right">
+                                            <i class="fas fa-eye w-3"></i> عرض
+                                        </button>
+                                        <a href="/admin/requests/new?customer_id=\${customer.id}" class="flex items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-right">
+                                            <i class="fas fa-file-invoice w-3 flex-shrink-0"></i> طلب تمويل جديد
+                                        </a>
+                                        <button onclick="editCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-green-700 hover:bg-green-50 text-right">
+                                            <i class="fas fa-edit w-3"></i> تعديل
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">\${startIdx + index + 1}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    <span class="font-medium">\${customer.full_name}</span>
+                                    <span class="font-medium truncate-cell">\${customer.full_name}</span>
                                     <button onclick="viewCustomerFinancingDetails(\${customer.id})" 
                                             class="text-indigo-600 hover:text-indigo-800 transition-colors" 
                                             title="عرض التفاصيل التمويلية الكاملة">
@@ -2405,30 +2936,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <td class="px-4 py-3 font-medium text-purple-600">\${customer.financing_amount ? customer.financing_amount.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm text-orange-600">\${customer.monthly_obligations ? customer.monthly_obligations.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm">\${customer.financing_type_name || '-'}</td>
-                            <td class="px-4 py-3">
-                                <div class="relative inline-block text-right">
-                                    <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
-                                        <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
-                                    </button>
-                                    <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[11rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-50">
-                                        <button onclick="viewCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 text-right">
-                                            <i class="fas fa-eye w-3"></i> عرض
-                                        </button>
-                                        <a href="/admin/requests/new?customer_id=\${customer.id}" class="flex items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-right">
-                                            <i class="fas fa-file-invoice w-3 flex-shrink-0"></i> طلب تمويل جديد
-                                        </a>
-                                        <button onclick="editCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-green-700 hover:bg-green-50 text-right">
-                                            <i class="fas fa-edit w-3"></i> تعديل
-                                        </button>
-                                        <div class="border-t border-gray-100 my-1"></div>
-                                        <button onclick="deleteCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-700 hover:bg-red-50 text-right">
-                                            <i class="fas fa-trash w-3"></i> حذف
-                                        </button>
-                                    </div>
-                                </div>
-                            </td>
                         </tr>
                     \`).join('');
+
+                    setupEdgeScroll('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight');
                 }
             } catch (error) {
                 console.error('Error loading customers:', error);
@@ -2446,6 +2957,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     // Apply date filter
                     const filterDateFrom = document.getElementById('filterRequestDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterRequestDateTo')?.value;
+                    const filterStatus = document.getElementById('filterStatus')?.value || '';
+                    const filterBank = document.getElementById('filterBank')?.value || '';
+                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, filterStatus, filterBank });
+                    if (sig !== requestsPaging.lastSig) {
+                        requestsPaging.lastSig = sig;
+                        requestsPaging.page = 1;
+                    }
                     
                     if (filterDateFrom || filterDateTo) {
                         requests = requests.filter(req => {
@@ -2458,13 +2976,33 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             return true;
                         });
                     }
+
+                    if (filterStatus) {
+                        requests = requests.filter((req) => String(req.status || '') === filterStatus);
+                    }
+
+                    if (filterBank) {
+                        const bankIdNum = Number(filterBank);
+                        requests = requests.filter((req) => {
+                            if (Number.isFinite(bankIdNum)) return Number(req.selected_bank_id) === bankIdNum;
+                            return String(req.selected_bank_name || '') === filterBank;
+                        });
+                    }
                     
                     if (requests.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';
+                        renderPaginationUI('requests', 0, requestsPaging);
                         return;
                     }
+
+                    const totalRequests = requests.length;
+                    renderPaginationUI('requests', totalRequests, requestsPaging);
+                    const totalPages = Math.max(1, Math.ceil(totalRequests / requestsPaging.pageSize));
+                    requestsPaging.page = clampPage(requestsPaging.page, totalPages);
+                    const startIdx = (requestsPaging.page - 1) * requestsPaging.pageSize;
+                    const pageRequests = requests.slice(startIdx, startIdx + requestsPaging.pageSize);
                     
-                    tbody.innerHTML = requests.map((req, index) => {
+                    tbody.innerHTML = pageRequests.map((req, index) => {
                         const statusColors = {
                             'pending': 'bg-yellow-100 text-yellow-800',
                             'approved': 'bg-green-100 text-green-800',
@@ -2478,16 +3016,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         
                         return \`
                             <tr class="border-b hover:bg-gray-50">
-                                <td class="px-4 py-3">\${index + 1}</td>
-                                <td class="px-4 py-3 font-medium">\${req.customer_name}</td>
-                                <td class="px-4 py-3">\${req.customer_phone}</td>
-                                <td class="px-4 py-3 text-sm">\${req.financing_type_name || '-'}</td>
-                                <td class="px-4 py-3 font-medium">\${req.requested_amount.toLocaleString('ar-SA')}</td>
-                                <td class="px-4 py-3">\${req.duration_months} شهر</td>
-                                <td class="px-4 py-3 text-sm">\${req.selected_bank_name || '-'}</td>
-                                <td class="px-4 py-3">
-                                    <span class="\${statusColors[req.status]} px-2 py-1 rounded text-xs">\${statusText[req.status]}</span>
-                                </td>
                                 <td class="px-4 py-3">
                                     <div class="relative inline-block text-right">
                                         <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
@@ -2507,9 +3035,21 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                         </div>
                                     </div>
                                 </td>
+                                <td class="px-4 py-3">\${startIdx + index + 1}</td>
+                                <td class="px-4 py-3 font-medium"><span class="truncate-cell">\${req.customer_name}</span></td>
+                                <td class="px-4 py-3">\${req.customer_phone}</td>
+                                <td class="px-4 py-3 text-sm">\${req.financing_type_name || '-'}</td>
+                                <td class="px-4 py-3 font-medium">\${req.requested_amount.toLocaleString('ar-SA')}</td>
+                                <td class="px-4 py-3">\${req.duration_months} شهر</td>
+                                <td class="px-4 py-3 text-sm"><span class="truncate-cell sm">\${req.selected_bank_name || '-'}</span></td>
+                                <td class="px-4 py-3">
+                                    <span class="\${statusColors[req.status]} px-2 py-1 rounded text-xs">\${statusText[req.status]}</span>
+                                </td>
                             </tr>
                         \`;
                     }).join('');
+
+                    setupEdgeScroll('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight');
                 }
             } catch (error) {
                 console.error('Error loading requests:', error);
@@ -3084,43 +3624,30 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                         <i class="fas fa-paperclip ml-1"></i>
                                         المرفقات
                                     </p>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        \${(request.id_attachment_url && request.id_attachment_url !== 'null') ? \`
-                                            <a href="\${request.id_attachment_url}" target="_blank" 
-                                               class="flex items-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors">
-                                                <i class="fas fa-id-card text-blue-600"></i>
-                                                <span class="text-sm text-blue-800 font-medium">صورة الهوية</span>
-                                                <i class="fas fa-download text-blue-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">صورة الهوية: غير مرفقة</div>'}
-                                        
-                                        \${(request.bank_statement_attachment_url && request.bank_statement_attachment_url !== 'null') ? \`
-                                            <a href="\${request.bank_statement_attachment_url}" target="_blank"
-                                               class="flex items-center gap-2 p-3 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors">
-                                                <i class="fas fa-university text-green-600"></i>
-                                                <span class="text-sm text-green-800 font-medium">كشف الحساب البنكي</span>
-                                                <i class="fas fa-download text-green-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">كشف الحساب: غير مرفق</div>'}
-                                        
-                                        \${(request.salary_attachment_url && request.salary_attachment_url !== 'null') ? \`
-                                            <a href="\${request.salary_attachment_url}" target="_blank"
-                                               class="flex items-center gap-2 p-3 bg-yellow-50 hover:bg-yellow-100 rounded-lg border border-yellow-200 transition-colors">
-                                                <i class="fas fa-file-invoice-dollar text-yellow-600"></i>
-                                                <span class="text-sm text-yellow-800 font-medium">تعريف الراتب</span>
-                                                <i class="fas fa-download text-yellow-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">تعريف الراتب: غير مرفق</div>'}
-                                        
-                                        \${(request.additional_attachment_url && request.additional_attachment_url !== 'null') ? \`
-                                            <a href="\${request.additional_attachment_url}" target="_blank"
-                                               class="flex items-center gap-2 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors">
-                                                <i class="fas fa-file text-purple-600"></i>
-                                                <span class="text-sm text-purple-800 font-medium">مرفقات إضافية</span>
-                                                <i class="fas fa-download text-purple-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">مرفقات إضافية: غير مرفقة</div>'}
-                                    </div>
+                                    \${(() => {
+                                        const docs = [
+                                          { key: 'identity_attachment_url', label: 'ملف الهوية', icon: 'fa-id-card', bg: 'blue' },
+                                          { key: 'signature_attachment_url', label: 'ملف السمة', icon: 'fa-signature', bg: 'green' },
+                                          { key: 'salary_profile_attachment_url', label: 'ملف تعريف الراتب', icon: 'fa-money-check', bg: 'yellow' },
+                                          { key: 'gosi_attachment_url', label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', bg: 'orange' },
+                                          { key: 'tax_exemption_attachment_url', label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', bg: 'indigo' },
+                                          { key: 'additional_1_attachment_url', label: 'مستند إضافي 1', icon: 'fa-file-alt', bg: 'purple' },
+                                          { key: 'additional_2_attachment_url', label: 'مستند إضافي 2', icon: 'fa-file-alt', bg: 'purple' },
+                                          { key: 'additional_3_attachment_url', label: 'مستند إضافي 3', icon: 'fa-file-alt', bg: 'purple' }
+                                        ];
+                                        const existing = docs
+                                          .map(d => ({ ...d, url: request[d.key] }))
+                                          .filter(d => d.url && d.url !== 'null');
+                                        if (existing.length === 0) return '';
+                                        return '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' + existing.map(d => \`
+                                          <a href="\${d.url}" target="_blank"
+                                             class="flex items-center gap-2 p-3 bg-\${d.bg}-50 hover:bg-\${d.bg}-100 rounded-lg border border-\${d.bg}-200 transition-colors">
+                                              <i class="fas \${d.icon} text-\${d.bg}-600"></i>
+                                              <span class="text-sm text-\${d.bg}-800 font-medium">\${d.label}</span>
+                                              <i class="fas fa-download text-\${d.bg}-600 mr-auto"></i>
+                                          </a>
+                                        \`).join('') + '</div>';
+                                    })()}
                                 </div>
                             </div>
                         \`;
@@ -3367,7 +3894,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     tbody.innerHTML = users.map((user, index) => \`
                         <tr class="border-b hover:bg-gray-50">
                             <td class="px-4 py-3">\${index + 1}</td>
-                            <td class="px-4 py-3 font-medium">\${user.full_name}</td>
+                            <td class="px-4 py-3 font-medium"><span class="truncate-cell">\${user.full_name}</span></td>
                             <td class="px-4 py-3">\${user.email}</td>
                             <td class="px-4 py-3">\${user.username}</td>
                             <td class="px-4 py-3">
@@ -4216,52 +4743,51 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 return localPath;
             }
         }
-
-        window.showPanelCopyToast = function (msg) {
-            var wrap = document.getElementById('anyLinkCopyToast');
-            var span = document.getElementById('anyLinkCopyToastText');
-            if (span) span.textContent = msg || 'تم النسخ';
-            if (wrap) {
-                wrap.classList.remove('hidden');
-                if (window.__panelCopyToastTimer) clearTimeout(window.__panelCopyToastTimer);
-                window.__panelCopyToastTimer = setTimeout(function () {
-                    wrap.classList.add('hidden');
-                }, 2500);
+        
+        function bindContactAffiliateActions(rootEl) {
+            if (!rootEl) return;
+            function fallbackCopy(text) {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                } catch (e) {}
+                document.body.removeChild(ta);
             }
-            var h1 = document.getElementById('copySuccessMessage');
-            var h2 = document.getElementById('contactRootCopySuccessMessage');
-            if (h1) h1.classList.add('hidden');
-            if (h2) h2.classList.add('hidden');
-        };
-
-        function legacyCopyString(text, onOk) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.setAttribute('readonly', '');
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-                if (onOk) onOk();
-            } catch (e) {
-                alert('تعذر نسخ الرابط');
-            }
-            document.body.removeChild(ta);
-        }
-
-        function copyStringToClipboard(text, onOk) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(function () {
-                    if (onOk) onOk();
-                }).catch(function () {
-                    legacyCopyString(text, onOk);
+            rootEl.querySelectorAll('[data-aff-copy]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var u = btn.getAttribute('data-aff-copy');
+                    if (!u) return;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(u).catch(function () {
+                            fallbackCopy(u);
+                        });
+                    } else {
+                        fallbackCopy(u);
+                    }
                 });
-                return;
-            }
-            legacyCopyString(text, onOk);
+            });
+            rootEl.querySelectorAll('[data-aff-open]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var u = btn.getAttribute('data-aff-open');
+                    if (u) window.open(u, '_blank');
+                });
+            });
         }
+
+        window.toggleShareLinksDropdown = function () {
+            var panel = document.getElementById('shareLinksDropdownPanel');
+            var btn = document.getElementById('shareLinksDropdownToggle');
+            var chev = document.getElementById('shareLinksDropdownChevron');
+            if (!panel || !btn) return;
+            var nowHidden = panel.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
+            if (chev) chev.classList.toggle('open', !nowHidden);
+        };
 
         // Generate and display calculator link and QR code
         async function loadCalculatorLink() {
@@ -4319,94 +4845,95 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 qrcodeContainer.appendChild(qrImg);
             }
 
-            const sectionWrap = document.getElementById('affiliateSectionWrap');
-            const container = document.getElementById('affiliateLinksRowsContainer');
-            if (sectionWrap && container) {
-                container.innerHTML = '';
-                var rid = parseInt(userData.role_id, 10);
-                var roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+            const affWrap = document.getElementById('contactAffiliateLinksWrap');
+            const affList = document.getElementById('contactAffiliateLinksList');
+            if (affWrap && affList) {
+                affList.innerHTML = '';
+                let rid = parseInt(userData.role_id, 10);
+                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
                 if (roleLegacy[rid]) rid = roleLegacy[rid];
                 if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
-                    var w = parseInt(window.USER_ROLE_ID, 10);
+                    const w = parseInt(window.USER_ROLE_ID, 10);
                     rid = roleLegacy[w] || w;
                 }
-                var showAff = (rid === 1 || rid === 2) && contactRootPath && contactRootPath !== '/';
+                let showAff = Boolean(contactRootPath && contactRootPath !== '/');
                 if (rid === 1) {
-                    var tidCheck = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                    if (!Number.isFinite(tidCheck) || tidCheck <= 0) showAff = false;
+                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
                 }
-                var manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
+                const manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
                 if (manageAffBlock) {
-                    manageAffBlock.style.display = showAff && (rid === 1 || rid === 2) ? '' : 'none';
+                    manageAffBlock.style.display = rid === 1 || rid === 2 ? '' : 'none';
                 }
                 if (!showAff) {
-                    sectionWrap.style.display = 'none';
+                    affWrap.style.display = 'none';
                 } else {
-                    sectionWrap.style.display = '';
-                    function escAffRow(s) {
-                        return String(s ?? '')
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/"/g, '&quot;');
-                    }
-                    function escAttrRow(s) {
-                        return String(s ?? '')
-                            .replace(/&/g, '&amp;')
-                            .replace(/"/g, '&quot;')
-                            .replace(/'/g, '&#39;');
-                    }
-                    function affiliateRowCard(label, fullUrl) {
-                        var esc = escAffRow;
-                        var a = escAttrRow(fullUrl);
-                        return (
-                            '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">' +
-                            '<p class="text-xs font-semibold text-gray-600 mb-2">' + esc(label) + '</p>' +
-                            '<div class="flex flex-wrap gap-2">' +
-                            '<input type="text" readonly dir="ltr" value="' + a + '" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">' +
-                            '<button type="button" class="js-aff-copy inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ" data-url="' + a + '"><i class="fas fa-copy"></i></button>' +
-                            '<button type="button" class="js-aff-open inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح" data-url="' + a + '"><i class="fas fa-external-link-alt"></i></button>' +
-                            '</div></div>'
-                        );
-                    }
+                    affWrap.style.display = 'block';
                     try {
-                        var u = '/api/tenant-contact-affiliates';
+                        let u = '/api/tenant-contact-affiliates';
                         if (rid === 1) {
-                            var tidQ = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                            u += '?tenant_id=' + tidQ;
+                            const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            u += '?tenant_id=' + tid;
                         }
-                        var res = await axios.get(u);
-                        var rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
+                        const res = await axios.get(u);
+                        const rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
+                        function escAff(s) {
+                            return String(s ?? '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;');
+                        }
+                        function escAttr(s) {
+                            return String(s ?? '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/"/g, '&quot;')
+                                .replace(/'/g, '&#39;');
+                        }
                         if (!rows.length) {
-                            container.innerHTML =
-                                '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70 text-sm text-gray-500 text-center">لا توجد روابط تسويقية بعد.</div>';
+                            affList.innerHTML =
+                                '<div class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 leading-relaxed">' +
+                                'لا توجد روابط تتبع بعد. استخدم «إدارة روابط التتبع» أدناه لإضافة مسار.' +
+                                '</div>';
                         } else {
-                            container.innerHTML = rows
+                            affList.innerHTML = rows
                                 .map(function (r) {
                                     var pathSeg = encodeURIComponent(r.path_segment || '');
-                                    var full = baseUrl + String(contactRootPath).replace(/\\/$/, '') + '/' + pathSeg;
-                                    return affiliateRowCard(r.label || r.path_segment || 'رابط', full);
+                                    var full =
+                                        baseUrl +
+                                        String(contactRootPath).replace(/\\/$/, '') +
+                                        '/' +
+                                        pathSeg;
+                                    return (
+                                        '<div class="rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                                        '<p class="text-xs font-bold text-gray-800 mb-2">' +
+                                        escAff(r.label) +
+                                        '</p>' +
+                                        '<label class="block text-xs font-medium text-gray-600 mb-1.5">رابط الحملة</label>' +
+                                        '<div class="flex gap-2">' +
+                                        '<input type="text" readonly dir="ltr" class="flex-1 min-w-0 px-4 py-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800" value="' +
+                                        escAttr(full) +
+                                        '">' +
+                                        '<button type="button" class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold transition-colors" data-aff-copy="' +
+                                        escAttr(full) +
+                                        '" title="نسخ الرابط">' +
+                                        '<i class="fas fa-copy"></i>' +
+                                        '</button>' +
+                                        '</div>' +
+                                        '<button type="button" class="w-full mt-3 bg-slate-700 hover:bg-slate-800 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-colors shadow-sm" data-aff-open="' +
+                                        escAttr(full) +
+                                        '">' +
+                                        '<i class="fas fa-external-link-alt ml-2"></i>فتح في نافذة جديدة' +
+                                        '</button>' +
+                                        '</div>'
+                                    );
                                 })
                                 .join('');
+                            bindContactAffiliateActions(affList);
                         }
-                        container.querySelectorAll('.js-aff-copy').forEach(function (btn) {
-                            btn.addEventListener('click', function () {
-                                var url = btn.getAttribute('data-url');
-                                if (!url) return;
-                                copyStringToClipboard(url, function () {
-                                    window.showPanelCopyToast('تم نسخ الرابط');
-                                });
-                            });
-                        });
-                        container.querySelectorAll('.js-aff-open').forEach(function (btn) {
-                            btn.addEventListener('click', function () {
-                                var url = btn.getAttribute('data-url');
-                                if (url) window.open(url, '_blank');
-                            });
-                        });
                     } catch (e) {
-                        container.innerHTML =
-                            '<div class="rounded-lg border border-red-200 p-3 bg-red-50 text-sm text-red-700 text-center">تعذر تحميل روابط الإحالة</div>';
+                        affList.innerHTML =
+                            '<div class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">تعذر تحميل الروابط</div>';
                     }
                 }
             }
@@ -4432,8 +4959,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 // Show success message
                 const successMessage = document.getElementById('copySuccessMessage');
-                var anyT = document.getElementById('anyLinkCopyToast');
-                if (anyT) anyT.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => {
@@ -4472,8 +4997,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 document.execCommand('copy');
                 const successMessage = document.getElementById('contactRootCopySuccessMessage');
-                var anyT2 = document.getElementById('anyLinkCopyToast');
-                if (anyT2) anyT2.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => successMessage.classList.add('hidden'), 3000);

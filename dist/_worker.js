@@ -1,4 +1,4 @@
-var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw new Error("next() called multiple times");r=i;let o,d=!1,c;if(e[i]?(c=e[i][0][0],s.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{o=await c(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},vt=Symbol(),wt=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,r=(e instanceof Ve?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?_t(e,{all:a,dot:s}):{}};async function _t(e,t){const a=await e.formData();return a?kt(a,t):{}}function kt(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?Et(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(It(a,s,n),delete a[s])}),a}var Et=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},It=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((r,l)=>{l===n.length-1?s[r]=a:((!s[r]||typeof s[r]!="object"||Array.isArray(s[r])||s[r]instanceof File)&&(s[r]=Object.create(null)),s=s[r])})},Pe=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},St=e=>{const{groups:t,path:a}=Tt(e),s=Pe(a);return Dt(s,t)},Tt=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},Dt=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},ce={},Bt=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return ce[s]||(a[2]?ce[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:ce[s]=[e,a[1],!0]),ce[s]}return null},ke=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Ct=e=>ke(e,decodeURI),He=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const r=t.indexOf("?",s),l=t.slice(a,r===-1?void 0:r);return Ct(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(n===63)break}return t.slice(a,s)},Rt=e=>{const t=He(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},K=(e,t,...a)=>(a.length&&(t=K(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Ue=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const r=n.replace("?","");s+="/"+r,a.push(s)}else s+="/"+n}),a.filter((n,r,l)=>l.indexOf(n)===r)},ye=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?ke(e,We):e):e,ze=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const o=l+t.length+2,d=e.indexOf("&",o);return ye(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){const l=e.indexOf("&",r+1);let i=e.indexOf("=",r);i>l&&l!==-1&&(i=-1);let o=e.slice(r+1,i===-1?l===-1?void 0:l:i);if(s&&(o=ye(o)),r=l,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=ye(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},jt=ze,Lt=(e,t)=>ze(e,t,!0),We=decodeURIComponent,Ce=e=>ke(e,We),Ve=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?Ce(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Ce(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return jt(this.url,e)}queries(e){return Lt(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await wt(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(r=>(n==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[vt](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},At={Stringify:1},Ge=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const r=e.callbacks;return r?.length?(n?n[0]+=e:n=[e],Promise.all(r.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>Ge(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},Nt="text/plain; charset=UTF-8",ve=(e,t)=>({"Content-Type":e,...t}),Ot=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Ve(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#i??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of r)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[r,l]of Object.entries(a))if(typeof l=="string")s.set(r,l);else{s.delete(r);for(const i of l)s.append(r,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,ve(Nt,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,ve("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,ve("text/html; charset=UTF-8",a));return typeof e=="object"?Ge(e,At.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},T="ALL",$t="all",qt=["get","post","put","delete","options","patch"],Ye="Can not add a route since the matcher is already built.",Je=class extends Error{},Mt="__COMPOSED_HANDLER",Ft=e=>e.text("404 Not Found",404),Re=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Pt=class Xe{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...qt,$t].forEach(r=>{this[r]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#r(r,this.#t,l),i.forEach(o=>{this.#r(r,this.#t,o)}),this)}),this.on=(r,l,...i)=>{for(const o of[l].flat()){this.#t=o;for(const d of[r].flat())i.map(c=>{this.#r(d.toUpperCase(),this.#t,c)})}return this},this.use=(r,...l)=>(typeof r=="string"?this.#t=r:(this.#t="*",l.unshift(r)),l.forEach(i=>{this.#r(T,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??He:Rt}#e(){const t=new Xe({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Ft;errorHandler=Re;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let r;a.errorHandler===Re?r=n.handler:(r=async(l,i)=>(await Be([],a.errorHandler)(l,()=>n.handler(l,i))).res,r[Mt]=n.handler),s.#r(n.method,n.path,r)}),this}basePath(t){const a=this.#e();return a._basePath=K(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,r;s&&(typeof s=="function"?r=s:(r=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const l=r?o=>{const d=r(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=K(this._basePath,t),d=o==="/"?0:o.length;return c=>{const u=new URL(c.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,c)}})();const i=async(o,d)=>{const c=await a(n(o.req.raw),...l(o));if(c)return c;await d()};return this.#r(T,K(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=K(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const r=this.getPath(t,{env:s}),l=this.router.match(n,r),i=new Ot(t,{path:r,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const o=Be(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${K("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},Qe=[];function Ht(e,t){const a=this.buildAllMatchers(),s=((n,r)=>{const l=a[n]||a[T],i=l[2][r];if(i)return i;const o=r.match(l[0]);if(!o)return[[],Qe];const d=o.indexOf("",1);return[l[1][d],o]});return this.match=s,s(e,t)}var pe="[^/]+",re=".*",oe="(?:|/.*)",Z=Symbol(),Ut=new Set(".\\+*[^]$()");function zt(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===re||e===oe?1:t===re||t===oe?-1:e===pe?1:t===pe?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Wt=class _e{#t;#e;#a=Object.create(null);insert(t,a,s,n,r){if(t.length===0){if(this.#t!==void 0)throw Z;if(r)return;this.#t=a;return}const[l,...i]=t,o=l==="*"?i.length===0?["","",re]:["","",pe]:l==="/*"?["","",oe]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const c=o[1];let u=o[2]||pe;if(c&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw Z;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==re&&m!==oe))throw Z;if(r)return;d=this.#a[u]=new _e,c!==""&&(d.#e=n.varIndex++)}!r&&c!==""&&s.push([c,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==re&&c!==oe))throw Z;if(r)return;d=this.#a[l]=new _e}d.insert(i,a,s,n,r)}buildRegExpStr(){const a=Object.keys(this.#a).sort(zt).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:Ut.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Vt=class{#t={varIndex:0};#e=new Wt;insert(e,t,a){const s=[],n=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${l}`;return n[l]=[d,o],l++,i=!0,d}),!i)break}const r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=n.length-1;l>=0;l--){const[i]=n[l];for(let o=r.length-1;o>=0;o--)if(r[o].indexOf(i)!==-1){r[o]=r[o].replace(i,n[l][1]);break}}return this.#e.insert(r,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,r,l)=>r!==void 0?(a[++t]=Number(r),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Gt=[/^$/,[],Object.create(null)],Ke=Object.create(null);function Ze(e){return Ke[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Yt(){Ke=Object.create(null)}function Jt(e){const t=new Vt,a=[];if(e.length===0)return Gt;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[u,m])=>d?1:u?-1:c.length-m.length),n=Object.create(null);for(let d=0,c=-1,u=s.length;d<u;d++){const[m,f,g]=s[d];m?n[f]=[g.map(([y])=>[y,Object.create(null)]),Qe]:c++;let b;try{b=t.insert(f,c,m)}catch(y){throw y===Z?new Je(f):y}m||(a[c]=g.map(([y,h])=>{const w=Object.create(null);for(h-=1;h>=0;h--){const[v,_]=b[h];w[v]=_}return[y,w]}))}const[r,l,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let u=0,m=a[d].length;u<m;u++){const f=a[d][u]?.[1];if(!f)continue;const g=Object.keys(f);for(let b=0,y=g.length;b<y;b++)f[g[b]]=i[f[g[b]]]}const o=[];for(const d in l)o[d]=a[l[d]];return[r,o,n]}function Q(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if(Ze(a).test(t))return[...e[a]]}}var Xt=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[T]:Object.create(null)},this.#e={[T]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(Ye);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[T]).forEach(o=>{i[e][o]=[...i[T][o]]})}),t==="/*"&&(t="*");const r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=Ze(t);e===T?Object.keys(s).forEach(o=>{s[o][t]||=Q(s[o],t)||Q(s[T],t)||[]}):s[e][t]||=Q(s[e],t)||Q(s[T],t)||[],Object.keys(s).forEach(o=>{(e===T||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,r])})}),Object.keys(n).forEach(o=>{(e===T||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,r]))});return}const l=Ue(t)||[t];for(let i=0,o=l.length;i<o;i++){const d=l[i];Object.keys(n).forEach(c=>{(e===T||e===c)&&(n[c][d]||=[...Q(s[c],d)||Q(s[T],d)||[]],n[c][d].push([a,r-o+i+1]))})}}match=Ht;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Yt(),e}#a(e){const t=[];let a=e===T;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(r=>[r,s[e][r]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==T&&t.push(...Object.keys(s[T]).map(r=>[r,s[T][r]]))}),a?Jt(t):null}},Qt=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ye);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let r=0,l;for(;r<n;r++){const i=a[r];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);l=i.match(e,t)}catch(o){if(o instanceof Je)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(r===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},se=Object.create(null),Kt=class et{#t;#e;#a;#r=0;#n=se;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const r=St(a),l=[];for(let i=0,o=r.length;i<o;i++){const d=r[i],c=r[i+1],u=Bt(d,c),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&l.push(u[1]);continue}n.#e[m]=new et,u&&(n.#a.push(u),l.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const r=[];for(let l=0,i=t.#t.length;l<i;l++){const o=t.#t[l],d=o[a]||o[T],c={};if(d!==void 0&&(d.params=Object.create(null),r.push(d),s!==se||n&&n!==se))for(let u=0,m=d.possibleKeys.length;u<m;u++){const f=d.possibleKeys[u],g=c[d.score];d.params[f]=n?.[f]&&!g?n[f]:s[f]??n?.[f],c[d.score]=!0}}return r}search(t,a){const s=[];this.#n=se;let r=[this];const l=Pe(a),i=[];for(let o=0,d=l.length;o<d;o++){const c=l[o],u=o===d-1,m=[];for(let f=0,g=r.length;f<g;f++){const b=r[f],y=b.#e[c];y&&(y.#n=b.#n,u?(y.#e["*"]&&s.push(...this.#s(y.#e["*"],t,b.#n)),s.push(...this.#s(y,t,b.#n))):m.push(y));for(let h=0,w=b.#a.length;h<w;h++){const v=b.#a[h],_=b.#n===se?{}:{...b.#n};if(v==="*"){const C=b.#e["*"];C&&(s.push(...this.#s(C,t,b.#n)),C.#n=_,m.push(C));continue}const[R,B,j]=v;if(!c&&!(j instanceof RegExp))continue;const E=b.#e[R],S=l.slice(o).join("/");if(j instanceof RegExp){const C=j.exec(S);if(C){if(_[B]=C[0],s.push(...this.#s(E,t,b.#n,_)),Object.keys(E.#e).length){E.#n=_;const O=C[0].match(/\//)?.length??0;(i[O]||=[]).push(E)}continue}}(j===!0||j.test(c))&&(_[B]=c,u?(s.push(...this.#s(E,t,_,b.#n)),E.#e["*"]&&s.push(...this.#s(E.#e["*"],t,_,b.#n))):(E.#n=_,m.push(E)))}}r=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},Zt=class{name="TrieRouter";#t;constructor(){this.#t=new Kt}add(e,t,a){const s=Ue(t);if(s){for(let n=0,r=s.length;n<r;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},tt=class extends Pt{constructor(e={}){super(e),this.router=e.router??new Qt({routers:[new Xt,new Zt]})}},ea=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(r=>typeof r=="string"?r==="*"?()=>r:l=>r===l?l:null:typeof r=="function"?r:l=>r.includes(l)?l:null)(a.origin),n=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(a.allowMethods);return async function(l,i){function o(c,u){l.res.headers.set(c,u)}const d=await s(l.req.header("origin")||"",l);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const c=await n(l.req.header("origin")||"",l);c.length&&o("Access-Control-Allow-Methods",c.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const ta=`<!DOCTYPE html>
+var je=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw new Error("next() called multiple times");r=i;let o,d=!1,p;if(e[i]?(p=e[i][0][0],s.req.routeIndex=i):p=i===e.length&&n||void 0,p)try{o=await p(s,()=>l(i+1))}catch(u){if(u instanceof Error&&t)s.error=u,o=await t(u,s),d=!0;else throw u}else s.finalized===!1&&a&&(o=await a(s));return o&&(s.finalized===!1||d)&&(s.res=o),s}},It=Symbol(),St=async(e,t=Object.create(null))=>{const{all:a=!1,dot:s=!1}=t,r=(e instanceof Qe?e.raw.headers:e.headers).get("Content-Type");return r?.startsWith("multipart/form-data")||r?.startsWith("application/x-www-form-urlencoded")?Tt(e,{all:a,dot:s}):{}};async function Tt(e,t){const a=await e.formData();return a?Dt(a,t):{}}function Dt(e,t){const a=Object.create(null);return e.forEach((s,n)=>{t.all||n.endsWith("[]")?Bt(a,n,s):a[n]=s}),t.dot&&Object.entries(a).forEach(([s,n])=>{s.includes(".")&&(Rt(a,s,n),delete a[s])}),a}var Bt=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Rt=(e,t,a)=>{let s=e;const n=t.split(".");n.forEach((r,l)=>{l===n.length-1?s[r]=a:((!s[r]||typeof s[r]!="object"||Array.isArray(s[r])||s[r]instanceof File)&&(s[r]=Object.create(null)),s=s[r])})},Ve=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Ct=e=>{const{groups:t,path:a}=Lt(e),s=Ve(a);return At(s,t)},Lt=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,s)=>{const n=`@${s}`;return t.push([n,a]),n}),{groups:t,path:e}},At=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[s]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(s)){e[n]=e[n].replace(s,t[a][1]);break}}return e},fe={},jt=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const s=`${e}#${t}`;return fe[s]||(a[2]?fe[s]=t&&t[0]!==":"&&t[0]!=="*"?[s,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:fe[s]=[e,a[1],!0]),fe[s]}return null},Te=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Nt=e=>Te(e,decodeURI),Ge=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let s=a;for(;s<t.length;s++){const n=t.charCodeAt(s);if(n===37){const r=t.indexOf("?",s),l=t.slice(a,r===-1?void 0:r);return Nt(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(n===63)break}return t.slice(a,s)},Mt=e=>{const t=Ge(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},ae=(e,t,...a)=>(a.length&&(t=ae(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Ye=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let s="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))s+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&s===""?a.push("/"):a.push(s);const r=n.replace("?","");s+="/"+r,a.push(s)}else s+="/"+n}),a.filter((n,r,l)=>l.indexOf(n)===r)},Ee=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?Te(e,Xe):e):e,Je=(e,t,a)=>{let s;if(!a&&t&&!/[%+]/.test(t)){let l=e.indexOf("?",8);if(l===-1)return;for(e.startsWith(t,l+1)||(l=e.indexOf(`&${t}`,l+1));l!==-1;){const i=e.charCodeAt(l+t.length+1);if(i===61){const o=l+t.length+2,d=e.indexOf("&",o);return Ee(e.slice(o,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";l=e.indexOf(`&${t}`,l+1)}if(s=/[%+]/.test(e),!s)return}const n={};s??=/[%+]/.test(e);let r=e.indexOf("?",8);for(;r!==-1;){const l=e.indexOf("&",r+1);let i=e.indexOf("=",r);i>l&&l!==-1&&(i=-1);let o=e.slice(r+1,i===-1?l===-1?void 0:l:i);if(s&&(o=Ee(o)),r=l,o==="")continue;let d;i===-1?d="":(d=e.slice(i+1,l===-1?void 0:l),s&&(d=Ee(d))),a?(n[o]&&Array.isArray(n[o])||(n[o]=[]),n[o].push(d)):n[o]??=d}return t?n[t]:n},Ot=Je,Ft=(e,t)=>Je(e,t,!0),Xe=decodeURIComponent,Ne=e=>Te(e,Xe),Qe=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#r()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?Ne(a):a}#r(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const s=this.#n(this.#e[0][this.routeIndex][1][a]);s!==void 0&&(e[a]=/\%/.test(s)?Ne(s):s)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Ot(this.url,e)}queries(e){return Ft(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,s)=>{t[s]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await St(this,e)}#s=e=>{const{bodyCache:t,raw:a}=this,s=t[e];if(s)return s;const n=Object.keys(t)[0];return n?t[n].then(r=>(n==="json"&&(r=JSON.stringify(r)),new Response(r)[e]())):t[e]=a[e]()};json(){return this.#s("text").then(e=>JSON.parse(e))}text(){return this.#s("text")}arrayBuffer(){return this.#s("arrayBuffer")}blob(){return this.#s("blob")}formData(){return this.#s("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[It](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},qt={Stringify:1},Ke=async(e,t,a,s,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const r=e.callbacks;return r?.length?(n?n[0]+=e:n=[e],Promise.all(r.map(i=>i({phase:t,buffer:n,context:s}))).then(i=>Promise.all(i.filter(Boolean).map(o=>Ke(o,t,!1,s,n))).then(()=>n[0]))):Promise.resolve(e)},Pt="text/plain; charset=UTF-8",ke=(e,t)=>({"Content-Type":e,...t}),$t=class{#t;#e;env={};#a;finalized=!1;error;#r;#n;#s;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Qe(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#s||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#s&&e){e=new Response(e.body,e);for(const[t,a]of this.#s.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const s=this.#s.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of s)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#s=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#s=new Response(this.#s.body,this.#s));const s=this.#s?this.#s.headers:this.#i??=new Headers;t===void 0?s.delete(e):a?.append?s.append(e,t):s.set(e,t)};status=e=>{this.#r=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const s=this.#s?new Headers(this.#s.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const r=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[l,i]of r)l.toLowerCase()==="set-cookie"?s.append(l,i):s.set(l,i)}if(a)for(const[r,l]of Object.entries(a))if(typeof l=="string")s.set(r,l);else{s.delete(r);for(const i of l)s.append(r,i)}const n=typeof t=="number"?t:t?.status??this.#r;return new Response(e,{status:n,headers:s})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#r&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,ke(Pt,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,ke("application/json",a));html=(e,t,a)=>{const s=n=>this.#o(n,t,ke("text/html; charset=UTF-8",a));return typeof e=="object"?Ke(e,qt.Stringify,!1,{}).then(s):s(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},D="ALL",Ht="all",zt=["get","post","put","delete","options","patch"],Ze="Can not add a route since the matcher is already built.",et=class extends Error{},Ut="__COMPOSED_HANDLER",Wt=e=>e.text("404 Not Found",404),Me=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Vt=class tt{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...zt,Ht].forEach(r=>{this[r]=(l,...i)=>(typeof l=="string"?this.#t=l:this.#r(r,this.#t,l),i.forEach(o=>{this.#r(r,this.#t,o)}),this)}),this.on=(r,l,...i)=>{for(const o of[l].flat()){this.#t=o;for(const d of[r].flat())i.map(p=>{this.#r(d.toUpperCase(),this.#t,p)})}return this},this.use=(r,...l)=>(typeof r=="string"?this.#t=r:(this.#t="*",l.unshift(r)),l.forEach(i=>{this.#r(D,this.#t,i)}),this);const{strict:s,...n}=t;Object.assign(this,n),this.getPath=s??!0?t.getPath??Ge:Mt}#e(){const t=new tt({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Wt;errorHandler=Me;route(t,a){const s=this.basePath(t);return a.routes.map(n=>{let r;a.errorHandler===Me?r=n.handler:(r=async(l,i)=>(await je([],a.errorHandler)(l,()=>n.handler(l,i))).res,r[Ut]=n.handler),s.#r(n.method,n.path,r)}),this}basePath(t){const a=this.#e();return a._basePath=ae(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,s){let n,r;s&&(typeof s=="function"?r=s:(r=s.optionHandler,s.replaceRequest===!1?n=o=>o:n=s.replaceRequest));const l=r?o=>{const d=r(o);return Array.isArray(d)?d:[d]}:o=>{let d;try{d=o.executionCtx}catch{}return[o.env,d]};n||=(()=>{const o=ae(this._basePath,t),d=o==="/"?0:o.length;return p=>{const u=new URL(p.url);return u.pathname=u.pathname.slice(d)||"/",new Request(u,p)}})();const i=async(o,d)=>{const p=await a(n(o.req.raw),...l(o));if(p)return p;await d()};return this.#r(D,ae(t,"*"),i),this}#r(t,a,s){t=t.toUpperCase(),a=ae(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:s};this.router.add(t,a,[s,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#s(t,a,s,n){if(n==="HEAD")return(async()=>new Response(null,await this.#s(t,a,s,"GET")))();const r=this.getPath(t,{env:s}),l=this.router.match(n,r),i=new $t(t,{path:r,matchResult:l,env:s,executionCtx:a,notFoundHandler:this.#a});if(l[0].length===1){let d;try{d=l[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(p){return this.#n(p,i)}return d instanceof Promise?d.then(p=>p||(i.finalized?i.res:this.#a(i))).catch(p=>this.#n(p,i)):d??this.#a(i)}const o=je(l[0],this.errorHandler,this.#a);return(async()=>{try{const d=await o(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#s(t,a[1],a[0],t.method);request=(t,a,s,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,s,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${ae("/",t)}`,a),s,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#s(t.request,t,void 0,t.request.method))})}},at=[];function Gt(e,t){const a=this.buildAllMatchers(),s=((n,r)=>{const l=a[n]||a[D],i=l[2][r];if(i)return i;const o=r.match(l[0]);if(!o)return[[],at];const d=o.indexOf("",1);return[l[1][d],o]});return this.match=s,s(e,t)}var be="[^/]+",ce=".*",pe="(?:|/.*)",se=Symbol(),Yt=new Set(".\\+*[^]$()");function Jt(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===ce||e===pe?1:t===ce||t===pe?-1:e===be?1:t===be?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Xt=class Se{#t;#e;#a=Object.create(null);insert(t,a,s,n,r){if(t.length===0){if(this.#t!==void 0)throw se;if(r)return;this.#t=a;return}const[l,...i]=t,o=l==="*"?i.length===0?["","",ce]:["","",be]:l==="/*"?["","",pe]:l.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(o){const p=o[1];let u=o[2]||be;if(p&&o[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw se;if(d=this.#a[u],!d){if(Object.keys(this.#a).some(m=>m!==ce&&m!==pe))throw se;if(r)return;d=this.#a[u]=new Se,p!==""&&(d.#e=n.varIndex++)}!r&&p!==""&&s.push([p,d.#e])}else if(d=this.#a[l],!d){if(Object.keys(this.#a).some(p=>p.length>1&&p!==ce&&p!==pe))throw se;if(r)return;d=this.#a[l]=new Se}d.insert(i,a,s,n,r)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Jt).map(s=>{const n=this.#a[s];return(typeof n.#e=="number"?`(${s})@${n.#e}`:Yt.has(s)?`\\${s}`:s)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Qt=class{#t={varIndex:0};#e=new Xt;insert(e,t,a){const s=[],n=[];for(let l=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,o=>{const d=`@\\${l}`;return n[l]=[d,o],l++,i=!0,d}),!i)break}const r=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let l=n.length-1;l>=0;l--){const[i]=n[l];for(let o=r.length-1;o>=0;o--)if(r[o].indexOf(i)!==-1){r[o]=r[o].replace(i,n[l][1]);break}}return this.#e.insert(r,t,s,this.#t,a),s}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],s=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,r,l)=>r!==void 0?(a[++t]=Number(r),"$()"):(l!==void 0&&(s[Number(l)]=++t),"")),[new RegExp(`^${e}`),a,s]}},Kt=[/^$/,[],Object.create(null)],st=Object.create(null);function nt(e){return st[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Zt(){st=Object.create(null)}function ea(e){const t=new Qt,a=[];if(e.length===0)return Kt;const s=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,p],[u,m])=>d?1:u?-1:p.length-m.length),n=Object.create(null);for(let d=0,p=-1,u=s.length;d<u;d++){const[m,b,g]=s[d];m?n[b]=[g.map(([h])=>[h,Object.create(null)]),at]:p++;let x;try{x=t.insert(b,p,m)}catch(h){throw h===se?new et(b):h}m||(a[p]=g.map(([h,f])=>{const v=Object.create(null);for(f-=1;f>=0;f--){const[w,_]=x[f];v[w]=_}return[h,v]}))}const[r,l,i]=t.buildRegExp();for(let d=0,p=a.length;d<p;d++)for(let u=0,m=a[d].length;u<m;u++){const b=a[d][u]?.[1];if(!b)continue;const g=Object.keys(b);for(let x=0,h=g.length;x<h;x++)b[g[x]]=i[b[g[x]]]}const o=[];for(const d in l)o[d]=a[l[d]];return[r,o,n]}function te(e,t){if(e){for(const a of Object.keys(e).sort((s,n)=>n.length-s.length))if(nt(a).test(t))return[...e[a]]}}var ta=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[D]:Object.create(null)},this.#e={[D]:Object.create(null)}}add(e,t,a){const s=this.#t,n=this.#e;if(!s||!n)throw new Error(Ze);s[e]||[s,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[D]).forEach(o=>{i[e][o]=[...i[D][o]]})}),t==="/*"&&(t="*");const r=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=nt(t);e===D?Object.keys(s).forEach(o=>{s[o][t]||=te(s[o],t)||te(s[D],t)||[]}):s[e][t]||=te(s[e],t)||te(s[D],t)||[],Object.keys(s).forEach(o=>{(e===D||e===o)&&Object.keys(s[o]).forEach(d=>{i.test(d)&&s[o][d].push([a,r])})}),Object.keys(n).forEach(o=>{(e===D||e===o)&&Object.keys(n[o]).forEach(d=>i.test(d)&&n[o][d].push([a,r]))});return}const l=Ye(t)||[t];for(let i=0,o=l.length;i<o;i++){const d=l[i];Object.keys(n).forEach(p=>{(e===D||e===p)&&(n[p][d]||=[...te(s[p],d)||te(s[D],d)||[]],n[p][d].push([a,r-o+i+1]))})}}match=Gt;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Zt(),e}#a(e){const t=[];let a=e===D;return[this.#t,this.#e].forEach(s=>{const n=s[e]?Object.keys(s[e]).map(r=>[r,s[e][r]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==D&&t.push(...Object.keys(s[D]).map(r=>[r,s[D][r]]))}),a?ea(t):null}},aa=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ze);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,s=this.#e,n=a.length;let r=0,l;for(;r<n;r++){const i=a[r];try{for(let o=0,d=s.length;o<d;o++)i.add(...s[o]);l=i.match(e,t)}catch(o){if(o instanceof et)continue;throw o}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(r===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,l}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},le=Object.create(null),sa=class rt{#t;#e;#a;#r=0;#n=le;constructor(t,a,s){if(this.#e=s||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,s){this.#r=++this.#r;let n=this;const r=Ct(a),l=[];for(let i=0,o=r.length;i<o;i++){const d=r[i],p=r[i+1],u=jt(d,p),m=Array.isArray(u)?u[0]:d;if(m in n.#e){n=n.#e[m],u&&l.push(u[1]);continue}n.#e[m]=new rt,u&&(n.#a.push(u),l.push(u[1])),n=n.#e[m]}return n.#t.push({[t]:{handler:s,possibleKeys:l.filter((i,o,d)=>d.indexOf(i)===o),score:this.#r}}),n}#s(t,a,s,n){const r=[];for(let l=0,i=t.#t.length;l<i;l++){const o=t.#t[l],d=o[a]||o[D],p={};if(d!==void 0&&(d.params=Object.create(null),r.push(d),s!==le||n&&n!==le))for(let u=0,m=d.possibleKeys.length;u<m;u++){const b=d.possibleKeys[u],g=p[d.score];d.params[b]=n?.[b]&&!g?n[b]:s[b]??n?.[b],p[d.score]=!0}}return r}search(t,a){const s=[];this.#n=le;let r=[this];const l=Ve(a),i=[];for(let o=0,d=l.length;o<d;o++){const p=l[o],u=o===d-1,m=[];for(let b=0,g=r.length;b<g;b++){const x=r[b],h=x.#e[p];h&&(h.#n=x.#n,u?(h.#e["*"]&&s.push(...this.#s(h.#e["*"],t,x.#n)),s.push(...this.#s(h,t,x.#n))):m.push(h));for(let f=0,v=x.#a.length;f<v;f++){const w=x.#a[f],_=x.#n===le?{}:{...x.#n};if(w==="*"){const L=x.#e["*"];L&&(s.push(...this.#s(L,t,x.#n)),L.#n=_,m.push(L));continue}const[I,k,T]=w;if(!p&&!(T instanceof RegExp))continue;const C=x.#e[I],H=l.slice(o).join("/");if(T instanceof RegExp){const L=T.exec(H);if(L){if(_[k]=L[0],s.push(...this.#s(C,t,x.#n,_)),Object.keys(C.#e).length){C.#n=_;const Z=L[0].match(/\//)?.length??0;(i[Z]||=[]).push(C)}continue}}(T===!0||T.test(p))&&(_[k]=p,u?(s.push(...this.#s(C,t,_,x.#n)),C.#e["*"]&&s.push(...this.#s(C.#e["*"],t,_,x.#n))):(C.#n=_,m.push(C)))}}r=m.concat(i.shift()??[])}return s.length>1&&s.sort((o,d)=>o.score-d.score),[s.map(({handler:o,params:d})=>[o,d])]}},na=class{name="TrieRouter";#t;constructor(){this.#t=new sa}add(e,t,a){const s=Ye(t);if(s){for(let n=0,r=s.length;n<r;n++)this.#t.insert(e,s[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ot=class extends Vt{constructor(e={}){super(e),this.router=e.router??new aa({routers:[new ta,new na]})}},ra=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},s=(r=>typeof r=="string"?r==="*"?()=>r:l=>r===l?l:null:typeof r=="function"?r:l=>r.includes(l)?l:null)(a.origin),n=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(a.allowMethods);return async function(l,i){function o(p,u){l.res.headers.set(p,u)}const d=await s(l.req.header("origin")||"",l);if(d&&o("Access-Control-Allow-Origin",d),a.credentials&&o("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&o("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),l.req.method==="OPTIONS"){a.origin!=="*"&&o("Vary","Origin"),a.maxAge!=null&&o("Access-Control-Max-Age",a.maxAge.toString());const p=await n(l.req.header("origin")||"",l);p.length&&o("Access-Control-Allow-Methods",p.join(","));let u=a.allowHeaders;if(!u?.length){const m=l.req.header("Access-Control-Request-Headers");m&&(u=m.split(/\s*,\s*/))}return u?.length&&(o("Access-Control-Allow-Headers",u.join(",")),l.res.headers.append("Vary","Access-Control-Request-Headers")),l.res.headers.delete("Content-Length"),l.res.headers.delete("Content-Type"),new Response(null,{headers:l.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&l.header("Vary","Origin",{append:!0})}};const oa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,aa=`<!DOCTYPE html>
+`,ia=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,at=`<!DOCTYPE html>
+`,it=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -753,51 +753,99 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     </h4>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- الهوية -->
+                        <!-- 1. ملف الهوية -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
                                 <i class="fas fa-id-card text-blue-600 ml-2"></i>
-                                صورة الهوية
+                                ملف الهوية
                             </label>
-                            <input type="file" id="idAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'idPreview')"
+                            <input type="file" id="identityAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'identityPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                            <div id="idPreview" class="mt-2"></div>
+                            <div id="identityPreview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
-                        <!-- كشف الحساب البنكي -->
+                        <!-- 2. ملف السمة -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
-                                <i class="fas fa-file-invoice text-green-600 ml-2"></i>
-                                كشف الحساب البنكي (آخر 3 أشهر)
+                                <i class="fas fa-signature text-green-600 ml-2"></i>
+                                ملف السمة
                             </label>
-                            <input type="file" id="bankStatementAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'bankStatementPreview')"
+                            <input type="file" id="signatureAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'signaturePreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
-                            <div id="bankStatementPreview" class="mt-2"></div>
+                            <div id="signaturePreview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
-                        <!-- تعريف بالراتب -->
+                        <!-- 3. ملف تعريف الراتب -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
                                 <i class="fas fa-file-contract text-purple-600 ml-2"></i>
-                                تعريف بالراتب
+                                ملف تعريف الراتب
                             </label>
-                            <input type="file" id="salaryAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryPreview')"
+                            <input type="file" id="salaryProfileAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryProfilePreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
-                            <div id="salaryPreview" class="mt-2"></div>
+                            <div id="salaryProfilePreview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
-                        <!-- مرفق إضافي -->
+                        <!-- 4. ملف التأمينات الاجتماعية -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
-                                <i class="fas fa-file text-orange-600 ml-2"></i>
-                                مرفق إضافي
+                                <i class="fas fa-shield-alt text-orange-600 ml-2"></i>
+                                ملف التأمينات الاجتماعية
                             </label>
-                            <input type="file" id="additionalAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'additionalPreview')"
+                            <input type="file" id="gosiAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'gosiPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
-                            <div id="additionalPreview" class="mt-2"></div>
+                            <div id="gosiPreview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 5. شهادة الإعفاء الضريبي -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-certificate text-blue-600 ml-2"></i>
+                                شهادة الإعفاء الضريبي
+                            </label>
+                            <input type="file" id="taxExemptionAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'taxExemptionPreview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            <div id="taxExemptionPreview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 6. مستند إضافي 1 -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-file-alt text-green-600 ml-2"></i>
+                                مستند إضافي 1
+                            </label>
+                            <input type="file" id="additional1Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional1Preview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                            <div id="additional1Preview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 7. مستند إضافي 2 -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-file-alt text-purple-600 ml-2"></i>
+                                مستند إضافي 2
+                            </label>
+                            <input type="file" id="additional2Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional2Preview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                            <div id="additional2Preview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 8. مستند إضافي 3 -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-file-alt text-orange-600 ml-2"></i>
+                                مستند إضافي 3
+                            </label>
+                            <input type="file" id="additional3Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional3Preview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
+                            <div id="additional3Preview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                     </div>
@@ -1381,10 +1429,14 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             }
             
             // Get file attachments info (filename only for now)
-            const idFile = document.getElementById('idAttachment').files[0];
-            const bankStatementFile = document.getElementById('bankStatementAttachment').files[0];
-            const salaryFile = document.getElementById('salaryAttachment').files[0];
-            const additionalFile = document.getElementById('additionalAttachment').files[0];
+            const identityFile = document.getElementById('identityAttachment').files[0];
+            const signatureFile = document.getElementById('signatureAttachment').files[0];
+            const salaryProfileFile = document.getElementById('salaryProfileAttachment').files[0];
+            const gosiFile = document.getElementById('gosiAttachment').files[0];
+            const taxExemptionFile = document.getElementById('taxExemptionAttachment').files[0];
+            const additional1File = document.getElementById('additional1Attachment').files[0];
+            const additional2File = document.getElementById('additional2Attachment').files[0];
+            const additional3File = document.getElementById('additional3Attachment').files[0];
 
             const pathParts = window.location.pathname.split('/');
             const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
@@ -1410,10 +1462,14 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 notes: document.getElementById('notes').value || null,
                 tenant_slug: tenantSlug,
                 // Store filenames for tracking
-                id_attachment_filename: idFile ? idFile.name : null,
-                bank_statement_attachment_filename: bankStatementFile ? bankStatementFile.name : null,
-                salary_attachment_filename: salaryFile ? salaryFile.name : null,
-                additional_attachment_filename: additionalFile ? additionalFile.name : null
+                identity_attachment_filename: identityFile ? identityFile.name : null,
+                signature_attachment_filename: signatureFile ? signatureFile.name : null,
+                salary_profile_attachment_filename: salaryProfileFile ? salaryProfileFile.name : null,
+                gosi_attachment_filename: gosiFile ? gosiFile.name : null,
+                tax_exemption_attachment_filename: taxExemptionFile ? taxExemptionFile.name : null,
+                additional_1_attachment_filename: additional1File ? additional1File.name : null,
+                additional_2_attachment_filename: additional2File ? additional2File.name : null,
+                additional_3_attachment_filename: additional3File ? additional3File.name : null
             };
             const sanitizedRequestData = sanitizeRequestData(requestData);
             const missingFields = Object.keys(requestData).filter((key) => requestData[key] === undefined);
@@ -1439,10 +1495,14 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     
                     // Step 2: Upload attachments if any exist
                     const attachments = [
-                        { file: idFile, type: 'id', label: 'صورة الهوية' },
-                        { file: salaryFile, type: 'salary', label: 'تعريف بالراتب' },
-                        { file: bankStatementFile, type: 'bank_statement', label: 'كشف الحساب البنكي' },
-                        { file: additionalFile, type: 'additional', label: 'مرفق إضافي' }
+                        { file: identityFile, type: 'identity', label: 'ملف الهوية' },
+                        { file: signatureFile, type: 'signature', label: 'ملف السمة' },
+                        { file: salaryProfileFile, type: 'salary_profile', label: 'ملف تعريف الراتب' },
+                        { file: gosiFile, type: 'gosi', label: 'ملف التأمينات الاجتماعية' },
+                        { file: taxExemptionFile, type: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
+                        { file: additional1File, type: 'additional_1', label: 'مستند إضافي 1' },
+                        { file: additional2File, type: 'additional_2', label: 'مستند إضافي 2' },
+                        { file: additional3File, type: 'additional_3', label: 'مستند إضافي 3' }
                     ].filter(att => att.file);
                     
                     if (attachments.length > 0) {
@@ -2089,7 +2149,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,sa=`<!DOCTYPE html>
+`,la=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2340,7 +2400,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,na=`<!DOCTYPE html>
+`,da=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2676,7 +2736,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ra=`<!DOCTYPE html>
+`,ca=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2975,7 +3035,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,oa=`<!DOCTYPE html>
+`,pa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3464,7 +3524,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,st=`<!DOCTYPE html>
+`,lt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3478,7 +3538,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
     <style>
-        .content-section { display: none; }
+        .content-section { display: none; min-width: 0; }
         .content-section.active { display: block; animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .quick-access-btn { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -3487,9 +3547,43 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         /* Enhanced Scrollbar Styles */
         .overflow-x-auto {
             overflow-x: auto;
+            max-width: 100%;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: #cbd5e0 #f7fafc;
+        }
+
+        /* Prevent wide tables from stretching the whole page */
+        .overflow-x-auto > table {
+            width: max-content;
+            min-width: 100%;
+        }
+
+        /* Let header/content use full width on large screens */
+        .page-header-inner {
+            max-width: none;
+            margin-left: 0;
+            margin-right: 0;
+            width: 100%;
+        }
+
+        /* Truncate long names inside cells */
+        .truncate-cell {
+            display: inline-block;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+        .truncate-cell.sm {
+            max-width: 130px;
+        }
+
+        /* Make table rows visually consistent */
+        .overflow-x-auto > table th,
+        .overflow-x-auto > table td {
+            white-space: nowrap;
         }
         
         .overflow-x-auto::-webkit-scrollbar {
@@ -3508,6 +3602,67 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         
         .overflow-x-auto::-webkit-scrollbar-thumb:hover {
             background: #a0aec0;
+        }
+
+        /* Hide horizontal scrollbar (keep scroll) for edge-arrow tables */
+        .no-hscrollbar {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge legacy */
+        }
+        .no-hscrollbar::-webkit-scrollbar {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+
+        /* Hover-to-reveal horizontal scroll arrows (tables) */
+        .edge-scroll-wrap { position: relative; }
+        .edge-scroll-zone {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 64px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+        .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+        .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+        .edge-scroll-zone .edge-scroll-btn {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 160ms ease;
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .edge-scroll-zone:hover .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+
+        .edge-scroll-btn button {
+            width: 38px;
+            height: 96px;
+            border-radius: 9999px;
+            border: 1px solid rgba(209,213,219,1);
+            background: rgba(255,255,255,0.92);
+            box-shadow: 0 12px 36px rgba(0,0,0,0.14);
+            color: #111827;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+        .edge-scroll-btn.edge-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            display: none !important;
+        }
+        /* left/right positioning is handled by edge-scroll-zone */
+        .edge-scroll-wrap .overflow-x-auto {
+            padding-left: 8px;
+            padding-right: 8px;
         }
         
         /* Mobile Responsive Styles */
@@ -3579,12 +3734,16 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         @media (min-width: 769px) and (max-width: 1024px) {
             .grid-cols-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
+
+        .share-links-dropdown-chevron.open {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body class="bg-gray-50">
     <!-- Top Header -->
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
-        <div class="flex items-center justify-between px-6 py-4">
+        <div class="page-header-inner flex items-center justify-between px-6 py-4">
             <!-- Right Side: Menu Toggle (Always Visible) -->
             <button type="button" onclick="window.toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
                 <i class="fas fa-bars text-2xl"></i>
@@ -3663,13 +3822,9 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
                     <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
                 </a>
-                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-fuchsia-50 rounded-lg transition-all group">
-                    <i class="fas fa-address-card text-xl text-fuchsia-600 group-hover:text-fuchsia-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-fuchsia-700">متابعة التواصل</span>
-                </a>
-                <a href="/admin/contact-affiliates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
-                    <i class="fas fa-funnel-dollar text-xl text-amber-600 group-hover:text-amber-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-amber-700">روابط التواصل التسويقية</span>
+                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
+                    <i class="fas fa-bullhorn text-xl text-amber-700 group-hover:text-amber-800"></i>
+                    <span class="font-medium text-gray-700 group-hover:text-amber-800">التسويق</span>
                 </a>
 
                 <!-- Rates -->
@@ -3790,7 +3945,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
 
     <!-- Main Content بدون Sidebar -->
     <div class="min-h-screen bg-gray-50">
-        <div class="max-w-7xl mx-auto p-6">
+        <div class="w-full px-6 py-6 2xl:px-10">
             
             <!-- لوحة الوصول السريع -->
             <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -3829,13 +3984,9 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         <div class="text-sm font-bold">التقارير</div>
                     </a>
                     
-                    <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 hover:from-fuchsia-600 hover:to-fuchsia-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
-                        <i class="fas fa-address-card text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">متابعة التواصل</div>
-                    </a>
-                    <a href="/admin/contact-affiliates" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
-                        <i class="fas fa-funnel-dollar text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">روابط التواصل التسويقية</div>
+                    <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-bullhorn text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">التسويق</div>
                     </a>
                     
                     <!-- زر نسب التمويل -->
@@ -4025,92 +4176,160 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 </div>
                 </div>
                 
-                <!-- Calculator Link & QR Code Section -->
+                <!-- Calculator (always visible) + contact/affiliate (collapsible); QR column stays content-sized when dropdown expands -->
                 <div class="bg-white rounded-xl shadow-lg p-6 mt-6" id="calculatorLinkSection">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                        <div class="flex items-center">
-                            <i class="fas fa-share-alt text-blue-600 text-2xl ml-3"></i>
-                            <div>
-                                <h2 class="text-xl font-bold text-gray-800">روابط العملاء</h2>
-                                <p class="text-xs text-gray-500 mt-0.5">الحاسبة، صفحة التواصل، وروابط الإحالة التسويقية</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:items-start">
+                        <div class="flex flex-col gap-6">
+                            <!-- Calculator: always visible -->
+                            <div class="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                                <div class="flex flex-col justify-center px-4 py-4">
+                                    <section>
+                                        <h3 class="flex items-center text-sm font-bold text-gray-800 mb-3">
+                                            <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                                <i class="fas fa-calculator text-sm"></i>
+                                            </span>
+                                            حاسبة التمويل
+                                        </h3>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1.5">رابط الحاسبة</label>
+                                        <div class="flex gap-2">
+                                            <input 
+                                                type="text" 
+                                                id="calculatorLinkInput" 
+                                                value="جاري التحميل..." 
+                                                readonly 
+                                                class="flex-1 min-w-0 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500"
+                                            >
+                                            <button 
+                                                type="button"
+                                                onclick="copyCalculatorLink()" 
+                                                class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold transition-colors"
+                                                title="نسخ الرابط"
+                                            >
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-2">
+                                            <i class="fas fa-info-circle ml-1"></i>
+                                            للعملاء لاستخدام حاسبة التمويل
+                                        </p>
+                                        <div id="copySuccessMessage" class="hidden mt-2 p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+                                            <i class="fas fa-check-circle ml-1"></i>
+                                            تم نسخ الرابط
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onclick="openCalculatorLink()" 
+                                            class="w-full mt-3 bg-slate-700 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors shadow-sm"
+                                        >
+                                            <i class="fas fa-external-link-alt ml-2"></i>
+                                            فتح الحاسبة في نافذة جديدة
+                                        </button>
+                                    </section>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Left: collapsible share links -->
-                        <div>
-                            <details id="clientShareLinksDetails" class="group border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 bg-slate-50 hover:bg-slate-100 text-gray-900 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                                    <span class="flex items-center gap-2 min-w-0">
-                                        <i class="fas fa-copy text-blue-600 shrink-0"></i>
-                                        <span class="truncate">نسخ أو فتح الروابط</span>
+
+                            <!-- Contact + affiliate links (collapsible); flex-shrink-0 keeps bar below calculator -->
+                            <div class="share-links-dropdown flex-shrink-0 rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+                                <button
+                                    type="button"
+                                    id="shareLinksDropdownToggle"
+                                    class="w-full flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-start"
+                                    onclick="toggleShareLinksDropdown()"
+                                    aria-expanded="false"
+                                    aria-controls="shareLinksDropdownPanel"
+                                >
+                                    <span class="flex items-center gap-3 min-w-0">
+                                        <i class="fas fa-address-card text-blue-600 text-xl flex-shrink-0"></i>
+                                        <span class="text-base font-bold text-gray-800">صفحة التواصل وروابط التتبع</span>
                                     </span>
-                                    <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform group-open:rotate-180 shrink-0"></i>
-                                </summary>
-                                <div class="border-t border-gray-100 p-4 space-y-3 bg-white">
-                                    <p class="text-xs text-gray-500 -mt-1 mb-1">جميع الروابط أدناه بنفس الشكل: انسخ أو افتح في تبويب جديد.</p>
+                                    <i id="shareLinksDropdownChevron" class="fas fa-chevron-down share-links-dropdown-chevron text-gray-500 text-sm transition-transform duration-200 flex-shrink-0" aria-hidden="true"></i>
+                                </button>
+                                <div id="shareLinksDropdownPanel" class="hidden border-t border-gray-100 bg-white px-4 py-4" role="region" aria-label="التواصل والتتبع">
+                                    <div class="flex flex-col gap-8">
+                            <!-- Contact root -->
+                            <section>
+                                <h3 class="flex items-center text-sm font-bold text-gray-800 mb-3">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                        <i class="fas fa-address-card text-sm"></i>
+                                    </span>
+                                    صفحة التواصل
+                                </h3>
+                                <label class="block text-xs font-medium text-gray-600 mb-1.5">رابط صفحة التواصل (المسار الجذر)</label>
+                                <div class="flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="contactRootLinkInput"
+                                        value="جاري التحميل..."
+                                        readonly
+                                        class="flex-1 min-w-0 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500"
+                                    >
+                                    <button
+                                        type="button"
+                                        onclick="copyContactRootLink()"
+                                        class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold transition-colors"
+                                        title="نسخ الرابط"
+                                    >
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div id="contactRootCopySuccessMessage" class="hidden mt-2 p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+                                    <i class="fas fa-check-circle ml-1"></i>
+                                    تم نسخ رابط التواصل
+                                </div>
+                                <button
+                                    type="button"
+                                    onclick="openContactRootLink()"
+                                    class="w-full mt-3 bg-slate-700 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors shadow-sm"
+                                >
+                                    <i class="fas fa-external-link-alt ml-2"></i>
+                                    فتح صفحة التواصل في نافذة جديدة
+                                </button>
+                            </section>
 
-                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
-                                        <p class="text-xs font-semibold text-gray-600 mb-2">حاسبة التمويل</p>
-                                        <div class="flex flex-wrap gap-2">
-                                            <input type="text" id="calculatorLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                                            <button type="button" onclick="copyCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
-                                            <button type="button" onclick="openCalculatorLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
-                                        </div>
-                                    </div>
-
-                                    <div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">
-                                        <p class="text-xs font-semibold text-gray-600 mb-2">صفحة التواصل (الرابط الأساسي)</p>
-                                        <div class="flex flex-wrap gap-2">
-                                            <input type="text" id="contactRootLinkInput" value="جاري التحميل..." readonly dir="ltr" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                                            <button type="button" onclick="copyContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ"><i class="fas fa-copy"></i></button>
-                                            <button type="button" onclick="openContactRootLink()" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح"><i class="fas fa-external-link-alt"></i></button>
-                                        </div>
-                                    </div>
-
-                                    <div id="affiliateSectionWrap" class="space-y-3" style="display:none">
-                                        <p class="text-xs font-semibold text-gray-600">روابط التواصل التسويقية</p>
-                                        <div id="affiliateLinksRowsContainer" class="space-y-3"></div>
-                                        <div id="contactAffiliatesManageBlock" class="rounded-lg border border-dashed border-gray-300 bg-slate-50 p-3 text-center text-sm text-gray-600" style="display:none">
-                                            <a href="/admin/contact-affiliates" class="font-semibold text-blue-700 hover:underline">إدارة روابط الإحالة</a>
-                                        </div>
-                                    </div>
-
-                                    <div class="space-y-1 pt-1">
-                                        <div id="anyLinkCopyToast" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
-                                            <i class="fas fa-check-circle ml-1"></i><span id="anyLinkCopyToastText">تم النسخ</span>
-                                        </div>
-                                        <div id="copySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
-                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط الحاسبة
-                                        </div>
-                                        <div id="contactRootCopySuccessMessage" class="hidden p-2 bg-green-50 border border-green-200 text-green-800 rounded-lg text-xs">
-                                            <i class="fas fa-check-circle ml-1"></i>تم نسخ رابط التواصل
-                                        </div>
+                            <!-- Affiliate tracking links -->
+                            <section id="contactAffiliateLinksWrap" class="pt-6 border-t border-gray-100" style="display:none;">
+                                <h3 class="flex items-center text-sm font-bold text-gray-800 mb-2">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                        <i class="fas fa-bullhorn text-sm"></i>
+                                    </span>
+                                    روابط التتبع التسويقية
+                                </h3>
+                                <p class="text-xs text-gray-500 mb-4 leading-relaxed">مسار إضافي (مثل <span dir="ltr" class="font-mono text-gray-600">/facebook</span>) يظهر مصدر الطلب في المتابعة.</p>
+                                <div id="contactAffiliateLinksList" class="space-y-3 max-h-72 overflow-y-auto pr-1"></div>
+                                <div id="contactAffiliatesManageBlock" class="mt-4 pt-4 border-t border-gray-100">
+                                    <a href="/admin/contact-affiliates" class="inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-800">
+                                        <i class="fas fa-cog"></i>
+                                        إدارة روابط التتبع
+                                    </a>
+                                </div>
+                            </section>
                                     </div>
                                 </div>
-                            </details>
+                            </div>
                         </div>
                         
-                        <!-- Right Side: QR Code -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-qrcode ml-1"></i>
-                                رمز QR للمشاركة
-                            </label>
-                            <div class="flex flex-col items-center justify-center bg-gray-50 border border-gray-300 rounded-lg p-4">
+                        <!-- Right Side: QR Code (self-start: row height follows left column without stretching this panel) -->
+                        <div class="flex w-full flex-col md:self-start">
+                            <h3 class="flex items-center text-sm font-bold text-gray-800 mb-3">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 text-blue-600 ml-2">
+                                    <i class="fas fa-qrcode text-sm"></i>
+                                </span>
+                                رمز QR للحاسبة
+                            </h3>
+                            <div class="flex flex-col items-center justify-center bg-gray-50 border border-gray-300 rounded-xl p-5">
                                 <div id="qrcodeContainer" class="mb-3"></div>
                                 <button 
+                                    type="button"
                                     onclick="downloadQRCode()" 
-                                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                                    class="w-full max-w-xs bg-slate-700 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors"
                                 >
                                     <i class="fas fa-download ml-1"></i>
                                     تحميل رمز QR
                                 </button>
                             </div>
-                            <p class="text-xs text-gray-500 mt-2 text-center">
+                            <p class="text-xs text-gray-500 mt-3 text-center leading-relaxed">
                                 <i class="fas fa-mobile-alt ml-1"></i>
-                                يمكن للعملاء مسح الرمز للوصول إلى الحاسبة مباشرة
+                                يوجّه مباشرة إلى رابط الحاسبة أعلاه
                             </p>
                         </div>
                     </div>
@@ -4194,12 +4413,12 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
 
             <!-- Customers Section -->
             <div id="customers-section" class="content-section">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center justify-between mb-6 min-w-0 w-full flex-wrap gap-2">
                     <h1 class="text-3xl font-bold text-gray-800">
                         <i class="fas fa-users text-blue-600 ml-2"></i>
                         إدارة العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3">
+                    <div class="flex space-x-reverse space-x-3 min-w-0 flex-wrap gap-2">
                         <button onclick="addCustomer()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold">
                             <i class="fas fa-plus ml-2"></i>
                             إضافة عميل جديد
@@ -4215,9 +4434,9 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full overflow-hidden">
                     <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." 
+                        <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." oninput="loadCustomers()" 
                                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
@@ -4231,10 +4450,26 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         </div>
                     </div>
                     
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
+                    <div id="customersEdgeScrollWrap" class="edge-scroll-wrap">
+                        <div class="edge-scroll-zone left">
+                            <div id="customersEdgeLeft" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('customersTableScroll', 'left')" aria-label="scroll left">
+                                    <i class="fas fa-chevron-left text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="edge-scroll-zone right">
+                            <div id="customersEdgeRight" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('customersTableScroll', 'right')" aria-label="scroll right">
+                                    <i class="fas fa-chevron-right text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="customersTableScroll" class="overflow-x-auto no-hscrollbar">
+                        <table class="min-w-full w-max">
                             <thead class="bg-gray-50">
                                 <tr>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">م</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الاسم</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الجوال</th>
@@ -4243,7 +4478,6 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">مبلغ التمويل</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الالتزامات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">نوع التمويل</th>
-                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="customersTable">
@@ -4255,17 +4489,31 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                             </tbody>
                         </table>
                     </div>
+                    </div>
+
+                    <!-- Customers Pagination -->
+                    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                            <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="customersPrevBtn" onclick="setCustomersPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                            <span id="customersPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                            <button id="customersNextBtn" onclick="setCustomersPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Financing Requests Section -->
             <div id="financing-requests-section" class="content-section">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center justify-between mb-6 min-w-0 w-full flex-wrap gap-2">
                     <h1 class="text-3xl font-bold text-gray-800">
                         <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                         طلبات التمويل من العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2">
+                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2 min-w-0">
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
                             <input type="date" id="filterRequestDateFrom" onchange="loadFinancingRequests()" 
@@ -4311,11 +4559,27 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
+                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full overflow-hidden">
+                    <div id="requestsEdgeScrollWrap" class="edge-scroll-wrap">
+                        <div class="edge-scroll-zone left">
+                            <div id="requestsEdgeLeft" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'left')" aria-label="scroll left">
+                                    <i class="fas fa-chevron-left text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="edge-scroll-zone right">
+                            <div id="requestsEdgeRight" class="edge-scroll-btn edge-hidden">
+                                <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'right')" aria-label="scroll right">
+                                    <i class="fas fa-chevron-right text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="requestsTableScroll" class="overflow-x-auto no-hscrollbar">
+                        <table class="min-w-full w-max">
                             <thead class="bg-gray-50">
                                 <tr>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">م</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">العميل</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الجوال</th>
@@ -4324,7 +4588,6 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">المدة</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">البنك</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الحالة</th>
-                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="requestsTable">
@@ -4335,6 +4598,20 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    </div>
+
+                    <!-- Requests Pagination -->
+                    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                            <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="requestsPrevBtn" onclick="setRequestsPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                            <span id="requestsPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                            <button id="requestsNextBtn" onclick="setRequestsPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5505,11 +5782,18 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         '/admin/customers',
                         '/admin/requests',
                         '/admin/my-tasks',
+                        '/my-tasks',
                         '/calculator',
                         '/'
                     ],
-                    '5': [ // Bank agent — funding requests for assigned bank only
-                        '/admin/requests'
+                    '5': [ // Bank agent
+                        '/admin/dashboard',
+                        '/admin/customers',
+                        '/admin/requests',
+                        '/admin/my-tasks',
+                        '/my-tasks',
+                        '/calculator',
+                        '/'
                     ]
                 };
                 
@@ -5812,6 +6096,273 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
         }
 
+        // Pagination helpers (Customers + Financing Requests)
+        const customersPaging = { page: 1, pageSize: 15, lastSig: '' };
+        const requestsPaging = { page: 1, pageSize: 15, lastSig: '' };
+
+        function getPageSizeOptions(total) {
+            const base = [15, 30, 50, 100];
+            const totalNum = Number(total) || 0;
+            const options = [base[0]];
+
+            for (let i = 1; i < base.length; i++) {
+                const size = base[i];
+                const prev = base[i - 1];
+
+                if (totalNum >= size) {
+                    options.push(size);
+                    continue;
+                }
+
+                // If we have more than the previous bucket, allow the next higher option.
+                // Example: total=21 -> [15, 30]
+                if (totalNum > prev) options.push(size);
+                break;
+            }
+
+            return options;
+        }
+
+        function clampPage(page, totalPages) {
+            if (totalPages <= 1) return 1;
+            if (page < 1) return 1;
+            if (page > totalPages) return totalPages;
+            return page;
+        }
+
+        function renderPaginationUI(kind, total, paging) {
+            const pageSizeSelect = document.getElementById(kind + 'PageSize');
+            const prevBtn = document.getElementById(kind + 'PrevBtn');
+            const nextBtn = document.getElementById(kind + 'NextBtn');
+            const info = document.getElementById(kind + 'PageInfo');
+
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return;
+
+            const options = getPageSizeOptions(total);
+            if (!options.includes(paging.pageSize)) paging.pageSize = 15;
+
+            pageSizeSelect.innerHTML = options
+                .map((n) => '<option value="' + n + '" ' + (n === paging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+                .join('');
+
+            const totalPages = Math.max(1, Math.ceil(total / paging.pageSize));
+            paging.page = clampPage(paging.page, totalPages);
+
+            const start = total === 0 ? 0 : (paging.page - 1) * paging.pageSize + 1;
+            const end = Math.min(total, paging.page * paging.pageSize);
+
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total);
+            prevBtn.disabled = paging.page <= 1;
+            nextBtn.disabled = paging.page >= totalPages;
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+        }
+
+        // Edge scroll controls for horizontally-scrollable tables
+        function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth;
+            const clamped = Math.max(0, Math.min(max, normalizedLeft));
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') {
+                el.scrollLeft = clamped;
+                return;
+            }
+            const type = getRtlScrollType();
+            if (type === 'negative') el.scrollLeft = -clamped;
+            else if (type === 'reverse') el.scrollLeft = max - clamped;
+            else el.scrollLeft = clamped; // default
+        }
+
+        function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReduced) {
+                setNormalizedScrollLeft(el, target);
+                return;
+            }
+
+            const max = el.scrollWidth - el.clientWidth;
+            const to = Math.max(0, Math.min(max, target));
+            const from = getNormalizedScrollLeft(el);
+            const delta = to - from;
+            if (Math.abs(delta) < 1) return;
+
+            const start = performance.now();
+            const duration = Math.max(120, Number(durationMs) || 260);
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1);
+            el.dataset.edgeScrollAnimToken = animToken;
+
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+            const tick = (now) => {
+                if (el.dataset.edgeScrollAnimToken !== animToken) return; // cancelled by a newer anim
+                const t = Math.min(1, (now - start) / duration);
+                const eased = easeOutCubic(t);
+                setNormalizedScrollLeft(el, from + delta * eased);
+                if (t < 1) requestAnimationFrame(tick);
+            };
+
+            requestAnimationFrame(tick);
+        }
+
+        window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+
+            const step = 360;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+
+            // visualDirection means "move viewport towards that edge"
+            // normalized scrollLeft is always LTR-like (0..max)
+            let delta = visualDirection === 'left' ? -step : step;
+            if (dir === 'rtl') delta = -delta;
+
+            const current = getNormalizedScrollLeft(el);
+            animateNormalizedScrollLeft(el, current + delta, 260);
+
+            requestAnimationFrame(() => {
+                const leftId = scrollElId.indexOf('customers') >= 0 ? 'customersEdgeLeft' : 'requestsEdgeLeft';
+                const rightId = scrollElId.indexOf('customers') >= 0 ? 'customersEdgeRight' : 'requestsEdgeRight';
+                updateEdgeScrollControls(scrollElId, leftId, rightId);
+            });
+        }
+
+        let __rtlScrollType = null;
+        function getRtlScrollType() {
+            if (__rtlScrollType) return __rtlScrollType;
+            const div = document.createElement('div');
+            div.style.width = '4px';
+            div.style.height = '1px';
+            div.style.overflow = 'scroll';
+            div.style.direction = 'rtl';
+            div.style.position = 'absolute';
+            div.style.top = '-9999px';
+            const inner = document.createElement('div');
+            inner.style.width = '8px';
+            inner.style.height = '1px';
+            div.appendChild(inner);
+            document.body.appendChild(div);
+            // Standard RTL scrollLeft detection:
+            // - reverse: initial scrollLeft > 0 (starts at max)
+            // - negative: after setting scrollLeft=1, value becomes < 0 (Chrome) or stays 0 (older impls)
+            // - default: after setting scrollLeft=1, value becomes > 0
+            if (div.scrollLeft > 0) {
+                __rtlScrollType = 'reverse';
+            } else {
+                div.scrollLeft = 1;
+                __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default';
+            }
+
+            document.body.removeChild(div);
+            return __rtlScrollType;
+        }
+
+        function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') return el.scrollLeft;
+            const type = getRtlScrollType();
+            if (type === 'negative') return -el.scrollLeft;
+            if (type === 'reverse') return max - el.scrollLeft;
+            return el.scrollLeft; // default
+        }
+
+        function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId);
+            const arrow = document.getElementById(arrowBtnId);
+            if (!el || !arrow) return;
+
+            const wrap = el.closest('.edge-scroll-wrap');
+            if (!wrap) return;
+
+            const wrapRect = wrap.getBoundingClientRect();
+            const vhCenter = window.innerHeight / 2;
+            const padding = 16;
+            const minY = wrapRect.top + padding;
+            const maxY = wrapRect.bottom - padding;
+            const desired = vhCenter;
+            const clamped = Math.max(minY, Math.min(maxY, desired));
+            const relativeTop = clamped - wrapRect.top;
+            arrow.style.top = String(relativeTop) + 'px';
+        }
+
+        function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            const leftWrap = document.getElementById(leftBtnId);
+            const rightWrap = document.getElementById(rightBtnId);
+            if (!el || !leftWrap || !rightWrap) return;
+
+            const canScroll = el.scrollWidth > el.clientWidth + 2;
+            if (!canScroll) {
+                leftWrap.classList.add('edge-hidden');
+                rightWrap.classList.add('edge-hidden');
+                return;
+            }
+
+            const maxScrollLeft = el.scrollWidth - el.clientWidth;
+            const sl = getNormalizedScrollLeft(el);
+
+            const canLeft = sl > 1;
+            const canRight = sl < maxScrollLeft - 1;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            const showLeft = dir === 'rtl' ? canRight : canLeft;
+            const showRight = dir === 'rtl' ? canLeft : canRight;
+
+            // show only when there is room in that direction
+            leftWrap.classList.toggle('edge-hidden', !showLeft);
+            rightWrap.classList.toggle('edge-hidden', !showRight);
+
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId);
+        }
+
+        function setupEdgeScroll(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+            if (el.dataset.edgeScrollBound === '1') return;
+            el.dataset.edgeScrollBound = '1';
+
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId);
+            el.addEventListener('scroll', tick, { passive: true });
+            window.addEventListener('resize', tick);
+            window.addEventListener('scroll', tick, { passive: true });
+            // initial
+            setTimeout(tick, 0);
+        }
+
+        window.setCustomersPageSize = function(value) {
+            const parsed = Number(value);
+            customersPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+            customersPaging.page = 1;
+            loadCustomers();
+        }
+
+        window.setCustomersPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') customersPaging.page -= 1;
+            else if (directionOrPage === 'next') customersPaging.page += 1;
+            else {
+                const parsed = Number(directionOrPage);
+                if (Number.isFinite(parsed)) customersPaging.page = parsed;
+            }
+            loadCustomers();
+        }
+
+        window.setRequestsPageSize = function(value) {
+            const parsed = Number(value);
+            requestsPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+            requestsPaging.page = 1;
+            loadFinancingRequests();
+        }
+
+        window.setRequestsPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') requestsPaging.page -= 1;
+            else if (directionOrPage === 'next') requestsPaging.page += 1;
+            else {
+                const parsed = Number(directionOrPage);
+                if (Number.isFinite(parsed)) requestsPaging.page = parsed;
+            }
+            loadFinancingRequests();
+        }
+
         // Load Customers
         async function loadCustomers() {
             try {
@@ -5823,6 +6374,12 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     // Apply date filter
                     const filterDateFrom = document.getElementById('filterDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterDateTo')?.value;
+                    const searchQuery = (document.getElementById('searchCustomers')?.value || '').trim().toLowerCase();
+                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, searchQuery });
+                    if (sig !== customersPaging.lastSig) {
+                        customersPaging.lastSig = sig;
+                        customersPaging.page = 1;
+                    }
                     
                     if (filterDateFrom || filterDateTo) {
                         customers = customers.filter(customer => {
@@ -5835,18 +6392,52 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                             return true;
                         });
                     }
+
+                    if (searchQuery) {
+                        customers = customers.filter((customer) => {
+                            const name = String(customer.full_name || '').toLowerCase();
+                            const phone = String(customer.phone || '').toLowerCase();
+                            return name.includes(searchQuery) || phone.includes(searchQuery);
+                        });
+                    }
                     
                     if (customers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
+                        renderPaginationUI('customers', 0, customersPaging);
                         return;
                     }
+
+                    const totalCustomers = customers.length;
+                    renderPaginationUI('customers', totalCustomers, customersPaging);
+                    const totalPages = Math.max(1, Math.ceil(totalCustomers / customersPaging.pageSize));
+                    customersPaging.page = clampPage(customersPaging.page, totalPages);
+                    const startIdx = (customersPaging.page - 1) * customersPaging.pageSize;
+                    const pageCustomers = customers.slice(startIdx, startIdx + customersPaging.pageSize);
                     
-                    tbody.innerHTML = customers.map((customer, index) => \`
+                    tbody.innerHTML = pageCustomers.map((customer, index) => \`
                         <tr class="border-b hover:bg-gray-50">
-                            <td class="px-4 py-3">\${index + 1}</td>
+                            <td class="px-4 py-3">
+                                <div class="relative inline-block text-right">
+                                    <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
+                                        <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
+                                    </button>
+                                    <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[11rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-50">
+                                        <button onclick="viewCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 text-right">
+                                            <i class="fas fa-eye w-3"></i> عرض
+                                        </button>
+                                        <a href="/admin/requests/new?customer_id=\${customer.id}" class="flex items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-right">
+                                            <i class="fas fa-file-invoice w-3 flex-shrink-0"></i> طلب تمويل جديد
+                                        </a>
+                                        <button onclick="editCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-green-700 hover:bg-green-50 text-right">
+                                            <i class="fas fa-edit w-3"></i> تعديل
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">\${startIdx + index + 1}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    <span class="font-medium">\${customer.full_name}</span>
+                                    <span class="font-medium truncate-cell">\${customer.full_name}</span>
                                     <button onclick="viewCustomerFinancingDetails(\${customer.id})" 
                                             class="text-indigo-600 hover:text-indigo-800 transition-colors" 
                                             title="عرض التفاصيل التمويلية الكاملة">
@@ -5871,30 +6462,10 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                             <td class="px-4 py-3 font-medium text-purple-600">\${customer.financing_amount ? customer.financing_amount.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm text-orange-600">\${customer.monthly_obligations ? customer.monthly_obligations.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm">\${customer.financing_type_name || '-'}</td>
-                            <td class="px-4 py-3">
-                                <div class="relative inline-block text-right">
-                                    <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
-                                        <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
-                                    </button>
-                                    <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[11rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-50">
-                                        <button onclick="viewCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 text-right">
-                                            <i class="fas fa-eye w-3"></i> عرض
-                                        </button>
-                                        <a href="/admin/requests/new?customer_id=\${customer.id}" class="flex items-center gap-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 text-right">
-                                            <i class="fas fa-file-invoice w-3 flex-shrink-0"></i> طلب تمويل جديد
-                                        </a>
-                                        <button onclick="editCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-green-700 hover:bg-green-50 text-right">
-                                            <i class="fas fa-edit w-3"></i> تعديل
-                                        </button>
-                                        <div class="border-t border-gray-100 my-1"></div>
-                                        <button onclick="deleteCustomer(\${customer.id})" class="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-700 hover:bg-red-50 text-right">
-                                            <i class="fas fa-trash w-3"></i> حذف
-                                        </button>
-                                    </div>
-                                </div>
-                            </td>
                         </tr>
                     \`).join('');
+
+                    setupEdgeScroll('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight');
                 }
             } catch (error) {
                 console.error('Error loading customers:', error);
@@ -5912,6 +6483,13 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     // Apply date filter
                     const filterDateFrom = document.getElementById('filterRequestDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterRequestDateTo')?.value;
+                    const filterStatus = document.getElementById('filterStatus')?.value || '';
+                    const filterBank = document.getElementById('filterBank')?.value || '';
+                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, filterStatus, filterBank });
+                    if (sig !== requestsPaging.lastSig) {
+                        requestsPaging.lastSig = sig;
+                        requestsPaging.page = 1;
+                    }
                     
                     if (filterDateFrom || filterDateTo) {
                         requests = requests.filter(req => {
@@ -5924,13 +6502,33 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                             return true;
                         });
                     }
+
+                    if (filterStatus) {
+                        requests = requests.filter((req) => String(req.status || '') === filterStatus);
+                    }
+
+                    if (filterBank) {
+                        const bankIdNum = Number(filterBank);
+                        requests = requests.filter((req) => {
+                            if (Number.isFinite(bankIdNum)) return Number(req.selected_bank_id) === bankIdNum;
+                            return String(req.selected_bank_name || '') === filterBank;
+                        });
+                    }
                     
                     if (requests.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';
+                        renderPaginationUI('requests', 0, requestsPaging);
                         return;
                     }
+
+                    const totalRequests = requests.length;
+                    renderPaginationUI('requests', totalRequests, requestsPaging);
+                    const totalPages = Math.max(1, Math.ceil(totalRequests / requestsPaging.pageSize));
+                    requestsPaging.page = clampPage(requestsPaging.page, totalPages);
+                    const startIdx = (requestsPaging.page - 1) * requestsPaging.pageSize;
+                    const pageRequests = requests.slice(startIdx, startIdx + requestsPaging.pageSize);
                     
-                    tbody.innerHTML = requests.map((req, index) => {
+                    tbody.innerHTML = pageRequests.map((req, index) => {
                         const statusColors = {
                             'pending': 'bg-yellow-100 text-yellow-800',
                             'approved': 'bg-green-100 text-green-800',
@@ -5944,16 +6542,6 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                         
                         return \`
                             <tr class="border-b hover:bg-gray-50">
-                                <td class="px-4 py-3">\${index + 1}</td>
-                                <td class="px-4 py-3 font-medium">\${req.customer_name}</td>
-                                <td class="px-4 py-3">\${req.customer_phone}</td>
-                                <td class="px-4 py-3 text-sm">\${req.financing_type_name || '-'}</td>
-                                <td class="px-4 py-3 font-medium">\${req.requested_amount.toLocaleString('ar-SA')}</td>
-                                <td class="px-4 py-3">\${req.duration_months} شهر</td>
-                                <td class="px-4 py-3 text-sm">\${req.selected_bank_name || '-'}</td>
-                                <td class="px-4 py-3">
-                                    <span class="\${statusColors[req.status]} px-2 py-1 rounded text-xs">\${statusText[req.status]}</span>
-                                </td>
                                 <td class="px-4 py-3">
                                     <div class="relative inline-block text-right">
                                         <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
@@ -5973,9 +6561,21 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                         </div>
                                     </div>
                                 </td>
+                                <td class="px-4 py-3">\${startIdx + index + 1}</td>
+                                <td class="px-4 py-3 font-medium"><span class="truncate-cell">\${req.customer_name}</span></td>
+                                <td class="px-4 py-3">\${req.customer_phone}</td>
+                                <td class="px-4 py-3 text-sm">\${req.financing_type_name || '-'}</td>
+                                <td class="px-4 py-3 font-medium">\${req.requested_amount.toLocaleString('ar-SA')}</td>
+                                <td class="px-4 py-3">\${req.duration_months} شهر</td>
+                                <td class="px-4 py-3 text-sm"><span class="truncate-cell sm">\${req.selected_bank_name || '-'}</span></td>
+                                <td class="px-4 py-3">
+                                    <span class="\${statusColors[req.status]} px-2 py-1 rounded text-xs">\${statusText[req.status]}</span>
+                                </td>
                             </tr>
                         \`;
                     }).join('');
+
+                    setupEdgeScroll('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight');
                 }
             } catch (error) {
                 console.error('Error loading requests:', error);
@@ -6550,43 +7150,30 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                                         <i class="fas fa-paperclip ml-1"></i>
                                         المرفقات
                                     </p>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        \${(request.id_attachment_url && request.id_attachment_url !== 'null') ? \`
-                                            <a href="\${request.id_attachment_url}" target="_blank" 
-                                               class="flex items-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors">
-                                                <i class="fas fa-id-card text-blue-600"></i>
-                                                <span class="text-sm text-blue-800 font-medium">صورة الهوية</span>
-                                                <i class="fas fa-download text-blue-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">صورة الهوية: غير مرفقة</div>'}
-                                        
-                                        \${(request.bank_statement_attachment_url && request.bank_statement_attachment_url !== 'null') ? \`
-                                            <a href="\${request.bank_statement_attachment_url}" target="_blank"
-                                               class="flex items-center gap-2 p-3 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors">
-                                                <i class="fas fa-university text-green-600"></i>
-                                                <span class="text-sm text-green-800 font-medium">كشف الحساب البنكي</span>
-                                                <i class="fas fa-download text-green-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">كشف الحساب: غير مرفق</div>'}
-                                        
-                                        \${(request.salary_attachment_url && request.salary_attachment_url !== 'null') ? \`
-                                            <a href="\${request.salary_attachment_url}" target="_blank"
-                                               class="flex items-center gap-2 p-3 bg-yellow-50 hover:bg-yellow-100 rounded-lg border border-yellow-200 transition-colors">
-                                                <i class="fas fa-file-invoice-dollar text-yellow-600"></i>
-                                                <span class="text-sm text-yellow-800 font-medium">تعريف الراتب</span>
-                                                <i class="fas fa-download text-yellow-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">تعريف الراتب: غير مرفق</div>'}
-                                        
-                                        \${(request.additional_attachment_url && request.additional_attachment_url !== 'null') ? \`
-                                            <a href="\${request.additional_attachment_url}" target="_blank"
-                                               class="flex items-center gap-2 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors">
-                                                <i class="fas fa-file text-purple-600"></i>
-                                                <span class="text-sm text-purple-800 font-medium">مرفقات إضافية</span>
-                                                <i class="fas fa-download text-purple-600 mr-auto"></i>
-                                            </a>
-                                        \` : '<div class="p-3 bg-gray-100 rounded-lg border border-gray-200 text-sm text-gray-500">مرفقات إضافية: غير مرفقة</div>'}
-                                    </div>
+                                    \${(() => {
+                                        const docs = [
+                                          { key: 'identity_attachment_url', label: 'ملف الهوية', icon: 'fa-id-card', bg: 'blue' },
+                                          { key: 'signature_attachment_url', label: 'ملف السمة', icon: 'fa-signature', bg: 'green' },
+                                          { key: 'salary_profile_attachment_url', label: 'ملف تعريف الراتب', icon: 'fa-money-check', bg: 'yellow' },
+                                          { key: 'gosi_attachment_url', label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', bg: 'orange' },
+                                          { key: 'tax_exemption_attachment_url', label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', bg: 'indigo' },
+                                          { key: 'additional_1_attachment_url', label: 'مستند إضافي 1', icon: 'fa-file-alt', bg: 'purple' },
+                                          { key: 'additional_2_attachment_url', label: 'مستند إضافي 2', icon: 'fa-file-alt', bg: 'purple' },
+                                          { key: 'additional_3_attachment_url', label: 'مستند إضافي 3', icon: 'fa-file-alt', bg: 'purple' }
+                                        ];
+                                        const existing = docs
+                                          .map(d => ({ ...d, url: request[d.key] }))
+                                          .filter(d => d.url && d.url !== 'null');
+                                        if (existing.length === 0) return '';
+                                        return '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' + existing.map(d => \`
+                                          <a href="\${d.url}" target="_blank"
+                                             class="flex items-center gap-2 p-3 bg-\${d.bg}-50 hover:bg-\${d.bg}-100 rounded-lg border border-\${d.bg}-200 transition-colors">
+                                              <i class="fas \${d.icon} text-\${d.bg}-600"></i>
+                                              <span class="text-sm text-\${d.bg}-800 font-medium">\${d.label}</span>
+                                              <i class="fas fa-download text-\${d.bg}-600 mr-auto"></i>
+                                          </a>
+                                        \`).join('') + '</div>';
+                                    })()}
                                 </div>
                             </div>
                         \`;
@@ -6833,7 +7420,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                     tbody.innerHTML = users.map((user, index) => \`
                         <tr class="border-b hover:bg-gray-50">
                             <td class="px-4 py-3">\${index + 1}</td>
-                            <td class="px-4 py-3 font-medium">\${user.full_name}</td>
+                            <td class="px-4 py-3 font-medium"><span class="truncate-cell">\${user.full_name}</span></td>
                             <td class="px-4 py-3">\${user.email}</td>
                             <td class="px-4 py-3">\${user.username}</td>
                             <td class="px-4 py-3">
@@ -7682,52 +8269,51 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 return localPath;
             }
         }
-
-        window.showPanelCopyToast = function (msg) {
-            var wrap = document.getElementById('anyLinkCopyToast');
-            var span = document.getElementById('anyLinkCopyToastText');
-            if (span) span.textContent = msg || 'تم النسخ';
-            if (wrap) {
-                wrap.classList.remove('hidden');
-                if (window.__panelCopyToastTimer) clearTimeout(window.__panelCopyToastTimer);
-                window.__panelCopyToastTimer = setTimeout(function () {
-                    wrap.classList.add('hidden');
-                }, 2500);
+        
+        function bindContactAffiliateActions(rootEl) {
+            if (!rootEl) return;
+            function fallbackCopy(text) {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                } catch (e) {}
+                document.body.removeChild(ta);
             }
-            var h1 = document.getElementById('copySuccessMessage');
-            var h2 = document.getElementById('contactRootCopySuccessMessage');
-            if (h1) h1.classList.add('hidden');
-            if (h2) h2.classList.add('hidden');
-        };
-
-        function legacyCopyString(text, onOk) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.setAttribute('readonly', '');
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-                if (onOk) onOk();
-            } catch (e) {
-                alert('تعذر نسخ الرابط');
-            }
-            document.body.removeChild(ta);
-        }
-
-        function copyStringToClipboard(text, onOk) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(function () {
-                    if (onOk) onOk();
-                }).catch(function () {
-                    legacyCopyString(text, onOk);
+            rootEl.querySelectorAll('[data-aff-copy]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var u = btn.getAttribute('data-aff-copy');
+                    if (!u) return;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(u).catch(function () {
+                            fallbackCopy(u);
+                        });
+                    } else {
+                        fallbackCopy(u);
+                    }
                 });
-                return;
-            }
-            legacyCopyString(text, onOk);
+            });
+            rootEl.querySelectorAll('[data-aff-open]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var u = btn.getAttribute('data-aff-open');
+                    if (u) window.open(u, '_blank');
+                });
+            });
         }
+
+        window.toggleShareLinksDropdown = function () {
+            var panel = document.getElementById('shareLinksDropdownPanel');
+            var btn = document.getElementById('shareLinksDropdownToggle');
+            var chev = document.getElementById('shareLinksDropdownChevron');
+            if (!panel || !btn) return;
+            var nowHidden = panel.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
+            if (chev) chev.classList.toggle('open', !nowHidden);
+        };
 
         // Generate and display calculator link and QR code
         async function loadCalculatorLink() {
@@ -7785,94 +8371,95 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 qrcodeContainer.appendChild(qrImg);
             }
 
-            const sectionWrap = document.getElementById('affiliateSectionWrap');
-            const container = document.getElementById('affiliateLinksRowsContainer');
-            if (sectionWrap && container) {
-                container.innerHTML = '';
-                var rid = parseInt(userData.role_id, 10);
-                var roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+            const affWrap = document.getElementById('contactAffiliateLinksWrap');
+            const affList = document.getElementById('contactAffiliateLinksList');
+            if (affWrap && affList) {
+                affList.innerHTML = '';
+                let rid = parseInt(userData.role_id, 10);
+                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
                 if (roleLegacy[rid]) rid = roleLegacy[rid];
                 if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
-                    var w = parseInt(window.USER_ROLE_ID, 10);
+                    const w = parseInt(window.USER_ROLE_ID, 10);
                     rid = roleLegacy[w] || w;
                 }
-                var showAff = (rid === 1 || rid === 2) && contactRootPath && contactRootPath !== '/';
+                let showAff = Boolean(contactRootPath && contactRootPath !== '/');
                 if (rid === 1) {
-                    var tidCheck = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                    if (!Number.isFinite(tidCheck) || tidCheck <= 0) showAff = false;
+                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
                 }
-                var manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
+                const manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
                 if (manageAffBlock) {
-                    manageAffBlock.style.display = showAff && (rid === 1 || rid === 2) ? '' : 'none';
+                    manageAffBlock.style.display = rid === 1 || rid === 2 ? '' : 'none';
                 }
                 if (!showAff) {
-                    sectionWrap.style.display = 'none';
+                    affWrap.style.display = 'none';
                 } else {
-                    sectionWrap.style.display = '';
-                    function escAffRow(s) {
-                        return String(s ?? '')
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/"/g, '&quot;');
-                    }
-                    function escAttrRow(s) {
-                        return String(s ?? '')
-                            .replace(/&/g, '&amp;')
-                            .replace(/"/g, '&quot;')
-                            .replace(/'/g, '&#39;');
-                    }
-                    function affiliateRowCard(label, fullUrl) {
-                        var esc = escAffRow;
-                        var a = escAttrRow(fullUrl);
-                        return (
-                            '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70">' +
-                            '<p class="text-xs font-semibold text-gray-600 mb-2">' + esc(label) + '</p>' +
-                            '<div class="flex flex-wrap gap-2">' +
-                            '<input type="text" readonly dir="ltr" value="' + a + '" class="flex-1 min-w-[10rem] px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40">' +
-                            '<button type="button" class="js-aff-copy inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0" title="نسخ" data-url="' + a + '"><i class="fas fa-copy"></i></button>' +
-                            '<button type="button" class="js-aff-open inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shrink-0" title="فتح" data-url="' + a + '"><i class="fas fa-external-link-alt"></i></button>' +
-                            '</div></div>'
-                        );
-                    }
+                    affWrap.style.display = 'block';
                     try {
-                        var u = '/api/tenant-contact-affiliates';
+                        let u = '/api/tenant-contact-affiliates';
                         if (rid === 1) {
-                            var tidQ = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                            u += '?tenant_id=' + tidQ;
+                            const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            u += '?tenant_id=' + tid;
                         }
-                        var res = await axios.get(u);
-                        var rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
+                        const res = await axios.get(u);
+                        const rows = Array.isArray(res && res.data && res.data.data) ? res.data.data : [];
+                        function escAff(s) {
+                            return String(s ?? '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;')
+                                .replace(/"/g, '&quot;');
+                        }
+                        function escAttr(s) {
+                            return String(s ?? '')
+                                .replace(/&/g, '&amp;')
+                                .replace(/"/g, '&quot;')
+                                .replace(/'/g, '&#39;');
+                        }
                         if (!rows.length) {
-                            container.innerHTML =
-                                '<div class="rounded-lg border border-gray-200 p-3 bg-slate-50/70 text-sm text-gray-500 text-center">لا توجد روابط تسويقية بعد.</div>';
+                            affList.innerHTML =
+                                '<div class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 leading-relaxed">' +
+                                'لا توجد روابط تتبع بعد. استخدم «إدارة روابط التتبع» أدناه لإضافة مسار.' +
+                                '</div>';
                         } else {
-                            container.innerHTML = rows
+                            affList.innerHTML = rows
                                 .map(function (r) {
                                     var pathSeg = encodeURIComponent(r.path_segment || '');
-                                    var full = baseUrl + String(contactRootPath).replace(/\\/$/, '') + '/' + pathSeg;
-                                    return affiliateRowCard(r.label || r.path_segment || 'رابط', full);
+                                    var full =
+                                        baseUrl +
+                                        String(contactRootPath).replace(/\\/$/, '') +
+                                        '/' +
+                                        pathSeg;
+                                    return (
+                                        '<div class="rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                                        '<p class="text-xs font-bold text-gray-800 mb-2">' +
+                                        escAff(r.label) +
+                                        '</p>' +
+                                        '<label class="block text-xs font-medium text-gray-600 mb-1.5">رابط الحملة</label>' +
+                                        '<div class="flex gap-2">' +
+                                        '<input type="text" readonly dir="ltr" class="flex-1 min-w-0 px-4 py-3 bg-white border border-gray-300 rounded-lg text-sm text-gray-800" value="' +
+                                        escAttr(full) +
+                                        '">' +
+                                        '<button type="button" class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold transition-colors" data-aff-copy="' +
+                                        escAttr(full) +
+                                        '" title="نسخ الرابط">' +
+                                        '<i class="fas fa-copy"></i>' +
+                                        '</button>' +
+                                        '</div>' +
+                                        '<button type="button" class="w-full mt-3 bg-slate-700 hover:bg-slate-800 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-colors shadow-sm" data-aff-open="' +
+                                        escAttr(full) +
+                                        '">' +
+                                        '<i class="fas fa-external-link-alt ml-2"></i>فتح في نافذة جديدة' +
+                                        '</button>' +
+                                        '</div>'
+                                    );
                                 })
                                 .join('');
+                            bindContactAffiliateActions(affList);
                         }
-                        container.querySelectorAll('.js-aff-copy').forEach(function (btn) {
-                            btn.addEventListener('click', function () {
-                                var url = btn.getAttribute('data-url');
-                                if (!url) return;
-                                copyStringToClipboard(url, function () {
-                                    window.showPanelCopyToast('تم نسخ الرابط');
-                                });
-                            });
-                        });
-                        container.querySelectorAll('.js-aff-open').forEach(function (btn) {
-                            btn.addEventListener('click', function () {
-                                var url = btn.getAttribute('data-url');
-                                if (url) window.open(url, '_blank');
-                            });
-                        });
                     } catch (e) {
-                        container.innerHTML =
-                            '<div class="rounded-lg border border-red-200 p-3 bg-red-50 text-sm text-red-700 text-center">تعذر تحميل روابط الإحالة</div>';
+                        affList.innerHTML =
+                            '<div class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">تعذر تحميل الروابط</div>';
                     }
                 }
             }
@@ -7898,8 +8485,6 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                 
                 // Show success message
                 const successMessage = document.getElementById('copySuccessMessage');
-                var anyT = document.getElementById('anyLinkCopyToast');
-                if (anyT) anyT.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => {
@@ -7938,8 +8523,6 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             try {
                 document.execCommand('copy');
                 const successMessage = document.getElementById('contactRootCopySuccessMessage');
-                var anyT2 = document.getElementById('anyLinkCopyToast');
-                if (anyT2) anyT2.classList.add('hidden');
                 if (successMessage) {
                     successMessage.classList.remove('hidden');
                     setTimeout(() => successMessage.classList.add('hidden'), 3000);
@@ -8222,7 +8805,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <div id="sidebar-overlay"></div>
 </body>
 </html>
-`,ia=`<!DOCTYPE html>
+`,ua=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8430,7 +9013,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,la=`<!DOCTYPE html>
+`,ma=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8498,7 +9081,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,nt=`<!DOCTYPE html>
+`,dt=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -8735,7 +9318,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,da=`<!DOCTYPE html>
+`,ga=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9018,7 +9601,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,rt=()=>`
+`,ct=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -9077,7 +9660,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,ca=`<!DOCTYPE html>
+`,fa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9128,7 +9711,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${rt()}
+        ${ct()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9267,7 +9850,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,pa=`<!DOCTYPE html>
+</html>`,ba=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9319,7 +9902,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${rt()}
+        ${ct()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -9532,7 +10115,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ua=`<!DOCTYPE html>
+</html>`,xa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9659,7 +10242,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ma=()=>`
+</html>`,ha=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -9706,7 +10289,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,ga=`<!DOCTYPE html>
+`,ya=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9757,7 +10340,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             width: max-content;
         }
         
-        ${ma()}
+        ${ha()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -10202,7 +10785,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,fa=`<!DOCTYPE html>
+</html>`,va=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -10566,7 +11149,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ot=()=>`
+`,pt=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -10597,7 +11180,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function ba(e,t,a){return`
+`;function wa(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10607,7 +11190,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${ot()}
+        ${pt()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10766,7 +11349,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <\/script>
     </body>
     </html>
-  `}function xa(e,t,a,s){return`
+  `}function _a(e,t,a,s){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -10776,7 +11359,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <script src="https://cdn.tailwindcss.com"><\/script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${ot()}
+        ${pt()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -10919,7 +11502,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
       <\/script>
     </body>
     </html>
-  `}function ha(e,t,a,s){const{transitions:n=[],actions:r=[],tasks:l=[]}=s,i=(o,d)=>{const c=new Date(o),m=new Date(d).getTime()-c.getTime(),f=Math.floor(m/(1e3*60*60)),g=Math.floor(f/24);return g>0?`${g} يوم`:`${f} ساعة`};return`
+  `}function Ea(e,t,a,s){const{transitions:n=[],actions:r=[],tasks:l=[]}=s,i=(o,d)=>{const p=new Date(o),m=new Date(d).getTime()-p.getTime(),b=Math.floor(m/(1e3*60*60)),g=Math.floor(b/24);return g>0?`${g} يوم`:`${b} ساعة`};return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11099,9 +11682,9 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
           </div>
         `:""}
         
-        ${n.map((o,d)=>{const c=d===n.length-1,u=d>0?i(n[d-1].created_at,o.created_at):null,m=r.filter(g=>g.stage_id===o.to_stage_id),f=l.filter(g=>g.stage_id===o.to_stage_id);return`
+        ${n.map((o,d)=>{const p=d===n.length-1,u=d>0?i(n[d-1].created_at,o.created_at):null,m=r.filter(g=>g.stage_id===o.to_stage_id),b=l.filter(g=>g.stage_id===o.to_stage_id);return`
             <div class="timeline-item">
-              <div class="timeline-dot ${c?"current":""}" style="background-color: ${o.to_stage_color}">
+              <div class="timeline-dot ${p?"current":""}" style="background-color: ${o.to_stage_color}">
                 <i class="fas ${o.to_stage_icon}"></i>
               </div>
               
@@ -11157,13 +11740,13 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
                   </div>
                 `:""}
                 
-                ${f.length>0?`
+                ${b.length>0?`
                   <div>
                     <h4 class="text-sm font-bold text-gray-700 mb-2">
                       <i class="fas fa-list-check ml-1"></i>
                       المهام:
                     </h4>
-                    ${f.map(g=>`
+                    ${b.map(g=>`
                       <div class="task-item ${g.status}">
                         <div class="flex justify-between items-start">
                           <div class="flex-1">
@@ -11419,7 +12002,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   
 </body>
 </html>
-  `}const ya=`
+  `}const ka=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -11729,7 +12312,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,va=`
+`,Ia=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12143,7 +12726,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,wa=`
+`,Sa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12586,7 +13169,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,_a=`
+`,Ta=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12811,7 +13394,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ka=`
+`,Da=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -13050,7 +13633,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ea=`<!DOCTYPE html>
+`,Ba=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13403,7 +13986,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,ue=`
+`,xe=`
 <style>
     .stat-card {
         transition: all 0.3s ease;
@@ -13462,7 +14045,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         overflow-y: auto;
     }
 </style>
-`;function me(e,t,a){return`
+`;function he(e,t,a){return`
     <div class="border-b border-slate-200/90 bg-white/80">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
             <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
@@ -13481,7 +14064,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
             </div>
         </div>
     </div>
-    `}function ge(e){return""}const fe=`
+    `}function ye(e){return""}const ve=`
 <script>
     const token = localStorage.getItem('authToken') || getCookie('authToken');
     if (!token) {
@@ -13516,7 +14099,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         alert('❌ ' + message);
     }
 <\/script>
-`,Ia=`<!DOCTYPE html>
+`,Ra=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13525,11 +14108,11 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${xe}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
-    ${ge()}
+    ${he("إدارة الموظفين","عرض وإدارة بيانات الموظفين","fas fa-users")}
+    ${ye()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics Cards -->
@@ -13745,7 +14328,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${fe}
+    ${ve}
     <script>
         async function loadEmployees() {
             try {
@@ -13876,7 +14459,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Sa=`<!DOCTYPE html>
+`,Ca=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13885,11 +14468,11 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${xe}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("تفاصيل الموظف","عرض معلومات الموظف الكاملة","fas fa-user")}
-    ${ge()}
+    ${he("تفاصيل الموظف","عرض معلومات الموظف الكاملة","fas fa-user")}
+    ${ye()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-6">
@@ -13907,7 +14490,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${fe}
+    ${ve}
     <script>
         const employeeId = window.location.pathname.split('/').pop();
         
@@ -14060,7 +14643,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ta=`<!DOCTYPE html>
+`,La=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -14069,11 +14652,11 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${xe}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("تعديل الموظف","تعديل بيانات الموظف","fas fa-user-edit")}
-    ${ge()}
+    ${he("تعديل الموظف","تعديل بيانات الموظف","fas fa-user-edit")}
+    ${ye()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-6">
@@ -14183,7 +14766,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${fe}
+    ${ve}
     <script>
         const employeeId = window.location.pathname.split('/').slice(0, -1).pop();
         
@@ -14269,7 +14852,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Da=`<!DOCTYPE html>
+`,Aa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -14278,11 +14861,11 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <script src="https://cdn.tailwindcss.com"><\/script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
-    ${ue}
+    ${xe}
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
-    ${me("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
-    ${ge()}
+    ${he("الحضور والغياب","تسجيل ومتابعة حضور الموظفين","fas fa-user-check")}
+    ${ye()}
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Statistics -->
@@ -14470,7 +15053,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
         </div>
     </div>
 
-    ${fe}
+    ${ve}
     <script>
         // Set today's date as default
         document.getElementById('dateFilter').valueAsDate = new Date();
@@ -14600,7 +15183,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
     <\/script>
 </body>
 </html>
-`,Ba=`
+`,ja=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -14991,7 +15574,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Ca=`
+`,Na=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15298,7 +15881,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Ra=`
+`,Ma=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15550,7 +16133,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,ja=`
+`,Oa=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -15813,7 +16396,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,La=`
+`,Fa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16307,7 +16890,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Aa=`
+`,qa=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16694,7 +17277,7 @@ var Be=(e,t,a)=>(s,n)=>{let r=-1;return l(0);async function l(i){if(i<=r)throw n
   <\/script>
 </body>
 </html>
-`,Na=`/* =============================================
+`,Pa=`/* =============================================
    نظام إدارة العقود - شركة الموعد للمقاولات العامة
    ============================================= */
 
@@ -17547,7 +18130,7 @@ body {
 html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([href="/admin/contracts/list"]):not([href="/admin/contracts/new"]) {
   display: none !important;
 }
-`,Oa=`<!DOCTYPE html>
+`,$a=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -18301,7 +18884,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,$a=`<!DOCTYPE html>
+`,Ha=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -20210,7 +20793,7 @@ document.addEventListener('DOMContentLoaded', boot);
 <\/script>
 </body>
 </html>
-`,qa=`<!DOCTYPE html>
+`,za=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -20366,7 +20949,7 @@ document.addEventListener('DOMContentLoaded', boot);
   <\/script>
 </body>
 </html>
-`,Ma=`<!DOCTYPE html>
+`,Ua=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
@@ -21571,7 +22154,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <\/script>
 </body>
 </html>
-`,Fa=`<!DOCTYPE html>
+`,Wa=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -22602,7 +23185,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <script src="/contracts-module/js/dashboard.js?v=20260401"><\/script>
 </body>
 </html>
-`,je=`<!DOCTYPE html>
+`,Oe=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -23745,7 +24328,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,Pa=`<!DOCTYPE html>
+`,Va=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -25617,7 +26200,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,Ha=`<!DOCTYPE html>
+`,Ga=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -26919,23 +27502,23 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <\/script>
 </body>
 </html>
-`,Le="?v=20260405";function Ua(e){const t=`
+`,Fe="?v=20260405";function Ya(e){const t=`
   <style id="contracts-module-styles">
-${Na}
+${Pa}
   </style>
-`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function za(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function it(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function be(e){let t=Ua(za(e.replace(/\r\n/g,`
-`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${Le}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${Le}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const Wa=be(Oa),Va=be($a),Ga=be(qa),Ya=be(Ma);function ne(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function Ae(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function G(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Ja(e){return e.roleId===4}function Ne(e){return e.roleId===3}async function V(e,t){const a=await t(e);return a.userId?Ja(a)?{info:a,error:e.json({error:"Forbidden"},403)}:{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function Oe(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(G(e)){const s=t?.tenant_id;if(typeof s=="number"&&s>0)return{tenantId:s,error:null};if(typeof s=="string"&&/^\d+$/.test(s))return{tenantId:parseInt(s,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const Xa=2e5;function $e(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>Xa?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function qe(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:G(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:G(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function Qa(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;let l="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&G(n)){const c=s.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(o=parseInt(String(c),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)l+=" WHERE tenant_id = ?",i.push(o);else return G(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(l+=" AND assigned_to = ?",i.push(n.userId)),l+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(l).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:c}=qe(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...c,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:c}=qe(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...c).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:c}=Oe(n,o,s);if(c)return c;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const f=(await s.env.DB.prepare(`INSERT INTO contract_templates (
+`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function Ja(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function ut(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function we(e){let t=Ya(Ja(e.replace(/\r\n/g,`
+`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${Fe}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${Fe}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const Xa=we($a),Qa=we(Ha),Ka=we(za),Za=we(Ua);function de(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function qe(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function J(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function es(e){return e.roleId===4}function Pe(e){return e.roleId===3}async function Y(e,t){const a=await t(e);return a.userId?es(a)?{info:a,error:e.json({error:"Forbidden"},403)}:{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function $e(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(J(e)){const s=t?.tenant_id;if(typeof s=="number"&&s>0)return{tenantId:s,error:null};if(typeof s=="string"&&/^\d+$/.test(s))return{tenantId:parseInt(s,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const ts=2e5;function He(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>ts?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function ze(e,t,a){const s=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:J(e)&&s&&/^\d+$/.test(s)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(s,10)]}:J(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}function as(e,t){e.get("/api/contract-tables/customer-list",async s=>{const{info:n,error:r}=await Y(s,t);if(r)return r;let l="SELECT id, full_name, phone, national_id, city FROM customers";const i=[];let o=n.tenantId??null;if(o==null&&J(n)){const p=s.req.query("tenant_id");if(p&&/^\d+$/.test(String(p))&&(o=parseInt(String(p),10)),o==null&&n.userId){const u=await s.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(n.userId).first();u?.tenant_id!=null&&(o=u.tenant_id)}}if(o!=null)l+=" WHERE tenant_id = ?",i.push(o);else return J(n)?s.json({data:[],debug:"no_tenant"}):s.json({data:[],debug:"no_tenant"});n.roleId===4&&n.userId&&(l+=" AND assigned_to = ?",i.push(n.userId)),l+=" ORDER BY full_name ASC LIMIT 500";const{results:d}=await s.env.DB.prepare(l).bind(...i).all();return s.json({data:d||[]})}),e.get("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await Y(s,t);if(r)return r;const l=s.req.param("table"),i=de(l);if(!i)return s.json({error:"Unknown table"},400);const o=Math.min(parseInt(s.req.query("limit")||"200",10)||200,500),{sql:d,binds:p}=ze(n,s,i),{results:u}=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE 1=1 ${d} ORDER BY id DESC LIMIT ?`).bind(...p,o).all();return s.json({data:u||[]})}),e.get("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await Y(s,t);if(r)return r;const l=s.req.param("table"),i=de(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const{sql:d,binds:p}=ze(n,s,i),u=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ? ${d}`).bind(o,...p).first();return u?s.json(u):s.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async s=>{const{info:n,error:r}=await Y(s,t);if(r)return r;const l=s.req.param("table"),i=de(l);if(!i)return s.json({error:"Unknown table"},400);const o=await s.req.json().catch(()=>({})),{tenantId:d,error:p}=$e(n,o,s);if(p)return p;if(d==null)return s.json({error:"Missing tenant"},400);if(i==="contract_templates"){const u=String(o.template_name??"");if(!u.trim())return s.json({error:"template_name required"},400);const b=(await s.env.DB.prepare(`INSERT INTO contract_templates (
           tenant_id, template_name, template_type, header_content, body_content, footer_content,
           variables_list, is_active, court_city
-        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,Ae(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="contracts"){const u=$e(o);if(!u.ok)return u.response;let m;try{m=await s.env.DB.prepare(`INSERT INTO contracts (
+        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(d,u,o.template_type??null,o.header_content??null,o.body_content??null,o.footer_content??null,qe(o.variables_list),o.is_active!==void 0?o.is_active?1:0:1,o.court_city??null).run()).meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(b).first();return s.json({...g,id:b})}if(i==="contracts"){const u=He(o);if(!u.ok)return u.response;let m;try{m=await s.env.DB.prepare(`INSERT INTO contracts (
           tenant_id, contract_number, template_id, template_name, date_gregorian, day_name,
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(d,o.contract_number??null,o.template_id!=null?Number(o.template_id):null,o.template_name??null,o.date_gregorian??null,o.day_name??null,o.party_one_name??null,o.party_one_phone??null,u.value,o.customer_id!=null?Number(o.customer_id):null,o.party_two_name??null,o.party_two_id??null,o.party_two_phone??null,o.party_two_address??null,o.finance_type??null,o.finance_amount!=null?Number(o.finance_amount):null,o.commission_amount!=null?Number(o.commission_amount):null,o.commission_type??null,o.commission_rate!=null?Number(o.commission_rate):null,o.note_order_number??null,o.note_due_date??null,o.status??"نشط",o.property_description??null,o.property_location??null,o.bank_name??null,o.notes??null,o.is_archived?1:0).run()}catch(b){const y=b instanceof Error?b.message:String(b);return/no such column/i.test(y)?s.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:y},500)}const f=m.meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(f).first();return s.json({...g,id:f})}if(i==="promissory_notes"){const u=o.contract_id!=null?Number(o.contract_id):NaN;if(!u)return s.json({error:"contract_id required"},400);const m=await s.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!m||m.tenant_id!==d)return s.json({error:"Invalid contract"},400);const f=String(o.note_number??"");if(!f.trim())return s.json({error:"note_number required"},400);const b=(await s.env.DB.prepare(`INSERT INTO promissory_notes (
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(d,o.contract_number??null,o.template_id!=null?Number(o.template_id):null,o.template_name??null,o.date_gregorian??null,o.day_name??null,o.party_one_name??null,o.party_one_phone??null,u.value,o.customer_id!=null?Number(o.customer_id):null,o.party_two_name??null,o.party_two_id??null,o.party_two_phone??null,o.party_two_address??null,o.finance_type??null,o.finance_amount!=null?Number(o.finance_amount):null,o.commission_amount!=null?Number(o.commission_amount):null,o.commission_type??null,o.commission_rate!=null?Number(o.commission_rate):null,o.note_order_number??null,o.note_due_date??null,o.status??"نشط",o.property_description??null,o.property_location??null,o.bank_name??null,o.notes??null,o.is_archived?1:0).run()}catch(x){const h=x instanceof Error?x.message:String(x);return/no such column/i.test(h)?s.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:h},500)}const b=m.meta.last_row_id,g=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(b).first();return s.json({...g,id:b})}if(i==="promissory_notes"){const u=o.contract_id!=null?Number(o.contract_id):NaN;if(!u)return s.json({error:"contract_id required"},400);const m=await s.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!m||m.tenant_id!==d)return s.json({error:"Invalid contract"},400);const b=String(o.note_number??"");if(!b.trim())return s.json({error:"note_number required"},400);const x=(await s.env.DB.prepare(`INSERT INTO promissory_notes (
           tenant_id, note_number, contract_id, debtor_name, debtor_id, amount, due_date, issue_date, payment_place, status
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,f,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(b).first();return s.json({...y,id:b})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:r,error:l}=await V(s,t);if(l)return l;if(Ne(r))return s.json({error:"Forbidden"},403);const i=s.req.param("table"),o=ne(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const c=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(r.tenantId&&u.tenant_id!==r.tenantId)return s.json({error:"Forbidden"},403);if(!r.tenantId&&!G(r))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="is_active"?f.push(c[h]?1:0):h==="variables_list"?f.push(Ae(c[h])):f.push(c[h]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(b)}if(o==="contracts"){if(c.party_one_logo!==void 0){const y=$e(c);if(!y.ok)return y.response;c.party_one_logo=y.value}const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="finance_amount"||h==="commission_amount"||h==="commission_rate"||h==="customer_id"||h==="template_id"?f.push(c[h]!=null?Number(c[h]):null):h==="is_archived"?f.push(c[h]?1:0):f.push(c[h]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("day_name","day_name"),g("party_one_name","party_one_name"),g("party_one_phone","party_one_phone"),g("party_one_logo","party_one_logo"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(y)}try{await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run()}catch(y){const h=y instanceof Error?y.message:String(y);return/no such column/i.test(h)?s.json({error:"database_schema",detail:"العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:h},500)}const b=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(b)}if(o==="promissory_notes"){const m=[],f=[],g=(y,h)=>{(n==="PUT"||c[h]!==void 0)&&(m.push(`${y} = ?`),h==="amount"||h==="contract_id"?f.push(c[h]!=null?Number(c[h]):null):f.push(c[h]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const y=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(y)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...f,d).run();const b=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(b)}return s.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;const l=s.env.ATTACHMENTS;if(!l)return s.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let i;try{i=await s.req.formData()}catch{return s.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const o=i.get("file");if(!o||!(o instanceof File))return s.json({error:"no_file",detail:"No file provided"},400);const d=o,c=2*1024*1024;if(d.size>c)return s.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(d.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return s.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const m=i.get("tenant_id"),f={};m!=null&&String(m).trim()!==""&&(f.tenant_id=m);const{tenantId:g,error:b}=Oe(n,f,s);if(b)return b;if(g==null)return s.json({error:"missing_tenant",detail:"Missing tenant"},400);const y=Date.now(),h=Math.random().toString(36).slice(2,9),w=(d.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",v=["jpg","jpeg","png","gif","webp"].includes(w)?w:"jpg",_=`contracts/${g}/party_logo_${y}_${h}.${v}`,R=await d.arrayBuffer();await l.put(_,R,{httpMetadata:{contentType:d.type||`image/${v==="jpg"?"jpeg":v}`}});const B=`/api/attachments/view/${_}`;return s.json({success:!0,url:B,filename:_})}),e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await V(s,t);if(r)return r;if(Ne(n))return s.json({error:"Forbidden"},403);const l=s.req.param("table"),i=ne(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!G(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const Ka=`/* =============================================
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(d,b,u,o.debtor_name??null,o.debtor_id??null,o.amount!=null?Number(o.amount):null,o.due_date??null,o.issue_date??null,o.payment_place??null,o.status??"ساري").run()).meta.last_row_id,h=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(x).first();return s.json({...h,id:x})}return s.json({error:"Unsupported"},400)});const a=async(s,n)=>{const{info:r,error:l}=await Y(s,t);if(l)return l;if(Pe(r))return s.json({error:"Forbidden"},403);const i=s.req.param("table"),o=de(i);if(!o)return s.json({error:"Unknown table"},400);const d=parseInt(s.req.param("id"),10);if(!d)return s.json({error:"Invalid id"},400);const p=await s.req.json().catch(()=>({})),u=await s.env.DB.prepare(`SELECT * FROM ${o} WHERE id = ?`).bind(d).first();if(!u)return s.json({error:"Not found"},404);if(r.tenantId&&u.tenant_id!==r.tenantId)return s.json({error:"Forbidden"},403);if(!r.tenantId&&!J(r))return s.json({error:"Forbidden"},403);if(o==="contract_templates"){const m=[],b=[],g=(h,f)=>{(n==="PUT"||p[f]!==void 0)&&(m.push(`${h} = ?`),f==="is_active"?b.push(p[f]?1:0):f==="variables_list"?b.push(qe(p[f])):b.push(p[f]??null))};if(g("template_name","template_name"),g("template_type","template_type"),g("header_content","header_content"),g("body_content","body_content"),g("footer_content","footer_content"),g("variables_list","variables_list"),g("is_active","is_active"),g("court_city","court_city"),m.length===0){const h=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(h)}await s.env.DB.prepare(`UPDATE contract_templates SET ${m.join(", ")} WHERE id = ?`).bind(...b,d).run();const x=await s.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(d).first();return s.json(x)}if(o==="contracts"){if(p.party_one_logo!==void 0){const h=He(p);if(!h.ok)return h.response;p.party_one_logo=h.value}const m=[],b=[],g=(h,f)=>{(n==="PUT"||p[f]!==void 0)&&(m.push(`${h} = ?`),f==="finance_amount"||f==="commission_amount"||f==="commission_rate"||f==="customer_id"||f==="template_id"?b.push(p[f]!=null?Number(p[f]):null):f==="is_archived"?b.push(p[f]?1:0):b.push(p[f]??null))};if(g("contract_number","contract_number"),g("template_id","template_id"),g("template_name","template_name"),g("date_gregorian","date_gregorian"),g("day_name","day_name"),g("party_one_name","party_one_name"),g("party_one_phone","party_one_phone"),g("party_one_logo","party_one_logo"),g("customer_id","customer_id"),g("party_two_name","party_two_name"),g("party_two_id","party_two_id"),g("party_two_phone","party_two_phone"),g("party_two_address","party_two_address"),g("finance_type","finance_type"),g("finance_amount","finance_amount"),g("commission_amount","commission_amount"),g("commission_type","commission_type"),g("commission_rate","commission_rate"),g("note_order_number","note_order_number"),g("note_due_date","note_due_date"),g("status","status"),g("property_description","property_description"),g("property_location","property_location"),g("bank_name","bank_name"),g("notes","notes"),g("is_archived","is_archived"),m.length===0){const h=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(h)}try{await s.env.DB.prepare(`UPDATE contracts SET ${m.join(", ")} WHERE id = ?`).bind(...b,d).run()}catch(h){const f=h instanceof Error?h.message:String(h);return/no such column/i.test(f)?s.json({error:"database_schema",detail:"العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1."},500):s.json({error:"database_error",detail:f},500)}const x=await s.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(d).first();return s.json(x)}if(o==="promissory_notes"){const m=[],b=[],g=(h,f)=>{(n==="PUT"||p[f]!==void 0)&&(m.push(`${h} = ?`),f==="amount"||f==="contract_id"?b.push(p[f]!=null?Number(p[f]):null):b.push(p[f]??null))};if(g("note_number","note_number"),g("contract_id","contract_id"),g("debtor_name","debtor_name"),g("debtor_id","debtor_id"),g("amount","amount"),g("due_date","due_date"),g("issue_date","issue_date"),g("payment_place","payment_place"),g("status","status"),m.length===0){const h=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(h)}await s.env.DB.prepare(`UPDATE promissory_notes SET ${m.join(", ")} WHERE id = ?`).bind(...b,d).run();const x=await s.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(d).first();return s.json(x)}return s.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async s=>{const{info:n,error:r}=await Y(s,t);if(r)return r;const l=s.env.ATTACHMENTS;if(!l)return s.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let i;try{i=await s.req.formData()}catch{return s.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const o=i.get("file");if(!o||!(o instanceof File))return s.json({error:"no_file",detail:"No file provided"},400);const d=o,p=2*1024*1024;if(d.size>p)return s.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(d.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return s.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const m=i.get("tenant_id"),b={};m!=null&&String(m).trim()!==""&&(b.tenant_id=m);const{tenantId:g,error:x}=$e(n,b,s);if(x)return x;if(g==null)return s.json({error:"missing_tenant",detail:"Missing tenant"},400);const h=Date.now(),f=Math.random().toString(36).slice(2,9),v=(d.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",w=["jpg","jpeg","png","gif","webp"].includes(v)?v:"jpg",_=`contracts/${g}/party_logo_${h}_${f}.${w}`,I=await d.arrayBuffer();await l.put(_,I,{httpMetadata:{contentType:d.type||`image/${w==="jpg"?"jpeg":w}`}});const k=`/api/attachments/view/${_}`;return s.json({success:!0,url:k,filename:_})}),e.put("/api/contract-tables/:table/:id",s=>a(s,"PUT")),e.patch("/api/contract-tables/:table/:id",s=>a(s,"PATCH")),e.delete("/api/contract-tables/:table/:id",async s=>{const{info:n,error:r}=await Y(s,t);if(r)return r;if(Pe(n))return s.json({error:"Forbidden"},403);const l=s.req.param("table"),i=de(l);if(!i)return s.json({error:"Unknown table"},400);const o=parseInt(s.req.param("id"),10);if(!o)return s.json({error:"Invalid id"},400);const d=await s.env.DB.prepare(`SELECT * FROM ${i} WHERE id = ?`).bind(o).first();return d?n.tenantId&&d.tenant_id!==n.tenantId?s.json({error:"Forbidden"},403):!n.tenantId&&!J(n)?s.json({error:"Forbidden"},403):(await s.env.DB.prepare(`DELETE FROM ${i} WHERE id = ?`).bind(o).run(),new Response(null,{status:204})):s.json({error:"Not found"},404)})}const ss=`/* =============================================
    app.js - الوظائف المشتركة للنظام
    ============================================= */
 
@@ -27338,7 +27921,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setCurrentDate();
   applyRole3ContractsRestrictions();
 });
-`,Za=`/* =============================================
+`,ns=`/* =============================================
    dashboard.js - لوحة التحكم
    ============================================= */
 
@@ -27569,15 +28152,15 @@ function sendWA(phone, name, contractNum) {
 }
 
 document.addEventListener('DOMContentLoaded', loadDashboard);
-`;function es(e,t){e.get("/contracts-module/js/app.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Ka,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)}),e.get("/contracts-module/js/dashboard.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(Za,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)})}function lt(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function Y(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function M(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("id_attachment_url")||t.includes("bank_statement_attachment_url")||t.includes("salary_attachment_url")||t.includes("additional_attachment_url"):!1}async function Ee(e,t,a){if(!t)return;const s=Object.entries(a).filter(([,l])=>l!==void 0);if(s.length===0)return;const n=s.map(([l])=>`${l} = ?`).join(", "),r=s.map(([,l])=>l??null);try{await e.prepare(`
+`;function rs(e,t){e.get("/contracts-module/js/app.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(ss,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)}),e.get("/contracts-module/js/dashboard.js",async a=>{const s=await t(a);return s.userId?s.roleId===4?a.newResponse("Forbidden",403):a.newResponse(ns,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)})}function mt(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(s=>({note:typeof s=="string"?s:String(s?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function X(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function P(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("identity_attachment_url")||t.includes("signature_attachment_url")||t.includes("salary_profile_attachment_url")||t.includes("gosi_attachment_url")||t.includes("tax_exemption_attachment_url")||t.includes("additional_1_attachment_url")||t.includes("additional_2_attachment_url")||t.includes("additional_3_attachment_url"):!1}async function De(e,t,a){if(!t)return;const s=Object.entries(a).filter(([,l])=>l!==void 0);if(s.length===0)return;const n=s.map(([l])=>`${l} = ?`).join(", "),r=s.map(([,l])=>l??null);try{await e.prepare(`
       UPDATE customers
       SET ${n}
       WHERE id = ?
-    `).bind(...r,t).run()}catch(l){if(!M(l))throw l}await e.prepare(`
+    `).bind(...r,t).run()}catch(l){if(!P(l))throw l}await e.prepare(`
     UPDATE financing_requests
     SET ${n}
     WHERE customer_id = ?
-  `).bind(...r,t).run()}function dt(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function ct(e){let a=dt(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const s=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(s)?{normalized:`966${s}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678"}}function ie(e){const t=dt(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const pt=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function le(e){return String(e??"").trim().toLowerCase()}function de(e){return pt.has(e)}function U(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function Ie(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function Se(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||pt.has(e))}function ut(e,t){const a=U(e.company_name),s=U(e.contact_email||""),n=U(e.contact_phone||""),r=U(e.primary_color||"#0f766e"),l=U(e.secondary_color||"#14b8a6"),i=JSON.stringify(t?.path_segment??null),o=t?U(t.label):"",d=t?`<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
+  `).bind(...r,t).run()}function gt(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function ft(e){let a=gt(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const s=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(s)?{normalized:`966${s}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678"}}function ue(e){const t=gt(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const bt=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function me(e){return String(e??"").trim().toLowerCase()}function ge(e){return bt.has(e)}function j(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function Be(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function Re(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||bt.has(e))}function xt(e,t){const a=j(e.company_name),s=j(e.contact_email||""),n=j(e.contact_phone||""),r=j(e.primary_color||"#0f766e"),l=j(e.secondary_color||"#14b8a6"),i=JSON.stringify(t?.path_segment??null),o=t?j(t.label):"",d=t?`<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
          <i class="fas fa-bullhorn ml-1"></i> المصدر: <strong>${o}</strong>
        </div>`:"";return`
     <!DOCTYPE html>
@@ -27591,8 +28174,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     </head>
     <body class="min-h-screen bg-gray-50">
       <div class="min-h-screen p-6" style="background: linear-gradient(135deg, ${r}, ${l});">
-        <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div class="lg:col-span-2 bg-white rounded-2xl shadow-2xl p-8">
+        <div class="w-full max-w-none grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-4 gap-6 items-start">
+          <div class="lg:col-span-2 2xl:col-span-3 bg-white rounded-2xl shadow-2xl p-8">
             <div class="text-center mb-8">
               <div class="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl" style="background: ${r};">
                 <i class="fas fa-comments"></i>
@@ -27678,7 +28261,34 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `}async function mt(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function ts(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const p=new tt;es(p,x);const F=()=>`
+  `}async function ht(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function os(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}const c=new ot;rs(c,y);const $=()=>`
+  /* Wide-screen layout: let pages span available width (avoid big empty side whitespace) */
+  @media (min-width: 1024px) {
+    .max-w-7xl,
+    .max-w-6xl,
+    .max-w-5xl,
+    .max-w-4xl,
+    .max-w-3xl {
+      max-width: none !important;
+      width: 100% !important;
+    }
+
+    .max-w-7xl.mx-auto,
+    .max-w-6xl.mx-auto,
+    .max-w-5xl.mx-auto,
+    .max-w-4xl.mx-auto,
+    .max-w-3xl.mx-auto,
+    .container.mx-auto {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    .container {
+      max-width: none !important;
+      width: 100% !important;
+    }
+  }
+
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     /* Container adjustments */
@@ -27879,7 +28489,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       min-width: 60px !important;
     }
   }
-`;p.use("*",ea());p.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});p.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}const s=await x(e);if(k(s.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});p.use("*",async(e,t)=>{if(e.req.method==="OPTIONS"){await t();return}const a=e.req.path||"";if(a.startsWith("/admin/")){await t();return}if(a.startsWith("/api/")){await t();return}const s=await x(e);if(!s.userId||k(s.roleId)!==5){await t();return}if(a==="/login"||a==="/forgot-password"||a.startsWith("/.well-known")){await t();return}return e.redirect("/admin/requests")});async function as(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let r=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(r=await e.env.DB.prepare(`
+`;c.use("*",ra());c.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});c.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}const s=await y(e);if(E(s.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a==="/api/customers"&&n==="GET"){await t();return}if(a==="/api/customer-reviews"&&n==="GET"){await t();return}if(a.startsWith("/api/customer-reviews/")&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});c.use("*",async(e,t)=>{if(e.req.method==="OPTIONS"){await t();return}const a=e.req.path||"";if(a.startsWith("/admin/")){await t();return}if(a.startsWith("/api/")){await t();return}const s=await y(e);if(!s.userId||E(s.roleId)!==5){await t();return}if(a==="/login"||a==="/forgot-password"||a.startsWith("/.well-known")){await t();return}return e.redirect("/admin/requests")});async function is(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],s=e.req.path.match(/^\/c\/([^\/]+)/),n=s?s[1]:null;let r=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(r=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -27889,14 +28499,17 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LIMIT 1
     `).bind(n).first()),r||(r=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),r}function ss(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const r=n===0?"":"=".repeat(4-n);return s+r}function q(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function ns(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,s=Date.parse(a);return Number.isNaN(s)?null:s}const Me=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function Te(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...Me]}catch{return[...Me]}}function rs(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function k(e){const t=rs(e);return t===null?null:{11:1,12:2,13:3,14:4}[t]??t}function we(e){return JSON.stringify(e).replace(/</g,"\\u003c")}function J(e,t){const a=k(e),s=(t||"").trim(),n=s.toLowerCase();return a===1?"مدير النظام":a===2?s||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"موظف التمويل":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":s==="موظف"?"موظف":s==="مشرف"||s.includes("مشرف")?"مشرف المبيعات":s||"غير محدد"}function ee(e){return e===1||e===2}async function te(e,t,a){return!t.userId||!t.roleId||!a?!1:t.roleId===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:t.roleId===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:t.roleId===2||t.roleId===3}async function x(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const y=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",y?"Present":"Missing"),y){const w=y.split(";").map(v=>v.trim()).find(v=>v.startsWith("authToken="));w?(t=w.startsWith("authToken=")?w.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const y=e.req.query("tenant_id");return{userId:null,tenantId:y?parseInt(y):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=ss(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const r=q(n[0]);if(!r)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const l=q(n[1]),i=k(q(n[2])),o=q(n[3]);if(!o)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:r,tenantIdFromToken:l,tokenRoleId:i,tokenIssuedAtMs:o}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",r);const d=await e.env.DB.prepare(`
+    `).bind().first()),r}function ls(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const s=a.replace(/-/g,"+").replace(/_/g,"/"),n=s.length%4;if(n===1)return null;const r=n===0?"":"=".repeat(4-n);return s+r}function q(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function ds(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,s=Date.parse(a);return Number.isNaN(s)?null:s}const Ue=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function Ce(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const s=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return s.length>0?s:[...Ue]}catch{return[...Ue]}}function cs(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function E(e){const t=cs(e);return t===null?null:{11:1,12:2,13:3,14:4}[t]??t}function Ie(e){return JSON.stringify(e).replace(/</g,"\\u003c")}function Q(e,t){const a=E(e),s=(t||"").trim(),n=s.toLowerCase();return a===1?"مدير النظام":a===2?s||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"موظف التمويل":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":s==="موظف"?"موظف":s==="مشرف"||s.includes("مشرف")?"مشرف المبيعات":s||"غير محدد"}function ne(e){return e===1||e===2}async function K(e,t,a){return!t.userId||!t.roleId||!a?!1:t.roleId===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:t.roleId===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:E(t.roleId)===5?!!(await e.prepare("SELECT 1 as ok FROM financing_requests WHERE customer_id = ? AND assigned_bank_agent_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:t.roleId===2||t.roleId===3}async function y(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const h=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",h?"Present":"Missing"),h){const v=h.split(";").map(w=>w.trim()).find(w=>w.startsWith("authToken="));v?(t=v.startsWith("authToken=")?v.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const h=e.req.query("tenant_id");return{userId:null,tenantId:h?parseInt(h):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=ls(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const s=atob(a);console.log("🔍 [getUserInfo] Decoded token:",s.substring(0,50)+"...");const n=s.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const r=q(n[0]);if(!r)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const l=q(n[1]),i=E(q(n[2])),o=q(n[3]);if(!o)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:r,tenantIdFromToken:l,tokenRoleId:i,tokenIssuedAtMs:o}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",r);const d=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
-    `).bind(r).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const c=ns(d.last_login??null);if(c&&o<c)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:o,userLastLoginMs:c}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const u=k(d.role_id),m=d.assigned_bank_id,f=m!=null&&!Number.isNaN(Number(m))?Number(m):null;if(u===1){const y=e.req.query("tenant_id"),h={userId:d.id,tenantId:y?parseInt(y):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",h),h}const g=d.tenant_id,b={userId:d.id,tenantId:g??l,roleId:u,tokenRoleId:i,assignedBankId:u===5?f:null};return console.log("✅ [getUserInfo] Returning user info:",b),b}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}async function os(e,t,a,s){return!!await e.prepare(`SELECT 1 AS ok FROM users
+    `).bind(r).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const p=ds(d.last_login??null);if(p&&o<p)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:o,userLastLoginMs:p}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const u=E(d.role_id),m=d.assigned_bank_id,b=m!=null&&!Number.isNaN(Number(m))?Number(m):null;if(u===1){const h=e.req.query("tenant_id"),f={userId:d.id,tenantId:h?parseInt(h):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",f),f}const g=d.tenant_id,x={userId:d.id,tenantId:g??l,roleId:u,tokenRoleId:i,assignedBankId:u===5?b:null};return console.log("✅ [getUserInfo] Returning user info:",x),x}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}async function ps(e,t,a){return!!await e.prepare(`SELECT 1 AS ok FROM users
        WHERE id = ? AND is_active = 1 AND role_id = 5
-         AND tenant_id = ? AND assigned_bank_id = ?`).bind(s,t,a).first()}async function xe(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function gt(e,t,a){let s="SELECT id, full_name, phone, national_id, city, tenant_id FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let l=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(l=parseInt(String(i),10)),l==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(l=o.tenant_id)}if(l==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(l)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};s+=` WHERE tenant_id = ? AND EXISTS (
+         AND tenant_id = ?`).bind(a,t).first()}async function yt(e,t,a){let s="SELECT id, full_name, phone, national_id, city, tenant_id FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let l=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(l=parseInt(String(i),10)),l==null&&t.userId){const o=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();o?.tenant_id!=null&&(l=o.tenant_id)}if(l==null)return{results:[]};s+=" WHERE tenant_id = ?",n.push(l)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};s+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};s+=` WHERE tenant_id = ? AND EXISTS (
       SELECT 1 FROM customer_assignments ca
       WHERE ca.customer_id = customers.id AND ca.employee_id = ?
-    )`,n.push(t.tenantId,t.userId)}else s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function D(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const is=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function ls(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
+    )`,n.push(t.tenantId,t.userId)}else if(E(t.roleId)===5){if(!t.tenantId||!t.userId)return{results:[]};s+=` WHERE tenant_id = ? AND EXISTS (
+      SELECT 1 FROM financing_requests fr
+      WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+    )`,n.push(t.tenantId,t.userId)}else s+=" WHERE 1 = 0";return s+=" ORDER BY full_name",{results:(n.length?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all()).results||[]}}function R(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const us=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];function ms(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let s=e.replace(a,"");return s=s.replace("</head>",`
 <style>
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
@@ -27905,7 +28518,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
   [href^="/admin/saas-settings"],
   [href^="/admin/tenant-calculators"] { display: none !important; }
 </style>
-</head>`),s}const ds={1:["/admin/dashboard","/admin/customers","/admin/requests","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups"],2:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/"],3:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/calculator","/"],4:["/admin/dashboard","/admin/customers","/admin/requests","/admin/my-tasks","/calculator","/"],5:["/admin/requests"]};function cs(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/panel"||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const s=a?.roleId??4,n=JSON.stringify(ds),r=`
+</head>`),s}const gs={1:["/admin/dashboard","/admin/customers","/admin/requests","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups"],2:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/"],3:["/admin/dashboard","/admin/customers","/admin/requests","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/calculator","/"],4:["/admin/dashboard","/admin/customers","/admin/requests","/admin/my-tasks","/my-tasks","/calculator","/"],5:["/admin/dashboard","/admin/customers","/admin/requests","/admin/my-tasks","/my-tasks","/calculator","/"]};function fs(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/panel"||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const s=a?.roleId??4,n=JSON.stringify(gs),r=`
 <style>
   #global-persistent-sidebar {
     position: fixed;
@@ -27993,6 +28606,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     margin-bottom: 2px;
     color: #475569;
   }
+  #global-persistent-sidebar .gps-submenu .gps-segment-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: #94a3b8;
+    padding: 10px 10px 6px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  #global-persistent-sidebar .gps-submenu .gps-subdivider {
+    margin: 6px 10px;
+    border: 0;
+    border-top: 1px dashed #e2e8f0;
+  }
   #global-persistent-sidebar .gps-count-badge {
     margin-inline-start: auto;
     background: #e2e8f0;
@@ -28078,7 +28704,28 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     </div>
     <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>مهام المتابعة</a>
     <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
-    <a href="/admin/follow-ups"><i class="fas fa-address-card"></i>متابعة التواصل</a>
+    <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>التسويق</a>
+    <div class="gps-collapsible gps-open" data-followups-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=all" class="gps-collapsible-main">
+        <i class="fas fa-bullhorn"></i>
+        <span>التسويق</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-followups-toggle aria-label="توسيع أو طي قائمة فلاتر متابعة التواصل">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <div class="gps-segment-label">مصدر رابط التواصل</div>
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=all" data-followups-link-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/follow-ups?followupLinkFilter=company&followupPriorityFilter=all" data-followups-link-filter="company"><i class="fas fa-building"></i>رابط الشركة</a>
+        <a href="/admin/follow-ups?followupLinkFilter=affiliate&followupPriorityFilter=all" data-followups-link-filter="affiliate"><i class="fas fa-tag"></i>روابط الأفلييت</a>
+        <hr class="gps-subdivider">
+        <div class="gps-segment-label">الأولوية</div>
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=important" data-followups-priority-filter="important"><i class="fas fa-exclamation-circle"></i>مهم</a>
+        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=regular" data-followups-priority-filter="regular"><i class="fas fa-minus-circle"></i>عادي</a>
+      </div>
+    </div>
     <a href="/admin/rates"><i class="fas fa-percentage"></i>نسب التمويل</a>
     <a href="/admin/payments"><i class="fas fa-receipt"></i>سندات القبض</a>
     <a href="/admin/banks"><i class="fas fa-university"></i>البنوك</a>
@@ -28120,10 +28767,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       }
 
       var userAllowed = ALLOWED[String(ROLE_ID)] || ALLOWED['4'];
+      var canAccessFollowups = userAllowed.indexOf('/admin/follow-ups') !== -1;
       var customersMainLink = sidebar.querySelector('[data-customers-main-link]');
       var customersCollapsible = sidebar.querySelector('[data-customers-collapsible]');
       var requestsMainLink = sidebar.querySelector('[data-requests-main-link]');
       var requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]');
+      var followupsMainLink = sidebar.querySelector('[data-followups-main-link]');
+      var followupsCollapsible = sidebar.querySelector('[data-followups-collapsible]');
 
       if (customersMainLink && customersCollapsible) {
         customersMainLink.style.display = 'none';
@@ -28135,6 +28785,18 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         requestsMainLink.style.display = 'none';
         requestsCollapsible.style.display = 'block';
         requestsCollapsible.classList.remove('gps-open');
+      }
+      if (followupsMainLink && followupsCollapsible) {
+        // Follow-ups is a manager-facing module. If the user can't access '/admin/follow-ups',
+        // hide the entire collapsible to avoid a broken row (arrow misalignment + empty submenu).
+        if (!canAccessFollowups) {
+          followupsMainLink.style.display = 'none';
+          followupsCollapsible.style.display = 'none';
+        } else {
+          followupsMainLink.style.display = 'none';
+          followupsCollapsible.style.display = 'block';
+          followupsCollapsible.classList.remove('gps-open');
+        }
       }
 
       sidebar.querySelectorAll('.gps-nav a[href]').forEach(function (link) {
@@ -28148,6 +28810,10 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           link.style.display = 'none';
           return;
         }
+        if (link.hasAttribute('data-followups-main-link')) {
+          link.style.display = 'none';
+          return;
+        }
         var normalizedHref = href.split('?')[0];
         var isSuperAdminOnly = link.getAttribute('data-superadmin-only') === 'true';
         if (isSuperAdminOnly && ROLE_ID !== 1) {
@@ -28156,7 +28822,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         }
         var isAlways =
           ROLE_ID !== 5 && (normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0);
-        if (isAlways || userAllowed.indexOf(normalizedHref) !== -1) {
+        var canShow = isAlways || userAllowed.indexOf(normalizedHref) !== -1;
+        var hiddenByCount = link.getAttribute('data-gps-hidden-by-count') === '1';
+        if (canShow && !hiddenByCount) {
           link.style.display = 'flex';
         } else {
           link.style.display = 'none';
@@ -28173,11 +28841,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         var hrefPath = url.pathname;
         var hrefRatingFilter = url.searchParams.get('ratingFilter');
         var hrefRequestStatusFilter = url.searchParams.get('requestStatusFilter');
+        var hrefFollowupLinkFilter = url.searchParams.get('followupLinkFilter');
+        var hrefFollowupPriorityFilter = url.searchParams.get('followupPriorityFilter');
         var activeMatch = path === hrefPath || path.indexOf(hrefPath + '/') === 0;
         if (activeMatch && hrefRatingFilter && query.get('ratingFilter') !== hrefRatingFilter) {
           activeMatch = false;
         }
         if (activeMatch && hrefRequestStatusFilter && query.get('requestStatusFilter') !== hrefRequestStatusFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch && hrefFollowupLinkFilter && query.get('followupLinkFilter') !== hrefFollowupLinkFilter) {
+          activeMatch = false;
+        }
+        if (activeMatch && hrefFollowupPriorityFilter && query.get('followupPriorityFilter') !== hrefFollowupPriorityFilter) {
           activeMatch = false;
         }
         if (activeMatch) {
@@ -28189,16 +28865,34 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     function renderSidebarCount(link, count) {
       if (!link) return;
       var badge = link.querySelector('.gps-count-badge');
+
       if (count == null) {
         if (badge) badge.remove();
         return;
       }
+
+      var n = typeof count === 'number' ? count : 0;
+
+      if (!link.dataset.gpsPrevDisplay) {
+        link.dataset.gpsPrevDisplay = link.style.display || '';
+      }
+
+      if (n <= 0) {
+        link.setAttribute('data-gps-hidden-by-count', '1');
+        link.style.display = 'none';
+        if (badge) badge.remove();
+        return;
+      }
+
+      link.removeAttribute('data-gps-hidden-by-count');
+      link.style.display = link.dataset.gpsPrevDisplay;
+
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'gps-count-badge';
         link.appendChild(badge);
       }
-      badge.textContent = String(count || 0);
+      badge.textContent = String(n);
     }
 
     function hydrateSidebarFilterCounts() {
@@ -28214,14 +28908,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           document.querySelectorAll('#global-persistent-sidebar [data-customer-rating-filter]').forEach(function (link) {
             var key = link.getAttribute('data-customer-rating-filter') || 'all';
             var value = customers[key];
-            if (typeof value !== 'number') value = null;
+            // If a key is absent from the payload, it effectively means 0 for this scope.
+            if (typeof value !== 'number') value = 0;
             renderSidebarCount(link, value);
           });
 
           document.querySelectorAll('#global-persistent-sidebar [data-request-status-filter]').forEach(function (link) {
             var key = link.getAttribute('data-request-status-filter') || 'all';
             var value = key === 'all' ? requests.all : requestStatusCounts[key];
-            if (typeof value !== 'number') value = null;
+            // Missing key => 0 requests for that status in this scope.
+            if (typeof value !== 'number') value = 0;
             renderSidebarCount(link, value);
           });
         })
@@ -28233,8 +28929,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       if (!toggle) {
         toggle = event.target.closest('#global-persistent-sidebar [data-requests-collapsible] [data-requests-toggle]');
       }
+      if (!toggle) {
+        toggle = event.target.closest('#global-persistent-sidebar [data-followups-collapsible] [data-followups-toggle]');
+      }
       if (!toggle) return;
-      var wrapper = toggle.closest('[data-customers-collapsible]') || toggle.closest('[data-requests-collapsible]');
+      var wrapper =
+        toggle.closest('[data-customers-collapsible]') ||
+        toggle.closest('[data-requests-collapsible]') ||
+        toggle.closest('[data-followups-collapsible]');
       if (!wrapper) return;
       event.preventDefault();
       event.stopPropagation();
@@ -28247,20 +28949,20 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     document.addEventListener('DOMContentLoaded', hydrateSidebarFilterCounts);
   })();
 <\/script>
-`;let i=t;return i=i.includes("</head>")?i.replace("</head>",`${r}</head>`):`${r}${i}`,i=i.includes("</body>")?i.replace("</body>",`${l}</body>`):`${i}${l}`,i}p.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await x(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=D(a),n=e.req.path||"";if(is.some(i=>n===i||n.startsWith(i+"/"))&&!s)return e.redirect("/admin/dashboard");if(k(a.roleId)===5&&!(n==="/admin/requests"||n.startsWith("/admin/requests/")&&n!=="/admin/requests/new"&&!n.includes("/edit")&&!n.includes("/delete")&&!n.includes("/workflow")&&!n.includes("/report")))return e.redirect("/admin/requests");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const i=e.res;if(i.status>=300&&i.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(i.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const o=i.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",o),o.includes("text/html")&&i.body){console.log("🔒 [RBAC] Processing HTML response...");const c=await i.clone().text();console.log("🔒 [RBAC] HTML length:",c.length);let u=c;s||(u=ls(u));const m=k(a.roleId)??4;u=cs(n,u,{roleId:m}),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const f=new Headers(i.headers);f.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:i.status,statusText:i.statusText,headers:f}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(i){const o={message:i?.message||"Unknown error",name:i?.name||"Error",stack:i?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(i,Object.getOwnPropertyNames(i),2)}catch(d){return`Failed to stringify: ${d}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",o)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});p.get("/api/user-info",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:k(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});p.use("/c/:tenant/*",async(e,t)=>{const a=await as(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function ps(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function he(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
+`;let i=t;return i=i.includes("</head>")?i.replace("</head>",`${r}</head>`):`${r}${i}`,i=i.includes("</body>")?i.replace("</body>",`${l}</body>`):`${i}${l}`,i}c.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await y(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const s=R(a),n=e.req.path||"";if(us.some(i=>n===i||n.startsWith(i+"/"))&&!s)return e.redirect("/admin/dashboard");if(E(a.roleId)===5&&!(n==="/admin"||n==="/admin/panel"||n==="/admin/dashboard"||n==="/admin/customers"||n.startsWith("/admin/customers/")||n==="/admin/requests"||n.startsWith("/admin/requests/")||n==="/admin/my-tasks"||n==="/my-tasks"||n==="/calculator"||n==="/"))return e.redirect("/admin/panel");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const i=e.res;if(i.status>=300&&i.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(i.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const o=i.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",o),o.includes("text/html")&&i.body){console.log("🔒 [RBAC] Processing HTML response...");const p=await i.clone().text();console.log("🔒 [RBAC] HTML length:",p.length);let u=p;s||(u=ms(u));const m=E(a.roleId)??4;u=fs(n,u,{roleId:m}),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const b=new Headers(i.headers);b.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:i.status,statusText:i.statusText,headers:b}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(i){const o={message:i?.message||"Unknown error",name:i?.name||"Error",stack:i?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(i,Object.getOwnPropertyNames(i),2)}catch(d){return`Failed to stringify: ${d}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",o)}}catch(a){const s={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",s),e.json({success:!1,error:"RBAC Middleware Error",dd:s},500)}});c.get("/api/user-info",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:E(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});c.use("/c/:tenant/*",async(e,t)=>{const a=await is(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function bs(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function _e(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
     SELECT id FROM tenants WHERE public_uuid = ? LIMIT 1
-  `).bind(t).first())?.id??null}p.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+  `).bind(t).first())?.id??null}c.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/tenants",async e=>{try{const t=await e.req.json(),a=le(t.slug);if(!t.company_name||!a)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(de(a))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);if(await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/tenants",async e=>{try{const t=await e.req.json(),a=me(t.slug);if(!t.company_name||!a)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(ge(a))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
-    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=ps(),r=await e.env.DB.prepare(`
+    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=bs(),r=await e.env.DB.prepare(`
       INSERT INTO tenants (
         public_uuid,
         company_name, slug, subdomain, status, max_users, 
         max_customers, max_requests, contact_email, contact_phone,
         primary_color, secondary_color
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(n,t.company_name,a,t.subdomain||a,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:r.meta.last_row_id,public_uuid:n,...t,slug:a},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t),s=await e.req.json(),n=le(s.slug);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);if(!s.company_name||!n)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(de(n))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);const r=await e.env.DB.prepare(`
+    `).bind(n,t.company_name,a,t.subdomain||a,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2").run();return e.json({success:!0,data:{id:r.meta.last_row_id,public_uuid:n,...t,slug:a},message:"تم إنشاء الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await _e(e,t),s=await e.req.json(),n=me(s.slug);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);if(!s.company_name||!n)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(ge(n))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);const r=await e.env.DB.prepare(`
       SELECT id, public_uuid FROM tenants WHERE id = ?
     `).bind(a).first();if(!r)return e.json({success:!1,error:"الشركة غير موجودة"},404);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ? AND id != ?
@@ -28278,11 +28980,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         primary_color = ?,
         secondary_color = ?
       WHERE id = ?
-    `).bind(i.company_name,i.slug,i.subdomain,i.status,i.max_users,i.max_customers,i.max_requests,i.contact_email,i.contact_phone,i.primary_color,i.secondary_color,a).run(),e.json({success:!0,data:{id:a,public_uuid:r?.public_uuid,...i},message:"تم تحديث الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const s=await e.env.DB.prepare(`
+    `).bind(i.company_name,i.slug,i.subdomain,i.status,i.max_users,i.max_customers,i.max_requests,i.contact_email,i.contact_phone,i.primary_color,i.secondary_color,a).run(),e.json({success:!0,data:{id:a,public_uuid:r?.public_uuid,...i},message:"تم تحديث الشركة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await _e(e,t);if(!a)return e.json({success:!1,error:"الشركة غير موجودة"},404);const s=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE tenant_id = ?
     `).bind(a).first();return s&&s.count>0?e.json({success:!1,error:`لا يمكن حذف الشركة لأنها تحتوي على ${s.count} مستخدم/مستخدمين`},400):(await e.env.DB.prepare(`
       DELETE FROM tenants WHERE id = ?
-    `).bind(a).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/auth/login",async e=>{try{if(console.log("🔐 [LOGIN] Starting login process..."),console.log("🔐 [LOGIN] Request URL:",e.req.url),console.log("🔐 [LOGIN] Request method:",e.req.method),!e.env.DB)return console.error("❌ [LOGIN] DB binding is not available"),console.error("❌ [LOGIN] c.env:",JSON.stringify(Object.keys(e.env||{}))),e.json({success:!1,error:"Database connection not available. Please check bindings configuration.",debug:{env_keys:Object.keys(e.env||{})}},500);console.log("🔐 [LOGIN] DB binding available, parsing request body...");const{username:t,password:a}=await e.req.json();if(console.log(`🔐 [LOGIN] Login attempt: ${t}`),console.log(`🔍 [LOGIN] DB binding check: ${!!e.env.DB}`),!e.env?.DB)return console.error("❌ DB binding check failed in login query"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const s=await e.env.DB.prepare(`
+    `).bind(a).run(),e.json({success:!0,message:"تم حذف الشركة بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/auth/login",async e=>{try{if(console.log("🔐 [LOGIN] Starting login process..."),console.log("🔐 [LOGIN] Request URL:",e.req.url),console.log("🔐 [LOGIN] Request method:",e.req.method),!e.env.DB)return console.error("❌ [LOGIN] DB binding is not available"),console.error("❌ [LOGIN] c.env:",JSON.stringify(Object.keys(e.env||{}))),e.json({success:!1,error:"Database connection not available. Please check bindings configuration.",debug:{env_keys:Object.keys(e.env||{})}},500);console.log("🔐 [LOGIN] DB binding available, parsing request body...");const{username:t,password:a}=await e.req.json();if(console.log(`🔐 [LOGIN] Login attempt: ${t}`),console.log(`🔍 [LOGIN] DB binding check: ${!!e.env.DB}`),!e.env?.DB)return console.error("❌ DB binding check failed in login query"),e.json({success:!1,error:"Database connection not available. Please check bindings configuration."},500);const s=await e.env.DB.prepare(`
       SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
              u.role_id, u.subscription_id, u.is_active, 
              u.tenant_id, u.assigned_bank_id,
@@ -28294,12 +28996,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
       LEFT JOIN tenants t ON u.tenant_id = t.id
       WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);if(console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),!e.env?.DB)console.error("❌ [LOGIN] DB binding lost after user query");else{console.log("✅ [LOGIN] Updating last_login timestamp...");const c=new Date().toISOString();await e.env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(c,s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")}console.log("🔐 [LOGIN] Creating authentication token...");const n=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",n);const r=btoa(n);console.log("🔐 [LOGIN] Token created:",r.substring(0,30)+"...");const l=10080*60,i=`authToken=${r}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,o=k(s.role_id)===5?"/admin/requests":"/admin/panel";console.log(`🎯 Redirect to: ${o}`),console.log(`🍪 Cookie set: authToken=${r.substring(0,20)}...`);const d=e.json({success:!0,token:r,redirect:o,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role_id:s.role_id,role_name:J(s.role_id,s.role_name),role_description:s.role_description,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug,assigned_bank_id:s.assigned_bank_id??null}});return console.log("🍪 [LOGIN] Setting cookie header..."),d.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),d}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,n)=>{try{s[n]=String(t[n])}catch{s[n]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});p.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});p.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
+    `).bind(t,a).first();if(!s)return console.log(`❌ Login failed: Invalid credentials for ${t}`),e.json({success:!1,error:"اسم المستخدم أو كلمة المرور غير صحيحة"},401);if(console.log(`✅ [LOGIN] User found: ${s.full_name} (Role ID: ${s.role_id})`),console.log(`✅ [LOGIN] User ID: ${s.id}, Tenant ID: ${s.tenant_id}`),!e.env?.DB)console.error("❌ [LOGIN] DB binding lost after user query");else{console.log("✅ [LOGIN] Updating last_login timestamp...");const p=new Date().toISOString();await e.env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(p,s.id).run(),console.log("✅ [LOGIN] last_login updated successfully")}console.log("🔐 [LOGIN] Creating authentication token...");const n=`${s.id}:${s.tenant_id||"null"}:${s.role_id}:${Date.now()}`;console.log("🔐 [LOGIN] Token data:",n);const r=btoa(n);console.log("🔐 [LOGIN] Token created:",r.substring(0,30)+"...");const l=10080*60,i=`authToken=${r}; Path=/; Max-Age=${l}; SameSite=Lax; Secure`,o="/admin/panel";console.log(`🎯 Redirect to: ${o}`),console.log(`🍪 Cookie set: authToken=${r.substring(0,20)}...`);const d=e.json({success:!0,token:r,redirect:o,user:{id:s.id,username:s.username,full_name:s.full_name,email:s.email,phone:s.phone,role_id:s.role_id,role_name:Q(s.role_id,s.role_name),role_description:s.role_description,company_name:s.subscription_company_name||s.tenant_name,subscription_id:s.subscription_id,tenant_id:s.tenant_id,tenant_name:s.tenant_name,tenant_slug:s.tenant_slug,assigned_bank_id:s.assigned_bank_id??null}});return console.log("🍪 [LOGIN] Setting cookie header..."),d.headers.set("Set-Cookie",i),console.log("✅ [LOGIN] Login successful, returning response"),d}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error:t?{message:t.message,name:t.name,stack:t.stack,cause:t.cause,toString:t.toString(),...Object.getOwnPropertyNames(t).reduce((s,n)=>{try{s[n]=String(t[n])}catch{s[n]="[Cannot serialize]"}return s},{})}:null,DB_available:!!e.env?.DB,env_keys:Object.keys(e.env||{}),env_DB_type:typeof e.env?.DB,request_url:e.req.url,request_method:e.req.method,request_headers:Object.fromEntries(e.req.raw.headers.entries()),error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [LOGIN] FULL ERROR DUMP:",a),e.json({success:!1,error:"حدث خطأ في تسجيل الدخول",dd:a},500)}});c.post("/api/auth/logout",async e=>{const t="authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure",a="authToken=; Path=/; Max-Age=0; SameSite=Lax",s=e.json({success:!0});return s.headers.append("Set-Cookie",t),s.headers.append("Set-Cookie",a),s});c.post("/api/auth/forgot-password",async e=>{try{const{email:t}=await e.req.json(),a=await e.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!a)return e.json({success:!1,message:"البريد الإلكتروني أو اسم المستخدم غير موجود"},404);const s=Math.floor(1e5+Math.random()*9e5).toString(),n=new Date(Date.now()+900*1e3);return await e.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
       VALUES (?, ?, ?, 0)
-    `).bind(a.id,s,n.toISOString()).run(),console.log(`Verification code for ${a.email}: ${s}`),e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني",devCode:s})}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});p.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(a.id,s,n.toISOString()).run(),console.log(`Verification code for ${a.email}: ${s}`),e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني",devCode:s})}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!s)return e.json({success:!1,message:"المستخدم غير موجود"},404);const n=await e.env.DB.prepare(`
       SELECT id, verification_code, expires_at, is_used
@@ -28307,18 +29009,18 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       WHERE user_id = ? AND is_used = 0
       ORDER BY created_at DESC
       LIMIT 1
-    `).bind(s.id).first();if(!n)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(n.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(n.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const r=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:r})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});p.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const n=await e.env.DB.prepare(`
+    `).bind(s.id).first();if(!n)return e.json({success:!1,message:"لم يتم العثور على رمز التحقق"},404);if(new Date(n.expires_at)<new Date)return e.json({success:!1,message:"انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد."},400);if(n.verification_code!==a)return e.json({success:!1,message:"رمز التحقق غير صحيح"},400);const r=Math.random().toString(36).substring(2)+Date.now().toString(36);return e.json({success:!0,message:"تم التحقق بنجاح",token:r})}catch(t){return console.error("Verify code error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.post("/api/auth/reset-password",async e=>{try{const{email:t,token:a,newPassword:s}=await e.req.json();if(!s||s.length<8)return e.json({success:!1,message:"كلمة السر يجب أن تكون 8 أحرف على الأقل"},400);const n=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();return n?(await e.env.DB.prepare(`
       UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).bind(s,n.id).run(),await e.env.DB.prepare(`
       UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
-    `).bind(n.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});p.get("/api/banks",async e=>{try{let t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,s=null;const n=e.req.header("Authorization"),r=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],l=n?.replace("Bearer ","")||r;if(l)try{const u=atob(l).split(":"),m=u[1]!=="null"?parseInt(u[1]):null,f=u[2]?parseInt(u[2]):null;(!a||Number.isNaN(a))&&m&&!Number.isNaN(m)&&(a=m),f&&!Number.isNaN(f)&&(s=f)}catch{}const i=e.req.query("include_global")==="1";let o="SELECT * FROM banks",d;return s===1?(o+=" ORDER BY bank_name",d=(await e.env.DB.prepare(o).all()).results):a!==null&&!Number.isNaN(a)?(i?o+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name":o+=" WHERE tenant_id = ? ORDER BY bank_name",d=(await e.env.DB.prepare(o).bind(a).all()).results):(o+=" WHERE 1=0 ORDER BY bank_name",d=(await e.env.DB.prepare(o).all()).results),e.json({success:!0,data:d})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:n,is_active:r,tenant_id:l}=t;let i=l;if(!i){const c=e.req.header("Authorization")?.replace("Bearer ","");if(c){const m=atob(c).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const o=await e.env.DB.prepare(`
+    `).bind(n.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.get("/api/banks",async e=>{try{let t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,s=null;const n=e.req.header("Authorization"),r=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],l=n?.replace("Bearer ","")||r;if(l)try{const u=atob(l).split(":"),m=u[1]!=="null"?parseInt(u[1]):null,b=u[2]?parseInt(u[2]):null;(!a||Number.isNaN(a))&&m&&!Number.isNaN(m)&&(a=m),b&&!Number.isNaN(b)&&(s=b)}catch{}const i=e.req.query("include_global")==="1";let o="SELECT * FROM banks",d;return s===1?(o+=" ORDER BY bank_name",d=(await e.env.DB.prepare(o).all()).results):a!==null&&!Number.isNaN(a)?(i?o+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name":o+=" WHERE tenant_id = ? ORDER BY bank_name",d=(await e.env.DB.prepare(o).bind(a).all()).results):(o+=" WHERE 1=0 ORDER BY bank_name",d=(await e.env.DB.prepare(o).all()).results),e.json({success:!0,data:d})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:s,logo_url:n,is_active:r,tenant_id:l}=t;let i=l;if(!i){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const m=atob(p).split(":");i=m[1]!=="null"?parseInt(m[1]):null}}const o=await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
       VALUES (?, ?, ?, ?, ?)
-    `).bind(a,s,n,r,i).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:n,logo_url:r,is_active:l}=a,o=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(o){const m=atob(o).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let c="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(c+=" AND tenant_id = ?",await e.env.DB.prepare(c).bind(s,n,r,l,t,d).run()):await e.env.DB.prepare(c).bind(s,n,r,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),n=a.get("bank_code"),r=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
+    `).bind(a,s,n,r,i).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),{bank_name:s,bank_code:n,logo_url:r,is_active:l}=a,o=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(o){const m=atob(o).split(":");d=m[1]!=="null"?parseInt(m[1]):null}let p="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";return d?(p+=" AND tenant_id = ?",await e.env.DB.prepare(p).bind(s,n,r,l,t,d).run()):await e.env.DB.prepare(p).bind(s,n,r,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("bank_name"),n=a.get("bank_code"),r=a.get("logo_url")||null,l=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(s,n,r,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,r=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,r=o[2]?parseInt(o[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(r!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await mt(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await ts(e.env.DB),r=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${r} بنك عام`,deleted_count:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await x(e),n=Number.isFinite(a)?a:s.tenantId,l=(await Te(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(r=a);let l=`
+    `).bind(s,n,r,l,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null,r=null;if(s)try{const o=atob(s).split(":");n=o[1]!=="null"?parseInt(o[1]):null,r=o[2]?parseInt(o[2]):null}catch{}const l=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!l)return e.json({success:!1,error:"البنك غير موجود"},404);if(l.tenant_id===null){if(r!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==l.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await ht(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a).split(":");s=i[2]?parseInt(i[2]):null}catch{}if(s!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await os(e.env.DB),r=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${r} بنك عام`,deleted_count:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",s;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",s=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",s=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,s=await y(e),n=Number.isFinite(a)?a:s.tenantId,l=(await Ce(e.env.DB,n)).map((i,o)=>({id:o+1,type_name:i}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(r=a);let l=`
       SELECT 
         r.*,
         b.bank_name,
@@ -28326,20 +29028,20 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM bank_financing_rates r
       JOIN banks b ON r.bank_id = b.id
       JOIN financing_types f ON r.financing_type_id = f.id
-    `;r!==null&&(l+=" WHERE r.tenant_id = ?"),l+=" ORDER BY b.bank_name, f.type_name";const{results:i}=r!==null?await e.env.DB.prepare(l).bind(r).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const d=atob(a).split(":");s=d[1]!=="null"?parseInt(d[1]):null}const n=e.req.header("Content-Type")||"";let r={};n.includes("application/json")?r=await e.req.json():(await e.req.formData()).forEach((d,c)=>{r[c]=d}),s===null&&r.tenant_id&&(s=parseInt(r.tenant_id));const l=r.notes&&String(r.notes).trim()?String(r.notes).trim():null,i=await e.env.DB.prepare(`
+    `;r!==null&&(l+=" WHERE r.tenant_id = ?"),l+=" ORDER BY b.bank_name, f.type_name";const{results:i}=r!==null?await e.env.DB.prepare(l).bind(r).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const d=atob(a).split(":");s=d[1]!=="null"?parseInt(d[1]):null}const n=e.req.header("Content-Type")||"";let r={};n.includes("application/json")?r=await e.req.json():(await e.req.formData()).forEach((d,p)=>{r[p]=d}),s===null&&r.tenant_id&&(s=parseInt(r.tenant_id));const l=r.notes&&String(r.notes).trim()?String(r.notes).trim():null,i=await e.env.DB.prepare(`
       INSERT INTO bank_financing_rates 
       (bank_id, financing_type_id, rate, min_amount, max_amount, min_duration, max_duration, is_active, tenant_id, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(r.bank_id,r.financing_type_id,r.rate,r.min_amount||null,r.max_amount||null,r.min_duration||null,r.max_duration||null,r.is_active||1,s,l).run();return n.includes("application/json")?e.json({success:!0,message:"تم إضافة النسبة بنجاح",id:i.meta.last_row_id}):e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message||"Unknown error",message:t.message||"Unknown error"},500)}});p.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}const l=a.notes!=null&&String(a.notes).trim()?String(a.notes).trim():null;let i=`
+    `).bind(r.bank_id,r.financing_type_id,r.rate,r.min_amount||null,r.max_amount||null,r.min_duration||null,r.max_duration||null,r.is_active||1,s,l).run();return n.includes("application/json")?e.json({success:!0,message:"تم إضافة النسبة بنجاح",id:i.meta.last_row_id}):e.redirect("/admin/rates")}catch(t){return e.json({success:!1,error:t.message||"Unknown error",message:t.message||"Unknown error"},500)}});c.put("/api/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const d=atob(n).split(":");r=d[1]!=="null"?parseInt(d[1]):null}const l=a.notes!=null&&String(a.notes).trim()?String(a.notes).trim():null;let i=`
       UPDATE bank_financing_rates 
       SET bank_id = ?, financing_type_id = ?, rate = ?, 
           min_amount = ?, max_amount = ?, min_salary = ?, max_salary = ?,
           min_duration = ?, max_duration = ?, is_active = ?, notes = ?
       WHERE id = ?
-    `;return r?(i+=" AND tenant_id = ?",await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,l,t,r).run()):await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null;if(s){const i=atob(s).split(":");n=i[1]!=="null"?parseInt(i[1]):null}let r="DELETE FROM bank_financing_rates WHERE id = ?";return n?(r+=" AND tenant_id = ?",await e.env.DB.prepare(r).bind(t,n).run()):await e.env.DB.prepare(r).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates/sample-csv",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT id, bank_name FROM banks WHERE is_active = 1",s=[];t&&(a+=" AND tenant_id = ?",s.push(t)),a+=" ORDER BY bank_name";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),r=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),l=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i=[],o=["بنك 1","بنك 2","بنك 3","بنك 4","بنك 5"],d=["نوع تمويل 1","نوع تمويل 2","نوع تمويل 3"];for(let g=0;g<5;g++)i.push([(60+g*12).toString(),(12+g*12).toString(),(5e5+g*5e5).toString(),(5e4+g*5e4).toString(),(4.5+g*.5).toFixed(1),d[g%d.length]||`نوع تمويل ${g%3+1}`,o[g]||`بنك ${g+1}`,(g+1).toString()]);const c="\uFEFF",u="‏";let m=c;const f=l.map(g=>u+g);return m+=f.join(",")+`\r
-`,i.forEach(g=>{const b=g.map(y=>{const h=String(y||""),w=u+h;return w.includes(",")||w.includes('"')||w.includes(`
-`)?'"'+w.replace(/"/g,'""')+'"':w});m+=b.join(",")+`\r
-`}),new Response(m,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نموذج_نسب_التمويل.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/rates/export-csv",async e=>{try{const t=await x(e),a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);let s=`
+    `;return r?(i+=" AND tenant_id = ?",await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,l,t,r).run()):await e.env.DB.prepare(i).bind(a.bank_id,a.financing_type_id,a.rate,a.min_amount,a.max_amount,a.min_salary,a.max_salary,a.min_duration,a.max_duration,a.is_active,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id"),s=e.req.header("Authorization")?.replace("Bearer ","");let n=null;if(s){const i=atob(s).split(":");n=i[1]!=="null"?parseInt(i[1]):null}let r="DELETE FROM bank_financing_rates WHERE id = ?";return n?(r+=" AND tenant_id = ?",await e.env.DB.prepare(r).bind(t,n).run()):await e.env.DB.prepare(r).bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates/sample-csv",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT id, bank_name FROM banks WHERE is_active = 1",s=[];t&&(a+=" AND tenant_id = ?",s.push(t)),a+=" ORDER BY bank_name";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),r=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),l=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i=[],o=["بنك 1","بنك 2","بنك 3","بنك 4","بنك 5"],d=["نوع تمويل 1","نوع تمويل 2","نوع تمويل 3"];for(let g=0;g<5;g++)i.push([(60+g*12).toString(),(12+g*12).toString(),(5e5+g*5e5).toString(),(5e4+g*5e4).toString(),(4.5+g*.5).toFixed(1),d[g%d.length]||`نوع تمويل ${g%3+1}`,o[g]||`بنك ${g+1}`,(g+1).toString()]);const p="\uFEFF",u="‏";let m=p;const b=l.map(g=>u+g);return m+=b.join(",")+`\r
+`,i.forEach(g=>{const x=g.map(h=>{const f=String(h||""),v=u+f;return v.includes(",")||v.includes('"')||v.includes(`
+`)?'"'+v.replace(/"/g,'""')+'"':v});m+=x.join(",")+`\r
+`}),new Response(m,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نموذج_نسب_التمويل.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/rates/export-csv",async e=>{try{const t=await y(e),a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);let s=`
       SELECT 
         r.*,
         b.bank_name,
@@ -28347,13 +29049,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM bank_financing_rates r
       LEFT JOIN banks b ON r.bank_id = b.id
       LEFT JOIN financing_types f ON r.financing_type_id = f.id
-    `,n=[];t.roleId===1?a&&(s+=" WHERE r.tenant_id = ?",n.push(a)):t.roleId===2||t.roleId===3?t.tenantId&&(s+=" WHERE r.tenant_id = ?",n.push(t.tenantId)):a&&(s+=" WHERE r.tenant_id = ?",n.push(a)),s+=" ORDER BY b.bank_name, f.type_name";const r=n.length>0?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all(),l=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i="\uFEFF",o="‏";let d=i;const c=l.map(u=>o+u);return d+=c.join(",")+`\r
-`,r.results.forEach((u,m)=>{const g=[u.max_duration||"",u.min_duration||"",u.max_amount||"",u.min_amount||"",u.rate||"",u.financing_type_name||"",u.bank_name||"",(m+1).toString()].map(b=>{const y=String(b||""),h=o+y;return h.includes(",")||h.includes('"')||h.includes(`
-`)?'"'+h.replace(/"/g,'""')+'"':h});d+=g.join(",")+`\r
-`}),new Response(d,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نسب_التمويل_'+new Date().toISOString().split("T")[0]+'.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/rates/upload-excel",async e=>{try{const{rates:t}=await e.req.json();if(!t||!Array.isArray(t)||t.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const s=e.req.header("Authorization")?.replace("Bearer ","");let n=null;if(s){const d=atob(s).split(":");n=d[1]!=="null"?parseInt(d[1]):null}let r=0,l=0;const i=[];for(const o of t)try{if(!o.bank_id||!o.financing_type_id||o.rate===void 0){i.push(`سطر غير صالح: البنك=${o.bank_id}, النوع=${o.financing_type_id}, النسبة=${o.rate}`);continue}let d=`
+    `,n=[];t.roleId===1?a&&(s+=" WHERE r.tenant_id = ?",n.push(a)):t.roleId===2||t.roleId===3?t.tenantId&&(s+=" WHERE r.tenant_id = ?",n.push(t.tenantId)):a&&(s+=" WHERE r.tenant_id = ?",n.push(a)),s+=" ORDER BY b.bank_name, f.type_name";const r=n.length>0?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all(),l=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i="\uFEFF",o="‏";let d=i;const p=l.map(u=>o+u);return d+=p.join(",")+`\r
+`,r.results.forEach((u,m)=>{const g=[u.max_duration||"",u.min_duration||"",u.max_amount||"",u.min_amount||"",u.rate||"",u.financing_type_name||"",u.bank_name||"",(m+1).toString()].map(x=>{const h=String(x||""),f=o+h;return f.includes(",")||f.includes('"')||f.includes(`
+`)?'"'+f.replace(/"/g,'""')+'"':f});d+=g.join(",")+`\r
+`}),new Response(d,{headers:{"Content-Type":"text/csv; charset=utf-8;","Content-Disposition":'attachment; filename="نسب_التمويل_'+new Date().toISOString().split("T")[0]+'.csv"'}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/rates/upload-excel",async e=>{try{const{rates:t}=await e.req.json();if(!t||!Array.isArray(t)||t.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const s=e.req.header("Authorization")?.replace("Bearer ","");let n=null;if(s){const d=atob(s).split(":");n=d[1]!=="null"?parseInt(d[1]):null}let r=0,l=0;const i=[];for(const o of t)try{if(!o.bank_id||!o.financing_type_id||o.rate===void 0){i.push(`سطر غير صالح: البنك=${o.bank_id}, النوع=${o.financing_type_id}, النسبة=${o.rate}`);continue}let d=`
           SELECT id FROM bank_financing_rates 
           WHERE bank_id = ? AND financing_type_id = ?
-        `;const c=[o.bank_id,o.financing_type_id];n!==null&&(d+=" AND tenant_id = ?",c.push(n));const u=await e.env.DB.prepare(d).bind(...c).first();if(u){let m=`
+        `;const p=[o.bank_id,o.financing_type_id];n!==null&&(d+=" AND tenant_id = ?",p.push(n));const u=await e.env.DB.prepare(d).bind(...p).first();if(u){let m=`
             UPDATE bank_financing_rates 
             SET rate = ?, 
                 min_amount = ?, 
@@ -28364,35 +29066,35 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 max_duration = ?,
                 is_active = ?
             WHERE id = ?
-          `;const f=[o.rate,o.min_amount||null,o.max_amount||null,o.min_salary||null,o.max_salary||null,o.min_duration||null,o.max_duration||null,o.is_active!==void 0?o.is_active:1,u.id];n!==null&&(m+=" AND tenant_id = ?",f.push(n)),await e.env.DB.prepare(m).bind(...f).run(),l++}else await e.env.DB.prepare(`
+          `;const b=[o.rate,o.min_amount||null,o.max_amount||null,o.min_salary||null,o.max_salary||null,o.min_duration||null,o.max_duration||null,o.is_active!==void 0?o.is_active:1,u.id];n!==null&&(m+=" AND tenant_id = ?",b.push(n)),await e.env.DB.prepare(m).bind(...b).run(),l++}else await e.env.DB.prepare(`
             INSERT INTO bank_financing_rates 
             (bank_id, financing_type_id, rate, min_amount, max_amount, min_salary, max_salary, min_duration, max_duration, is_active, tenant_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_salary||null,o.max_salary||null,o.min_duration||null,o.max_duration||null,o.is_active!==void 0?o.is_active:1,n).run(),r++}catch(d){i.push(`خطأ في معالجة السطر: ${d.message}`),console.error("Error processing rate:",d)}return e.json({success:!0,created:r,updated:l,errors:i.length>0?i:void 0,message:`تم إضافة ${r} سجل جديد وتحديث ${l} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+          `).bind(o.bank_id,o.financing_type_id,o.rate,o.min_amount||null,o.max_amount||null,o.min_salary||null,o.max_salary||null,o.min_duration||null,o.max_duration||null,o.is_active!==void 0?o.is_active:1,n).run(),r++}catch(d){i.push(`خطأ في معالجة السطر: ${d.message}`),console.error("Error processing rate:",d)}return e.json({success:!0,created:r,updated:l,errors:i.length>0?i:void 0,message:`تم إضافة ${r} سجل جديد وتحديث ${l} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),n=t.get("price"),r=t.get("duration_months"),l=t.get("max_calculations"),i=t.get("max_users"),o=t.get("is_active")||"1",d=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),s=t.get("description"),n=t.get("price"),r=t.get("duration_months"),l=t.get("max_calculations"),i=t.get("max_users"),o=t.get("is_active")||"1",d=await e.env.DB.prepare(`
       INSERT INTO packages (package_name, description, price, duration_months, max_calculations, max_users, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s||null,n,r,l||null,i||null,o).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:n,duration_months:r,max_calculations:l,max_users:i,is_active:o}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s||null,n,r,l||null,i||null,o).run();return e.redirect("/admin/packages")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/packages/:id",async e=>{try{const t=e.req.param("id"),{package_name:a,description:s,price:n,duration_months:r,max_calculations:l,max_users:i,is_active:o}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE packages 
       SET package_name = ?, description = ?, price = ?, duration_months = ?, 
           max_calculations = ?, max_users = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,n,r,l,i,o,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let n=`
+    `).bind(a,s,n,r,l,i,o,t).run(),e.json({success:!0,message:"تم تحديث الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscriptions",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a){const i=atob(a).split(":");s=i[1]!=="null"?parseInt(i[1]):null}let n=`
       SELECT 
         s.*,
         p.package_name,
         p.price,
         p.max_calculations
       FROM subscriptions s
-      JOIN packages p ON s.package_id = p.id`;s&&(n+=` WHERE s.tenant_id = ${s}`),n+=" ORDER BY s.created_at DESC";const{results:r}=await e.env.DB.prepare(n).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),n=t.get("start_date"),r=t.get("end_date"),l=t.get("status")||"active",i=t.get("calculations_used")||0,d=e.req.header("Authorization")?.replace("Bearer ","");let c=null;if(d){const f=atob(d).split(":");c=f[1]!=="null"?parseInt(f[1]):null}const u=await e.env.DB.prepare(`
+      JOIN packages p ON s.package_id = p.id`;s&&(n+=` WHERE s.tenant_id = ${s}`),n+=" ORDER BY s.created_at DESC";const{results:r}=await e.env.DB.prepare(n).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscriptions",async e=>{try{const t=await e.req.formData(),a=t.get("company_name"),s=t.get("package_id"),n=t.get("start_date"),r=t.get("end_date"),l=t.get("status")||"active",i=t.get("calculations_used")||0,d=e.req.header("Authorization")?.replace("Bearer ","");let p=null;if(d){const b=atob(d).split(":");p=b[1]!=="null"?parseInt(b[1]):null}const u=await e.env.DB.prepare(`
       INSERT INTO subscriptions (company_name, package_id, start_date, end_date, status, calculations_used, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,n,r,l,i,c).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:n,end_date:r,status:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s,n,r,l,i,p).run();return e.redirect("/admin/subscriptions")}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id"),{company_name:a,package_id:s,start_date:n,end_date:r,status:l}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscriptions 
       SET company_name = ?, package_id = ?, start_date = ?, end_date = ?, status = ?
       WHERE id = ?
-    `).bind(a,s,n,r,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(a,s,n,r,l,t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name,
@@ -28401,7 +29103,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       ORDER BY sr.created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name,
@@ -28412,19 +29114,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       WHERE sr.id = ?
-    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:n,package_id:r,notes:l}=await e.req.json();if(!t||!a||!s||!n||!r)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(n.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
+    `).bind(t).first();return a?e.json({success:!0,data:a}):e.json({success:!1,message:"الطلب غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/subscription-requests",async e=>{try{const{company_name:t,contact_name:a,email:s,phone:n,package_id:r,notes:l}=await e.req.json();if(!t||!a||!s||!n||!r)return e.json({success:!1,message:"جميع الحقول مطلوبة"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))return e.json({success:!1,message:"البريد الإلكتروني غير صحيح"},400);if(!/^(05|5)[0-9]{8}$/.test(n.replace(/[\s-]/g,"")))return e.json({success:!1,message:"رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 ويتكون من 10 أرقام"},400);if(!await e.env.DB.prepare(`
       SELECT id FROM packages WHERE id = ? AND is_active = 1
-    `).bind(r).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const c=await e.env.DB.prepare(`
+    `).bind(r).first())return e.json({success:!1,message:"الباقة غير موجودة أو غير متاحة"},400);const p=await e.env.DB.prepare(`
       INSERT INTO subscription_requests 
       (company_name, contact_name, email, phone, package_id, status, notes)
       VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(t,a,s,n,r,l||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:c.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});p.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,n,r,l||null).run();return e.json({success:!0,message:"تم إرسال طلبك بنجاح. سنتواصل معك قريباً",requestId:p.meta.last_row_id})}catch(t){return console.error("Subscription request error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
-    `).bind(a,s||null,t).run(),e.json({success:!0,message:"تم تحديث الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s||null,t).run(),e.json({success:!0,message:"تم تحديث الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM subscription_requests WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/users",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId,s=t.tenantId;let n=`
+    `).bind(t).run(),e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/users",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId,s=t.tenantId;let n=`
       SELECT u.*,
              (SELECT role_name FROM roles WHERE id = u.role_id) AS role_name,
              (SELECT description FROM roles WHERE id = u.role_id) AS role_description,
@@ -28432,34 +29134,37 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
              (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&s&&(n+=` WHERE u.tenant_id = ${s}`),n+=`
-      ORDER BY u.id DESC`;const{results:r}=await e.env.DB.prepare(n).all(),l=(r||[]).map(i=>({...i,role_name:J(i.role_id,i.role_name)}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),r=t.get("email"),l=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",c=await x(e);if(!c.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!D(c))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=null;const f=t.get("tenant_id");if(D(c))if(f!=null&&String(f).trim()!==""){const w=parseInt(String(f),10);m=Number.isNaN(w)?null:w}else m=null;else{if(!c.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=c.tenantId}const g=t.get("assigned_bank_id");let b=null;if(u===5){if(!(D(c)||c.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء موظف التمويل"},403);const v=typeof m=="number"?m:parseInt(String(m||""),10);if(!v||Number.isNaN(v))return e.json({success:!1,error:"يجب اختيار الشركة لموظف التمويل"},400);const _=Number.parseInt(String(g||""),10);if(Number.isNaN(_)||_<=0)return e.json({success:!1,error:"يجب اختيار البنك لموظف التمويل"},400);if(!await xe(e.env.DB,v,_))return e.json({success:!1,error:"البنك غير صالح لهذه الشركة"},400);b=_}if(await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:r}=await e.env.DB.prepare(n).all(),l=(r||[]).map(i=>({...i,role_name:Q(i.role_id,i.role_name)}));return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users",async e=>{try{const t=await e.req.formData(),a=t.get("username"),s=t.get("password"),n=t.get("full_name"),r=t.get("email"),l=t.get("phone"),i=t.get("role_id"),o=t.get("subscription_id")||null,d=t.get("is_active")||"1",p=await y(e);if(!p.userId)return e.json({success:!1,error:"Unauthorized"},401);const u=Number.parseInt(String(i||""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!R(p))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let m=null;const b=t.get("tenant_id");if(R(p))if(b!=null&&String(b).trim()!==""){const f=parseInt(String(b),10);m=Number.isNaN(f)?null:f}else m=null;else{if(!p.tenantId)return e.json({success:!1,error:"No tenant context"},400);m=p.tenantId}let g=null;if(u===5){if(!(R(p)||p.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء موظف التمويل"},403);const v=typeof m=="number"?m:parseInt(String(m||""),10);if(!v||Number.isNaN(v))return e.json({success:!1,error:"يجب اختيار الشركة لموظف التمويل"},400);g=null}if(await e.env.DB.prepare(`
       SELECT id FROM users WHERE username = ?
     `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(r&&await e.env.DB.prepare(`
         SELECT id FROM users WHERE email = ?
       `).bind(r).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const h=await e.env.DB.prepare(`
       INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id, assigned_bank_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,n,r,l,u,o,d,m,b).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:h.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});p.get("/api/admin/company-banks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t)&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.query("tenant_id"),s=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!s||Number.isNaN(s))return e.json({success:!1,error:"tenant_id required"},400);if(!D(t)&&t.tenantId!==s)return e.json({success:!1,error:"Forbidden"},403);try{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(s).all();return e.json({success:!0,data:n||[]})}catch{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(s).all();return e.json({success:!0,data:n||[]})}}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/admin/bank-agents",async e=>{try{const t=await x(e);if(!t.userId||k(t.roleId)===5)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),s=e.req.query("bank_id"),n=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN,r=s!=null&&String(s).trim()!==""?parseInt(String(s),10):NaN;if(!n||Number.isNaN(n)||!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id and bank_id required"},400);if(!D(t)&&t.tenantId!==n)return e.json({success:!1,error:"Forbidden"},403);if(!await xe(e.env.DB,n,r))return e.json({success:!1,error:"Invalid bank for tenant"},400);const{results:i}=await e.env.DB.prepare(`SELECT u.id, u.full_name, u.username, u.email
+    `).bind(a,s,n,r,l,u,o,d,m,g).run();return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:h.meta.last_row_id})}catch(t){return console.error("Error adding user:",t),e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});c.get("/api/admin/company-banks",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t)&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.query("tenant_id"),s=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!s||Number.isNaN(s))return e.json({success:!1,error:"tenant_id required"},400);if(!R(t)&&t.tenantId!==s)return e.json({success:!1,error:"Forbidden"},403);try{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(s).all();return e.json({success:!0,data:n||[]})}catch{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(s).all();return e.json({success:!0,data:n||[]})}}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/admin/bank-agents",async e=>{try{const t=await y(e);if(!t.userId||E(t.roleId)===5)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),s=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!s||Number.isNaN(s))return e.json({success:!1,error:"tenant_id required"},400);if(!R(t)&&t.tenantId!==s)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(`SELECT u.id, u.full_name, u.username, u.email
          FROM users u
          WHERE u.role_id = 5 AND u.is_active = 1
-           AND u.tenant_id = ? AND u.assigned_bank_id = ?
-         ORDER BY u.full_name`).bind(n,r).all();return e.json({success:!0,data:i||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/users/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.req.json(),{username:n,full_name:r,email:l,phone:i,role_id:o,subscription_id:d,is_active:c,assigned_bank_id:u}=s,m=Number.parseInt(String(o??""),10);if(Number.isNaN(m))return e.json({success:!1,error:"Invalid role_id"},400);if(m===1&&!D(t))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);const f=await e.env.DB.prepare("SELECT id, tenant_id FROM users WHERE id = ?").bind(a).first();if(!f)return e.json({success:!1,error:"User not found"},404);let g=null;if(m===5){if(!(D(t)||t.roleId===2))return e.json({success:!1,error:"Forbidden"},403);const y=f.tenant_id!=null?Number(f.tenant_id):null;if(!y)return e.json({success:!1,error:"Bank agent requires a company (tenant)"},400);const h=Number.parseInt(String(u??""),10);if(Number.isNaN(h)||h<=0)return e.json({success:!1,error:"assigned_bank_id required for bank agent"},400);if(!await xe(e.env.DB,y,h))return e.json({success:!1,error:"Invalid bank for tenant"},400);g=h}return await e.env.DB.prepare(`
+           AND u.tenant_id = ?
+         ORDER BY u.full_name`).bind(s).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/users/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.req.json(),{username:n,full_name:r,email:l,phone:i,role_id:o,subscription_id:d,is_active:p}=s,u=Number.parseInt(String(o??""),10);if(Number.isNaN(u))return e.json({success:!1,error:"Invalid role_id"},400);if(u===1&&!R(t))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);const m=await e.env.DB.prepare("SELECT id, tenant_id FROM users WHERE id = ?").bind(a).first();if(!m)return e.json({success:!1,error:"User not found"},404);let b=null;if(u===5){if(!(R(t)||t.roleId===2))return e.json({success:!1,error:"Forbidden"},403);if(!(m.tenant_id!=null?Number(m.tenant_id):null))return e.json({success:!1,error:"Bank agent requires a company (tenant)"},400);b=null}return await e.env.DB.prepare(`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?, assigned_bank_id = ?
       WHERE id = ?
-    `).bind(n,r,l,i,m,d,c,g,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers",async e=>{try{const t=await x(e);let a=`
+    `).bind(n,r,l,i,u,d,p,b,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers",async e=>{try{const t=await y(e);let a=`
       SELECT 
         c.*,
         COUNT(f.id) as total_requests,
         SUM(CASE WHEN f.status = 'pending' THEN 1 ELSE 0 END) as pending_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests
       FROM customers c
-      LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4&&t.tenantId&&t.userId?a+=` WHERE c.tenant_id = ${t.tenantId} AND EXISTS (
+      LEFT JOIN financing_requests f ON c.id = f.customer_id`;t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=` WHERE c.tenant_id = ${t.tenantId}`):t.roleId===4?t.tenantId&&t.userId?a+=` WHERE c.tenant_id = ${t.tenantId} AND EXISTS (
           SELECT 1 FROM customer_assignments ca
           WHERE ca.customer_id = c.id AND ca.employee_id = ${t.userId}
+        )`:a+=" WHERE 1 = 0":E(t.roleId)===5&&t.tenantId&&t.userId?a+=` WHERE c.tenant_id = ${t.tenantId} AND EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ${t.userId}
         )`:a+=" WHERE 1 = 0"),a+=`
       GROUP BY c.id
-      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=ct(s);if(!n.normalized)return e.html(`
+      ORDER BY c.created_at DESC`;const{results:s}=await e.env.DB.prepare(a).all();return e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers",async e=>{try{const t=await e.req.formData(),a=t.get("full_name"),s=t.get("phone"),n=ft(s);if(!n.normalized)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -28489,9 +29194,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
         </body>
         </html>
-      `,400);const r=n.normalized,l=t.get("email")||null,i=t.get("national_id")||null,o=t.get("date_of_birth")||null,d=t.get("dob_calendar_type")||"gregorian",c=t.get("employer_name")||null,u=t.get("job_type")||"civilian",m=t.get("job_title")||null,f=t.get("military_rank")||null,g=t.get("work_start_date")||null,b=t.get("city")||null,y=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,h=parseFloat(t.get("monthly_salary")||"0"),w=t.get("notes")?.trim()||null,v=lt(t.get("solutions_json")),_=(t.get("id_attachment_url")||"").trim()||null,R=(t.get("bank_statement_attachment_url")||"").trim()||null,B=(t.get("salary_attachment_url")||"").trim()||null,j=(t.get("additional_attachment_url")||"").trim()||null,E=await x(e);let S=E.tenantId;if(!S&&E.roleId===1){const I=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(I)&&I>0&&(S=I)}if(!S){const I=await e.env.DB.prepare(`
+      `,400);const r=n.normalized,l=t.get("email")||null,i=t.get("national_id")||null,o=t.get("date_of_birth")||null,d=t.get("dob_calendar_type")||"gregorian",p=t.get("employer_name")||null,u=t.get("job_type")||"civilian",m=t.get("job_title")||null,b=t.get("military_rank")||null,g=t.get("work_start_date")||null,x=t.get("city")||null,h=t.get("basic_salary")?parseFloat(t.get("basic_salary")):null,f=parseFloat(t.get("monthly_salary")||"0"),v=t.get("notes")?.trim()||null,w=(()=>{const S=String(t.get("enrollment_source")??"").trim();return S==="affiliate"||S==="calculator"?S:null})(),_=w==="affiliate"&&String(t.get("enrollment_source_label")??"").trim().slice(0,200)||null,I=mt(t.get("solutions_json")),k=(t.get("identity_attachment_url")||"").trim()||null,T=(t.get("signature_attachment_url")||"").trim()||null,C=(t.get("salary_profile_attachment_url")||"").trim()||null,H=(t.get("gosi_attachment_url")||"").trim()||null,L=(t.get("tax_exemption_attachment_url")||"").trim()||null,Z=(t.get("additional_1_attachment_url")||"").trim()||null,re=(t.get("additional_2_attachment_url")||"").trim()||null,W=(t.get("additional_3_attachment_url")||"").trim()||null,A=await y(e);let B=A.tenantId;if(!B&&A.roleId===1){const S=Number.parseInt(String(t.get("tenant_id")??""),10);!Number.isNaN(S)&&S>0&&(B=S)}if(!B){const S=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
-      `).first();I?.id&&(S=I.id)}if(!S)throw new Error("Missing tenant context for customer creation");if(i){let I="SELECT id, full_name FROM customers WHERE national_id = ?",A=[i];S&&(I+=" AND tenant_id = ?",A.push(S));const $=await e.env.DB.prepare(I).bind(...A).first();if($)return e.html(`
+      `).first();S?.id&&(B=S.id)}if(!B)throw new Error("Missing tenant context for customer creation");if(i){let S="SELECT id, full_name FROM customers WHERE national_id = ?",N=[i];B&&(S+=" AND tenant_id = ?",N.push(B));const F=await e.env.DB.prepare(S).bind(...N).first();if(F)return e.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
           <head>
@@ -28513,15 +29218,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </div>
                 <div class="bg-white rounded-lg p-4 mb-4">
                   <p class="text-gray-700"><strong>الرقم الوطني:</strong> ${i}</p>
-                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${$.full_name}</p>
-                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${$.id}</p>
+                  <p class="text-gray-700"><strong>مسجل باسم:</strong> ${F.full_name}</p>
+                  <p class="text-gray-700"><strong>رقم العميل:</strong> #${F.id}</p>
                 </div>
                 <div class="flex gap-3">
                   <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-arrow-right ml-2"></i>
                     العودة للنموذج
                   </a>
-                  <a href="/admin/customers/${$.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <a href="/admin/customers/${F.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-eye ml-2"></i>
                     عرض العميل الموجود
                   </a>
@@ -28534,7 +29239,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </body>
           </html>
-        `)}const C=r.slice(3),O=`0${C}`;let L="SELECT id, full_name FROM customers WHERE (phone = ? OR phone = ? OR phone = ?)",X=[r,C,O];S&&(L+=" AND tenant_id = ?",X.push(S));const W=await e.env.DB.prepare(L).bind(...X).first();if(W)return e.html(`
+        `)}const M=r.slice(3),oe=`0${M}`;let ie="SELECT id, full_name FROM customers WHERE (phone = ? OR phone = ? OR phone = ?)",V=[r,M,oe];B&&(ie+=" AND tenant_id = ?",V.push(B));const ee=await e.env.DB.prepare(ie).bind(...V).first();if(ee)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -28556,15 +29261,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </div>
               <div class="bg-white rounded-lg p-4 mb-4">
                 <p class="text-gray-700"><strong>رقم الهاتف:</strong> ${r}</p>
-                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${W.full_name}</p>
-                <p class="text-gray-700"><strong>رقم العميل:</strong> #${W.id}</p>
+                <p class="text-gray-700"><strong>مسجل باسم:</strong> ${ee.full_name}</p>
+                <p class="text-gray-700"><strong>رقم العميل:</strong> #${ee.id}</p>
               </div>
               <div class="flex gap-3">
                 <a href="/admin/customers/add" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-arrow-right ml-2"></i>
                   العودة للنموذج
                 </a>
-                <a href="/admin/customers/${W.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                <a href="/admin/customers/${ee.id}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-eye ml-2"></i>
                   عرض العميل الموجود
                 </a>
@@ -28573,28 +29278,41 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
         </body>
         </html>
-      `);const N=[a,r,l,i,o,d==="hijri"?"hijri":"gregorian",c,u==="military"?"military":"civilian",m,u==="military"?f:null,g,b,y,h,S,w,_,R,B,j];let P;try{P=await e.env.DB.prepare(`
-      INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url, solutions_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...N,v).run()}catch(I){if(Y(I))try{P=await e.env.DB.prepare(`
-          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...N).run()}catch(A){if(!M(A))throw A;P=await e.env.DB.prepare(`
+      `);const G=[a,r,l,i,o,d==="hijri"?"hijri":"gregorian",p,u==="military"?"military":"civilian",m,u==="military"?b:null,g,x,h,f,B,v,w,_,k,T,C,H,L,Z,re,W];let O;try{O=await e.env.DB.prepare(`
+      INSERT INTO customers (
+        full_name, phone, email, national_id, birthdate, dob_calendar_type,
+        employer_name, job_type, job_title, military_rank, work_start_date, city,
+        basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+        identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+        additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url,
+        solutions_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...G,I).run()}catch(S){if(X(S))try{O=await e.env.DB.prepare(`
+          INSERT INTO customers (
+            full_name, phone, email, national_id, birthdate, dob_calendar_type,
+            employer_name, job_type, job_title, military_rank, work_start_date, city,
+            basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+            identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+            additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(...G).run()}catch(N){if(!P(N))throw N;O=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...N.slice(0,16)).run()}else if(M(I))try{P=await e.env.DB.prepare(`
+        `).bind(...G.slice(0,16)).run()}else if(P(S))try{O=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...N.slice(0,16),v).run()}catch(A){if(!Y(A))throw A;P=await e.env.DB.prepare(`
+        `).bind(...G.slice(0,16),I).run()}catch(N){if(!X(N))throw N;O=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...N.slice(0,16)).run()}else throw I}const H=P.meta?.last_row_id,ae=t.get("obligations_json");if(H&&ae)try{const I=JSON.parse(ae);if(Array.isArray(I)&&I.length>0){let A=0;for(const $ of I){const xt=$.obligation_type??"",ht=Number($.total_amount)||0,De=Number($.monthly_installment)||0,yt=$.due_date||null;A+=De,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(H,xt,ht,De,yt,S).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(A,H).run()}}catch{}if(H&&E.roleId===4&&E.userId&&E.tenantId!=null&&E.tenantId===S)try{await e.env.DB.prepare(`
+        `).bind(...G.slice(0,16)).run()}else throw S}const z=O.meta?.last_row_id,Le=t.get("obligations_json");if(z&&Le)try{const S=JSON.parse(Le);if(Array.isArray(S)&&S.length>0){let N=0;for(const F of S){const _t=F.obligation_type??"",Et=Number(F.total_amount)||0,Ae=Number(F.monthly_installment)||0,kt=F.due_date||null;N+=Ae,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(z,_t,Et,Ae,kt,B).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(N,z).run()}}catch{}if(z&&A.roleId===4&&A.userId&&A.tenantId!=null&&A.tenantId===B)try{await e.env.DB.prepare(`
           INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
           VALUES (?, ?, ?, ?)
-        `).bind(H,E.userId,E.userId,"").run(),await e.env.DB.prepare(`
+        `).bind(z,A.userId,A.userId,"").run(),await e.env.DB.prepare(`
           INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
           VALUES (?, NULL, ?, ?, ?)
-        `).bind(H,E.userId,E.userId,"").run()}catch(I){console.error("Auto-assign new customer to employee (role 4) failed:",I)}return e.redirect("/admin/customers")}catch(t){return e.html(`
+        `).bind(z,A.userId,A.userId,"").run()}catch(S){console.error("Auto-assign new customer to employee (role 4) failed:",S)}return e.redirect("/admin/customers")}catch(t){return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -28625,7 +29343,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),r=ct(n);if(!r.normalized)return e.html(`
+    `)}});c.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=a.get("full_name"),n=a.get("phone"),r=ft(n);if(!r.normalized)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -28655,34 +29373,37 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
         </body>
         </html>
-      `,400);const l=r.normalized,i=a.get("email")||null,o=a.get("national_id")||null,d=a.get("date_of_birth")||null,c=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,m=a.get("job_type")||"civilian",f=a.get("job_title")||null,g=a.get("military_rank")||null,b=a.get("work_start_date")||null,y=a.get("city")||null,h=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,w=parseFloat(a.get("monthly_salary")||"0"),v=a.get("notes")?.trim()||null,_=lt(a.get("solutions_json")),R=(a.get("id_attachment_url")||"").trim()||null,B=(a.get("bank_statement_attachment_url")||"").trim()||null,j=(a.get("salary_attachment_url")||"").trim()||null,E=(a.get("additional_attachment_url")||"").trim()||null,S=[s,l,i,o,d,c==="hijri"?"hijri":"gregorian",u,m==="military"?"military":"civilian",f,m==="military"?g:null,b,y,h,w,v,R,B,j,E];try{await e.env.DB.prepare(`
+      `,400);const l=r.normalized,i=a.get("email")||null,o=a.get("national_id")||null,d=a.get("date_of_birth")||null,p=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,m=a.get("job_type")||"civilian",b=a.get("job_title")||null,g=a.get("military_rank")||null,x=a.get("work_start_date")||null,h=a.get("city")||null,f=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,v=parseFloat(a.get("monthly_salary")||"0"),w=a.get("notes")?.trim()||null,_=mt(a.get("solutions_json")),I=a.get("identity_attachment_url")?.trim()||a.get("id_attachment_url")?.trim()||null,k=a.get("signature_attachment_url")?.trim()||a.get("bank_statement_attachment_url")?.trim()||null,T=a.get("salary_profile_attachment_url")?.trim()||a.get("salary_attachment_url")?.trim()||null,C=a.get("gosi_attachment_url")?.trim()||null,H=a.get("tax_exemption_attachment_url")?.trim()||null,L=a.get("additional_1_attachment_url")?.trim()||a.get("additional_attachment_url")?.trim()||null,Z=a.get("additional_2_attachment_url")?.trim()||null,re=a.get("additional_3_attachment_url")?.trim()||null,W=[s,l,i,o,d,p==="hijri"?"hijri":"gregorian",u,m==="military"?"military":"civilian",b,m==="military"?g:null,x,h,f,v,w,I,k,T,C,H,L,Z,re];try{await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
           employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
-          id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?, solutions_json = ?
+          identity_attachment_url = ?, signature_attachment_url = ?, salary_profile_attachment_url = ?, gosi_attachment_url = ?, tax_exemption_attachment_url = ?,
+          additional_1_attachment_url = ?, additional_2_attachment_url = ?, additional_3_attachment_url = ?,
+          solutions_json = ?
       WHERE id = ?
-    `).bind(...S,_,t).run()}catch(O){if(Y(O))try{await e.env.DB.prepare(`
+    `).bind(...W,_,t).run()}catch(B){if(X(B))try{await e.env.DB.prepare(`
           UPDATE customers 
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
-              id_attachment_url = ?, bank_statement_attachment_url = ?, salary_attachment_url = ?, additional_attachment_url = ?
+              identity_attachment_url = ?, signature_attachment_url = ?, salary_profile_attachment_url = ?, gosi_attachment_url = ?, tax_exemption_attachment_url = ?,
+              additional_1_attachment_url = ?, additional_2_attachment_url = ?, additional_3_attachment_url = ?
           WHERE id = ?
-        `).bind(...S,t).run()}catch(L){if(!M(L))throw L;await e.env.DB.prepare(`
+        `).bind(...W,t).run()}catch(M){if(!P(M))throw M;await e.env.DB.prepare(`
           UPDATE customers 
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
           WHERE id = ?
-        `).bind(...S.slice(0,15),t).run()}else if(M(O))try{await e.env.DB.prepare(`
+        `).bind(...W.slice(0,15),t).run()}else if(P(B))try{await e.env.DB.prepare(`
           UPDATE customers 
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?, solutions_json = ?
           WHERE id = ?
-        `).bind(...S.slice(0,15),_,t).run()}catch(L){if(!Y(L))throw L;await e.env.DB.prepare(`
+        `).bind(...W.slice(0,15),_,t).run()}catch(M){if(!X(M))throw M;await e.env.DB.prepare(`
           UPDATE customers 
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
           WHERE id = ?
-        `).bind(...S.slice(0,15),t).run()}else throw O}const C=a.get("obligations_json");if(C)try{const L=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const X=JSON.parse(C);if(Array.isArray(X)&&X.length>0){let W=0;for(const N of X){const P=N.obligation_type??"",H=Number(N.total_amount)||0,ae=Number(N.monthly_installment)||0,I=N.due_date||null;W+=ae,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,P,H,ae,I,L).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(W,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return await Ee(e.env.DB,t,{id_attachment_url:R,bank_statement_attachment_url:B,salary_attachment_url:j,additional_attachment_url:E}),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!Y(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:l,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let r=null;if(n!=null?r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!r)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(r.id).all()).results||[];return e.json({success:!0,customer:r,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customers/:id/obligations",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await te(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),r=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of r){const o=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,u=i.due_date||null;l+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,c,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/financing-requests",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
+        `).bind(...W.slice(0,15),t).run()}else throw B}const A=a.get("obligations_json");if(A)try{const M=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const oe=JSON.parse(A);if(Array.isArray(oe)&&oe.length>0){let ie=0;for(const V of oe){const ee=V.obligation_type??"",G=Number(V.total_amount)||0,O=Number(V.monthly_installment)||0,z=V.due_date||null;ie+=O,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,ee,G,O,z,M).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(ie,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}return await De(e.env.DB,t,{identity_attachment_url:I,signature_attachment_url:k,salary_profile_attachment_url:T,gosi_attachment_url:C,tax_exemption_attachment_url:H,additional_1_attachment_url:L,additional_2_attachment_url:Z,additional_3_attachment_url:re}),e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const s=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!s)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}catch(o){if(!X(o))throw o;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,s.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const l=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const o=n.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(p=>({note:typeof p=="string"?p:String(p?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:l,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),s=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;s&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(s).first())?.id??null);let r=null;if(n!=null?r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():r=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!r)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(r.id).all()).results||[];return e.json({success:!0,customer:r,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customers/:id/obligations",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await K(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const r=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:r})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customers/:id/obligations",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!s)return e.json({success:!1,error:"Not found"},404);if(!await K(e.env.DB,t,s))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),r=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let l=0;for(const i of r){const o=i.obligation_type??"",d=Number(i.total_amount)||0,p=Number(i.monthly_installment)||0,u=i.due_date||null;l+=p,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,o,d,p,u,s.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(l,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/financing-requests",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
       SELECT 
         f.*,
         c.full_name as customer_name,
@@ -28702,10 +29423,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN users u ON ca.employee_id = u.id`;const s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(a+=" WHERE f.tenant_id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0":t.roleId===4?t.tenantId&&t.userId?(a+=` WHERE f.tenant_id = ? AND EXISTS (
           SELECT 1 FROM customer_assignments ca2
           WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
-        )`,s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0":k(t.roleId)===5&&t.tenantId&&t.userId?(a+=" WHERE f.tenant_id = ? AND f.assigned_bank_agent_id = ?",s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY f.created_at DESC";const{results:n}=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.json({success:!0,data:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/sidebar-filter-counts",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);const a=[],s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(a.push("c.tenant_id = ?"),s.push(t.tenantId)):a.push("1 = 0"):t.roleId===4?t.tenantId&&t.userId?(a.push("c.tenant_id = ?"),a.push(`EXISTS (
+        )`,s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0":E(t.roleId)===5&&t.tenantId&&t.userId?(a+=` WHERE f.tenant_id = ? AND (
+          f.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca2
+            WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
+          )
+        )`,s.push(t.tenantId,t.userId,t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY f.created_at DESC";const{results:n}=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.json({success:!0,data:n})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/sidebar-filter-counts",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);const a=[],s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(a.push("c.tenant_id = ?"),s.push(t.tenantId)):a.push("1 = 0"):t.roleId===4?t.tenantId&&t.userId?(a.push("c.tenant_id = ?"),a.push(`EXISTS (
           SELECT 1 FROM customer_assignments ca
           WHERE ca.customer_id = c.id AND ca.employee_id = ?
-        )`),s.push(t.tenantId,t.userId)):a.push("1 = 0"):(k(t.roleId),a.push("1 = 0")));const n=a.length>0?`WHERE ${a.join(" AND ")}`:"",r=await e.env.DB.prepare(`
+        )`),s.push(t.tenantId,t.userId)):a.push("1 = 0"):E(t.roleId)===5&&t.tenantId&&t.userId?(a.push("c.tenant_id = ?"),a.push(`EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+        )`),s.push(t.tenantId,t.userId)):a.push("1 = 0"));const n=a.length>0?`WHERE ${a.join(" AND ")}`:"",r=await e.env.DB.prepare(`
       WITH scoped_customers AS (
         SELECT c.id
         FROM customers c
@@ -28731,10 +29461,10 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         SUM(CASE WHEN lr.rating = 5 THEN 1 ELSE 0 END) AS rating_5
       FROM scoped_customers sc
       LEFT JOIN latest_reviews lr ON lr.customer_id = sc.id
-    `).bind(...s).first(),l=Number(r?.all_count||0),i=Number(r?.rating_1||0)+Number(r?.rating_2||0)+Number(r?.rating_3||0)+Number(r?.rating_4||0)+Number(r?.rating_5||0),o=Math.max(0,l-i),d=[],c=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(d.push("c.tenant_id = ?"),c.push(t.tenantId)):d.push("1 = 0"):t.roleId===4?t.tenantId&&t.userId?(d.push("c.tenant_id = ?"),d.push(`EXISTS (
+    `).bind(...s).first(),l=Number(r?.all_count||0),i=Number(r?.rating_1||0)+Number(r?.rating_2||0)+Number(r?.rating_3||0)+Number(r?.rating_4||0)+Number(r?.rating_5||0),o=Math.max(0,l-i),d=[],p=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId?(d.push("c.tenant_id = ?"),p.push(t.tenantId)):d.push("1 = 0"):t.roleId===4?t.tenantId&&t.userId?(d.push("c.tenant_id = ?"),d.push(`EXISTS (
           SELECT 1 FROM customer_assignments ca
           WHERE ca.customer_id = c.id AND ca.employee_id = ?
-        )`),c.push(t.tenantId,t.userId)):d.push("1 = 0"):k(t.roleId)===5&&t.tenantId&&t.userId?(d.push("c.tenant_id = ?"),d.push("fr.assigned_bank_agent_id = ?"),c.push(t.tenantId,t.userId)):d.push("1 = 0"));const u=d.length>0?`WHERE ${d.join(" AND ")}`:"",m=(await e.env.DB.prepare(`
+        )`),p.push(t.tenantId,t.userId)):d.push("1 = 0"):E(t.roleId)===5&&t.userId?(t.tenantId&&(d.push("c.tenant_id = ?"),p.push(t.tenantId)),d.push("fr.assigned_bank_agent_id = ?"),p.push(t.userId)):d.push("1 = 0"));const u=d.length>0?`WHERE ${d.join(" AND ")}`:"",m=(await e.env.DB.prepare(`
       SELECT
         COALESCE(
           ws.stage_name_ar,
@@ -28756,19 +29486,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
       ${u}
       GROUP BY status_label
-    `).bind(...c).all()).results,f={};let g=0;return m.forEach(b=>{const y=String(b?.status_label||"").trim(),h=Number(b?.count||0);y&&(f[y]=h,g+=h)}),e.json({success:!0,customers:{all:l,0:o,1:Number(r?.rating_1||0),2:Number(r?.rating_2||0),3:Number(r?.rating_3||0),4:Number(r?.rating_4||0),5:Number(r?.rating_5||0)},requests:{all:g,byState:f}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),n=s.get("customer_id"),r=s.get("financing_type_id"),l=s.get("requested_amount"),i=s.get("duration_months"),o=s.get("salary_at_request"),d=s.get("selected_bank_id");let c=d!=null&&String(d).trim()!==""?parseInt(String(d),10):null;c!=null&&Number.isNaN(c)&&(c=null);const u=s.get("assigned_bank_agent_id");let m=u!=null&&String(u).trim()!==""?parseInt(String(u),10):null;m!=null&&Number.isNaN(m)&&(m=null);const f=s.get("status")||"pending",g=s.get("notes")||"",b=await x(e);if(!b.userId||!b.roleId)return e.json({success:!1,error:"غير مصرح"},401);const y=await e.env.DB.prepare(`
+    `).bind(...p).all()).results,b={};let g=0;return m.forEach(x=>{const h=String(x?.status_label||"").trim(),f=Number(x?.count||0);h&&(b[h]=f,g+=f)}),e.json({success:!0,customers:{all:l,0:o,1:Number(r?.rating_1||0),2:Number(r?.rating_2||0),3:Number(r?.rating_3||0),4:Number(r?.rating_4||0),5:Number(r?.rating_5||0)},requests:{all:g,byState:b}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",s=await e.req.formData(),n=s.get("customer_id"),r=s.get("financing_type_id"),l=s.get("requested_amount"),i=s.get("duration_months"),o=s.get("salary_at_request"),d=s.get("selected_bank_id");let p=d!=null&&String(d).trim()!==""?parseInt(String(d),10):null;p!=null&&Number.isNaN(p)&&(p=null);const u=s.get("assigned_bank_agent_id");let m=u!=null&&String(u).trim()!==""?parseInt(String(u),10):null;m!=null&&Number.isNaN(m)&&(m=null);const b=s.get("status")||"pending",g=s.get("notes")||"",x=await y(e);if(!x.userId||!x.roleId)return e.json({success:!1,error:"غير مصرح"},401);const h=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM customers WHERE id = ?
-    `).bind(n).first();if(!y)return e.json({success:!1,error:"العميل غير موجود"},400);if(b.roleId!==1){if(!b.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(y.tenant_id!==b.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}if(b.roleId===4&&!await te(e.env.DB,b,y))return e.json({success:!1,error:"غير مصرح: العميل غير مخصص لك"},403);const h=b.roleId===1?y.tenant_id:b.tenantId;if(m!=null){if(!c||Number.isNaN(c))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);const v=h!=null?Number(h):NaN;if(!v||Number.isNaN(v))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await os(e.env.DB,v,c,m))return e.json({success:!1,error:"موظف التمويل غير صالح لهذا البنك والشركة"},400)}const w=await e.env.DB.prepare(`
+    `).bind(n).first();if(!h)return e.json({success:!1,error:"العميل غير موجود"},400);if(x.roleId!==1){if(!x.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(h.tenant_id!==x.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}if(x.roleId===4&&!await K(e.env.DB,x,h))return e.json({success:!1,error:"غير مصرح: العميل غير مخصص لك"},403);const f=x.roleId===1?h.tenant_id:x.tenantId;if(m!=null){if(!p||Number.isNaN(p))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);const w=f!=null?Number(f):NaN;if(!w||Number.isNaN(w))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await ps(e.env.DB,w,m))return e.json({success:!1,error:"موظف التمويل غير صالح لهذه الشركة"},400)}const v=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
         status, notes, tenant_id, assigned_bank_agent_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(n,r,c,l,o,i,f,g,h,m).run();return a?e.json({success:!0,id:w.meta.last_row_id},201):e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});p.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(n,r,p,l,o,i,b,g,f,m).run();return a?e.json({success:!0,id:v.meta.last_row_id},201):e.redirect("/admin/requests")}catch(t){return console.error("Error creating request:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء حفظ الطلب"},500)}});c.get("/api/workflow/stages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
       ORDER BY stage_order ASC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/workflow/timeline/:requestId",async e=>{try{const t=e.req.param("requestId"),{results:a}=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/workflow/timeline/:requestId",async e=>{try{const t=e.req.param("requestId"),{results:a}=await e.env.DB.prepare(`
       SELECT 
         wst.*,
         from_stage.stage_name_ar as from_stage_name,
@@ -28808,38 +29538,38 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
       WHERE wst.request_id = ?
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});const us={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function ms(e){return e&&us[e]||null}p.post("/api/workflow/update-stage",async e=>{try{const{requestId:t,newStageId:a,notes:s,userId:n}=await e.req.json(),r=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:{transitions:a,actions:s,tasks:n}})}catch(t){return e.json({success:!1,error:t.message},500)}});const xs={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function hs(e){return e&&xs[e]||null}c.post("/api/workflow/update-stage",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(E(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,newStageId:s,notes:n,userId:r}=await e.req.json(),l=await e.env.DB.prepare(`
       SELECT stage_name FROM workflow_stages WHERE id = ?
-    `).bind(a).first(),l=await e.env.DB.prepare(`
+    `).bind(s).first(),i=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
-    `).bind(t).first(),i=ms(r?.stage_name||null),o=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],d=[a];return i&&(o.push("status = ?"),d.push(i),i==="pending"?o.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):i==="under_review"?o.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):i==="approved"?o.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):i==="rejected"&&o.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(i==="approved"||i==="rejected"||i==="under_review")&&o.push("reviewed_at = CURRENT_TIMESTAMP")),d.push(t),await e.env.DB.prepare(`
+    `).bind(a).first(),o=hs(l?.stage_name||null),d=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],p=[s];return o&&(d.push("status = ?"),p.push(o),o==="pending"?d.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):o==="under_review"?d.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):o==="approved"?d.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):o==="rejected"&&d.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(o==="approved"||o==="rejected"||o==="under_review")&&d.push("reviewed_at = CURRENT_TIMESTAMP")),p.push(a),await e.env.DB.prepare(`
       UPDATE financing_requests 
-      SET ${o.join(", ")}
+      SET ${d.join(", ")}
       WHERE id = ?
-    `).bind(...d).run(),s&&await e.env.DB.prepare(`
+    `).bind(...p).run(),n&&await e.env.DB.prepare(`
         UPDATE workflow_stage_transitions 
         SET notes = ?, transitioned_by = ?
         WHERE request_id = ? AND to_stage_id = ?
         ORDER BY created_at DESC
         LIMIT 1
-      `).bind(s,n,t,a).run(),i&&l?.status&&l.status!==i&&await e.env.DB.prepare(`
+      `).bind(n,r,a,s).run(),o&&i?.status&&i.status!==o&&await e.env.DB.prepare(`
         INSERT INTO financing_request_status_history (request_id, old_status, new_status, changed_by, notes)
         VALUES (?, ?, ?, ?, ?)
-      `).bind(t,l.status,i,n||null,s||"").run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:n,performedBy:r,notes:l}=await e.req.json();return await e.env.DB.prepare(`
+      `).bind(a,i.status,o,r||null,n||"").run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/add-action",async e=>{try{const{requestId:t,stageId:a,actionType:s,actionData:n,performedBy:r,notes:l}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_actions 
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,n,r,l).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:n,assignedTo:r,dueDate:l,priority:i}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,n,r,l).run(),e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/create-task",async e=>{try{const{requestId:t,stageId:a,taskTitle:s,taskDescription:n,assignedTo:r,dueDate:l,priority:i}=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO workflow_stage_tasks 
       (request_id, stage_id, task_title, task_description, assigned_to, due_date, priority)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(t,a,s,n,r,l,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t,a,s,n,r,l,i||"medium").run(),e.json({success:!0,message:"تم إنشاء المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/workflow/complete-task",async e=>{try{const{taskId:t,completedBy:a}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE workflow_stage_tasks 
       SET status = 'completed', 
           completed_at = CURRENT_TIMESTAMP,
           completed_by = ?
       WHERE id = ?
-    `).bind(a,t).run(),e.json({success:!0,message:"تم إتمام المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/workflow/my-tasks/:userId",async e=>{try{const t=e.req.param("userId"),{results:a}=await e.env.DB.prepare(`
+    `).bind(a,t).run(),e.json({success:!0,message:"تم إتمام المهمة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/workflow/my-tasks/:userId",async e=>{try{const t=e.req.param("userId"),{results:a}=await e.env.DB.prepare(`
       SELECT 
         wst.*,
         ws.stage_name_ar,
@@ -28853,7 +29583,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN customers c ON fr.customer_id = c.id
       WHERE wst.assigned_to = ? AND wst.status = 'pending'
       ORDER BY wst.due_date ASC
-    `).bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a),[o,d]=i.split(":");s=d==="null"?null:parseInt(d)}catch{}let n=`
+    `).bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(a)try{const i=atob(a),[o,d]=i.split(":");s=d==="null"?null:parseInt(d)}catch{}let n=`
       SELECT 
         p.*,
         c.full_name as customer_name,
@@ -28861,12 +29591,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM payments p
       LEFT JOIN customers c ON p.customer_id = c.id
       LEFT JOIN users u ON p.employee_id = u.id
-    `;const r=[];s&&(n+=" WHERE p.tenant_id = ?",r.push(s)),n+=" ORDER BY p.created_at DESC";const{results:l}=await e.env.DB.prepare(n).bind(...r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[n,r]=s.split(":"),l=r==="null"?null:parseInt(r),i=parseInt(n);if(!l)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const o=await e.req.json();return!o.financing_request_id||!o.customer_id||!o.amount||!o.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
+    `;const r=[];s&&(n+=" WHERE p.tenant_id = ?",r.push(s)),n+=" ORDER BY p.created_at DESC";const{results:l}=await e.env.DB.prepare(n).bind(...r).all();return e.json({success:!0,data:l})}catch(t){return console.error("Payments API error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/payments",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[n,r]=s.split(":"),l=r==="null"?null:parseInt(r),i=parseInt(n);if(!l)return e.json({success:!1,error:"يجب أن تكون مرتبطاً بشركة"},403);const o=await e.req.json();return!o.financing_request_id||!o.customer_id||!o.amount||!o.payment_date?e.json({success:!1,error:"البيانات المطلوبة ناقصة"},400):(await e.env.DB.prepare(`
       INSERT INTO payments (
         financing_request_id, customer_id, tenant_id, employee_id,
         amount, payment_date, payment_method, receipt_number, notes, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(o.financing_request_id,o.customer_id,l,o.employee_id||null,o.amount,o.payment_date,o.payment_method||"cash",o.receipt_number||null,o.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[n,r]=s.split(":"),l=r==="null"?null:parseInt(r),i=e.req.param("id");if(l){const o=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(o&&o.tenant_id!==l)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(o.financing_request_id,o.customer_id,l,o.employee_id||null,o.amount,o.payment_date,o.payment_method||"cash",o.receipt_number||null,o.notes||null,i).run(),e.json({success:!0,message:"تم حفظ سند القبض بنجاح"}))}catch(t){return console.error("Error creating payment:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/payments/:id",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");if(!a)return e.json({success:!1,error:"غير مصرح"},401);const s=atob(a),[n,r]=s.split(":"),l=r==="null"?null:parseInt(r),i=e.req.param("id");if(l){const o=await e.env.DB.prepare("SELECT tenant_id FROM payments WHERE id = ?").bind(i).first();if(o&&o.tenant_id!==l)return e.json({success:!1,error:"غير مصرح بحذف هذا السند"},403)}return await e.env.DB.prepare("DELETE FROM payments WHERE id = ?").bind(i).run(),e.json({success:!0,message:"تم حذف السند بنجاح"})}catch(t){return console.error("Error deleting payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/c/:tenant/calculator/submit-request",async e=>{try{const t=e.req.param("tenant"),a=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ? AND status = 'active'
     `).bind(t).first();if(!s)return e.json({success:!1,error:"شركة غير موجودة"},404);const n=s.id;let r=await e.env.DB.prepare(`
       SELECT id FROM customers WHERE (national_id = ? OR phone = ?) AND tenant_id = ?
@@ -28876,18 +29606,20 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             birthdate = ?, monthly_salary = ?,
             employer_name = ?, job_title = ?,
             work_start_date = ?, city = ?,
-            financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
+            financing_amount = ?, monthly_obligations = ?, financing_type_id = ?,
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(a.full_name||"",a.phone||"",a.email||null,a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,l).run();else try{l=(await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
             job_title, work_start_date, city, tenant_id,
-            financing_amount, monthly_obligations, financing_type_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",n,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null).run()).meta.last_row_id}catch(d){if(d.message&&d.message.includes("UNIQUE")){const c=await e.env.DB.prepare(`
+            financing_amount, monthly_obligations, financing_type_id,
+            enrollment_source
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(a.full_name||"",a.phone||"",a.email||null,a.national_id||"",a.birthdate||null,a.monthly_salary||0,a.employer||"",a.job_title||"",a.work_start_date||null,a.city||"",n,a.requested_amount||0,a.monthly_obligations||0,a.financing_type_id||null,"calculator").run()).meta.last_row_id}catch(d){if(d.message&&d.message.includes("UNIQUE")){const p=await e.env.DB.prepare(`
             SELECT id FROM customers WHERE (national_id = ? OR phone = ?)
-          `).bind(a.national_id||"",a.phone||"").first();if(c)l=c.id,await e.env.DB.prepare(`
+          `).bind(a.national_id||"",a.phone||"").first();if(p)l=p.id,await e.env.DB.prepare(`
               UPDATE customers 
               SET full_name = ?, phone = ?, email = ?, 
                   birthdate = ?, monthly_salary = ?,
@@ -28902,7 +29634,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         monthly_obligations, monthly_payment,
         status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-    `).bind(l,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,n).run()).meta.last_row_id;return e.json({success:!0,request_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});p.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const i=await e.env.DB.prepare(`
+    `).bind(l,a.financing_type_id||null,a.bank_id||a.selected_bank_id||null,a.requested_amount||0,a.monthly_salary||0,a.duration||a.duration_months||0,a.monthly_obligations||0,a.monthly_payment||0,a.notes||null,n).run()).meta.last_row_id;return e.json({success:!0,request_id:o,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),console.error("Error details:",{message:t.message,stack:t.stack,data:t}),e.json({success:!1,error:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى.",details:t.message},500)}});c.post("/api/calculator/save-customer",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const i=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
       `).bind(a).first();i&&(s=i.id)}if(!s){const i=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
@@ -28923,9 +29655,10 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             total_payment = ?,
             calculation_date = CURRENT_TIMESTAMP,
             tenant_id = COALESCE(?, tenant_id),
-            solutions_json = IFNULL(?, solutions_json)
+            solutions_json = IFNULL(?, solutions_json),
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
-      `).bind(...i).run()}catch(o){if(!Y(o))throw o;await e.env.DB.prepare(`
+      `).bind(...i).run()}catch(o){if(!X(o))throw o;await e.env.DB.prepare(`
         UPDATE customers 
         SET full_name = ?, 
             birthdate = ?, 
@@ -28939,7 +29672,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             monthly_payment = ?,
             total_payment = ?,
             calculation_date = CURRENT_TIMESTAMP,
-            tenant_id = COALESCE(?, tenant_id)
+            tenant_id = COALESCE(?, tenant_id),
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(t.name,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,s,r).run()}}else{const i=`TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`,o=[t.name,t.phone,t.birthdate,t.salary,t.amount,t.obligations||0,t.financing_type_id,t.duration_months||null,t.best_bank_id||null,t.best_rate||null,t.monthly_payment||null,t.total_payment||null,i,s];let d;try{d=await e.env.DB.prepare(`
         INSERT INTO customers (
@@ -28947,17 +29681,40 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           financing_amount, monthly_obligations, financing_type_id,
           financing_duration_months, best_bank_id, best_rate,
           monthly_payment, total_payment, calculation_date,
-          national_id, tenant_id, solutions_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
-      `).bind(...o,l??"[]").run()}catch(c){if(!Y(c))throw c;d=await e.env.DB.prepare(`
+          national_id, tenant_id, solutions_json,
+          enrollment_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+      `).bind(...o,l??"[]","calculator").run()}catch(p){if(!X(p))throw p;d=await e.env.DB.prepare(`
         INSERT INTO customers (
           full_name, phone, birthdate, monthly_salary,
           financing_amount, monthly_obligations, financing_type_id,
           financing_duration_months, best_bank_id, best_rate,
           monthly_payment, total_payment, calculation_date,
-          national_id, tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-      `).bind(...o).run()}r=d.meta.last_row_id}return e.json({success:!0,customer_id:r,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const o=await e.env.DB.prepare(`
+          national_id, tenant_id,
+          enrollment_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
+      `).bind(...o,"calculator").run()}r=d.meta.last_row_id}if(s&&r&&!(await e.env.DB.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? LIMIT 1").bind(r).first())?.ok){const{results:o}=await e.env.DB.prepare(`
+          SELECT id FROM users
+          WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+          ORDER BY id ASC
+        `).bind(s).all(),d=o||[];if(d.length){let p=function(v){if(v==null)return m[0];const w=m.indexOf(v);return w===-1?m[0]:m[(w+1)%m.length]};const u=await e.env.DB.prepare(`
+            SELECT last_auto_assigned_user_id
+            FROM tenant_customer_auto_assign_state
+            WHERE tenant_id = ?
+            LIMIT 1
+          `).bind(s).first(),m=d.map(v=>v.id),b=u?.last_auto_assigned_user_id??null,g=p(b),x=1,h="تعيين تلقائي (الحاسبة)";(await e.env.DB.prepare(`
+            INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+            VALUES (?, ?, ?, ?)
+          `).bind(r,g,x,h).run()).meta.changes>0&&(await e.env.DB.prepare(`
+              INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+              VALUES (?, NULL, ?, ?, ?)
+            `).bind(r,g,x,h).run(),await e.env.DB.prepare(`
+              INSERT INTO tenant_customer_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+              VALUES (?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(tenant_id) DO UPDATE SET
+                last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+                updated_at = CURRENT_TIMESTAMP
+            `).bind(s,g).run())}}return e.json({success:!0,customer_id:r,tenant_id:s,message:"تم حفظ بيانات العميل بنجاح"})}catch(t){return console.error("Save customer error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/calculator/submit-request",async e=>{try{const t=await e.req.json(),a=t.tenant_slug||null;let s=null;if(a){const o=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE slug = ? AND status = 'active'
       `).bind(a).first();o&&(s=o.id)}if(!s){const o=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
@@ -28969,15 +29726,17 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             birthdate = ?, monthly_salary = ?,
             employer_name = ?, job_title = ?,
             work_start_date = ?, city = ?,
-            tenant_id = COALESCE(tenant_id, ?)
+            tenant_id = COALESCE(tenant_id, ?),
+            enrollment_source = COALESCE(enrollment_source, 'calculator')
         WHERE id = ?
       `).bind(t.full_name,t.phone,t.email||null,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s,r).run(),n.tenant_id&&(s=n.tenant_id);else try{r=(await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, 
             birthdate, monthly_salary, employer_name, 
-            job_title, work_start_date, city, tenant_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s).run()).meta.last_row_id}catch(o){if(o.message&&o.message.includes("UNIQUE")){const d=await e.env.DB.prepare(`
+            job_title, work_start_date, city, tenant_id,
+            enrollment_source
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(t.full_name,t.phone,t.email||null,t.national_id,t.birthdate,t.monthly_salary,t.employer,t.job_title,t.work_start_date,t.city,s,"calculator").run()).meta.last_row_id}catch(o){if(o.message&&o.message.includes("UNIQUE")){const d=await e.env.DB.prepare(`
             SELECT id, tenant_id FROM customers WHERE national_id = ? OR phone = ?
           `).bind(t.national_id,t.phone).first();if(d)r=d.id,d.tenant_id&&(s=d.tenant_id);else throw o}else throw o}const i=(await e.env.DB.prepare(`
       INSERT INTO financing_requests (
@@ -28989,35 +29748,35 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     `).bind(r,t.financing_type_id,t.bank_id,t.requested_amount,t.monthly_salary,t.duration,t.monthly_obligations,t.monthly_payment,t.notes).run()).meta.last_row_id;return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:r,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});p.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const w=a.substring(7).split(".");w.length===3&&(s=JSON.parse(atob(w[1])).tenant_id||null)}const{requested_amount:n,duration_months:r,salary_at_request:l,monthly_obligations:i,id_attachment_url:o,bank_statement_attachment_url:d,salary_attachment_url:c,additional_attachment_url:u}=await e.req.json();let m=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?"];const f=[n,r,l||0,i||0];o&&(m.push("id_attachment_url = ?"),f.push(o)),d&&(m.push("bank_statement_attachment_url = ?"),f.push(d)),c&&(m.push("salary_attachment_url = ?"),f.push(c)),u&&(m.push("additional_attachment_url = ?"),f.push(u)),f.push(t);let g=`
+    `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:r,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});c.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=e.req.header("Authorization");let s=null;if(a&&a.startsWith("Bearer ")){const k=a.substring(7).split(".");k.length===3&&(s=JSON.parse(atob(k[1])).tenant_id||null)}const{requested_amount:n,duration_months:r,salary_at_request:l,monthly_obligations:i,identity_attachment_url:o,signature_attachment_url:d,salary_profile_attachment_url:p,gosi_attachment_url:u,tax_exemption_attachment_url:m,additional_1_attachment_url:b,additional_2_attachment_url:g,additional_3_attachment_url:x}=await e.req.json();let h=["requested_amount = ?","duration_months = ?","salary_at_request = ?","monthly_obligations = ?"];const f=[n,r,l||0,i||0];o&&(h.push("identity_attachment_url = ?"),f.push(o)),d&&(h.push("signature_attachment_url = ?"),f.push(d)),p&&(h.push("salary_profile_attachment_url = ?"),f.push(p)),u&&(h.push("gosi_attachment_url = ?"),f.push(u)),m&&(h.push("tax_exemption_attachment_url = ?"),f.push(m)),b&&(h.push("additional_1_attachment_url = ?"),f.push(b)),g&&(h.push("additional_2_attachment_url = ?"),f.push(g)),x&&(h.push("additional_3_attachment_url = ?"),f.push(x)),f.push(t);let v=`
       UPDATE financing_requests 
-      SET ${m.join(", ")}
+      SET ${h.join(", ")}
       WHERE id = ?
-    `;s!==null&&(g+=" AND tenant_id = ?",f.push(s)),await e.env.DB.prepare(g).bind(...f).run();const y=(await e.env.DB.prepare(`
+    `;s!==null&&(v+=" AND tenant_id = ?",f.push(s)),await e.env.DB.prepare(v).bind(...f).run();const _=(await e.env.DB.prepare(`
       SELECT customer_id FROM financing_requests WHERE id = ?
-    `).bind(t).first())?.customer_id;return await Ee(e.env.DB,y,{id_attachment_url:o,bank_statement_attachment_url:d,salary_attachment_url:c,additional_attachment_url:u}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/financing-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).bind(t).first())?.customer_id;return await De(e.env.DB,_,{identity_attachment_url:o,signature_attachment_url:d,salary_profile_attachment_url:p,gosi_attachment_url:u,tax_exemption_attachment_url:m,additional_1_attachment_url:b,additional_2_attachment_url:g,additional_3_attachment_url:x}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/financing-requests/:id/status",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(E(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{status:s,notes:n}=await e.req.json(),r=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
-    `).bind(t).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[a];l?await e.env.DB.prepare(`
+    `).bind(a).first(),i={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[s];i?await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET status = ?, notes = ?, ${l} = datetime('now'), reviewed_at = datetime('now')
+        SET status = ?, notes = ?, ${i} = datetime('now'), reviewed_at = datetime('now')
         WHERE id = ?
-      `).bind(a,s,t).run():await e.env.DB.prepare(`
+      `).bind(s,n,a).run():await e.env.DB.prepare(`
         UPDATE financing_requests SET status = ?, notes = ? WHERE id = ?
-      `).bind(a,s,t).run(),n&&n.status!==a&&await e.env.DB.prepare(`
+      `).bind(s,n,a).run(),r&&r.status!==s&&await e.env.DB.prepare(`
         INSERT INTO financing_request_status_history (request_id, old_status, new_status, changed_by, notes)
         VALUES (?, ?, ?, 'admin', ?)
-      `).bind(t,n.status,a,s||"").run();const i=await e.env.DB.prepare(`
+      `).bind(a,r.status,s,n||"").run();const o=await e.env.DB.prepare(`
       SELECT requested_amount FROM financing_requests WHERE id = ?
-    `).bind(t).first(),o={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},d={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
+    `).bind(a).first(),d={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},p={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${t} إلى: ${o[a]||a}`,d[a]||"info","status_change",t).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),n=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),r=new Set(["id","salary","bank_statement","additional"]),l=n.toLowerCase();if(!r.has(l))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,o=2*1024*1024;if(i.size>o)return e.json({success:!1,error:"File too large. Max size is 2MB"},400);const d=Date.now(),c=Math.random().toString(36).substring(7),m=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",f=s?`${s}/${l}_${d}.${m}`:`temp/${l}_${d}_${c}.${m}`,g=await i.arrayBuffer();await e.env.ATTACHMENTS.put(f,g,{httpMetadata:{contentType:i.type}});const b=`/api/attachments/view/${f}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const h={id:"id_attachment_url",salary:"salary_attachment_url",bank_statement:"bank_statement_attachment_url",additional:"additional_attachment_url"}[l];console.log("📎 Updating attachment:",{requestId:s,attachmentType:l,columnName:h,publicUrl:b});const w=await e.env.DB.prepare(`
+    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${a} إلى: ${d[s]||s}`,p[s]||"info","status_change",a).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),s=String(t.get("request_id")||"").trim(),n=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),r=new Set(["identity","signature","salary_profile","gosi","tax_exemption","additional_1","additional_2","additional_3"]),l=n.toLowerCase();if(!r.has(l))return e.json({success:!1,error:"Invalid attachment type"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const i=a,o=2*1024*1024;if(i.size>o)return e.json({success:!1,error:"File too large. Max size is 2MB"},400);const d=Date.now(),p=Math.random().toString(36).substring(7),m=(i.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin",b=s?`${s}/${l}_${d}.${m}`:`temp/${l}_${d}_${p}.${m}`,g=await i.arrayBuffer();await e.env.ATTACHMENTS.put(b,g,{httpMetadata:{contentType:i.type}});const x=`/api/attachments/view/${b}`;if(s){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const f={identity:"identity_attachment_url",signature:"signature_attachment_url",salary_profile:"salary_profile_attachment_url",gosi:"gosi_attachment_url",tax_exemption:"tax_exemption_attachment_url",additional_1:"additional_1_attachment_url",additional_2:"additional_2_attachment_url",additional_3:"additional_3_attachment_url"}[l];console.log("📎 Updating attachment:",{requestId:s,attachmentType:l,columnName:f,publicUrl:x});const v=await e.env.DB.prepare(`
         UPDATE financing_requests 
-        SET ${h} = ? 
+        SET ${f} = ? 
         WHERE id = ?
-      `).bind(b,s).run();console.log("✅ Update result:",w);const v=await e.env.DB.prepare(`
+      `).bind(x,s).run();console.log("✅ Update result:",v);const w=await e.env.DB.prepare(`
         SELECT customer_id FROM financing_requests WHERE id = ?
-      `).bind(s).first(),_={};h==="id_attachment_url"&&(_.id_attachment_url=b),h==="bank_statement_attachment_url"&&(_.bank_statement_attachment_url=b),h==="salary_attachment_url"&&(_.salary_attachment_url=b),h==="additional_attachment_url"&&(_.additional_attachment_url=b),await Ee(e.env.DB,v?.customer_id,{..._})}return e.json({success:!0,url:b,filename:f})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let r=null;if(n.startsWith("id_")?r="id_attachment_url":n.startsWith("salary_")?r="salary_attachment_url":n.startsWith("bank_statement_")?r="bank_statement_attachment_url":n.startsWith("additional_")&&(r="additional_attachment_url"),r){await e.env.DB.prepare(`
+      `).bind(s).first(),_={};f==="identity_attachment_url"&&(_.identity_attachment_url=x),f==="signature_attachment_url"&&(_.signature_attachment_url=x),f==="salary_profile_attachment_url"&&(_.salary_profile_attachment_url=x),f==="gosi_attachment_url"&&(_.gosi_attachment_url=x),f==="tax_exemption_attachment_url"&&(_.tax_exemption_attachment_url=x),f==="additional_1_attachment_url"&&(_.additional_1_attachment_url=x),f==="additional_2_attachment_url"&&(_.additional_2_attachment_url=x),f==="additional_3_attachment_url"&&(_.additional_3_attachment_url=x),await De(e.env.DB,w?.customer_id,{..._})}return e.json({success:!0,url:x,filename:b})}catch(t){return console.error("Upload error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/attachments/view/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path"),a=await e.env.ATTACHMENTS.get(t);if(!a)return e.notFound();const s=new Headers;return a.writeHttpMetadata(s),s.set("etag",a.httpEtag),new Response(a.body,{headers:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/attachments/delete/:path{.+}",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=e.req.param("path");await e.env.ATTACHMENTS.delete(t);const a=t.split("/");if(a.length===2){const s=a[0],n=a[1];let r=null;if(n.startsWith("identity_")?r="identity_attachment_url":n.startsWith("signature_")?r="signature_attachment_url":n.startsWith("salary_profile_")?r="salary_profile_attachment_url":n.startsWith("gosi_")?r="gosi_attachment_url":n.startsWith("tax_exemption_")?r="tax_exemption_attachment_url":n.startsWith("additional_1_")?r="additional_1_attachment_url":n.startsWith("additional_2_")?r="additional_2_attachment_url":n.startsWith("additional_3_")&&(r="additional_3_attachment_url"),r){await e.env.DB.prepare(`
           UPDATE financing_requests 
           SET ${r} = NULL 
           WHERE id = ?
@@ -29025,24 +29784,34 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             UPDATE customers
             SET ${r} = NULL
             WHERE id = (SELECT customer_id FROM financing_requests WHERE id = ?)
-          `).bind(s).run()}catch(l){if(!M(l))throw l}}}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/customer-reviews",async e=>{try{const t=await x(e),{customer_id:a,customer_name:s,rating:n,note:r}=await e.req.json();if(!a||!s||!n)return e.json({success:!1,error:"customer_id, customer_name, and rating are required"},400);const l=parseInt(n,10);if(l<1||l>5)return e.json({success:!1,error:"rating must be 1–5"},400);const i=await e.env.DB.prepare(`
+          `).bind(s).run()}catch(l){if(!P(l))throw l}}}return e.json({success:!0})}catch(t){return console.error("Delete error:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/customer-reviews",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(E(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const{customer_id:a,customer_name:s,rating:n,note:r}=await e.req.json();if(!a||!s||!n)return e.json({success:!1,error:"customer_id, customer_name, and rating are required"},400);const l=parseInt(n,10);if(l<1||l>5)return e.json({success:!1,error:"rating must be 1–5"},400);const i=await e.env.DB.prepare(`
       INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(a,s,l,r||null,t.userId||null,t.tenantId||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating customer review:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/customer-reviews",async e=>{try{const t=await x(e),a=e.req.query("latest_per_customer")==="1";let s;const n=[];a?(s=`SELECT cr.* FROM customer_reviews cr
+    `).bind(a,s,l,r||null,t.userId||null,t.tenantId||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating customer review:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/customer-reviews",async e=>{try{const t=await y(e),a=e.req.query("latest_per_customer")==="1",s=E(t.roleId);let n;const r=[];a?(n=`SELECT cr.* FROM customer_reviews cr
         INNER JOIN (
           SELECT customer_id, MAX(created_at) as max_created
           FROM customer_reviews
-          WHERE 1=1`,t.tenantId?(s+=" AND tenant_id = ?",n.push(t.tenantId)):t.userId&&(s+=" AND user_id = ?",n.push(t.userId)),s+=` GROUP BY customer_id
-        ) latest ON cr.customer_id = latest.customer_id AND cr.created_at = latest.max_created`,t.tenantId?(s+=" WHERE cr.tenant_id = ?",n.push(t.tenantId)):t.userId&&(s+=" WHERE cr.user_id = ?",n.push(t.userId))):(s="SELECT * FROM customer_reviews WHERE 1=1",t.tenantId?(s+=" AND tenant_id = ?",n.push(t.tenantId)):t.userId&&(s+=" AND user_id = ?",n.push(t.userId)),s+=" ORDER BY created_at DESC");const{results:r}=n.length>0?await e.env.DB.prepare(s).bind(...n).all():await e.env.DB.prepare(s).all();return e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/customer-reviews/:customerId",async e=>{try{const t=e.req.param("customerId"),{results:a}=await e.env.DB.prepare("SELECT * FROM customer_reviews WHERE customer_id = ? ORDER BY created_at DESC").bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/customer-reviews/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customer_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/customers/:id/archive",async e=>{try{const t=await x(e),a=e.req.param("id");return await e.env.DB.prepare(`
+          WHERE 1=1`,t.tenantId?(n+=" AND tenant_id = ?",r.push(t.tenantId)):t.userId&&(n+=" AND user_id = ?",r.push(t.userId)),n+=` GROUP BY customer_id
+        ) latest ON cr.customer_id = latest.customer_id AND cr.created_at = latest.max_created`,t.tenantId?(n+=" WHERE cr.tenant_id = ?",r.push(t.tenantId)):t.userId&&(n+=" WHERE cr.user_id = ?",r.push(t.userId)),s===5&&t.userId&&(n+=` AND EXISTS (
+          SELECT 1
+          FROM financing_requests fr
+          WHERE fr.customer_id = cr.customer_id
+            AND fr.assigned_bank_agent_id = ?
+        )`,r.push(t.userId))):(n="SELECT * FROM customer_reviews WHERE 1=1",t.tenantId?(n+=" AND tenant_id = ?",r.push(t.tenantId)):t.userId&&(n+=" AND user_id = ?",r.push(t.userId)),s===5&&t.userId&&(n+=` AND EXISTS (
+          SELECT 1
+          FROM financing_requests fr
+          WHERE fr.customer_id = customer_reviews.customer_id
+            AND fr.assigned_bank_agent_id = ?
+        )`,r.push(t.userId)),n+=" ORDER BY created_at DESC");const{results:l}=r.length>0?await e.env.DB.prepare(n).bind(...r).all():await e.env.DB.prepare(n).all();return e.json({success:!0,data:l})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/customer-reviews/:customerId",async e=>{try{const t=e.req.param("customerId"),{results:a}=await e.env.DB.prepare("SELECT * FROM customer_reviews WHERE customer_id = ? ORDER BY created_at DESC").bind(t).all();return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/customer-reviews/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(E(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customer_reviews WHERE id = ?").bind(a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/customers/:id/archive",async e=>{try{const t=await y(e),a=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE customers SET is_archived = 1, archived_at = CURRENT_TIMESTAMP, archived_by = ?
       WHERE id = ?
-    `).bind(t.userId||null,a).run(),e.json({success:!0})}catch(t){return console.error("Error archiving customer:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/customers/:id/unarchive",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(t.userId||null,a).run(),e.json({success:!0})}catch(t){return console.error("Error archiving customer:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/customers/:id/unarchive",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE customers SET is_archived = 0, archived_at = NULL, archived_by = NULL
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error unarchiving customer:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/customer-alarms",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const{customer_id:a,customer_name:s,alarm_date_gregorian:n,alarm_date_hijri:r,alarm_time:l,note:i}=await e.req.json();if(!a||!s)return e.json({success:!1,error:"customer_id and customer_name are required"},400);const o=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error unarchiving customer:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/customer-alarms",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const{customer_id:a,customer_name:s,alarm_date_gregorian:n,alarm_date_hijri:r,alarm_time:l,note:i}=await e.req.json();if(!a||!s)return e.json({success:!1,error:"customer_id and customer_name are required"},400);const o=await e.env.DB.prepare(`
       INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,s,n||null,r||null,l||null,i||null,t.userId,t.tenantId||null).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return console.error("Error creating customer alarm:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/customer-alarms",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);let a="SELECT * FROM customer_alarms WHERE user_id = ?";const s=[t.userId];a+=" ORDER BY created_at DESC";const{results:n}=await e.env.DB.prepare(a).bind(...s).all();return e.json({success:!0,data:n})}catch(t){return console.error("Error fetching customer alarms:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/customer-alarms/unread-count",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const s=await e.env.DB.prepare("SELECT COUNT(*) as count FROM customer_alarms WHERE is_read = 0 AND user_id = ?").bind(t.userId).first();return e.json({success:!0,count:s?.count||0})}catch(t){return console.error("Error fetching unread alarms count:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/customer-alarms/:id/read",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id");return await e.env.DB.prepare("UPDATE customer_alarms SET is_read = 1 WHERE id = ? AND user_id = ?").bind(a,t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error marking alarm as read:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/customer-alarms/read-all",async e=>{try{const t=await x(e);return t.userId?(await e.env.DB.prepare("UPDATE customer_alarms SET is_read = 1 WHERE is_read = 0 AND user_id = ?").bind(t.userId).run(),e.json({success:!0})):e.json({success:!1,error:"Unauthorized"},401)}catch(t){return console.error("Error marking all alarms as read:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/customer-alarms/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customer_alarms WHERE id = ? AND user_id = ?").bind(a,t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error deleting customer alarm:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,n=1;if(a){const o=atob(a).split(":");n=parseInt(o[0]),s=o[1]!=="null"?parseInt(o[1]):null}let r=`
+    `).bind(a,s,n||null,r||null,l||null,i||null,t.userId,t.tenantId||null).run();return e.json({success:!0,id:o.meta.last_row_id})}catch(t){return console.error("Error creating customer alarm:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/customer-alarms",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);let a="SELECT * FROM customer_alarms WHERE user_id = ?";const s=[t.userId];a+=" ORDER BY created_at DESC";const{results:n}=await e.env.DB.prepare(a).bind(...s).all();return e.json({success:!0,data:n})}catch(t){return console.error("Error fetching customer alarms:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/customer-alarms/unread-count",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const s=await e.env.DB.prepare("SELECT COUNT(*) as count FROM customer_alarms WHERE is_read = 0 AND user_id = ?").bind(t.userId).first();return e.json({success:!0,count:s?.count||0})}catch(t){return console.error("Error fetching unread alarms count:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/customer-alarms/:id/read",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id");return await e.env.DB.prepare("UPDATE customer_alarms SET is_read = 1 WHERE id = ? AND user_id = ?").bind(a,t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error marking alarm as read:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/customer-alarms/read-all",async e=>{try{const t=await y(e);return t.userId?(await e.env.DB.prepare("UPDATE customer_alarms SET is_read = 1 WHERE is_read = 0 AND user_id = ?").bind(t.userId).run(),e.json({success:!0})):e.json({success:!1,error:"Unauthorized"},401)}catch(t){return console.error("Error marking all alarms as read:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/customer-alarms/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customer_alarms WHERE id = ? AND user_id = ?").bind(a,t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error deleting customer alarm:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,n=1;if(a){const o=atob(a).split(":");n=parseInt(o[0]),s=o[1]!=="null"?parseInt(o[1]):null}let r=`
       SELECT 
         n.*,
         fr.requested_amount,
@@ -29051,21 +29820,21 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN financing_requests fr ON n.related_request_id = fr.id
       WHERE n.user_id = ?`;s&&(r+=` AND n.tenant_id = ${s}`),r+=`
       ORDER BY n.created_at DESC
-      LIMIT 50`;const{results:l}=await e.env.DB.prepare(r).bind(n).all();return e.json({success:!0,data:l})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,n=1;if(a){const o=atob(a).split(":");n=parseInt(o[0]),s=o[1]!=="null"?parseInt(o[1]):null}let r="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(r+=` AND tenant_id = ${s}`);const l=await e.env.DB.prepare(r).bind(n).first();return e.json({success:!0,count:l?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+      LIMIT 50`;const{results:l}=await e.env.DB.prepare(r).bind(n).all();return e.json({success:!0,data:l})}catch(t){return console.error("Error fetching notifications:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/notifications/unread-count",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let s=null,n=1;if(a){const o=atob(a).split(":");n=parseInt(o[0]),s=o[1]!=="null"?parseInt(o[1]):null}let r="SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";s&&(r+=` AND tenant_id = ${s}`);const l=await e.env.DB.prepare(r).bind(n).first();return e.json({success:!0,count:l?.count||0})}catch(t){return console.error("Error fetching unread count:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/notifications/:id/read",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE notifications
       SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
-    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error marking notification as read:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/notifications/read-all",async e=>{try{return await e.env.DB.prepare(`
+    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error marking notification as read:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/notifications/read-all",async e=>{try{return await e.env.DB.prepare(`
       UPDATE notifications
       SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE user_id = ? AND is_read = 0
-    `).bind(1).run(),e.json({success:!0})}catch(t){return console.error("Error marking all as read:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/notifications/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(1).run(),e.json({success:!0})}catch(t){return console.error("Error marking all as read:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/notifications/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       DELETE FROM notifications
       WHERE id = ? AND user_id = ?
-    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:n,category:r,related_request_id:l}=await e.req.json(),i=await e.env.DB.prepare(`
+    `).bind(t,1).run(),e.json({success:!0})}catch(t){return console.error("Error deleting notification:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/notifications",async e=>{try{const{user_id:t,title:a,message:s,type:n,category:r,related_request_id:l}=await e.req.json(),i=await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(t||1,a,s,n||"info",r||"general",l||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).bind(t||1,a,s,n||"info",r||"general",l||null).run();return e.json({success:!0,id:i.meta.last_row_id})}catch(t){return console.error("Error creating notification:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/calculations",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         calc.*,
         u.full_name as user_name,
@@ -29077,15 +29846,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       JOIN financing_types ft ON calc.financing_type_id = ft.id
       ORDER BY calc.created_at DESC
       LIMIT 100
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:n,financing_type_id:r,user_id:l,subscription_id:i}=await e.req.json(),o=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/calculate",async e=>{try{const{amount:t,duration_months:a,salary:s,bank_id:n,financing_type_id:r,user_id:l,subscription_id:i}=await e.req.json(),o=await e.env.DB.prepare(`
       SELECT rate FROM bank_financing_rates 
       WHERE bank_id = ? AND financing_type_id = ? AND is_active = 1
       LIMIT 1
-    `).bind(n,r).first();if(!o)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const d=o.rate,c=d/100/12,u=t*c*Math.pow(1+c,a)/(Math.pow(1+c,a)-1),m=u*a,f=m-t,g=await e.env.DB.prepare(`
+    `).bind(n,r).first();if(!o)return e.json({success:!1,error:"لا توجد نسبة تمويل متاحة لهذا البنك ونوع التمويل"},400);const d=o.rate,p=d/100/12,u=t*p*Math.pow(1+p,a)/(Math.pow(1+p,a)-1),m=u*a,b=m-t,g=await e.env.DB.prepare(`
       INSERT INTO calculations 
       (user_id, subscription_id, financing_type_id, bank_id, amount, duration_months, salary, rate, monthly_payment, total_payment, total_interest)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(l||null,i||null,r,n,t,a,s,d,u,m,f).run();return e.json({success:!0,data:{id:g.meta.last_row_id,amount:t,duration_months:a,rate:d,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(f*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
+    `).bind(l||null,i||null,r,n,t,a,s,d,u,m,b).run();return e.json({success:!0,data:{id:g.meta.last_row_id,amount:t,duration_months:a,rate:d,monthly_payment:Math.round(u*100)/100,total_payment:Math.round(m*100)/100,total_interest:Math.round(b*100)/100}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/admin/init-payments-table",async e=>{try{return await e.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         financing_request_id INTEGER NOT NULL,
@@ -29101,60 +29870,60 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/dashboard/stats",async e=>{try{const t=await x(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",n='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',l='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",o=null;t.roleId===1?o=null:t.roleId===2||t.roleId===3?(o=t.tenantId,o!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",n+=" AND tenant_id = ?",r+=" AND tenant_id = ?",l+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.tenantId?(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",n+=" AND tenant_id = ?",r+=" AND tenant_id = ?",o=t.tenantId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",n+=" AND 1 = 0",r+=" AND 1 = 0");const d=o!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(o).first():await e.env.DB.prepare(a).first(),c=o!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(o).first():await e.env.DB.prepare(s).first(),u=o!==null&&t.roleId!==1?await e.env.DB.prepare(n).bind(o).first():await e.env.DB.prepare(n).first(),m=o!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(o).first():await e.env.DB.prepare(r).first(),f=o!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(l).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(l).first():{count:0},g=o!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},b=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),y=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),h=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:d?.count||0,total_requests:c?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:f?.count||0,total_calculations:h?.count||0,active_banks:b?.count||0,active_tenants:y?.count||0,active_users:g?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run()).meta.changes===0?e.json({success:!1,error:"الطلب غير موجود"},404):e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return console.error("Error deleting financing request:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+    `).run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_request ON payments(financing_request_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_employee ON payments(employee_id)").run(),await e.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date)").run(),e.json({success:!0,message:"Payments table created successfully"})}catch(t){return console.error("Error creating payments table:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/dashboard/stats",async e=>{try{const t=await y(e);let a="SELECT COUNT(*) as count FROM customers",s="SELECT COUNT(*) as count FROM financing_requests",n='SELECT COUNT(*) as count FROM financing_requests WHERE status = "pending"',r='SELECT COUNT(*) as count FROM financing_requests WHERE status = "approved"',l='SELECT COUNT(*) as count FROM subscriptions WHERE status = "active"',i="SELECT COUNT(*) as count FROM users WHERE is_active = 1",o=null;t.roleId===1?o=null:t.roleId===2||t.roleId===3?(o=t.tenantId,o!==null&&(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",n+=" AND tenant_id = ?",r+=" AND tenant_id = ?",l+=" AND tenant_id = ?",i+=" AND tenant_id = ?")):t.roleId===4&&t.tenantId?(a+=" WHERE tenant_id = ?",s+=" WHERE tenant_id = ?",n+=" AND tenant_id = ?",r+=" AND tenant_id = ?",o=t.tenantId):(a+=" WHERE 1 = 0",s+=" WHERE 1 = 0",n+=" AND 1 = 0",r+=" AND 1 = 0");const d=o!==null&&t.roleId!==1?await e.env.DB.prepare(a).bind(o).first():await e.env.DB.prepare(a).first(),p=o!==null&&t.roleId!==1?await e.env.DB.prepare(s).bind(o).first():await e.env.DB.prepare(s).first(),u=o!==null&&t.roleId!==1?await e.env.DB.prepare(n).bind(o).first():await e.env.DB.prepare(n).first(),m=o!==null&&t.roleId!==1?await e.env.DB.prepare(r).bind(o).first():await e.env.DB.prepare(r).first(),b=o!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(l).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(l).first():{count:0},g=o!==null&&t.roleId!==1&&t.roleId!==4?await e.env.DB.prepare(i).bind(t.tenantId).first():t.roleId===1?await e.env.DB.prepare(i).first():{count:0},x=await e.env.DB.prepare("SELECT COUNT(*) as count FROM banks WHERE is_active = 1").first(),h=await e.env.DB.prepare('SELECT COUNT(*) as count FROM tenants WHERE status = "active"').first(),f=await e.env.DB.prepare("SELECT COUNT(*) as count FROM calculations").first();return e.json({success:!0,data:{total_customers:d?.count||0,total_requests:p?.count||0,pending_requests:u?.count||0,approved_requests:m?.count||0,active_subscriptions:b?.count||0,total_calculations:f?.count||0,active_banks:x?.count||0,active_tenants:h?.count||0,active_users:g?.count||0}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/customers/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE customer_id = ?").bind(t).run(),await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف العميل بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id");return(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(t).run()).meta.changes===0?e.json({success:!1,error:"الطلب غير موجود"},404):e.json({success:!0,message:"تم حذف الطلب بنجاح"})}catch(t){return console.error("Error deleting financing request:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/rates/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM bank_financing_rates WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف النسبة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscriptions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscriptions WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/users/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/packages/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM packages WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الباقة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/subscription-requests",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT 
         sr.*,
         p.package_name
       FROM subscription_requests sr
       LEFT JOIN packages p ON sr.package_id = p.id
       ORDER BY sr.created_at DESC
-    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/subscription-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/subscription-requests/:id/status",async e=>{try{const t=e.req.param("id"),{status:a,notes:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE subscription_requests 
       SET status = ?, notes = ?
       WHERE id = ?
-    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/permissions",async e=>{try{const a=((await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results||[]).map(s=>({...s,role_name:J(s.id,s.role_name)}));return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(n=>{s[n.category]||(s[n.category]=[]),s[n.category].push(n)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
+    `).bind(a,s,t).run(),e.json({success:!0,message:"تم تحديث حالة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/subscription-requests/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM subscription_requests WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف طلب الاشتراك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions",async e=>{try{const a=((await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results||[]).map(s=>({...s,role_name:Q(s.id,s.role_name)}));return e.json({success:!0,data:a})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/permissions/by-category",async e=>{try{const a=(await e.env.DB.prepare("SELECT * FROM permissions ORDER BY category, id").all()).results,s={};return a.forEach(n=>{s[n.category]||(s[n.category]=[]),s[n.category].push(n)}),e.json({success:!0,data:s})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/roles/:roleId/permissions",async e=>{try{const t=e.req.param("roleId"),a=await e.env.DB.prepare(`
       SELECT p.* FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       WHERE rp.role_id = ?
       ORDER BY p.category, p.id
-    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/users/:userId/permissions",async e=>{try{const t=e.req.param("userId"),a=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/users/:userId/permissions",async e=>{try{const t=e.req.param("userId"),a=await e.env.DB.prepare(`
       SELECT p.* FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       INNER JOIN users u ON u.role_id = rp.role_id
       WHERE u.id = ?
       ORDER BY p.category, p.id
-    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/roles/:roleId/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("roleId"),{permission_ids:s}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(a).run();for(const n of s)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(a,n).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
+    `).bind(t).all();return e.json({success:!0,data:a.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:roleId/permissions",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("roleId"),{permission_ids:s}=await e.req.json();await e.env.DB.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(a).run();for(const n of s)await e.env.DB.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)").bind(a,n).run();return e.json({success:!0,message:"تم تحديث صلاحيات الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/users/check-permission",async e=>{try{const{user_id:t,permission_key:a}=await e.req.json(),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as has_permission FROM permissions p
       INNER JOIN role_permissions rp ON p.id = rp.permission_id
       INNER JOIN users u ON u.role_id = rp.role_id
       WHERE u.id = ? AND p.permission_key = ?
-    `).bind(t,a).first();return e.json({success:!0,has_permission:s?.has_permission>0})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/roles",async e=>{try{const t=await e.env.DB.prepare(`
+    `).bind(t,a).first();return e.json({success:!0,has_permission:s?.has_permission>0})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/roles",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT r.*, 
              COUNT(rp.permission_id) as permissions_count
       FROM roles r
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       GROUP BY r.id
       ORDER BY r.id
-    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/roles",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const{role_name:a,description:s}=await e.req.json(),n=await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:t.results})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/roles",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const{role_name:a,description:s}=await e.req.json(),n=await e.env.DB.prepare(`
       INSERT INTO roles (role_name, description, created_at)
       VALUES (?, ?, datetime('now'))
-    `).bind(a,s).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_name:s,description:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a,s).run();return e.json({success:!0,message:"تم إضافة الدور بنجاح",role_id:n.meta.last_row_id})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/roles/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_name:s,description:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE roles 
       SET role_name = ?, description = ?
       WHERE id = ?
-    `).bind(s,n,a).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.delete("/api/roles/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),s=await e.env.DB.prepare(`
+    `).bind(s,n,a).run(),e.json({success:!0,message:"تم تحديث الدور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.delete("/api/roles/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),s=await e.env.DB.prepare(`
       SELECT COUNT(*) as count FROM users WHERE role_id = ?
     `).bind(a).first();return s&&s.count>0?e.json({success:!1,error:"لا يمكن حذف هذا الدور لأنه مرتبط بمستخدمين"},400):(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(a).run(),await e.env.DB.prepare(`
       DELETE FROM roles WHERE id = ?
-    `).bind(a).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:n,role_id:r,is_active:l}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a).run(),e.json({success:!0,message:"تم حذف الدور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/users/:id",async e=>{try{const t=e.req.param("id"),{full_name:a,email:s,phone:n,role_id:r,is_active:l}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE users 
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
       WHERE id = ?
-    `).bind(a,s,n,r,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(ta));p.get("/calculator",e=>e.html(at));p.get("/calculator-old",e=>e.html(aa));p.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(a,s,n,r,l,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(oa));c.get("/calculator",e=>e.html(it));c.get("/calculator-old",e=>e.html(ia));c.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(at.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+  `).bind(t).first();return a?e.html(it.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
         // Tenant information for company-specific calculator
         window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
     `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
@@ -29179,7 +29948,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)});p.get("/login",e=>e.html(sa));p.get("/forgot-password",e=>e.html(na));p.get("/packages",e=>e.html(ra));p.get("/subscribe",e=>e.html(oa));p.get("/admin",e=>e.html(`
+    `)});c.get("/login",e=>e.html(la));c.get("/forgot-password",e=>e.html(da));c.get("/packages",e=>e.html(ca));c.get("/subscribe",e=>e.html(pa));c.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -29229,7 +29998,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
     </body>
     </html>
-  `));p.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const f=atob(n).split(":");r=f[1]!=="null"?parseInt(f[1]):null}let l="1=1";const i=[];r&&(l+=" AND f.tenant_id = ?",i.push(r)),t&&(l+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(l+=" AND DATE(f.created_at) <= ?",i.push(a));const o=`
+  `));c.get("/api/reports/statistics",async e=>{try{const t=e.req.query("from_date"),a=e.req.query("to_date"),n=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(n){const b=atob(n).split(":");r=b[1]!=="null"?parseInt(b[1]):null}let l="1=1";const i=[];r&&(l+=" AND f.tenant_id = ?",i.push(r)),t&&(l+=" AND DATE(f.created_at) >= ?",i.push(t)),a&&(l+=" AND DATE(f.created_at) <= ?",i.push(a));const o=`
       SELECT 
         COUNT(*) as total_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
@@ -29238,7 +30007,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         SUM(f.requested_amount) as total_amount
       FROM financing_requests f
       WHERE ${l}
-    `,d=await e.env.DB.prepare(o).bind(...i).first(),c=`
+    `,d=await e.env.DB.prepare(o).bind(...i).first(),p=`
       SELECT 
         c.full_name as customer_name,
         COUNT(f.id) as request_count,
@@ -29250,7 +30019,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       GROUP BY c.id
       ORDER BY request_count DESC, total_amount DESC
       LIMIT 10
-    `,{results:u}=await e.env.DB.prepare(c).bind(...i).all();return e.json({success:!0,data:{...d,top_customers:u}})}catch(t){return console.error("Reports API error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/reports/requests-followup",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("tenant_id");let s=a?parseInt(a):t.tenantId;t.roleId===1&&!s&&(s=null),console.log("📊 Requests followup report - User:",t.userId,"Role:",t.roleId,"Tenant:",s);let n=`
+    `,{results:u}=await e.env.DB.prepare(p).bind(...i).all();return e.json({success:!0,data:{...d,top_customers:u}})}catch(t){return console.error("Reports API error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/requests-followup",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("tenant_id");let s=a?parseInt(a):t.tenantId;t.roleId===1&&!s&&(s=null),console.log("📊 Requests followup report - User:",t.userId,"Role:",t.roleId,"Tenant:",s);let n=`
       SELECT 
         fr.id,
         fr.created_at,
@@ -29287,7 +30056,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-    `;s&&(n+=" WHERE c.tenant_id = ?"),n+=" ORDER BY fr.created_at DESC";const{results:r}=s?await e.env.DB.prepare(n).bind(s).all():await e.env.DB.prepare(n).all();return e.json({success:!0,data:r})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/reports/banks",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const n=`
+    `;s&&(n+=" WHERE c.tenant_id = ?"),n+=" ORDER BY fr.created_at DESC";const{results:r}=s?await e.env.DB.prepare(n).bind(s).all():await e.env.DB.prepare(n).all();return e.json({success:!0,data:r})}catch(t){return console.error("Requests follow-up report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/banks",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);let a="",s=[];t.roleId!==1&&(a="WHERE b.tenant_id = ?",s.push(t.tenantId));const n=`
       SELECT 
         b.id,
         b.bank_name,
@@ -29306,7 +30075,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       ${a}
       GROUP BY b.id, b.bank_name
       ORDER BY total_requests DESC
-    `,{results:r}=s.length>0?await e.env.DB.prepare(n).bind(...s).all():await e.env.DB.prepare(n).all(),l={total_banks:r.length,total_requests:r.reduce((i,o)=>i+(o.total_requests||0),0),overall_approval_rate:r.length>0?(r.reduce((i,o)=>i+(parseFloat(o.approval_rate)||0),0)/r.length).toFixed(2):"0.00",average_amount:r.length>0?(r.reduce((i,o)=>i+(parseFloat(o.average_amount)||0),0)/r.length).toFixed(2):"0.00"};return e.json({success:!0,banks:r,summary:l})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/reports/performance",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let n="",r=[];t.roleId!==1&&t.tenantId&&(n="WHERE c.tenant_id = ?",r.push(t.tenantId)),a&&s&&(n+=(n?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",r.push(a,s));const l=`
+    `,{results:r}=s.length>0?await e.env.DB.prepare(n).bind(...s).all():await e.env.DB.prepare(n).all(),l={total_banks:r.length,total_requests:r.reduce((i,o)=>i+(o.total_requests||0),0),overall_approval_rate:r.length>0?(r.reduce((i,o)=>i+(parseFloat(o.approval_rate)||0),0)/r.length).toFixed(2):"0.00",average_amount:r.length>0?(r.reduce((i,o)=>i+(parseFloat(o.average_amount)||0),0)/r.length).toFixed(2):"0.00"};return e.json({success:!0,banks:r,summary:l})}catch(t){return console.error("Banks report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/performance",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("start_date"),s=e.req.query("end_date");let n="",r=[];t.roleId!==1&&t.tenantId&&(n="WHERE c.tenant_id = ?",r.push(t.tenantId)),a&&s&&(n+=(n?" AND ":"WHERE ")+"fr.created_at BETWEEN ? AND ?",r.push(a,s));const l=`
       SELECT 
         COUNT(DISTINCT c.id) as total_customers,
         COUNT(DISTINCT CASE WHEN c.created_at >= date('now', '-30 days') THEN c.id END) as active_customers,
@@ -29346,7 +30115,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       HAVING requests_count > 0
       ORDER BY approved_count DESC
       LIMIT 10
-    `,{results:d}=r.length>0?await e.env.DB.prepare(o).bind(...r).all():await e.env.DB.prepare(o).all(),c=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:c,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:d})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/reports/workflow",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("customer_id"),s=e.req.query("start_date"),n=e.req.query("end_date"),r=["1=1"],l=[];t.roleId!==1&&t.tenantId&&(r.push("c.tenant_id = ?"),l.push(t.tenantId)),a&&(r.push("c.id = ?"),l.push(a)),s&&(r.push("DATE(fr.created_at) >= DATE(?)"),l.push(s)),n&&(r.push("DATE(fr.created_at) <= DATE(?)"),l.push(n));const i=r.join(" AND "),o=`
+    `,{results:d}=r.length>0?await e.env.DB.prepare(o).bind(...r).all():await e.env.DB.prepare(o).all(),p=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",u=i?.total_customers&&i?.total_requests?(i.total_requests/i.total_customers*100).toFixed(2):"0.00",m=i?.total_requests&&i.approved_requests+i.rejected_requests?((i.approved_requests+i.rejected_requests)/i.total_requests*100).toFixed(2):"0.00";return e.json({success:!0,...i,monthly_revenue:i?.total_revenue||0,conversion_rate:p,request_rate:u,completion_rate:m,avg_processing_time:"3",avg_response_time:"2",customer_lifecycle:"45",revenue_growth:"15",top_performers:d})}catch(t){return console.error("Performance report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/reports/workflow",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح بالوصول"},401);const a=e.req.query("customer_id"),s=e.req.query("start_date"),n=e.req.query("end_date"),r=["1=1"],l=[];t.roleId!==1&&t.tenantId&&(r.push("c.tenant_id = ?"),l.push(t.tenantId)),a&&(r.push("c.id = ?"),l.push(a)),s&&(r.push("DATE(fr.created_at) >= DATE(?)"),l.push(s)),n&&(r.push("DATE(fr.created_at) <= DATE(?)"),l.push(n));const i=r.join(" AND "),o=`
       SELECT
         COALESCE(ws.stage_name_ar, 'غير محدد') as name,
         COUNT(fr.id) as count
@@ -29380,7 +30149,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       WHERE duration_minutes IS NOT NULL AND duration_minutes >= 0
       GROUP BY stage
       ORDER BY duration DESC
-    `,c=`
+    `,p=`
       SELECT
         c.id as customer_id,
         c.full_name as customer_name,
@@ -29404,7 +30173,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       WHERE ${i}
       ORDER BY fr.created_at DESC
       LIMIT 500
-    `,{results:u}=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all(),{results:m}=l.length>0?await e.env.DB.prepare(d).bind(...l).all():await e.env.DB.prepare(d).all(),{results:f}=l.length>0?await e.env.DB.prepare(c).bind(...l).all():await e.env.DB.prepare(c).all(),g={approved:"مكتمل",rejected:"مرفوض",pending:"قيد المعالجة",under_review:"قيد المراجعة",reviewed:"تمت المراجعة",submitted:"مقدم"},b=v=>{const _=Number(v||0);if(!Number.isFinite(_)||_<=0)return"0 دقيقة";const R=Math.floor(_/60),B=Math.round(_%60);return R<=0?`${B} دقيقة`:`${R} ساعة ${B} دقيقة`},y=(f||[]).map(v=>({customerId:v.customer_id,customerName:v.customer_name||"-",requestId:v.request_id,amount:Number(v.requested_amount||0),stage:v.current_stage||"غير محدد",transitions:Number(v.transitions||0),duration:b(v.total_duration_minutes),status:g[v.status]||v.status||"غير محدد"})),h=(m||[]).map(v=>({stage:v.stage||"غير محدد",duration:Number(v.duration||0)})),w=(u||[]).map(v=>({name:v.name||"غير محدد",count:Number(v.count||0)}));return e.json({success:!0,data:{stages:w,durations:h,details:y}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});p.get("/admin/panel",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.html(`
+    `,{results:u}=l.length>0?await e.env.DB.prepare(o).bind(...l).all():await e.env.DB.prepare(o).all(),{results:m}=l.length>0?await e.env.DB.prepare(d).bind(...l).all():await e.env.DB.prepare(d).all(),{results:b}=l.length>0?await e.env.DB.prepare(p).bind(...l).all():await e.env.DB.prepare(p).all(),g={approved:"مكتمل",rejected:"مرفوض",pending:"قيد المعالجة",under_review:"قيد المراجعة",reviewed:"تمت المراجعة",submitted:"مقدم"},x=w=>{const _=Number(w||0);if(!Number.isFinite(_)||_<=0)return"0 دقيقة";const I=Math.floor(_/60),k=Math.round(_%60);return I<=0?`${k} دقيقة`:`${I} ساعة ${k} دقيقة`},h=(b||[]).map(w=>({customerId:w.customer_id,customerName:w.customer_name||"-",requestId:w.request_id,amount:Number(w.requested_amount||0),stage:w.current_stage||"غير محدد",transitions:Number(w.transitions||0),duration:x(w.total_duration_minutes),status:g[w.status]||w.status||"غير محدد"})),f=(m||[]).map(w=>({stage:w.stage||"غير محدد",duration:Number(w.duration||0)})),v=(u||[]).map(w=>({name:w.name||"غير محدد",count:Number(w.count||0)}));return e.json({success:!0,data:{stages:v,durations:f,details:h}})}catch(t){return console.error("Workflow report error:",t),e.json({success:!1,error:t.message},500)}});c.get("/admin/panel",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -29452,11 +30221,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
-  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let r=st;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(o,"")}r=r.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return r=r.replace("<!--__PANEL_USER_BOOT__-->",`<script>
-      window.USER_DATA = ${we({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:J(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
-      window.USER_PERMISSIONS = ${we(n.map(l=>l.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${we(n)};
-      window.USER_ROLE_ID = ${k(t.roleId)??4};
+  `).bind(t.roleId).all(),n=Array.isArray(s.results)?s.results:[];let r=lt;if(t.roleId!==1){const l=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of l){const o=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");r=r.replace(o,"")}r=r.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return r=r.replace("<!--__PANEL_USER_BOOT__-->",`<script>
+      window.USER_DATA = ${Ie({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:Q(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
+      window.USER_PERMISSIONS = ${Ie(n.map(l=>l.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${Ie(n)};
+      window.USER_ROLE_ID = ${E(t.roleId)??4};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
     <\/script>`),e.html(r)}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(s){return`Failed to stringify: ${s}`}})()};return console.error("❌ [ADMIN_PANEL] ERROR DUMP:",a),e.html(`
@@ -29475,7 +30244,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
+    `)}});c.get("/admin/reports/requests-followup",async e=>{try{const t=e.req.query("tenant_id");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -29526,7 +30295,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             width: max-content;
           }
           
-          ${F()}
+          ${$()}
           
           /* Scroll Buttons for Tables */
           .scroll-btn {
@@ -30026,7 +30795,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>Error: "+t.message+"</h1>",500)}});p.get("/admin/tenants/add",e=>e.html(`
+    `)}catch(t){return e.html("<h1>Error: "+t.message+"</h1>",500)}});c.get("/admin/tenants/add",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -30224,7 +30993,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
     </body>
     </html>
-  `));p.get("/admin/tenants/:tenantRef/edit",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
+  `));c.get("/admin/tenants/:tenantRef/edit",async e=>{try{const t=e.req.param("tenantRef"),a=await _e(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(a).first();return s?e.html(`
       <!DOCTYPE html>
@@ -30413,7 +31182,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           <\/script>
       </body>
       </html>
-    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await he(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
+    `):e.html("<h1>الشركة غير موجودة</h1>")}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants/:tenantRef",async e=>{try{const t=e.req.param("tenantRef"),a=await _e(e,t);if(!a)return e.html("<h1>الشركة غير موجودة</h1>");const s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = ?
     `).bind(a).first();if(!s)return e.html("<h1>الشركة غير موجودة</h1>");const n=await e.env.DB.prepare(`
       SELECT 
@@ -30589,9 +31358,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/tenants",e=>e.html(ia));p.get("/admin/tenant-calculators",e=>e.html(la));p.get("/admin/saas-settings",e=>e.html(nt));p.get("/admin/settings",e=>e.html(nt));p.get("/admin/reports",e=>e.html(da));p.get("/admin/reports/customers",e=>e.html(ca));p.get("/admin/reports/requests",e=>e.html(pa));p.get("/admin/reports/financial",e=>e.html(ua));p.get("/admin/reports/banks",e=>e.html(ya));p.get("/admin/reports/performance",e=>e.html(va));p.get("/admin/reports/clicks",e=>e.html(wa));p.get("/admin/reports/workflow",e=>e.html(_a));p.get("/admin/reports/employee-performance",e=>e.html(ka));p.get("/admin/payments",e=>e.html(ga));p.get("/admin/banks",e=>e.html(fa));p.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/tenants",e=>e.html(ua));c.get("/admin/tenant-calculators",e=>e.html(ma));c.get("/admin/saas-settings",e=>e.html(dt));c.get("/admin/settings",e=>e.html(dt));c.get("/admin/reports",e=>e.html(ga));c.get("/admin/reports/customers",e=>e.html(fa));c.get("/admin/reports/requests",e=>e.html(ba));c.get("/admin/reports/financial",e=>e.html(xa));c.get("/admin/reports/banks",e=>e.html(ka));c.get("/admin/reports/performance",e=>e.html(Ia));c.get("/admin/reports/clicks",e=>e.html(Sa));c.get("/admin/reports/workflow",e=>e.html(Ta));c.get("/admin/reports/employee-performance",e=>e.html(Da));c.get("/admin/payments",e=>e.html(ya));c.get("/admin/banks",e=>e.html(va));c.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(st.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(lt.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -30613,7 +31382,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)});p.get("/test",e=>e.html(`
+    `)});c.get("/test",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -30647,7 +31416,22 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
     </body>
     </html>
-  `));p.get("/admin/dashboard",async e=>{try{const t=await x(e);let a="",s="",n="",r=[];t.roleId===1?(a="",s="",n=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,n=`AND c.tenant_id = ${t.tenantId}`,r.push(t.tenantId)):t.roleId===4&&t.tenantId?(a=`WHERE tenant_id = ${t.tenantId}`,s=`WHERE tenant_id = ${t.tenantId}`,n=`AND c.tenant_id = ${t.tenantId}`,r.push(t.tenantId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",n="AND 1 = 0");const l=await e.env.DB.prepare(`
+  `));c.get("/admin/dashboard",async e=>{try{const t=await y(e);let a="",s="",n="",r=[];t.roleId===1?(a="",s="",n=""):t.roleId===2||t.roleId===3?t.tenantId&&(a=`WHERE tenant_id = ${t.tenantId}`,s=a,n=`AND c.tenant_id = ${t.tenantId}`,r.push(t.tenantId)):t.roleId===4?t.tenantId?(a=`WHERE tenant_id = ${t.tenantId}`,s=`WHERE tenant_id = ${t.tenantId}`,n=`AND c.tenant_id = ${t.tenantId}`,r.push(t.tenantId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",n="AND 1 = 0"):E(t.roleId)===5&&t.tenantId&&t.userId?(a=`WHERE tenant_id = ${t.tenantId} AND EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ${t.userId}
+        )`,s=`WHERE tenant_id = ${t.tenantId} AND (
+          assigned_bank_agent_id = ${t.userId}
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = financing_requests.customer_id AND ca.employee_id = ${t.userId}
+          )
+        )`,n=`AND c.tenant_id = ${t.tenantId} AND (
+          fr.assigned_bank_agent_id = ${t.userId}
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = fr.customer_id AND ca.employee_id = ${t.userId}
+          )
+        )`,r.push(t.tenantId)):(a="WHERE 1 = 0",s="WHERE 1 = 0",n="AND 1 = 0");const l=await e.env.DB.prepare(`
       SELECT 
         (SELECT COUNT(*) FROM customers ${a}) as total_customers,
         (SELECT COUNT(*) FROM financing_requests ${s}) as total_requests,
@@ -30689,7 +31473,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM financing_requests
       ${s}
       GROUP BY status
-    `).all(),c=i.results||[],u=o.results||[],m=d.results||[];return e.html(`
+    `).all(),p=i.results||[],u=o.results||[],m=d.results||[];return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -30705,7 +31489,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             .print-full-width { width: 100%; }
           }
           
-          ${F()}
+          ${$()}
         </style>
       </head>
       <body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
@@ -30904,13 +31688,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     </tr>
                   </thead>
                   <tbody>
-                    ${u.map((f,g)=>`
+                    ${u.map((b,g)=>`
                       <tr class="border-t hover:bg-gray-50">
                         <td class="px-4 py-3">
                           <span class="text-2xl">${g===0?"🥇":g===1?"🥈":g===2?"🥉":(g+1).toString()}</span>
                         </td>
-                        <td class="px-4 py-3 font-bold text-gray-800">${f.bank_name}</td>
-                        <td class="px-4 py-3 text-blue-600 font-bold">${f.request_count}</td>
+                        <td class="px-4 py-3 font-bold text-gray-800">${b.bank_name}</td>
+                        <td class="px-4 py-3 text-blue-600 font-bold">${b.request_count}</td>
                       </tr>
                       `).join("")}
                   </tbody>
@@ -30935,14 +31719,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               تفاصيل حالات الطلبات
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              ${m.map(f=>{const b={pending:{color:"yellow",icon:"clock",label:"قيد الانتظار"},under_review:{color:"blue",icon:"search",label:"قيد المراجعة"},approved:{color:"green",icon:"check-circle",label:"موافق"},rejected:{color:"red",icon:"times-circle",label:"مرفوض"}}[f.status]||{color:"gray",icon:"question",label:f.status};return`
-                  <div class="bg-${b.color}-50 border-2 border-${b.color}-200 rounded-lg p-4">
+              ${m.map(b=>{const x={pending:{color:"yellow",icon:"clock",label:"قيد الانتظار"},under_review:{color:"blue",icon:"search",label:"قيد المراجعة"},approved:{color:"green",icon:"check-circle",label:"موافق"},rejected:{color:"red",icon:"times-circle",label:"مرفوض"}}[b.status]||{color:"gray",icon:"question",label:b.status};return`
+                  <div class="bg-${x.color}-50 border-2 border-${x.color}-200 rounded-lg p-4">
                     <div class="flex items-center justify-between mb-2">
-                      <i class="fas fa-${b.icon} text-2xl text-${b.color}-600"></i>
-                      <span class="text-3xl font-bold text-${b.color}-600">${f.count}</span>
+                      <i class="fas fa-${x.icon} text-2xl text-${x.color}-600"></i>
+                      <span class="text-3xl font-bold text-${x.color}-600">${b.count}</span>
                     </div>
-                    <p class="text-sm text-gray-700 font-bold">${b.label}</p>
-                    <p class="text-xs text-gray-600">${f.percentage}% من الإجمالي</p>
+                    <p class="text-sm text-gray-700 font-bold">${x.label}</p>
+                    <p class="text-xs text-gray-600">${b.percentage}% من الإجمالي</p>
                   </div>
                 `}).join("")}
             </div>
@@ -30953,7 +31737,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <script>
           // Monthly Trend Chart
           const monthlyCtx = document.getElementById('monthlyTrendChart').getContext('2d');
-          const monthlyData = ${JSON.stringify(c)};
+          const monthlyData = ${JSON.stringify(p)};
           
           new Chart(monthlyCtx, {
             type: 'line',
@@ -31079,7 +31863,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/archived",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");let a="SELECT * FROM customers WHERE is_archived = 1";const s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" AND tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.tenantId&&t.userId?(a+=` AND tenant_id = ? AND EXISTS (
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/archived",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.redirect("/login");let a="SELECT * FROM customers WHERE is_archived = 1";const s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" AND tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.tenantId&&t.userId?(a+=` AND tenant_id = ? AND EXISTS (
           SELECT 1 FROM customer_assignments ca
           WHERE ca.customer_id = customers.id AND ca.employee_id = ?
         )`,s.push(t.tenantId,t.userId)):a+=" AND 1 = 0"),a+=" ORDER BY archived_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
@@ -31217,7 +32001,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/add",async e=>{const t=await x(e),s=String(e.req.query("full_name")??e.req.query("name")??"").trim().slice(0,400),n=ie(e.req.query("phone")),r=await Te(e.env.DB,t.tenantId);return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/add",async e=>{const t=await y(e),s=String(e.req.query("full_name")??e.req.query("name")??"").trim().slice(0,400),n=ue(e.req.query("phone")),r=String(e.req.query("enrollment_source")??"").trim(),l=r==="affiliate"||r==="calculator"?r:"",i=String(e.req.query("affiliate_label")??"").trim().slice(0,200),o=await Ce(e.env.DB,t.tenantId);return e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -31255,7 +32039,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 <input type="text" name="full_name" required 
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="مثال: أحمد محمد السعيد"
-                       value="${U(s)}">
+                       value="${j(s)}">
               </div>
               
               <div>
@@ -31268,7 +32052,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <input type="tel" name="phone" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl"
                          class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
                          placeholder="5xxxxxxxx"
-                         value="${U(n)}"
+                         value="${j(n)}"
                          oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
                          oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
                 </div>
@@ -31276,6 +32060,24 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               </div>
             </div>
             
+            ${l?`
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-tag text-amber-600 ml-1"></i>
+                  مصدر التسجيل
+                </label>
+                <input type="text"
+                       value="${l==="calculator"?"الحاسبة":j(i||"affiliate")}"
+                       class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800"
+                       disabled>
+                <input type="hidden" name="enrollment_source" value="${j(l)}">
+                <input type="hidden" name="enrollment_source_label" value="${j(i)}">
+                <p class="text-xs text-gray-500 mt-1">هذا الحقل تلقائي ولا يمكن تعديله.</p>
+              </div>
+            </div>
+            `:""}
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -31837,51 +32639,107 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
 
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-              <h2 class="text-xl font-bold text-gray-700 mb-4">
-                <i class="fas fa-paperclip ml-2"></i>
-                المرفقات
-              </h2>
-              <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-              <input type="hidden" name="id_attachment_url" id="customer_id_attachment_url">
-              <input type="hidden" name="bank_statement_attachment_url" id="customer_bank_statement_attachment_url">
-              <input type="hidden" name="salary_attachment_url" id="customer_salary_attachment_url">
-              <input type="hidden" name="additional_attachment_url" id="customer_additional_attachment_url">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-id-card ml-1"></i> صورة الهوية
-                  </label>
-                  <input type="file" id="customer_id_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_id_attachment_preview" class="mt-2"></div>
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <h2 class="text-xl font-bold text-gray-700">
+                  <i class="fas fa-paperclip ml-2"></i>
+                  المرفقات
+                </h2>
+                <button type="button" id="openCustomerAttachmentsModal"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition">
+                  <i class="fas fa-paperclip ml-1"></i>
+                  إدارة المرفقات
+                </button>
+              </div>
+              <p class="text-sm text-gray-500 mt-2">يتم رفع المرفقات من خلال نافذة منبثقة داخل النموذج.</p>
+
+              <!-- hidden URLs (submitted with form) -->
+              <input type="hidden" name="identity_attachment_url" id="customer_identity_attachment_url">
+              <input type="hidden" name="signature_attachment_url" id="customer_signature_attachment_url">
+              <input type="hidden" name="salary_profile_attachment_url" id="customer_salary_profile_attachment_url">
+              <input type="hidden" name="gosi_attachment_url" id="customer_gosi_attachment_url">
+              <input type="hidden" name="tax_exemption_attachment_url" id="customer_tax_exemption_attachment_url">
+              <input type="hidden" name="additional_1_attachment_url" id="customer_additional_1_attachment_url">
+              <input type="hidden" name="additional_2_attachment_url" id="customer_additional_2_attachment_url">
+              <input type="hidden" name="additional_3_attachment_url" id="customer_additional_3_attachment_url">
+            </div>
+
+            <!-- Attachments Modal -->
+            <div id="customerAttachmentsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+              <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-paperclip ml-2 text-blue-600"></i>
+                    رفع المرفقات (اختياري)
+                  </h3>
+                  <button type="button" id="closeCustomerAttachmentsModal" class="text-gray-500 hover:text-gray-800">
+                    <i class="fas fa-times text-xl"></i>
+                  </button>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
-                  </label>
-                  <input type="file" id="customer_bank_statement_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_bank_statement_attachment_preview" class="mt-2"></div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-id-card ml-1"></i> ملف الهوية</label>
+                    <input type="file" id="customer_identity_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_identity_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-signature ml-1"></i> ملف السمة</label>
+                    <input type="file" id="customer_signature_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_signature_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب</label>
+                    <input type="file" id="customer_salary_profile_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_salary_profile_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية</label>
+                    <input type="file" id="customer_gosi_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_gosi_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-certificate ml-1"></i> شهادة الإعفاء الضريبي</label>
+                    <input type="file" id="customer_tax_exemption_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_tax_exemption_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 1</label>
+                    <input type="file" id="customer_additional_1_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_additional_1_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 2</label>
+                    <input type="file" id="customer_additional_2_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_additional_2_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 3</label>
+                    <input type="file" id="customer_additional_3_attachment" accept="image/*,application/pdf"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="customer_additional_3_attachment_preview" class="mt-2"></div>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-money-check ml-1"></i> تعريف الراتب
-                  </label>
-                  <input type="file" id="customer_salary_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_salary_attachment_preview" class="mt-2"></div>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
-                  </label>
-                  <input type="file" id="customer_additional_attachment" accept="image/*,application/pdf"
-                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                  <div id="customer_additional_attachment_preview" class="mt-2"></div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                  <button type="button" id="doneCustomerAttachmentsModal"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
+                    تم
+                  </button>
                 </div>
               </div>
             </div>
@@ -31954,30 +32812,65 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         (function () {
           const form = document.getElementById('add-customer-form');
           if (!form) return;
+          // Attachments modal controls (upload inputs live inside the modal; URLs are hidden fields in the main form)
+          (function initCustomerAttachmentsModal() {
+            var modal = document.getElementById('customerAttachmentsModal');
+            var openBtn = document.getElementById('openCustomerAttachmentsModal');
+            var closeBtn = document.getElementById('closeCustomerAttachmentsModal');
+            var doneBtn = document.getElementById('doneCustomerAttachmentsModal');
+            if (!modal || !openBtn) return;
+            function open() { modal.classList.remove('hidden'); }
+            function close() { modal.classList.add('hidden'); }
+            openBtn.addEventListener('click', open);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            if (doneBtn) doneBtn.addEventListener('click', close);
+            modal.addEventListener('click', function (e) {
+              if (e && e.target === modal) close();
+            });
+            document.addEventListener('keydown', function (e) {
+              if (e && e.key === 'Escape') close();
+            });
+          })();
           var messageEl = document.getElementById('customer-create-message');
           var attachmentFiles = {
-            id: null,
-            bank_statement: null,
-            salary: null,
-            additional: null
+            identity: null,
+            signature: null,
+            salary_profile: null,
+            gosi: null,
+            tax_exemption: null,
+            additional_1: null,
+            additional_2: null,
+            additional_3: null
           };
           var attachmentInputs = {
-            id: document.getElementById('customer_id_attachment'),
-            bank_statement: document.getElementById('customer_bank_statement_attachment'),
-            salary: document.getElementById('customer_salary_attachment'),
-            additional: document.getElementById('customer_additional_attachment')
+            identity: document.getElementById('customer_identity_attachment'),
+            signature: document.getElementById('customer_signature_attachment'),
+            salary_profile: document.getElementById('customer_salary_profile_attachment'),
+            gosi: document.getElementById('customer_gosi_attachment'),
+            tax_exemption: document.getElementById('customer_tax_exemption_attachment'),
+            additional_1: document.getElementById('customer_additional_1_attachment'),
+            additional_2: document.getElementById('customer_additional_2_attachment'),
+            additional_3: document.getElementById('customer_additional_3_attachment')
           };
           var attachmentPreviewIds = {
-            id: 'customer_id_attachment_preview',
-            bank_statement: 'customer_bank_statement_attachment_preview',
-            salary: 'customer_salary_attachment_preview',
-            additional: 'customer_additional_attachment_preview'
+            identity: 'customer_identity_attachment_preview',
+            signature: 'customer_signature_attachment_preview',
+            salary_profile: 'customer_salary_profile_attachment_preview',
+            gosi: 'customer_gosi_attachment_preview',
+            tax_exemption: 'customer_tax_exemption_attachment_preview',
+            additional_1: 'customer_additional_1_attachment_preview',
+            additional_2: 'customer_additional_2_attachment_preview',
+            additional_3: 'customer_additional_3_attachment_preview'
           };
           var attachmentHiddenIds = {
-            id: 'customer_id_attachment_url',
-            bank_statement: 'customer_bank_statement_attachment_url',
-            salary: 'customer_salary_attachment_url',
-            additional: 'customer_additional_attachment_url'
+            identity: 'customer_identity_attachment_url',
+            signature: 'customer_signature_attachment_url',
+            salary_profile: 'customer_salary_profile_attachment_url',
+            gosi: 'customer_gosi_attachment_url',
+            tax_exemption: 'customer_tax_exemption_attachment_url',
+            additional_1: 'customer_additional_1_attachment_url',
+            additional_2: 'customer_additional_2_attachment_url',
+            additional_3: 'customer_additional_3_attachment_url'
           };
 
           function setMessage(type, text) {
@@ -32085,7 +32978,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             var addBtn = document.getElementById('add-obligation-row');
             var hidden = document.getElementById('obligations_json');
             if (!tbody || !addBtn || !hidden) return;
-            var obligationTypeNames = ${JSON.stringify(r)};
+            var obligationTypeNames = ${JSON.stringify(o)};
             function esc(s) {
               return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
             }
@@ -32173,10 +33066,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
             try {
               var uploadOrder = [
-                { key: 'id', label: 'صورة الهوية' },
-                { key: 'bank_statement', label: 'كشف الحساب' },
-                { key: 'salary', label: 'تعريف الراتب' },
-                { key: 'additional', label: 'المرفقات الإضافية' }
+                { key: 'identity', label: 'ملف الهوية' },
+                { key: 'signature', label: 'ملف السمة' },
+                { key: 'salary_profile', label: 'ملف تعريف الراتب' },
+                { key: 'gosi', label: 'ملف التأمينات الاجتماعية' },
+                { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
+                { key: 'additional_1', label: 'مستند إضافي 1' },
+                { key: 'additional_2', label: 'مستند إضافي 2' },
+                { key: 'additional_3', label: 'مستند إضافي 3' }
               ];
               for (var i = 0; i < uploadOrder.length; i++) {
                 var item = uploadOrder[i];
@@ -32235,7 +33132,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `)});p.get("/admin/customer-assignment",async e=>{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(!ee(t.roleId))return e.html("<h1>خطأ: ليس لديك صلاحية لإدارة توزيع العملاء</h1>",403);const a=t.roleId===1,s=t.roleId===1||t.roleId===2,n=t.roleId===1||t.roleId===2||t.roleId===3,r=q(e.req.query("tenant_id"))??null,l=a?r??1:t.tenantId??1,i=await e.env.DB.prepare(`
+  `)});c.get("/admin/customer-assignment",async e=>{const t=await y(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(!ne(t.roleId))return e.html("<h1>خطأ: ليس لديك صلاحية لإدارة توزيع العملاء</h1>",403);const a=t.roleId===1,s=t.roleId===1||t.roleId===2,n=t.roleId===1||t.roleId===2||t.roleId===3,r=q(e.req.query("tenant_id"))??null,l=a?r??1:t.tenantId??1,i=await e.env.DB.prepare(`
     SELECT id, username, full_name, email
     FROM users 
     WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
@@ -32262,7 +33159,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     WHERE u.role_id IN (3, 4, 13, 14) AND u.tenant_id = ?
     GROUP BY u.id
     ORDER BY customer_count DESC
-  `).bind(l,l).all(),c=`
+  `).bind(l,l).all(),p=`
     <!DOCTYPE html>
     <html dir="rtl" lang="ar">
     <head>
@@ -32289,7 +33186,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         .assigned { background: #d1fae5; color: #065f46; }
         .unassigned { background: #fee2e2; color: #991b1b; }
         
-        ${F()}
+        ${$()}
       </style>
     </head>
     <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
@@ -32344,8 +33241,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               <span>التقارير</span>
             </a>
             <a href="/admin/follow-ups" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
-              <i class="fas fa-address-card text-fuchsia-600 group-hover:scale-110 transition-transform"></i>
-              <span>متابعة التواصل</span>
+              <i class="fas fa-bullhorn text-amber-700 group-hover:scale-110 transition-transform"></i>
+              <span>التسويق</span>
             </a>
           </div>
 
@@ -32481,7 +33378,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button onclick="autoDistribute()" class="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-6 py-4 rounded-lg transition-all shadow-md">
               <i class="fas fa-random ml-2"></i>
-              توزيع تلقائي متساوي
+              تعيين تلقائي عادل
             </button>
             <button onclick="clearAllAssignments()" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-4 rounded-lg transition-all shadow-md">
               <i class="fas fa-trash ml-2"></i>
@@ -32538,7 +33435,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                       </td>
                       <td class="px-4 py-3">#${u.id}</td>
                       <td class="px-4 py-3 font-semibold">${u.full_name||"غير محدد"}</td>
-                      <td class="px-4 py-3">${ie(u.phone)||"غير محدد"}</td>
+                      <td class="px-4 py-3">${ue(u.phone)||"غير محدد"}</td>
                       <td class="px-4 py-3">${u.email||"غير محدد"}</td>
                       <td class="px-4 py-3">
                         ${u.assigned_employee_name?`<span class="employee-badge assigned">${u.assigned_employee_name}</span>`:'<span class="employee-badge unassigned">غير مخصص</span>'}
@@ -32767,9 +33664,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
         }
 
-        // Auto distribute customers equally
+        // Auto-assign unassigned customers (fair round-robin among role-4 staff; cursor independent of manual assignments)
         async function autoDistribute() {
-          if (!confirm('سيتم توزيع العملاء بالتساوي على جميع الموظفين. هل تريد المتابعة؟')) return;
+          if (!confirm('سيتم تخصيص العملاء غير المخصصين لموظفي دور الموظف بالتناوب العادل (حسب آخر تعيين تلقائي). المتابعة؟')) return;
           
           try {
             // Get tenant_id from URL parameter
@@ -32779,12 +33676,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             const response = await fetch('/api/customer-assignment/auto-distribute', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tenant_id: tenantId })
+              body: JSON.stringify({ tenant_id: Number(tenantId) || undefined })
             });
             
             const data = await response.json();
             if (data.success) {
-              alert(\`تم توزيع \${data.assigned_count} عميل على \${data.employee_count} موظف!\`);
+              const n = typeof data.assigned_count === 'number' ? data.assigned_count : 0;
+              const ec = typeof data.employee_count === 'number' ? data.employee_count : 0;
+              alert(n > 0 ? ('تم تخصيص ' + n + ' عميلاً على ' + ec + ' موظفاً في الدور.') : (data.message || 'لا يوجد عملاء غير مخصصين.'));
               location.reload();
             } else {
               alert('حدث خطأ: ' + (data.error || 'خطأ غير معروف'));
@@ -32896,14 +33795,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `;return e.html(c)});p.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json(),n=await x(e);if(!n.userId||!n.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(n.roleId))return e.json({success:!1,error:"غير مصرح"},403);const r=n.roleId===1,l=r?q(e.req.query("tenant_id"))??n.tenantId??1:n.tenantId??1;if(!a){const u=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();return u?!r&&u.tenant_id!==l?e.json({success:!1,error:"غير مصرح"},403):(await e.env.DB.prepare(`
+  `;return e.html(p)});c.post("/api/customer-assignment",async e=>{try{const{customer_id:t,employee_id:a,notes:s}=await e.req.json(),n=await y(e);if(!n.userId||!n.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ne(n.roleId))return e.json({success:!1,error:"غير مصرح"},403);const r=n.roleId===1,l=r?q(e.req.query("tenant_id"))??n.tenantId??1:n.tenantId??1;if(!a){const u=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();return u?!r&&u.tenant_id!==l?e.json({success:!1,error:"غير مصرح"},403):(await e.env.DB.prepare(`
         DELETE FROM customer_assignments WHERE customer_id = ?
-      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"})):e.json({success:!1,error:"العميل غير موجود"},404)}const i=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!i)return e.json({success:!1,error:"الموظف غير موجود"},404);const o=k(i.role_id);if(o!==3&&o!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!r&&i.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const d=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();if(!d)return e.json({success:!1,error:"العميل غير موجود"},404);if(!r&&d.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const c=await e.env.DB.prepare(`
+      `).bind(t).run(),e.json({success:!0,message:"تم إلغاء التخصيص"})):e.json({success:!1,error:"العميل غير موجود"},404)}const i=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!i)return e.json({success:!1,error:"الموظف غير موجود"},404);const o=E(i.role_id);if(o!==3&&o!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!r&&i.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const d=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(t).first();if(!d)return e.json({success:!1,error:"العميل غير موجود"},404);if(!r&&d.tenant_id!==l)return e.json({success:!1,error:"غير مصرح"},403);const p=await e.env.DB.prepare(`
       SELECT * FROM customer_assignments WHERE customer_id = ?
-    `).bind(t).first();return c?(await e.env.DB.prepare(`
+    `).bind(t).first();return p?(await e.env.DB.prepare(`
         INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
         VALUES (?, ?, ?, 1, ?)
-      `).bind(t,c.employee_id,a,s||"").run(),await e.env.DB.prepare(`
+      `).bind(t,p.employee_id,a,s||"").run(),await e.env.DB.prepare(`
         UPDATE customer_assignments 
         SET employee_id = ?, assigned_by = 1, assigned_at = datetime('now'), notes = ?
         WHERE customer_id = ?
@@ -32913,22 +33812,39 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       `).bind(t,a,s||"").run(),await e.env.DB.prepare(`
         INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
         VALUES (?, NULL, ?, 1, ?)
-      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/auto-distribute",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=t.roleId===1,s=await e.req.json().catch(()=>({})),n=q(s?.tenant_id?.toString?.())??q(e.req.query("tenant_id"))??null,r=a?n??1:t.tenantId??1,l=await e.env.DB.prepare(`
-      SELECT id FROM users 
-      WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
-      ORDER BY id
-    `).bind(r).all();if(l.results.length===0)return e.json({success:!1,error:"لا يوجد موظفين في هذه الشركة"});const i=await e.env.DB.prepare(`
-      SELECT c.id 
+      `).bind(t,a,s||"").run()),e.json({success:!0,message:"تم التخصيص بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/auto-distribute",async e=>{try{let t=function(f){if(f==null)return b[0];const v=b.indexOf(f);return v===-1?b[0]:b[(v+1)%b.length]};const a=await y(e);if(!a.userId||!a.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ne(a.roleId))return e.json({success:!1,error:"غير مصرح"},403);const s=a.roleId===1,n=await e.req.json().catch(()=>({})),r=q(String(n?.tenant_id??""))??q(e.req.query("tenant_id"))??null,l=s?r:a.tenantId;if(l==null||l<=0)return e.json({success:!1,error:"تعذر تحديد الشركة"},400);if(!s&&a.tenantId!==l)return e.json({success:!1,error:"غير مصرح"},403);const{results:i}=await e.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      ORDER BY id ASC
+    `).bind(l).all(),o=i||[];if(!o.length)return e.json({success:!1,error:"لا يوجد موظفون نشطون بدور الموظف في هذه الشركة"},400);let p=(await e.env.DB.prepare(`
+      SELECT last_auto_assigned_user_id
+      FROM tenant_customer_auto_assign_state
+      WHERE tenant_id = ?
+      LIMIT 1
+    `).bind(l).first())?.last_auto_assigned_user_id??null;const{results:u}=await e.env.DB.prepare(`
+      SELECT c.id
       FROM customers c
-      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      WHERE ca.customer_id IS NULL AND c.tenant_id = ?
-      ORDER BY c.id
-    `).bind(r).all();let o=0;const d=l.results.length;for(let c=0;c<i.results.length;c++){const u=i.results[c],m=l.results[c%d];await e.env.DB.prepare(`
+      LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
+      WHERE c.tenant_id = ?
+        AND ca.customer_id IS NULL
+        AND (c.is_archived = 0 OR c.is_archived IS NULL)
+      ORDER BY c.id ASC
+      LIMIT 500
+    `).bind(l).all(),m=u||[];if(!m.length)return e.json({success:!0,assigned_count:0,employee_count:o.length,message:"لا يوجد عملاء غير مخصصين"});const b=o.map(f=>f.id),g=a.userId??1;let x=0;const h="تعيين تلقائي عادل";for(const f of m){const v=t(p);(await e.env.DB.prepare(`
         INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-        VALUES (?, ?, 1, 'توزيع تلقائي')
-      `).bind(u.id,m.id).run(),o++}return e.json({success:!0,assigned_count:o,employee_count:d})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/clear-all",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=await e.env.DB.prepare(`
+        VALUES (?, ?, ?, ?)
+      `).bind(f.id,v,g,h).run()).meta.changes>0&&(await e.env.DB.prepare(`
+          INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+          VALUES (?, NULL, ?, ?, ?)
+        `).bind(f.id,v,g,h).run(),p=v,x+=1)}return x>0&&await e.env.DB.prepare(`
+        INSERT INTO tenant_customer_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tenant_id) DO UPDATE SET
+          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(l,p).run(),e.json({success:!0,assigned_count:x,employee_count:o.length})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/clear-all",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ne(t.roleId))return e.json({success:!1,error:"غير مصرح"},403);const a=await e.env.DB.prepare(`
       DELETE FROM customer_assignments
-    `).run();return e.json({success:!0,cleared_count:a.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json(),s=await x(e);if(!s.userId||!s.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ee(s.roleId))return e.json({success:!1,error:"غير مصرح"},403);const n=s.roleId===1,r=n?q(e.req.query("tenant_id"))??s.tenantId??1:s.tenantId??1,l=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!l)return e.json({success:!1,error:"الموظف غير موجود"},404);const i=k(l.role_id);if(i!==3&&i!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!n&&l.tenant_id!==r)return e.json({success:!1,error:"غير مصرح"},403);let o=0;for(const d of t){const c=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(d).first();if(!c||!n&&c.tenant_id!==r)continue;await e.env.DB.prepare(`
+    `).run();return e.json({success:!0,cleared_count:a.meta.changes})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/customer-assignment/bulk",async e=>{try{const{customer_ids:t,employee_id:a}=await e.req.json(),s=await y(e);if(!s.userId||!s.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(!ne(s.roleId))return e.json({success:!1,error:"غير مصرح"},403);const n=s.roleId===1,r=n?q(e.req.query("tenant_id"))??s.tenantId??1:s.tenantId??1,l=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(a).first();if(!l)return e.json({success:!1,error:"الموظف غير موجود"},404);const i=E(l.role_id);if(i!==3&&i!==4)return e.json({success:!1,error:"المستخدم المحدد ليس موظفًا"},400);if(!n&&l.tenant_id!==r)return e.json({success:!1,error:"غير مصرح"},403);let o=0;for(const d of t){const p=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(d).first();if(!p||!n&&p.tenant_id!==r)continue;await e.env.DB.prepare(`
         SELECT * FROM customer_assignments WHERE customer_id = ?
       `).bind(d).first()?await e.env.DB.prepare(`
           UPDATE customer_assignments 
@@ -32937,7 +33853,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         `).bind(a,d).run():await e.env.DB.prepare(`
           INSERT INTO customer_assignments (customer_id, employee_id, assigned_by)
           VALUES (?, ?, 1)
-        `).bind(d,a).run(),o++}return e.json({success:!0,assigned_count:o})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/admin/banks",async e=>{try{let t=e.req.query("tenant_id");if(!t){const r=e.req.header("Authorization"),l=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],i=r?.replace("Bearer ","")||l;if(i)try{const d=atob(i).split(":");t=d[1]!=="null"?d[1]:void 0}catch{}}let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(parseInt(t)).first());let s="SELECT * FROM banks";t?s+=" WHERE tenant_id = ?":s+=" WHERE 1=1",s+=" ORDER BY bank_name";const n=t?await e.env.DB.prepare(s).bind(parseInt(t)).all():await e.env.DB.prepare(s).all();return e.html(`
+        `).bind(d,a).run(),o++}return e.json({success:!0,assigned_count:o})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/admin/banks",async e=>{try{let t=e.req.query("tenant_id");if(!t){const r=e.req.header("Authorization"),l=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],i=r?.replace("Bearer ","")||l;if(i)try{const d=atob(i).split(":");t=d[1]!=="null"?d[1]:void 0}catch{}}let a=null;t&&(a=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(parseInt(t)).first());let s="SELECT * FROM banks";t?s+=" WHERE tenant_id = ?":s+=" WHERE 1=1",s+=" ORDER BY bank_name";const n=t?await e.env.DB.prepare(s).bind(parseInt(t)).all():await e.env.DB.prepare(s).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -32999,7 +33915,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});p.get("/admin/rates",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null),s=null;a&&(s=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(a).first());let n=`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates",async e=>{try{const t=await y(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null),s=null;a&&(s=await e.env.DB.prepare("SELECT company_name FROM tenants WHERE id = ?").bind(a).first());let n=`
       SELECT 
         r.*,
         b.bank_name,
@@ -33057,7 +33973,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             width: max-content;
           }
           
-          ${F()}
+          ${$()}
           
           /* Dropdown menu styles */
           .csv-dropdown {
@@ -33750,13 +34666,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});p.get("/admin/rates/add",async e=>{try{const t=await x(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(ba(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});p.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});c.get("/admin/rates/add",async e=>{try{const t=await y(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const s=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(wa(a||"",s.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});c.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const s=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(xa(a,s,n.results,r.results))});p.get("/admin/customers",async e=>{try{const t=await x(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!s)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),r=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(_a(a,s,n.results,r.results))});c.get("/admin/customers",async e=>{try{const t=await y(e);if(console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -33794,11 +34710,28 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       SELECT customers.*, u.full_name AS assigned_employee_name
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 14)
-      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" AND customers.tenant_id = ?",s.push(t.tenantId)):t.roleId===4&&t.tenantId&&t.userId?(a+=` AND customers.tenant_id = ? AND EXISTS (
+      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 14)
+      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" AND customers.tenant_id = ?",s.push(t.tenantId)):t.roleId===4?t.tenantId&&t.userId?(a+=` AND customers.tenant_id = ? AND EXISTS (
           SELECT 1 FROM customer_assignments ca2
           WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?
-        )`,s.push(t.tenantId,t.userId)):a+=" AND 1 = 0"),a+=" ORDER BY customers.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();let r="SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1";const l=[];t.roleId!==1&&(t.tenantId?(r+=" AND tenant_id = ?",l.push(t.tenantId)):t.userId&&(r+=" AND user_id = ?",l.push(t.userId)));const i=l.length>0?await e.env.DB.prepare(r).bind(...l).all():await e.env.DB.prepare(r).all(),o=new Set(i.results.map(c=>c.customer_id)),d=t.roleId!==3;return e.html(`
+        )`,s.push(t.tenantId,t.userId)):a+=" AND 1 = 0":E(t.roleId)===5&&t.tenantId&&t.userId?(a+=` AND customers.tenant_id = ? AND EXISTS (
+          SELECT 1
+          FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        )`,s.push(t.tenantId,t.userId)):a+=" AND 1 = 0"),a+=" ORDER BY customers.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();let r="SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1";const l=[];t.roleId!==1&&(E(t.roleId)===5&&t.tenantId&&t.userId?(r+=" AND tenant_id = ? AND assigned_bank_agent_id = ?",l.push(t.tenantId,t.userId)):t.tenantId?(r+=" AND tenant_id = ?",l.push(t.tenantId)):t.userId&&(r+=" AND user_id = ?",l.push(t.userId)));const i=l.length>0?await e.env.DB.prepare(r).bind(...l).all():await e.env.DB.prepare(r).all(),o=new Set(i.results.map(f=>f.customer_id));let d="WHERE 1=1";const p=[];t.roleId!==1&&(E(t.roleId)===5&&t.tenantId&&t.userId?(d+=" AND tenant_id = ? AND assigned_bank_agent_id = ?",p.push(t.tenantId,t.userId)):t.tenantId?(d+=" AND tenant_id = ?",p.push(t.tenantId)):t.userId&&(d+=" AND user_id = ?",p.push(t.userId)));const u=`
+      SELECT
+        fr.customer_id,
+        u.id AS bank_agent_role5_user_id,
+        COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.username), '')) AS bank_agent_display_name
+      FROM financing_requests fr
+      LEFT JOIN users u ON u.id = fr.assigned_bank_agent_id AND u.role_id = 5
+      INNER JOIN (
+        SELECT customer_id, MAX(id) AS max_req_id
+        FROM financing_requests
+        ${d}
+        GROUP BY customer_id
+      ) latest ON fr.id = latest.max_req_id
+    `,m=p.length>0?await e.env.DB.prepare(u).bind(...p).all():await e.env.DB.prepare(u).all(),b=new Map;for(const f of m.results||[]){const v=Number(f.customer_id);Number.isNaN(v)||b.set(v,{agentUserId:f.bank_agent_role5_user_id!=null?Number(f.bank_agent_role5_user_id):null,agentName:f.bank_agent_display_name!=null?String(f.bank_agent_display_name):null})}const g=t.roleId!==3,x=E(t.roleId)!==5,h=!1;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -33808,12 +34741,34 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <script src="https://cdn.tailwindcss.com"><\/script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
-          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
+          /* Horizontal scroll only; never clip rows vertically */
+          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; max-width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #10b981 #f7fafc; }
           .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
           .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
           .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
           .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #059669 0%, #047857 100%); border-color: #d1d5db; }
-          .overflow-x-auto table { min-width: 1200px; width: max-content; }
+          .overflow-x-auto table { min-width: 100%; width: max-content; }
+          .truncate-cell { display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+          .truncate-cell.sm { max-width: 130px; }
+          .filter-hidden { display: none !important; }
+
+          /* Hover-to-reveal horizontal scroll arrows (customers table) */
+          .edge-scroll-wrap { position: relative; }
+          /* Don't block clicks on the table (actions buttons near edges) */
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 10; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 0; pointer-events: none; transition: opacity 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          /* Wrap hover (not zone — zone uses pointer-events:none so table buttons stay clickable) */
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+          .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
+          .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
+          .no-hscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+          .no-hscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
           @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0)} }
           .alarm-unread-dot { display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:50%; animation:pulse-glow 1.5s infinite; position:absolute; top:-3px; left:-3px; }
           .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
@@ -33825,7 +34780,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           #tableBody tr[style*="background-color"]:hover { filter: brightness(0.97); }
           #tableBody.dropdown-open tr:not(.dropdown-active-row) { pointer-events: none !important; }
           #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td { background-color: inherit !important; }
-          ${F()}
+          ${$()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -33851,18 +34806,24 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   التنبيهات
                   <span id="notifDot" class="alarm-unread-dot hidden"></span>
                 </button>
-                ${ee(t.roleId)?`
+                ${ne(t.roleId)?`
                 <a href="/admin/customer-assignment${t.tenantId?"?tenant_id="+t.tenantId:""}" 
                    class="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md">
                   <i class="fas fa-users-cog ml-2"></i>
                   توزيع العملاء
                 </a>
                 `:""}
+                ${h?`
+                <button type="button" id="customerAutoAssignOpenBtn" class="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md inline-flex items-center gap-2">
+                  <i class="fas fa-random"></i>
+                  تعيين تلقائي عادل
+                </button>
+                `:""}
                 <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
-                ${d?`
+                ${g?`
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة عميل جديد
@@ -33953,32 +34914,82 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-lg overflow-visible">
-            <table class="min-w-full" id="dataTable">
+          <div class="bg-white rounded-xl shadow-lg overflow-x-hidden overflow-y-visible">
+            <div class="edge-scroll-wrap">
+              <div class="edge-scroll-zone left">
+                <div id="customersEdgeLeft" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('customersTableScroll', 'left')" aria-label="scroll left">
+                    <i class="fas fa-chevron-left text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="edge-scroll-zone right">
+                <div id="customersEdgeRight" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('customersTableScroll', 'right')" aria-label="scroll right">
+                    <i class="fas fa-chevron-right text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div id="customersTableScroll" class="overflow-x-auto">
+            <table class="min-w-full w-max" id="dataTable">
               <thead class="bg-gray-50">
                 <tr>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الإجراءات</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">المصدر</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموظف المخصص</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="موظف البنك (دور 5) المعيّن على آخر طلب تمويل">موظف البنك</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
-                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${n.results.map(c=>`
-                  <tr class="hover:bg-gray-50" data-customer-id="${c.id}" data-name="${c.full_name||""}" data-phone="${ie(c.phone)||""}" data-email="${c.email||""}" data-assigned="${(c.assigned_employee_name||"").replace(/"/g,"&quot;")}" data-created-at="${c.created_at||""}" data-has-request="${o.has(c.id)?"1":"0"}" data-rating="0">
-                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${c.id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${c.full_name||"-"}</td>
+                ${n.results.map(f=>{const v=o.has(f.id),w=b.get(f.id),I=(v?`${w?.agentName||""} ${w?.agentUserId!=null?"#"+w.agentUserId:""}`.trim():"").replace(/"/g,"&quot;"),k=String(f.enrollment_source||"").trim(),T=String(f.enrollment_source_label||"").trim(),H=String((k==="calculator"?"الحاسبة":k==="affiliate"?T:"")||"").replace(/"/g,"&quot;");return`
+                  <tr class="hover:bg-gray-50" data-customer-id="${f.id}" data-name="${f.full_name||""}" data-phone="${ue(f.phone)||""}" data-email="${f.email||""}" data-source="${H}" data-assigned="${(f.assigned_employee_name||"").replace(/"/g,"&quot;")}" data-bank-agent="${I}" data-created-at="${f.created_at||""}" data-has-request="${v?"1":"0"}" data-rating="0">
+                    <td class="px-3 py-3 whitespace-nowrap text-right align-middle relative">
+                      <div class="relative inline-block text-right">
+                        <button type="button" onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap w-full">
+                          <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div class="actions-dropdown-menu hidden absolute right-0 mt-1 min-w-[10rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
+                          <button type="button" onclick="openAlarmModal(${f.id}, '${(f.full_name||"").replace(/'/g,"\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50 text-right">
+                            <i class="fas fa-bell w-4 flex-shrink-0"></i> إضافة تنبيه
+                          </button>
+                          ${x?`
+                          <button type="button" onclick="openReviewModal(${f.id}, '${(f.full_name||"").replace(/'/g,"\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50 text-right">
+                            <i class="fas fa-star w-4 flex-shrink-0"></i> تقييم العميل
+                          </button>
+                          `:""}
+                          <a href="/admin/customers/${f.id}/report" class="flex items-center gap-2 px-3 py-2 text-sm text-purple-700 hover:bg-purple-50">
+                            <i class="fas fa-file-alt w-4 flex-shrink-0"></i> تقرير
+                          </a>
+                          <a href="/admin/customers/${f.id}" class="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">
+                            <i class="fas fa-eye w-4 flex-shrink-0"></i> عرض
+                          </a>
+                          <button type="button" onclick="openNewRequest(${f.id}, '${(f.full_name||"").replace(/'/g,"\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50 text-right">
+                            <i class="fas fa-file-invoice w-4 flex-shrink-0"></i> طلب تمويل جديد
+                          </button>
+                          ${g?`
+                          <div class="border-t border-gray-100 my-1"></div>
+                          <a href="/admin/customers/${f.id}/edit" class="flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
+                            <i class="fas fa-edit w-4 flex-shrink-0"></i> تعديل
+                          </a>
+                          `:""}
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${f.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${f.full_name||"-"}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="inline-flex items-center gap-2">
-                        <span dir="ltr">${ie(c.phone)||"-"}</span>
+                        <span dir="ltr">${ue(f.phone)||"-"}</span>
                         <button
                           type="button"
-                          onclick="openCustomerWhatsApp('${String(c.whatsapp_phone||c.whatsapp_phone_number||"").replace(/'/g,"\\'")}', '${String(c.phone||"").replace(/'/g,"\\'")}')"
+                          onclick="openCustomerWhatsApp('${String(f.whatsapp_phone||f.whatsapp_phone_number||"").replace(/'/g,"\\'")}', '${String(f.phone||"").replace(/'/g,"\\'")}')"
                           class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
                           title="فتح واتساب"
                         >
@@ -33986,54 +34997,42 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                         </button>
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${c.email||"-"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${f.email||"-"}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      ${c.assigned_employee_name?`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">${c.assigned_employee_name}</span>`:'<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>'}
+                      ${k==="calculator"?'<span class="inline-flex items-center rounded-full bg-blue-100 text-blue-900 px-2.5 py-0.5 text-xs font-semibold border border-blue-200"><i class="fas fa-calculator ml-1"></i>الحاسبة</span>':k==="affiliate"&&T?`<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>${j(T)}</span>`:'<span class="text-gray-300 text-sm">—</span>'}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(c.created_at).toLocaleDateString("ar-SA")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      ${f.assigned_employee_name?`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${f.assigned_employee_name}</span></span>`:'<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(f.created_at).toLocaleDateString("ar-SA")}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                      ${o.has(c.id)?'<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 font-bold text-base" title="يوجد طلب تمويل">✓</span>':'<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-500 font-bold text-base" title="لا يوجد طلب تمويل">✗</span>'}
+                      ${v?'<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 font-bold text-base" title="يوجد طلب تمويل">✓</span>':'<span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-500 font-bold text-base" title="لا يوجد طلب تمويل">✗</span>'}
                     </td>
-                    <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${c.id}">
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${v?w?.agentUserId?`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${w.agentUserId}"><span class="truncate-cell sm">${w.agentName||"—"}</span></span>`:'<span class="text-xs text-amber-700">غير معيّن</span>':'<span class="text-gray-300 text-sm">—</span>'}
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${f.id}">
                       <span class="text-gray-300 text-sm">—</span>
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap w-px text-right align-middle relative">
-                      <div class="relative inline-block text-right">
-                        <button type="button" onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap">
-                          <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
-                        </button>
-                        <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[10rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
-                          <button type="button" onclick="openAlarmModal(${c.id}, '${(c.full_name||"").replace(/'/g,"\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50 text-right">
-                            <i class="fas fa-bell w-4 flex-shrink-0"></i> إضافة تنبيه
-                          </button>
-                          <button type="button" onclick="openReviewModal(${c.id}, '${(c.full_name||"").replace(/'/g,"\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50 text-right">
-                            <i class="fas fa-star w-4 flex-shrink-0"></i> تقييم العميل
-                          </button>
-                          <a href="/admin/customers/${c.id}/report" class="flex items-center gap-2 px-3 py-2 text-sm text-purple-700 hover:bg-purple-50">
-                            <i class="fas fa-file-alt w-4 flex-shrink-0"></i> تقرير
-                          </a>
-                          <a href="/admin/customers/${c.id}" class="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">
-                            <i class="fas fa-eye w-4 flex-shrink-0"></i> عرض
-                          </a>
-                          <button type="button" onclick="openNewRequest(${c.id}, '${(c.full_name||"").replace(/'/g,"\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50 text-right">
-                            <i class="fas fa-file-invoice w-4 flex-shrink-0"></i> طلب تمويل جديد
-                          </button>
-                          ${d?`
-                          <div class="border-t border-gray-100 my-1"></div>
-                          <a href="/admin/customers/${c.id}/edit" class="flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
-                            <i class="fas fa-edit w-4 flex-shrink-0"></i> تعديل
-                          </a>
-                          <a href="/admin/customers/${c.id}/delete" onclick="return confirm('هل أنت متأكد من حذف هذا العميل؟')" class="flex items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
-                            <i class="fas fa-trash w-4 flex-shrink-0"></i> حذف
-                          </a>
-                          `:""}
-                        </div>
-                      </div>
-                    </td>
                   </tr>
-                `).join("")}
+                `}).join("")}
               </tbody>
             </table>
+            </div>
+            </div>
+
+            <!-- Customers Pagination -->
+            <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="customersPrevBtn" onclick="setCustomersPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                <span id="customersPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                <button id="customersNextBtn" onclick="setCustomersPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -34149,6 +35148,26 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             <span id="toastText"></span>
           </div>
         </div>
+
+        ${h?`
+        <div id="customerAutoAssignModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="customerAutoAssignTitle">
+          <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl mx-4 overflow-hidden" onclick="event.stopPropagation()">
+            <div class="px-5 py-4 border-b">
+              <h2 id="customerAutoAssignTitle" class="text-lg font-bold text-gray-900">تأكيد التعيين التلقائي</h2>
+            </div>
+            <div class="p-5">
+              <p id="customerAutoAssignBody" class="text-sm text-gray-700 leading-relaxed"></p>
+              <div id="customerAutoAssignActionsConfirm" class="mt-6 flex flex-wrap items-center justify-end gap-2">
+                <button type="button" id="customerAutoAssignCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+                <button type="button" id="customerAutoAssignConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white">متابعة</button>
+              </div>
+              <div id="customerAutoAssignActionsResult" class="hidden mt-6 flex justify-end">
+                <button type="button" id="customerAutoAssignOkBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-900 text-white">حسناً</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        `:""}
 
         <script>
           const customerIdsWithRequests = new Set(${JSON.stringify([...o])});
@@ -34464,6 +35483,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
           function closeAllDropdowns() {
             document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
+              restorePortaledMenu(m);
               m.classList.add('hidden');
               m.style.top = '';
               m.style.bottom = '';
@@ -34493,13 +35513,123 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             }
           }
 
+          function unbindActionsMenuRepos(menu) {
+            if (!menu._actionsRepos) return;
+            const scrollEl = menu._actionsRepos.scrollEl;
+            const reposition = menu._actionsRepos.reposition;
+            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
+            if (reposition) window.removeEventListener('resize', reposition);
+            delete menu._actionsRepos;
+          }
+
+          function restorePortaledMenu(menu) {
+            if (!menu || menu.dataset.portal !== '1') return;
+            unbindActionsMenuRepos(menu);
+            const placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
+            if (placeholder && placeholder.parentNode) {
+              placeholder.parentNode.replaceChild(menu, placeholder);
+            }
+            delete menu.dataset.portal;
+            delete menu.dataset.portalPlaceholderId;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.right = '';
+            menu.style.bottom = '';
+            menu.style.marginTop = '';
+            menu.style.marginBottom = '';
+            menu.style.zIndex = '';
+          }
+
+          /** Move menu onto .edge-scroll-wrap (outside horizontal scroll panel) — avoids scrollbar clipping without covering the navbar. */
+          function anchorActionsMenu(btn, menu) {
+            if (!menu || menu.dataset.portal === '1') return;
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            const wrap = scrollEl ? scrollEl.closest('.edge-scroll-wrap') : null;
+            const host = wrap || scrollEl;
+            if (!host || !menu.parentNode) return;
+            const placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
+            const placeholder = document.createElement('span');
+            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
+            menu.parentNode.insertBefore(placeholder, menu);
+            menu.dataset.portal = '1';
+            menu.dataset.portalPlaceholderId = placeholderId;
+            host.appendChild(menu);
+          }
+
+          function positionAnchoredActionsMenu(btn, menu) {
+            if (!btn || !menu || !menu.parentElement) return;
+            const host = menu.parentElement;
+            const hr = host.getBoundingClientRect();
+            const br = btn.getBoundingClientRect();
+
+            menu.style.position = 'absolute';
+            menu.style.marginTop = '0';
+            menu.style.marginBottom = '0';
+            menu.style.right = 'auto';
+            menu.style.bottom = 'auto';
+
+            let w = menu.offsetWidth || 176;
+            let h = menu.offsetHeight || 200;
+            if (w < 10) w = 176;
+            if (h < 10) h = 200;
+
+            const hw = hr.width || host.clientWidth || 0;
+            let left = br.right - hr.left - w;
+            if (hw > 0 && Number.isFinite(left)) left = Math.max(4, Math.min(hw - w - 4, left));
+            else left = Number.isFinite(left) ? Math.max(4, left) : 4;
+
+            let top = br.bottom - hr.top + 6;
+            const spaceBelow = hr.bottom - br.bottom;
+            if (spaceBelow < Math.min(h, 72) && (br.top - hr.top) > Math.min(h, 72)) {
+              top = br.top - hr.top - h - 6;
+            }
+
+            menu.style.left = String(Math.round(left)) + 'px';
+            menu.style.top = String(Math.round(top)) + 'px';
+            menu.style.zIndex = '40';
+          }
+
+          function bindActionsMenuRepos(btn, menu) {
+            unbindActionsMenuRepos(menu);
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            if (!scrollEl) return;
+            function reposition() {
+              if (menu.classList.contains('hidden')) return;
+              positionAnchoredActionsMenu(btn, menu);
+            }
+            menu._actionsRepos = { scrollEl: scrollEl, reposition: reposition };
+            scrollEl.addEventListener('scroll', reposition, { passive: true });
+            window.addEventListener('resize', reposition);
+          }
+
+          function getActionsMenuForButton(btn) {
+            if (!btn) return null;
+            const id = btn.dataset && btn.dataset.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
+            if (id) {
+              const found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
+              if (found) return found;
+            }
+            const sib = btn.nextElementSibling;
+            if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) return sib;
+            return null;
+          }
+
           function toggleActionsDropdown(btn) {
-            const menu = btn.nextElementSibling;
+            const menu = getActionsMenuForButton(btn);
+            if (!menu) return;
             const willOpen = menu.classList.contains('hidden');
             closeAllDropdowns();
             if (willOpen) {
               menu.classList.remove('hidden');
-              positionDropdownMenu(menu);
+              // ensure stable link for subsequent toggles even after re-parenting
+              if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
+              btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
+              anchorActionsMenu(btn, menu);
+              requestAnimationFrame(function() {
+                positionAnchoredActionsMenu(btn, menu);
+                bindActionsMenuRepos(btn, menu);
+              });
               const cell = btn.closest('td');
               if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
               const row = btn.closest('tr');
@@ -34547,6 +35677,228 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
           }
 
+          // Pagination + edge-scroll (Customers list page)
+          const customersPaging = { page: 1, pageSize: 15, lastSig: '' }
+          function getPageSizeOptions(total) {
+            const base = [15, 30, 50, 100]
+            const totalNum = Number(total) || 0
+            const options = [base[0]]
+
+            for (let i = 1; i < base.length; i++) {
+              const size = base[i]
+              const prev = base[i - 1]
+
+              if (totalNum >= size) {
+                options.push(size)
+                continue
+              }
+
+              // If we have more than the previous bucket, allow the next higher option.
+              // Example: total=21 -> [15, 30]
+              if (totalNum > prev) options.push(size)
+              break
+            }
+
+            return options
+          }
+          function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
+
+          window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            const step = 360
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            let delta = visualDirection === 'left' ? -step : step
+            if (dir === 'rtl') delta = -delta
+            const current = getNormalizedScrollLeft(el)
+            animateNormalizedScrollLeft(el, current + delta, 260)
+            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'customersEdgeLeft', 'customersEdgeRight'))
+          }
+
+          function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth
+            const clamped = Math.max(0, Math.min(max, normalizedLeft))
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') { el.scrollLeft = clamped; return }
+            const type = getRtlScrollType()
+            if (type === 'negative') el.scrollLeft = -clamped
+            else if (type === 'reverse') el.scrollLeft = max - clamped
+            else el.scrollLeft = clamped
+          }
+
+          function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            if (prefersReduced) { setNormalizedScrollLeft(el, target); return }
+
+            const max = el.scrollWidth - el.clientWidth
+            const to = Math.max(0, Math.min(max, target))
+            const from = getNormalizedScrollLeft(el)
+            const delta = to - from
+            if (Math.abs(delta) < 1) return
+
+            const start = performance.now()
+            const duration = Math.max(120, Number(durationMs) || 260)
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1)
+            el.dataset.edgeScrollAnimToken = animToken
+
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+            const tick = (now) => {
+              if (el.dataset.edgeScrollAnimToken !== animToken) return
+              const t = Math.min(1, (now - start) / duration)
+              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t))
+              if (t < 1) requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          }
+
+          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId)
+            const arrow = document.getElementById(arrowBtnId)
+            if (!el || !arrow) return
+            const wrap = el.closest('.edge-scroll-wrap')
+            if (!wrap) return
+            const wrapRect = wrap.getBoundingClientRect()
+            const vhCenter = window.innerHeight / 2
+            const padding = 16
+            const minY = wrapRect.top + padding
+            const maxY = wrapRect.bottom - padding
+            const desired = vhCenter
+            const clamped = Math.max(minY, Math.min(maxY, desired))
+            const relativeTop = clamped - wrapRect.top
+            arrow.style.top = String(relativeTop) + 'px'
+          }
+
+          let __rtlScrollType = null
+          function getRtlScrollType() {
+            if (__rtlScrollType) return __rtlScrollType
+            const div = document.createElement('div')
+            div.style.width = '4px'
+            div.style.height = '1px'
+            div.style.overflow = 'scroll'
+            div.style.direction = 'rtl'
+            div.style.position = 'absolute'
+            div.style.top = '-9999px'
+            const inner = document.createElement('div')
+            inner.style.width = '8px'
+            inner.style.height = '1px'
+            div.appendChild(inner)
+            document.body.appendChild(div)
+            if (div.scrollLeft > 0) __rtlScrollType = 'reverse'
+            else {
+              div.scrollLeft = 1
+              __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default'
+            }
+            document.body.removeChild(div)
+            return __rtlScrollType
+          }
+
+          function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') return el.scrollLeft
+            const type = getRtlScrollType()
+            if (type === 'negative') return -el.scrollLeft
+            if (type === 'reverse') return max - el.scrollLeft
+            return el.scrollLeft
+          }
+
+          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            const leftWrap = document.getElementById(leftBtnId)
+            const rightWrap = document.getElementById(rightBtnId)
+            if (!el || !leftWrap || !rightWrap) return
+
+            const canScroll = el.scrollWidth > el.clientWidth + 2
+            if (!canScroll) {
+              leftWrap.classList.add('edge-hidden')
+              rightWrap.classList.add('edge-hidden')
+              return
+            }
+
+            const maxScrollLeft = el.scrollWidth - el.clientWidth
+            const sl = getNormalizedScrollLeft(el)
+            const canLeft = sl > 1
+            const canRight = sl < maxScrollLeft - 1
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            const showLeft = dir === 'rtl' ? canRight : canLeft
+            const showRight = dir === 'rtl' ? canLeft : canRight
+            leftWrap.classList.toggle('edge-hidden', !showLeft)
+            rightWrap.classList.toggle('edge-hidden', !showRight)
+
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId)
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId)
+          }
+
+          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            if (el.dataset.edgeScrollBound === '1') return
+            el.dataset.edgeScrollBound = '1'
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId)
+            el.addEventListener('scroll', tick, { passive: true })
+            window.addEventListener('resize', tick)
+            window.addEventListener('scroll', tick, { passive: true })
+            setTimeout(tick, 0)
+          }
+
+          function renderCustomersPaginationUI(total) {
+            const pageSizeSelect = document.getElementById('customersPageSize')
+            const prevBtn = document.getElementById('customersPrevBtn')
+            const nextBtn = document.getElementById('customersNextBtn')
+            const info = document.getElementById('customersPageInfo')
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return
+
+            const options = getPageSizeOptions(total)
+            if (options.indexOf(customersPaging.pageSize) === -1) customersPaging.pageSize = 15
+            pageSizeSelect.innerHTML = options
+              .map((n) => '<option value="' + n + '" ' + (n === customersPaging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+              .join('')
+
+            const totalPages = Math.max(1, Math.ceil(total / customersPaging.pageSize))
+            customersPaging.page = clampPage(customersPaging.page, totalPages)
+            const start = total === 0 ? 0 : (customersPaging.page - 1) * customersPaging.pageSize + 1
+            const end = Math.min(total, customersPaging.page * customersPaging.pageSize)
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total)
+            prevBtn.disabled = customersPaging.page <= 1
+            nextBtn.disabled = customersPaging.page >= totalPages
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled)
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled)
+          }
+
+          window.setCustomersPageSize = function(value) {
+            const parsed = Number(value)
+            customersPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
+            customersPaging.page = 1
+            filterTable()
+          }
+          window.setCustomersPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') customersPaging.page -= 1
+            else if (directionOrPage === 'next') customersPaging.page += 1
+            else {
+              const parsed = Number(directionOrPage)
+              if (Number.isFinite(parsed)) customersPaging.page = parsed
+            }
+            filterTable()
+          }
+
+          function applyCustomersPagination() {
+            const tableBody = document.getElementById('tableBody')
+            if (!tableBody) return
+            const rows = Array.from(tableBody.getElementsByTagName('tr'))
+            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
+            renderCustomersPaginationUI(visibleRows.length)
+            const totalPages = Math.max(1, Math.ceil(visibleRows.length / customersPaging.pageSize))
+            customersPaging.page = clampPage(customersPaging.page, totalPages)
+            const startIdx = (customersPaging.page - 1) * customersPaging.pageSize
+            const endIdx = startIdx + customersPaging.pageSize
+            visibleRows.forEach((row, idx) => {
+              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
+            })
+            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
+            setupEdgeScrollOnce('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
+            updateEdgeScrollControls('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
+          }
+
           function filterTable() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
             const filterField = document.getElementById('filterField').value;
@@ -34555,17 +35907,21 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             const ratingFilter = document.getElementById('ratingFilter').value;
             const rows = document.getElementById('tableBody').getElementsByTagName('tr');
             let visibleCount = 0;
+            const sig = JSON.stringify({ searchInput, filterField, dateRangeFilter, requestsFilter, ratingFilter })
+            if (sig !== customersPaging.lastSig) { customersPaging.lastSig = sig; customersPaging.page = 1 }
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i];
               const name = row.getAttribute('data-name') || '';
               const phone = row.getAttribute('data-phone') || '';
               const email = row.getAttribute('data-email') || '';
+              const source = row.getAttribute('data-source') || '';
               const assigned = row.getAttribute('data-assigned') || '';
+              const bankAgent = row.getAttribute('data-bank-agent') || '';
               const createdAt = row.getAttribute('data-created-at') || '';
               const hasRequest = row.getAttribute('data-has-request') || '0';
               const rating = row.getAttribute('data-rating') || '0';
 
-              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput));
+              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||source.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput)||bankAgent.toLowerCase().includes(searchInput));
 
               let matchesDateRange = true;
               if (dateRangeFilter !== 'all') {
@@ -34580,10 +35936,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               let matchesRating = ratingFilter === 'all' || rating === ratingFilter;
 
               const visible = matchesSearch && matchesDateRange && matchesRequests && matchesRating;
-              row.style.display = visible ? '' : 'none';
+              row.classList.toggle('filter-hidden', !visible);
               if (visible) visibleCount++;
             }
             document.getElementById('totalCount').textContent = visibleCount;
+            applyCustomersPagination();
           }
 
           function applyPresetFiltersFromUrl() {
@@ -34606,8 +35963,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
           function exportToCSV() {
             const data = [
-              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'الموظف المخصص', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${n.results.map(c=>`['${c.id}', '${c.full_name||"-"}', '${c.phone||"-"}', '${c.email||"-"}', '${(c.assigned_employee_name||"غير مخصص").replace(/'/g,"\\'")}', '${c.national_id||"-"}', '${new Date(c.created_at).toLocaleDateString("ar-SA")}']`).join(`,
+              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل'],
+              ${n.results.map(f=>{const v=o.has(f.id),w=b.get(f.id),_=v?w?.agentUserId?w.agentName||"—":"غير معيّن":"—",I=f.enrollment_source==="calculator"?"الحاسبة":f.enrollment_source==="affiliate"?f.enrollment_source_label||"affiliate":"";return`['${f.id}', '${f.full_name||"-"}', '${f.phone||"-"}', '${f.email||"-"}', '${String(I||"").replace(/'/g,"\\'")}', '${(f.assigned_employee_name||"غير مخصص").replace(/'/g,"\\'")}', '${String(_).replace(/'/g,"\\'")}', '${f.national_id||"-"}', '${new Date(f.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
               `)}
             ];
             let csv = '\\uFEFF';
@@ -34620,12 +35977,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
 
           refreshUnreadDot();
+          // Initialize table paging + page-size dropdown on first load
+          filterTable();
           loadCustomerRatings();
           applyPresetFiltersFromUrl();
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/roles",async e=>{try{return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/roles",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -34982,7 +36341,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});p.get("/admin/notifications",async e=>{try{return e.html(`
+    `)}catch(t){return e.html("<h1>خطأ في تحميل الصفحة</h1><p>"+t.message+"</p>")}});c.get("/admin/notifications",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -35014,7 +36373,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             50% { opacity: .5; }
           }
           
-          ${F()}
+          ${$()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -35281,7 +36640,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/requests/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/requests/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
@@ -35292,10 +36651,18 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       WHERE fr.id = ?
     `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");try{const n=await e.env.DB.prepare(`
-        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        SELECT
+          identity_attachment_url,
+          signature_attachment_url,
+          salary_profile_attachment_url,
+          gosi_attachment_url,
+          tax_exemption_attachment_url,
+          additional_1_attachment_url,
+          additional_2_attachment_url,
+          additional_3_attachment_url
         FROM customers
         WHERE id = ?
-      `).bind(a.customer_id).first();n&&(a.id_attachment_url=n.id_attachment_url||a.id_attachment_url||null,a.bank_statement_attachment_url=n.bank_statement_attachment_url||a.bank_statement_attachment_url||null,a.salary_attachment_url=n.salary_attachment_url||a.salary_attachment_url||null,a.additional_attachment_url=n.additional_attachment_url||a.additional_attachment_url||null)}catch(n){if(!M(n))throw n}const s=await e.env.DB.prepare(`
+      `).bind(a.customer_id).first();n&&(a.identity_attachment_url=n.identity_attachment_url||a.identity_attachment_url||null,a.signature_attachment_url=n.signature_attachment_url||a.signature_attachment_url||null,a.salary_profile_attachment_url=n.salary_profile_attachment_url||a.salary_profile_attachment_url||null,a.gosi_attachment_url=n.gosi_attachment_url||a.gosi_attachment_url||null,a.tax_exemption_attachment_url=n.tax_exemption_attachment_url||a.tax_exemption_attachment_url||null,a.additional_1_attachment_url=n.additional_1_attachment_url||a.additional_1_attachment_url||null,a.additional_2_attachment_url=n.additional_2_attachment_url||a.additional_2_attachment_url||null,a.additional_3_attachment_url=n.additional_3_attachment_url||a.additional_3_attachment_url||null)}catch(n){if(!P(n))throw n}const s=await e.env.DB.prepare(`
       SELECT id, bank_name FROM banks ORDER BY bank_name
     `).all();return e.html(`
       <!DOCTYPE html>
@@ -35399,112 +36766,180 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   المرفقات
                 </h2>
                 
-                <!-- Current Attachments -->
-                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                  <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-id-card ml-1"></i> صورة الهوية:</p>
-                      ${a.id_attachment_url?`
-                        <a href="${a.id_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      `:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                <!-- Current Attachments (only show uploaded; hide if none) -->
+                ${(()=>{const n=[{label:"ملف الهوية",icon:"fa-id-card",url:a.identity_attachment_url},{label:"ملف السمة",icon:"fa-signature",url:a.signature_attachment_url},{label:"ملف تعريف الراتب",icon:"fa-money-check",url:a.salary_profile_attachment_url},{label:"ملف التأمينات الاجتماعية",icon:"fa-shield-alt",url:a.gosi_attachment_url},{label:"شهادة الإعفاء الضريبي",icon:"fa-certificate",url:a.tax_exemption_attachment_url},{label:"مستند إضافي 1",icon:"fa-file-alt",url:a.additional_1_attachment_url},{label:"مستند إضافي 2",icon:"fa-file-alt",url:a.additional_2_attachment_url},{label:"مستند إضافي 3",icon:"fa-file-alt",url:a.additional_3_attachment_url}].filter(r=>r.url);return n.length===0?"":`
+                    <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                      <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${n.map(r=>`
+                          <div class="border-r pr-4">
+                            <p class="text-sm text-gray-600 mb-2"><i class="fas ${r.icon} ml-1"></i> ${r.label}:</p>
+                            <a href="${r.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
+                              <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
+                            </a>
+                          </div>
+                        `).join("")}
+                      </div>
                     </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-invoice ml-1"></i> كشف الحساب:</p>
-                      ${a.bank_statement_attachment_url?`
-                        <a href="${a.bank_statement_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      `:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-money-check ml-1"></i> تعريف الراتب:</p>
-                      ${a.salary_attachment_url?`
-                        <a href="${a.salary_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      `:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-alt ml-1"></i> مرفقات إضافية:</p>
-                      ${a.additional_attachment_url?`
-                        <a href="${a.additional_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                        </a>
-                      `:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                  </div>
-                </div>
+                  `})()}
                 
-                <!-- Upload New Attachments -->
-                <div class="space-y-4">
-                  <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-                  
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- ID Attachment -->
+                <!-- Upload New Attachments (modal popup) -->
+                <div class="space-y-2">
+                  <button type="button" id="openRequestAttachmentsModal"
+                          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold transition inline-flex items-center gap-2">
+                    <i class="fas fa-paperclip"></i>
+                    إدارة المرفقات
+                  </button>
+                  <p class="text-sm text-gray-500">يتم رفع المرفقات من خلال نافذة منبثقة داخل النموذج.</p>
+                </div>
+
+                <div id="requestAttachmentsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+                  <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-paperclip ml-2 text-blue-600"></i>
+                        رفع المرفقات (اختياري)
+                      </h3>
+                      <button type="button" id="closeRequestAttachmentsModal" class="text-gray-500 hover:text-gray-800">
+                        <i class="fas fa-times text-xl"></i>
+                      </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 1. Identity -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                        <i class="fas fa-id-card ml-1"></i> ملف الهوية
                       </label>
                       <input 
                         type="file"
-                        id="id_attachment"
+                        id="identity_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('id_attachment')"
+                        onchange="handleFileSelect('identity_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="id_attachment_preview" class="mt-2"></div>
+                      <div id="identity_attachment_preview" class="mt-2"></div>
                     </div>
                     
-                    <!-- Bank Statement Attachment -->
+                    <!-- 2. Signature -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                        <i class="fas fa-signature ml-1"></i> ملف السمة
                       </label>
                       <input 
                         type="file"
-                        id="bank_statement_attachment"
+                        id="signature_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('bank_statement_attachment')"
+                        onchange="handleFileSelect('signature_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="bank_statement_attachment_preview" class="mt-2"></div>
+                      <div id="signature_attachment_preview" class="mt-2"></div>
                     </div>
                     
-                    <!-- Salary Attachment -->
+                    <!-- 3. Salary Profile -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                        <i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب
                       </label>
                       <input 
                         type="file"
-                        id="salary_attachment"
+                        id="salary_profile_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('salary_attachment')"
+                        onchange="handleFileSelect('salary_profile_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="salary_attachment_preview" class="mt-2"></div>
+                      <div id="salary_profile_attachment_preview" class="mt-2"></div>
                     </div>
                     
-                    <!-- Additional Attachment -->
+                    <!-- 4. GOSI -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                        <i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية
                       </label>
                       <input 
                         type="file"
-                        id="additional_attachment"
+                        id="gosi_attachment"
                         accept="image/*,application/pdf"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('additional_attachment')"
+                        onchange="handleFileSelect('gosi_attachment')"
                       >
                       <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="additional_attachment_preview" class="mt-2"></div>
+                      <div id="gosi_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 5. Tax exemption -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-certificate ml-1"></i> شهادة الإعفاء الضريبي
+                      </label>
+                      <input
+                        type="file"
+                        id="tax_exemption_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('tax_exemption_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="tax_exemption_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 6. Additional 1 -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 1
+                      </label>
+                      <input
+                        type="file"
+                        id="additional_1_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('additional_1_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="additional_1_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 7. Additional 2 -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 2
+                      </label>
+                      <input
+                        type="file"
+                        id="additional_2_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('additional_2_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="additional_2_attachment_preview" class="mt-2"></div>
+                    </div>
+
+                    <!-- 8. Additional 3 -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 3
+                      </label>
+                      <input
+                        type="file"
+                        id="additional_3_attachment"
+                        accept="image/*,application/pdf"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        onchange="handleFileSelect('additional_3_attachment')"
+                      >
+                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                      <div id="additional_3_attachment_preview" class="mt-2"></div>
+                    </div>
+                    </div>
+
+                    <div class="flex justify-end gap-3 mt-6">
+                      <button type="button" id="doneRequestAttachmentsModal"
+                              class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
+                        تم
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -35534,11 +36969,33 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
         
         <script>
+          (function initRequestAttachmentsModal() {
+            var modal = document.getElementById('requestAttachmentsModal');
+            var openBtn = document.getElementById('openRequestAttachmentsModal');
+            var closeBtn = document.getElementById('closeRequestAttachmentsModal');
+            var doneBtn = document.getElementById('doneRequestAttachmentsModal');
+            if (!modal || !openBtn) return;
+            function open() { modal.classList.remove('hidden'); }
+            function close() { modal.classList.add('hidden'); }
+            openBtn.addEventListener('click', open);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            if (doneBtn) doneBtn.addEventListener('click', close);
+            modal.addEventListener('click', function (e) {
+              if (e && e.target === modal) close();
+            });
+            document.addEventListener('keydown', function (e) {
+              if (e && e.key === 'Escape') close();
+            });
+          })();
           const attachmentFiles = {
-            id_attachment: null,
-            bank_statement_attachment: null,
-            salary_attachment: null,
-            additional_attachment: null
+            identity_attachment: null,
+            signature_attachment: null,
+            salary_profile_attachment: null,
+            gosi_attachment: null,
+            tax_exemption_attachment: null,
+            additional_1_attachment: null,
+            additional_2_attachment: null,
+            additional_3_attachment: null
           }
           
           function handleFileSelect(fieldName) {
@@ -35608,44 +37065,84 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             
             try {
               // Upload attachments if selected
-              if (attachmentFiles.id_attachment) {
+              if (attachmentFiles.identity_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع صورة الهوية...
+                    جاري رفع ملف الهوية...
                   </div>
                 \`
-                data.id_attachment_url = await uploadAttachment(attachmentFiles.id_attachment, 'id')
+                data.identity_attachment_url = await uploadAttachment(attachmentFiles.identity_attachment, 'identity')
               }
               
-              if (attachmentFiles.bank_statement_attachment) {
+              if (attachmentFiles.signature_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع كشف الحساب...
+                    جاري رفع ملف السمة...
                   </div>
                 \`
-                data.bank_statement_attachment_url = await uploadAttachment(attachmentFiles.bank_statement_attachment, 'bank_statement')
+                data.signature_attachment_url = await uploadAttachment(attachmentFiles.signature_attachment, 'signature')
               }
               
-              if (attachmentFiles.salary_attachment) {
+              if (attachmentFiles.salary_profile_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع تعريف الراتب...
+                    جاري رفع ملف تعريف الراتب...
                   </div>
                 \`
-                data.salary_attachment_url = await uploadAttachment(attachmentFiles.salary_attachment, 'salary')
+                data.salary_profile_attachment_url = await uploadAttachment(attachmentFiles.salary_profile_attachment, 'salary_profile')
               }
               
-              if (attachmentFiles.additional_attachment) {
+              if (attachmentFiles.gosi_attachment) {
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
                     <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع المرفقات الإضافية...
+                    جاري رفع ملف التأمينات الاجتماعية...
                   </div>
                 \`
-                data.additional_attachment_url = await uploadAttachment(attachmentFiles.additional_attachment, 'additional')
+                data.gosi_attachment_url = await uploadAttachment(attachmentFiles.gosi_attachment, 'gosi')
+              }
+
+              if (attachmentFiles.tax_exemption_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع شهادة الإعفاء الضريبي...
+                  </div>
+                \`
+                data.tax_exemption_attachment_url = await uploadAttachment(attachmentFiles.tax_exemption_attachment, 'tax_exemption')
+              }
+
+              if (attachmentFiles.additional_1_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع مستند إضافي 1...
+                  </div>
+                \`
+                data.additional_1_attachment_url = await uploadAttachment(attachmentFiles.additional_1_attachment, 'additional_1')
+              }
+
+              if (attachmentFiles.additional_2_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع مستند إضافي 2...
+                  </div>
+                \`
+                data.additional_2_attachment_url = await uploadAttachment(attachmentFiles.additional_2_attachment, 'additional_2')
+              }
+
+              if (attachmentFiles.additional_3_attachment) {
+                document.getElementById('message').innerHTML = \`
+                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+                    <i class="fas fa-spinner fa-spin ml-2"></i>
+                    جاري رفع مستند إضافي 3...
+                  </div>
+                \`
+                data.additional_3_attachment_url = await uploadAttachment(attachmentFiles.additional_3_attachment, 'additional_3')
               }
               
               // Update financing request
@@ -35683,7 +37180,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Edit request page error:",t),e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});p.get("/admin/requests",async e=>{try{const t=await x(e);let a=`
+    `)}catch(t){return console.error("Edit request page error:",t),e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});c.get("/admin/requests",async e=>{try{const t=await y(e);let a=`
       SELECT 
         fr.id,
         fr.customer_id,
@@ -35693,25 +37190,39 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         fr.status,
         fr.current_stage_id,
         fr.created_at,
+        fr.assigned_bank_agent_id,
+        bagent.id AS bank_agent_role5_user_id,
+        emp.id AS assigned_employee_id,
         c.full_name as customer_name,
         c.assigned_to as customer_assigned_to,
         b.bank_name as bank_name,
         ws.stage_name as workflow_stage_name,
         ws.stage_name_ar as workflow_stage_name_ar,
-        ws.stage_color as workflow_stage_color
+        ws.stage_color as workflow_stage_color,
+        COALESCE(NULLIF(TRIM(bagent.full_name), ''), NULLIF(TRIM(bagent.username), '')) as assigned_bank_agent_name,
+        COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) as assigned_employee_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
+      LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 14)
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      LEFT JOIN users bagent ON bagent.id = fr.assigned_bank_agent_id AND bagent.role_id = 5
     `,s=[];t.roleId===1||(t.roleId===2||t.roleId===3?t.tenantId&&(a+=" WHERE c.tenant_id = ?",s.push(t.tenantId)):t.roleId===4?t.tenantId&&t.userId?(a+=` WHERE c.tenant_id = ? AND EXISTS (
           SELECT 1 FROM customer_assignments ca
           WHERE ca.customer_id = c.id AND ca.employee_id = ?
-        )`,s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0":k(t.roleId)===5&&t.tenantId&&t.userId?(a+=" WHERE c.tenant_id = ? AND fr.assigned_bank_agent_id = ?",s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=((await e.env.DB.prepare(`
+        )`,s.push(t.tenantId,t.userId)):a+=" WHERE 1 = 0":E(t.roleId)===5&&t.tenantId&&t.userId?(a+=` WHERE c.tenant_id = ? AND (
+          fr.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+        )`,s.push(t.tenantId,t.userId,t.userId)):a+=" WHERE 1 = 0"),a+=" ORDER BY fr.created_at DESC";const n=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all(),l=((await e.env.DB.prepare(`
       SELECT stage_name_ar
       FROM workflow_stages
       WHERE is_active = 1
       ORDER BY stage_order ASC, id ASC
-    `).all())?.results||[]).map(g=>String(g?.stage_name_ar||"").trim()).filter(g=>g.length>0),i=["قيد الانتظار","قيد المراجعة","مقبول","موافق عليه","مرفوض","قيد المعالجة","مكتمل","ملغي","غير محدد"],o=Array.from(new Set([...l,...i])),d=JSON.stringify(o).replace(/</g,"\\u003c"),c=k(t.roleId),u=t.roleId!==3&&c!==5,m=[1,2,3,4].includes(Number(t.roleId)),f=c===5;return e.html(`
+    `).all())?.results||[]).map(g=>String(g?.stage_name_ar||"").trim()).filter(g=>g.length>0),i=["قيد الانتظار","قيد المراجعة","مقبول","موافق عليه","مرفوض","قيد المعالجة","مكتمل","ملغي","غير محدد"],o=Array.from(new Set([...l,...i])),d=JSON.stringify(o).replace(/</g,"\\u003c"),p=E(t.roleId),u=t.roleId!==3&&p!==5,m=[1,2,3,4].includes(Number(t.roleId)),b=p===5;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -35753,15 +37264,26 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           
           .overflow-x-auto table {
             min-width: 100%;
-            width: 100%;
+            width: max-content;
           }
 
-          @media (max-width: 1024px) {
-            .overflow-x-auto table {
-              min-width: 1200px;
-              width: max-content;
-            }
-          }
+          .truncate-cell { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+          .truncate-cell.sm { max-width: 160px; }
+          .filter-hidden { display: none !important; }
+
+          /* Hover-to-reveal horizontal scroll arrows (requests table) */
+          .edge-scroll-wrap { position: relative; }
+          /* Don't block clicks on the table (actions buttons near edges) */
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 10; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 0; pointer-events: none; transition: opacity 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          /* Wrap hover (not zone — zone uses pointer-events:none so table buttons stay clickable) */
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+          .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
+          .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
 
           .requests-table-scroll {
             overflow: visible !important;
@@ -35786,7 +37308,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             background-color: inherit !important;
           }
           
-          ${F()}
+          ${$()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -35812,7 +37334,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            ${f?"":'<a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>'}
+            ${b?"":'<a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>'}
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -35834,7 +37356,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <i class="fas fa-file-export ml-2"></i>
                   تصدير Excel
                 </button>
-                ${f?"":`
+                ${b?"":`
                 <a href="/admin/reports/requests-followup" 
                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all inline-block text-center">
                   <i class="fas fa-chart-line ml-2"></i>
@@ -35892,43 +37414,52 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </div>
           </div>
           
-          <div class="bg-white rounded-xl shadow-lg overflow-visible">
-            <div>
-              <table class="min-w-full" id="dataTable">
+          <div class="bg-white rounded-xl shadow-lg overflow-x-hidden">
+            <div class="edge-scroll-wrap">
+              <div class="edge-scroll-zone left">
+                <div id="requestsEdgeLeft" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'left')" aria-label="scroll left">
+                    <i class="fas fa-chevron-left text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="edge-scroll-zone right">
+                <div id="requestsEdgeRight" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('requestsTableScroll', 'right')" aria-label="scroll right">
+                    <i class="fas fa-chevron-right text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div id="requestsTableScroll" class="overflow-x-auto no-hscrollbar">
+              <table class="min-w-full w-max" id="dataTable">
                 <thead class="bg-gray-50">
                   <tr>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">العميل</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="الموظف (دور 4) المعيّن للعميل">الموظف المخصص</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="المستخدم بدور 5 المعيّن على الطلب">موظف البنك</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البنك</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المبلغ</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المدة</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${n.results.map(g=>{const b={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"},y=g.workflow_stage_name_ar||b[g.status]||g.status||"غير محدد",h={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"},w=g.workflow_stage_color?"":h[g.status]||"bg-gray-100 text-gray-800",v=g.workflow_stage_color?`background-color: ${g.workflow_stage_color}20; color: ${g.workflow_stage_color};`:"";return`
+                ${n.results.map(g=>{const x={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"},h=g.workflow_stage_name_ar||x[g.status]||g.status||"غير محدد",f={pending:"bg-yellow-100 text-yellow-800",under_review:"bg-blue-100 text-blue-800",approved:"bg-green-100 text-green-800",rejected:"bg-red-100 text-red-800",processing:"bg-purple-100 text-purple-800",completed:"bg-teal-100 text-teal-800",cancelled:"bg-gray-100 text-gray-800"},v=g.workflow_stage_color?"":f[g.status]||"bg-gray-100 text-gray-800",w=g.workflow_stage_color?`background-color: ${g.workflow_stage_color}20; color: ${g.workflow_stage_color};`:"",_=g.assigned_employee_name?String(g.assigned_employee_name):"",I=g.bank_agent_role5_user_id!=null?Number(g.bank_agent_role5_user_id):null,k=g.assigned_bank_agent_name?String(g.assigned_bank_agent_name):"",T=(k+" "+(I!=null&&!Number.isNaN(I)?"#"+I:"")).trim();return`
                   <tr class="hover:bg-gray-50" 
                       data-customer="${g.customer_name||""}" 
+                      data-employee="${_.replace(/"/g,"&quot;")}"
+                      data-bank-agent="${T.replace(/"/g,"&quot;")}"
                       data-bank="${g.bank_name||""}" 
-                      data-status="${y}">
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${g.customer_name||"عميل #"+g.customer_id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${g.bank_name||"بنك #"+(g.selected_bank_id||"-")}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${g.requested_amount?.toLocaleString("ar-SA")} ريال</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${g.duration_months} شهر</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span class="px-2 py-1 text-xs rounded-full ${w}" style="${v}">
-                        ${y}
-                      </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">${new Date(g.created_at).toLocaleDateString("ar-SA")}</td>
+                      data-status="${h}">
                     <td class="px-6 py-4 whitespace-nowrap text-right relative">
                       <div class="relative inline-block text-right">
                         <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
                           الإجراءات <i class="fas fa-chevron-down text-xs"></i>
                         </button>
                         <div class="actions-dropdown-menu hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
-                          ${f?"":`
+                          ${b?"":`
                           <a href="/admin/requests/${g.id}/workflow" class="flex items-center gap-2 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">
                             <i class="fas fa-clock w-4"></i> الجدول الزمني
                           </a>
@@ -35951,18 +37482,249 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                         </div>
                       </div>
                     </td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="truncate-cell">${g.customer_name||"عميل #"+g.customer_id}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${_?`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${_}</span></span>`:'<span class="text-gray-300 text-sm">—</span>'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${I!=null&&!Number.isNaN(I)?`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${I}"><span class="truncate-cell sm">${k||"—"}</span></span>`:'<span class="text-gray-300 text-sm">—</span>'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap"><span class="truncate-cell sm">${g.bank_name||"بنك #"+(g.selected_bank_id||"-")}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap">${g.requested_amount?.toLocaleString("ar-SA")} ريال</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${g.duration_months} شهر</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="px-2 py-1 text-xs rounded-full ${v}" style="${w}">
+                        ${h}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(g.created_at).toLocaleDateString("ar-SA")}</td>
                   </tr>
                 `}).join("")}
               </tbody>
               </table>
+            </div>
+            </div>
+
+            <!-- Requests Pagination -->
+            <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="requestsPrevBtn" onclick="setRequestsPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                <span id="requestsPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                <button id="requestsNextBtn" onclick="setRequestsPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+              </div>
             </div>
           </div>
         </div>
         
         <script>
           const REQUEST_STATUS_OPTIONS = ${d};
+          // Pagination + edge-scroll (Requests list page)
+          const requestsPaging = { page: 1, pageSize: 15, lastSig: '' }
+          function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
+          function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
+
+          window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            const step = 360
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            let delta = visualDirection === 'left' ? -step : step
+            if (dir === 'rtl') delta = -delta
+            const current = getNormalizedScrollLeft(el)
+            animateNormalizedScrollLeft(el, current + delta, 260)
+            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'requestsEdgeLeft', 'requestsEdgeRight'))
+          }
+
+          function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth
+            const clamped = Math.max(0, Math.min(max, normalizedLeft))
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') { el.scrollLeft = clamped; return }
+            const type = getRtlScrollType()
+            if (type === 'negative') el.scrollLeft = -clamped
+            else if (type === 'reverse') el.scrollLeft = max - clamped
+            else el.scrollLeft = clamped
+          }
+
+          function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            if (prefersReduced) { setNormalizedScrollLeft(el, target); return }
+
+            const max = el.scrollWidth - el.clientWidth
+            const to = Math.max(0, Math.min(max, target))
+            const from = getNormalizedScrollLeft(el)
+            const delta = to - from
+            if (Math.abs(delta) < 1) return
+
+            const start = performance.now()
+            const duration = Math.max(120, Number(durationMs) || 260)
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1)
+            el.dataset.edgeScrollAnimToken = animToken
+
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+            const tick = (now) => {
+              if (el.dataset.edgeScrollAnimToken !== animToken) return
+              const t = Math.min(1, (now - start) / duration)
+              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t))
+              if (t < 1) requestAnimationFrame(tick)
+            }
+            requestAnimationFrame(tick)
+          }
+
+          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId)
+            const arrow = document.getElementById(arrowBtnId)
+            if (!el || !arrow) return
+            const wrap = el.closest('.edge-scroll-wrap')
+            if (!wrap) return
+            const wrapRect = wrap.getBoundingClientRect()
+            const vhCenter = window.innerHeight / 2
+            const padding = 16
+            const minY = wrapRect.top + padding
+            const maxY = wrapRect.bottom - padding
+            const desired = vhCenter
+            const clamped = Math.max(minY, Math.min(maxY, desired))
+            const relativeTop = clamped - wrapRect.top
+            arrow.style.top = String(relativeTop) + 'px'
+          }
+
+          let __rtlScrollType = null
+          function getRtlScrollType() {
+            if (__rtlScrollType) return __rtlScrollType
+            const div = document.createElement('div')
+            div.style.width = '4px'
+            div.style.height = '1px'
+            div.style.overflow = 'scroll'
+            div.style.direction = 'rtl'
+            div.style.position = 'absolute'
+            div.style.top = '-9999px'
+            const inner = document.createElement('div')
+            inner.style.width = '8px'
+            inner.style.height = '1px'
+            div.appendChild(inner)
+            document.body.appendChild(div)
+            if (div.scrollLeft > 0) __rtlScrollType = 'reverse'
+            else {
+              div.scrollLeft = 1
+              __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default'
+            }
+            document.body.removeChild(div)
+            return __rtlScrollType
+          }
+
+          function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            if (dir !== 'rtl') return el.scrollLeft
+            const type = getRtlScrollType()
+            if (type === 'negative') return -el.scrollLeft
+            if (type === 'reverse') return max - el.scrollLeft
+            return el.scrollLeft
+          }
+
+          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            const leftWrap = document.getElementById(leftBtnId)
+            const rightWrap = document.getElementById(rightBtnId)
+            if (!el || !leftWrap || !rightWrap) return
+
+            const canScroll = el.scrollWidth > el.clientWidth + 2
+            if (!canScroll) {
+              leftWrap.classList.add('edge-hidden')
+              rightWrap.classList.add('edge-hidden')
+              return
+            }
+
+            const maxScrollLeft = el.scrollWidth - el.clientWidth
+            const sl = getNormalizedScrollLeft(el)
+            const canLeft = sl > 1
+            const canRight = sl < maxScrollLeft - 1
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
+            const showLeft = dir === 'rtl' ? canRight : canLeft
+            const showRight = dir === 'rtl' ? canLeft : canRight
+            leftWrap.classList.toggle('edge-hidden', !showLeft)
+            rightWrap.classList.toggle('edge-hidden', !showRight)
+
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId)
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId)
+          }
+
+          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId)
+            if (!el) return
+            if (el.dataset.edgeScrollBound === '1') return
+            el.dataset.edgeScrollBound = '1'
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId)
+            el.addEventListener('scroll', tick, { passive: true })
+            window.addEventListener('resize', tick)
+            window.addEventListener('scroll', tick, { passive: true })
+            setTimeout(tick, 0)
+          }
+
+          function renderRequestsPaginationUI(total) {
+            const pageSizeSelect = document.getElementById('requestsPageSize')
+            const prevBtn = document.getElementById('requestsPrevBtn')
+            const nextBtn = document.getElementById('requestsNextBtn')
+            const info = document.getElementById('requestsPageInfo')
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return
+
+            const options = getPageSizeOptions(total)
+            if (options.indexOf(requestsPaging.pageSize) === -1) requestsPaging.pageSize = 15
+            pageSizeSelect.innerHTML = options
+              .map((n) => '<option value="' + n + '" ' + (n === requestsPaging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+              .join('')
+
+            const totalPages = Math.max(1, Math.ceil(total / requestsPaging.pageSize))
+            requestsPaging.page = clampPage(requestsPaging.page, totalPages)
+            const start = total === 0 ? 0 : (requestsPaging.page - 1) * requestsPaging.pageSize + 1
+            const end = Math.min(total, requestsPaging.page * requestsPaging.pageSize)
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total)
+            prevBtn.disabled = requestsPaging.page <= 1
+            nextBtn.disabled = requestsPaging.page >= totalPages
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled)
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled)
+          }
+
+          window.setRequestsPageSize = function(value) {
+            const parsed = Number(value)
+            requestsPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
+            requestsPaging.page = 1
+            filterTable()
+          }
+          window.setRequestsPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') requestsPaging.page -= 1
+            else if (directionOrPage === 'next') requestsPaging.page += 1
+            else {
+              const parsed = Number(directionOrPage)
+              if (Number.isFinite(parsed)) requestsPaging.page = parsed
+            }
+            filterTable()
+          }
+
+          function applyRequestsPagination() {
+            const tableBody = document.getElementById('tableBody')
+            if (!tableBody) return
+            const rows = Array.from(tableBody.getElementsByTagName('tr'))
+            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
+            renderRequestsPaginationUI(visibleRows.length)
+            const totalPages = Math.max(1, Math.ceil(visibleRows.length / requestsPaging.pageSize))
+            requestsPaging.page = clampPage(requestsPaging.page, totalPages)
+            const startIdx = (requestsPaging.page - 1) * requestsPaging.pageSize
+            const endIdx = startIdx + requestsPaging.pageSize
+            visibleRows.forEach((row, idx) => {
+              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
+            })
+            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
+            setupEdgeScrollOnce('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
+            updateEdgeScrollControls('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
+          }
           function closeAllDropdowns() {
             document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
+              restorePortaledMenu(m);
               m.classList.add('hidden');
               m.style.top = '';
               m.style.bottom = '';
@@ -35976,6 +37738,96 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             document.querySelectorAll('tbody.dropdown-open').forEach(tb => tb.classList.remove('dropdown-open'));
             document.querySelectorAll('tr.dropdown-active-row').forEach(tr => tr.classList.remove('dropdown-active-row'));
             document.querySelectorAll('tbody .actions-dropdown-btn').forEach(b => { b.style.visibility = ''; });
+          }
+
+          function unbindActionsMenuRepos(menu) {
+            if (!menu._actionsRepos) return;
+            const scrollEl = menu._actionsRepos.scrollEl;
+            const reposition = menu._actionsRepos.reposition;
+            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
+            if (reposition) window.removeEventListener('resize', reposition);
+            delete menu._actionsRepos;
+          }
+
+          function restorePortaledMenu(menu) {
+            if (!menu || menu.dataset.portal !== '1') return;
+            unbindActionsMenuRepos(menu);
+            const placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
+            if (placeholder && placeholder.parentNode) {
+              placeholder.parentNode.replaceChild(menu, placeholder);
+            }
+            delete menu.dataset.portal;
+            delete menu.dataset.portalPlaceholderId;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.right = '';
+            menu.style.bottom = '';
+            menu.style.marginTop = '';
+            menu.style.marginBottom = '';
+            menu.style.zIndex = '';
+          }
+
+          /** Move menu onto .edge-scroll-wrap (outside horizontal scroll panel) — avoids scrollbar clipping without covering the navbar. */
+          function anchorActionsMenu(btn, menu) {
+            if (!menu || menu.dataset.portal === '1') return;
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            const wrap = scrollEl ? scrollEl.closest('.edge-scroll-wrap') : null;
+            const host = wrap || scrollEl;
+            if (!host || !menu.parentNode) return;
+            const placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
+            const placeholder = document.createElement('span');
+            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
+            menu.parentNode.insertBefore(placeholder, menu);
+            menu.dataset.portal = '1';
+            menu.dataset.portalPlaceholderId = placeholderId;
+            host.appendChild(menu);
+          }
+
+          function positionAnchoredActionsMenu(btn, menu) {
+            if (!btn || !menu || !menu.parentElement) return;
+            const host = menu.parentElement;
+            const hr = host.getBoundingClientRect();
+            const br = btn.getBoundingClientRect();
+
+            menu.style.position = 'absolute';
+            menu.style.marginTop = '0';
+            menu.style.marginBottom = '0';
+            menu.style.right = 'auto';
+            menu.style.bottom = 'auto';
+
+            let w = menu.offsetWidth || 176;
+            let h = menu.offsetHeight || 200;
+            if (w < 10) w = 176;
+            if (h < 10) h = 200;
+
+            const hw = hr.width || host.clientWidth || 0;
+            let left = br.right - hr.left - w;
+            if (hw > 0 && Number.isFinite(left)) left = Math.max(4, Math.min(hw - w - 4, left));
+            else left = Number.isFinite(left) ? Math.max(4, left) : 4;
+
+            let top = br.bottom - hr.top + 6;
+            const spaceBelow = hr.bottom - br.bottom;
+            if (spaceBelow < Math.min(h, 72) && (br.top - hr.top) > Math.min(h, 72)) {
+              top = br.top - hr.top - h - 6;
+            }
+
+            menu.style.left = String(Math.round(left)) + 'px';
+            menu.style.top = String(Math.round(top)) + 'px';
+            menu.style.zIndex = '40';
+          }
+
+          function bindActionsMenuRepos(btn, menu) {
+            unbindActionsMenuRepos(menu);
+            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            if (!scrollEl) return;
+            function reposition() {
+              if (menu.classList.contains('hidden')) return;
+              positionAnchoredActionsMenu(btn, menu);
+            }
+            menu._actionsRepos = { scrollEl: scrollEl, reposition: reposition };
+            scrollEl.addEventListener('scroll', reposition, { passive: true });
+            window.addEventListener('resize', reposition);
           }
 
           function positionDropdownMenu(menu) {
@@ -36006,12 +37858,28 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
 
           function toggleActionsDropdown(btn) {
-            const menu = btn.nextElementSibling;
+            let menu = null;
+            const id = btn?.dataset?.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
+            if (id) {
+              const found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
+              if (found) menu = found;
+            }
+            if (!menu) {
+              const sib = btn.nextElementSibling;
+              if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) menu = sib;
+            }
+            if (!menu) return;
             const willOpen = menu.classList.contains('hidden');
             closeAllDropdowns();
             if (willOpen) {
               menu.classList.remove('hidden');
-              positionDropdownMenu(menu);
+              if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
+              btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
+              anchorActionsMenu(btn, menu);
+              requestAnimationFrame(function() {
+                positionAnchoredActionsMenu(btn, menu);
+                bindActionsMenuRepos(btn, menu);
+              });
               const cell = btn.closest('td');
               if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
               const row = btn.closest('tr');
@@ -36039,10 +37907,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             const tableBody = document.getElementById('tableBody')
             const rows = tableBody.getElementsByTagName('tr')
             let visibleCount = 0
+            const sig = JSON.stringify({ searchInput, filterField, statusFilter })
+            if (sig !== requestsPaging.lastSig) { requestsPaging.lastSig = sig; requestsPaging.page = 1 }
             
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i]
               const customer = row.getAttribute('data-customer') || ''
+              const employee = row.getAttribute('data-employee') || ''
+              const bankAgent = row.getAttribute('data-bank-agent') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
               
@@ -36063,7 +37935,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     break
                   default: // 'all'
                     shouldShow = customer.toLowerCase().includes(searchInput) || 
+                                employee.toLowerCase().includes(searchInput) ||
                                 bank.toLowerCase().includes(searchInput) || 
+                                bankAgent.toLowerCase().includes(searchInput) ||
                                 status.toLowerCase().includes(searchInput)
                 }
               }
@@ -36071,11 +37945,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               const statusMatches = statusFilter === 'all' || status === statusFilter
               const visible = shouldShow && statusMatches
 
-              row.style.display = visible ? '' : 'none'
+              row.classList.toggle('filter-hidden', !visible)
               if (visible) visibleCount++
             }
             
             document.getElementById('totalCount').textContent = visibleCount
+            applyRequestsPagination()
           }
 
           function hydrateStatusFilterOptions() {
@@ -36160,11 +38035,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           hydrateStatusFilterOptions()
           hydrateRequestsSidebarStatuses()
           applyRequestStatusFilterFromUrl()
+          filterTable()
           
           function exportToCSV() {
             const data = [
-              ['العميل', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
-              ${n.results.map(g=>{const y={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[g.status]||g.status,h=g.customer_name||`عميل #${g.customer_id}`,w=g.bank_name||`بنك #${g.selected_bank_id||"-"}`;return`['${h}', '${w}', '${g.requested_amount||0}', '${g.duration_months}', '${y}', '${new Date(g.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
+              ['العميل', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
+              ${n.results.map(g=>{const h={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[g.status]||g.status,f=g.customer_name||`عميل #${g.customer_id}`,v=g.bank_name||`بنك #${g.selected_bank_id||"-"}`,w=g.assigned_employee_name?String(g.assigned_employee_name):"—",_=g.bank_agent_role5_user_id!=null?Number(g.bank_agent_role5_user_id):null,I=g.assigned_bank_agent_name?String(g.assigned_bank_agent_name):"",k=_!=null&&!Number.isNaN(_)&&I||"—";return`['${String(f).replace(/'/g,"\\'")}', '${String(w).replace(/'/g,"\\'")}', '${String(k).replace(/'/g,"\\'")}', '${String(v).replace(/'/g,"\\'")}', '${g.requested_amount||0}', '${g.duration_months}', '${h}', '${new Date(g.created_at).toLocaleDateString("ar-SA")}']`}).join(`,
               `)}
             ];
             
@@ -36182,7 +38058,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});p.get("/admin/requests/:id/delete",async e=>{try{if((await x(e)).roleId===5)return e.redirect("/admin/requests");const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});p.get("/admin/requests/new",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(k(t.roleId)===5)return e.redirect("/admin/requests");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await gt(e,t),s=e.req.query("customer_id");let n=null;if(s!=null&&String(s).trim()!==""){const m=parseInt(String(s),10);!Number.isNaN(m)&&m>0&&(n=m)}const r=n!=null&&a.some(m=>Number(m.id)===n);let l="SELECT id, bank_name FROM banks WHERE is_active = 1";const i=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);l+=" AND (tenant_id = ? OR tenant_id IS NULL)",i.push(t.tenantId)}l+=" ORDER BY bank_name";let o;try{o=i.length?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all()}catch(m){console.error("Error loading banks for /admin/requests/new:",m),o=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const d=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),c=JSON.stringify(a.map(m=>({id:m.id,name:m.full_name||"",text:`${m.full_name} - ${m.phone}`,tenant_id:m.tenant_id!=null?Number(m.tenant_id):null}))).replace(/</g,"\\u003c"),u=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
+    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});c.get("/admin/requests/:id/delete",async e=>{try{if(!(await y(e)).userId)return e.redirect("/login");const a=e.req.param("id");return await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1")}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});c.get("/admin/requests/new",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.redirect("/login");if(E(t.roleId)===5)return e.redirect("/admin/requests");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await yt(e,t),s=e.req.query("customer_id");let n=null;if(s!=null&&String(s).trim()!==""){const m=parseInt(String(s),10);!Number.isNaN(m)&&m>0&&(n=m)}const r=n!=null&&a.some(m=>Number(m.id)===n);let l="SELECT id, bank_name FROM banks WHERE is_active = 1";const i=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);l+=" AND (tenant_id = ? OR tenant_id IS NULL)",i.push(t.tenantId)}l+=" ORDER BY bank_name";let o;try{o=i.length?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all()}catch(m){console.error("Error loading banks for /admin/requests/new:",m),o=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const d=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),p=JSON.stringify(a.map(m=>({id:m.id,name:m.full_name||"",text:`${m.full_name} - ${m.phone}`,tenant_id:m.tenant_id!=null?Number(m.tenant_id):null}))).replace(/</g,"\\u003c"),u=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -36378,7 +38254,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             </form>
           </div>
         </div>
-        <script type="application/json" id="newRequestCustomersJSON">${c}<\/script>
+        <script type="application/json" id="newRequestCustomersJSON">${p}<\/script>
         <script type="application/json" id="newRequestPrefillCustomerId">${JSON.stringify(r?n:null)}<\/script>
         <script type="application/json" id="newRequestPageCtx">${u}<\/script>
         <script>
@@ -36465,7 +38341,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     bankAgentSelect.appendChild(o);
                   });
                   if (data.data.length === 0 && bankAgentHint) {
-                    bankAgentHint.textContent = 'لا يوجد وكلاء بنك مفعّلون لهذا البنك في هذه الشركة.';
+                    bankAgentHint.textContent = 'لا يوجد موظفو تمويل مفعّلون لهذه الشركة.';
                     bankAgentHint.classList.remove('hidden');
                   }
                 } else {
@@ -36607,7 +38483,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests/new:",t),e.html('<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">'+(t?.message||t)+'</p><pre style="direction:ltr; text-align:left;">'+(t?.stack||"No stack")+"</pre>")}});p.get("/admin/requests/:id",async e=>{try{const t=e.req.param("id"),a=await x(e);if(!a.userId)return e.redirect("/login");const s=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("Error in /admin/requests/new:",t),e.html('<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">'+(t?.message||t)+'</p><pre style="direction:ltr; text-align:left;">'+(t?.stack||"No stack")+"</pre>")}});c.get("/admin/requests/:id",async e=>{try{const t=e.req.param("id"),a=await y(e);if(!a.userId)return e.redirect("/login");const s=await e.env.DB.prepare(`
       SELECT fr.*, 
              c.full_name as customer_name, c.phone as customer_phone, c.email as customer_email,
              c.tenant_id as customer_tenant_id,
@@ -36617,11 +38493,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!s)return e.html("<h1>الطلب غير موجود</h1>");if(k(a.roleId)===5){const r=a.tenantId;if(!r||!a.userId||Number(s.customer_tenant_id)!==Number(r)||Number(s.assigned_bank_agent_id)!==Number(a.userId))return e.redirect("/admin/requests")}const n=k(a.roleId)===5;try{const r=await e.env.DB.prepare(`
-        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+    `).bind(t).first();if(!s)return e.html("<h1>الطلب غير موجود</h1>");if(E(a.roleId)===5){const r=a.tenantId;if(!r||!a.userId||Number(s.customer_tenant_id)!==Number(r)||Number(s.assigned_bank_agent_id)!==Number(a.userId)&&!await K(e.env.DB,a,{id:Number(s.customer_id),tenant_id:s.customer_tenant_id!=null?Number(s.customer_tenant_id):null}))return e.redirect("/admin/requests")}const n=E(a.roleId)===5;try{const r=await e.env.DB.prepare(`
+        SELECT
+          identity_attachment_url,
+          signature_attachment_url,
+          salary_profile_attachment_url,
+          gosi_attachment_url,
+          tax_exemption_attachment_url,
+          additional_1_attachment_url,
+          additional_2_attachment_url,
+          additional_3_attachment_url
         FROM customers
         WHERE id = ?
-      `).bind(s.customer_id).first();r&&(s.id_attachment_url=s.id_attachment_url||r.id_attachment_url||null,s.bank_statement_attachment_url=s.bank_statement_attachment_url||r.bank_statement_attachment_url||null,s.salary_attachment_url=s.salary_attachment_url||r.salary_attachment_url||null,s.additional_attachment_url=s.additional_attachment_url||r.additional_attachment_url||null)}catch(r){if(!M(r))throw r}return e.html(`
+      `).bind(s.customer_id).first();r&&(s.identity_attachment_url=s.identity_attachment_url||r.identity_attachment_url||null,s.signature_attachment_url=s.signature_attachment_url||r.signature_attachment_url||null,s.salary_profile_attachment_url=s.salary_profile_attachment_url||r.salary_profile_attachment_url||null,s.gosi_attachment_url=s.gosi_attachment_url||r.gosi_attachment_url||null,s.tax_exemption_attachment_url=s.tax_exemption_attachment_url||r.tax_exemption_attachment_url||null,s.additional_1_attachment_url=s.additional_1_attachment_url||r.additional_1_attachment_url||null,s.additional_2_attachment_url=s.additional_2_attachment_url||r.additional_2_attachment_url||null,s.additional_3_attachment_url=s.additional_3_attachment_url||r.additional_3_attachment_url||null)}catch(r){if(!P(r))throw r}return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -36742,151 +38626,36 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               <i class="fas fa-paperclip text-blue-600 ml-3"></i>
               المرفقات
             </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              ${s.id_attachment_url?`
-                <div class="border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-id-card text-2xl text-blue-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">صورة الهوية</span>
+            ${(()=>{const r=[{key:"identity",label:"ملف الهوية",icon:"fa-id-card",url:s.identity_attachment_url},{key:"signature",label:"ملف السمة",icon:"fa-signature",url:s.signature_attachment_url},{key:"salary_profile",label:"ملف تعريف الراتب",icon:"fa-money-check",url:s.salary_profile_attachment_url},{key:"gosi",label:"ملف التأمينات الاجتماعية",icon:"fa-shield-alt",url:s.gosi_attachment_url},{key:"tax_exemption",label:"شهادة الإعفاء الضريبي",icon:"fa-certificate",url:s.tax_exemption_attachment_url},{key:"additional_1",label:"مستند إضافي 1",icon:"fa-file-alt",url:s.additional_1_attachment_url},{key:"additional_2",label:"مستند إضافي 2",icon:"fa-file-alt",url:s.additional_2_attachment_url},{key:"additional_3",label:"مستند إضافي 3",icon:"fa-file-alt",url:s.additional_3_attachment_url}].filter(l=>l.url);return r.length===0?`<div class="text-center mt-2 text-gray-500">
+                  <i class="fas fa-inbox text-4xl mb-2"></i>
+                  <p>لا توجد مرفقات لهذا الطلب</p>
+                </div>`:`<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                ${r.map(l=>`
+                  <div class="border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                    <div class="flex items-center justify-between mb-3">
+                      <div class="flex items-center">
+                        <i class="fas ${l.icon} text-2xl text-blue-600 ml-3"></i>
+                        <span class="font-bold text-gray-800">${l.label}</span>
+                      </div>
+                      <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                     </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${s.id_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${s.id_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${s.id_attachment_url}', 'id')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              `:`
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-id-card text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">صورة الهوية</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-              
-              ${s.salary_attachment_url?`
-                <div class="border-2 border-green-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-money-check-alt text-2xl text-green-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">كشف الراتب</span>
+                    <div class="grid grid-cols-3 gap-2">
+                      <a href="${l.url}" target="_blank"
+                         class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
+                        <i class="fas fa-eye"></i> عرض
+                      </a>
+                      <a href="${l.url}" download
+                         class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
+                        <i class="fas fa-download"></i> تنزيل
+                      </a>
+                      <button onclick="deleteAttachment('${l.url}', '${l.key}')"
+                         class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
+                        <i class="fas fa-trash"></i> حذف
+                      </button>
                     </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                   </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${s.salary_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${s.salary_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${s.salary_attachment_url}', 'salary')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              `:`
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-money-check-alt text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">كشف الراتب</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-              
-              ${s.bank_statement_attachment_url?`
-                <div class="border-2 border-purple-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-file-invoice-dollar text-2xl text-purple-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">كشف الحساب البنكي</span>
-                    </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${s.bank_statement_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${s.bank_statement_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${s.bank_statement_attachment_url}', 'bank_statement')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              `:`
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-file-invoice-dollar text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">كشف الحساب البنكي</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-              
-              ${s.additional_attachment_url?`
-                <div class="border-2 border-orange-200 rounded-lg p-4 hover:shadow-md transition">
-                  <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center">
-                      <i class="fas fa-file-alt text-2xl text-orange-600 ml-3"></i>
-                      <span class="font-bold text-gray-800">مرفق إضافي</span>
-                    </div>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <a href="${s.additional_attachment_url}" target="_blank" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-eye"></i> عرض
-                    </a>
-                    <a href="${s.additional_attachment_url}" download 
-                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-download"></i> تنزيل
-                    </a>
-                    <button onclick="deleteAttachment('${s.additional_attachment_url}', 'additional')" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
-                      <i class="fas fa-trash"></i> حذف
-                    </button>
-                  </div>
-                </div>
-              `:`
-                <div class="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div class="flex items-center mb-3">
-                    <i class="fas fa-file-alt text-2xl text-gray-400 ml-3"></i>
-                    <span class="font-bold text-gray-600">مرفق إضافي</span>
-                  </div>
-                  <p class="text-sm text-gray-500">لم يتم رفع المرفق</p>
-                </div>
-              `}
-            </div>
-            
-            ${!s.id_attachment_url&&!s.salary_attachment_url&&!s.bank_statement_attachment_url&&!s.additional_attachment_url?`
-              <div class="text-center mt-6 text-gray-500">
-                <i class="fas fa-inbox text-4xl mb-2"></i>
-                <p>لا توجد مرفقات لهذا الطلب</p>
-              </div>
-            `:""}
+                `).join("")}
+              </div>`})()}
           </div>
         </div>
         
@@ -36917,7 +38686,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();return s?await te(e.env.DB,t,s)?e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();return s?await K(e.env.DB,t,s)?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -36985,7 +38754,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>غير مصرح بعرض هذا العميل</h1>",403):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id/edit",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await te(e.env.DB,t,s))return e.html("<h1>غير مصرح بتعديل هذا العميل</h1>",403);const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[],l=await Te(e.env.DB,s.tenant_id??null);let i=[];try{const o=s.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.html(`
+    `):e.html("<h1>غير مصرح بعرض هذا العميل</h1>",403):e.html("<h1>العميل غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id/edit",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare("SELECT * FROM customers WHERE id = ?").bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await K(e.env.DB,t,s))return e.html("<h1>غير مصرح بتعديل هذا العميل</h1>",403);const r=(await e.env.DB.prepare("SELECT * FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[],l=await Ce(e.env.DB,s.tenant_id??null);let i=[];try{const o=s.solutions_json;if(o){const d=JSON.parse(o);Array.isArray(d)&&(i=d.map(p=>({note:typeof p=="string"?p:String(p?.note??"")})))}}catch{}return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -37017,7 +38786,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <label class="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف *</label>
                   <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden">
                     <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
-                    <input type="tel" name="phone" value="${ie(s.phone)}" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl" class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
+                    <input type="tel" name="phone" value="${ue(s.phone)}" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl" class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
                            placeholder="5xxxxxxxx"
                            oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
                            oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
@@ -37122,64 +38891,94 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <i class="fas fa-paperclip ml-2"></i>
                   المرفقات
                 </h2>
-                <div class="mb-6 bg-white p-4 rounded-lg">
-                  <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-id-card ml-1"></i> صورة الهوية:</p>
-                      ${s.id_attachment_url?`<a href="${s.id_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
+                ${(()=>{const o=[{label:"ملف الهوية",icon:"fa-id-card",url:s.identity_attachment_url},{label:"ملف السمة",icon:"fa-signature",url:s.signature_attachment_url},{label:"ملف تعريف الراتب",icon:"fa-money-check",url:s.salary_profile_attachment_url},{label:"ملف التأمينات الاجتماعية",icon:"fa-shield-alt",url:s.gosi_attachment_url},{label:"شهادة الإعفاء الضريبي",icon:"fa-certificate",url:s.tax_exemption_attachment_url},{label:"مستند إضافي 1",icon:"fa-file-alt",url:s.additional_1_attachment_url},{label:"مستند إضافي 2",icon:"fa-file-alt",url:s.additional_2_attachment_url},{label:"مستند إضافي 3",icon:"fa-file-alt",url:s.additional_3_attachment_url}].filter(d=>d.url);return o.length===0?"":`
+                    <div class="mb-6 bg-white p-4 rounded-lg">
+                      <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${o.map(d=>`
+                          <div class="border-r pr-4">
+                            <p class="text-sm text-gray-600 mb-2"><i class="fas ${d.icon} ml-1"></i> ${d.label}:</p>
+                            <a href="${d.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
+                              <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
+                            </a>
+                          </div>
+                        `).join("")}
+                      </div>
                     </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-invoice ml-1"></i> كشف الحساب:</p>
-                      ${s.bank_statement_attachment_url?`<a href="${s.bank_statement_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div class="border-r pr-4">
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-money-check ml-1"></i> تعريف الراتب:</p>
-                      ${s.salary_attachment_url?`<a href="${s.salary_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                    <div>
-                      <p class="text-sm text-gray-600 mb-2"><i class="fas fa-file-alt ml-1"></i> مرفقات إضافية:</p>
-                      ${s.additional_attachment_url?`<a href="${s.additional_attachment_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-external-link-alt ml-1"></i> عرض الملف</a>`:'<span class="text-red-500 text-sm">لم يتم الرفع</span>'}
-                    </div>
-                  </div>
-                </div>
+                  `})()}
                 <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-                <input type="hidden" name="id_attachment_url" id="edit_customer_id_attachment_url" value="${(s.id_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
-                <input type="hidden" name="bank_statement_attachment_url" id="edit_customer_bank_statement_attachment_url" value="${(s.bank_statement_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
-                <input type="hidden" name="salary_attachment_url" id="edit_customer_salary_attachment_url" value="${(s.salary_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
-                <input type="hidden" name="additional_attachment_url" id="edit_customer_additional_attachment_url" value="${(s.additional_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="identity_attachment_url" id="edit_customer_identity_attachment_url" value="${(s.identity_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="signature_attachment_url" id="edit_customer_signature_attachment_url" value="${(s.signature_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="salary_profile_attachment_url" id="edit_customer_salary_profile_attachment_url" value="${(s.salary_profile_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="gosi_attachment_url" id="edit_customer_gosi_attachment_url" value="${(s.gosi_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="tax_exemption_attachment_url" id="edit_customer_tax_exemption_attachment_url" value="${(s.tax_exemption_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="additional_1_attachment_url" id="edit_customer_additional_1_attachment_url" value="${(s.additional_1_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="additional_2_attachment_url" id="edit_customer_additional_2_attachment_url" value="${(s.additional_2_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
+                <input type="hidden" name="additional_3_attachment_url" id="edit_customer_additional_3_attachment_url" value="${(s.additional_3_attachment_url||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-id-card ml-1"></i> صورة الهوية
+                      <i class="fas fa-id-card ml-1"></i> ملف الهوية
                     </label>
-                    <input type="file" id="edit_customer_id_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_identity_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_id_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_identity_attachment_preview" class="mt-2"></div>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-invoice ml-1"></i> كشف الحساب البنكي
+                      <i class="fas fa-signature ml-1"></i> ملف السمة
                     </label>
-                    <input type="file" id="edit_customer_bank_statement_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_signature_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_bank_statement_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_signature_attachment_preview" class="mt-2"></div>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-money-check ml-1"></i> تعريف الراتب
+                      <i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب
                     </label>
-                    <input type="file" id="edit_customer_salary_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_salary_profile_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_salary_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_salary_profile_attachment_preview" class="mt-2"></div>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-alt ml-1"></i> مرفقات إضافية
+                      <i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية
                     </label>
-                    <input type="file" id="edit_customer_additional_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <input type="file" id="edit_customer_gosi_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_additional_attachment_preview" class="mt-2"></div>
+                    <div id="edit_customer_gosi_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-certificate ml-1"></i> شهادة الإعفاء الضريبي
+                    </label>
+                    <input type="file" id="edit_customer_tax_exemption_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_tax_exemption_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 1
+                    </label>
+                    <input type="file" id="edit_customer_additional_1_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_1_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 2
+                    </label>
+                    <input type="file" id="edit_customer_additional_2_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_2_attachment_preview" class="mt-2"></div>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 3
+                    </label>
+                    <input type="file" id="edit_customer_additional_3_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
+                    <div id="edit_customer_additional_3_attachment_preview" class="mt-2"></div>
                   </div>
                 </div>
               </div>
@@ -37249,28 +39048,44 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 var editForm = document.getElementById('edit-customer-form');
                 var editMessageEl = document.getElementById('customer-edit-message');
                 var editAttachmentFiles = {
-                  id: null,
-                  bank_statement: null,
-                  salary: null,
-                  additional: null
+                  identity: null,
+                  signature: null,
+                  salary_profile: null,
+                  gosi: null,
+                  tax_exemption: null,
+                  additional_1: null,
+                  additional_2: null,
+                  additional_3: null
                 };
                 var editAttachmentInputs = {
-                  id: document.getElementById('edit_customer_id_attachment'),
-                  bank_statement: document.getElementById('edit_customer_bank_statement_attachment'),
-                  salary: document.getElementById('edit_customer_salary_attachment'),
-                  additional: document.getElementById('edit_customer_additional_attachment')
+                  identity: document.getElementById('edit_customer_identity_attachment'),
+                  signature: document.getElementById('edit_customer_signature_attachment'),
+                  salary_profile: document.getElementById('edit_customer_salary_profile_attachment'),
+                  gosi: document.getElementById('edit_customer_gosi_attachment'),
+                  tax_exemption: document.getElementById('edit_customer_tax_exemption_attachment'),
+                  additional_1: document.getElementById('edit_customer_additional_1_attachment'),
+                  additional_2: document.getElementById('edit_customer_additional_2_attachment'),
+                  additional_3: document.getElementById('edit_customer_additional_3_attachment')
                 };
                 var editAttachmentPreviewIds = {
-                  id: 'edit_customer_id_attachment_preview',
-                  bank_statement: 'edit_customer_bank_statement_attachment_preview',
-                  salary: 'edit_customer_salary_attachment_preview',
-                  additional: 'edit_customer_additional_attachment_preview'
+                  identity: 'edit_customer_identity_attachment_preview',
+                  signature: 'edit_customer_signature_attachment_preview',
+                  salary_profile: 'edit_customer_salary_profile_attachment_preview',
+                  gosi: 'edit_customer_gosi_attachment_preview',
+                  tax_exemption: 'edit_customer_tax_exemption_attachment_preview',
+                  additional_1: 'edit_customer_additional_1_attachment_preview',
+                  additional_2: 'edit_customer_additional_2_attachment_preview',
+                  additional_3: 'edit_customer_additional_3_attachment_preview'
                 };
                 var editAttachmentHiddenIds = {
-                  id: 'edit_customer_id_attachment_url',
-                  bank_statement: 'edit_customer_bank_statement_attachment_url',
-                  salary: 'edit_customer_salary_attachment_url',
-                  additional: 'edit_customer_additional_attachment_url'
+                  identity: 'edit_customer_identity_attachment_url',
+                  signature: 'edit_customer_signature_attachment_url',
+                  salary_profile: 'edit_customer_salary_profile_attachment_url',
+                  gosi: 'edit_customer_gosi_attachment_url',
+                  tax_exemption: 'edit_customer_tax_exemption_attachment_url',
+                  additional_1: 'edit_customer_additional_1_attachment_url',
+                  additional_2: 'edit_customer_additional_2_attachment_url',
+                  additional_3: 'edit_customer_additional_3_attachment_url'
                 };
                 function setEditMessage(type, text) {
                   if (!editMessageEl) return;
@@ -37429,10 +39244,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     if (submitBtn) submitBtn.disabled = true;
                     try {
                       var uploadOrder = [
-                        { key: 'id', label: 'صورة الهوية' },
-                        { key: 'bank_statement', label: 'كشف الحساب' },
-                        { key: 'salary', label: 'تعريف الراتب' },
-                        { key: 'additional', label: 'المرفقات الإضافية' }
+                        { key: 'identity', label: 'ملف الهوية' },
+                        { key: 'signature', label: 'ملف السمة' },
+                        { key: 'salary_profile', label: 'ملف تعريف الراتب' },
+                        { key: 'gosi', label: 'ملف التأمينات الاجتماعية' },
+                        { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
+                        { key: 'additional_1', label: 'مستند إضافي 1' },
+                        { key: 'additional_2', label: 'مستند إضافي 2' },
+                        { key: 'additional_3', label: 'مستند إضافي 3' }
                       ];
                       for (var i = 0; i < uploadOrder.length; i++) {
                         var item = uploadOrder[i];
@@ -37457,7 +39276,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/customers/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.redirect("/admin/customers")}catch{return e.html("<h1>خطأ في حذف العميل</h1>")}});p.get("/admin/banks/add",async e=>e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/customers/:id/delete",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM customers WHERE id = ?").bind(t).run(),e.redirect("/admin/customers")}catch{return e.html("<h1>خطأ في حذف العميل</h1>")}});c.get("/admin/banks/add",async e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -37508,7 +39327,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       </div>
     </body>
     </html>
-  `));p.get("/admin/customers/:id/report",async e=>{try{const t=await x(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare(`
+  `));c.get("/admin/customers/:id/report",async e=>{try{const t=await y(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id"),s=await e.env.DB.prepare(`
       SELECT 
         c.*,
         ft.type_name as financing_type_name,
@@ -37517,7 +39336,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN financing_types ft ON c.financing_type_id = ft.id
       LEFT JOIN banks b ON c.best_bank_id = b.id
       WHERE c.id = ?
-    `).bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await te(e.env.DB,t,s))return e.html("<h1>غير مصرح بعرض تقرير هذا العميل</h1>",403);const n=s,r=i=>i?new Date(i).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=i=>i?i.toLocaleString("ar-SA"):"غير محدد";return e.html(`
+    `).bind(a).first();if(!s)return e.html("<h1>العميل غير موجود</h1>");if(!await K(e.env.DB,t,s))return e.html("<h1>غير مصرح بعرض تقرير هذا العميل</h1>",403);const n=s,r=i=>i?new Date(i).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",l=i=>i?i.toLocaleString("ar-SA"):"غير محدد";return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -37535,7 +39354,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             page-break-inside: avoid;
           }
           
-          ${F()}
+          ${$()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -37639,37 +39458,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
               المرفقات
             </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${n.id_attachment_url?`
-              <a href="${n.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
-                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
-                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${n.bank_statement_attachment_url?`
-              <a href="${n.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
-                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
-                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${n.salary_attachment_url?`
-              <a href="${n.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
-                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
-                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${n.additional_attachment_url?`
-              <a href="${n.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
-                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
-                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${!n.id_attachment_url&&!n.bank_statement_attachment_url&&!n.salary_attachment_url&&!n.additional_attachment_url?`
-              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
-                لا توجد مرفقات مرفوعة لهذا العميل
-              </div>
-              `:""}
-            </div>
+            ${(()=>{const i=[{label:"ملف الهوية",icon:"fa-id-card",url:n.identity_attachment_url},{label:"ملف السمة",icon:"fa-signature",url:n.signature_attachment_url},{label:"ملف تعريف الراتب",icon:"fa-money-check",url:n.salary_profile_attachment_url},{label:"ملف التأمينات الاجتماعية",icon:"fa-shield-alt",url:n.gosi_attachment_url},{label:"شهادة الإعفاء الضريبي",icon:"fa-certificate",url:n.tax_exemption_attachment_url},{label:"مستند إضافي 1",icon:"fa-file-alt",url:n.additional_1_attachment_url},{label:"مستند إضافي 2",icon:"fa-file-alt",url:n.additional_2_attachment_url},{label:"مستند إضافي 3",icon:"fa-file-alt",url:n.additional_3_attachment_url}].filter(o=>o.url);return i.length===0?`<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                  لا توجد مرفقات مرفوعة لهذا العميل
+                </div>`:`<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${i.map(o=>`
+                  <a href="${o.url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                    <span class="font-bold text-blue-800"><i class="fas ${o.icon} ml-2"></i>${o.label}</span>
+                    <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+                  </a>
+                `).join("")}
+              </div>`})()}
           </div>
 
           <!-- القسم 3: بيانات الحاسبة المالية -->
@@ -37853,7 +39651,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch(t){return console.error("خطأ في عرض تقرير العميل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.get("/admin/requests/:id/report",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("خطأ في عرض تقرير العميل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.get("/admin/requests/:id/report",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
@@ -37871,10 +39669,18 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
     `).bind(t).first();if(!a)return e.html("<h1>الطلب غير موجود</h1>");const s=a;try{const o=await e.env.DB.prepare(`
-        SELECT id_attachment_url, bank_statement_attachment_url, salary_attachment_url, additional_attachment_url
+        SELECT
+          identity_attachment_url,
+          signature_attachment_url,
+          salary_profile_attachment_url,
+          gosi_attachment_url,
+          tax_exemption_attachment_url,
+          additional_1_attachment_url,
+          additional_2_attachment_url,
+          additional_3_attachment_url
         FROM customers
         WHERE id = ?
-      `).bind(s.customer_id).first();o&&(s.id_attachment_url=s.id_attachment_url||o.id_attachment_url||null,s.bank_statement_attachment_url=s.bank_statement_attachment_url||o.bank_statement_attachment_url||null,s.salary_attachment_url=s.salary_attachment_url||o.salary_attachment_url||null,s.additional_attachment_url=s.additional_attachment_url||o.additional_attachment_url||null)}catch(o){if(!M(o))throw o}const n=o=>o?new Date(o).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",r=o=>o?o.toLocaleString("ar-SA"):"غير محدد",l={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=l[s.status]||l.pending;return e.html(`
+      `).bind(s.customer_id).first();o&&(s.identity_attachment_url=s.identity_attachment_url||o.identity_attachment_url||null,s.signature_attachment_url=s.signature_attachment_url||o.signature_attachment_url||null,s.salary_profile_attachment_url=s.salary_profile_attachment_url||o.salary_profile_attachment_url||null,s.gosi_attachment_url=s.gosi_attachment_url||o.gosi_attachment_url||null,s.tax_exemption_attachment_url=s.tax_exemption_attachment_url||o.tax_exemption_attachment_url||null,s.additional_1_attachment_url=s.additional_1_attachment_url||o.additional_1_attachment_url||null,s.additional_2_attachment_url=s.additional_2_attachment_url||o.additional_2_attachment_url||null,s.additional_3_attachment_url=s.additional_3_attachment_url||o.additional_3_attachment_url||null)}catch(o){if(!P(o))throw o}const n=o=>o?new Date(o).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",r=o=>o?o.toLocaleString("ar-SA"):"غير محدد",l={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},i=l[s.status]||l.pending;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -37892,7 +39698,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             page-break-inside: avoid;
           }
           
-          ${F()}
+          ${$()}
         </style>
       </head>
       <body class="bg-gray-50">
@@ -38094,37 +39900,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               <i class="fas fa-paperclip text-cyan-600 ml-2"></i>
               المرفقات
             </h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${s.id_attachment_url?`
-              <a href="${s.id_attachment_url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
-                <span class="font-bold text-blue-800"><i class="fas fa-id-card ml-2"></i>صورة الهوية</span>
-                <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${s.bank_statement_attachment_url?`
-              <a href="${s.bank_statement_attachment_url}" target="_blank" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition">
-                <span class="font-bold text-indigo-800"><i class="fas fa-file-invoice ml-2"></i>كشف الحساب البنكي</span>
-                <span class="text-indigo-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${s.salary_attachment_url?`
-              <a href="${s.salary_attachment_url}" target="_blank" class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition">
-                <span class="font-bold text-green-800"><i class="fas fa-money-check-alt ml-2"></i>كشف الراتب</span>
-                <span class="text-green-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${s.additional_attachment_url?`
-              <a href="${s.additional_attachment_url}" target="_blank" class="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition">
-                <span class="font-bold text-amber-800"><i class="fas fa-paperclip ml-2"></i>مرفق إضافي</span>
-                <span class="text-amber-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
-              </a>
-              `:""}
-              ${!s.id_attachment_url&&!s.bank_statement_attachment_url&&!s.salary_attachment_url&&!s.additional_attachment_url?`
-              <div class="md:col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
-                لا توجد مرفقات مرفوعة لهذا الطلب/العميل
-              </div>
-              `:""}
-            </div>
+            ${(()=>{const o=[{label:"ملف الهوية",icon:"fa-id-card",url:s.identity_attachment_url},{label:"ملف السمة",icon:"fa-signature",url:s.signature_attachment_url},{label:"ملف تعريف الراتب",icon:"fa-money-check",url:s.salary_profile_attachment_url},{label:"ملف التأمينات الاجتماعية",icon:"fa-shield-alt",url:s.gosi_attachment_url},{label:"شهادة الإعفاء الضريبي",icon:"fa-certificate",url:s.tax_exemption_attachment_url},{label:"مستند إضافي 1",icon:"fa-file-alt",url:s.additional_1_attachment_url},{label:"مستند إضافي 2",icon:"fa-file-alt",url:s.additional_2_attachment_url},{label:"مستند إضافي 3",icon:"fa-file-alt",url:s.additional_3_attachment_url}].filter(d=>d.url);return o.length===0?`<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
+                  لا توجد مرفقات مرفوعة لهذا الطلب/العميل
+                </div>`:`<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${o.map(d=>`
+                  <a href="${d.url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+                    <span class="font-bold text-blue-800"><i class="fas ${d.icon} ml-2"></i>${d.label}</span>
+                    <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
+                  </a>
+                `).join("")}
+              </div>`})()}
           </div>
           
           <!-- القسم 4: معلومات إضافية -->
@@ -38178,7 +39963,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch(t){return console.error("خطأ في عرض تقرير طلب التمويل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.get("/admin/requests/:id/workflow",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("خطأ في عرض تقرير طلب التمويل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.get("/admin/requests/:id/workflow",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
@@ -38209,10 +39994,10 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
     `).bind(t).all(),{results:l}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
-    `).bind(t).all(),i={data:{transitions:n,actions:r,tasks:l}},o=ha(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});p.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(t).all(),i={data:{transitions:n,actions:r,tasks:l}},o=Ea(parseInt(t),a,s,i.data||{transitions:[],actions:[],tasks:[]});return e.html(o)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});c.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
-    `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});p.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
+    `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});c.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38275,7 +40060,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/banks/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
+    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/banks/:id/edit",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38326,11 +40111,11 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.parseBody();return await e.env.DB.prepare(`
+    `):e.html("<h1>البنك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.parseBody();return await e.env.DB.prepare(`
       UPDATE banks 
       SET bank_name = ?, description = ?
       WHERE id = ?
-    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});p.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await mt(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});p.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
+    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});c.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await ht(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});c.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -38520,7 +40305,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/rates",async e=>{try{const t=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/rates",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT fr.*, b.bank_name, ft.type_name
       FROM bank_financing_rates fr
       LEFT JOIN banks b ON fr.bank_id = b.id
@@ -39085,7 +40870,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/rates/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),a=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/rates/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),a=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -39221,7 +41006,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});p.get("/admin/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});c.get("/admin/rates/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT fr.*, b.bank_name, ft.type_name
       FROM bank_financing_rates fr
       LEFT JOIN banks b ON fr.bank_id = b.id
@@ -39314,7 +41099,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>النسبة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/subscriptions",async e=>{try{const t=await e.env.DB.prepare(`
+    `):e.html("<h1>النسبة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/subscriptions",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT s.*, p.package_name, p.price
       FROM subscriptions s
       LEFT JOIN packages p ON s.package_id = p.id
@@ -39520,7 +41305,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/subscriptions/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, package_name, price, duration_months FROM packages WHERE is_active = 1 ORDER BY price").all();return e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/subscriptions/new",async e=>{try{const t=await e.env.DB.prepare("SELECT id, package_name, price, duration_months FROM packages WHERE is_active = 1 ORDER BY price").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -39664,7 +41449,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});p.get("/admin/subscriptions/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch{return e.html("<h1>خطأ في تحميل الصفحة</h1>")}});c.get("/admin/subscriptions/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT s.*, p.package_name, p.price
       FROM subscriptions s
       LEFT JOIN packages p ON s.package_id = p.id
@@ -39751,7 +41536,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>الاشتراك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/packages",async e=>{try{const t=await e.env.DB.prepare(`
+    `):e.html("<h1>الاشتراك غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/packages",async e=>{try{const t=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
     `).all();return e.html(`
       <!DOCTYPE html>
@@ -39940,7 +41725,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/packages/new",async e=>e.html(`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/packages/new",async e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -40067,7 +41852,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       </div>
     </body>
     </html>
-  `));p.get("/admin/packages/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM packages WHERE id = ?").bind(t).first();return a?e.html(`
+  `));c.get("/admin/packages/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM packages WHERE id = ?").bind(t).first();return a?e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40148,7 +41933,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>الباقة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/users",async e=>{try{return e.html(`
+    `):e.html("<h1>الباقة غير موجودة</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/users",async e=>{try{return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40481,7 +42266,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/users/:id",async e=>{try{const t=e.req.param("id");if(t==="new")return e.redirect("/admin/users-new");const a=`
+    `)}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/users/:id",async e=>{try{const t=e.req.param("id");if(t==="new")return e.redirect("/admin/users-new");const a=`
       SELECT u.*, r.role_name, r.description as role_description,
              t.company_name as tenant_name
       FROM users u
@@ -40615,12 +42400,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),a=await x(e),s=a.roleId,n=D(a),r=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.get("/admin/users/:id/edit",async e=>{try{const t=e.req.param("id"),a=await y(e),s=a.roleId,n=R(a),r=`
       SELECT u.*, r.role_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       WHERE u.id = ?
-    `,{results:l}=await e.env.DB.prepare(r).bind(t).all();if(!l||l.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const i=l[0];if(!n){if(k(i.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(a.tenantId&&i.tenant_id&&i.tenant_id!==a.tenantId)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>",403)}const o=n?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",d=await e.env.DB.prepare(o).all();let c={results:[]};s===1&&(c=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all());const u=i.tenant_id!=null?Number(i.tenant_id):NaN;let m=[];if(u&&!Number.isNaN(u))try{m=(await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(u).all()).results||[]}catch{m=(await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(u).all()).results||[]}const f=i.assigned_bank_id,g=k(i.role_id)===5;return e.html(`
+    `,{results:l}=await e.env.DB.prepare(r).bind(t).all();if(!l||l.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const i=l[0];if(!n){if(E(i.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(a.tenantId&&i.tenant_id&&i.tenant_id!==a.tenantId)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم في شركة أخرى.</p>",403)}const o=n?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",d=await e.env.DB.prepare(o).all();let p={results:[]};s===1&&(p=await e.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all());const u=!1;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40693,9 +42478,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   </label>
                   <select name="role_id" id="roleSelect" required
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    ${d.results?.map(b=>`
-                      <option value="${b.id}" ${i.role_id===b.id?"selected":""}>
-                        ${J(b.id,b.role_name)}
+                    ${d.results?.map(m=>`
+                      <option value="${m.id}" ${i.role_id===m.id?"selected":""}>
+                        ${Q(m.id,m.role_name)}
                       </option>
                     `).join("")||""}
                   </select>
@@ -40709,9 +42494,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                   <select name="tenant_id"
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">لا توجد شركة (Super Admin فقط)</option>
-                    ${c.results?.map(b=>`
-                      <option value="${b.id}" ${i.tenant_id===b.id?"selected":""}>
-                        ${b.company_name}
+                    ${p.results?.map(m=>`
+                      <option value="${m.id}" ${i.tenant_id===m.id?"selected":""}>
+                        ${m.company_name}
                       </option>
                     `).join("")||""}
                   </select>
@@ -40719,19 +42504,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 `:`
                 <input type="hidden" name="tenant_id" value="${i.tenant_id||""}">
                 `}
-                
-                <div id="editBankAgentWrap" class="md:col-span-2" style="display: ${g?"block":"none"};">
-                  <label class="block text-sm font-bold text-gray-700 mb-2">
-                    <i class="fas fa-university text-amber-600 ml-1"></i>
-                    البنك <span class="text-red-600">*</span>
-                  </label>
-                  <select name="assigned_bank_id" id="editAssignedBankSelect"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="">-- اختر البنك --</option>
-                    ${m.map(b=>`
-                      <option value="${b.id}" ${Number(f)===Number(b.id)?"selected":""}>${String(b.bank_name||"").replace(/</g,"")}</option>`).join("")}
-                  </select>
-                </div>
                 
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -40759,34 +42531,20 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <script>
           (function () {
             var roleSelect = document.getElementById('roleSelect');
-            var wrap = document.getElementById('editBankAgentWrap');
-            var bankSel = document.getElementById('editAssignedBankSelect');
-            if (!roleSelect || !wrap || !bankSel) return;
-            function sync() {
-              var rid = parseInt(roleSelect.value, 10);
-              if (rid === 5) {
-                wrap.style.display = 'block';
-                bankSel.setAttribute('required', 'required');
-              } else {
-                wrap.style.display = 'none';
-                bankSel.removeAttribute('required');
-              }
-            }
-            roleSelect.addEventListener('change', sync);
-            sync();
+            if (!roleSelect) return;
           })();
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});p.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await x(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=D(s),r=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(k(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const b=n?u:s.tenantId,y=b!=null&&String(b).trim()!==""?parseInt(String(b),10):NaN,h=a.get("assigned_bank_id");let w=null;if(f===5){if(!(n||s.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>",403);if(!y||Number.isNaN(y))return e.html("<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>",400);const B=Number.parseInt(String(h||""),10);if(Number.isNaN(B)||B<=0)return e.html("<h1>خطأ</h1><p>يجب اختيار البنك لموظف التمويل.</p>",400);if(!await xe(e.env.DB,y,B))return e.html("<h1>خطأ</h1><p>البنك غير صالح لهذه الشركة.</p>",400);w=B}let v=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});c.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),s=await y(e);if(!s.userId)return e.html("<h1>Unauthorized</h1>",401);const n=R(s),r=a.get("username"),l=a.get("full_name"),i=a.get("email")||null,o=a.get("phone")||null,d=a.get("password"),p=a.get("role_id"),u=a.get("tenant_id")||null,m=a.get("is_active"),b=Number.parseInt(String(p||""),10);if(Number.isNaN(b))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const g=await e.env.DB.prepare("SELECT id, tenant_id, role_id FROM users WHERE id = ?").bind(t).first();if(!g)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(E(g.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(b===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!s.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const x=n?u:s.tenantId,h=x!=null&&String(x).trim()!==""?parseInt(String(x),10):NaN;let f=null;if(b===5){if(!(n||s.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>",403);if(!h||Number.isNaN(h))return e.html("<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>",400);f=null}let v=`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, 
           role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
-    `,_=[r,l,i,o,f,b,m,w];return d&&d.toString().trim()!==""&&(v=`
+    `,w=[r,l,i,o,b,x,m,f];return d&&d.toString().trim()!==""&&(v=`
         UPDATE users 
         SET username = ?, full_name = ?, email = ?, phone = ?, 
             password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
-      `,_=[r,l,i,o,d,f,b,m,w]),v+=" WHERE id = ?",_.push(t),await e.env.DB.prepare(v).bind(..._).run(),e.html(`
+      `,w=[r,l,i,o,d,b,x,m,f]),v+=" WHERE id = ?",w.push(t),await e.env.DB.prepare(v).bind(...w).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40843,7 +42601,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.get("/admin/users/:id/delete",async e=>{try{const t=e.req.param("id"),{results:a}=await e.env.DB.prepare("SELECT id, username, full_name FROM users WHERE id = ?").bind(t).all();if(!a||a.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const s=a[0];return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.html(`
+    `)}});c.get("/admin/users/:id/delete",async e=>{try{const t=e.req.param("id"),{results:a}=await e.env.DB.prepare("SELECT id, username, full_name FROM users WHERE id = ?").bind(t).all();if(!a||a.length===0)return e.html("<h1>المستخدم غير موجود</h1>");const s=a[0];return await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(t).run(),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40896,7 +42654,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `)}});p.get("/admin/users-new",async e=>{try{const t=await x(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const n=D(t)?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",r=await e.env.DB.prepare(n).all(),l=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
+    `)}});c.get("/admin/users-new",async e=>{try{const t=await y(e);let a="SELECT id, company_name FROM tenants";const s=[];t.roleId!==1&&(t.tenantId?(a+=" WHERE id = ?",s.push(t.tenantId)):a+=" WHERE 1 = 0"),a+=" ORDER BY company_name";const n=R(t)?"SELECT id, role_name, description FROM roles ORDER BY id":"SELECT id, role_name, description FROM roles WHERE id != 1 ORDER BY id",r=await e.env.DB.prepare(n).all(),l=s.length>0?await e.env.DB.prepare(a).bind(...s).all():await e.env.DB.prepare(a).all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -41006,7 +42764,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                     <option value="">-- اختر الدور --</option>
                     ${r.results.map(i=>`
-                      <option value="${i.id}" data-role-name="${J(i.id,i.role_name)}">${J(i.id,i.role_name)}</option>
+                      <option value="${i.id}" data-role-name="${Q(i.id,i.role_name)}">${Q(i.id,i.role_name)}</option>
                     `).join("")}
                   </select>
                 </div>
@@ -41024,18 +42782,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                       <option value="${i.id}">${i.company_name}</option>
                     `).join("")}
                   </select>
-                </div>
-                
-                <div id="bankAgentBankWrap" class="md:col-span-2" style="display: none;">
-                  <label class="block text-sm font-bold text-gray-700 mb-2">
-                    <i class="fas fa-university text-amber-600 ml-1"></i>
-                    البنك <span class="text-red-600">*</span>
-                  </label>
-                  <select name="assigned_bank_id" id="assignedBankSelect"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                    <option value="">-- اختر البنك --</option>
-                  </select>
-                  <p class="text-xs text-gray-500 mt-1">يظهر فقط عند اختيار دور موظف التمويل، ويقتصر على بنوك الشركة المختارة.</p>
                 </div>
                 
                 <!-- الحالة -->
@@ -41120,39 +42866,10 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           loadUserData();
           document.addEventListener('DOMContentLoaded', loadUserData);
           
-          // Update tenant + bank-agent fields based on role_id
-          async function loadBanksForTenant(tenantId) {
-            const bankSelect = document.getElementById('assignedBankSelect');
-            if (!bankSelect || !tenantId) return;
-            bankSelect.innerHTML = '<option value="">-- جاري التحميل --</option>';
-            const token = localStorage.getItem('authToken');
-            try {
-              const res = await fetch('/api/admin/company-banks?tenant_id=' + encodeURIComponent(String(tenantId)), {
-                headers: token ? { Authorization: 'Bearer ' + token } : {}
-              });
-              const data = await res.json();
-              if (!data.success || !Array.isArray(data.data)) {
-                bankSelect.innerHTML = '<option value="">تعذر تحميل البنوك</option>';
-                return;
-              }
-              bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
-              data.data.forEach(function (b) {
-                const opt = document.createElement('option');
-                opt.value = String(b.id);
-                opt.textContent = b.bank_name || ('بنك #' + b.id);
-                bankSelect.appendChild(opt);
-              });
-            } catch (e) {
-              bankSelect.innerHTML = '<option value="">خطأ في التحميل</option>';
-            }
-          }
-          
           function updateTenantRequirement() {
             const roleSelect = document.getElementById('roleSelect');
             const subscriptionDiv = document.getElementById('subscriptionDiv');
             const tenantSelect = document.getElementById('tenantSelect');
-            const bankWrap = document.getElementById('bankAgentBankWrap');
-            const bankSelect = document.getElementById('assignedBankSelect');
             
             if (!roleSelect || !subscriptionDiv) return;
             
@@ -41166,22 +42883,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               subscriptionDiv.style.display = 'block';
               if (tenantSelect) tenantSelect.setAttribute('required', 'required');
             }
-            
-            if (bankWrap && bankSelect) {
-              if (selectedRoleId === 5) {
-                bankWrap.style.display = 'block';
-                bankSelect.setAttribute('required', 'required');
-                const tid = tenantSelect && tenantSelect.value ? tenantSelect.value : '';
-                if (tid) loadBanksForTenant(tid);
-                else {
-                  bankSelect.innerHTML = '<option value="">اختر الشركة أولاً</option>';
-                }
-              } else {
-                bankWrap.style.display = 'none';
-                bankSelect.removeAttribute('required');
-                bankSelect.innerHTML = '<option value="">-- اختر البنك --</option>';
-              }
-            }
           }
           
           document.addEventListener('DOMContentLoaded', () => {
@@ -41190,14 +42891,6 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             if (roleSelect) {
               roleSelect.addEventListener('change', updateTenantRequirement);
               updateTenantRequirement();
-            }
-            if (tenantSelect) {
-              tenantSelect.addEventListener('change', function () {
-                const roleSelect2 = document.getElementById('roleSelect');
-                if (roleSelect2 && parseInt(roleSelect2.value, 10) === 5) {
-                  loadBanksForTenant(tenantSelect.value);
-                }
-              });
             }
           });
           
@@ -41236,7 +42929,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return console.error("Error loading add user page:",t),e.html(`<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr;">${t.stack}</pre>`)}});p.get("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
+    `)}catch(t){return console.error("Error loading add user page:",t),e.html(`<h1>خطأ في تحميل الصفحة</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr;">${t.stack}</pre>`)}});c.get("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare(`
       SELECT u.*, r.role_name, s.company_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
@@ -41340,7 +43033,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         </div>
       </body>
       </html>
-    `):e.html("<h1>المستخدم غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});p.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id"),a=await x(e);if(!a.userId)return e.html("<h1>Unauthorized</h1>",401);if(!D(a))return e.html("<h1>غير مسموح</h1><p>هذه الصفحة متاحة لمدير SaaS فقط.</p>",403);const s=await e.env.DB.prepare(`
+    `):e.html("<h1>المستخدم غير موجود</h1>")}catch{return e.html("<h1>خطأ في تحميل البيانات</h1>")}});c.get("/admin/users/:id/permissions",async e=>{try{const t=e.req.param("id"),a=await y(e);if(!a.userId)return e.html("<h1>Unauthorized</h1>",401);if(!R(a))return e.html("<h1>غير مسموح</h1><p>هذه الصفحة متاحة لمدير SaaS فقط.</p>",403);const s=await e.env.DB.prepare(`
       SELECT u.*, r.role_name 
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
@@ -41398,19 +43091,19 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                 </h2>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  ${i[d].map(c=>`
+                  ${i[d].map(p=>`
                     <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                       <input 
                         type="checkbox" 
-                        id="perm_${c.id}" 
+                        id="perm_${p.id}" 
                         name="permissions[]" 
-                        value="${c.id}"
-                        ${c.hasPermission?"checked":""}
+                        value="${p.id}"
+                        ${p.hasPermission?"checked":""}
                         class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                       >
-                      <label for="perm_${c.id}" class="mr-3 flex-1 cursor-pointer">
-                        <div class="font-semibold text-gray-800">${c.permission_name}</div>
-                        ${c.description?`<div class="text-xs text-gray-500">${c.description}</div>`:""}
+                      <label for="perm_${p.id}" class="mr-3 flex-1 cursor-pointer">
+                        <div class="font-semibold text-gray-800">${p.permission_name}</div>
+                        ${p.description?`<div class="text-xs text-gray-500">${p.description}</div>`:""}
                       </label>
                     </div>
                   `).join("")}
@@ -41478,12 +43171,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});p.post("/api/users/:id/permissions",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!D(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_id:s,permission_ids:n}=await e.req.json();if(await e.env.DB.prepare(`
+    `)}catch(t){return e.html("<h1>خطأ في تحميل البيانات: "+t.message+"</h1>")}});c.post("/api/users/:id/permissions",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!R(t))return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id"),{role_id:s,permission_ids:n}=await e.req.json();if(await e.env.DB.prepare(`
       DELETE FROM role_permissions WHERE role_id = ?
     `).bind(s).run(),n&&n.length>0)for(const r of n)await e.env.DB.prepare(`
           INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
           VALUES (?, ?)
-        `).bind(s,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/hr/leaves",async e=>{try{const t=await x(e),a=e.req.query("status")||"",s=e.req.query("type")||"",n=e.req.query("employee_id")||"";let r=`
+        `).bind(s,r).run();return e.json({success:!0,message:"تم تحديث الصلاحيات بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/leaves",async e=>{try{const t=await y(e),a=e.req.query("status")||"",s=e.req.query("type")||"",n=e.req.query("employee_id")||"";let r=`
       SELECT 
         l.*,
         e.full_name_ar as employee_name,
@@ -41493,23 +43186,23 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       FROM hr_leaves l
       LEFT JOIN hr_employees e ON l.employee_id = e.id
       WHERE 1=1
-    `;const l=[];a&&(r+=" AND l.status = ?",l.push(a)),s&&(r+=" AND l.leave_type = ?",l.push(s)),n&&(r+=" AND l.employee_id = ?",l.push(n)),r+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(r).bind(...l).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/hr/leaves",async e=>{try{const t=await x(e),{employee_id:a,leave_type:s,start_date:n,end_date:r,reason:l}=await e.req.json(),i=new Date(n),o=new Date(r),d=Math.ceil((o.getTime()-i.getTime())/(1e3*60*60*24))+1,c=await e.env.DB.prepare(`
+    `;const l=[];a&&(r+=" AND l.status = ?",l.push(a)),s&&(r+=" AND l.leave_type = ?",l.push(s)),n&&(r+=" AND l.employee_id = ?",l.push(n)),r+=" ORDER BY l.created_at DESC";const i=l.length>0?await e.env.DB.prepare(r).bind(...l).all():await e.env.DB.prepare(r).all();return e.json({success:!0,data:i.results||[]})}catch(t){return console.error("Error fetching leaves:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await y(e),{employee_id:a,leave_type:s,start_date:n,end_date:r,reason:l}=await e.req.json(),i=new Date(n),o=new Date(r),d=Math.ceil((o.getTime()-i.getTime())/(1e3*60*60*24))+1,p=await e.env.DB.prepare(`
       INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(t.tenantId||1,a,s,n,r,d,l||null).run();return e.json({success:!0,id:c.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e);return await e.env.DB.prepare(`
+    `).bind(t.tenantId||1,a,s,n,r,d,l||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error creating leave:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id/approve",async e=>{try{const t=e.req.param("id"),a=await y(e);return await e.env.DB.prepare(`
       UPDATE hr_leaves 
       SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(a.userId,t).run(),e.json({success:!0})}catch(t){return console.error("Error approving leave:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/leaves/:id/reject",async e=>{try{const t=e.req.param("id"),a=await x(e),{reason:s}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(a.userId,t).run(),e.json({success:!0})}catch(t){return console.error("Error approving leave:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id/reject",async e=>{try{const t=e.req.param("id"),a=await y(e),{reason:s}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_leaves 
       SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
       WHERE id = ?
-    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId,{employee_id:s,month:n,status:r}=e.req.query();let l=`
+    `).bind(a.userId,s,t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting leave:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_leaves WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting leave:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/salaries",async e=>{try{const a=(await y(e)).tenantId,{employee_id:s,month:n,status:r}=e.req.query();let l=`
       SELECT s.*, e.full_name_ar as employee_name
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
       WHERE 1=1
-    `;const i=[];s&&(l+=" AND s.employee_id = ?",i.push(s)),n&&(l+=" AND s.salary_month = ?",i.push(n)),r&&(l+=" AND s.payment_status = ?",i.push(r)),l+=" ORDER BY s.salary_month DESC, s.created_at DESC";const o=i.length>0?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:o.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/hr/salaries",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json(),n=parseFloat(s.basic_salary)||0,r=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,o=parseFloat(s.bonuses)||0,d=parseFloat(s.overtime_amount)||0,c=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,f=n+r+l+i+o+d,g=c+u+m,b=f-g;return await e.env.DB.prepare(`
+    `;const i=[];s&&(l+=" AND s.employee_id = ?",i.push(s)),n&&(l+=" AND s.salary_month = ?",i.push(n)),r&&(l+=" AND s.payment_status = ?",i.push(r)),l+=" ORDER BY s.salary_month DESC, s.created_at DESC";const o=i.length>0?await e.env.DB.prepare(l).bind(...i).all():await e.env.DB.prepare(l).all();return e.json({success:!0,data:o.results||[]})}catch(t){return console.error("Error fetching salaries:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/salaries",async e=>{try{const a=(await y(e)).tenantId||1,s=await e.req.json(),n=parseFloat(s.basic_salary)||0,r=parseFloat(s.housing_allowance)||0,l=parseFloat(s.transportation_allowance)||0,i=parseFloat(s.other_allowances)||0,o=parseFloat(s.bonuses)||0,d=parseFloat(s.overtime_amount)||0,p=parseFloat(s.late_deductions)||0,u=parseFloat(s.absence_deductions)||0,m=parseFloat(s.other_deductions)||0,b=n+r+l+i+o+d,g=p+u+m,x=b-g;return await e.env.DB.prepare(`
       INSERT INTO hr_salaries (
         tenant_id, employee_id, salary_month, basic_salary,
         housing_allowance, transportation_allowance, other_allowances,
@@ -41517,15 +43210,15 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         other_deductions, gross_salary, total_deductions, net_salary,
         payment_status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(a,s.employee_id,s.salary_month,n,r,l,i,o,d,c,u,m,f,g,b,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s.employee_id,s.salary_month,n,r,l,i,o,d,p,u,m,b,g,x,s.notes||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding salary:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/approve",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries 
       SET payment_status = 'approved'
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error approving salary:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error approving salary:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries 
       SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error paying salary:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_salaries WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting salary:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId,s=a?`WHERE d.tenant_id = ${a}`:"",n=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error paying salary:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/salaries/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_salaries WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting salary:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/departments",async e=>{try{const a=(await y(e)).tenantId,s=a?`WHERE d.tenant_id = ${a}`:"",n=await e.env.DB.prepare(`
       SELECT d.*, 
              m.full_name as manager_name,
              (SELECT COUNT(*) FROM hr_employees e WHERE e.department = d.department_code AND e.tenant_id = d.tenant_id) as employee_count
@@ -41533,12 +43226,12 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN hr_employees m ON d.manager_id = m.id
       ${s}
       ORDER BY d.department_name
-    `).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching departments:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/hr/departments",async e=>{try{const a=(await x(e)).tenantId||1,s=await e.req.json();return await e.env.DB.prepare(`
+    `).all();return e.json({success:!0,data:n.results})}catch(t){return console.error("Error fetching departments:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/departments",async e=>{try{const a=(await y(e)).tenantId||1,s=await e.req.json();return await e.env.DB.prepare(`
       INSERT INTO hr_departments (
         tenant_id, department_name, department_code, 
         manager_id, description, budget
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId;console.log("🔍 HR Performance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const n=await e.env.DB.prepare(`
+    `).bind(a,s.department_name,s.department_code,s.manager_id||null,s.description||null,s.budget||0).run(),e.json({success:!0})}catch(t){return console.error("Error adding department:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/departments/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_departments WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting department:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/performance",async e=>{try{const t=await y(e),a=t.tenantId;console.log("🔍 HR Performance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const n=await e.env.DB.prepare(`
       SELECT p.*, 
              e.full_name_ar as employee_name,
              r.full_name_ar as reviewer_name,
@@ -41552,14 +43245,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN hr_employees e ON p.employee_id = e.id
       LEFT JOIN hr_employees r ON p.reviewer_id = r.id
       ORDER BY p.review_date DESC
-    `).all();return console.log("🔍 HR Performance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/hr/performance",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json();let n=s.review_period_start||s.review_date,r=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(n=s.review_date,r=s.review_date);const l=s.attendance_rating||3,i=s.quality_rating||3,o=s.teamwork_rating||3,d=s.punctuality_rating||3,c=s.overall_rating||(parseFloat(l)+parseFloat(i)+parseFloat(o)+parseFloat(d))/4;return await e.env.DB.prepare(`
+    `).all();return console.log("🔍 HR Performance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching reviews:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/performance",async e=>{try{const t=await y(e),a=t.tenantId||1,s=await e.req.json();let n=s.review_period_start||s.review_date,r=s.review_period_end||s.review_date;s.review_period&&!s.review_period_start&&(n=s.review_date,r=s.review_date);const l=s.attendance_rating||3,i=s.quality_rating||3,o=s.teamwork_rating||3,d=s.punctuality_rating||3,p=s.overall_rating||(parseFloat(l)+parseFloat(i)+parseFloat(o)+parseFloat(d))/4;return await e.env.DB.prepare(`
       INSERT INTO hr_performance_reviews (
         tenant_id, employee_id, reviewer_id, review_period_start, review_period_end, review_date,
         overall_rating, attendance_punctuality, quality_of_work, 
         teamwork, strengths, areas_for_improvement,
         goals, comments, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(a,s.employee_id,t.userId,n,r,s.review_date,c,l,i,o,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId;let s=`
+    `).bind(a,s.employee_id,t.userId,n,r,s.review_date,p,l,i,o,s.strengths||null,s.weaknesses||null,s.goals||null,s.comments||null).run(),e.json({success:!0})}catch(t){return console.error("Error adding review:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/performance/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_performance_reviews WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting review:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/promotions",async e=>{try{const t=await y(e),a=t.tenantId;let s=`
       SELECT p.*, 
              e.full_name_ar as employee_name,
              e.job_title as current_position,
@@ -41568,7 +43261,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
              p.effective_date as promotion_date
       FROM hr_promotions_transfers p
       LEFT JOIN hr_employees e ON p.employee_id = e.id
-    `;console.log("🔍 HR Promotions API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),s=s.replace("WHERE 1=1",""),s+=" ORDER BY p.effective_date DESC";const n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Promotions API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/hr/promotions",async e=>{try{const t=await x(e),a=t.tenantId||1,s=await e.req.json(),n=await e.env.DB.prepare(`
+    `;console.log("🔍 HR Promotions API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId}),s=s.replace("WHERE 1=1",""),s+=" ORDER BY p.effective_date DESC";const n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Promotions API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching promotions:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/hr/promotions",async e=>{try{const t=await y(e),a=t.tenantId||1,s=await e.req.json(),n=await e.env.DB.prepare(`
       SELECT job_title, basic_salary, department FROM hr_employees WHERE id = ?
     `).bind(s.employee_id).first();return await e.env.DB.prepare(`
       INSERT INTO hr_promotions_transfers (
@@ -41576,7 +43269,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         old_salary, new_salary, effective_date,
         old_department, new_department, reason, approved_by, status
       ) VALUES (?, ?, 'promotion', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(a,s.employee_id,n?.job_title||"",s.new_position,n?.basic_salary||0,s.new_salary,s.effective_date||s.promotion_date,n?.department||"",s.new_department||n?.department||"",s.reason||"",t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await x(e),s=await e.env.DB.prepare(`
+    `).bind(a,s.employee_id,n?.job_title||"",s.new_position,n?.basic_salary||0,s.new_salary,s.effective_date||s.promotion_date,n?.department||"",s.new_department||n?.department||"",s.reason||"",t.userId).run(),e.json({success:!0})}catch(t){return console.error("Error adding promotion:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/promotions/:id/approve",async e=>{try{const t=e.req.param("id"),a=await y(e),s=await e.env.DB.prepare(`
       SELECT * FROM hr_promotions_transfers WHERE id = ?
     `).bind(t).first();return s?(await e.env.DB.prepare(`
       UPDATE hr_promotions_transfers 
@@ -41586,17 +43279,17 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       UPDATE hr_employees 
       SET job_title = ?, basic_salary = ?, department = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).bind(s.new_job_title,s.new_salary,s.new_department,s.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(s.new_job_title,s.new_salary,s.new_department,s.employee_id).run(),e.json({success:!0})):e.json({success:!1,error:"Promotion not found"},404)}catch(t){return console.error("Error approving promotion:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/promotions/:id/reject",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_promotions_transfers SET status = 'rejected' WHERE id = ?
-    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.query("search")||"",n=e.req.query("type")||"",r=e.req.query("status")||"";let l=`
+    `).bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error rejecting promotion:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/promotions/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_promotions_transfers WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting promotion:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/documents",async e=>{try{const a=(await y(e))?.tenantId||1,s=e.req.query("search")||"",n=e.req.query("type")||"",r=e.req.query("status")||"";let l=`
       SELECT d.*, e.full_name as employee_name, e.employee_number
       FROM hr_documents d
       LEFT JOIN hr_employees e ON d.employee_id = e.id
       WHERE d.tenant_id = ?
-    `;const i=[a];s&&(l+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),n&&(l+=" AND d.document_type = ?",i.push(n)),l+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const o=await e.env.DB.prepare(l).bind(...i).all();return e.json({success:!0,data:o.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!0,data:[]})}});p.post("/api/hr/documents",async e=>{try{const a=(await x(e))?.tenantId||1,s=await e.req.json(),{employee_id:n,document_type:r,document_number:l,issue_date:i,expiry_date:o,notes:d}=s,c=await e.env.DB.prepare(`
+    `;const i=[a];s&&(l+=" AND (e.full_name LIKE ? OR d.document_type LIKE ? OR d.document_number LIKE ?)",i.push(`%${s}%`,`%${s}%`,`%${s}%`)),n&&(l+=" AND d.document_type = ?",i.push(n)),l+=" ORDER BY d.expiry_date ASC, d.created_at DESC";const o=await e.env.DB.prepare(l).bind(...i).all();return e.json({success:!0,data:o.results})}catch(t){return console.error("Error fetching documents:",t),e.json({success:!0,data:[]})}});c.post("/api/hr/documents",async e=>{try{const a=(await y(e))?.tenantId||1,s=await e.req.json(),{employee_id:n,document_type:r,document_number:l,issue_date:i,expiry_date:o,notes:d}=s,p=await e.env.DB.prepare(`
       INSERT INTO hr_documents (tenant_id, employee_id, document_type, document_number, issue_date, expiry_date, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,n,r,l||null,i||null,o||null,d||null).run();return e.json({success:!0,id:c.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/reports/:type",async e=>{try{const a=(await x(e))?.tenantId||1,s=e.req.param("type"),n=e.req.query("start_date")||"",r=e.req.query("end_date")||"";let l={};const i=await e.env.DB.prepare(`
+    `).bind(a,n,r,l||null,i||null,o||null,d||null).run();return e.json({success:!0,id:p.meta.last_row_id})}catch(t){return console.error("Error adding document:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/documents/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_documents WHERE id = ?").bind(t).run(),e.json({success:!0})}catch(t){return console.error("Error deleting document:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/reports/:type",async e=>{try{const a=(await y(e))?.tenantId||1,s=e.req.param("type"),n=e.req.query("start_date")||"",r=e.req.query("end_date")||"";let l={};const i=await e.env.DB.prepare(`
       SELECT COUNT(*) as total, 
              COUNT(CASE WHEN status = 'active' THEN 1 END) as active
       FROM hr_employees 
@@ -41609,7 +43302,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         WHERE tenant_id = ?
         ${n?"AND attendance_date >= ?":""}
         ${r?"AND attendance_date <= ?":""}
-      `).bind(a,...n?[n]:[],...r?[r]:[]).first(),m=u?.total||0,f=u?.present||0;l.attendanceRate=m>0?Math.round(f/m*100):0,l.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],l.attendanceData=[95,92,88,94,90,85]}const o=await e.env.DB.prepare(`
+      `).bind(a,...n?[n]:[],...r?[r]:[]).first(),m=u?.total||0,b=u?.present||0;l.attendanceRate=m>0?Math.round(b/m*100):0,l.attendanceLabels=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس"],l.attendanceData=[95,92,88,94,90,85]}const o=await e.env.DB.prepare(`
       SELECT SUM(net_salary) as total
       FROM hr_salaries
       WHERE tenant_id = ?
@@ -41619,7 +43312,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       SELECT AVG(overall_rating) as avg
       FROM hr_performance_reviews
       WHERE tenant_id = ?
-    `).bind(a).first();l.avgPerformance=d?.avg||0,(s==="overview"||s==="leaves")&&(l.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],l.leavesData=[45,20,15,10]);const c=await e.env.DB.prepare(`
+    `).bind(a).first();l.avgPerformance=d?.avg||0,(s==="overview"||s==="leaves")&&(l.leavesLabels=["إجازة سنوية","إجازة مرضية","إجازة طارئة","أخرى"],l.leavesData=[45,20,15,10]);const p=await e.env.DB.prepare(`
       SELECT d.department_name as department, SUM(s.net_salary) as total
       FROM hr_salaries s
       LEFT JOIN hr_employees e ON s.employee_id = e.id
@@ -41628,8 +43321,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return l.salariesLabels=c.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=c.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Qa(p,x);async function z(e,t="all"){const a=await x(e);return!a.userId||!a.roleId?e.redirect("/login"):a.roleId===4?e.redirect("/admin/panel"):a.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}p.get("/admin/contracts",async e=>{const t=await z(e,"all");return t||e.html(Fa)});p.get("/admin/contracts/list",async e=>{const t=await z(e,"list-new-only");if(t)return t;const s=(await x(e)).roleId===3?it(je):je;return e.html(s)});p.get("/admin/contracts/new",async e=>{const t=await z(e,"list-new-only");if(t)return t;const a=await x(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:s}=await gt(e,a,{scopeSuperAdminToTenant:!0}),n=m=>(m||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),r=m=>(m||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=s.map(m=>{const f=m.national_id&&!String(m.national_id).startsWith("TEMP-")?String(m.national_id):"",g=r(m.full_name||"")+(m.phone?" — "+r(m.phone):"")+(f?" ("+r(f)+")":"");return`<option value="${n(String(m.id))}" data-name="${n(m.full_name||"")}" data-national_id="${n(f)}" data-phone="${n(m.phone||"")}" data-city="${n(m.city||"")}">${g}</option>`}).join(`
-`);let i="",o="",d="";const c=a.tenantId;if(c){const m=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(c).first();if(m&&(o=n(m.company_name||""),d=n((m.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',m.company_name)){const f=(m.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${r(m.company_name)}</strong>${f?` — ${r(f)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let u=Pa.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",o).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d);return a.roleId===3&&(u=it(u)),e.html(u)});p.get("/admin/contracts/view",async e=>{const t=await z(e,"list-new-only");return t||e.html(Wa)});p.get("/admin/contracts/templates",async e=>{const t=await z(e,"all");return t||e.html(Ha)});p.get("/admin/contracts/notes",async e=>{const t=await z(e,"all");return t||e.html(Va)});p.get("/admin/contracts/archive",async e=>{const t=await z(e,"all");return t||e.html(Ga)});p.get("/admin/contracts/settings",async e=>{const t=await z(e,"all");return t||e.html(Ya)});p.get("/admin/hr",e=>e.html(Ea));p.get("/admin/hr/employees",e=>e.html(Ia));p.get("/admin/hr/employees/:id",e=>e.html(Sa));p.get("/admin/hr/employees/:id/edit",e=>e.html(Ta));p.get("/admin/hr/attendance",e=>e.html(Da));p.get("/admin/hr/leaves",e=>e.html(Ba));p.get("/admin/hr/salaries",e=>e.html(Ca));p.get("/admin/hr/performance",e=>e.html(Ra));p.get("/admin/hr/promotions",e=>e.html(ja));p.get("/admin/hr/documents",e=>e.html(La));p.get("/admin/hr/reports",e=>e.html(Aa));p.get("/api/hr/dashboard/stats",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),r=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(r).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),c=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(c).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:f}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
+    `).bind(a).all();return l.salariesLabels=p.results?.map(u=>u.department||"غير محدد")||[],l.salariesData=p.results?.map(u=>u.total||0)||[],l.performanceLabels=["ممتاز","جيد جداً","جيد"],l.performanceData=[30,50,20],l.details=[],e.json({success:!0,data:l})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});as(c,y);async function U(e,t="all"){const a=await y(e);return!a.userId||!a.roleId?e.redirect("/login"):a.roleId===4?e.redirect("/admin/panel"):a.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}c.get("/admin/contracts",async e=>{const t=await U(e,"all");return t||e.html(Wa)});c.get("/admin/contracts/list",async e=>{const t=await U(e,"list-new-only");if(t)return t;const s=(await y(e)).roleId===3?ut(Oe):Oe;return e.html(s)});c.get("/admin/contracts/new",async e=>{const t=await U(e,"list-new-only");if(t)return t;const a=await y(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:s}=await yt(e,a,{scopeSuperAdminToTenant:!0}),n=m=>(m||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),r=m=>(m||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),l=s.map(m=>{const b=m.national_id&&!String(m.national_id).startsWith("TEMP-")?String(m.national_id):"",g=r(m.full_name||"")+(m.phone?" — "+r(m.phone):"")+(b?" ("+r(b)+")":"");return`<option value="${n(String(m.id))}" data-name="${n(m.full_name||"")}" data-national_id="${n(b)}" data-phone="${n(m.phone||"")}" data-city="${n(m.city||"")}">${g}</option>`}).join(`
+`);let i="",o="",d="";const p=a.tenantId;if(p){const m=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(p).first();if(m&&(o=n(m.company_name||""),d=n((m.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',m.company_name)){const b=(m.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${r(m.company_name)}</strong>${b?` — ${r(b)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let u=Va.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",l).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",o).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d);return a.roleId===3&&(u=ut(u)),e.html(u)});c.get("/admin/contracts/view",async e=>{const t=await U(e,"list-new-only");return t||e.html(Xa)});c.get("/admin/contracts/templates",async e=>{const t=await U(e,"all");return t||e.html(Ga)});c.get("/admin/contracts/notes",async e=>{const t=await U(e,"all");return t||e.html(Qa)});c.get("/admin/contracts/archive",async e=>{const t=await U(e,"all");return t||e.html(Ka)});c.get("/admin/contracts/settings",async e=>{const t=await U(e,"all");return t||e.html(Za)});c.get("/admin/hr",e=>e.html(Ba));c.get("/admin/hr/employees",e=>e.html(Ra));c.get("/admin/hr/employees/:id",e=>e.html(Ca));c.get("/admin/hr/employees/:id/edit",e=>e.html(La));c.get("/admin/hr/attendance",e=>e.html(Aa));c.get("/admin/hr/leaves",e=>e.html(ja));c.get("/admin/hr/salaries",e=>e.html(Na));c.get("/admin/hr/performance",e=>e.html(Ma));c.get("/admin/hr/promotions",e=>e.html(Oa));c.get("/admin/hr/documents",e=>e.html(Fa));c.get("/admin/hr/reports",e=>e.html(qa));c.get("/api/hr/dashboard/stats",async e=>{try{const a=(await y(e)).tenantId,s=a?`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees WHERE tenant_id = ${a}`:"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active FROM hr_employees",n=await e.env.DB.prepare(s).first(),r=new Date().toISOString().split("T")[0],l=a?`SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present' AND tenant_id = ${a}`:"SELECT COUNT(*) as present FROM hr_attendance WHERE DATE(attendance_date) = ? AND status = 'present'",i=await e.env.DB.prepare(l).bind(r).first(),o=a?`SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as pending FROM hr_leaves WHERE status = 'pending'",d=await e.env.DB.prepare(o).first(),p=a?`SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending' AND tenant_id = ${a}`:"SELECT COUNT(*) as count, SUM(net_salary) as total FROM hr_salaries WHERE payment_status = 'pending'",u=await e.env.DB.prepare(p).first(),m=a?`SELECT department, COUNT(*) as count FROM hr_employees WHERE tenant_id = ${a} GROUP BY department`:"SELECT department, COUNT(*) as count FROM hr_employees GROUP BY department",{results:b}=await e.env.DB.prepare(m).all(),g=a?`SELECT DATE(date) as date, 
          SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
@@ -41639,7 +43332,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
          SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent
          FROM hr_attendance 
          WHERE DATE(date) >= DATE('now', '-7 days')
-         GROUP BY DATE(date) ORDER BY date`,{results:b}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:n?.total||0,activeEmployees:n?.active||0,presentToday:i?.present||0,pendingLeaves:d?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:f||[],attendanceTrend:b||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/hr/employees",async e=>{try{const t=await x(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
+         GROUP BY DATE(date) ORDER BY date`,{results:x}=await e.env.DB.prepare(g).all();return e.json({success:!0,data:{totalEmployees:n?.total||0,activeEmployees:n?.active||0,presentToday:i?.present||0,pendingLeaves:d?.pending||0,pendingSalaries:u?.count||0,pendingSalariesAmount:u?.total||0,departmentDistribution:b||[],attendanceTrend:x||[]}})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/employees",async e=>{try{const t=await y(e);console.log("🔍 HR Employees API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const s=await e.env.DB.prepare(`SELECT 
         id,
         tenant_id,
         COALESCE(employee_number, employee_code) AS employee_number,
@@ -41667,7 +43360,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         created_at,
         updated_at
       FROM hr_employees 
-      ORDER BY created_at DESC, hire_date DESC`).all();return console.log("🔍 HR Employees API - Results count:",s.results?.length||0),e.json({success:!0,data:s.results||[]})}catch(t){return console.error("Error fetching employees:",t),e.json({success:!1,error:t.message},500)}});p.get("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),s=await e.env.DB.prepare(`SELECT 
+      ORDER BY created_at DESC, hire_date DESC`).all();return console.log("🔍 HR Employees API - Results count:",s.results?.length||0),e.json({success:!0,data:s.results||[]})}catch(t){return console.error("Error fetching employees:",t),e.json({success:!1,error:t.message},500)}});c.get("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),s=await e.env.DB.prepare(`SELECT 
         id,
         tenant_id,
         COALESCE(employee_number, employee_code) AS employee_number,
@@ -41696,14 +43389,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         created_at,
         updated_at
       FROM hr_employees 
-      WHERE id = ?`).bind(t).first();return s?e.json({success:!0,data:s}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId||1,n=await e.env.DB.prepare(`
+      WHERE id = ?`).bind(t).first();return s?e.json({success:!0,data:s}):e.json({success:!1,error:"الموظف غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/employees",async e=>{try{const t=await e.req.json(),s=(await y(e)).tenantId||1,n=await e.env.DB.prepare(`
       INSERT INTO hr_employees (
         employee_number, full_name, national_id, email, phone, birthdate, gender,
         department, job_title, basic_salary, housing_allowance, transportation_allowance,
         hire_date, contract_start_date, contract_end_date, direct_manager,
         employment_type, work_schedule, status, notes, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_number||null,t.full_name,t.national_id||null,t.email||null,t.phone||null,t.birthdate||t.date_of_birth||null,t.gender||null,t.department||null,t.job_title||null,t.basic_salary||0,t.housing_allowance||0,t.transportation_allowance||0,t.hire_date||null,t.contract_start_date||null,t.contract_end_date||null,t.direct_manager||null,t.employment_type||"full_time",t.work_schedule||"regular",t.status||"active",t.notes||null,s).run();return e.json({success:!0,id:n.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return console.error("Error adding employee:",t),e.json({success:!1,error:t.message},500)}});p.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t.employee_number||null,t.full_name,t.national_id||null,t.email||null,t.phone||null,t.birthdate||t.date_of_birth||null,t.gender||null,t.department||null,t.job_title||null,t.basic_salary||0,t.housing_allowance||0,t.transportation_allowance||0,t.hire_date||null,t.contract_start_date||null,t.contract_end_date||null,t.direct_manager||null,t.employment_type||"full_time",t.work_schedule||"regular",t.status||"active",t.notes||null,s).run();return e.json({success:!0,id:n.meta.last_row_id,message:"تم إضافة الموظف بنجاح"})}catch(t){return console.error("Error adding employee:",t),e.json({success:!1,error:t.message},500)}});c.put("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_employees SET
         employee_number = ?, full_name = ?, national_id = ?, email = ?, phone = ?,
         birthdate = ?, gender = ?, department = ?, job_title = ?, basic_salary = ?,
@@ -41712,7 +43405,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         employment_type = ?, work_schedule = ?, status = ?, notes = ?,
         updated_at = datetime('now')
       WHERE id = ?
-    `).bind(a.employee_number||null,a.full_name,a.national_id||null,a.email||null,a.phone||null,a.birthdate||a.date_of_birth||null,a.gender||null,a.department||null,a.job_title||null,a.basic_salary||0,a.housing_allowance||0,a.transportation_allowance||0,a.hire_date||null,a.contract_start_date||null,a.contract_end_date||null,a.direct_manager||null,a.employment_type||"full_time",a.work_schedule||"regular",a.status||"active",a.notes||null,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return console.error("Error updating employee:",t),e.json({success:!1,error:t.message},500)}});p.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/hr/attendance",async e=>{try{const t=await x(e);console.log("🔍 HR Attendance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const a=t.tenantId,s=a?`SELECT 
+    `).bind(a.employee_number||null,a.full_name,a.national_id||null,a.email||null,a.phone||null,a.birthdate||a.date_of_birth||null,a.gender||null,a.department||null,a.job_title||null,a.basic_salary||0,a.housing_allowance||0,a.transportation_allowance||0,a.hire_date||null,a.contract_start_date||null,a.contract_end_date||null,a.direct_manager||null,a.employment_type||"full_time",a.work_schedule||"regular",a.status||"active",a.notes||null,t).run(),e.json({success:!0,message:"تم تحديث بيانات الموظف بنجاح"})}catch(t){return console.error("Error updating employee:",t),e.json({success:!1,error:t.message},500)}});c.delete("/api/hr/employees/:id",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare("DELETE FROM hr_employees WHERE id = ?").bind(t).run(),e.json({success:!0,message:"تم حذف الموظف بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/attendance",async e=>{try{const t=await y(e);console.log("🔍 HR Attendance API - UserInfo:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const a=t.tenantId,s=a?`SELECT 
           a.*,
           e.full_name_ar as employee_name,
           e.employee_code as employee_number,
@@ -41729,7 +43422,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           a.working_hours as work_hours
         FROM hr_attendance a 
         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function ft(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[r,l]=t.split(":").map(Number),i=s*60+n;let o=r*60+l;o<i&&(o+=1440);const d=o-i,c=Math.round(d/60*100)/100,u=Math.floor(c),m=Math.round((c-u)*60),f=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:f}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}p.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,{workingHours:n,workHoursFormatted:r}=ft(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(s).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function vt(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[s,n]=e.split(":").map(Number),[r,l]=t.split(":").map(Number),i=s*60+n;let o=r*60+l;o<i&&(o+=1440);const d=o-i,p=Math.round(d/60*100)/100,u=Math.floor(p),m=Math.round((p-u)*60),b=`${u}:${m.toString().padStart(2,"0")}`;return{workingHours:p,workHoursFormatted:b}}catch(s){return console.error("Error calculating working hours:",s),{workingHours:null,workHoursFormatted:null}}}c.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),s=(await y(e)).tenantId,{workingHours:n,workHoursFormatted:r}=vt(t.check_in_time,t.check_out_time,t.attendance_date),l=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
         employee_id,
         attendance_date,
@@ -41743,14 +43436,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         work_hours,
         tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,n,r,s).run();return e.json({success:!0,id:l.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=(await x(e)).tenantId,r=await e.env.DB.prepare(`
+    `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,n,r,s).run();return e.json({success:!0,id:l.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=(await y(e)).tenantId,r=await e.env.DB.prepare(`
       SELECT check_in_time, attendance_date FROM hr_attendance 
       WHERE id = ? AND tenant_id = ?
-    `).bind(t,n).first();if(!r)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||r.check_in_time,i=a.check_out_time||null,o=a.attendance_date||r.attendance_date,{workingHours:d,workHoursFormatted:c}=ft(l,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,c)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
+    `).bind(t,n).first();if(!r)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const l=a.check_in_time||r.check_in_time,i=a.check_out_time||null,o=a.attendance_date||r.attendance_date,{workingHours:d,workHoursFormatted:p}=vt(l,i,o),u=[],m=[];return a.check_in_time!==void 0&&(u.push("check_in_time = ?"),m.push(a.check_in_time)),a.check_out_time!==void 0&&(u.push("check_out_time = ?"),m.push(a.check_out_time||null)),a.status!==void 0&&(u.push("status = ?"),m.push(a.status)),a.notes!==void 0&&(u.push("notes = ?"),m.push(a.notes||null)),a.late_minutes!==void 0&&(u.push("late_minutes = ?"),m.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(u.push("overtime_minutes = ?"),m.push(a.overtime_minutes||0)),d!==null&&(u.push("working_hours = ?"),u.push("work_hours = ?"),m.push(d,p)),u.push("updated_at = CURRENT_TIMESTAMP"),m.push(t,n),u.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
       UPDATE hr_attendance 
       SET ${u.join(", ")}
       WHERE id = ? AND tenant_id = ?
-    `).bind(...m).run(),e.json({success:!0,message:"تم تحديث سجل الحضور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});p.get("/api/hr/leaves",async e=>{try{const a=(await x(e)).tenantId,s=a?`SELECT l.*, e.full_name, e.employee_number, lt.type_name 
+    `).bind(...m).run(),e.json({success:!0,message:"تم تحديث سجل الحضور بنجاح"}))}catch(t){return e.json({success:!1,error:t.message},500)}});c.get("/api/hr/leaves",async e=>{try{const a=(await y(e)).tenantId,s=a?`SELECT l.*, e.full_name, e.employee_number, lt.type_name 
          FROM hr_leaves l 
          LEFT JOIN hr_employees e ON l.employee_id = e.id 
          LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
@@ -41758,63 +43451,90 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
          FROM hr_leaves l 
          LEFT JOIN hr_employees e ON l.employee_id = e.id 
          LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
-         ORDER BY l.request_date DESC`,{results:n}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:n})}catch(t){return e.json({success:!1,error:t.message},500)}});p.post("/api/hr/leaves",async e=>{try{const t=await e.req.json(),s=(await x(e)).tenantId,n=await e.env.DB.prepare(`
+         ORDER BY l.request_date DESC`,{results:n}=await e.env.DB.prepare(s).all();return e.json({success:!0,data:n})}catch(t){return e.json({success:!1,error:t.message},500)}});c.post("/api/hr/leaves",async e=>{try{const t=await e.req.json(),s=(await y(e)).tenantId,n=await e.env.DB.prepare(`
       INSERT INTO hr_leaves (
         employee_id, leave_type_id, start_date, end_date, days_count,
         reason, status, tenant_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:n.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:n}=await e.req.json();return await e.env.DB.prepare(`
+    `).bind(t.employee_id,t.leave_type_id,t.start_date,t.end_date,t.days_count,t.reason,t.status||"pending",s).run();return e.json({success:!0,id:n.meta.last_row_id,message:"تم إضافة طلب الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/leaves/:id",async e=>{try{const t=e.req.param("id"),{status:a,rejection_reason:s,approved_by:n}=await e.req.json();return await e.env.DB.prepare(`
       UPDATE hr_leaves SET status = ?, rejection_reason = ?, approved_by = ?, approval_date = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(a,s,n,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});p.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
+    `).bind(a,s,n,t).run(),e.json({success:!0,message:"تم تحديث حالة الإجازة بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});c.put("/api/hr/salaries/:id/pay",async e=>{try{const t=e.req.param("id");return await e.env.DB.prepare(`
       UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
       WHERE id = ?
-    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});p.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});p.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});p.post("/api/public/:slug/contact-submissions",async e=>{try{const t=le(e.req.param("slug"));if(!t||de(t))return e.json({success:!1,error:"Invalid slug"},400);const a=await e.req.json().catch(()=>({})),s=String(a?.customer_name??"").trim(),n=String(a?.customer_phone??"").trim(),r=String(a?.customer_message??"").trim(),l=Ie(a?.affiliate_path);if(!s||!n||!r)return e.json({success:!1,error:"الاسم ورقم الجوال والرسالة مطلوبة"},400);const i=await e.env.DB.prepare(`
+    `).bind(t).run(),e.json({success:!0,message:"تم تحديث حالة الدفع بنجاح"})}catch(t){return console.error("Error updating salary payment:",t),e.json({success:!1,error:t.message},500)}});c.post("/api/test/login",async e=>{try{if(!e.env?.DB)return e.json({success:!1,error:"DB binding not available",DB_exists:!1},500);const t=await e.env.DB.prepare("SELECT COUNT(*) as count FROM users").first();return e.json({success:!0,DB_exists:!0,DB_usable:!0,user_count:t})}catch(t){return e.json({success:!1,error:t.message,DB_exists:!!e.env?.DB,stack:t.stack},500)}});c.get("/api/test/bindings",async e=>{const t={DB_exists:!!e.env.DB,ATTACHMENTS_exists:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()};if(e.env.DB)try{const a=await e.env.DB.prepare("SELECT 1 as test").first();t.DB_usable=!0,t.DB_test_result=a}catch(a){t.DB_usable=!1,t.DB_error=a.message}else t.DB_usable=!1,t.DB_error="DB binding is undefined";return e.json(t)});c.post("/api/public/:slug/contact-submissions",async e=>{try{const t=me(e.req.param("slug"));if(!t||ge(t))return e.json({success:!1,error:"Invalid slug"},400);const a=await e.req.json().catch(()=>({})),s=String(a?.customer_name??"").trim(),n=String(a?.customer_phone??"").trim(),r=String(a?.customer_message??"").trim(),l=Be(a?.affiliate_path);if(!s||!n||!r)return e.json({success:!1,error:"الاسم ورقم الجوال والرسالة مطلوبة"},400);const i=await e.env.DB.prepare(`
       SELECT id
       FROM tenants
       WHERE slug = ? AND status = 'active'
       LIMIT 1
-    `).bind(t).first();if(!i?.id)return e.json({success:!1,error:"الشركة غير موجودة"},404);let o=null,d=null;if(l){if(!Se(l))return e.json({success:!1,error:"مسار الإحالة غير صالح"},400);const c=await e.env.DB.prepare(`
+    `).bind(t).first();if(!i?.id)return e.json({success:!1,error:"الشركة غير موجودة"},404);let o=null,d=null;if(l){if(!Re(l))return e.json({success:!1,error:"مسار الإحالة غير صالح"},400);const h=await e.env.DB.prepare(`
         SELECT path_segment, label
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
         LIMIT 1
-      `).bind(i.id,l).first();if(!c)return e.json({success:!1,error:"رابط الإحالة غير معروف"},400);o=c.path_segment,d=c.label}return await e.env.DB.prepare(`
+      `).bind(i.id,l).first();if(!h)return e.json({success:!1,error:"رابط الإحالة غير معروف"},400);o=h.path_segment,d=h.label}const p=await e.env.DB.prepare(`
       INSERT INTO company_contact_followups (
         tenant_id, customer_name, customer_phone, customer_message, source_slug,
         affiliate_path_segment, affiliate_label
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(i.id,s,n,r,t,o,d).run(),e.json({success:!0,message:"تم إرسال طلبك بنجاح"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId;if(a==null)return e.json({success:!1,error:"Forbidden"},403);let s=null;if(a===1){const l=e.req.query("tenant_id");if(s=l&&/^\d+$/.test(String(l))?parseInt(String(l),10):null,!s)return e.json({success:!1,error:"tenant_id مطلوب"},400)}else if(s=t.tenantId,!s)return e.json({success:!1,error:"لا شركة مرتبطة"},400);const{results:n}=await e.env.DB.prepare(`
+    `).bind(i.id,s,n,r,t,o,d).run(),u=p?.meta?.last_row_id??p?.meta?.lastRowId??p?.meta?.last_insert_rowid??null,m=Number(u),b=new Date().toISOString(),g=`متابعة طلب تواصل: ${s}`;let x=null;try{const{results:h}=await e.env.DB.prepare(`
+        SELECT id FROM users
+        WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+        ORDER BY id ASC
+      `).bind(i.id).all(),f=h||[];if(f.length){let v=function(k){if(k==null)return _[0];const T=_.indexOf(k);return T===-1?_[0]:_[(T+1)%_.length]};const w=await e.env.DB.prepare(`
+          SELECT last_auto_assigned_user_id
+          FROM tenant_followup_auto_assign_state
+          WHERE tenant_id = ?
+          LIMIT 1
+        `).bind(i.id).first(),_=f.map(k=>k.id),I=w?.last_auto_assigned_user_id??null;x=v(I)}}catch{x=null}return Number.isFinite(m)&&m>0&&(await e.env.DB.prepare(`
+        INSERT INTO company_contact_followup_tasks
+          (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
+           assigned_user_id, priority, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(m,i.id,g,b,null,x,"regular",null).run(),x!=null&&await e.env.DB.prepare(`
+          INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(tenant_id) DO UPDATE SET
+            last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+            updated_at = CURRENT_TIMESTAMP
+        `).bind(i.id,x).run()),e.json({success:!0,message:"تم إرسال طلبك بنجاح"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/tenant-contact-affiliates",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=t.roleId;if(a==null)return e.json({success:!1,error:"Forbidden"},403);let s=null;if(a===1){const l=e.req.query("tenant_id");if(s=l&&/^\d+$/.test(String(l))?parseInt(String(l),10):null,!s)return e.json({success:!1,error:"tenant_id مطلوب"},400)}else if(s=t.tenantId,!s)return e.json({success:!1,error:"لا شركة مرتبطة"},400);const{results:n}=await e.env.DB.prepare(`
       SELECT id, tenant_id, path_segment, label, created_at
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
-    `).bind(s).all(),r=await e.env.DB.prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1").bind(s).first();return e.json({success:!0,data:n||[],tenant_slug:r?.slug??null})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/tenant-contact-affiliates",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>({})),s=Ie(a?.path_segment),n=String(a?.label??"").trim();let r=t.roleId===2?t.tenantId:null;if(t.roleId===1){const l=a?.tenant_id,i=parseInt(String(l??""),10);r=Number.isFinite(i)&&i>0?i:null}return r?t.roleId===2&&t.tenantId!==r?e.json({success:!1,error:"Forbidden"},403):!s||!Se(s)?e.json({success:!1,error:"مسار غير صالح. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية أو وسطية فقط (مثل facebook أو fb-ads)"},400):!n||n.length>120?e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400):(await e.env.DB.prepare(`
+    `).bind(s).all(),r=await e.env.DB.prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1").bind(s).first();return e.json({success:!0,data:n||[],tenant_slug:r?.slug??null})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.post("/api/tenant-contact-affiliates",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>({})),s=Be(a?.path_segment),n=String(a?.label??"").trim();let r=t.roleId===2?t.tenantId:null;if(t.roleId===1){const l=a?.tenant_id,i=parseInt(String(l??""),10);r=Number.isFinite(i)&&i>0?i:null}return r?t.roleId===2&&t.tenantId!==r?e.json({success:!1,error:"Forbidden"},403):!s||!Re(s)?e.json({success:!1,error:"مسار غير صالح. استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية أو وسطية فقط (مثل facebook أو fb-ads)"},400):!n||n.length>120?e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400):(await e.env.DB.prepare(`
       INSERT INTO tenant_contact_affiliate_links (tenant_id, path_segment, label)
       VALUES (?, ?, ?)
-    `).bind(r,s,n).run(),e.json({success:!0,message:"تم إنشاء رابط الإحالة"})):e.json({success:!1,error:t.roleId===1?"tenant_id مطلوب":"لا شركة مرتبطة"},400)}catch(t){const a=String(t?.message||"");return a.includes("UNIQUE")||a.toLowerCase().includes("unique")?e.json({success:!1,error:"هذا المسار مستخدم بالفعل لهذه الشركة"},400):e.json({success:!1,error:t?.message||"Server error"},500)}});p.delete("/api/tenant-contact-affiliates/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid id"},400);const s=await e.env.DB.prepare(`
+    `).bind(r,s,n).run(),e.json({success:!0,message:"تم إنشاء رابط الإحالة"})):e.json({success:!1,error:t.roleId===1?"tenant_id مطلوب":"لا شركة مرتبطة"},400)}catch(t){const a=String(t?.message||"");return a.includes("UNIQUE")||a.toLowerCase().includes("unique")?e.json({success:!1,error:"هذا المسار مستخدم بالفعل لهذه الشركة"},400):e.json({success:!1,error:t?.message||"Server error"},500)}});c.delete("/api/tenant-contact-affiliates/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid id"},400);const s=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
-    `).bind(a).first();return s?t.roleId===2&&(!t.tenantId||s.tenant_id!==t.tenantId)?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare("DELETE FROM tenant_contact_affiliate_links WHERE id = ?").bind(a).run(),e.json({success:!0,message:"تم حذف الرابط"})):e.json({success:!1,error:"Not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);if(t.roleId===1){const n=e.req.query("tenant_id");if(n&&/^\d+$/.test(String(n))){const{results:l}=await e.env.DB.prepare(`
+    `).bind(a).first();return s?t.roleId===2&&(!t.tenantId||s.tenant_id!==t.tenantId)?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare("DELETE FROM tenant_contact_affiliate_links WHERE id = ?").bind(a).run(),e.json({success:!0,message:"تم حذف الرابط"})):e.json({success:!1,error:"Not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/follow-ups",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=String(e.req.query("followupLinkFilter")??"").trim().toLowerCase(),s=a==="company"||a==="affiliate"?a:"all",n=String(e.req.query("followupPriorityFilter")??"").trim().toLowerCase(),r=n==="important"||n==="regular"?n:"all",l=s==="company"?" AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') ":s==="affiliate"?" AND (f.affiliate_path_segment IS NOT NULL AND TRIM(f.affiliate_path_segment) <> '') ":"",i=r==="important"||r==="regular"?" AND EXISTS (SELECT 1 FROM company_contact_followup_tasks t WHERE t.followup_id = f.id AND t.priority = ?) ":"";if(t.roleId===1){const m=e.req.query("tenant_id");if(m&&/^\d+$/.test(String(m))){const h=e.env.DB.prepare(`
           SELECT f.*, t.company_name
           FROM company_contact_followups f
           LEFT JOIN tenants t ON t.id = f.tenant_id
           WHERE f.tenant_id = ?
+          ${l}
+          ${i}
           ORDER BY f.created_at DESC
           LIMIT 300
-        `).bind(parseInt(String(n),10)).all();return e.json({success:!0,data:l||[]})}const{results:r}=await e.env.DB.prepare(`
+        `),f=[parseInt(String(m),10)];i&&f.push(r);const{results:v}=await h.bind(...f).all();return e.json({success:!0,data:v||[]})}const b=e.env.DB.prepare(`
         SELECT f.*, t.company_name
         FROM company_contact_followups f
         LEFT JOIN tenants t ON t.id = f.tenant_id
+        WHERE 1=1
+        ${l}
+        ${i}
         ORDER BY f.created_at DESC
         LIMIT 300
-      `).all();return e.json({success:!0,data:r||[]})}if(!t.tenantId)return e.json({success:!0,data:[]});const{results:s}=await e.env.DB.prepare(`
+      `),g=[];i&&g.push(r);const{results:x}=await(g.length?b.bind(...g):b).all();return e.json({success:!0,data:x||[]})}if(!t.tenantId)return e.json({success:!0,data:[]});const d=e.env.DB.prepare(`
       SELECT f.*, t.company_name
       FROM company_contact_followups f
       LEFT JOIN tenants t ON t.id = f.tenant_id
       WHERE f.tenant_id = ?
+      ${l}
+      ${i}
       ORDER BY f.created_at DESC
       LIMIT 300
-    `).bind(t.tenantId).all();return e.json({success:!0,data:s||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups/:id/notes",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
+    `),p=[t.tenantId];i&&p.push(r);const{results:u}=await d.bind(...p).all();return e.json({success:!0,data:u||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/follow-ups/:id/notes",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
       SELECT id, tenant_id
       FROM company_contact_followups
       WHERE id = ?
@@ -41826,7 +43546,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       WHERE n.followup_id = ?
       ORDER BY n.created_at DESC, n.id DESC
       LIMIT 200
-    `).bind(a).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/follow-ups/:id/notes",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.note_text??"").trim();if(!n)return e.json({success:!1,error:"يرجى إدخال الملاحظة"},400);const r=await e.env.DB.prepare(`
+    `).bind(a).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.post("/api/follow-ups/:id/notes",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.note_text??"").trim();if(!n)return e.json({success:!1,error:"يرجى إدخال الملاحظة"},400);const r=await e.env.DB.prepare(`
       SELECT id, tenant_id
       FROM company_contact_followups
       WHERE id = ?
@@ -41835,13 +43555,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       INSERT INTO company_contact_followup_notes (
         followup_id, tenant_id, note_text, created_by_user_id
       ) VALUES (?, ?, ?, ?)
-    `).bind(a,r.tenant_id,n,t.userId).run(),e.json({success:!0,message:"تمت إضافة الملاحظة"})):e.json({success:!1,error:"Follow-up not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups/:id/staff",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
+    `).bind(a,r.tenant_id,n,t.userId).run(),e.json({success:!0,message:"تمت إضافة الملاحظة"})):e.json({success:!1,error:"Follow-up not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/follow-ups/:id/staff",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
     `).bind(a).first();if(!s?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(`
       SELECT id, full_name FROM users
       WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
       ORDER BY full_name
-    `).bind(s.tenant_id).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/follow-ups/:id/tasks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
+    `).bind(s.tenant_id).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/follow-ups/:id/tasks",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
     `).bind(a).first();if(!s?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&s.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(`
       SELECT t.id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
@@ -41852,26 +43572,73 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       LEFT JOIN users au ON au.id = t.assigned_user_id
       LEFT JOIN users cu ON cu.id = t.created_by_user_id
       WHERE t.followup_id = ?
-      ORDER BY t.created_at DESC, t.id DESC
-      LIMIT 200
-    `).bind(a).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.post("/api/follow-ups/:id/tasks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.task_title??"").trim();if(!n)return e.json({success:!1,error:"يرجى إدخال عنوان المهمة"},400);const r=String(s?.scheduled_at_gregorian??"").trim();if(!r||Number.isNaN(new Date(r).getTime()))return e.json({success:!1,error:"تاريخ غير صالح"},400);const l=String(s?.priority??"").trim();if(!["regular","important"].includes(l))return e.json({success:!1,error:"الأولوية غير صالحة"},400);const i=String(s?.scheduled_at_hijri??"").trim()||null,o=await e.env.DB.prepare(`
+      ORDER BY t.id DESC
+      LIMIT 1
+    `).bind(a).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.post("/api/follow-ups/:id/tasks",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId===4)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid follow-up id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.task_title??"").trim();if(!n)return e.json({success:!1,error:"يرجى إدخال عنوان المهمة"},400);const r=String(s?.scheduled_at_gregorian??"").trim();if(!r||Number.isNaN(new Date(r).getTime()))return e.json({success:!1,error:"تاريخ غير صالح"},400);const l=String(s?.priority??"").trim();if(!["regular","important"].includes(l))return e.json({success:!1,error:"الأولوية غير صالحة"},400);const i=String(s?.scheduled_at_hijri??"").trim()||null,o=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
-    `).bind(a).first();if(!o?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&o.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);let d=null;if(s?.assigned_user_id!=null&&String(s.assigned_user_id).trim()!==""){const c=parseInt(String(s.assigned_user_id),10);if(!Number.isFinite(c)||c<=0)return e.json({success:!1,error:"معرّف الموظف غير صالح"},400);if(!(await e.env.DB.prepare(`
+    `).bind(a).first();if(!o?.id)return e.json({success:!1,error:"Follow-up not found"},404);if(t.roleId!==1&&o.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);let d=null;if(s?.assigned_user_id!=null&&String(s.assigned_user_id).trim()!==""){const u=parseInt(String(s.assigned_user_id),10);if(!Number.isFinite(u)||u<=0)return e.json({success:!1,error:"معرّف الموظف غير صالح"},400);if(!(await e.env.DB.prepare(`
         SELECT id FROM users WHERE id = ? AND role_id = 4 AND tenant_id = ? LIMIT 1
-      `).bind(c,o.tenant_id).first())?.id)return e.json({success:!1,error:"الموظف غير موجود في هذه الشركة"},400);d=c}return await e.env.DB.prepare(`
+      `).bind(u,o.tenant_id).first())?.id)return e.json({success:!1,error:"الموظف غير موجود في هذه الشركة"},400);d=u}const p=await e.env.DB.prepare(`
+      SELECT id FROM company_contact_followup_tasks
+      WHERE followup_id = ? AND tenant_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).bind(a,o.tenant_id).first();return p?.id?(await e.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks
+        SET task_title = ?,
+            scheduled_at_gregorian = ?,
+            scheduled_at_hijri = ?,
+            assigned_user_id = ?,
+            priority = ?
+        WHERE id = ? AND tenant_id = ?
+      `).bind(n,r,i,d,l,p.id,o.tenant_id).run(),e.json({success:!0,message:"تم حفظ تغييرات المهمة"})):(await e.env.DB.prepare(`
       INSERT INTO company_contact_followup_tasks
         (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
          assigned_user_id, priority, created_by_user_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,o.tenant_id,n,r,i,d,l,t.userId).run(),e.json({success:!0,message:"تمت إضافة المهمة"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/api/my-followup-tasks",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!0,data:[]});const a=String(e.req.query("status")??"").trim().toLowerCase(),s=a==="pending"?" AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending') ":a==="completed"?" AND LOWER(TRIM(t.status)) = 'completed' ":"",{results:n}=await e.env.DB.prepare(`
+    `).bind(a,o.tenant_id,n,r,i,d,l,t.userId).run(),e.json({success:!0,message:"تم إنشاء المهمة"}))}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.post("/api/follow-ups/auto-assign-unassigned-tasks",async e=>{try{let t=function(m){if(m==null)return p[0];const b=p.indexOf(m);return b===-1?p[0]:p[(b+1)%p.length]};const a=await y(e);if(!a.userId)return e.json({success:!1,error:"Unauthorized"},401);if(a.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);if(!a.tenantId)return e.json({success:!1,error:"لم تُعرّف شركة للحساب"},400);const s=a.tenantId,{results:n}=await e.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      ORDER BY id ASC
+    `).bind(s).all(),r=n||[];if(!r.length)return e.json({success:!1,error:"لا يوجد موظفون نشطون بدور الموظف في شركتك"},400);let i=(await e.env.DB.prepare(`
+      SELECT last_auto_assigned_user_id
+      FROM tenant_followup_auto_assign_state
+      WHERE tenant_id = ?
+      LIMIT 1
+    `).bind(s).first())?.last_auto_assigned_user_id??null;const{results:o}=await e.env.DB.prepare(`
+      SELECT t.id
+      FROM company_contact_followup_tasks t
+      WHERE t.tenant_id = ?
+        AND t.assigned_user_id IS NULL
+        AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending')
+      ORDER BY t.id ASC
+      LIMIT 500
+    `).bind(s).all(),d=o||[];if(!d.length)return e.json({success:!0,assigned:0,message:"لا توجد مهام بلا تعيين"});const p=r.map(m=>m.id);let u=0;for(const m of d){const b=t(i);(await e.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks
+        SET assigned_user_id = ?
+        WHERE id = ? AND tenant_id = ? AND assigned_user_id IS NULL
+      `).bind(b,m.id,s).run()).meta.changes>0&&(i=b,u+=1)}return u>0&&await e.env.DB.prepare(`
+        INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tenant_id) DO UPDATE SET
+          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(s,i).run(),e.json({success:!0,assigned:u,message:u?`تم تعيين ${u} مهمة`:"لم يُعيّن شيء (ربما عُيّنت المهام مؤخراً)"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/my-followup-tasks",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!0,data:[]});const a=String(e.req.query("status")??"").trim().toLowerCase(),s=a==="pending"?" AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending') ":a==="completed"?" AND LOWER(TRIM(t.status)) = 'completed' ":"",{results:n}=await e.env.DB.prepare(`
       SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
              t.priority, t.status, t.created_at,
+             t.employee_note_text, t.employee_note_updated_at,
              f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
              f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
-             tn.company_name
+             tn.company_name,
+             pr_out.id AS outgoing_pass_request_id,
+             pr_out.to_user_id AS outgoing_pass_to_user_id,
+             tu_out.full_name AS outgoing_pass_to_name
       FROM company_contact_followup_tasks t
       INNER JOIN company_contact_followups f ON f.id = t.followup_id
       LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      LEFT JOIN company_contact_followup_task_pass_requests pr_out
+        ON pr_out.task_id = t.id AND pr_out.status = 'pending' AND pr_out.from_user_id = ?
+      LEFT JOIN users tu_out ON tu_out.id = pr_out.to_user_id
       WHERE t.assigned_user_id = ? AND t.tenant_id = ?
       ${s}
       ORDER BY
@@ -41879,11 +43646,79 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         t.scheduled_at_gregorian ASC,
         t.id DESC
       LIMIT 300
-    `).bind(t.userId,t.tenantId).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.patch("/api/my-followup-tasks/:id",async e=>{try{const t=await x(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid task id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.status??"").trim().toLowerCase();if(!["pending","completed"].includes(n))return e.json({success:!1,error:"حالة غير صالحة"},400);const r=await e.env.DB.prepare(`
+    `).bind(t.userId,t.userId,t.tenantId).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.patch("/api/my-followup-tasks/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid task id"},400);const s=await e.req.json().catch(()=>({})),n=s?.status!=null&&String(s.status).trim()!=="",r=n?String(s?.status??"").trim().toLowerCase():null;if(n&&!["pending","completed"].includes(String(r)))return e.json({success:!1,error:"حالة غير صالحة"},400);const l=s?.note_text,i=l!=null,o=i?String(l??"").trim():null;if(!n&&!i)return e.json({success:!1,error:"لا توجد بيانات للتحديث"},400);if(i&&!o)return e.json({success:!1,error:"يرجى إدخال الملاحظة"},400);const d=await e.env.DB.prepare(`
       SELECT id, tenant_id, assigned_user_id FROM company_contact_followup_tasks WHERE id = ? LIMIT 1
-    `).bind(a).first();return r?.id?r.tenant_id!==t.tenantId||r.assigned_user_id!==t.userId?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare(`
-      UPDATE company_contact_followup_tasks SET status = ? WHERE id = ?
-    `).bind(n,a).run(),e.json({success:!0,message:n==="completed"?"تم إكمال المهمة":"أعيدت المهمة إلى قيد التنفيذ"})):e.json({success:!1,error:"Task not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});p.get("/admin/my-tasks",async e=>{const t=await x(e);return t.userId?t.roleId!==4?e.redirect("/admin/panel"):t.tenantId?e.html(`
+    `).bind(a).first();if(!d?.id)return e.json({success:!1,error:"Task not found"},404);if(d.tenant_id!==t.tenantId||d.assigned_user_id!==t.userId)return e.json({success:!1,error:"Forbidden"},403);n&&r&&(await e.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks SET status = ? WHERE id = ?
+      `).bind(r,a).run(),r==="completed"&&await e.env.DB.prepare(`
+          UPDATE company_contact_followup_task_pass_requests
+          SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+          WHERE task_id = ? AND status = 'pending'
+        `).bind(a).run()),i&&o&&await e.env.DB.prepare(`
+        UPDATE company_contact_followup_tasks
+        SET employee_note_text = ?, employee_note_updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(o,a).run();const p=n&&r==="completed"?"تم إكمال المهمة":n&&r==="pending"?"أعيدت المهمة إلى قيد التنفيذ":"تم حفظ الملاحظة";return e.json({success:!0,message:p})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/api/my-tenant-followup-staff",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!0,data:[]});const{results:a}=await e.env.DB.prepare(`
+      SELECT id, full_name FROM users
+      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1 AND id != ?
+      ORDER BY full_name
+    `).bind(t.tenantId,t.userId).all();return e.json({success:!0,data:a||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.post("/api/my-followup-tasks/:taskId/pass",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("taskId"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid task id"},400);const s=await e.req.json().catch(()=>({})),n=parseInt(String(s?.to_user_id??""),10);if(!Number.isFinite(n)||n<=0)return e.json({success:!1,error:"يرجى اختيار موظف"},400);if(n===t.userId)return e.json({success:!1,error:"لا يمكن التمرير إلى نفسك"},400);if(!(await e.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE id = ? AND role_id = 4 AND tenant_id = ? AND is_active = 1
+      LIMIT 1
+    `).bind(n,t.tenantId).first())?.id)return e.json({success:!1,error:"الموظف غير موجود في شركتك"},400);const l=await e.env.DB.prepare(`
+      SELECT id, tenant_id, assigned_user_id, status
+      FROM company_contact_followup_tasks
+      WHERE id = ? LIMIT 1
+    `).bind(a).first();if(!l?.id)return e.json({success:!1,error:"Task not found"},404);if(l.tenant_id!==t.tenantId||l.assigned_user_id!==t.userId)return e.json({success:!1,error:"Forbidden"},403);if(String(l.status??"").trim().toLowerCase()==="completed")return e.json({success:!1,error:"لا يمكن تمرير مهمة مكتملة"},400);const o=String(s?.note_text??"").trim();return o?(await e.env.DB.prepare(`
+      SELECT id FROM company_contact_followup_task_pass_requests
+      WHERE task_id = ? AND status = 'pending' LIMIT 1
+    `).bind(a).first())?.id?e.json({success:!1,error:"توجد بالفعل طلب تمرير معلّق لهذه المهمة"},400):(await e.env.DB.prepare(`
+      INSERT INTO company_contact_followup_task_pass_requests
+        (task_id, tenant_id, from_user_id, to_user_id, status, note_text)
+      VALUES (?, ?, ?, ?, 'pending', ?)
+    `).bind(a,t.tenantId,t.userId,n,o).run(),e.json({success:!0,message:"تم إرسال طلب التمرير"})):e.json({success:!1,error:"يرجى كتابة ملاحظة مع طلب التمرير"},400)}catch(t){const a=t?.message||"Server error";return String(a).includes("UNIQUE constraint")?e.json({success:!1,error:"توجد بالفعل طلب تمرير معلّق لهذه المهمة"},400):e.json({success:!1,error:a},500)}});c.get("/api/my-followup-task-passes/incoming",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!0,data:[]});const{results:a}=await e.env.DB.prepare(`
+      SELECT pr.id AS pass_request_id, pr.task_id, pr.from_user_id, pr.created_at AS pass_created_at, pr.note_text AS pass_note_text,
+             fu.full_name AS from_user_name,
+             t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri, t.priority, t.status AS task_status,
+             f.customer_name, f.customer_phone, f.customer_message,
+             f.affiliate_label, tn.company_name
+      FROM company_contact_followup_task_pass_requests pr
+      INNER JOIN company_contact_followup_tasks t ON t.id = pr.task_id
+      INNER JOIN company_contact_followups f ON f.id = t.followup_id
+      LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      LEFT JOIN users fu ON fu.id = pr.from_user_id
+      WHERE pr.to_user_id = ? AND pr.tenant_id = ? AND pr.status = 'pending'
+      ORDER BY pr.created_at ASC, pr.id ASC
+      LIMIT 100
+    `).bind(t.userId,t.tenantId).all();return e.json({success:!0,data:a||[]})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.patch("/api/my-followup-task-passes/:id",async e=>{try{const t=await y(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==4)return e.json({success:!1,error:"Forbidden"},403);if(!t.tenantId)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid pass id"},400);const s=await e.req.json().catch(()=>({})),n=String(s?.action??"").trim().toLowerCase();if(!["accept","reject","cancel"].includes(n))return e.json({success:!1,error:"إجراء غير صالح"},400);const r=await e.env.DB.prepare(`
+      SELECT pr.id, pr.task_id, pr.tenant_id, pr.from_user_id, pr.to_user_id, pr.status
+      FROM company_contact_followup_task_pass_requests pr
+      WHERE pr.id = ? LIMIT 1
+    `).bind(a).first();if(!r?.id)return e.json({success:!1,error:"Not found"},404);if(r.tenant_id!==t.tenantId)return e.json({success:!1,error:"Forbidden"},403);if(r.status!=="pending")return e.json({success:!1,error:"لم يعد هذا الطلب قابلاً للمعالجة"},400);if(n==="cancel")return r.from_user_id!==t.userId?e.json({success:!1,error:"Forbidden"},403):(await e.env.DB.prepare(`
+        UPDATE company_contact_followup_task_pass_requests
+        SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(a).run(),e.json({success:!0,message:"تم إلغاء طلب التمرير"}));if(r.to_user_id!==t.userId)return e.json({success:!1,error:"Forbidden"},403);if(n==="reject")return await e.env.DB.prepare(`
+        UPDATE company_contact_followup_task_pass_requests
+        SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(a).run(),e.json({success:!0,message:"تم رفض طلب التمرير"});const l=await e.env.DB.prepare(`
+      SELECT id, assigned_user_id, status FROM company_contact_followup_tasks
+      WHERE id = ? AND tenant_id = ? LIMIT 1
+    `).bind(r.task_id,t.tenantId).first();return l?.id?l.assigned_user_id!==r.from_user_id?e.json({success:!1,error:"تعيين المهمة تغيّر؛ لا يمكن القبول"},400):String(l.status??"").trim().toLowerCase()==="completed"?(await e.env.DB.prepare(`
+        UPDATE company_contact_followup_task_pass_requests
+        SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(a).run(),e.json({success:!1,error:"المهمة أصبحت مكتملة"},400)):(await e.env.DB.prepare(`
+      UPDATE company_contact_followup_tasks
+      SET assigned_user_id = ?
+      WHERE id = ? AND tenant_id = ?
+    `).bind(t.userId,r.task_id,t.tenantId).run(),await e.env.DB.prepare(`
+      UPDATE company_contact_followup_task_pass_requests
+      SET status = 'accepted', resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(a).run(),e.json({success:!0,message:"تم قبول المهمة ونقلها إليك"})):e.json({success:!1,error:"Task not found"},404)}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});c.get("/my-tasks",e=>e.redirect("/admin/my-tasks"));c.get("/admin/my-tasks",async e=>{const t=await y(e);if(!t.userId)return e.redirect("/login");const a=E(t.roleId);return a!==4&&a!==5?e.redirect("/admin/panel"):t.tenantId?e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -41906,18 +43741,59 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           </a>
         </div>
 
-        <div class="flex flex-wrap gap-2 mb-4">
-          <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
-          <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
-          <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+        <div class="flex flex-wrap gap-2 mb-4 border-b border-gray-200 pb-3">
+          <button type="button" data-page-tab="tasks" id="tabTasks" class="page-tab px-4 py-2 rounded-lg text-sm font-medium border bg-indigo-600 text-white border-indigo-600">مهامي</button>
+          <button type="button" data-page-tab="passes" id="tabPasses" class="page-tab hidden px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">
+            <i class="fas fa-share ml-1 text-violet-600"></i>التمريرات الواردة
+            <span id="passesBadge" class="mr-1 inline-flex min-w-[1.25rem] justify-center rounded-full bg-violet-600 px-1.5 py-0.5 text-xs text-white hidden">0</span>
+          </button>
         </div>
 
-        <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
-        <div id="cards" class="space-y-3"></div>
+        <div id="tasksPage">
+          <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
+            <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
+            <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+          </div>
+          <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
+          <div id="cards" class="space-y-3"></div>
+        </div>
+
+        <div id="passesPage" class="hidden">
+          <p class="text-sm text-gray-600 mb-3">طلبات زميل لنقل مهمة إليك. قبولك ينقل التعيين إليك ويزيلها عن المرسل.</p>
+          <div id="passListStatus" class="text-sm text-gray-600 mb-3"></div>
+          <div id="passCards" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <!-- Note Modal (integrated, no browser prompts) -->
+      <div id="noteModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+          <div class="flex items-center justify-between px-5 py-4 border-b">
+            <h2 id="noteModalTitle" class="text-lg font-bold text-gray-900">ملاحظة</h2>
+            <button type="button" id="noteModalCloseBtn" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-5 space-y-3">
+            <p id="noteModalHint" class="text-sm text-gray-600"></p>
+            <textarea id="noteModalInput" rows="5" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder=""></textarea>
+            <p id="noteModalError" class="text-sm text-red-700 hidden"></p>
+            <div class="flex items-center justify-end gap-2 pt-1">
+              <button type="button" id="noteModalCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button type="button" id="noteModalSaveBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white">
+                <i class="fas fa-save ml-2"></i>حفظ
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <script>
         let activeFilter = 'all';
+        let activePageTab = 'tasks';
+        let tenantStaff = [];
+        let noteModalState = { open: false, required: false, resolve: null };
 
         function escapeHtml(v) {
           return String(v ?? '')
@@ -41950,10 +43826,141 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             : '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">قيد التنفيذ</span>';
         }
 
+        function openNoteModal(opts) {
+          const modal = document.getElementById('noteModal');
+          const titleEl = document.getElementById('noteModalTitle');
+          const hintEl = document.getElementById('noteModalHint');
+          const inputEl = document.getElementById('noteModalInput');
+          const errEl = document.getElementById('noteModalError');
+          const saveBtn = document.getElementById('noteModalSaveBtn');
+          const cancelBtn = document.getElementById('noteModalCancelBtn');
+          const closeBtn = document.getElementById('noteModalCloseBtn');
+
+          const title = opts && opts.title ? String(opts.title) : 'ملاحظة';
+          const hint = opts && opts.hint ? String(opts.hint) : '';
+          const placeholder = opts && opts.placeholder ? String(opts.placeholder) : '';
+          const initialValue = opts && opts.initialValue != null ? String(opts.initialValue) : '';
+          const required = !!(opts && opts.required);
+
+          titleEl.textContent = title;
+          hintEl.textContent = hint;
+          inputEl.placeholder = placeholder;
+          inputEl.value = initialValue;
+          errEl.textContent = '';
+          errEl.classList.add('hidden');
+
+          noteModalState.open = true;
+          noteModalState.required = required;
+
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+
+          setTimeout(function () { inputEl.focus(); inputEl.select(); }, 0);
+
+          function cleanup() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            noteModalState.open = false;
+            noteModalState.required = false;
+            noteModalState.resolve = null;
+            // remove listeners
+            saveBtn.removeEventListener('click', onSave);
+            cancelBtn.removeEventListener('click', onCancel);
+            closeBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKeyDown);
+          }
+
+          function onBackdrop(e) {
+            if (e.target === modal) onCancel();
+          }
+
+          function onKeyDown(e) {
+            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSave();
+          }
+
+          function onCancel() {
+            if (noteModalState.resolve) noteModalState.resolve(null);
+            cleanup();
+          }
+
+          function onSave() {
+            const text = String(inputEl.value || '').trim();
+            if (required && !text) {
+              errEl.textContent = 'يرجى إدخال الملاحظة';
+              errEl.classList.remove('hidden');
+              inputEl.focus();
+              return;
+            }
+            if (noteModalState.resolve) noteModalState.resolve(text);
+            cleanup();
+          }
+
+          saveBtn.addEventListener('click', onSave);
+          cancelBtn.addEventListener('click', onCancel);
+          closeBtn.addEventListener('click', onCancel);
+          modal.addEventListener('click', onBackdrop);
+          document.addEventListener('keydown', onKeyDown);
+
+          return new Promise(function (resolve) {
+            noteModalState.resolve = resolve;
+          });
+        }
+
         function setListStatus(msg, type) {
           const el = document.getElementById('listStatus');
           el.textContent = msg || '';
           el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function setPassListStatus(msg, type) {
+          const el = document.getElementById('passListStatus');
+          el.textContent = msg || '';
+          el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function staffOptionsHtml() {
+          if (!tenantStaff.length) {
+            return '<option value="">لا يوجد موظفون آخرون في الشركة</option>';
+          }
+          return '<option value="">-- اختر موظفاً لتمرير المهمة --</option>' +
+            tenantStaff.map(function (u) {
+              return '<option value="' + escapeHtml(String(u.id)) + '">' + escapeHtml(u.full_name || '') + '</option>';
+            }).join('');
+        }
+
+        function updateIncomingPassTab(count) {
+          var n = typeof count === 'number' ? count : 0;
+          var badge = document.getElementById('passesBadge');
+          badge.textContent = String(n);
+          if (n > 0) {
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+            if (activePageTab === 'passes') {
+              activePageTab = 'tasks';
+            }
+          }
+          syncPassesTabStyle();
+        }
+
+        function syncPassesTabStyle() {
+          var tabTasks = document.getElementById('tabTasks');
+          var tabPasses = document.getElementById('tabPasses');
+          var badgeEl = document.getElementById('passesBadge');
+          var n = parseInt(badgeEl.textContent, 10) || 0;
+          tabTasks.className = 'page-tab px-4 py-2 rounded-lg text-sm font-medium border ' +
+            (activePageTab === 'tasks' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 bg-white text-gray-700');
+          if (n > 0) {
+            tabPasses.classList.remove('hidden');
+            tabPasses.className = 'page-tab px-4 py-2 rounded-lg text-sm font-medium border ' +
+              (activePageTab === 'passes' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 bg-white text-gray-700');
+          } else {
+            tabPasses.classList.add('hidden');
+          }
+          document.getElementById('tasksPage').classList.toggle('hidden', activePageTab !== 'tasks');
+          document.getElementById('passesPage').classList.toggle('hidden', activePageTab !== 'passes');
         }
 
         function renderTasks(tasks) {
@@ -41964,11 +43971,48 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
           root.innerHTML = tasks.map(function (task) {
             const done = isCompleted(task);
+            var hasNote = task.employee_note_text != null && String(task.employee_note_text).trim() !== '';
+            var noteBlock =
+              '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+              '<div class="flex items-center justify-between gap-2">' +
+              '<div class="text-xs font-medium text-gray-700"><i class="fas fa-note-sticky ml-1 text-amber-600"></i>ملاحظتك على المهمة</div>' +
+              '<button type="button" data-note="' + task.id + '" class="text-sm font-medium text-amber-800 underline">ملاحظة</button>' +
+              '</div>' +
+              (hasNote
+                ? '<div class="mt-2 text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
+                  (task.employee_note_updated_at ? '<div class="mt-1 text-xs text-gray-400">' + escapeHtml(formatDate(task.employee_note_updated_at)) + '</div>' : '')
+                : '<div class="mt-2 text-sm text-gray-500">لا توجد ملاحظة محفوظة.</div>') +
+              '</div>';
             var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
               '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
+            if (task.affiliate_label) {
+              enrollHref +=
+                '&enrollment_source=affiliate' +
+                '&affiliate_label=' + encodeURIComponent(String(task.affiliate_label || '').trim());
+            }
             var enrollCustomerBtn =
               '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
               '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
+            var passBlock = '';
+            if (!done) {
+              var outId = task.outgoing_pass_request_id;
+              if (outId != null && outId !== '' && Number(outId) > 0) {
+                passBlock =
+                  '<div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">' +
+                  '<div class="mb-2"><i class="fas fa-hourglass-half ml-1"></i>طلب تمرير قيد الانتظار إلى: <strong>' +
+                  escapeHtml(task.outgoing_pass_to_name || '') + '</strong> (ما زلت المعيّن حتى يقبل زميلك)</div>' +
+                  '<button type="button" data-pass-cancel="' + escapeHtml(String(outId)) + '" class="text-sm font-medium text-violet-800 underline">إلغاء طلب التمرير</button></div>';
+              } else {
+                passBlock =
+                  '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                  '<div class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-share ml-1 text-violet-600"></i>تمرير المهمة لزميل</div>' +
+                  '<div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">' +
+                  '<select data-pass-select="' + task.id + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+                  staffOptionsHtml() + '</select>' +
+                  '<button type="button" data-pass-submit="' + task.id + '" class="whitespace-nowrap bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50" ' +
+                  (tenantStaff.length ? '' : 'disabled ') + '>إرسال طلب التمرير</button></div></div>';
+              }
+            }
             const actionBtn = done
               ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
                 enrollCustomerBtn +
@@ -41994,6 +44038,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
                     (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
                   '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
                 '</div>' +
+                noteBlock +
+                passBlock +
                 actionBtn +
               '</div>'
             );
@@ -42005,6 +44051,98 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           root.querySelectorAll('[data-reopen]').forEach(function (btn) {
             btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-reopen'), 'pending'); });
           });
+          root.querySelectorAll('[data-note]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-note');
+              var task = (Array.isArray(tasks) ? tasks : []).find(function (t) { return String(t.id) === String(tid); });
+              var existing = task && task.employee_note_text != null ? String(task.employee_note_text) : '';
+              openNoteModal({
+                title: 'ملاحظة للمهمة',
+                hint: '',
+                placeholder: 'اكتب ملاحظتك هنا...',
+                initialValue: existing || '',
+                required: true
+              }).then(function (text) {
+                if (text == null) return;
+                patchTaskNote(tid, text);
+              });
+            });
+          });
+          root.querySelectorAll('[data-pass-submit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-pass-submit');
+              var sel = root.querySelector('[data-pass-select="' + tid + '"]');
+              var toId = sel ? sel.value : '';
+              submitPassRequest(tid, toId);
+            });
+          });
+          root.querySelectorAll('[data-pass-cancel]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchPass(btn.getAttribute('data-pass-cancel'), 'cancel'); });
+          });
+        }
+
+        function renderIncomingPasses(rows) {
+          const root = document.getElementById('passCards');
+          if (!Array.isArray(rows) || !rows.length) {
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد طلبات تمرير حالياً.</div>';
+            return;
+          }
+          root.innerHTML = rows.map(function (row) {
+            var note = row.pass_note_text != null ? String(row.pass_note_text).trim() : '';
+            var noteBlock = note
+              ? '<div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">' +
+                '<div class="text-xs font-medium text-violet-900 mb-1"><i class="fas fa-note-sticky ml-1"></i>ملاحظة الزميل</div>' +
+                '<div class="whitespace-pre-wrap break-words">' + escapeHtml(note) + '</div>' +
+                '</div>'
+              : '';
+            return (
+              '<div class="bg-white border border-violet-200 rounded-xl p-4 shadow-sm">' +
+                '<div class="text-base font-semibold text-gray-900">' + escapeHtml(row.task_title || '') + '</div>' +
+                '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(row.priority) + '</div>' +
+                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                  '<div><i class="fas fa-user ml-1 text-violet-500"></i>من: <strong>' + escapeHtml(row.from_user_name || '') + '</strong></div>' +
+                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(row.company_name || '-') + '</div>' +
+                  '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(row.customer_name || '-') + ' — ' + escapeHtml(row.customer_phone || '-') + '</div>' +
+                  '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(row.customer_message || '') + '</span></div>' +
+                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(row.scheduled_at_gregorian || '-') + '</div>' +
+                  '<div class="text-gray-400">' + formatDate(row.pass_created_at) + '</div>' +
+                '</div>' +
+                noteBlock +
+                '<div class="mt-3 flex flex-wrap gap-2">' +
+                  '<button type="button" data-pass-action="accept" data-pass-id="' + row.pass_request_id + '" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">قبول المهمة</button>' +
+                  '<button type="button" data-pass-action="reject" data-pass-id="' + row.pass_request_id + '" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium px-4 py-2 rounded-lg">رفض</button>' +
+                '</div></div>'
+            );
+          }).join('');
+          root.querySelectorAll('[data-pass-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              patchPass(btn.getAttribute('data-pass-id'), btn.getAttribute('data-pass-action'));
+            });
+          });
+        }
+
+        async function loadStaff() {
+          try {
+            const res = await axios.get('/api/my-tenant-followup-staff');
+            tenantStaff = Array.isArray(res?.data?.data) ? res.data.data : [];
+          } catch (e) {
+            tenantStaff = [];
+          }
+        }
+
+        async function loadIncomingPasses() {
+          setPassListStatus('جاري التحميل...', 'neutral');
+          document.getElementById('passCards').innerHTML = '';
+          try {
+            const res = await axios.get('/api/my-followup-task-passes/incoming');
+            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+            setPassListStatus('', 'neutral');
+            renderIncomingPasses(rows);
+            updateIncomingPassTab(rows.length);
+          } catch (e) {
+            setPassListStatus('تعذر تحميل طلبات التمرير', 'error');
+            updateIncomingPassTab(0);
+          }
         }
 
         async function loadTasks() {
@@ -42026,10 +44164,75 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
         async function patchTask(id, status) {
           if (!id) return;
           try {
-            await axios.patch('/api/my-followup-tasks/' + id, { status: status }, { headers: { 'Content-Type': 'application/json' } });
-            await loadTasks();
+            var payload = { status: status };
+            if (String(status).toLowerCase() === 'completed') {
+              const note = await openNoteModal({
+                title: 'ملاحظة عند إكمال المهمة',
+                hint: 'اختياري: اكتب ملاحظة تُحفظ مع المهمة عند الإكمال.',
+                placeholder: 'اكتب الملاحظة (اختياري)...',
+                initialValue: '',
+                required: false
+              });
+              if (note != null && String(note).trim()) {
+                payload.note_text = String(note).trim();
+              }
+            }
+            await axios.patch('/api/my-followup-tasks/' + id, payload, { headers: { 'Content-Type': 'application/json' } });
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
           } catch (e) {
             var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تحديث المهمة';
+            alert(msg);
+          }
+        }
+
+        async function submitPassRequest(taskId, toUserId) {
+          if (!taskId || !toUserId) {
+            alert('يرجى اختيار موظف من القائمة');
+            return;
+          }
+          try {
+            var note = await openNoteModal({
+              title: 'ملاحظة طلب التمرير',
+              hint: 'الملاحظة مطلوبة وسيشاهدها زميلك عند استلام الطلب.',
+              placeholder: 'اكتب الملاحظة المطلوبة...',
+              initialValue: '',
+              required: true
+            });
+            if (note == null) return;
+            await axios.post(
+              '/api/my-followup-tasks/' + taskId + '/pass',
+              { to_user_id: parseInt(toUserId, 10), note_text: String(note).trim() },
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر إرسال الطلب';
+            alert(msg);
+          }
+        }
+
+        async function patchTaskNote(id, noteText) {
+          if (!id) return;
+          try {
+            await axios.patch('/api/my-followup-tasks/' + id, { note_text: noteText }, { headers: { 'Content-Type': 'application/json' } });
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر حفظ الملاحظة';
+            alert(msg);
+          }
+        }
+
+        async function patchPass(passId, action) {
+          if (!passId) return;
+          try {
+            await axios.patch('/api/my-followup-task-passes/' + passId, { action: action }, { headers: { 'Content-Type': 'application/json' } });
+            if (action === 'accept') {
+              activePageTab = 'tasks';
+            }
+            await Promise.all([loadTasks(), loadIncomingPasses()]);
+            syncPassesTabStyle();
+          } catch (e) {
+            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تنفيذ الإجراء';
             alert(msg);
           }
         }
@@ -42051,12 +44254,26 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           });
         });
 
+        document.querySelectorAll('.page-tab').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var t = btn.getAttribute('data-page-tab');
+            if (!t || btn.classList.contains('hidden')) return;
+            activePageTab = t;
+            syncPassesTabStyle();
+            if (activePageTab === 'passes') loadIncomingPasses();
+          });
+        });
+
         setActiveFilterButtons();
-        loadTasks();
+        (async function init() {
+          await loadStaff();
+          await Promise.all([loadTasks(), loadIncomingPasses()]);
+          syncPassesTabStyle();
+        })();
       <\/script>
     </body>
     </html>
-  `):e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title></head><body class="p-6"><p>لم يُعرّف حسابك على شركة.</p><a href="/admin/panel">العودة</a></body></html>',400):e.redirect("/login")});p.get("/admin/contact-affiliates",async e=>{const t=await x(e);if(!t.userId)return e.redirect("/login");if(t.roleId!==1&&t.roleId!==2)return e.redirect("/admin/panel");const a=t.roleId===1;return e.html(`
+  `):e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title></head><body class="p-6"><p>لم يُعرّف حسابك على شركة.</p><a href="/admin/panel">العودة</a></body></html>',400)});c.get("/admin/contact-affiliates",async e=>{const t=await y(e);if(!t.userId)return e.redirect("/login");if(t.roleId!==1&&t.roleId!==2)return e.redirect("/admin/panel");const a=t.roleId===1;return e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -42249,7 +44466,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <\/script>
     </body>
     </html>
-  `)});p.get("/admin/follow-ups",async e=>{const t=await x(e);return t.userId?t.roleId===4?e.redirect("/admin/panel"):e.html(`
+  `)});c.get("/admin/follow-ups",async e=>{const t=await y(e);return t.userId?t.roleId===4?e.redirect("/admin/panel"):e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -42267,18 +44484,86 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
     </head>
     <body class="bg-gray-50 min-h-screen">
-      <div class="max-w-7xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-gray-900"><i class="fas fa-address-card ml-2 text-purple-600"></i>متابعة طلبات التواصل</h1>
-            <p class="text-gray-600 mt-2">الطلبات القادمة من صفحات التواصل العامة للشركات</p>
+      <div class="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0">
+              <div class="flex items-center gap-3">
+                <div class="bg-white/15 p-2.5 rounded-xl border border-white/20">
+                  <i class="fas fa-bullhorn text-2xl"></i>
+                </div>
+                <div class="min-w-0">
+                  <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">التسويق - متابعة طلبات التواصل</h1>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/10 border border-white/15 rounded-2xl p-2">
+                <div class="min-w-[14rem]">
+                  <label class="block text-[11px] font-bold text-white/90 mb-1">مصدر الرابط</label>
+                  <div class="relative">
+                    <select id="followupLinkFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
+                      <option value="all">الكل</option>
+                      <option value="company">رابط الشركة</option>
+                      <option value="affiliate">روابط الأفلييت</option>
+                    </select>
+                    <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
+                  </div>
+                </div>
+                <div class="min-w-[14rem]">
+                  <label class="block text-[11px] font-bold text-white/90 mb-1">الأولوية</label>
+                  <div class="relative">
+                    <select id="followupPriorityFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
+                      <option value="all">الكل</option>
+                      <option value="important">مهم</option>
+                      <option value="regular">عادي</option>
+                    </select>
+                    <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" id="autoAssignTasksBtn" class="hidden items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
+                <i class="fas fa-random"></i>
+                <span>تعيين تلقائي</span>
+              </button>
+              <a href="/admin/contact-affiliates" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
+                <i class="fas fa-funnel-dollar"></i>روابط الأفلييت
+              </a>
+              <a href="/admin/panel" class="inline-flex items-center gap-2 bg-gray-900/70 hover:bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/10">
+                <i class="fas fa-arrow-right"></i>لوحة التحكم
+              </a>
+            </div>
           </div>
-          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg">
-            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
-          </a>
         </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <p id="autoAssignHint" class="hidden">
+          يعيّن المهام غير المعيّنة فقط لموظفي الشركة بالتناوب: بعد أن يحصل موظف على مهمة بالتعيين التلقائي، يُعاد الدور للبقية قبل أن يُعاد إليه. التعيين اليدوي لا يؤثر على هذا التوزيع.
+        </p>
 
         <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Auto-assign confirm / result -->
+      <div id="autoAssignFlowModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="autoAssignFlowTitle">
+          <div class="px-5 py-4 border-b">
+            <h2 id="autoAssignFlowTitle" class="text-lg font-bold text-gray-900">تأكيد التعيين التلقائي</h2>
+          </div>
+          <div class="p-5">
+            <p id="autoAssignFlowBody" class="text-sm text-gray-700 leading-relaxed"></p>
+            <div id="autoAssignFlowActionsConfirm" class="mt-6 flex flex-wrap items-center justify-end gap-2">
+              <button type="button" id="autoAssignCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button type="button" id="autoAssignConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white">متابعة</button>
+            </div>
+            <div id="autoAssignFlowActionsResult" class="hidden mt-6 flex justify-end">
+              <button type="button" id="autoAssignResultOkBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-900 text-white">حسناً</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Notes Modal -->
@@ -42374,6 +44659,8 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
       <script>
         let activeFollowupId = null;
         let activeTaskFollowupId = null;
+        let pendingDefaultTaskStaffId = null;
+        let activeEditingTaskId = null;
         let taskDatePicker = null;
         let taskHijriPicker = null;
         let isTaskSyncing = false;
@@ -42554,7 +44841,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             history.innerHTML = '<div class="text-sm text-gray-500">لا توجد مهام.</div>';
             return;
           }
-          history.innerHTML = tasks.map((task) => \`
+          // Single-task mode: show the newest task only.
+          const task = tasks[0];
+          history.innerHTML = [task].map((task) => \`
             <div class="bg-white border border-gray-200 rounded-lg p-3">
               <div class="flex items-start justify-between gap-2 mb-1">
                 <span class="text-sm font-medium text-gray-800">\${escapeHtml(task.task_title || '')}</span>
@@ -42576,16 +44865,16 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             el.innerHTML = '<div class="text-xs text-gray-400 mt-1">لا توجد مهام</div>';
             return;
           }
-          const shown = tasks.slice(0, 3);
-          const extra = tasks.length > 3 ? \`<div class="text-xs text-gray-400">+\${tasks.length - 3} مهام أخرى</div>\` : '';
-          el.innerHTML = '<div class="mt-1 space-y-1">' +
-            shown.map((t) => \`
-              <div class="flex items-center gap-2 text-xs text-gray-700">
-                <i class="fas fa-circle text-indigo-400" style="font-size:5px;flex-shrink:0"></i>
-                <span class="truncate flex-1">\${escapeHtml(t.assigned_user_name || 'غير محدد')}</span>
-                \${priorityBadge(t.priority)}
-              </div>
-            \`).join('') + extra + '</div>';
+          const t = tasks[0];
+          el.innerHTML =
+            '<div class="mt-1 flex items-center gap-2 text-xs text-gray-700">' +
+              '<i class="fas fa-circle text-indigo-400" style="font-size:5px;flex-shrink:0"></i>' +
+              '<span class="truncate flex-1">' + escapeHtml(t.task_title || '') + '</span>' +
+              priorityBadge(t.priority) +
+            '</div>' +
+            '<div class="mt-1 text-xs text-gray-500"><i class="fas fa-user ml-1 text-gray-400"></i>' +
+              escapeHtml(t.assigned_user_name || 'غير محدد') +
+            '</div>';
         }
 
         async function loadCardTasks(followupId) {
@@ -42614,7 +44903,40 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل المهام...</div>';
           try {
             const res = await axios.get('/api/follow-ups/' + followupId + '/tasks');
-            renderTasksInModal(Array.isArray(res?.data?.data) ? res.data.data : []);
+            const tasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            renderTasksInModal(tasks);
+            // Remember the "current" assignee (most recent assigned task) for default selection.
+            pendingDefaultTaskStaffId = null;
+            activeEditingTaskId = null;
+            if (Array.isArray(tasks) && tasks.length) {
+              activeEditingTaskId = tasks[0]?.id != null ? String(tasks[0].id) : null;
+              for (const t of tasks) {
+                const raw = t && t.assigned_user_id != null ? String(t.assigned_user_id).trim() : '';
+                const n = raw ? parseInt(raw, 10) : NaN;
+                if (Number.isFinite(n) && n > 0) {
+                  pendingDefaultTaskStaffId = String(n);
+                  break;
+                }
+              }
+            }
+            applyPendingDefaultTaskStaff();
+
+            // Prefill the form with the existing task (single-task mode).
+            const saveBtn = document.getElementById('saveTaskBtn');
+            if (Array.isArray(tasks) && tasks.length) {
+              const t0 = tasks[0] || {};
+              document.getElementById('taskTitleInput').value = String(t0.task_title || '');
+              document.getElementById('taskScheduledGregorian').value = String(t0.scheduled_at_gregorian || '');
+              document.getElementById('taskScheduledHijri').value = String(t0.scheduled_at_hijri || '');
+              document.getElementById('taskPrioritySelect').value = String(t0.priority || 'regular');
+              if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save ml-2"></i>حفظ التغييرات';
+            } else {
+              document.getElementById('taskTitleInput').value = '';
+              document.getElementById('taskScheduledGregorian').value = '';
+              document.getElementById('taskScheduledHijri').value = '';
+              document.getElementById('taskPrioritySelect').value = 'regular';
+              if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-plus ml-2"></i>إنشاء المهمة';
+            }
           } catch (e) {
             history.innerHTML = '<div class="text-sm text-red-700">تعذر تحميل المهام</div>';
           }
@@ -42628,9 +44950,22 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
             const staff = Array.isArray(res?.data?.data) ? res.data.data : [];
             sel.innerHTML = '<option value="">-- بدون تعيين --</option>' +
               staff.map((u) => \`<option value="\${Number(u.id)}">\${escapeHtml(u.full_name || '')}</option>\`).join('');
+            applyPendingDefaultTaskStaff();
           } catch (_) {
             sel.innerHTML = '<option value="">-- تعذر التحميل --</option>';
           }
+        }
+
+        function applyPendingDefaultTaskStaff() {
+          const sel = document.getElementById('taskStaffSelect');
+          if (!sel) return;
+          // Respect a user manual selection.
+          if (sel.value && String(sel.value).trim() !== '') return;
+          if (!pendingDefaultTaskStaffId) return;
+          // Only apply if the option exists.
+          const opt = sel.querySelector('option[value="' + String(pendingDefaultTaskStaffId) + '"]');
+          if (!opt) return;
+          sel.value = String(pendingDefaultTaskStaffId);
         }
 
         function initTaskDatePicker() {
@@ -42692,11 +45027,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
 
         function openTasksModal(followupId) {
           activeTaskFollowupId = followupId;
+          pendingDefaultTaskStaffId = null;
+          activeEditingTaskId = null;
           document.getElementById('taskTitleInput').value = '';
           document.getElementById('taskScheduledGregorian').value = '';
           document.getElementById('taskScheduledHijri').value = '';
           document.getElementById('taskQuickAction').value = '';
           document.getElementById('taskPrioritySelect').value = 'regular';
+          document.getElementById('taskStaffSelect').value = '';
           setTaskStatus('', 'neutral');
           document.getElementById('tasksModal').classList.remove('hidden');
           document.getElementById('tasksModal').classList.add('flex');
@@ -42718,7 +45056,13 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           const cards = document.getElementById('cards');
           cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
           try {
-            const res = await axios.get('/api/follow-ups');
+            const params = new URLSearchParams(window.location.search);
+            const link = (params.get('followupLinkFilter') || 'all').toLowerCase();
+            const pr = (params.get('followupPriorityFilter') || 'all').toLowerCase();
+            const api = new URL('/api/follow-ups', window.location.origin);
+            if (link && link !== 'all') api.searchParams.set('followupLinkFilter', link);
+            if (pr && pr !== 'all') api.searchParams.set('followupPriorityFilter', pr);
+            const res = await axios.get(api.pathname + api.search);
             const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
             if (!rows.length) {
               cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات تواصل حالياً.</div>';
@@ -42760,6 +45104,66 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           } catch (e) {
             cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
           }
+        }
+
+        function getFollowupFilterParamsFromUrl() {
+          const params = new URLSearchParams(window.location.search);
+          const link = String(params.get('followupLinkFilter') || 'all').trim().toLowerCase();
+          const pr = String(params.get('followupPriorityFilter') || 'all').trim().toLowerCase();
+          return {
+            link: (link === 'company' || link === 'affiliate' || link === 'all') ? link : 'all',
+            pr: (pr === 'important' || pr === 'regular' || pr === 'all') ? pr : 'all'
+          };
+        }
+
+        function setFollowupFilterParamsInUrl(next) {
+          const params = new URLSearchParams(window.location.search);
+          const link = String(next?.link || 'all').trim().toLowerCase();
+          const pr = String(next?.pr || 'all').trim().toLowerCase();
+
+          if (link && link !== 'all') params.set('followupLinkFilter', link);
+          else params.delete('followupLinkFilter');
+
+          if (pr && pr !== 'all') params.set('followupPriorityFilter', pr);
+          else params.delete('followupPriorityFilter');
+
+          const qs = params.toString();
+          const nextUrl = window.location.pathname + (qs ? ('?' + qs) : '');
+          window.history.replaceState({}, '', nextUrl);
+        }
+
+        function syncFollowupHeaderFiltersFromUrl() {
+          const linkSelect = document.getElementById('followupLinkFilterSelect');
+          const prSelect = document.getElementById('followupPriorityFilterSelect');
+          if (!linkSelect || !prSelect) return;
+          const current = getFollowupFilterParamsFromUrl();
+          linkSelect.value = current.link;
+          prSelect.value = current.pr;
+        }
+
+        function initFollowupHeaderFilters() {
+          const linkSelect = document.getElementById('followupLinkFilterSelect');
+          const prSelect = document.getElementById('followupPriorityFilterSelect');
+          if (!linkSelect || !prSelect) return;
+
+          syncFollowupHeaderFiltersFromUrl();
+
+          linkSelect.addEventListener('change', function() {
+            const current = getFollowupFilterParamsFromUrl();
+            setFollowupFilterParamsInUrl({ link: this.value, pr: current.pr });
+            loadFollowUps();
+          });
+
+          prSelect.addEventListener('change', function() {
+            const current = getFollowupFilterParamsFromUrl();
+            setFollowupFilterParamsInUrl({ link: current.link, pr: this.value });
+            loadFollowUps();
+          });
+
+          window.addEventListener('popstate', function() {
+            syncFollowupHeaderFiltersFromUrl();
+            loadFollowUps();
+          });
         }
 
         document.getElementById('closeNotesModalBtn').addEventListener('click', closeNotesModal);
@@ -42843,12 +45247,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
               priority: priority
             });
             if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ المهمة');
-            document.getElementById('taskTitleInput').value = '';
-            document.getElementById('taskScheduledGregorian').value = '';
-            document.getElementById('taskScheduledHijri').value = '';
-            if (taskDatePicker) taskDatePicker.clear();
-            document.getElementById('taskPrioritySelect').value = 'regular';
-            setTaskStatus('تمت إضافة المهمة بنجاح', 'success');
+            setTaskStatus(res?.data?.message || 'تم حفظ المهمة', 'success');
             await loadTasksInModal(activeTaskFollowupId);
             loadCardTasks(activeTaskFollowupId);
           } catch (err) {
@@ -42856,11 +45255,77 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
           }
         });
 
+        initFollowupHeaderFilters();
+
+        const autoAssignFlowModal = document.getElementById('autoAssignFlowModal');
+        const autoAssignFlowBody = document.getElementById('autoAssignFlowBody');
+        const autoAssignFlowTitle = document.getElementById('autoAssignFlowTitle');
+        const autoAssignFlowActionsConfirm = document.getElementById('autoAssignFlowActionsConfirm');
+        const autoAssignFlowActionsResult = document.getElementById('autoAssignFlowActionsResult');
+
+        function openAutoAssignConfirmModal() {
+          autoAssignFlowTitle.textContent = 'تأكيد التعيين التلقائي';
+          autoAssignFlowBody.textContent = 'سيتم تعيين جميع المهام غير المعيّنة (قيد التنفيذ) لموظفي الشركة بالتناوب العادل. المتابعة؟';
+          autoAssignFlowActionsConfirm.classList.remove('hidden');
+          autoAssignFlowActionsResult.classList.add('hidden');
+          autoAssignFlowModal.classList.remove('hidden');
+          autoAssignFlowModal.classList.add('flex');
+        }
+
+        function showAutoAssignResultModal(title, message) {
+          autoAssignFlowTitle.textContent = title;
+          autoAssignFlowBody.textContent = message;
+          autoAssignFlowActionsConfirm.classList.add('hidden');
+          autoAssignFlowActionsResult.classList.remove('hidden');
+          autoAssignFlowModal.classList.remove('hidden');
+          autoAssignFlowModal.classList.add('flex');
+        }
+
+        function closeAutoAssignFlowModal() {
+          autoAssignFlowModal.classList.add('hidden');
+          autoAssignFlowModal.classList.remove('flex');
+        }
+
+        document.getElementById('autoAssignCancelBtn').addEventListener('click', closeAutoAssignFlowModal);
+        document.getElementById('autoAssignResultOkBtn').addEventListener('click', closeAutoAssignFlowModal);
+        autoAssignFlowModal.addEventListener('click', function (e) {
+          if (e.target === autoAssignFlowModal) closeAutoAssignFlowModal();
+        });
+
+        const autoAssignBtn = document.getElementById('autoAssignTasksBtn');
+        if (autoAssignBtn && !autoAssignBtn.classList.contains('hidden')) {
+          autoAssignBtn.addEventListener('click', function () {
+            openAutoAssignConfirmModal();
+          });
+        }
+
+        document.getElementById('autoAssignConfirmBtn').addEventListener('click', async function () {
+          const btn = document.getElementById('autoAssignConfirmBtn');
+          const tealBtn = document.getElementById('autoAssignTasksBtn');
+          btn.disabled = true;
+          if (tealBtn) tealBtn.disabled = true;
+          try {
+            const res = await axios.post('/api/follow-ups/auto-assign-unassigned-tasks');
+            const data = res?.data || {};
+            if (!data.success) throw new Error(data.error || 'تعذر التنفيذ');
+            const n = typeof data.assigned === 'number' ? data.assigned : 0;
+            const msg = data.message || (n ? ('تم تعيين ' + n + ' مهمة') : 'لا توجد مهام للتعيين');
+            await loadFollowUps();
+            showAutoAssignResultModal('اكتمل', msg);
+          } catch (err) {
+            const msg = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : (err.message || 'حدث خطأ');
+            showAutoAssignResultModal('تعذر التنفيذ', msg);
+          } finally {
+            btn.disabled = false;
+            if (tealBtn) tealBtn.disabled = false;
+          }
+        });
+
         loadFollowUps();
       <\/script>
     </body>
     </html>
-  `):e.redirect("/login")});p.get("/:slug/:affiliatePath",async e=>{const t=le(e.req.param("slug")),a=Ie(e.req.param("affiliatePath"));if(!t||de(t)||!a||!Se(a))return e.notFound();const s=await e.env.DB.prepare(`
+  `):e.redirect("/login")});c.get("/:slug/:affiliatePath",async e=>{const t=me(e.req.param("slug")),a=Be(e.req.param("affiliatePath"));if(!t||ge(t)||!a||!Re(a))return e.notFound();const s=await e.env.DB.prepare(`
     SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
@@ -42870,9 +45335,9 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
-  `).bind(s.id,a).first();return n?e.html(ut(s,n)):e.notFound()});p.get("/:slug",async e=>{const t=le(e.req.param("slug"));if(!t||de(t))return e.notFound();const a=await e.env.DB.prepare(`
+  `).bind(s.id,a).first();return n?e.html(xt(s,n)):e.notFound()});c.get("/:slug",async e=>{const t=me(e.req.param("slug"));if(!t||ge(t))return e.notFound();const a=await e.env.DB.prepare(`
     SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
-  `).bind(t).first();return a?e.html(ut(a,null)):e.notFound()});const Fe=new tt,gs=Object.assign({"/src/index.tsx":p});let bt=!1;for(const[,e]of Object.entries(gs))e&&(Fe.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Fe.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),bt=!0);if(!bt)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{Fe as default};
+  `).bind(t).first();return a?e.html(xt(a,null)):e.notFound()});const We=new ot,ys=Object.assign({"/src/index.tsx":c});let wt=!1;for(const[,e]of Object.entries(ys))e&&(We.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),We.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),wt=!0);if(!wt)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{We as default};

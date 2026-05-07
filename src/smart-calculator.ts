@@ -339,51 +339,99 @@ export const smartCalculator = `<!DOCTYPE html>
                     </h4>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- الهوية -->
+                        <!-- 1. ملف الهوية -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
                                 <i class="fas fa-id-card text-blue-600 ml-2"></i>
-                                صورة الهوية
+                                ملف الهوية
                             </label>
-                            <input type="file" id="idAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'idPreview')"
+                            <input type="file" id="identityAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'identityPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                            <div id="idPreview" class="mt-2"></div>
+                            <div id="identityPreview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
-                        <!-- كشف الحساب البنكي -->
+                        <!-- 2. ملف السمة -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
-                                <i class="fas fa-file-invoice text-green-600 ml-2"></i>
-                                كشف الحساب البنكي (آخر 3 أشهر)
+                                <i class="fas fa-signature text-green-600 ml-2"></i>
+                                ملف السمة
                             </label>
-                            <input type="file" id="bankStatementAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'bankStatementPreview')"
+                            <input type="file" id="signatureAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'signaturePreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
-                            <div id="bankStatementPreview" class="mt-2"></div>
+                            <div id="signaturePreview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
-                        <!-- تعريف بالراتب -->
+                        <!-- 3. ملف تعريف الراتب -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
                                 <i class="fas fa-file-contract text-purple-600 ml-2"></i>
-                                تعريف بالراتب
+                                ملف تعريف الراتب
                             </label>
-                            <input type="file" id="salaryAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryPreview')"
+                            <input type="file" id="salaryProfileAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryProfilePreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
-                            <div id="salaryPreview" class="mt-2"></div>
+                            <div id="salaryProfilePreview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                         
-                        <!-- مرفق إضافي -->
+                        <!-- 4. ملف التأمينات الاجتماعية -->
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">
-                                <i class="fas fa-file text-orange-600 ml-2"></i>
-                                مرفق إضافي
+                                <i class="fas fa-shield-alt text-orange-600 ml-2"></i>
+                                ملف التأمينات الاجتماعية
                             </label>
-                            <input type="file" id="additionalAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'additionalPreview')"
+                            <input type="file" id="gosiAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'gosiPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
-                            <div id="additionalPreview" class="mt-2"></div>
+                            <div id="gosiPreview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 5. شهادة الإعفاء الضريبي -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-certificate text-blue-600 ml-2"></i>
+                                شهادة الإعفاء الضريبي
+                            </label>
+                            <input type="file" id="taxExemptionAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'taxExemptionPreview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            <div id="taxExemptionPreview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 6. مستند إضافي 1 -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-file-alt text-green-600 ml-2"></i>
+                                مستند إضافي 1
+                            </label>
+                            <input type="file" id="additional1Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional1Preview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                            <div id="additional1Preview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 7. مستند إضافي 2 -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-file-alt text-purple-600 ml-2"></i>
+                                مستند إضافي 2
+                            </label>
+                            <input type="file" id="additional2Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional2Preview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
+                            <div id="additional2Preview" class="mt-2"></div>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                        </div>
+
+                        <!-- 8. مستند إضافي 3 -->
+                        <div>
+                            <label class="block text-gray-700 font-bold mb-2">
+                                <i class="fas fa-file-alt text-orange-600 ml-2"></i>
+                                مستند إضافي 3
+                            </label>
+                            <input type="file" id="additional3Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional3Preview')"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
+                            <div id="additional3Preview" class="mt-2"></div>
                             <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
                         </div>
                     </div>
@@ -967,10 +1015,14 @@ export const smartCalculator = `<!DOCTYPE html>
             }
             
             // Get file attachments info (filename only for now)
-            const idFile = document.getElementById('idAttachment').files[0];
-            const bankStatementFile = document.getElementById('bankStatementAttachment').files[0];
-            const salaryFile = document.getElementById('salaryAttachment').files[0];
-            const additionalFile = document.getElementById('additionalAttachment').files[0];
+            const identityFile = document.getElementById('identityAttachment').files[0];
+            const signatureFile = document.getElementById('signatureAttachment').files[0];
+            const salaryProfileFile = document.getElementById('salaryProfileAttachment').files[0];
+            const gosiFile = document.getElementById('gosiAttachment').files[0];
+            const taxExemptionFile = document.getElementById('taxExemptionAttachment').files[0];
+            const additional1File = document.getElementById('additional1Attachment').files[0];
+            const additional2File = document.getElementById('additional2Attachment').files[0];
+            const additional3File = document.getElementById('additional3Attachment').files[0];
 
             const pathParts = window.location.pathname.split('/');
             const tenantSlug = pathParts[1] === 'c' ? pathParts[2] : null;
@@ -996,10 +1048,14 @@ export const smartCalculator = `<!DOCTYPE html>
                 notes: document.getElementById('notes').value || null,
                 tenant_slug: tenantSlug,
                 // Store filenames for tracking
-                id_attachment_filename: idFile ? idFile.name : null,
-                bank_statement_attachment_filename: bankStatementFile ? bankStatementFile.name : null,
-                salary_attachment_filename: salaryFile ? salaryFile.name : null,
-                additional_attachment_filename: additionalFile ? additionalFile.name : null
+                identity_attachment_filename: identityFile ? identityFile.name : null,
+                signature_attachment_filename: signatureFile ? signatureFile.name : null,
+                salary_profile_attachment_filename: salaryProfileFile ? salaryProfileFile.name : null,
+                gosi_attachment_filename: gosiFile ? gosiFile.name : null,
+                tax_exemption_attachment_filename: taxExemptionFile ? taxExemptionFile.name : null,
+                additional_1_attachment_filename: additional1File ? additional1File.name : null,
+                additional_2_attachment_filename: additional2File ? additional2File.name : null,
+                additional_3_attachment_filename: additional3File ? additional3File.name : null
             };
             const sanitizedRequestData = sanitizeRequestData(requestData);
             const missingFields = Object.keys(requestData).filter((key) => requestData[key] === undefined);
@@ -1025,10 +1081,14 @@ export const smartCalculator = `<!DOCTYPE html>
                     
                     // Step 2: Upload attachments if any exist
                     const attachments = [
-                        { file: idFile, type: 'id', label: 'صورة الهوية' },
-                        { file: salaryFile, type: 'salary', label: 'تعريف بالراتب' },
-                        { file: bankStatementFile, type: 'bank_statement', label: 'كشف الحساب البنكي' },
-                        { file: additionalFile, type: 'additional', label: 'مرفق إضافي' }
+                        { file: identityFile, type: 'identity', label: 'ملف الهوية' },
+                        { file: signatureFile, type: 'signature', label: 'ملف السمة' },
+                        { file: salaryProfileFile, type: 'salary_profile', label: 'ملف تعريف الراتب' },
+                        { file: gosiFile, type: 'gosi', label: 'ملف التأمينات الاجتماعية' },
+                        { file: taxExemptionFile, type: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
+                        { file: additional1File, type: 'additional_1', label: 'مستند إضافي 1' },
+                        { file: additional2File, type: 'additional_2', label: 'مستند إضافي 2' },
+                        { file: additional3File, type: 'additional_3', label: 'مستند إضافي 3' }
                     ].filter(att => att.file);
                     
                     if (attachments.length > 0) {
