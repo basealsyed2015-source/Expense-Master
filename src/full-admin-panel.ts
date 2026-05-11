@@ -91,28 +91,31 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
         /* Hover-to-reveal horizontal scroll arrows (tables) */
         .edge-scroll-wrap { position: relative; }
+        /* Zone uses pointer-events:none so rows/actions under the gutters stay clickable; buttons opt in on wrap hover */
         .edge-scroll-zone {
             position: absolute;
             top: 0;
             bottom: 0;
             width: 64px;
-            z-index: 10;
+            z-index: 80;
             display: flex;
             align-items: center;
             justify-content: center;
-            pointer-events: auto;
+            pointer-events: none;
         }
         .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
         .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
         .edge-scroll-zone .edge-scroll-btn {
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 160ms ease;
+            opacity: 1;
+            pointer-events: auto;
+            transition: opacity 160ms ease, box-shadow 160ms ease;
             position: absolute;
             left: 50%;
             transform: translate(-50%, -50%);
         }
-        .edge-scroll-zone:hover .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+        .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) {
+            box-shadow: 0 12px 40px rgba(15,23,42,0.18);
+        }
 
         .edge-scroll-btn button {
             width: 38px;
@@ -137,6 +140,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
         .edge-scroll-wrap .overflow-x-auto {
             padding-left: 8px;
             padding-right: 8px;
+        }
+
+        #customersTable.dropdown-open tr:not(.dropdown-active-row),
+        #requestsTable.dropdown-open tr:not(.dropdown-active-row) {
+            pointer-events: none !important;
+        }
+        #customersTable.dropdown-open tr:not(.dropdown-active-row):hover td,
+        #requestsTable.dropdown-open tr:not(.dropdown-active-row):hover td {
+            background-color: inherit !important;
         }
         
         /* Mobile Responsive Styles */
@@ -215,207 +227,37 @@ export const fullAdminPanel = `<!DOCTYPE html>
     </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Top Header -->
+    <!-- شريط علوي: المستخدم والإجراءات السريعة؛ روابط الأقسام في الشريط الجانبي الموحد (حقن من الخادم). -->
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-40">
-        <div class="page-header-inner flex items-center justify-between px-6 py-4">
-            <!-- Right Side: Menu Toggle (Always Visible) -->
-            <button type="button" onclick="window.toggleMobileMenu()" class="p-2 hover:bg-white/10 rounded-lg" title="القائمة">
+        <div class="page-header-inner flex items-center justify-between px-6 py-4 gap-3 flex-wrap">
+            <div class="flex items-center gap-1 shrink-0">
+            <button type="button" class="p-2 hover:bg-white/10 rounded-lg shrink-0" title="القائمة" aria-label="فتح أو إغلاق قائمة التنقل" onclick="(function(){var t=document.getElementById('gps-panel-rail-toggle');if(t)t.click();})()">
                 <i class="fas fa-bars text-2xl"></i>
             </button>
-            
-            <!-- Center: User Info -->
-            <div class="flex items-center space-x-reverse space-x-3">
-                <div class="text-right">
-                    <div class="font-bold" id="userDisplayName">جاري التحميل...</div>
-                    <div class="text-xs text-blue-200" id="userEmail">-</div>
-                </div>
-                <i class="fas fa-user-circle text-3xl"></i>
+            <a href="/admin/panel" class="p-2 hover:bg-white/10 rounded-lg shrink-0 text-white no-underline" title="لوحة الوصول السريع" aria-label="الصفحة الرئيسية">
+                <i class="fas fa-home text-2xl"></i>
+            </a>
             </div>
-            
-            <!-- Left Side: Buttons -->
-            <div class="flex items-center space-x-reverse space-x-4">
-                <button onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
+            <div class="flex items-center space-x-reverse space-x-3 min-w-0 flex-1 justify-center md:justify-center">
+                <div class="text-right min-w-0">
+                    <div class="font-bold truncate max-w-[min(100vw-12rem,28rem)]" id="userDisplayName">جاري التحميل...</div>
+                    <div class="text-xs text-blue-200 truncate max-w-[min(100vw-12rem,28rem)]" id="userEmail">-</div>
+                </div>
+                <i class="fas fa-user-circle text-3xl shrink-0"></i>
+            </div>
+            <div class="flex items-center space-x-reverse space-x-2 shrink-0">
+                <button type="button" onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الإشعارات">
+                <button type="button" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الإشعارات">
                     <i class="fas fa-bell"></i>
                 </button>
-                <button onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors hidden md:inline-block" title="تسجيل الخروج">
+                <button type="button" onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors hidden md:inline-block" title="تسجيل الخروج">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>
         </div>
     </div>
-
-    <!-- Sidebar Menu -->
-    <div id="mobile-menu" class="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 overflow-y-auto">
-        <div class="p-6">
-            <!-- Close Button -->
-            <button type="button" onclick="window.toggleMobileMenu()" class="absolute top-4 left-4 p-2 hover:bg-gray-100 rounded-lg transition-all">
-                <i class="fas fa-times text-2xl text-gray-600"></i>
-            </button>
-            
-            <!-- Logo & Title -->
-            <div class="mb-8 pt-4">
-                <div class="flex items-center space-x-3 space-x-reverse mb-4">
-                    <i class="fas fa-calculator text-4xl text-blue-600"></i>
-                    <div>
-                        <h2 class="text-xl font-bold text-gray-800">منصة التمويل</h2>
-                        <p class="text-sm text-gray-500">لوحة التحكم</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Menu Items -->
-            <div class="space-y-2">
-                <!-- Dashboard -->
-                <a href="/admin/dashboard" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
-                    <i class="fas fa-tachometer-alt text-xl text-blue-600 group-hover:text-blue-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-blue-700">ملخص العملاء</span>
-                </a>
-
-                <!-- Customers -->
-                <a href="/admin/customers" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-green-50 rounded-lg transition-all group">
-                    <i class="fas fa-users text-xl text-green-600 group-hover:text-green-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-green-700">العملاء</span>
-                </a>
-
-                <!-- Financing Requests -->
-                <a href="/admin/requests" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-purple-50 rounded-lg transition-all group">
-                    <i class="fas fa-file-invoice-dollar text-xl text-purple-600 group-hover:text-purple-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-purple-700">طلبات التمويل</span>
-                </a>
-
-                <a href="/admin/my-tasks" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-indigo-50 rounded-lg transition-all group">
-                    <i class="fas fa-tasks text-xl text-indigo-600 group-hover:text-indigo-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-indigo-700">مهام المتابعة</span>
-                </a>
-
-                <!-- Reports -->
-                <a href="/admin/reports" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-teal-50 rounded-lg transition-all group">
-                    <i class="fas fa-chart-line text-xl text-teal-600 group-hover:text-teal-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-teal-700">التقارير</span>
-                </a>
-                <a href="/admin/follow-ups" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
-                    <i class="fas fa-bullhorn text-xl text-amber-700 group-hover:text-amber-800"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-amber-800">التسويق</span>
-                </a>
-
-                <!-- Rates -->
-                <a href="/admin/rates" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-indigo-50 rounded-lg transition-all group">
-                    <i class="fas fa-percentage text-xl text-indigo-600 group-hover:text-indigo-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-indigo-700">نسب التمويل</span>
-                </a>
-
-                <!-- Payments -->
-                <a href="/admin/payments" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-emerald-50 rounded-lg transition-all group">
-                    <i class="fas fa-receipt text-xl text-emerald-600 group-hover:text-emerald-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-emerald-700">سندات القبض</span>
-                </a>
-
-                <!-- Banks -->
-                <a href="/admin/banks" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-orange-50 rounded-lg transition-all group">
-                    <i class="fas fa-university text-xl text-orange-600 group-hover:text-orange-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-orange-700">البنوك</span>
-                </a>
-
-                <!-- Subscriptions -->
-                <a href="/admin/subscriptions" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-pink-50 rounded-lg transition-all group">
-                    <i class="fas fa-calendar-check text-xl text-pink-600 group-hover:text-pink-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-pink-700">الاشتراكات</span>
-                </a>
-
-                <!-- Packages -->
-                <a href="/admin/packages" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-yellow-50 rounded-lg transition-all group">
-                    <i class="fas fa-box text-xl text-yellow-600 group-hover:text-yellow-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-yellow-700">الباقات</span>
-                </a>
-
-                <!-- Tenants Management -->
-                <a href="/admin/tenants" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
-                    <i class="fas fa-building text-xl text-cyan-600 group-hover:text-cyan-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-cyan-700">إدارة الشركات</span>
-                </a>
-
-                <!-- Settings -->
-                <a href="/admin/settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
-                    <i class="fas fa-cog text-xl text-gray-600 group-hover:text-gray-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-gray-700">إعدادات النظام</span>
-                </a>
-
-                <!-- HR System -->
-                <a href="/admin/hr" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-blue-50 rounded-lg transition-all group">
-                    <i class="fas fa-users-cog text-xl text-blue-600 group-hover:text-blue-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-blue-700">الموارد البشرية</span>
-                </a>
-
-                <!-- Contracts (brokerage) -->
-                <a href="/admin/contracts" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
-                    <i class="fas fa-file-contract text-xl text-amber-700 group-hover:text-amber-800"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-amber-800">إدارة العقود</span>
-                </a>
-
-                <hr class="my-4">
-
-                <!-- Users -->
-                <a href="/admin/users" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-slate-50 rounded-lg transition-all group">
-                    <i class="fas fa-user-shield text-xl text-slate-600 group-hover:text-slate-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-slate-700">المستخدمين</span>
-                </a>
-
-                <!-- Roles (Admin Only) -->
-                <a href="/admin/roles" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
-                    <i class="fas fa-user-tag text-xl text-violet-600 group-hover:text-violet-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-violet-700">الأدوار والصلاحيات</span>
-                </a>
-
-                <!-- Notifications -->
-                <a href="/admin/notifications" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
-                    <i class="fas fa-bell text-xl text-red-600 group-hover:text-red-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-red-700">الإشعارات</span>
-                </a>
-
-                <!-- Tenant Calculators -->
-                <a href="/admin/tenant-calculators" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-violet-50 rounded-lg transition-all group">
-                    <i class="fas fa-calculator text-xl text-violet-600 group-hover:text-violet-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-violet-700">حاسبات الشركات</span>
-                </a>
-
-                <!-- SaaS Settings -->
-                <a href="/admin/saas-settings" data-superadmin-only="true" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-amber-50 rounded-lg transition-all group">
-                    <i class="fas fa-cogs text-xl text-amber-600 group-hover:text-amber-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-amber-700">إعدادات SaaS</span>
-                </a>
-
-                <hr class="my-4">
-
-                <!-- Calculator -->
-                <a href="/calculator" id="sidebarCalculatorLink" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-cyan-50 rounded-lg transition-all group">
-                    <i class="fas fa-calculator text-xl text-cyan-600 group-hover:text-cyan-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-cyan-700">الحاسبة</span>
-                </a>
-
-                <!-- Home -->
-                <a href="/" class="flex items-center space-x-3 space-x-reverse p-4 hover:bg-gray-50 rounded-lg transition-all group">
-                    <i class="fas fa-home text-xl text-gray-600 group-hover:text-gray-700"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-gray-700">الصفحة الرئيسية</span>
-                </a>
-
-                <hr class="my-4">
-
-                <!-- Logout -->
-                <button onclick="doLogout()" class="w-full flex items-center space-x-3 space-x-reverse p-4 hover:bg-red-50 rounded-lg transition-all group">
-                    <i class="fas fa-sign-out-alt text-xl text-gray-600 group-hover:text-red-600"></i>
-                    <span class="font-medium text-gray-700 group-hover:text-red-600">تسجيل الخروج</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Menu Overlay -->
-    <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="window.toggleMobileMenu()"></div>
-
-    <!-- Sidebar permissions are enforced by applyUserPermissions() (same allowlist as quick-access) -->
 
     <!-- Main Content بدون Sidebar -->
     <div class="min-h-screen bg-gray-50">
@@ -522,6 +364,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <a href="/admin/notifications" class="quick-access-btn bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-bell text-3xl mb-2"></i>
                         <div class="text-sm font-bold">الإشعارات</div>
+                    </a>
+
+                    <!-- إعدادات الشركة (مدير الشركة — دور 2 فقط عبر القائمة المسموحة) -->
+                    <a href="/admin/company-settings" class="quick-access-btn bg-gradient-to-br from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-building text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">إعدادات الشركة</div>
                     </a>
                     
                     <!-- زر الحاسبة -->
@@ -908,7 +756,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full overflow-hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full">
                     <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                         <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." oninput="loadCustomers()" 
                                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
@@ -969,7 +817,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
-                            <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                            <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="15">15</option></select>
                         </div>
                         <div class="flex items-center gap-2">
                             <button id="customersPrevBtn" onclick="setCustomersPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
@@ -1033,7 +881,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full overflow-hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full">
                     <div id="requestsEdgeScrollWrap" class="edge-scroll-wrap">
                         <div class="edge-scroll-zone left">
                             <div id="requestsEdgeLeft" class="edge-scroll-btn edge-hidden">
@@ -1079,7 +927,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
-                            <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                            <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="15">15</option></select>
                         </div>
                         <div class="flex items-center gap-2">
                             <button id="requestsPrevBtn" onclick="setRequestsPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
@@ -1205,15 +1053,17 @@ export const fullAdminPanel = `<!DOCTYPE html>
             </div>
 
             <div id="users-section" class="content-section">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <h1 class="text-3xl font-bold text-gray-800">
                         <i class="fas fa-user-cog text-purple-600 ml-2"></i>
                         المستخدمين
                     </h1>
-                    <button onclick="addUser()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-bold">
-                        <i class="fas fa-plus ml-2"></i>
-                        إضافة مستخدم جديد
-                    </button>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="addUser()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-bold">
+                            <i class="fas fa-plus ml-2"></i>
+                            إضافة مستخدم جديد
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -1908,23 +1758,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
     <!--__PANEL_USER_BOOT__-->
     <script>
-        // Defined first so header/overlay onclick handlers work even if a later error halts this script.
-        window.toggleMobileMenu = function () {
-            const sidebar = document.getElementById('mobile-menu');
-            const overlay = document.getElementById('menu-overlay');
-            if (sidebar && overlay) {
-                if (sidebar.classList.contains('translate-x-full')) {
-                    sidebar.classList.remove('translate-x-full');
-                    sidebar.classList.add('translate-x-0');
-                    overlay.classList.remove('hidden');
-                } else {
-                    sidebar.classList.add('translate-x-full');
-                    sidebar.classList.remove('translate-x-0');
-                    overlay.classList.add('hidden');
-                }
-            }
-        };
-
         // Debug dump function - displays data on screen
         window.dd = function(data) {
             console.log('🔍 DD:', data);
@@ -1997,6 +1830,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 // تحميل البيانات
                 window.loadSectionData(sectionName);
+                ;[0, 120, 400].forEach(function (ms) {
+                    setTimeout(function () {
+                        try {
+                            updateEdgeScrollControls('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight');
+                            updateEdgeScrollControls('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight');
+                        } catch (e) {}
+                    }, ms);
+                });
             } else {
                 console.error('❌ القسم غير موجود:', sectionName);
             }
@@ -2185,7 +2026,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     document.querySelectorAll('.quick-access-btn[href="/admin/contracts"]').forEach((el) => {
                         el.setAttribute('href', '/admin/contracts/list');
                     });
-                    document.querySelectorAll('#mobile-menu a[href="/admin/contracts"]').forEach((el) => {
+                    document.querySelectorAll('#global-persistent-sidebar a[href="/admin/contracts"]').forEach((el) => {
                         el.setAttribute('href', '/admin/contracts/list');
                     });
                 }
@@ -2197,6 +2038,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 //   must be super-admin only (role_id = 1).
                 const allowedLinks = {
                     '1': [ // Super Admin
+                        '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers', 
                         '/admin/requests',
@@ -2208,7 +2050,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/roles',
                         '/admin/notifications',
                         '/calculator',
-                        '/',
                         '/admin/tenants',
                         '/admin/tenant-calculators',
                         '/admin/saas-settings',
@@ -2221,6 +2062,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/contracts'
                     ],
                     '2': [ // Company Admin (companyadmin)
+                        '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
@@ -2234,10 +2076,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/hr',
                         '/admin/contracts',
                         '/admin/notifications',
+                        '/admin/company-settings',
+                        '/admin/company-settings/locations',
                         '/calculator',
-                        '/'
                     ],
                     '3': [ // Supervisor (Read-only)
+                        '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
@@ -2249,25 +2093,35 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/contracts',
                         '/admin/contracts/list',
                         '/calculator',
-                        '/'
                     ],
                     '4': [ // Employee
+                        '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
+                        '/admin/contracts',
+                        '/admin/contracts/list',
+                        '/admin/contracts/new',
+                        '/admin/contracts/templates',
                         '/admin/my-tasks',
                         '/my-tasks',
                         '/calculator',
-                        '/'
                     ],
-                    '5': [ // Bank agent
+                    '5': [ // Bank agent (page access also enforced in index.tsx /admin/* RBAC; APIs scope actions). No marketing (/admin/follow-ups).
+                        '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
                         '/admin/requests',
+                        '/admin/contact-affiliates',
+                        '/admin/contracts',
+                        '/admin/contracts/list',
+                        '/admin/contracts/new',
+                        '/admin/contracts/templates',
                         '/admin/my-tasks',
                         '/my-tasks',
+                        '/admin/my-leaves',
                         '/calculator',
-                        '/'
+                        '/',
                     ]
                 };
                 
@@ -2308,9 +2162,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         console.log('🚫 إخفاء زر (superadmin-only):', href);
                         return;
                     }
+
+                    // Calculator href is rewritten to /c/:slug/calculator; quick-access uses same visibility rule as other roles.
+                    const isCalculatorHref =
+                        normalizedHref === '/calculator' ||
+                        (normalizedHref.startsWith('/c/') && normalizedHref.endsWith('/calculator'));
+                    const calculatorQuickBypass = isCalculatorHref;
                     
                     // فحص الصلاحية
-                    if (!userAllowedLinks.includes(normalizedHref)) {
+                    if (!calculatorQuickBypass && !userAllowedLinks.includes(normalizedHref)) {
                         button.style.display = 'none';
                         hiddenCount++;
                         console.log('🚫 إخفاء زر:', href);
@@ -2321,8 +2181,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     }
                 });
                 
-                // Sidebar: apply the exact same allowlist as quick-access
-                const sidebarLinks = document.querySelectorAll('#mobile-menu a[href]');
+                // Sidebar: apply the exact same allowlist as quick-access (persistent rail injected with HTML response)
+                const sidebarLinks = document.querySelectorAll('#global-persistent-sidebar .gps-nav a[href]');
                 let sidebarHidden = 0;
                 let sidebarVisible = 0;
                 
@@ -2343,9 +2203,11 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         return;
                     }
                     
-                    // Always keep calculator links visible if present (bank agents: no calculator/home shortcuts)
+                    // Panel home always; calculator tenant URLs same rules as other roles (allowlist still applies where needed)
                     const isAlways =
-                        roleId !== 5 && (normalizedHref === '/calculator' || normalizedHref.startsWith('/c/'));
+                        normalizedHref === '/admin/panel' ||
+                        normalizedHref === '/calculator' ||
+                        normalizedHref.startsWith('/c/');
                     
                     // Check if href is in allowed links
                     if (isAlways || userAllowedLinks.includes(normalizedHref)) {
@@ -2521,16 +2383,166 @@ export const fullAdminPanel = `<!DOCTYPE html>
             }
         }
         
-        // Actions dropdown toggle
-        function toggleActionsDropdown(btn) {
-            const menu = btn.nextElementSibling;
-            document.querySelectorAll('.actions-dropdown-menu').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
-            menu.classList.toggle('hidden');
+        // Actions dropdown: portal onto .edge-scroll-wrap so menus are not clipped by horizontal scroll ports
+        function closeAllDropdowns() {
+            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) {
+                restorePortaledMenu(m);
+                m.classList.add('hidden');
+                m.style.top = '';
+                m.style.bottom = '';
+                m.style.marginTop = '';
+                m.style.marginBottom = '';
+            });
+            document.querySelectorAll('td.actions-cell-active').forEach(function(td) {
+                td.classList.remove('actions-cell-active');
+                td.style.zIndex = '';
+            });
+            document.querySelectorAll('tbody.dropdown-open').forEach(function(tb) { tb.classList.remove('dropdown-open'); });
+            document.querySelectorAll('tr.dropdown-active-row').forEach(function(tr) { tr.classList.remove('dropdown-active-row'); });
+            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(function(b) { b.style.visibility = ''; });
         }
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.actions-dropdown-btn')) {
-                document.querySelectorAll('.actions-dropdown-menu').forEach(m => m.classList.add('hidden'));
+
+        function unbindActionsMenuRepos(menu) {
+            if (!menu._actionsRepos) return;
+            var scrollEl = menu._actionsRepos.scrollEl;
+            var reposition = menu._actionsRepos.reposition;
+            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
+            if (reposition) {
+                window.removeEventListener('resize', reposition);
+                window.removeEventListener('scroll', reposition);
             }
+            delete menu._actionsRepos;
+        }
+
+        function restorePortaledMenu(menu) {
+            if (!menu || menu.dataset.portal !== '1') return;
+            unbindActionsMenuRepos(menu);
+            var placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
+            if (placeholder && placeholder.parentNode) {
+                placeholder.parentNode.replaceChild(menu, placeholder);
+            }
+            delete menu.dataset.portal;
+            delete menu.dataset.portalPlaceholderId;
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.right = '';
+            menu.style.bottom = '';
+            menu.style.marginTop = '';
+            menu.style.marginBottom = '';
+            menu.style.zIndex = '';
+        }
+
+        function anchorActionsMenu(btn, menu) {
+            if (!menu || menu.dataset.portal === '1') return;
+            if (!menu.parentNode) return;
+            var placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
+            var placeholder = document.createElement('span');
+            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
+            menu.parentNode.insertBefore(placeholder, menu);
+            menu.dataset.portal = '1';
+            menu.dataset.portalPlaceholderId = placeholderId;
+            document.body.appendChild(menu);
+        }
+
+        function positionAnchoredActionsMenu(btn, menu) {
+            if (!btn || !menu) return;
+            var br = btn.getBoundingClientRect();
+            var vpPad = 8;
+            var gap = 6;
+            var w = menu.offsetWidth || 200;
+            var h = menu.offsetHeight || 220;
+            if (w < 10) w = 200;
+            if (h < 10) h = 220;
+
+            var left = br.right - w;
+            left = Math.max(vpPad, Math.min(left, window.innerWidth - w - vpPad));
+
+            var top = br.bottom + gap;
+            var spaceBelow = window.innerHeight - br.bottom - vpPad;
+            var spaceAbove = br.top - vpPad;
+            if (spaceBelow < h && spaceAbove >= h && spaceAbove > spaceBelow) {
+                top = br.top - h - gap;
+            }
+            top = Math.max(vpPad, Math.min(top, window.innerHeight - h - vpPad));
+
+            menu.style.position = 'fixed';
+            menu.style.left = Math.round(left) + 'px';
+            menu.style.top = Math.round(top) + 'px';
+            menu.style.right = 'auto';
+            menu.style.bottom = 'auto';
+            menu.style.marginTop = '0';
+            menu.style.marginBottom = '0';
+            menu.style.zIndex = '10050';
+        }
+
+        function bindActionsMenuRepos(btn, menu) {
+            unbindActionsMenuRepos(menu);
+            var scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
+            function reposition() {
+                if (menu.classList.contains('hidden')) return;
+                positionAnchoredActionsMenu(btn, menu);
+            }
+            menu._actionsRepos = { scrollEl: scrollEl || null, reposition: reposition };
+            if (scrollEl) scrollEl.addEventListener('scroll', reposition, { passive: true });
+            window.addEventListener('resize', reposition);
+            window.addEventListener('scroll', reposition, { passive: true });
+        }
+
+        function getActionsMenuForButton(btn) {
+            if (!btn) return null;
+            var id = btn.dataset && btn.dataset.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
+            if (id) {
+                var found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
+                if (found) return found;
+            }
+            var sib = btn.nextElementSibling;
+            if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) return sib;
+            return null;
+        }
+
+        function toggleActionsDropdown(btn) {
+            var menu = getActionsMenuForButton(btn);
+            if (!menu) return;
+            var willOpen = menu.classList.contains('hidden');
+            closeAllDropdowns();
+            if (willOpen) {
+                menu.classList.remove('hidden');
+                if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
+                btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
+                anchorActionsMenu(btn, menu);
+                requestAnimationFrame(function() {
+                    positionAnchoredActionsMenu(btn, menu);
+                    bindActionsMenuRepos(btn, menu);
+                });
+                var cell = btn.closest('td');
+                if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
+                var row = btn.closest('tr');
+                if (row) row.classList.add('dropdown-active-row');
+                var tbody = btn.closest('tbody');
+                if (tbody) {
+                    tbody.classList.add('dropdown-open');
+                    tbody.querySelectorAll('.actions-dropdown-btn').forEach(function(b) {
+                        b.style.visibility = (b === btn) ? '' : 'hidden';
+                    });
+                }
+            }
+        }
+        window.toggleActionsDropdown = toggleActionsDropdown;
+
+        document.addEventListener('click', function(e) {
+            var tgt = e.target;
+            if (tgt && tgt.nodeType === 3) tgt = tgt.parentElement;
+            if (!tgt || typeof tgt.closest !== 'function') tgt = null;
+            if (tgt && (tgt.closest('.actions-dropdown-btn') || tgt.closest('.actions-dropdown-menu'))) return;
+            var ev = e;
+            setTimeout(function() {
+                var t = ev.target;
+                if (t && t.nodeType === 3) t = t.parentElement;
+                if (!t || typeof t.closest !== 'function') t = null;
+                if (t && (t.closest('.actions-dropdown-btn') || t.closest('.actions-dropdown-menu'))) return;
+                closeAllDropdowns();
+            }, 0);
         });
 
         function normalizePhoneDigits(phoneValue) {
@@ -2765,7 +2777,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
             const rightWrap = document.getElementById(rightBtnId);
             if (!el || !leftWrap || !rightWrap) return;
 
-            const canScroll = el.scrollWidth > el.clientWidth + 2;
+            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5;
             if (!canScroll) {
                 leftWrap.classList.add('edge-hidden');
                 rightWrap.classList.add('edge-hidden');
@@ -2799,8 +2811,18 @@ export const fullAdminPanel = `<!DOCTYPE html>
             el.addEventListener('scroll', tick, { passive: true });
             window.addEventListener('resize', tick);
             window.addEventListener('scroll', tick, { passive: true });
-            // initial
+            window.addEventListener('load', tick, { passive: true });
             setTimeout(tick, 0);
+            setTimeout(tick, 150);
+            setTimeout(tick, 500);
+            if (typeof ResizeObserver !== 'undefined') {
+                try {
+                    const ro = new ResizeObserver(tick);
+                    ro.observe(el);
+                    const tbl = el.querySelector('table');
+                    if (tbl) ro.observe(tbl);
+                } catch (e) {}
+            }
         }
 
         window.setCustomersPageSize = function(value) {
@@ -2875,6 +2897,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         });
                     }
                     
+                    closeAllDropdowns();
                     if (customers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
                         renderPaginationUI('customers', 0, customersPaging);
@@ -2892,7 +2915,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <tr class="border-b hover:bg-gray-50">
                             <td class="px-4 py-3">
                                 <div class="relative inline-block text-right">
-                                    <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
+                                    <button type="button" onclick="toggleActionsDropdown(this); return false;" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
                                         <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
                                     </button>
                                     <div class="actions-dropdown-menu hidden absolute left-0 mt-1 min-w-[11rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-50">
@@ -2940,9 +2963,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     \`).join('');
 
                     setupEdgeScroll('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight');
+                } else {
+                    renderPaginationUI('customers', 0, customersPaging);
                 }
             } catch (error) {
                 console.error('Error loading customers:', error);
+                renderPaginationUI('customers', 0, customersPaging);
             }
         }
         
@@ -2989,6 +3015,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         });
                     }
                     
+                    closeAllDropdowns();
                     if (requests.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';
                         renderPaginationUI('requests', 0, requestsPaging);
@@ -3018,7 +3045,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <tr class="border-b hover:bg-gray-50">
                                 <td class="px-4 py-3">
                                     <div class="relative inline-block text-right">
-                                        <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
+                                        <button type="button" onclick="toggleActionsDropdown(this); return false;" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
                                             <i class="fas fa-ellipsis-h"></i> الإجراءات <i class="fas fa-chevron-down text-xs"></i>
                                         </button>
                                         <div class="actions-dropdown-menu hidden absolute left-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-100 z-50">
@@ -3050,9 +3077,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     }).join('');
 
                     setupEdgeScroll('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight');
+                } else {
+                    renderPaginationUI('requests', 0, requestsPaging);
                 }
             } catch (error) {
                 console.error('Error loading requests:', error);
+                renderPaginationUI('requests', 0, requestsPaging);
             }
         }
         
@@ -3063,7 +3093,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         
         window.logout = function() {
             if (confirm('هل تريد تسجيل الخروج؟')) {
-                window.location.href = '/';
+                window.location.href = '/login';
             }
         }
         
@@ -3877,7 +3907,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 alert('❌ حدث خطأ أثناء الحذف');
             }
         }
-        
+
         // Load Users
         async function loadUsers() {
             try {
@@ -4850,17 +4880,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
             if (affWrap && affList) {
                 affList.innerHTML = '';
                 let rid = parseInt(userData.role_id, 10);
-                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4 };
+                const roleLegacy = { 11: 1, 12: 2, 13: 3, 14: 4, 15: 5 };
                 if (roleLegacy[rid]) rid = roleLegacy[rid];
                 if (typeof window.USER_ROLE_ID !== 'undefined' && window.USER_ROLE_ID !== null) {
                     const w = parseInt(window.USER_ROLE_ID, 10);
                     rid = roleLegacy[w] || w;
                 }
-                let showAff = Boolean(contactRootPath && contactRootPath !== '/');
-                if (rid === 1) {
-                    const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
-                    if (!Number.isFinite(tid) || tid <= 0) showAff = false;
-                }
+                /** Show copyable campaign links whenever a public contact path exists — not role-gated. */
+                const showAff = Boolean(contactRootPath && contactRootPath !== '/');
                 const manageAffBlock = document.getElementById('contactAffiliatesManageBlock');
                 if (manageAffBlock) {
                     manageAffBlock.style.display = rid === 1 || rid === 2 ? '' : 'none';
@@ -4873,6 +4900,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         let u = '/api/tenant-contact-affiliates';
                         if (rid === 1) {
                             const tid = parseInt(userData.tenant_id || userData.tenantId || '0', 10);
+                            if (!Number.isFinite(tid) || tid <= 0) {
+                                affList.innerHTML =
+                                    '<div class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 leading-relaxed">' +
+                                    'لعرض روابط التتبع، اختر شركة من نطاق السوبر أدمن أو افتح تفاصيل الشركة.' +
+                                    '</div>';
+                                return;
+                            }
                             u += '?tenant_id=' + tid;
                         }
                         const res = await axios.get(u);
@@ -5244,33 +5278,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 console.error('Error loading reports:', error);
             }
         };
-        
-        // Mobile Menu Toggle
-        window.toggleMobileMenu = function() {
-            const sidebar = document.getElementById('mobile-menu');
-            const overlay = document.getElementById('menu-overlay');
-            
-            if (sidebar && overlay) {
-                if (sidebar.classList.contains('translate-x-full')) {
-                    // فتح القائمة
-                    sidebar.classList.remove('translate-x-full');
-                    sidebar.classList.add('translate-x-0');
-                    overlay.classList.remove('hidden');
-                } else {
-                    // إغلاق القائمة
-                    sidebar.classList.add('translate-x-full');
-                    sidebar.classList.remove('translate-x-0');
-                    overlay.classList.add('hidden');
-                }
-            }
-        };
-        
-        // Close mobile menu when clicking a menu link
-        document.querySelectorAll('#mobile-menu a').forEach(link => {
-            link.addEventListener('click', function() {
-                setTimeout(() => toggleMobileMenu(), 100);
-            });
-        });
     </script>
     
     <!-- تم توحيد صلاحيات القائمة الجانبية مع صلاحيات لوحة الوصول السريع داخل applyUserPermissions() -->

@@ -19,7 +19,6 @@ export function registerContractsStaticRoutes(app: any, getUserInfo: GetUserInfo
   app.get('/contracts-module/js/app.js', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.newResponse('Unauthorized', 401)
-    if (userInfo.roleId === 4) return c.newResponse('Forbidden', 403)
     return c.newResponse(contractsAppJs, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'no-store, must-revalidate'
@@ -28,7 +27,6 @@ export function registerContractsStaticRoutes(app: any, getUserInfo: GetUserInfo
   app.get('/contracts-module/js/dashboard.js', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.newResponse('Unauthorized', 401)
-    if (userInfo.roleId === 4) return c.newResponse('Forbidden', 403)
     return c.newResponse(contractsDashboardJs, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'no-store, must-revalidate'

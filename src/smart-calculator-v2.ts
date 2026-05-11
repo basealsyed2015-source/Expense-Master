@@ -28,15 +28,15 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
     <nav class="bg-white shadow-lg">
         <div class="container mx-auto px-4 py-4">
             <div class="flex justify-between items-center">
-                <a href="/" class="text-2xl font-bold text-blue-600">
+                <a href="/admin/panel" class="text-2xl font-bold text-blue-600">
                     <i class="fas fa-calculator ml-2"></i>
                     حاسبة التمويل الذكية
                 </a>
                 <div class="space-x-reverse space-x-4">
-                    <a href="/" class="text-gray-700 hover:text-blue-600">
+                    <a href="/admin/panel" class="text-gray-700 hover:text-blue-600">
                         <i class="fas fa-home ml-1"></i>الرئيسية
                     </a>
-                    <a href="/admin" class="text-gray-700 hover:text-blue-600">
+                    <a href="/admin/panel" class="text-gray-700 hover:text-blue-600">
                         <i class="fas fa-user-shield ml-1"></i>الإدارة
                     </a>
                 </div>

@@ -18,7 +18,7 @@ export const clicksReportPage = `
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
     <div class="border-b border-slate-200/90 bg-white/90">
         <div class="max-w-7xl mx-auto px-4 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Header -->
@@ -463,7 +463,7 @@ export const workflowReportPage = `
 <body class="bg-gradient-to-br from-gray-50 via-green-50 to-blue-50">
     <div class="border-b border-slate-200/90 bg-white/90">
         <div class="max-w-7xl mx-auto px-4 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Header -->
@@ -691,7 +691,7 @@ export const employeePerformanceReportPage = `
 <body class="bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50">
     <div class="border-b border-slate-200/90 bg-white/90">
         <div class="max-w-7xl mx-auto px-4 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Header -->

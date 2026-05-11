@@ -901,7 +901,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
   <main class="main-content">
     <div class="contracts-page-back">
-      <a href="/admin">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <header class="topbar">
       <div class="topbar-title"><h1 id="pageTitle"><i class="fas fa-plus-circle"></i> عقد جديد</h1></div>
@@ -1141,6 +1141,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
                 <select class="form-control" id="status">
                   <option value="نشط">نشط</option>
                   <option value="بانتظار التمويل" selected>بانتظار التمويل</option>
+                  <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
+                  <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
                   <option value="مكتمل">مكتمل</option>
                 </select>
               </div>
@@ -1682,6 +1684,11 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
     function getFormData() {
       const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
+      const roleId = getContractsRoleId();
+      const statusValue =
+        roleId === 4 && !editingContractId
+          ? CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL
+          : document.getElementById('status').value;
       return {
         contract_number: document.getElementById('contract_number').value,
         template_id: selectedTemplate?.template_id != null ? Number(selectedTemplate.template_id) : null,
@@ -1706,7 +1713,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         commission_amount: parseFloat(document.getElementById('commission_amount').value) || 0,
         note_order_number: document.getElementById('note_order_number').value,
         note_due_date: document.getElementById('note_due_date').value,
-        status: document.getElementById('status').value,
+        status: statusValue,
         notes: document.getElementById('notes').value,
         is_archived: false
       };
@@ -1738,7 +1745,12 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
               status: 'ساري'
             });
           }
-          showToast('تم إنشاء العقد وسند الأمر بنجاح', 'success');
+          showToast(
+            getContractsRoleId() === 4
+              ? 'تم إنشاء العقد وإرساله لاعتماد ممثل البنك'
+              : 'تم إنشاء العقد وسند الأمر بنجاح',
+            'success'
+          );
         }
         setTimeout(() => { window.location.href = \`/admin/contracts/view?id=\${contract.id}\`; }, 1200);
       } catch (e) {

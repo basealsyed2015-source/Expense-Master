@@ -3,7 +3,24 @@
     "allow": [
       "Bash(awk 'NR>=5408 && NR<=5425 {print NR\": \"$0}' dist/_worker.js)",
       "Bash(awk -F: '$1>=5180 && $1<=5700 {print}')",
-      "Bash(grep -n \"^    <script>$\\\\|^        <script>$\\\\|^<script>$\" src/full-admin-panel.ts)"
+      "Bash(grep -n \"^    <script>$\\\\|^        <script>$\\\\|^<script>$\" src/full-admin-panel.ts)",
+      "Bash(grep -n \"ch === '\\\\\\\\\\\\\\\\\" \"C:\\\\Users\\\\Kyo\\\\OneDrive\\\\Desktop\\\\Zat code\\\\Expense-Cloudflare\\\\Expense-Master\\\\dist\\\\_worker.js\")",
+      "Bash(node -e ' *)",
+      "Bash(awk -F: '$1>=16410 && $1<=17600 {print $1\": \"$2$3}')",
+      "Bash(awk 'NR>=16553 && NR<=17564' src/index.tsx)",
+      "Bash(grep -nE '\\\\\\\\\\\\`|\\\\$\\\\{')",
+      "Bash(grep -nE \"\\([^\\\\\\\\\\\\\\\\]\\)\\\\\\\\\\\\\\\\n[^\\\\\\\\\\\\\\\\]|^\\\\\\\\\\\\\\\\n[^\\\\\\\\\\\\\\\\]\")",
+      "Bash(awk 'NR>=16900 && NR<=17564 {print NR\": \"$0}' src/index.tsx)",
+      "Bash(grep -E \"'\\\\\\\\\\\\\\\\n[^\\\\\\\\\\\\\\\\]\")",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(awk -F: '$1>=8766 && $1<=9200')",
+      "Bash(git *)",
+      "Bash(curl -s \"https://tamweel-calc.com/admin/requests?requestStatusFilter=%D8%AA%D9%85+%D8%A7%D9%84%D8%A5%D8%B1%D8%B3%D8%A7%D9%84&tenant_id=2\")",
+      "Bash(curl -sL \"https://tamweel-calc.com/admin/requests\" -o /tmp/req.html)",
+      "Read(//tmp/**)",
+      "Bash(awk 'NR>=17427 && NR<=18351 && /\\\\/[^\\\\/]*\\\\/[gimsu]/ {print NR\": \"$0}' src/index.tsx)",
+      "Bash(node --input-type=module -e ' *)"
     ]
   }
 }

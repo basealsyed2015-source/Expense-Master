@@ -11,7 +11,7 @@ export const banksManagementPage = `<!DOCTYPE html>
 <body class="bg-gray-50">
     <div class="border-b border-slate-200/90 bg-slate-50/90">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Header -->

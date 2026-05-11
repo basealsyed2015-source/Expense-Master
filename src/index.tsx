@@ -12,6 +12,14 @@ import { fullAdminPanel } from './full-admin-panel'
 import { tenantsPage } from './tenants-page'
 import { tenantCalculatorsPage } from './tenant-calculators-page'
 import { saasSettingsPage } from './saas-settings-page'
+import { companySettingsPage } from './company-settings-page'
+import {
+  buildCompanyLocationEditPage,
+  companyLocationNewPage,
+  companyLocationsListPage,
+} from './company-locations-page'
+import { buildSaudiCitySelectOptionsHtml, isValidSaudiCityName } from './saudi-arabia-cities'
+import { actionsDropdownCSS, actionsDropdownScript } from './actions-dropdown'
 import { reportsPage } from './reports-page'
 import { customersReportPage, requestsReportPage, financialReportPage } from './advanced-reports'
 import { paymentsPage } from './payments-page'
@@ -75,6 +83,9 @@ function isMissingCustomerSolutionsColumnError(e: unknown): boolean {
   return m.includes('solutions_json') && (m.includes('no such column') || m.includes('no column named'))
 }
 
+/** UTF-8 BOM + Excel "sep=" hint so Arabic/RTL locales (list separator often `;`) still split columns on comma. */
+const EXCEL_UTF8_CSV_PREFIX = `${String.fromCharCode(0xfeff)}sep=,\r\n`
+
 function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
   const m = String((e as Error)?.message ?? e ?? '')
   if (!(m.includes('no such column') || m.includes('no column named'))) return false
@@ -88,6 +99,11 @@ function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
     m.includes('additional_2_attachment_url') ||
     m.includes('additional_3_attachment_url')
   )
+}
+
+function isMissingCustomerLocationIdColumnError(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? e ?? '')
+  return m.includes('location_id') && (m.includes('no such column') || m.includes('no column named'))
 }
 
 type AttachmentSyncPayload = {
@@ -192,6 +208,42 @@ function isReservedRootSlug(slug: string): boolean {
   return RESERVED_ROOT_SLUGS.has(slug)
 }
 
+/** URL segment for a branch location under /{companySlug}/{locationSlug}/… */
+function deriveLocationSlugFromName(name: string, tenantSlugFallback: string): string {
+  const latin = String(name ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64)
+  if (latin) return latin
+  const fb = normalizeTenantSlug(tenantSlugFallback)
+  return fb || 'main'
+}
+
+async function ensureUniqueTenantLocationSlug(
+  db: D1Database,
+  tenantId: number,
+  baseSlug: string
+): Promise<string> {
+  let candidate = normalizeTenantSlug(baseSlug) || 'location'
+  if (!candidate || isReservedRootSlug(candidate)) {
+    candidate = 'loc-' + (candidate || 'branch')
+  }
+  for (let i = 0; i < 60; i++) {
+    const suffix = i === 0 ? '' : `-${i + 1}`
+    const trySlug = (candidate + suffix).slice(0, 64)
+    const row = await db
+      .prepare(`SELECT id FROM tenant_locations WHERE tenant_id = ? AND slug = ? LIMIT 1`)
+      .bind(tenantId, trySlug)
+      .first<{ id: number }>()
+    if (!row) return trySlug
+  }
+  return `${candidate}-${Date.now()}`.slice(0, 64)
+}
+
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -199,6 +251,34 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/** For double-quoted HTML attributes (not full HTML escaping of URL schemes). */
+function escapeHtmlAttr(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+}
+
+/** Saudi mobile digits only (9665xxxxxxxx); null if not a valid KSA mobile after normalization. */
+function normalizePublicContactPhoneDigits(rawPhone: string): string | null {
+  const n = normalizeArabicAndPersianDigits(String(rawPhone ?? '').trim())
+  let d = n.replace(/[^\d]/g, '')
+  if (!d) return null
+  if (d.startsWith('00966')) d = d.slice(5)
+  else if (d.startsWith('966')) d = d.slice(3)
+  else if (d.startsWith('05') && d.length === 10) d = d.slice(1)
+  else if (d.startsWith('0')) d = d.replace(/^0+/, '')
+  if (d.length === 9 && d.startsWith('5')) d = '966' + d
+  if (!d.startsWith('966') || d.length !== 12 || !/^9665\d{8}$/.test(d)) return null
+  return d
+}
+
+/** WhatsApp chat URL (full international number, no + — https://faq.whatsapp.com/5913398998672934). */
+function buildPublicWhatsappHref(rawPhone: string): string | null {
+  const d = normalizePublicContactPhoneDigits(rawPhone)
+  if (!d) return null
+  return `https://wa.me/${d}`
 }
 
 function normalizeAffiliatePathSegment(value: unknown): string {
@@ -215,6 +295,49 @@ function isValidAffiliatePathSegment(seg: string): boolean {
   return true
 }
 
+const MAX_TENANT_LOGO_URL_LEN = 2000
+const MAX_TENANT_ADDRESS_LEN = 2000
+
+function normalizeTenantAddressField(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw == null || String(raw).trim() === '') return { ok: true, value: null }
+  const s = String(raw).trim()
+  if (s.length > MAX_TENANT_ADDRESS_LEN) {
+    return { ok: false, error: `العنوان يتجاوز ${MAX_TENANT_ADDRESS_LEN} حرفاً` }
+  }
+  return { ok: true, value: s }
+}
+
+function normalizeTenantCityField(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw == null || String(raw).trim() === '') return { ok: true, value: null }
+  const t = String(raw).trim()
+  if (!isValidSaudiCityName(t)) {
+    return { ok: false, error: 'يرجى اختيار مدينة من القائمة' }
+  }
+  return { ok: true, value: t }
+}
+
+/** Accepts https/http absolute URLs or same-origin paths (e.g. `/api/attachments/...`). */
+function normalizeTenantLogoUrl(raw: unknown): string | null {
+  const s = String(raw ?? '').trim()
+  if (!s) return null
+  if (s.length > MAX_TENANT_LOGO_URL_LEN) return null
+  if (s.includes('..') || s.includes('\\')) return null
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+      return s
+    } catch {
+      return null
+    }
+  }
+  if (s.startsWith('/')) {
+    if (!/^\/[\w\-./?=&%:#+]*$/i.test(s)) return null
+    return s
+  }
+  return null
+}
+
 type PublicContactTenantRow = {
   company_name: string
   slug: string
@@ -222,24 +345,76 @@ type PublicContactTenantRow = {
   contact_phone: string | null
   primary_color: string | null
   secondary_color: string | null
+  logo_url: string | null
+  /** Branch / marketing location — shown under title */
+  public_city?: string | null
+  public_address?: string | null
+}
+
+function pickFirstNonEmptyContactField(
+  ...vals: Array<string | null | undefined>
+): string | null {
+  for (const v of vals) {
+    if (v != null && String(v).trim() !== '') return String(v).trim()
+  }
+  return null
+}
+
+function mergePublicContactForLocation(
+  tenant: PublicContactTenantRow & { id?: number },
+  loc: {
+    name: string
+    city: string
+    address: string
+    contact_phone: string | null
+    contact_email: string | null
+    logo_url: string | null
+  },
+  primary: {
+    contact_phone: string | null
+    contact_email: string | null
+    logo_url: string | null
+  } | null
+): PublicContactTenantRow {
+  return {
+    company_name: loc.name,
+    slug: tenant.slug,
+    contact_email: pickFirstNonEmptyContactField(
+      loc.contact_email,
+      primary?.contact_email,
+      tenant.contact_email
+    ),
+    contact_phone: pickFirstNonEmptyContactField(
+      loc.contact_phone,
+      primary?.contact_phone,
+      tenant.contact_phone
+    ),
+    logo_url: pickFirstNonEmptyContactField(loc.logo_url, primary?.logo_url, tenant.logo_url),
+    primary_color: tenant.primary_color,
+    secondary_color: tenant.secondary_color,
+    public_city: loc.city,
+    public_address: loc.address,
+  }
 }
 
 function buildPublicContactPageHtml(
   tenant: PublicContactTenantRow,
-  affiliate: null | { path_segment: string; label: string }
+  affiliate: null | { path_segment: string; label: string },
+  opts?: { locationSlug?: string | null }
 ): string {
   const companyName = escapeHtml(tenant.company_name)
-  const contactEmail = escapeHtml(tenant.contact_email || '')
-  const contactPhone = escapeHtml(tenant.contact_phone || '')
+  const phoneRaw = String(tenant.contact_phone ?? '').trim()
+  const emailRaw = String(tenant.contact_email ?? '').trim()
+  const contactEmail = escapeHtml(emailRaw)
+  const contactPhone = escapeHtml(phoneRaw)
+  const waHref = buildPublicWhatsappHref(phoneRaw)
+  const waHrefAttr = waHref ? escapeHtmlAttr(waHref) : ''
   const primaryColor = escapeHtml(tenant.primary_color || '#0f766e')
   const secondaryColor = escapeHtml(tenant.secondary_color || '#14b8a6')
   const affiliatePathJson = JSON.stringify(affiliate?.path_segment ?? null)
-  const affiliateLabelEsc = affiliate ? escapeHtml(affiliate.label) : ''
-  const affiliateBanner = affiliate
-    ? `<div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 text-center">
-         <i class="fas fa-bullhorn ml-1"></i> المصدر: <strong>${affiliateLabelEsc}</strong>
-       </div>`
-    : ''
+  const locationSlugJson = JSON.stringify(opts?.locationSlug ?? null)
+  const logoNorm = normalizeTenantLogoUrl(tenant.logo_url)
+  const logoAttr = logoNorm ? escapeHtmlAttr(logoNorm) : ''
 
   return `
     <!DOCTYPE html>
@@ -253,16 +428,71 @@ function buildPublicContactPageHtml(
     </head>
     <body class="min-h-screen bg-gray-50">
       <div class="min-h-screen p-6" style="background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor});">
-        <div class="w-full max-w-none grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-4 gap-6 items-start">
-          <div class="lg:col-span-2 2xl:col-span-3 bg-white rounded-2xl shadow-2xl p-8">
-            <div class="text-center mb-8">
-              <div class="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl" style="background: ${primaryColor};">
+        <div class="w-full max-w-3xl mx-auto">
+          <div class="bg-white rounded-2xl shadow-2xl p-8">
+            <div class="mb-8">
+              ${
+                logoNorm
+                  ? `<div class="flex justify-center mb-5"><img src="${logoAttr}" alt="" class="max-h-24 max-w-[220px] object-contain rounded-xl shadow-md bg-white p-3 border border-gray-100" width="220" height="96" loading="lazy" decoding="async" /></div>`
+                  : `<div class="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center text-white text-3xl shadow-md" style="background: ${primaryColor};">
                 <i class="fas fa-comments"></i>
+              </div>`
+              }
+              <h1 class="text-2xl md:text-3xl font-bold text-gray-900 text-center px-2 leading-tight">${companyName}</h1>
+              ${
+                tenant.public_city || tenant.public_address
+                  ? `<p class="text-gray-700 text-center text-sm mt-2">${escapeHtml(
+                      [tenant.public_city, tenant.public_address].filter(Boolean).join(' — ')
+                    )}</p>`
+                  : ''
+              }
+              <p class="text-gray-600 text-center text-sm mt-2 mb-6">أرسل بياناتك وسيتم التواصل معك</p>
+              <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-4 md:p-5">
+                <p class="text-center text-xs font-medium text-gray-500 mb-3">بيانات التواصل</p>
+                <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3">
+                  ${
+                    phoneRaw
+                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white text-sm shadow-sm" style="background:#25D366;">
+                      <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
+                    </span>
+                    <span class="min-w-0 flex-1 text-right">
+                      <span class="block text-xs text-gray-500">واتساب</span>
+                      ${
+                        waHref
+                          ? `<a href="${waHrefAttr}" target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-emerald-700 dir-ltr block break-all underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-offset-1 rounded" style="--tw-ring-color:${primaryColor};">${contactPhone}</a>`
+                          : `<span class="text-sm font-semibold text-gray-900 dir-ltr block break-all">${contactPhone}</span>`
+                      }
+                    </span>
+                  </div>`
+                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white/60 px-4 py-3 text-gray-400">
+                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500 text-sm">
+                      <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
+                    </span>
+                    <span class="min-w-0 flex-1 text-right text-sm">لا يوجد رقم مسجل</span>
+                  </div>`
+                  }
+                  ${
+                    emailRaw
+                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white text-sm shadow-sm" style="background:${primaryColor};">
+                      <i class="fas fa-envelope" aria-hidden="true"></i>
+                    </span>
+                    <span class="min-w-0 flex-1 text-right">
+                      <span class="block text-xs text-gray-500">البريد</span>
+                      <span class="text-sm font-semibold text-gray-900 dir-ltr block break-all">${contactEmail}</span>
+                    </span>
+                  </div>`
+                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white/60 px-4 py-3 text-gray-400">
+                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500 text-sm">
+                      <i class="fas fa-envelope" aria-hidden="true"></i>
+                    </span>
+                    <span class="min-w-0 flex-1 text-right text-sm">لا يوجد بريد مسجل</span>
+                  </div>`
+                  }
+                </div>
               </div>
-              <h1 class="text-3xl font-bold text-gray-900 mb-2">${companyName}</h1>
-              <p class="text-gray-600">أرسل بياناتك وسيتم التواصل معك</p>
             </div>
-            ${affiliateBanner}
             <form id="contactForm" class="space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">الاسم</label>
@@ -282,21 +512,11 @@ function buildPublicContactPageHtml(
               <p id="formStatus" class="text-sm"></p>
             </form>
           </div>
-
-          <div class="space-y-4">
-            <div class="bg-white rounded-xl shadow-lg p-5">
-              <p class="text-sm text-gray-500 mb-1">رقم التواصل</p>
-              <p class="text-lg font-semibold text-gray-900 break-words">${contactPhone || 'غير متوفر'}</p>
-            </div>
-            <div class="bg-white rounded-xl shadow-lg p-5">
-              <p class="text-sm text-gray-500 mb-1">البريد الإلكتروني</p>
-              <p class="text-lg font-semibold text-gray-900 break-words">${contactEmail || 'غير متوفر'}</p>
-            </div>
-          </div>
         </div>
       </div>
       <script>
         const AFFILIATE_PATH = ${affiliatePathJson};
+        const LOCATION_SLUG = ${locationSlugJson};
         const form = document.getElementById('contactForm');
         const statusEl = document.getElementById('formStatus');
         const submitBtn = document.getElementById('submitBtn');
@@ -314,6 +534,7 @@ function buildPublicContactPageHtml(
             customer_message: document.getElementById('customer_message').value.trim()
           };
           if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
+          if (LOCATION_SLUG) payload.location_slug = LOCATION_SLUG;
 
           try {
             const res = await fetch('/api/public/${tenant.slug}/contact-submissions', {
@@ -371,6 +592,132 @@ async function deleteGlobalBanksAndDependents(db: D1Database) {
     ),
     db.prepare('DELETE FROM banks WHERE tenant_id IS NULL'),
   ])
+}
+
+/** When users with roles supervisor (3), employee (4), or bank_agent (5) are created, mirror them into hr_employees for /admin/hr flows. */
+async function syncNewUserToHrEmployees(
+  db: D1Database,
+  opts: {
+    tenantId: number
+    userId: number
+    roleId: number
+    fullName: string
+    username: string
+    email: string | null
+    phone: string | null
+    /** Shown as «القسم» on HR employees list (hr_employees.department). */
+    department: string | null
+  }
+): Promise<boolean> {
+  const code = `USR${opts.userId}`
+  const already = await db
+    .prepare('SELECT id FROM hr_employees WHERE employee_code = ? LIMIT 1')
+    .bind(code)
+    .first()
+  if (already) return false
+
+  let jobTitle = 'موظف'
+  if (opts.roleId === 3) jobTitle = 'مشرف المبيعات'
+  else if (opts.roleId === 5) jobTitle = 'موظف التمويل'
+
+  const displayName = opts.fullName.trim() || opts.username.trim() || code
+  const hireDate = new Date().toISOString().slice(0, 10)
+
+  await db
+    .prepare(`
+      INSERT INTO hr_employees (
+        tenant_id, employee_code, employee_number,
+        full_name, full_name_ar,
+        email, phone, department, job_title, hire_date,
+        employment_type, work_schedule, status,
+        basic_salary, housing_allowance, transportation_allowance,
+        notes
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        'full_time', 'regular', 'active',
+        0, 0, 0,
+        ?
+      )
+    `)
+    .bind(
+      opts.tenantId,
+      code,
+      code,
+      displayName,
+      displayName,
+      opts.email,
+      opts.phone,
+      opts.department,
+      jobTitle,
+      hireDate,
+      `linked_user:${opts.userId}`
+    )
+    .run()
+  return true
+}
+
+/** TEMP: backfill hr_employees for existing users (roles 3–5). Remove with sync API + UI when done. */
+async function bulkSyncUsersToHrEmployees(
+  db: D1Database,
+  tenantFilter: number | null
+): Promise<{
+  synced: number
+  skipped: number
+  errors: { userId: number; message: string }[]
+}> {
+  let query = `
+    SELECT id, tenant_id, role_id, full_name, username, email, phone, hr_section
+    FROM users
+    WHERE role_id IN (3, 4, 5, 13, 14) AND tenant_id IS NOT NULL
+  `
+  const bindVals: number[] = []
+  if (tenantFilter != null && typeof tenantFilter === 'number' && !Number.isNaN(tenantFilter)) {
+    query += ` AND tenant_id = ?`
+    bindVals.push(tenantFilter)
+  }
+  const stmt = bindVals.length ? db.prepare(query).bind(...bindVals) : db.prepare(query)
+  const { results } = await stmt.all()
+  let synced = 0
+  let skipped = 0
+  const errors: { userId: number; message: string }[] = []
+  for (const u of results || []) {
+    const userId = Number((u as { id: unknown }).id)
+    const tid = Number((u as { tenant_id: unknown }).tenant_id)
+    let roleId = Number((u as { role_id: unknown }).role_id)
+    if (roleId === 13) roleId = 3
+    else if (roleId === 14) roleId = 4
+    if (!userId || Number.isNaN(userId) || !tid || Number.isNaN(tid)) continue
+    const emailRaw = (u as { email: unknown }).email
+    const phoneRaw = (u as { phone: unknown }).phone
+    const emailStr =
+      emailRaw != null && String(emailRaw).trim() !== '' ? String(emailRaw).trim() : null
+    const phoneStr =
+      phoneRaw != null && String(phoneRaw).trim() !== '' ? String(phoneRaw).trim() : null
+    const fullStr =
+      (u as { full_name: unknown }).full_name != null
+        ? String((u as { full_name: unknown }).full_name).trim()
+        : ''
+    const secRaw = (u as { hr_section?: unknown }).hr_section
+    const deptStr =
+      secRaw != null && String(secRaw).trim() !== '' ? String(secRaw).trim() : null
+    try {
+      const created = await syncNewUserToHrEmployees(db, {
+        tenantId: tid,
+        userId,
+        roleId,
+        fullName: fullStr,
+        username: String((u as { username: unknown }).username ?? ''),
+        email: emailStr,
+        phone: phoneStr,
+        department: deptStr,
+      })
+      if (created) synced++
+      else skipped++
+    } catch (e: unknown) {
+      errors.push({ userId, message: String((e as Error)?.message ?? e) })
+    }
+  }
+  return { synced, skipped, errors }
 }
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
@@ -621,7 +968,7 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-// Bank agents (role 5): only read scoped funding requests/customers, sidebar request counts, and auth logout.
+// Bank agents (role 5): scoped funding requests/customers (read + edit/delete within scope), attachment upload for edits, sidebar counts, auth.
 app.use('/api/*', async (c, next) => {
   const p = c.req.path
   if (
@@ -630,6 +977,11 @@ app.use('/api/*', async (c, next) => {
     p.startsWith('/api/auth/forgot') ||
     p.startsWith('/api/auth/reset')
   ) {
+    await next()
+    return
+  }
+  // Public tenant APIs (contact form, etc.) — no bank-agent API gate
+  if (p.startsWith('/api/public/')) {
     await next()
     return
   }
@@ -643,7 +995,42 @@ app.use('/api/*', async (c, next) => {
     await next()
     return
   }
+  if (
+    p.startsWith('/api/financing-requests/') &&
+    (method === 'PUT' || method === 'DELETE')
+  ) {
+    await next()
+    return
+  }
+  if (p === '/api/attachments/upload' && method === 'POST') {
+    await next()
+    return
+  }
   if (p === '/api/customers' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/customers' && method === 'POST') {
+    await next()
+    return
+  }
+  if (p === '/api/requests' && method === 'POST') {
+    await next()
+    return
+  }
+  if (p === '/api/customers/import-csv' && method === 'POST') {
+    await next()
+    return
+  }
+  if (p === '/api/requests/import-csv' && method === 'POST') {
+    await next()
+    return
+  }
+  if (p === '/api/customer-reviews' && method === 'POST') {
+    await next()
+    return
+  }
+  if (p.startsWith('/api/customer-reviews/') && method === 'DELETE') {
     await next()
     return
   }
@@ -659,34 +1046,47 @@ app.use('/api/*', async (c, next) => {
     await next()
     return
   }
+  // Own leave history/submit (scoped in handler by user → hr_employees email)
+  if (p === '/api/my-leaves' && (method === 'GET' || method === 'POST')) {
+    await next()
+    return
+  }
+  if (method === 'GET' && (
+    p === '/api/banks' ||
+    p === '/api/rates' ||
+    p === '/api/financing-types' ||
+    p === '/api/tenants'
+  )) {
+    await next()
+    return
+  }
+  if (method === 'POST' && (
+    p === '/api/calculator/save-customer' ||
+    p === '/api/calculator/submit-request' ||
+    p === '/api/workflow/update-stage'
+  )) {
+    await next()
+    return
+  }
+  if (p === '/api/tenant-contact-affiliates' && method === 'GET') {
+    await next()
+    return
+  }
+  // Contracts module: `/api/contract-tables/*` + logo upload. Missing here caused 403 for role 5 on every contracts API call.
+  if (p.startsWith('/api/contract-tables/')) {
+    await next()
+    return
+  }
+  if (p === '/api/contracts/party-logo-upload' && method === 'POST') {
+    await next()
+    return
+  }
+  // Contract documents reference party logos stored in R2 at this URL.
+  if (method === 'GET' && p.startsWith('/api/attachments/view/')) {
+    await next()
+    return
+  }
   return c.json({ success: false, error: 'غير مصرح' }, 403)
-})
-
-// Bank agents: only admin + API (each further restricted). No calculator, home, /c/*, packages, etc.
-app.use('*', async (c, next) => {
-  if (c.req.method === 'OPTIONS') {
-    await next()
-    return
-  }
-  const path = c.req.path || ''
-  if (path.startsWith('/admin/')) {
-    await next()
-    return
-  }
-  if (path.startsWith('/api/')) {
-    await next()
-    return
-  }
-  const info = await getUserInfo(c)
-  if (!info.userId || normalizeRoleId(info.roleId) !== 5) {
-    await next()
-    return
-  }
-  if (path === '/login' || path === '/forgot-password' || path.startsWith('/.well-known')) {
-    await next()
-    return
-  }
-  return c.redirect('/admin/requests')
 })
 
 // ===================================
@@ -836,7 +1236,8 @@ function normalizeRoleId(roleId: unknown): number | null {
     11: 1,
     12: 2,
     13: 3,
-    14: 4
+    14: 4,
+    15: 5
   }
   return legacyMap[n] ?? n
 }
@@ -1020,9 +1421,32 @@ async function getUserInfo(
     // For other roles: DB is source of truth for which company (tenant) this user belongs to.
     // Stale JWT tenant segments must not override users.tenant_id (fixes customer/contract scoping).
     const dbTenantId = (user as { tenant_id?: number | null }).tenant_id
+    let tenantIdResolved: number | null = dbTenantId != null ? dbTenantId : tenantIdFromToken
+
+    // Bank agents (role 5) are often scoped by assigned_bank_id; banks belong to exactly one tenant.
+    // Without this, tenantId stays NULL when users.tenant_id was never filled and the JWT segment is null,
+    // and every tenant-filtered API (including the whole contracts module) returns zero rows — not just "empty list".
+    if (
+      tenantIdResolved == null &&
+      normalizedRoleId === 5 &&
+      assignedBankId != null &&
+      c.env?.DB
+    ) {
+      try {
+        const bankRow = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
+          .bind(assignedBankId)
+          .first<{ tenant_id: number | null }>()
+        if (bankRow?.tenant_id != null && !Number.isNaN(Number(bankRow.tenant_id))) {
+          tenantIdResolved = Number(bankRow.tenant_id)
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
     const result = {
       userId: user.id,
-      tenantId: dbTenantId != null ? dbTenantId : tenantIdFromToken,
+      tenantId: tenantIdResolved,
       roleId: normalizedRoleId,
       tokenRoleId,
       assignedBankId: normalizedRoleId === 5 ? assignedBankId : null
@@ -1181,6 +1605,9 @@ const SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES = [
   '/admin/tenant-calculators'
 ]
 
+/** Visible only to company admin (normalized role id 2); enforced server-side. */
+const COMPANY_ADMIN_ONLY_ADMIN_PATH_PREFIXES = ['/admin/company-settings']
+
 function stripSuperAdminLinksFromHtml(html: string): string {
   const superAdminPrefixGroup = '(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)'
   const anchorPattern = new RegExp(
@@ -1200,7 +1627,10 @@ function stripSuperAdminLinksFromHtml(html: string): string {
   [href^="/admin/tenant-calculators"] { display: none !important; }
 </style>
 `
-  result = result.replace('</head>', `${style}</head>`)
+  const hc = '</head>'
+  const hi = result.lastIndexOf(hc)
+  if (hi !== -1) result = result.slice(0, hi) + style + result.slice(hi)
+  else result = style + result
   return result
 }
 
@@ -1247,6 +1677,8 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/notifications',
     '/calculator',
     '/',
+    '/admin/company-settings',
+    '/admin/company-settings/locations',
   ],
   '3': [
     '/admin/dashboard',
@@ -1258,6 +1690,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts',
     '/admin/contracts/list',
     '/admin/follow-ups',
+    '/admin/my-leaves',
     '/calculator',
     '/',
   ],
@@ -1265,18 +1698,30 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/requests',
+    '/admin/contracts',
+    '/admin/contracts/list',
+    '/admin/contracts/new',
+    '/admin/contracts/templates',
     '/admin/my-tasks',
     '/my-tasks',
+    '/admin/my-leaves',
     '/calculator',
     '/',
   ],
-  // Role 5 should mirror role 4 navigation (UI allowlist). Sensitive actions are still blocked server-side.
+  // Role 5: bank agent — keep in sync with /admin/* RBAC + full-admin-panel allowedLinks['5']. No marketing (/admin/follow-ups).
   '5': [
+    '/admin/panel',
     '/admin/dashboard',
     '/admin/customers',
     '/admin/requests',
+    '/admin/contact-affiliates',
+    '/admin/contracts',
+    '/admin/contracts/list',
+    '/admin/contracts/new',
+    '/admin/contracts/templates',
     '/admin/my-tasks',
     '/my-tasks',
+    '/admin/my-leaves',
     '/calculator',
     '/',
   ],
@@ -1284,9 +1729,94 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
 
 function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number }): string {
   if (!pathname.startsWith('/admin/')) return html
-  if (pathname === '/admin/panel') return html
   if (pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) return html
   if (html.includes('id="global-persistent-sidebar"')) return html
+
+  const isAdminPanelRail = pathname === '/admin/panel'
+  const panelRailCss = isAdminPanelRail
+    ? `
+  html.admin-panel-rail body { transition: margin 0.28s ease; }
+  html.admin-panel-rail #global-persistent-sidebar {
+    transition: transform 0.28s ease;
+  }
+  html.admin-panel-rail #global-persistent-sidebar.gps-rail-collapsed {
+    transform: translateX(100%);
+    pointer-events: none;
+  }
+  html.admin-panel-rail.admin-panel-sidebar-collapsed body {
+    margin-right: 0 !important;
+  }
+  html.admin-panel-rail .gps-panel-rail-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1100;
+  }
+  /* Desktop+: fixed top-right — beside the sidebar seam when open; viewport top-right when collapsed. */
+  html.admin-panel-rail .gps-panel-rail-toggle {
+    position: fixed;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(260px + 12px);
+    transform: none;
+    z-index: 1106;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 2px 14px rgba(15,23,42,0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    color: #1e40af;
+    transition: right 0.28s ease, top 0.2s ease;
+  }
+  html.admin-panel-rail.admin-panel-sidebar-collapsed .gps-panel-rail-toggle {
+    right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  html.admin-panel-rail .gps-panel-rail-toggle .gps-panel-rail-icon-open {
+    display: inline-block;
+  }
+  html.admin-panel-rail .gps-panel-rail-toggle .gps-panel-rail-icon-closed {
+    display: none;
+  }
+  html.admin-panel-rail.admin-panel-sidebar-collapsed .gps-panel-rail-toggle .gps-panel-rail-icon-open {
+    display: none;
+  }
+  html.admin-panel-rail.admin-panel-sidebar-collapsed .gps-panel-rail-toggle .gps-panel-rail-icon-closed {
+    display: inline-block;
+  }
+  @media (max-width: 768px) {
+    html.admin-panel-rail #global-persistent-sidebar {
+      display: flex !important;
+      width: min(286px, 88vw);
+      box-shadow: -4px 0 24px rgba(15,23,42,0.14);
+      z-index: 1103;
+    }
+    html.admin-panel-rail .gps-panel-rail-overlay.is-visible {
+      display: block;
+    }
+    html.admin-panel-rail:not(.admin-panel-sidebar-collapsed) .gps-panel-rail-toggle {
+      right: calc(min(286px, 88vw) + 12px) !important;
+    }
+    html.admin-panel-rail .gps-panel-rail-toggle {
+      top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+      bottom: auto !important;
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 12px !important;
+      box-shadow: 0 2px 14px rgba(15,23,42,0.12) !important;
+    }
+    html.admin-panel-rail.admin-panel-sidebar-collapsed body {
+      margin-right: 0 !important;
+    }
+  }
+`
+    : ''
 
   const effectiveRoleId = opts?.roleId ?? 4
   const allowedLinksJson = JSON.stringify(PERSISTENT_SIDEBAR_ALLOWED_LINKS)
@@ -1413,6 +1943,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     #global-persistent-sidebar { display: none; }
     body { margin-right: 0 !important; }
   }
+  ${panelRailCss}
 </style>
 `
 
@@ -1430,7 +1961,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <a href="/admin/customers" data-customers-main-link><i class="fas fa-users"></i>العملاء</a>
     <div class="gps-collapsible gps-open" data-customers-collapsible>
       <div class="gps-collapsible-row">
-        <a href="/admin/customers?ratingFilter=all" class="gps-collapsible-main">
+        <a href="/admin/customers?ratingFilter=all&amp;requestsFilter=all" class="gps-collapsible-main">
         <i class="fas fa-users"></i>
         <span>العملاء</span>
         </a>
@@ -1439,13 +1970,13 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         </button>
       </div>
       <div class="gps-submenu">
-        <a href="/admin/customers?ratingFilter=all" data-customer-rating-filter="all"><i class="fas fa-list"></i>الكل</a>
-        <a href="/admin/customers?ratingFilter=0" data-customer-rating-filter="0"><i class="fas fa-minus-circle"></i>بدون تقييم</a>
-        <a href="/admin/customers?ratingFilter=5" data-customer-rating-filter="5"><i class="fas fa-star"></i>عميل ممتاز</a>
-        <a href="/admin/customers?ratingFilter=4" data-customer-rating-filter="4"><i class="fas fa-thumbs-up"></i>عميل جيد</a>
-        <a href="/admin/customers?ratingFilter=3" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل مقبول</a>
-        <a href="/admin/customers?ratingFilter=2" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
-        <a href="/admin/customers?ratingFilter=1" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
+        <a href="/admin/customers?ratingFilter=all&amp;requestsFilter=all" data-customer-rating-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/customers?ratingFilter=0&amp;requestsFilter=all" data-customer-rating-filter="0"><i class="fas fa-minus-circle"></i>بدون تقييم</a>
+        <a href="/admin/customers?ratingFilter=5&amp;requestsFilter=all" data-customer-rating-filter="5"><i class="fas fa-star"></i>عميل ممتاز</a>
+        <a href="/admin/customers?ratingFilter=4&amp;requestsFilter=all" data-customer-rating-filter="4"><i class="fas fa-thumbs-up"></i>عميل جيد</a>
+        <a href="/admin/customers?ratingFilter=3&amp;requestsFilter=all" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل مقبول</a>
+        <a href="/admin/customers?ratingFilter=2&amp;requestsFilter=all" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
+        <a href="/admin/customers?ratingFilter=1&amp;requestsFilter=all" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
       </div>
     </div>
     <a href="/admin/requests" data-requests-main-link><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
@@ -1509,22 +2040,31 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <a href="/admin/tenants" data-superadmin-only="true"><i class="fas fa-building"></i>إدارة الشركات</a>
     <a href="/admin/settings" data-superadmin-only="true"><i class="fas fa-cog"></i>إعدادات النظام</a>
     <a href="/admin/hr"><i class="fas fa-users-cog"></i>الموارد البشرية</a>
+    <a href="/admin/my-leaves"><i class="fas fa-calendar-alt"></i>طلبات إجازتي</a>
     <a href="/admin/contracts"><i class="fas fa-file-contract"></i>إدارة العقود</a>
     <hr class="gps-divider">
     <a href="/admin/users"><i class="fas fa-user-shield"></i>المستخدمين</a>
     <a href="/admin/roles" data-superadmin-only="true"><i class="fas fa-user-tag"></i>الأدوار والصلاحيات</a>
     <a href="/admin/notifications"><i class="fas fa-bell"></i>الإشعارات</a>
+    <a href="/admin/company-settings"><i class="fas fa-building"></i>إعدادات الشركة</a>
     <a href="/admin/tenant-calculators" data-superadmin-only="true"><i class="fas fa-calculator"></i>حاسبات الشركات</a>
     <a href="/admin/saas-settings" data-superadmin-only="true"><i class="fas fa-cogs"></i>إعدادات SaaS</a>
     <hr class="gps-divider">
     <a href="/calculator"><i class="fas fa-calculator"></i>الحاسبة</a>
-    <a href="/"><i class="fas fa-home"></i>الصفحة الرئيسية</a>
+    <a href="/admin/panel"><i class="fas fa-home"></i>الصفحة الرئيسية</a>
     <hr class="gps-divider">
     <button onclick="(function(){localStorage.removeItem('authToken');document.cookie='authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';window.location.href='/login';})()">
       <i class="fas fa-sign-out-alt"></i>تسجيل الخروج
     </button>
   </nav>
 </aside>
+${isAdminPanelRail ? `
+<div id="gps-panel-rail-overlay" class="gps-panel-rail-overlay" aria-hidden="true"></div>
+<button type="button" id="gps-panel-rail-toggle" class="gps-panel-rail-toggle" aria-controls="global-persistent-sidebar" aria-expanded="false" title="إظهار القائمة">
+  <i class="fas fa-chevron-right gps-panel-rail-icon-open" aria-hidden="true"></i>
+  <i class="fas fa-bars gps-panel-rail-icon-closed" aria-hidden="true"></i>
+</button>
+` : ''}
 <script>
   (function () {
     var ALLOWED = ${allowedLinksJson};
@@ -1596,7 +2136,9 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
           return;
         }
         var isAlways =
-          ROLE_ID !== 5 && (normalizedHref === '/calculator' || normalizedHref.indexOf('/c/') === 0);
+          normalizedHref === '/admin/panel' ||
+          normalizedHref === '/calculator' ||
+          normalizedHref.indexOf('/c/') === 0;
         var canShow = isAlways || userAllowed.indexOf(normalizedHref) !== -1;
         var hiddenByCount = link.getAttribute('data-gps-hidden-by-count') === '1';
         if (canShow && !hiddenByCount) {
@@ -1699,7 +2241,81 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         .catch(function () {});
     }
 
+    function applySidebarFilterLink(link) {
+      if (!link) return false;
+      var href = link.getAttribute('href');
+      if (!href) return false;
+
+      var url = new URL(href, window.location.origin);
+      if (url.pathname !== window.location.pathname) return false;
+
+      var handled = false;
+      var params = new URLSearchParams(window.location.search);
+
+      if (url.pathname === '/admin/customers' && (url.searchParams.has('ratingFilter') || url.searchParams.has('requestsFilter'))) {
+        var rating = url.searchParams.get('ratingFilter') || 'all';
+        var requests = url.searchParams.get('requestsFilter') || 'all';
+        var customerSearchEl = document.getElementById('searchInput');
+        var customerFieldEl = document.getElementById('filterField');
+        var customerDateEl = document.getElementById('dateRangeFilter');
+        var ratingEl = document.getElementById('ratingFilter');
+        var requestsEl = document.getElementById('requestsFilter');
+        if (customerSearchEl) customerSearchEl.value = '';
+        if (customerFieldEl) customerFieldEl.value = 'all';
+        if (customerDateEl) customerDateEl.value = 'all';
+        if (ratingEl) ratingEl.value = rating;
+        if (requestsEl) requestsEl.value = requests;
+        params.set('ratingFilter', rating);
+        params.set('requestsFilter', requests);
+        handled = true;
+      }
+
+      if (url.pathname === '/admin/requests' && url.searchParams.has('requestStatusFilter')) {
+        var status = url.searchParams.get('requestStatusFilter') || 'all';
+        var requestSearchEl = document.getElementById('searchInput');
+        var requestFieldEl = document.getElementById('filterField');
+        var statusEl = document.getElementById('statusFilter');
+        if (requestSearchEl) requestSearchEl.value = '';
+        if (requestFieldEl) requestFieldEl.value = 'all';
+        if (statusEl) statusEl.value = status;
+        params.set('requestStatusFilter', status);
+        handled = true;
+      }
+
+      if (url.pathname === '/admin/follow-ups' && (url.searchParams.has('followupLinkFilter') || url.searchParams.has('followupPriorityFilter'))) {
+        var followupLink = url.searchParams.get('followupLinkFilter') || 'all';
+        var followupPriority = url.searchParams.get('followupPriorityFilter') || 'all';
+        var followupLinkEl = document.getElementById('followupLinkFilterSelect');
+        var followupPriorityEl = document.getElementById('followupPriorityFilterSelect');
+        if (followupLinkEl) followupLinkEl.value = followupLink;
+        if (followupPriorityEl) followupPriorityEl.value = followupPriority;
+        params.set('followupLinkFilter', followupLink);
+        params.set('followupPriorityFilter', followupPriority);
+        handled = true;
+      }
+
+      if (!handled) return false;
+
+      var qs = params.toString();
+      window.history.pushState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
+      applyGlobalSidebarPermissions();
+
+      if (url.pathname === '/admin/follow-ups' && typeof window.loadFollowUps === 'function') {
+        window.loadFollowUps();
+      } else if (typeof window.filterTable === 'function') {
+        window.filterTable();
+      }
+      return true;
+    }
+
     document.addEventListener('click', function (event) {
+      var filterLink = event.target.closest('#global-persistent-sidebar a[href]');
+      if (filterLink && applySidebarFilterLink(filterLink)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       var toggle = event.target.closest('#global-persistent-sidebar [data-customers-collapsible] [data-customers-toggle]');
       if (!toggle) {
         toggle = event.target.closest('#global-persistent-sidebar [data-requests-collapsible] [data-requests-toggle]');
@@ -1722,13 +2338,83 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     hydrateSidebarFilterCounts();
     document.addEventListener('DOMContentLoaded', applyGlobalSidebarPermissions);
     document.addEventListener('DOMContentLoaded', hydrateSidebarFilterCounts);
+    ${isAdminPanelRail ? `
+    (function injectAdminPanelRail() {
+      document.documentElement.classList.add('admin-panel-rail');
+      window.__gpsPanelMobileOpen = false;
+      var mq = window.matchMedia('(max-width: 768px)');
+      function mobile() {
+        return mq.matches;
+      }
+      function desktopCollapsed() {
+        return localStorage.getItem('gpsAdminPanelRailCollapsed') !== '0';
+      }
+      function applyRail() {
+        var side = document.getElementById('global-persistent-sidebar');
+        var btn = document.getElementById('gps-panel-rail-toggle');
+        var overlay = document.getElementById('gps-panel-rail-overlay');
+        if (!side || !btn) return;
+        var collapsed = mobile() ? !window.__gpsPanelMobileOpen : desktopCollapsed();
+        document.documentElement.classList.toggle('admin-panel-sidebar-collapsed', collapsed);
+        side.classList.toggle('gps-rail-collapsed', collapsed);
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        btn.setAttribute('title', collapsed ? 'إظهار القائمة' : 'إخفاء القائمة');
+        if (overlay) {
+          var showOv = mobile() && !collapsed;
+          overlay.classList.toggle('is-visible', showOv);
+          overlay.setAttribute('aria-hidden', showOv ? 'false' : 'true');
+        }
+      }
+      function toggleRail() {
+        if (mobile()) {
+          window.__gpsPanelMobileOpen = !window.__gpsPanelMobileOpen;
+        } else {
+          localStorage.setItem('gpsAdminPanelRailCollapsed', desktopCollapsed() ? '0' : '1');
+        }
+        applyRail();
+      }
+      var btn = document.getElementById('gps-panel-rail-toggle');
+      if (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          toggleRail();
+        });
+      }
+      var overlay = document.getElementById('gps-panel-rail-overlay');
+      if (overlay) {
+        overlay.addEventListener('click', function () {
+          window.__gpsPanelMobileOpen = false;
+          applyRail();
+        });
+      }
+      document.addEventListener(
+        'click',
+        function (e) {
+          if (!mobile()) return;
+          if (!e.target.closest('#global-persistent-sidebar a[href]')) return;
+          window.__gpsPanelMobileOpen = false;
+          applyRail();
+        },
+        true
+      );
+      mq.addEventListener('change', applyRail);
+      applyRail();
+    })();
+    ` : ''}
   })();
 </script>
 `
 
   let out = html
-  out = out.includes('</head>') ? out.replace('</head>', `${style}</head>`) : `${style}${out}`
-  out = out.includes('</body>') ? out.replace('</body>', `${sidebar}</body>`) : `${out}${sidebar}`
+  const headClose = '</head>'
+  const headIdx = out.lastIndexOf(headClose)
+  if (headIdx !== -1) out = out.slice(0, headIdx) + style + out.slice(headIdx)
+  else out = style + out
+
+  const bodyClose = '</body>'
+  const bodyIdx = out.lastIndexOf(bodyClose)
+  if (bodyIdx !== -1) out = out.slice(0, bodyIdx) + sidebar + out.slice(bodyIdx)
+  else out = out + sidebar
   return out
 }
 
@@ -1763,18 +2449,25 @@ app.use('/admin/*', async (c, next) => {
   }
 
   const rid = normalizeRoleId(info.roleId)
+  const isCompanyAdminOnlyPath = COMPANY_ADMIN_ONLY_ADMIN_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + '/')
+  )
+  if (isCompanyAdminOnlyPath && rid !== 2) {
+    return c.redirect('/admin/dashboard')
+  }
   if (rid === 5) {
-    // Role 5: same surface navigation as role 4. Sensitive mutations are blocked at the API layer.
+    // Bank agent: allow the same app surface as the sidebar / role-4-style workflows; APIs still enforce scope. No marketing (/admin/follow-ups).
     const ok =
       pathname === '/admin' ||
       pathname === '/admin/panel' ||
       pathname === '/admin/dashboard' ||
-      pathname === '/admin/customers' ||
-      pathname.startsWith('/admin/customers/') ||
-      pathname === '/admin/requests' ||
-      pathname.startsWith('/admin/requests/') ||
+      pathname.startsWith('/admin/customers') ||
+      pathname.startsWith('/admin/requests') ||
       pathname === '/admin/my-tasks' ||
       pathname === '/my-tasks' ||
+      pathname === '/admin/my-leaves' ||
+      pathname.startsWith('/admin/contracts') ||
+      pathname === '/admin/contact-affiliates' ||
       pathname === '/calculator' ||
       pathname === '/'
     if (!ok) {
@@ -1978,7 +2671,31 @@ app.post('/api/tenants', async (c) => {
     if (existing) {
       return c.json({ success: false, error: 'الـ Slug موجود بالفعل' }, 400)
     }
-    
+
+    const logoNorm =
+      data.logo_url != null && String(data.logo_url).trim() !== ''
+        ? normalizeTenantLogoUrl(data.logo_url)
+        : null
+    if (data.logo_url != null && String(data.logo_url).trim() !== '' && !logoNorm) {
+      return c.json({ success: false, error: 'رابط شعار الشركة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)' }, 400)
+    }
+
+    const locationNameRaw = String(data.location_name ?? '').trim()
+    if (!locationNameRaw) {
+      return c.json({ success: false, error: 'اسم الموقع الرئيسي مطلوب' }, 400)
+    }
+
+    const cityNorm = normalizeTenantCityField(data.city)
+    if (!cityNorm.ok) return c.json({ success: false, error: cityNorm.error }, 400)
+    if (!cityNorm.value) {
+      return c.json({ success: false, error: 'المدينة مطلوبة لتحديد موقع الشركة' }, 400)
+    }
+    const addrNorm = normalizeTenantAddressField(data.address)
+    if (!addrNorm.ok) return c.json({ success: false, error: addrNorm.error }, 400)
+    if (!addrNorm.value) {
+      return c.json({ success: false, error: 'العنوان التفصيلي مطلوب لتحديد موقع الشركة' }, 400)
+    }
+
     // Insert new tenant
     const publicUuid = generatePublicTenantUuid()
 
@@ -1987,8 +2704,8 @@ app.post('/api/tenants', async (c) => {
         public_uuid,
         company_name, slug, subdomain, status, max_users, 
         max_customers, max_requests, contact_email, contact_phone,
-        primary_color, secondary_color
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        primary_color, secondary_color, logo_url, city, address
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       publicUuid,
       data.company_name,
@@ -2001,13 +2718,45 @@ app.post('/api/tenants', async (c) => {
       data.contact_email || '',
       data.contact_phone || '',
       data.primary_color || '#667eea',
-      data.secondary_color || '#764ba2'
+      data.secondary_color || '#764ba2',
+      logoNorm,
+      cityNorm.value,
+      addrNorm.value
     ).run()
-    
-    return c.json({ 
-      success: true, 
-      data: { id: result.meta.last_row_id, public_uuid: publicUuid, ...data, slug },
-      message: 'تم إنشاء الشركة بنجاح'
+
+    const tenantId = Number(result.meta.last_row_id)
+    let locSlug = deriveLocationSlugFromName(locationNameRaw, slug)
+    locSlug = await ensureUniqueTenantLocationSlug(c.env.DB, tenantId, locSlug)
+
+    const contactEmailLoc =
+      data.contact_email != null && String(data.contact_email).trim() !== ''
+        ? String(data.contact_email).trim()
+        : null
+    const contactPhoneLoc =
+      data.contact_phone != null && String(data.contact_phone).trim() !== ''
+        ? String(data.contact_phone).trim()
+        : null
+
+    await c.env.DB.prepare(`
+      INSERT INTO tenant_locations (
+        tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url,
+        is_primary, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
+    `).bind(
+      tenantId,
+      locationNameRaw,
+      locSlug,
+      cityNorm.value,
+      addrNorm.value,
+      contactPhoneLoc,
+      contactEmailLoc,
+      logoNorm,
+    ).run()
+
+    return c.json({
+      success: true,
+      data: { id: tenantId, public_uuid: publicUuid, ...data, slug, primary_location_slug: locSlug },
+      message: 'تم إنشاء الشركة بنجاح',
     })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -2050,6 +2799,19 @@ app.put('/api/tenants/:tenantRef', async (c) => {
     if (existingSlug) {
       return c.json({ success: false, error: 'الـ Slug موجود بالفعل' }, 400)
     }
+
+    const logoNorm =
+      data.logo_url != null && String(data.logo_url).trim() !== ''
+        ? normalizeTenantLogoUrl(data.logo_url)
+        : null
+    if (data.logo_url != null && String(data.logo_url).trim() !== '' && !logoNorm) {
+      return c.json({ success: false, error: 'رابط شعار الشركة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)' }, 400)
+    }
+
+    const cityNorm = normalizeTenantCityField(data.city)
+    if (!cityNorm.ok) return c.json({ success: false, error: cityNorm.error }, 400)
+    const addrNorm = normalizeTenantAddressField(data.address)
+    if (!addrNorm.ok) return c.json({ success: false, error: addrNorm.error }, 400)
     
     const normalizedData = {
       company_name: data.company_name,
@@ -2062,7 +2824,10 @@ app.put('/api/tenants/:tenantRef', async (c) => {
       contact_email: data.contact_email ?? null,
       contact_phone: data.contact_phone ?? null,
       primary_color: data.primary_color || '#667eea',
-      secondary_color: data.secondary_color || '#764ba2'
+      secondary_color: data.secondary_color || '#764ba2',
+      logo_url: logoNorm,
+      city: cityNorm.value,
+      address: addrNorm.value
     }
 
     // Update tenant
@@ -2078,7 +2843,10 @@ app.put('/api/tenants/:tenantRef', async (c) => {
         contact_email = ?,
         contact_phone = ?,
         primary_color = ?,
-        secondary_color = ?
+        secondary_color = ?,
+        logo_url = ?,
+        city = ?,
+        address = ?
       WHERE id = ?
     `).bind(
       normalizedData.company_name,
@@ -2092,6 +2860,9 @@ app.put('/api/tenants/:tenantRef', async (c) => {
       normalizedData.contact_phone,
       normalizedData.primary_color,
       normalizedData.secondary_color,
+      normalizedData.logo_url,
+      normalizedData.city,
+      normalizedData.address,
       id
     ).run()
     
@@ -2100,6 +2871,699 @@ app.put('/api/tenants/:tenantRef', async (c) => {
       data: { id, public_uuid: tenant?.public_uuid, ...normalizedData },
       message: 'تم تحديث الشركة بنجاح'
     })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin (role 2): read own tenant branding / contact fields only
+app.get('/api/my-tenant', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const row = await c.env.DB.prepare(`
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid
+      FROM tenants WHERE id = ? LIMIT 1
+    `).bind(info.tenantId).first<{
+      company_name: string
+      contact_email: string | null
+      contact_phone: string | null
+      city: string | null
+      address: string | null
+      logo_url: string | null
+      slug: string
+      public_uuid: string | null
+    }>()
+    if (!row) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+    return c.json({ success: true, data: row })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin (role 2): upload tenant logo to R2; returns `/api/attachments/view/...` for `tenants.logo_url`
+app.post('/api/my-tenant/logo-upload', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'تخزين الملفات غير مُهيأ' }, 500)
+    }
+
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ success: false, error: 'توقعنا نموذجاً متعدد الأجزاء (ملف)' }, 400)
+    }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ success: false, error: 'لم يتم اختيار ملف' }, 400)
+    }
+
+    const file = fileEntry
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return c.json({ success: false, error: 'الحد الأقصى لحجم الشعار 2 ميجابايت' }, 400)
+    }
+
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ success: false, error: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+
+    const tenantRow = await c.env.DB.prepare(`SELECT id FROM tenants WHERE id = ? LIMIT 1`)
+      .bind(info.tenantId)
+      .first<{ id: number }>()
+    if (!tenantRow) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'jpg'
+    const key = `tenants/${info.tenantId}/company_logo_${timestamp}_${random}.${ext}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    await c.env.ATTACHMENTS.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      }
+    })
+
+    const publicUrl = `/api/attachments/view/${key}`
+    return c.json({ success: true, url: publicUrl, filename: key })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin (role 2): update company name, contact email/phone, logo (own tenant)
+app.patch('/api/my-tenant', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const body = await c.req.json().catch(() => ({}))
+    const updates: Record<string, string | null> = {}
+
+    if ('company_name' in body) {
+      const name = String(body.company_name ?? '').trim()
+      if (!name) {
+        return c.json({ success: false, error: 'اسم الشركة مطلوب' }, 400)
+      }
+      updates.company_name = name
+    }
+    if ('contact_email' in body) {
+      const raw = body.contact_email
+      if (raw == null || String(raw).trim() === '') {
+        updates.contact_email = null
+      } else {
+        const em = String(raw).trim()
+        if (em.length > 200) {
+          return c.json({ success: false, error: 'البريد الإلكتروني طويل جداً' }, 400)
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+          return c.json({ success: false, error: 'صيغة البريد الإلكتروني غير صحيحة' }, 400)
+        }
+        updates.contact_email = em
+      }
+    }
+    if ('contact_phone' in body) {
+      const raw = body.contact_phone
+      if (raw == null || String(raw).trim() === '') {
+        updates.contact_phone = null
+      } else {
+        const normalized = normalizePublicContactPhoneDigits(String(raw))
+        if (!normalized) {
+          return c.json(
+            {
+              success: false,
+              error:
+                'صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX).'
+            },
+            400
+          )
+        }
+        updates.contact_phone = normalized
+      }
+    }
+    if ('logo_url' in body) {
+      const raw = body.logo_url
+      const trimmed = raw == null ? '' : String(raw).trim()
+      const logoNorm = trimmed === '' ? null : normalizeTenantLogoUrl(trimmed)
+      if (trimmed !== '' && !logoNorm) {
+        return c.json({
+          success: false,
+          error: 'رابط الشعار غير صالح (استخدم https:// أو مساراً يبدأ بـ /)'
+        }, 400)
+      }
+      updates.logo_url = logoNorm
+    }
+    if ('city' in body) {
+      const cityNorm = normalizeTenantCityField(body.city)
+      if (!cityNorm.ok) {
+        return c.json({ success: false, error: cityNorm.error }, 400)
+      }
+      updates.city = cityNorm.value
+    }
+    if ('address' in body) {
+      const addrNorm = normalizeTenantAddressField(body.address)
+      if (!addrNorm.ok) {
+        return c.json({ success: false, error: addrNorm.error }, 400)
+      }
+      updates.address = addrNorm.value
+    }
+
+    const keys = Object.keys(updates)
+    if (keys.length === 0) {
+      return c.json({ success: false, error: 'لا توجد حقول للتحديث' }, 400)
+    }
+
+    const exists = await c.env.DB.prepare(`SELECT id FROM tenants WHERE id = ?`)
+      .bind(info.tenantId)
+      .first<{ id: number }>()
+    if (!exists) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    const setSql = keys.map((k) => `${k} = ?`).join(', ')
+    const values = keys.map((k) => updates[k]!)
+    await c.env.DB.prepare(`UPDATE tenants SET ${setSql} WHERE id = ?`)
+      .bind(...values, info.tenantId)
+      .run()
+
+    const row = await c.env.DB.prepare(`
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid
+      FROM tenants WHERE id = ? LIMIT 1
+    `).bind(info.tenantId).first()
+
+    return c.json({ success: true, data: row, message: 'تم تحديث بيانات الشركة' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+async function fetchPrimaryTenantLocation(db: D1Database, tenantId: number) {
+  return db
+    .prepare(
+      `
+      SELECT id, name, slug, city, address, contact_phone, contact_email, logo_url
+      FROM tenant_locations
+      WHERE tenant_id = ? AND is_primary = 1 AND is_active = 1
+      LIMIT 1
+    `
+    )
+    .bind(tenantId)
+    .first<{
+      id: number
+      name: string
+      slug: string
+      city: string
+      address: string
+      contact_phone: string | null
+      contact_email: string | null
+      logo_url: string | null
+    }>()
+}
+
+function normalizeLocationSlugInput(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+/g, '')
+}
+
+// Company admin: list branch locations
+app.get('/api/my-tenant/locations', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const { results } = await c.env.DB.prepare(
+      `
+      SELECT id, tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url,
+             is_primary, is_active, created_at
+      FROM tenant_locations
+      WHERE tenant_id = ? AND is_active = 1
+      ORDER BY is_primary DESC, id ASC
+    `
+    )
+      .bind(info.tenantId)
+      .all()
+    return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: one branch location (for edit screen)
+app.get('/api/my-tenant/locations/:id', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const id = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    }
+    const row = await c.env.DB.prepare(
+      `
+      SELECT id, tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url,
+             is_primary, is_active, created_at
+      FROM tenant_locations
+      WHERE id = ? AND tenant_id = ? AND is_active = 1
+      LIMIT 1
+    `
+    )
+      .bind(id, info.tenantId)
+      .first()
+    if (!row) {
+      return c.json({ success: false, error: 'الموقع غير موجود' }, 404)
+    }
+    return c.json({ success: true, data: row })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: add a non-primary location (primary is created with the company / migration)
+app.post('/api/my-tenant/locations', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const body = await c.req.json().catch(() => ({}))
+    const name = String(body.name ?? '').trim()
+    let slug = normalizeLocationSlugInput(body.slug)
+    if (!name) {
+      return c.json({ success: false, error: 'اسم الموقع مطلوب' }, 400)
+    }
+    if (!slug || !isValidAffiliatePathSegment(slug)) {
+      return c.json({ success: false, error: 'معرّف الموقع (slug) غير صالح' }, 400)
+    }
+    const cityNorm = normalizeTenantCityField(body.city)
+    if (!cityNorm.ok) return c.json({ success: false, error: cityNorm.error }, 400)
+    if (!cityNorm.value) {
+      return c.json({ success: false, error: 'المدينة مطلوبة' }, 400)
+    }
+    const addrNorm = normalizeTenantAddressField(body.address)
+    if (!addrNorm.ok) return c.json({ success: false, error: addrNorm.error }, 400)
+    if (!addrNorm.value) {
+      return c.json({ success: false, error: 'العنوان مطلوب' }, 400)
+    }
+
+    let contact_phone: string | null = null
+    if (body.contact_phone != null && String(body.contact_phone).trim() !== '') {
+      const normalized = normalizePublicContactPhoneDigits(String(body.contact_phone))
+      if (!normalized) {
+        return c.json(
+          {
+            success: false,
+            error:
+              'صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX).',
+          },
+          400
+        )
+      }
+      contact_phone = normalized
+    }
+    let contact_email: string | null = null
+    if (body.contact_email != null && String(body.contact_email).trim() !== '') {
+      const em = String(body.contact_email).trim()
+      if (em.length > 200) {
+        return c.json({ success: false, error: 'البريد الإلكتروني طويل جداً' }, 400)
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+        return c.json({ success: false, error: 'صيغة البريد الإلكتروني غير صحيحة' }, 400)
+      }
+      contact_email = em
+    }
+    let logo_url: string | null = null
+    if (body.logo_url != null && String(body.logo_url).trim() !== '') {
+      logo_url = normalizeTenantLogoUrl(body.logo_url)
+      if (!logo_url) {
+        return c.json({ success: false, error: 'رابط الشعار غير صالح' }, 400)
+      }
+    }
+
+    slug = await ensureUniqueTenantLocationSlug(c.env.DB, info.tenantId, slug)
+
+    await c.env.DB.prepare(
+      `
+      INSERT INTO tenant_locations (
+        tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url,
+        is_primary, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
+    `
+    )
+      .bind(
+        info.tenantId,
+        name,
+        slug,
+        cityNorm.value,
+        addrNorm.value,
+        contact_phone,
+        contact_email,
+        logo_url
+      )
+      .run()
+
+    const row = await c.env.DB.prepare(
+      `
+      SELECT id, tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url, is_primary, is_active, created_at
+      FROM tenant_locations
+      WHERE tenant_id = ? AND slug = ?
+      LIMIT 1
+    `
+    )
+      .bind(info.tenantId, slug)
+      .first()
+
+    return c.json({ success: true, data: row, message: 'تم إضافة الموقع' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: update a location (empty optional fields = inherit from primary at display time; stored as NULL)
+app.patch('/api/my-tenant/locations/:id', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const id = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    }
+
+    const existing = await c.env.DB.prepare(
+      `
+      SELECT id, is_primary FROM tenant_locations
+      WHERE id = ? AND tenant_id = ? AND is_active = 1
+      LIMIT 1
+    `
+    )
+      .bind(id, info.tenantId)
+      .first<{ id: number; is_primary: number }>()
+    if (!existing) {
+      return c.json({ success: false, error: 'الموقع غير موجود' }, 404)
+    }
+
+    const body = await c.req.json().catch(() => ({}))
+    const updates: Record<string, string | number | null> = {}
+
+    if ('name' in body) {
+      const name = String(body.name ?? '').trim()
+      if (!name) {
+        return c.json({ success: false, error: 'اسم الموقع مطلوب' }, 400)
+      }
+      updates.name = name
+    }
+    if ('slug' in body) {
+      let slug = normalizeLocationSlugInput(body.slug)
+      if (!slug || !isValidAffiliatePathSegment(slug)) {
+        return c.json({ success: false, error: 'معرّف الموقع (slug) غير صالح' }, 400)
+      }
+      const clash = await c.env.DB.prepare(
+        `
+        SELECT id FROM tenant_locations
+        WHERE tenant_id = ? AND slug = ? AND id != ?
+        LIMIT 1
+      `
+      )
+        .bind(info.tenantId, slug, id)
+        .first()
+      if (clash) {
+        return c.json({ success: false, error: 'هذا المعرّف مستخدم لموقع آخر' }, 400)
+      }
+      updates.slug = slug
+    }
+    if ('city' in body) {
+      const cityNorm = normalizeTenantCityField(body.city)
+      if (!cityNorm.ok) return c.json({ success: false, error: cityNorm.error }, 400)
+      if (!cityNorm.value) {
+        return c.json({ success: false, error: 'المدينة مطلوبة' }, 400)
+      }
+      updates.city = cityNorm.value
+    }
+    if ('address' in body) {
+      const addrNorm = normalizeTenantAddressField(body.address)
+      if (!addrNorm.ok) return c.json({ success: false, error: addrNorm.error }, 400)
+      if (!addrNorm.value) {
+        return c.json({ success: false, error: 'العنوان مطلوب' }, 400)
+      }
+      updates.address = addrNorm.value
+    }
+    if ('contact_phone' in body) {
+      const raw = body.contact_phone
+      if (raw == null || String(raw).trim() === '') {
+        updates.contact_phone = null
+      } else {
+        const normalized = normalizePublicContactPhoneDigits(String(raw))
+        if (!normalized) {
+          return c.json(
+            {
+              success: false,
+              error:
+                'صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX).',
+            },
+            400
+          )
+        }
+        updates.contact_phone = normalized
+      }
+    }
+    if ('contact_email' in body) {
+      const raw = body.contact_email
+      if (raw == null || String(raw).trim() === '') {
+        updates.contact_email = null
+      } else {
+        const em = String(raw).trim()
+        if (em.length > 200) {
+          return c.json({ success: false, error: 'البريد الإلكتروني طويل جداً' }, 400)
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+          return c.json({ success: false, error: 'صيغة البريد الإلكتروني غير صحيحة' }, 400)
+        }
+        updates.contact_email = em
+      }
+    }
+    if ('logo_url' in body) {
+      const raw = body.logo_url
+      const trimmed = raw == null ? '' : String(raw).trim()
+      const logoNorm = trimmed === '' ? null : normalizeTenantLogoUrl(trimmed)
+      if (trimmed !== '' && !logoNorm) {
+        return c.json({
+          success: false,
+          error: 'رابط الشعار غير صالح (استخدم https:// أو مساراً يبدأ بـ /)',
+        }, 400)
+      }
+      updates.logo_url = logoNorm
+    }
+
+    const keys = Object.keys(updates)
+    if (keys.length === 0) {
+      return c.json({ success: false, error: 'لا توجد حقول للتحديث' }, 400)
+    }
+
+    const setSql = keys.map((k) => `${k} = ?`).join(', ')
+    const values = keys.map((k) => updates[k]!)
+    await c.env.DB.prepare(
+      `UPDATE tenant_locations SET ${setSql}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+    )
+      .bind(...values, id, info.tenantId)
+      .run()
+
+    const row = await c.env.DB.prepare(
+      `
+      SELECT id, tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url, is_primary, is_active, created_at
+      FROM tenant_locations WHERE id = ? LIMIT 1
+    `
+    )
+      .bind(id)
+      .first()
+
+    return c.json({ success: true, data: row, message: 'تم تحديث الموقع' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: deactivate a non-primary location
+app.delete('/api/my-tenant/locations/:id', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    const id = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(
+      `
+      SELECT id, is_primary FROM tenant_locations
+      WHERE id = ? AND tenant_id = ?
+      LIMIT 1
+    `
+    )
+      .bind(id, info.tenantId)
+      .first<{ id: number; is_primary: number }>()
+    if (!row) {
+      return c.json({ success: false, error: 'الموقع غير موجود' }, 404)
+    }
+    if (row.is_primary) {
+      return c.json({ success: false, error: 'لا يمكن حذف الموقع الرئيسي' }, 400)
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE tenant_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+    )
+      .bind(id, info.tenantId)
+      .run()
+
+    return c.json({ success: true, message: 'تم إلغاء تفعيل الموقع' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: upload logo for a specific location (stores URL on row via PATCH or returned for client to PATCH)
+app.post('/api/my-tenant/locations/:id/logo-upload', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'تخزين الملفات غير مُهيأ' }, 500)
+    }
+
+    const id = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    }
+
+    const loc = await c.env.DB.prepare(
+      `SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1`
+    )
+      .bind(id, info.tenantId)
+      .first<{ id: number }>()
+    if (!loc) {
+      return c.json({ success: false, error: 'الموقع غير موجود' }, 404)
+    }
+
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ success: false, error: 'توقعنا نموذجاً متعدد الأجزاء (ملف)' }, 400)
+    }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ success: false, error: 'لم يتم اختيار ملف' }, 400)
+    }
+
+    const file = fileEntry
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return c.json({ success: false, error: 'الحد الأقصى لحجم الشعار 2 ميجابايت' }, 400)
+    }
+
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ success: false, error: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'jpg'
+    const key = `tenants/${info.tenantId}/location_${id}_logo_${timestamp}_${random}.${ext}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    await c.env.ATTACHMENTS.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      },
+    })
+
+    const publicUrl = `/api/attachments/view/${key}`
+    await c.env.DB.prepare(`UPDATE tenant_locations SET logo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`)
+      .bind(publicUrl, id, info.tenantId)
+      .run()
+
+    return c.json({ success: true, url: publicUrl, filename: key })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -2213,7 +3677,28 @@ app.post('/api/auth/login', async (c) => {
     
     // Create token with tenant_id (user_id:tenant_id:role_id:timestamp)
     console.log('🔐 [LOGIN] Creating authentication token...')
-    const tokenData = `${user.id}:${user.tenant_id || 'null'}:${user.role_id}:${Date.now()}`
+    let tenantForAuthToken: number | null =
+      user.tenant_id != null ? Number(user.tenant_id as number) : null
+    const loginNormalizedRoleId = normalizeRoleId(user.role_id)
+    const loginAssignedBankId = (user as { assigned_bank_id?: number | null }).assigned_bank_id
+    const loginBankIdNum =
+      loginAssignedBankId != null && !Number.isNaN(Number(loginAssignedBankId))
+        ? Number(loginAssignedBankId)
+        : null
+    if (tenantForAuthToken == null && loginNormalizedRoleId === 5 && loginBankIdNum != null && c.env.DB) {
+      try {
+        const br = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
+          .bind(loginBankIdNum)
+          .first<{ tenant_id: number | null }>()
+        if (br?.tenant_id != null && !Number.isNaN(Number(br.tenant_id))) {
+          tenantForAuthToken = Number(br.tenant_id)
+        }
+      } catch (_) {
+        /* keep null */
+      }
+    }
+
+    const tokenData = `${user.id}:${tenantForAuthToken ?? 'null'}:${user.role_id}:${Date.now()}`
     console.log('🔐 [LOGIN] Token data:', tokenData)
     const token = btoa(tokenData)
     console.log('🔐 [LOGIN] Token created:', token.substring(0, 30) + '...')
@@ -2967,12 +4452,9 @@ app.get('/api/rates/sample-csv', async (c) => {
       ]);
     }
     
-    // Build CSV content with proper UTF-8 BOM and RTL markers for Arabic support
-    // Note: CSV format doesn't support sheet-level RTL, so columns will appear from left to right
-    // Users need to manually set Excel to RTL mode: Page Layout > Sheet Right-to-Left
-    const BOM = String.fromCharCode(0xFEFF);
+    // Build CSV: BOM + sep=, so Excel (Arabic/RTL locales often use semicolon as list separator) splits on comma; RLM for cell text
     const RLM = '\u200F'; // Right-to-Left Mark for cell-level RTL
-    let csv = BOM;
+    let csv = EXCEL_UTF8_CSV_PREFIX
     
     // Keep header in RTL order (rightmost column first) - will display correctly when Excel is set to RTL
     const rtlHeader = header.map(h => RLM + h);
@@ -3062,12 +4544,9 @@ app.get('/api/rates/export-csv', async (c) => {
       'رقم تسلسلي'
     ];
     
-    // Build CSV content with proper UTF-8 BOM and RTL markers for Arabic support
-    // Note: CSV format doesn't support sheet-level RTL, so columns will appear from left to right
-    // Users need to manually set Excel to RTL mode: Page Layout > Sheet Right-to-Left
-    const BOM = String.fromCharCode(0xFEFF);
+    // Build CSV: BOM + sep=, so Excel (Arabic/RTL locales often use semicolon as list separator) splits on comma; RLM for cell text
     const RLM = '\u200F'; // Right-to-Left Mark for cell-level RTL
-    let csv = BOM;
+    let csv = EXCEL_UTF8_CSV_PREFIX
     
     // Keep header in RTL order (rightmost column first) - will display correctly when Excel is set to RTL
     const rtlHeader = header.map(h => RLM + h);
@@ -3556,6 +5035,47 @@ app.get('/api/users', async (c) => {
   }
 })
 
+// TEMP: HR backfill — remove endpoint + UI when migration complete
+app.post('/api/admin/sync-users-to-hr', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const superU = isSuperAdminUser(userInfo)
+    const companyAdmin = userInfo.roleId === 2
+    if (!superU && !companyAdmin) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    let tenantFilter: number | null = null
+    if (superU) {
+      const body = (await c.req.json().catch(() => ({}))) as { tenant_id?: unknown }
+      const raw = body?.tenant_id
+      if (raw != null && String(raw).trim() !== '') {
+        const p = parseInt(String(raw), 10)
+        tenantFilter = Number.isNaN(p) ? null : p
+      }
+    } else if (userInfo.tenantId != null && !Number.isNaN(Number(userInfo.tenantId))) {
+      tenantFilter = userInfo.tenantId
+    } else {
+      return c.json({ success: false, error: 'No tenant context' }, 400)
+    }
+
+    const { synced, skipped, errors } = await bulkSyncUsersToHrEmployees(c.env.DB, tenantFilter)
+    return c.json({
+      success: true,
+      message: 'تمت المزامنة',
+      synced,
+      skipped,
+      errors,
+      tenant_id: tenantFilter,
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message || 'Sync failed' }, 500)
+  }
+})
+
 // Add user
 app.post('/api/users', async (c) => {
   try {
@@ -3565,6 +5085,11 @@ app.post('/api/users', async (c) => {
     const full_name = formData.get('full_name')
     const email = formData.get('email')
     const phone = formData.get('phone')
+    const hr_section_raw = formData.get('hr_section')
+    const hr_section =
+      hr_section_raw != null && String(hr_section_raw).trim() !== ''
+        ? String(hr_section_raw).trim()
+        : null
     const role_id = formData.get('role_id')
     const subscription_id = formData.get('subscription_id') || null
     const is_active = formData.get('is_active') || '1'
@@ -3645,14 +5170,66 @@ app.post('/api/users', async (c) => {
     }
     
     const result = await c.env.DB.prepare(`
-      INSERT INTO users (username, password, full_name, email, phone, role_id, subscription_id, is_active, tenant_id, assigned_bank_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(username, password, full_name, email, phone, requestedRoleId, subscription_id, is_active, tenant_id, assigned_bank_id).run()
-    
-    return c.json({ 
-      success: true, 
+      INSERT INTO users (username, password, full_name, email, phone, hr_section, role_id, subscription_id, is_active, tenant_id, assigned_bank_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+      .bind(
+        username,
+        password,
+        full_name,
+        email,
+        phone,
+        hr_section,
+        requestedRoleId,
+        subscription_id,
+        is_active,
+        tenant_id,
+        assigned_bank_id
+      )
+      .run()
+
+    const newUserId = result.meta.last_row_id
+
+    const needsHrRow =
+      (requestedRoleId === 3 || requestedRoleId === 4 || requestedRoleId === 5) &&
+      typeof tenant_id === 'number' &&
+      !Number.isNaN(tenant_id)
+
+    if (needsHrRow && newUserId != null && Number(newUserId) > 0 && typeof tenant_id === 'number') {
+      try {
+        const hrTenantId = tenant_id
+        const emailStr = email != null && String(email).trim() !== '' ? String(email).trim() : null
+        const phoneStr = phone != null && String(phone).trim() !== '' ? String(phone).trim() : null
+        const fullStr = full_name != null ? String(full_name).trim() : ''
+        await syncNewUserToHrEmployees(c.env.DB, {
+          tenantId: hrTenantId,
+          userId: Number(newUserId),
+          roleId: requestedRoleId,
+          fullName: fullStr,
+          username: String(username ?? ''),
+          email: emailStr,
+          phone: phoneStr,
+          department: hr_section,
+        })
+      } catch (hrErr: any) {
+        console.error('Error syncing new user to hr_employees:', hrErr)
+        await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(newUserId).run()
+        return c.json(
+          {
+            success: false,
+            error:
+              hrErr?.message ||
+              'تم إنشاء الحساب لكن تعذر إضافة السجل في الموارد البشرية. لم يتم حفظ المستخدم.',
+          },
+          500
+        )
+      }
+    }
+
+    return c.json({
+      success: true,
       message: 'تم إضافة المستخدم بنجاح',
-      userId: result.meta.last_row_id 
+      userId: newUserId,
     })
   } catch (error: any) {
     console.error('Error adding user:', error)
@@ -3796,9 +5373,11 @@ app.get('/api/customers', async (c) => {
         c.*,
         COUNT(f.id) as total_requests,
         SUM(CASE WHEN f.status = 'pending' THEN 1 ELSE 0 END) as pending_requests,
-        SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests
+        SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
+        tl.name as enrollment_location_name
       FROM customers c
-      LEFT JOIN financing_requests f ON c.id = f.customer_id`
+      LEFT JOIN financing_requests f ON c.id = f.customer_id
+      LEFT JOIN tenant_locations tl ON c.location_id = tl.id`
     
     // Apply filtering based on role
     if (userInfo.roleId === 1) {
@@ -3838,6 +5417,118 @@ app.get('/api/customers', async (c) => {
     
     const { results } = await c.env.DB.prepare(query).all()
     return c.json({ success: true, data: results })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Download sample CSV template for customers
+app.get('/api/customers/sample-csv', async (c) => {
+  try {
+    // Keep header aligned with Customers table/export
+    const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل']
+    const rows = [
+      ['', 'محمد أحمد', '512345678', 'user@example.com', '', '', '', '', '1234567890', ''],
+      ['', 'سارة علي', '501234567', '', '', '', '', '', '', '']
+    ]
+    const csv = EXCEL_UTF8_CSV_PREFIX + [header, ...rows].map((r) => r.join(',')).join('\r\n') + '\r\n'
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8;',
+        'Content-Disposition': 'attachment; filename="customers_sample.csv"'
+      }
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Import customers from CSV (parsed client-side and sent as JSON)
+app.post('/api/customers/import-csv', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (userInfo.roleId === 3) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const body = await c.req.json().catch(() => null) as any
+    const incoming = body?.customers
+    if (!Array.isArray(incoming) || incoming.length === 0) {
+      return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
+    }
+
+    // Resolve tenant scope
+    let tenant_id: number | null = userInfo.tenantId != null ? Number(userInfo.tenantId) : null
+    if (!tenant_id && userInfo.roleId === 1) {
+      const tidFromBody = Number.parseInt(String(body?.tenant_id ?? ''), 10)
+      if (!Number.isNaN(tidFromBody) && tidFromBody > 0) tenant_id = tidFromBody
+    }
+    if (!tenant_id) {
+      const defaultTenant = await c.env.DB.prepare(
+        `SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1`
+      ).first<{ id: number }>()
+      if (defaultTenant?.id) tenant_id = defaultTenant.id
+    }
+    if (!tenant_id) {
+      return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+    }
+
+    let created = 0
+    let updated = 0
+    const errors: string[] = []
+
+    for (let i = 0; i < incoming.length; i++) {
+      const row = incoming[i] || {}
+      try {
+        const full_name = String(row.full_name ?? row.name ?? '').trim()
+        const rawPhone = String(row.phone ?? '').trim()
+        if (!full_name) {
+          errors.push(`Row ${i + 1}: full_name is required`)
+          continue
+        }
+        const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
+        if (!normalizedPhoneResult.normalized) {
+          errors.push(`Row ${i + 1}: phone invalid (${normalizedPhoneResult.error || rawPhone})`)
+          continue
+        }
+        const phone = normalizedPhoneResult.normalized
+        const email = row.email != null && String(row.email).trim() ? String(row.email).trim() : null
+        const national_id =
+          row.national_id != null && String(row.national_id).trim() ? String(row.national_id).trim() : null
+
+        const existing = await c.env.DB.prepare(
+          `SELECT id FROM customers WHERE phone = ? AND tenant_id = ? LIMIT 1`
+        ).bind(phone, tenant_id).first<{ id: number }>()
+
+        if (existing?.id) {
+          await c.env.DB.prepare(
+            `UPDATE customers
+             SET full_name = ?, email = ?, national_id = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND tenant_id = ?`
+          ).bind(full_name, email, national_id, existing.id, tenant_id).run()
+          updated++
+        } else {
+          await c.env.DB.prepare(
+            `INSERT INTO customers (full_name, phone, email, national_id, tenant_id)
+             VALUES (?, ?, ?, ?, ?)`
+          ).bind(full_name, phone, email, national_id, tenant_id).run()
+          created++
+        }
+      } catch (e: any) {
+        errors.push(`Row ${i + 1}: ${e?.message || String(e)}`)
+      }
+    }
+
+    return c.json({
+      success: true,
+      created,
+      updated,
+      errors: errors.length ? errors : undefined,
+      message: `تمت إضافة ${created} وتحديث ${updated}`
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -3941,6 +5632,42 @@ app.post('/api/customers', async (c) => {
 
     if (!tenant_id) {
       throw new Error('Missing tenant context for customer creation')
+    }
+
+    const activeLocCountRow = await c.env.DB.prepare(
+      `SELECT COUNT(*) as n FROM tenant_locations WHERE tenant_id = ? AND is_active = 1`
+    )
+      .bind(tenant_id)
+      .first<{ n: number }>()
+    const activeLocationCount = Number(activeLocCountRow?.n ?? 0)
+
+    const locationIdRaw = formData.get('location_id')
+    let resolvedLocationId: number | null = null
+    if (locationIdRaw != null && String(locationIdRaw).trim() !== '') {
+      const lid = Number.parseInt(String(locationIdRaw), 10)
+      if (!Number.isFinite(lid) || lid <= 0) {
+        return c.html(
+          `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع غير صالح</h1><p class="text-amber-800 mt-2">يرجى اختيار موقع تسجيل صحيح.</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
+          400
+        )
+      }
+      const locOk = await c.env.DB.prepare(
+        `SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1`
+      )
+        .bind(lid, tenant_id)
+        .first<{ id: number }>()
+      if (!locOk) {
+        return c.html(
+          `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة</h1><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
+          400
+        )
+      }
+      resolvedLocationId = lid
+    } else if (activeLocationCount > 0) {
+      return c.html(
+        `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع الذي سُجّل فيه العميل.</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
+        400
+      )
     }
     
     // Check if national_id already exists within the same tenant
@@ -4085,7 +5812,8 @@ app.post('/api/customers', async (c) => {
       tax_exemption_attachment_url,
       additional_1_attachment_url,
       additional_2_attachment_url,
-      additional_3_attachment_url
+      additional_3_attachment_url,
+      resolvedLocationId,
     ] as const
     let result: { meta?: { last_row_id?: number } }
     try {
@@ -4096,14 +5824,31 @@ app.post('/api/customers', async (c) => {
         basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
         identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
         additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url,
+        location_id,
+        solutions_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(...insertBind, solutions_json).run() as { meta?: { last_row_id?: number } }
+    } catch (e: unknown) {
+      if (isMissingCustomerLocationIdColumnError(e)) {
+        try {
+          result = await c.env.DB.prepare(`
+      INSERT INTO customers (
+        full_name, phone, email, national_id, birthdate, dob_calendar_type,
+        employer_name, job_type, job_title, military_rank, work_start_date, city,
+        basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+        identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+        additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url,
         solutions_json
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...insertBind, solutions_json).run() as { meta?: { last_row_id?: number } }
-    } catch (e: unknown) {
-      if (isMissingCustomerSolutionsColumnError(e)) {
-        try {
-          result = await c.env.DB.prepare(`
+    `)
+            .bind(...insertBind.slice(0, -1), solutions_json)
+            .run() as { meta?: { last_row_id?: number } }
+        } catch (e2: unknown) {
+          if (isMissingCustomerSolutionsColumnError(e2)) {
+            try {
+              result = await c.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, birthdate, dob_calendar_type,
             employer_name, job_type, job_title, military_rank, work_start_date, city,
@@ -4112,13 +5857,87 @@ app.post('/api/customers', async (c) => {
             additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...insertBind).run() as { meta?: { last_row_id?: number } }
-        } catch (innerError: unknown) {
-          if (!isMissingCustomerAttachmentsColumnError(innerError)) throw innerError
-          result = await c.env.DB.prepare(`
+        `)
+                .bind(...insertBind.slice(0, -1))
+                .run() as { meta?: { last_row_id?: number } }
+            } catch (innerError: unknown) {
+              if (!isMissingCustomerAttachmentsColumnError(innerError)) throw innerError
+              result = await c.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...insertBind.slice(0, 16)).run() as { meta?: { last_row_id?: number } }
+        `)
+                .bind(...insertBind.slice(0, 16))
+                .run() as { meta?: { last_row_id?: number } }
+            }
+          } else if (isMissingCustomerAttachmentsColumnError(e2)) {
+            try {
+              result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+                .bind(...insertBind.slice(0, 16), solutions_json)
+                .run() as { meta?: { last_row_id?: number } }
+            } catch (innerError: unknown) {
+              if (!isMissingCustomerSolutionsColumnError(innerError)) throw innerError
+              result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+                .bind(...insertBind.slice(0, 16))
+                .run() as { meta?: { last_row_id?: number } }
+            }
+          } else {
+            throw e2
+          }
+        }
+      } else if (isMissingCustomerSolutionsColumnError(e)) {
+        try {
+          result = await c.env.DB.prepare(`
+          INSERT INTO customers (
+            full_name, phone, email, national_id, birthdate, dob_calendar_type,
+            employer_name, job_type, job_title, military_rank, work_start_date, city,
+            basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+            identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+            additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url,
+            location_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+            .bind(...insertBind)
+            .run() as { meta?: { last_row_id?: number } }
+        } catch (innerError: unknown) {
+          if (isMissingCustomerLocationIdColumnError(innerError)) {
+            try {
+              result = await c.env.DB.prepare(`
+          INSERT INTO customers (
+            full_name, phone, email, national_id, birthdate, dob_calendar_type,
+            employer_name, job_type, job_title, military_rank, work_start_date, city,
+            basic_salary, monthly_salary, tenant_id, notes, enrollment_source, enrollment_source_label,
+            identity_attachment_url, signature_attachment_url, salary_profile_attachment_url, gosi_attachment_url, tax_exemption_attachment_url,
+            additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+                .bind(...insertBind.slice(0, -1))
+                .run() as { meta?: { last_row_id?: number } }
+            } catch (inner2: unknown) {
+              if (!isMissingCustomerAttachmentsColumnError(inner2)) throw inner2
+              result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+                .bind(...insertBind.slice(0, 16))
+                .run() as { meta?: { last_row_id?: number } }
+            }
+          } else if (!isMissingCustomerAttachmentsColumnError(innerError)) throw innerError
+          else {
+            result = await c.env.DB.prepare(`
+          INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+              .bind(...insertBind.slice(0, 16))
+              .run() as { meta?: { last_row_id?: number } }
+          }
         }
       } else if (isMissingCustomerAttachmentsColumnError(e)) {
         try {
@@ -4292,6 +6111,57 @@ app.post('/api/customers/:id', async (c) => {
       null
     const additional_2_attachment_url = (formData.get('additional_2_attachment_url') as string | null)?.trim() || null
     const additional_3_attachment_url = (formData.get('additional_3_attachment_url') as string | null)?.trim() || null
+
+    const enrollmentTenantRow = await c.env.DB.prepare('SELECT tenant_id FROM customers WHERE id = ?').bind(id).first() as { tenant_id: number | null } | null
+    if (!enrollmentTenantRow) {
+      return c.json({ success: false, error: 'Customer not found' }, 404)
+    }
+    const enrollmentTenantId = enrollmentTenantRow.tenant_id
+    let resolvedLocationId: number | null = null
+    if (enrollmentTenantId) {
+      const activeLocCountRow = await c.env.DB.prepare(
+        `SELECT COUNT(*) as n FROM tenant_locations WHERE tenant_id = ? AND is_active = 1`
+      )
+        .bind(enrollmentTenantId)
+        .first<{ n: number }>()
+      const activeLocationCount = Number(activeLocCountRow?.n ?? 0)
+      const locationIdRaw = formData.get('location_id')
+      if (locationIdRaw != null && String(locationIdRaw).trim() !== '') {
+        const lid = Number.parseInt(String(locationIdRaw), 10)
+        if (!Number.isFinite(lid) || lid <= 0) {
+          return c.html(
+            `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع غير صالح</h1><p class="text-amber-800 mt-2">يرجى اختيار موقع تسجيل صحيح.</p><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
+            400
+          )
+        }
+        let locOk = await c.env.DB.prepare(
+          `SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1`
+        )
+          .bind(lid, enrollmentTenantId)
+          .first<{ id: number }>()
+        if (!locOk) {
+          const stillCurrent = await c.env.DB.prepare(
+            `SELECT c.location_id AS lid FROM customers c
+             INNER JOIN tenant_locations tl ON tl.id = c.location_id AND tl.tenant_id = ?
+             WHERE c.id = ? AND c.location_id = ? LIMIT 1`
+          )
+            .bind(enrollmentTenantId, id, lid)
+            .first<{ lid: number }>()
+          if (!stillCurrent) {
+            return c.html(
+              `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة أو غير مفعّل</h1><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
+              400
+            )
+          }
+        }
+        resolvedLocationId = lid
+      } else if (activeLocationCount > 0) {
+        return c.html(
+          `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع المرتبط بالعميل.</p><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
+          400
+        )
+      }
+    }
     
     const updateBind = [
       full_name,
@@ -4368,6 +6238,11 @@ app.post('/api/customers/:id', async (c) => {
       } else {
         throw e
       }
+    }
+    try {
+      await c.env.DB.prepare(`UPDATE customers SET location_id = ? WHERE id = ?`).bind(resolvedLocationId, id).run()
+    } catch (locErr: unknown) {
+      if (!isMissingCustomerLocationIdColumnError(locErr)) throw locErr
     }
     const obligationsJson = formData.get('obligations_json') as string | null
     if (obligationsJson) {
@@ -4570,9 +6445,11 @@ app.get('/api/financing-requests', async (c) => {
         b.bank_name as selected_bank_name,
         ft.type_name as financing_type_name,
         ca.employee_id as assigned_employee_id,
-        u.full_name as assigned_employee_name
+        u.full_name as assigned_employee_name,
+        tl.name as enrollment_location_name
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
+      LEFT JOIN tenant_locations tl ON c.location_id = tl.id
       LEFT JOIN banks b ON f.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
@@ -4873,6 +6750,25 @@ app.post('/api/requests', async (c) => {
         return c.json({ success: false, error: 'غير مصرح: العميل غير مخصص لك' }, 403)
       }
     }
+    // Bank agents (role 5): same as employees for existing scope, OR first touch on a new customer by assigning themselves on this request
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      const custRow = customer as { id: number; tenant_id: number | null }
+      const hasAccess = await canUserAccessCustomer(c.env.DB, userInfo, custRow)
+      const selfAssign =
+        userInfo.userId != null &&
+        assigned_bank_agent_id != null &&
+        Number(assigned_bank_agent_id) === Number(userInfo.userId)
+      if (!hasAccess && !selfAssign) {
+        return c.json(
+          {
+            success: false,
+            error:
+              'غير مصرح: اختر نفسك كموظف تمويل على هذا الطلب لربط العميل بك، أو اختر عميلاً مرتبطًا بطلباتك',
+          },
+          403
+        )
+      }
+    }
 
     const tenant_id = userInfo.roleId === 1 ? customer.tenant_id : userInfo.tenantId
 
@@ -4917,6 +6813,254 @@ app.post('/api/requests', async (c) => {
   } catch (error: any) {
     console.error('Error creating request:', error)
     return c.json({ success: false, error: error.message, message: 'حدث خطأ أثناء حفظ الطلب' }, 500)
+  }
+})
+
+// Download sample CSV template for financing requests
+app.get('/api/requests/sample-csv', async (c) => {
+  try {
+    // Keep header aligned with Requests table/export
+    const header = ['العميل', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ']
+    const rows = [
+      ['محمد أحمد', '', '', 'الراجحي', '50000', '60', 'pending', ''],
+      ['سارة علي', '', '', '', '250000', '48', 'under_review', '']
+    ]
+    const csv = EXCEL_UTF8_CSV_PREFIX + [header, ...rows].map((r) => r.join(',')).join('\r\n') + '\r\n'
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8;',
+        'Content-Disposition': 'attachment; filename="requests_sample.csv"'
+      }
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Import financing requests from CSV (parsed client-side and sent as JSON)
+app.post('/api/requests/import-csv', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+
+    const body = await c.req.json().catch(() => null) as any
+    const incoming = body?.requests
+    if (!Array.isArray(incoming) || incoming.length === 0) {
+      return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
+    }
+
+    let created = 0
+    const errors: string[] = []
+
+    for (let i = 0; i < incoming.length; i++) {
+      const row = incoming[i] || {}
+      try {
+        // Resolve customer
+        const customerNameRaw =
+          row.customer_name != null && String(row.customer_name).trim()
+            ? String(row.customer_name).trim()
+            : (row.customer != null && String(row.customer).trim() ? String(row.customer).trim() : '')
+        const customerIdRaw = row.customer_id != null && String(row.customer_id).trim() ? String(row.customer_id).trim() : ''
+        let customerId: number | null = null
+        if (customerIdRaw) {
+          const n = Number.parseInt(customerIdRaw, 10)
+          if (!Number.isNaN(n) && n > 0) customerId = n
+        }
+        if (!customerId) {
+          if (customerNameRaw) {
+            if (userInfo.roleId !== 1) {
+              if (!userInfo.tenantId) {
+                errors.push(`Row ${i + 1}: missing tenant scope`)
+                continue
+              }
+              const matches = await c.env.DB.prepare(
+                `SELECT id, tenant_id FROM customers WHERE full_name = ? AND tenant_id = ? ORDER BY id DESC LIMIT 2`
+              ).bind(customerNameRaw, userInfo.tenantId).all()
+              const rows = (matches?.results || []) as Array<{ id?: number; tenant_id?: number | null }>
+              if (rows.length === 0) {
+                // fall back to phone below
+              } else if (rows.length > 1) {
+                errors.push(`Row ${i + 1}: multiple customers match this name`)
+                continue
+              } else {
+                customerId = rows[0]?.id != null ? Number(rows[0].id) : null
+              }
+            } else {
+              const matches = await c.env.DB.prepare(
+                `SELECT id, tenant_id FROM customers WHERE full_name = ? ORDER BY id DESC LIMIT 2`
+              ).bind(customerNameRaw).all()
+              const rows = (matches?.results || []) as Array<{ id?: number; tenant_id?: number | null }>
+              if (rows.length === 0) {
+                // fall back to phone below
+              } else if (rows.length > 1) {
+                errors.push(`Row ${i + 1}: multiple customers match this name`)
+                continue
+              } else {
+                customerId = rows[0]?.id != null ? Number(rows[0].id) : null
+              }
+            }
+          }
+        }
+        if (!customerId) {
+          const rawPhone = String(row.customer_phone ?? row.phone ?? '').trim()
+          const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
+          if (!normalizedPhoneResult.normalized) {
+            errors.push(`Row ${i + 1}: customer_phone invalid`)
+            continue
+          }
+          const phone = normalizedPhoneResult.normalized
+          // Scope by tenant for non-superadmins
+          if (userInfo.roleId !== 1) {
+            if (!userInfo.tenantId) {
+              errors.push(`Row ${i + 1}: missing tenant scope`)
+              continue
+            }
+            const cust = await c.env.DB.prepare(
+              `SELECT id, tenant_id FROM customers WHERE phone = ? AND tenant_id = ? LIMIT 1`
+            ).bind(phone, userInfo.tenantId).first<{ id: number; tenant_id: number | null }>()
+            if (!cust?.id) {
+              errors.push(`Row ${i + 1}: customer not found for this company`)
+              continue
+            }
+            customerId = Number(cust.id)
+          } else {
+            const cust = await c.env.DB.prepare(
+              `SELECT id, tenant_id FROM customers WHERE phone = ? ORDER BY id DESC LIMIT 1`
+            ).bind(phone).first<{ id: number; tenant_id: number | null }>()
+            if (!cust?.id) {
+              errors.push(`Row ${i + 1}: customer not found`)
+              continue
+            }
+            customerId = Number(cust.id)
+          }
+        }
+
+        const customer = await c.env.DB.prepare(
+          `SELECT id, tenant_id FROM customers WHERE id = ?`
+        ).bind(customerId).first<{ id: number; tenant_id: number | null }>()
+        if (!customer?.id) {
+          errors.push(`Row ${i + 1}: customer not found`)
+          continue
+        }
+
+        // Enforce tenant scope for non-superadmins
+        if (userInfo.roleId !== 1) {
+          if (!userInfo.tenantId) {
+            errors.push(`Row ${i + 1}: يجب تحديد الشركة`)
+            continue
+          }
+          if (customer.tenant_id !== userInfo.tenantId) {
+            errors.push(`Row ${i + 1}: forbidden tenant`)
+            continue
+          }
+        }
+        // Employees can create requests only for customers assigned to them
+        if (userInfo.roleId === 4) {
+          if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) {
+            errors.push(`Row ${i + 1}: customer not assigned`)
+            continue
+          }
+        }
+
+        const ridCsv = normalizeRoleId(userInfo.roleId)
+        const assigned_bank_agent_csv =
+          ridCsv === 5 && userInfo.userId != null ? userInfo.userId : null
+
+        const tenant_id = userInfo.roleId === 1 ? customer.tenant_id : userInfo.tenantId
+        if (userInfo.roleId !== 1 && !tenant_id) {
+          errors.push(`Row ${i + 1}: tenant missing`)
+          continue
+        }
+
+        const requested_amount = Number.parseFloat(String(row.requested_amount ?? row.amount ?? ''))
+        if (!Number.isFinite(requested_amount) || requested_amount <= 0) {
+          errors.push(`Row ${i + 1}: requested_amount invalid`)
+          continue
+        }
+        const duration_months_raw = row.duration_months != null ? String(row.duration_months).trim() : ''
+        const duration_months = duration_months_raw ? Number.parseInt(duration_months_raw, 10) : null
+        const salary_at_request_raw = row.salary_at_request != null ? String(row.salary_at_request).trim() : ''
+        const salary_at_request = salary_at_request_raw ? Number.parseFloat(salary_at_request_raw) : null
+
+        // financing_type: id or name
+        let financing_type_id: number | null = null
+        const ft = row.financing_type_id ?? row.financing_type ?? row.type ?? null
+        if (ft != null && String(ft).trim() !== '') {
+          const ftStr = String(ft).trim()
+          const ftId = Number.parseInt(ftStr, 10)
+          if (!Number.isNaN(ftId) && ftId > 0) {
+            financing_type_id = ftId
+          } else {
+            const typeRow = await c.env.DB.prepare(
+              `SELECT id FROM financing_types WHERE type_name = ? ORDER BY id DESC LIMIT 1`
+            ).bind(ftStr).first<{ id: number }>()
+            if (typeRow?.id) financing_type_id = Number(typeRow.id)
+          }
+        }
+
+        // selected_bank: id or name (optional)
+        let selected_bank_id: number | null = null
+        const bank = row.selected_bank_id ?? row.selected_bank ?? row.bank ?? null
+        if (bank != null && String(bank).trim() !== '') {
+          const bStr = String(bank).trim()
+          const bId = Number.parseInt(bStr, 10)
+          if (!Number.isNaN(bId) && bId > 0) {
+            selected_bank_id = bId
+          } else {
+            if (tenant_id != null) {
+              const bankRow = await c.env.DB.prepare(
+                `SELECT id FROM banks WHERE bank_name = ? AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY tenant_id DESC, id DESC LIMIT 1`
+              ).bind(bStr, tenant_id).first<{ id: number }>()
+              if (bankRow?.id) selected_bank_id = Number(bankRow.id)
+            } else {
+              const bankRow = await c.env.DB.prepare(
+                `SELECT id FROM banks WHERE bank_name = ? ORDER BY id DESC LIMIT 1`
+              ).bind(bStr).first<{ id: number }>()
+              if (bankRow?.id) selected_bank_id = Number(bankRow.id)
+            }
+          }
+        }
+
+        const status =
+          row.status != null && String(row.status).trim() ? String(row.status).trim() : 'pending'
+        const notes = row.notes != null && String(row.notes).trim() ? String(row.notes).trim() : ''
+
+        await c.env.DB.prepare(
+          `INSERT INTO financing_requests (
+            customer_id, financing_type_id, selected_bank_id,
+            requested_amount, salary_at_request, duration_months,
+            status, notes, tenant_id, created_by, assigned_bank_agent_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          customerId,
+          financing_type_id,
+          selected_bank_id,
+          requested_amount,
+          salary_at_request,
+          duration_months,
+          status,
+          notes,
+          tenant_id,
+          userInfo.userId,
+          assigned_bank_agent_csv
+        ).run()
+
+        created++
+      } catch (e: any) {
+        errors.push(`Row ${i + 1}: ${e?.message || String(e)}`)
+      }
+    }
+
+    return c.json({
+      success: true,
+      created,
+      errors: errors.length ? errors : undefined,
+      message: `تمت إضافة ${created} طلب`
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
   }
 })
 
@@ -5031,9 +7175,6 @@ app.post('/api/workflow/update-stage', async (c) => {
   try {
     const requester = await getUserInfo(c)
     if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (normalizeRoleId(requester.roleId) === 5) {
-      return c.json({ success: false, error: 'Forbidden' }, 403)
-    }
     const { requestId, newStageId, notes, userId } = await c.req.json()
 
     const stage = await c.env.DB.prepare(`
@@ -5911,6 +8052,15 @@ app.post('/api/calculator/submit-request', async (c) => {
 app.put('/api/financing-requests/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const normRid = normalizeRoleId(userInfo.roleId)
+    if (normRid === 3) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
     const authHeader = c.req.header('Authorization')
     let tenantId = null
     
@@ -5921,6 +8071,48 @@ app.put('/api/financing-requests/:id', async (c) => {
       if (parts.length === 3) {
         const payload = JSON.parse(atob(parts[1]))
         tenantId = payload.tenant_id || null
+      }
+    }
+
+    if (normRid === 5) {
+      const scopeRow = await c.env.DB.prepare(`
+        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.tenant_id, c.tenant_id AS customer_tenant_id
+        FROM financing_requests fr
+        LEFT JOIN customers c ON fr.customer_id = c.id
+        WHERE fr.id = ?
+      `)
+        .bind(id)
+        .first() as {
+          id?: number
+          customer_id?: number | null
+          assigned_bank_agent_id?: number | null
+          tenant_id?: number | null
+          customer_tenant_id?: number | null
+        } | null
+      if (!scopeRow?.id) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const tid = userInfo.tenantId
+      if (!tid) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const rowTenant = scopeRow.tenant_id != null ? Number(scopeRow.tenant_id) : Number(scopeRow.customer_tenant_id)
+      if (Number(tid) !== rowTenant) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const assignedAgentId = Number(scopeRow.assigned_bank_agent_id)
+      const customerId = scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null
+      const custTid =
+        scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null
+      if (
+        assignedAgentId !== Number(userInfo.userId) &&
+        (customerId == null ||
+          !(await canUserAccessCustomer(c.env.DB, userInfo, {
+            id: customerId,
+            tenant_id: custTid
+          })))
+      ) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
       }
     }
     
@@ -5972,8 +8164,9 @@ app.put('/api/financing-requests/:id', async (c) => {
       WHERE id = ?
     `
     
-    // Add tenant_id filter if not SuperAdmin
-    if (tenantId !== null) {
+    // Add tenant_id filter if not SuperAdmin. Bank agents (5) already scoped above;
+    // rows may use customer tenant only (fr.tenant_id NULL) — JWT tenant would block the update.
+    if (tenantId !== null && normRid !== 5) {
       updateQuery += ' AND tenant_id = ?'
       params.push(tenantId)
     }
@@ -6289,9 +8482,6 @@ app.post('/api/customer-reviews', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      return c.json({ success: false, error: 'Forbidden' }, 403)
-    }
     const { customer_id, customer_name, rating, note } = await c.req.json()
     if (!customer_id || !customer_name || !rating) {
       return c.json({ success: false, error: 'customer_id, customer_name, and rating are required' }, 400)
@@ -6378,9 +8568,6 @@ app.delete('/api/customer-reviews/:id', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      return c.json({ success: false, error: 'Forbidden' }, 403)
-    }
     const id = c.req.param('id')
     await c.env.DB.prepare(`DELETE FROM customer_reviews WHERE id = ?`).bind(id).run()
     return c.json({ success: true })
@@ -6915,12 +9102,62 @@ app.delete('/api/customers/:id', async (c) => {
 app.delete('/api/financing-requests/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const normRid = normalizeRoleId(userInfo.roleId)
+    if (normRid === 3) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    if (normRid === 5) {
+      const scopeRow = await c.env.DB.prepare(`
+        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.tenant_id, c.tenant_id AS customer_tenant_id
+        FROM financing_requests fr
+        LEFT JOIN customers c ON fr.customer_id = c.id
+        WHERE fr.id = ?
+      `)
+        .bind(id)
+        .first() as {
+          id?: number
+          customer_id?: number | null
+          assigned_bank_agent_id?: number | null
+          tenant_id?: number | null
+          customer_tenant_id?: number | null
+        } | null
+      if (!scopeRow?.id) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const tid = userInfo.tenantId
+      if (!tid) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const rowTenant = scopeRow.tenant_id != null ? Number(scopeRow.tenant_id) : Number(scopeRow.customer_tenant_id)
+      if (Number(tid) !== rowTenant) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+      const assignedAgentId = Number(scopeRow.assigned_bank_agent_id)
+      const customerId = scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null
+      const custTid =
+        scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null
+      if (
+        assignedAgentId !== Number(userInfo.userId) &&
+        (customerId == null ||
+          !(await canUserAccessCustomer(c.env.DB, userInfo, {
+            id: customerId,
+            tenant_id: custTid
+          })))
+      ) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+    }
+
     const result = await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
-    
+
     if (result.meta.changes === 0) {
       return c.json({ success: false, error: 'الطلب غير موجود' }, 404)
     }
-    
+
     return c.json({ success: true, message: 'تم حذف الطلب بنجاح' })
   } catch (error: any) {
     console.error('Error deleting financing request:', error)
@@ -7356,12 +9593,14 @@ app.get('/admin', (c) => {
     </head>
     <body>
         <script>
-            // Check if user is logged in
+            // Check if user is logged in (localStorage or auth cookie — server reads cookie for real pages)
             const authToken = localStorage.getItem('authToken');
             const userData = localStorage.getItem('userData');
+            const hasAuthCookie = typeof document !== 'undefined' && document.cookie.split(';').some(function (c) {
+              return c.trim().indexOf('authToken=') === 0;
+            });
             
-            if (authToken && userData) {
-                // User is logged in, load admin panel
+            if ((authToken && userData) || hasAuthCookie) {
                 window.location.replace('/admin/panel');
             } else {
                 // User is not logged in, show login required page
@@ -8202,7 +10441,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
         
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">
               <i class="fas fa-arrow-right ml-2"></i>
               العودة للوحة التحكم
             </a>
@@ -8500,8 +10739,8 @@ app.get('/admin/reports/requests-followup', async (c) => {
               return;
             }
             
-            // Create CSV content
-            let csv = 'رقم,اسم العميل,رقم الهاتف,الموظف المخصص,تاريخ تقديم الطلب,المدة المنقضية (أيام),المبلغ المطلوب,حالة الطلب\\n';
+            // Create CSV content (sep=, so Excel RTL/Arabic locales split columns on comma)
+            let csv = '\\uFEFFsep=,\\r\\n' + 'رقم,اسم العميل,رقم الهاتف,الموظف المخصص,تاريخ تقديم الطلب,المدة المنقضية (أيام),المبلغ المطلوب,حالة الطلب\\n';
             
             reportData.forEach((row, index) => {
               const statusNames = {
@@ -8524,8 +10763,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
             });
             
             // Create download link
-            const BOM = "\\uFEFF";
-            const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             
@@ -8688,6 +10926,20 @@ app.get('/admin/tenants/add', (c) => {
                                 >
                                 <p class="text-xs text-gray-500 mt-1">حروف صغيرة وأرقام وشرطات فقط</p>
                             </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    اسم الموقع الرئيسي <span class="text-red-500">*</span>
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="location_name"
+                                    required
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="مثال: الفرع الرئيسي — الرياض"
+                                    dir="rtl"
+                                >
+                                <p class="text-xs text-gray-500 mt-1">يُنشأ بهذا الاسم أول موقع للشركة (يمكن إضافة فروع لاحقاً من إعدادات الشركة).</p>
+                            </div>
                         </div>
                     </div>
                     
@@ -8726,7 +10978,7 @@ app.get('/admin/tenants/add', (c) => {
                     <div>
                         <h2 class="text-xl font-bold text-gray-700 mb-4">
                             <i class="fas fa-address-card ml-2"></i>
-                            معلومات الاتصال (اختياري)
+                            موقع الشركة والاتصال
                         </h2>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
@@ -8746,6 +10998,27 @@ app.get('/admin/tenants/add', (c) => {
                                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                     placeholder="+966501234567"
                                 >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">المدينة <span class="text-red-500">*</span></label>
+                                <select id="city" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white" dir="rtl">
+                                    ${buildSaudiCitySelectOptionsHtml()}
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">العنوان التفصيلي <span class="text-red-500">*</span></label>
+                                <textarea id="address" required rows="3" maxlength="2000" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 resize-y min-h-[5rem]" placeholder="الحي، الشارع، المبنى…" dir="rtl"></textarea>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">رابط شعار الشركة (اختياري)</label>
+                                <input 
+                                    type="url" 
+                                    id="logo_url"
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="https://example.com/logo.png"
+                                    dir="ltr"
+                                >
+                                <p class="text-xs text-gray-500 mt-1">يظهر في صفحة التواصل العامة (<code class="text-xs bg-gray-100 px-1 rounded">/slug</code>) وفي نماذج روابط الإحالة.</p>
                             </div>
                         </div>
                     </div>
@@ -8791,11 +11064,15 @@ app.get('/admin/tenants/add', (c) => {
                 const data = {
                     company_name: document.getElementById('company_name').value,
                     slug: document.getElementById('slug').value,
+                    location_name: document.getElementById('location_name').value.trim(),
                     status: document.getElementById('status').value,
                     max_users: parseInt(document.getElementById('max_users').value),
                     subdomain: null,
                     contact_email: document.getElementById('contact_email').value || null,
-                    contact_phone: document.getElementById('contact_phone').value || null
+                    contact_phone: document.getElementById('contact_phone').value || null,
+                    city: (document.getElementById('city').value || '').trim() || null,
+                    address: (document.getElementById('address').value || '').trim() || null,
+                    logo_url: (document.getElementById('logo_url').value || '').trim() || null
                 };
                 
                 try {
@@ -8965,6 +11242,28 @@ app.get('/admin/tenants/:tenantRef/edit', async (c) => {
                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                                   >
                               </div>
+                              <div>
+                                  <label class="block text-sm font-medium text-gray-700 mb-2">المدينة</label>
+                                  <select id="city" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white" dir="rtl">
+                                      ${buildSaudiCitySelectOptionsHtml(String((tenant as { city?: string | null }).city ?? ''))}
+                                  </select>
+                              </div>
+                              <div class="md:col-span-2">
+                                  <label class="block text-sm font-medium text-gray-700 mb-2">العنوان التفصيلي (اختياري)</label>
+                                  <textarea id="address" rows="3" maxlength="2000" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 resize-y min-h-[5rem]" placeholder="الحي، الشارع…" dir="rtl">${escapeHtml(String((tenant as { address?: string | null }).address ?? ''))}</textarea>
+                              </div>
+                              <div class="md:col-span-2">
+                                  <label class="block text-sm font-medium text-gray-700 mb-2">رابط شعار الشركة (اختياري)</label>
+                                  <input 
+                                      type="url" 
+                                      id="logo_url"
+                                      value="${escapeHtmlAttr(String((tenant as { logo_url?: string | null }).logo_url ?? ''))}"
+                                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                                      placeholder="https://example.com/logo.png"
+                                      dir="ltr"
+                                  >
+                                  <p class="text-xs text-gray-500 mt-1">يظهر في صفحة التواصل العامة وروابط الإحالة.</p>
+                              </div>
                           </div>
                       </div>
                       
@@ -9002,7 +11301,10 @@ app.get('/admin/tenants/:tenantRef/edit', async (c) => {
                       max_users: parseInt(document.getElementById('max_users').value),
                       subdomain: null,
                       contact_email: document.getElementById('contact_email').value || null,
-                      contact_phone: document.getElementById('contact_phone').value || null
+                      contact_phone: document.getElementById('contact_phone').value || null,
+                      city: (document.getElementById('city').value || '').trim() || null,
+                      address: (document.getElementById('address').value || '').trim() || null,
+                      logo_url: (document.getElementById('logo_url').value || '').trim() || null
                   };
                   
                   try {
@@ -9182,6 +11484,14 @@ app.get('/admin/tenants/:tenantRef', async (c) => {
                               <p class="text-lg text-gray-900">${tenant.contact_phone || '-'}</p>
                           </div>
                           <div>
+                              <label class="block text-sm font-medium text-gray-500 mb-1">المدينة</label>
+                              <p class="text-lg text-gray-900">${(tenant as { city?: string | null }).city || '-'}</p>
+                          </div>
+                          <div class="md:col-span-2">
+                              <label class="block text-sm font-medium text-gray-500 mb-1">العنوان التفصيلي</label>
+                              <p class="text-lg text-gray-900 whitespace-pre-wrap">${escapeHtml(String((tenant as { address?: string | null }).address || '')) || '-'}</p>
+                          </div>
+                          <div>
                               <label class="block text-sm font-medium text-gray-500 mb-1">تاريخ الإنشاء</label>
                               <p class="text-lg text-gray-900">${new Date(tenant.created_at).toLocaleDateString('ar-SA')}</p>
                           </div>
@@ -9245,6 +11555,17 @@ app.get('/admin/tenants', (c) => c.html(tenantsPage))
 app.get('/admin/tenant-calculators', (c) => c.html(tenantCalculatorsPage))
 app.get('/admin/saas-settings', (c) => c.html(saasSettingsPage))
 app.get('/admin/settings', (c) => c.html(saasSettingsPage))
+app.get('/admin/company-settings', (c) => c.html(companySettingsPage))
+app.get('/admin/company-settings/locations/new', (c) => c.html(companyLocationNewPage))
+app.get('/admin/company-settings/locations/:id/edit', (c) => {
+  const raw = c.req.param('id')
+  const id = String(raw ?? '').trim()
+  if (!/^\d+$/.test(id)) {
+    return c.notFound()
+  }
+  return c.html(buildCompanyLocationEditPage(id))
+})
+app.get('/admin/company-settings/locations', (c) => c.html(companyLocationsListPage))
 app.get('/admin/reports', (c) => c.html(reportsPage))
 app.get('/admin/reports/customers', (c) => c.html(customersReportPage))
 app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
@@ -9490,7 +11811,7 @@ app.get('/admin/dashboard', async (c) => {
           <!-- Header -->
           <div class="flex justify-between items-center mb-8 no-print">
             <div>
-              <a href="/admin" class="text-blue-600 hover:text-blue-800 text-sm mb-2 inline-block">
+              <a href="/admin/panel" class="text-blue-600 hover:text-blue-800 text-sm mb-2 inline-block">
                 <i class="fas fa-arrow-right ml-1"></i>
                 العودة للوحة الرئيسية
               </a>
@@ -9504,10 +11825,6 @@ app.get('/admin/dashboard', async (c) => {
               <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
                 <i class="fas fa-print ml-2"></i>
                 طباعة التقرير
-              </button>
-              <button onclick="doLogout()" class="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition">
-                <i class="fas fa-sign-out-alt ml-2"></i>
-                تسجيل الخروج
               </button>
             </div>
           </div>
@@ -9847,25 +12164,6 @@ app.get('/admin/dashboard', async (c) => {
               }
             }
           });
-          
-          // دالة تسجيل الخروج
-          async function doLogout() {
-            if (!confirm('هل تريد تسجيل الخروج؟')) return;
-            try {
-              await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-            } catch (e) {
-              console.warn('Logout API failed:', e);
-            }
-            try {
-              localStorage.removeItem('user');
-              localStorage.removeItem('userData');
-              localStorage.removeItem('authToken');
-              localStorage.removeItem('token');
-              document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax';
-              document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
-            } catch (e) {}
-            window.location.href = '/login';
-          }
         </script>
       </body>
       </html>
@@ -10056,6 +12354,33 @@ app.get('/admin/customers/add', async (c) => {
       : ''
   const prefillEnrollmentSourceLabel = String(c.req.query('affiliate_label') ?? '').trim().slice(0, 200)
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
+
+  const queryTenantId = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+  let resolvedTenantIdForLocations = userInfo.tenantId
+  if (
+    !resolvedTenantIdForLocations &&
+    userInfo.roleId === 1 &&
+    Number.isFinite(queryTenantId) &&
+    queryTenantId > 0
+  ) {
+    resolvedTenantIdForLocations = queryTenantId
+  }
+  let locationOptionsHtml = ''
+  if (resolvedTenantIdForLocations) {
+    const locRes = await c.env.DB.prepare(
+      `SELECT id, name, slug FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
+    )
+      .bind(resolvedTenantIdForLocations)
+      .all<{ id: number; name: string; slug: string }>()
+    const locRows = (locRes.results || []) as Array<{ id: number; name: string; slug: string }>
+    locationOptionsHtml = locRows
+      .map(
+        (r) =>
+          `<option value="${r.id}">${escapeHtml(r.name)} — ${escapeHtml(r.slug)}</option>`
+      )
+      .join('')
+  }
+
   return c.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -10085,6 +12410,11 @@ app.get('/admin/customers/add', async (c) => {
           </h1>
           
           <form id="add-customer-form" method="POST" action="/api/customers" enctype="application/x-www-form-urlencoded" class="space-y-6">
+            ${
+              resolvedTenantIdForLocations && userInfo.roleId === 1
+                ? `<input type="hidden" name="tenant_id" value="${resolvedTenantIdForLocations}" />`
+                : ''
+            }
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -10112,6 +12442,25 @@ app.get('/admin/customers/add', async (c) => {
                          oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
                 </div>
                 <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="md:col-span-2">
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-map-marker-alt text-teal-600 ml-1"></i>
+                  موقع التسجيل (الفرع) ${locationOptionsHtml ? '*' : ''}
+                </label>
+                <select name="location_id" id="company_location_id" ${locationOptionsHtml ? 'required' : ''}
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                  <option value="">— اختر موقع التسجيل —</option>
+                  ${locationOptionsHtml}
+                </select>
+                ${
+                  !locationOptionsHtml
+                    ? `<p class="text-xs text-amber-700 mt-1">لا توجد مواقع مفعّلة لهذه الشركة. يجب إنشاء مواقع من <a href="/admin/company-settings/locations" class="underline font-semibold">إعدادات المواقع</a> قبل إضافة العملاء.</p>`
+                    : `<p class="text-xs text-gray-500 mt-1">يُحدد الفرع الذي سُجّل العميل عنده ويظهر في القوائم وطلبات التمويل.</p>`
+                }
               </div>
             </div>
             
@@ -12250,7 +14599,7 @@ app.get('/admin/banks', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6">
@@ -12455,7 +14804,7 @@ app.get('/admin/rates', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6">
@@ -12835,9 +15184,12 @@ app.get('/admin/rates', async (c) => {
                 let jsonData;
                 
                 if (file.name.match(/\\.csv$/i)) {
-                  // Handle CSV file
-                  const text = e.target.result;
-                  const lines = text.split('\\n').filter(line => line.trim());
+                  // Handle CSV file — strip BOM + sep= line exported for Excel (Arabic locale list separator)
+                  let text = String(e.target.result || '').replace(/^\uFEFF/, '');
+                  let lines = text.split(/\\r?\\n/).filter(function (line) { return line.trim(); });
+                  if (lines.length > 0 && /^sep=(?:,|;|\\t)\\s*$/.test(lines[0].trim())) {
+                    lines = lines.slice(1);
+                  }
                   if (lines.length < 2) {
                     alert('الملف فارغ أو لا يحتوي على بيانات');
                     clearFile();
@@ -13227,10 +15579,12 @@ app.get('/admin/customers', async (c) => {
     
     // Build query based on role — always exclude archived customers (employee assignee: role_id 4 or legacy 14)
     let query = `
-      SELECT customers.*, u.full_name AS assigned_employee_name
+      SELECT customers.*, u.full_name AS assigned_employee_name,
+        tl.name AS enrollment_location_name
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 14)
+      LEFT JOIN tenant_locations tl ON customers.location_id = tl.id
       WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`;
     let queryParams: any[] = [];
     
@@ -13332,10 +15686,36 @@ app.get('/admin/customers', async (c) => {
         agentName: row.bank_agent_display_name != null ? String(row.bank_agent_display_name) : null
       })
     }
+
+    const customersCsvRowsJson = JSON.stringify(
+      customers.results.map((customer: any) => {
+        const hasFr = customerIdsWithRequests.has(customer.id)
+        const ba = bankAgentByCustomer.get(customer.id)
+        const bankCol = !hasFr ? '—' : !ba?.agentUserId ? 'غير معيّن' : (ba.agentName || '—')
+        const src =
+          customer.enrollment_source === 'calculator'
+            ? 'الحاسبة'
+            : customer.enrollment_source === 'affiliate'
+              ? (customer.enrollment_source_label || 'affiliate')
+              : ''
+        return [
+          String(customer.id ?? ''),
+          String(customer.full_name || '-'),
+          String(customer.phone || '-'),
+          String(customer.email || '-'),
+          String(src || ''),
+          String(customer.enrollment_location_name || '—'),
+          String(customer.assigned_employee_name || 'غير مخصص'),
+          String(bankCol || '—'),
+          String(customer.national_id || '-'),
+          new Date(customer.created_at).toLocaleDateString('ar-SA')
+        ]
+      })
+    ).replace(/</g, '\\u003c')
     
     // Determine if user can edit/delete (not for Role 3 - Supervisor)
     const canEdit = userInfo.roleId !== 3;
-    const canReviewCustomers = normalizeRoleId(userInfo.roleId) !== 5
+    const canReviewCustomers = true
 
     // Customer auto-assign is now automatic on calculator intake,
     // so we remove the button from the customers list page UI.
@@ -13365,12 +15745,11 @@ app.get('/admin/customers', async (c) => {
           /* Hover-to-reveal horizontal scroll arrows (customers table) */
           .edge-scroll-wrap { position: relative; }
           /* Don't block clicks on the table (actions buttons near edges) */
-          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 10; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
           .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
           .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
-          .edge-scroll-zone .edge-scroll-btn { opacity: 0; pointer-events: none; transition: opacity 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
-          /* Wrap hover (not zone — zone uses pointer-events:none so table buttons stay clickable) */
-          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
           .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
           .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
           .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
@@ -13388,15 +15767,14 @@ app.get('/admin/customers', async (c) => {
           #notifPanelOverlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:1099; display:none; }
           #notifPanelOverlay.open { display:block; }
           #tableBody tr[style*="background-color"]:hover { filter: brightness(0.97); }
-          #tableBody.dropdown-open tr:not(.dropdown-active-row) { pointer-events: none !important; }
-          #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td { background-color: inherit !important; }
+          ${actionsDropdownCSS}
           ${getMobileResponsiveCSS()}
         </style>
       </head>
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
-          <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+          <div class="mb-6 relative z-20">
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800 inline-block">← العودة للوحة الرئيسية</a>
           </div>
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
             <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
@@ -13431,8 +15809,19 @@ app.get('/admin/customers', async (c) => {
                 ` : ''}
                 <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
-                  تصدير Excel
+                  تصدير CSV
                 </button>
+                ${canEdit ? `
+                <button onclick="downloadCustomersSampleCSV()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-download ml-2"></i>
+                  نموذج CSV
+                </button>
+                <button onclick="triggerCustomersCSVImport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-file-upload ml-2"></i>
+                  استيراد CSV
+                </button>
+                <input type="file" id="customersCsvInput" accept=".csv" class="hidden" onchange="handleCustomersCSVFile(event)">
+                ` : ''}
                 ${canEdit ? `
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
@@ -13492,7 +15881,7 @@ app.get('/admin/customers', async (c) => {
                     <select id="requestsFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
                       <option value="all">الكل</option>
                       <option value="1">لديه طلب ✓</option>
-                      <option value="0">بدون طلب ✗</option>
+                      <option value="0" selected>بدون طلب ✗</option>
                     </select>
                   </div>
 
@@ -13524,7 +15913,7 @@ app.get('/admin/customers', async (c) => {
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-lg overflow-x-hidden overflow-y-visible">
+          <div class="bg-white rounded-xl shadow-lg">
             <div class="edge-scroll-wrap">
               <div class="edge-scroll-zone left">
                 <div id="customersEdgeLeft" class="edge-scroll-btn edge-hidden">
@@ -13550,6 +15939,7 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">المصدر</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموقع</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموظف المخصص</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
@@ -13576,36 +15966,36 @@ app.get('/admin/customers', async (c) => {
                   const enrollmentSourceDataEsc = String(enrollmentSourceSearch || '').replace(/"/g, '&quot;')
                   return `
                   <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-source="${enrollmentSourceDataEsc}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-bank-agent="${bankAgentDataEsc}" data-created-at="${customer.created_at || ''}" data-has-request="${hasFr ? '1' : '0'}" data-rating="0">
-                    <td class="px-3 py-3 whitespace-nowrap text-right align-middle relative">
-                      <div class="relative inline-block text-right">
-                        <button type="button" onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap w-full">
-                          <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                    <td class="px-3 py-3 whitespace-nowrap text-right align-middle">
+                      <button type="button"
+                              data-actions-target="actions-customer-${customer.id}"
+                              class="actions-dropdown-btn inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap w-full">
+                        <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                      </button>
+                      <div id="actions-customer-${customer.id}" hidden class="actions-dropdown-menu">
+                        <button type="button" onclick="openAlarmModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="actions-dropdown-item" style="color:#c2410c;">
+                          <i class="fas fa-bell"></i> إضافة تنبيه
                         </button>
-                        <div class="actions-dropdown-menu hidden absolute right-0 mt-1 min-w-[10rem] w-max bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
-                          <button type="button" onclick="openAlarmModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50 text-right">
-                            <i class="fas fa-bell w-4 flex-shrink-0"></i> إضافة تنبيه
-                          </button>
-                          ${canReviewCustomers ? `
-                          <button type="button" onclick="openReviewModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50 text-right">
-                            <i class="fas fa-star w-4 flex-shrink-0"></i> تقييم العميل
-                          </button>
-                          ` : ''}
-                          <a href="/admin/customers/${customer.id}/report" class="flex items-center gap-2 px-3 py-2 text-sm text-purple-700 hover:bg-purple-50">
-                            <i class="fas fa-file-alt w-4 flex-shrink-0"></i> تقرير
-                          </a>
-                          <a href="/admin/customers/${customer.id}" class="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50">
-                            <i class="fas fa-eye w-4 flex-shrink-0"></i> عرض
-                          </a>
-                          <button type="button" onclick="openNewRequest(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50 text-right">
-                            <i class="fas fa-file-invoice w-4 flex-shrink-0"></i> طلب تمويل جديد
-                          </button>
-                          ${canEdit ? `
-                          <div class="border-t border-gray-100 my-1"></div>
-                          <a href="/admin/customers/${customer.id}/edit" class="flex items-center gap-2 px-3 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
-                            <i class="fas fa-edit w-4 flex-shrink-0"></i> تعديل
-                          </a>
-                          ` : ''}
-                        </div>
+                        ${canReviewCustomers ? `
+                        <button type="button" onclick="openReviewModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="actions-dropdown-item" style="color:#a16207;">
+                          <i class="fas fa-star"></i> تقييم العميل
+                        </button>
+                        ` : ''}
+                        <a href="/admin/customers/${customer.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
+                          <i class="fas fa-file-alt"></i> تقرير
+                        </a>
+                        <a href="/admin/customers/${customer.id}" class="actions-dropdown-item" style="color:#1d4ed8;">
+                          <i class="fas fa-eye"></i> عرض
+                        </a>
+                        <button type="button" onclick="openNewRequest(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="actions-dropdown-item" style="color:#15803d;">
+                          <i class="fas fa-file-invoice"></i> طلب تمويل جديد
+                        </button>
+                        ${canEdit ? `
+                        <div class="actions-dropdown-divider"></div>
+                        <a href="/admin/customers/${customer.id}/edit" class="actions-dropdown-item" style="color:#a16207;">
+                          <i class="fas fa-edit"></i> تعديل
+                        </a>
+                        ` : ''}
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
@@ -13632,6 +16022,9 @@ app.get('/admin/customers', async (c) => {
                             ? `<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>${escapeHtml(enrollmentSourceLabel)}</span>`
                             : `<span class="text-gray-300 text-sm">—</span>`
                       }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                      ${customer.enrollment_location_name ? escapeHtml(String(customer.enrollment_location_name)) : '<span class="text-gray-400">—</span>'}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       ${customer.assigned_employee_name
@@ -13669,7 +16062,7 @@ app.get('/admin/customers', async (c) => {
             <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
-                <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                <select id="customersPageSize" onchange="setCustomersPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="15">15</option></select>
               </div>
               <div class="flex items-center gap-2">
                 <button id="customersPrevBtn" onclick="setCustomersPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
@@ -13814,13 +16207,14 @@ app.get('/admin/customers', async (c) => {
         ` : ''}
 
         <script>
+          ${actionsDropdownScript}
+
           const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
           const pageParams = new URLSearchParams(window.location.search);
           const presetRatingFilter = pageParams.get('ratingFilter');
+          const presetRequestsFilter = pageParams.get('requestsFilter');
 
           function openNewRequest(customerId, customerName) {
-            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
-            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(function(b) { b.style.visibility = ''; b.style.pointerEvents = ''; });
             if (customerIdsWithRequests.has(customerId)) {
               showToast('يوجد طلب تمويل مسبق لهذا العميل', 'error');
               return;
@@ -13842,7 +16236,6 @@ app.get('/admin/customers', async (c) => {
           }
 
           function openAlarmModal(customerId, customerName) {
-            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
             alarmCustomerId = customerId;
             alarmCustomerName = customerName;
             document.getElementById('alarmModalTitle').textContent = 'إضافة تنبيه للعميل: ' + customerName;
@@ -13961,7 +16354,6 @@ app.get('/admin/customers', async (c) => {
           }
 
           function openReviewModal(customerId, customerName) {
-            document.querySelectorAll('.actions-dropdown-menu').forEach(function(m) { m.classList.add('hidden'); });
             reviewCustomerId = customerId;
             reviewCustomerName = customerName;
             document.getElementById('reviewModalTitle').textContent = 'تقييم العميل: ' + customerName;
@@ -13976,9 +16368,12 @@ app.get('/admin/customers', async (c) => {
           document.getElementById('reviewModal').addEventListener('click', function(e) { if (e.target === this) closeReviewModal(); });
           document.addEventListener('click', function(e) {
             const dd = document.getElementById('reviewRatingDropdown');
-            if (!dd.classList.contains('hidden') && !document.getElementById('reviewRatingContainer').contains(e.target)) {
+            const rc = document.getElementById('reviewRatingContainer');
+            const ch = document.getElementById('reviewRatingChevron');
+            if (!dd || !rc) return;
+            if (!dd.classList.contains('hidden') && !rc.contains(e.target)) {
               dd.classList.add('hidden');
-              document.getElementById('reviewRatingChevron').style.transform = '';
+              if (ch) ch.style.transform = '';
             }
           });
 
@@ -14112,6 +16507,7 @@ app.get('/admin/customers', async (c) => {
               const resp = await fetch('/api/customer-alarms/unread-count');
               const data = await resp.json();
               const dot = document.getElementById('notifDot');
+              if (!dot) return;
               if (data.count > 0) dot.classList.remove('hidden');
               else dot.classList.add('hidden');
             } catch(e) {}
@@ -14124,174 +16520,6 @@ app.get('/admin/customers', async (c) => {
             t.classList.remove('hidden');
             setTimeout(() => t.classList.add('hidden'), 3000);
           }
-
-          function closeAllDropdowns() {
-            document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
-              restorePortaledMenu(m);
-              m.classList.add('hidden');
-              m.style.top = '';
-              m.style.bottom = '';
-              m.style.marginTop = '';
-              m.style.marginBottom = '';
-            });
-            document.querySelectorAll('td.actions-cell-active').forEach(td => {
-              td.classList.remove('actions-cell-active');
-              td.style.zIndex = '';
-            });
-            document.querySelectorAll('tbody.dropdown-open').forEach(tb => tb.classList.remove('dropdown-open'));
-            document.querySelectorAll('tr.dropdown-active-row').forEach(tr => tr.classList.remove('dropdown-active-row'));
-            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(b => { b.style.visibility = ''; });
-          }
-
-          function positionDropdownMenu(menu) {
-            menu.style.top = '100%';
-            menu.style.bottom = 'auto';
-            menu.style.marginTop = '0.25rem';
-            menu.style.marginBottom = '0';
-            const rect = menu.getBoundingClientRect();
-            if (rect.bottom > (window.innerHeight - 8)) {
-              menu.style.top = 'auto';
-              menu.style.bottom = '100%';
-              menu.style.marginTop = '0';
-              menu.style.marginBottom = '0.25rem';
-            }
-          }
-
-          function unbindActionsMenuRepos(menu) {
-            if (!menu._actionsRepos) return;
-            const scrollEl = menu._actionsRepos.scrollEl;
-            const reposition = menu._actionsRepos.reposition;
-            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
-            if (reposition) window.removeEventListener('resize', reposition);
-            delete menu._actionsRepos;
-          }
-
-          function restorePortaledMenu(menu) {
-            if (!menu || menu.dataset.portal !== '1') return;
-            unbindActionsMenuRepos(menu);
-            const placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
-            if (placeholder && placeholder.parentNode) {
-              placeholder.parentNode.replaceChild(menu, placeholder);
-            }
-            delete menu.dataset.portal;
-            delete menu.dataset.portalPlaceholderId;
-            menu.style.position = '';
-            menu.style.left = '';
-            menu.style.top = '';
-            menu.style.right = '';
-            menu.style.bottom = '';
-            menu.style.marginTop = '';
-            menu.style.marginBottom = '';
-            menu.style.zIndex = '';
-          }
-
-          /** Move menu onto .edge-scroll-wrap (outside horizontal scroll panel) — avoids scrollbar clipping without covering the navbar. */
-          function anchorActionsMenu(btn, menu) {
-            if (!menu || menu.dataset.portal === '1') return;
-            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
-            const wrap = scrollEl ? scrollEl.closest('.edge-scroll-wrap') : null;
-            const host = wrap || scrollEl;
-            if (!host || !menu.parentNode) return;
-            const placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
-            const placeholder = document.createElement('span');
-            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
-            menu.parentNode.insertBefore(placeholder, menu);
-            menu.dataset.portal = '1';
-            menu.dataset.portalPlaceholderId = placeholderId;
-            host.appendChild(menu);
-          }
-
-          function positionAnchoredActionsMenu(btn, menu) {
-            if (!btn || !menu || !menu.parentElement) return;
-            const host = menu.parentElement;
-            const hr = host.getBoundingClientRect();
-            const br = btn.getBoundingClientRect();
-
-            menu.style.position = 'absolute';
-            menu.style.marginTop = '0';
-            menu.style.marginBottom = '0';
-            menu.style.right = 'auto';
-            menu.style.bottom = 'auto';
-
-            let w = menu.offsetWidth || 176;
-            let h = menu.offsetHeight || 200;
-            if (w < 10) w = 176;
-            if (h < 10) h = 200;
-
-            const hw = hr.width || host.clientWidth || 0;
-            let left = br.right - hr.left - w;
-            if (hw > 0 && Number.isFinite(left)) left = Math.max(4, Math.min(hw - w - 4, left));
-            else left = Number.isFinite(left) ? Math.max(4, left) : 4;
-
-            let top = br.bottom - hr.top + 6;
-            const spaceBelow = hr.bottom - br.bottom;
-            if (spaceBelow < Math.min(h, 72) && (br.top - hr.top) > Math.min(h, 72)) {
-              top = br.top - hr.top - h - 6;
-            }
-
-            menu.style.left = String(Math.round(left)) + 'px';
-            menu.style.top = String(Math.round(top)) + 'px';
-            menu.style.zIndex = '40';
-          }
-
-          function bindActionsMenuRepos(btn, menu) {
-            unbindActionsMenuRepos(menu);
-            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
-            if (!scrollEl) return;
-            function reposition() {
-              if (menu.classList.contains('hidden')) return;
-              positionAnchoredActionsMenu(btn, menu);
-            }
-            menu._actionsRepos = { scrollEl: scrollEl, reposition: reposition };
-            scrollEl.addEventListener('scroll', reposition, { passive: true });
-            window.addEventListener('resize', reposition);
-          }
-
-          function getActionsMenuForButton(btn) {
-            if (!btn) return null;
-            const id = btn.dataset && btn.dataset.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
-            if (id) {
-              const found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
-              if (found) return found;
-            }
-            const sib = btn.nextElementSibling;
-            if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) return sib;
-            return null;
-          }
-
-          function toggleActionsDropdown(btn) {
-            const menu = getActionsMenuForButton(btn);
-            if (!menu) return;
-            const willOpen = menu.classList.contains('hidden');
-            closeAllDropdowns();
-            if (willOpen) {
-              menu.classList.remove('hidden');
-              // ensure stable link for subsequent toggles even after re-parenting
-              if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
-              btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
-              anchorActionsMenu(btn, menu);
-              requestAnimationFrame(function() {
-                positionAnchoredActionsMenu(btn, menu);
-                bindActionsMenuRepos(btn, menu);
-              });
-              const cell = btn.closest('td');
-              if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
-              const row = btn.closest('tr');
-              if (row) row.classList.add('dropdown-active-row');
-              const tbody = btn.closest('tbody');
-              if (tbody) {
-                tbody.classList.add('dropdown-open');
-                tbody.querySelectorAll('.actions-dropdown-btn').forEach(b => {
-                  b.style.visibility = b === btn ? '' : 'hidden';
-                });
-              }
-            }
-          }
-          document.addEventListener('click', function(e) {
-            if (!e.target.closest('.actions-dropdown-btn') && !e.target.closest('.actions-dropdown-menu')) {
-              closeAllDropdowns();
-            }
-          });
 
           function normalizePhoneDigits(phoneValue) {
             const raw = String(phoneValue || '').trim();
@@ -14452,7 +16680,7 @@ app.get('/admin/customers', async (c) => {
             const rightWrap = document.getElementById(rightBtnId)
             if (!el || !leftWrap || !rightWrap) return
 
-            const canScroll = el.scrollWidth > el.clientWidth + 2
+            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5
             if (!canScroll) {
               leftWrap.classList.add('edge-hidden')
               rightWrap.classList.add('edge-hidden')
@@ -14482,7 +16710,18 @@ app.get('/admin/customers', async (c) => {
             el.addEventListener('scroll', tick, { passive: true })
             window.addEventListener('resize', tick)
             window.addEventListener('scroll', tick, { passive: true })
+            window.addEventListener('load', tick, { passive: true })
             setTimeout(tick, 0)
+            setTimeout(tick, 150)
+            setTimeout(tick, 500)
+            if (typeof ResizeObserver !== 'undefined') {
+              try {
+                const ro = new ResizeObserver(tick)
+                ro.observe(el)
+                const tbl = el.querySelector('table')
+                if (tbl) ro.observe(tbl)
+              } catch (e) {}
+            }
           }
 
           function renderCustomersPaginationUI(total) {
@@ -14544,6 +16783,7 @@ app.get('/admin/customers', async (c) => {
           }
 
           function filterTable() {
+            closeAllDropdowns();
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
             const filterField = document.getElementById('filterField').value;
             const dateRangeFilter = document.getElementById('dateRangeFilter').value;
@@ -14588,49 +16828,158 @@ app.get('/admin/customers', async (c) => {
           }
 
           function applyPresetFiltersFromUrl() {
-            if (!presetRatingFilter) return;
             const ratingFilterEl = document.getElementById('ratingFilter');
-            const allowed = ['all', '0', '1', '2', '3', '4', '5'];
-            if (!ratingFilterEl || allowed.indexOf(presetRatingFilter) === -1) return;
-            ratingFilterEl.value = presetRatingFilter;
-            filterTable();
+            const requestsFilterEl = document.getElementById('requestsFilter');
+            const allowedRatings = ['all', '0', '1', '2', '3', '4', '5'];
+            const allowedReq = ['all', '0', '1'];
+            let changed = false;
+
+            if (presetRatingFilter && ratingFilterEl && allowedRatings.indexOf(presetRatingFilter) !== -1) {
+              ratingFilterEl.value = presetRatingFilter;
+              changed = true;
+              if (requestsFilterEl) {
+                if (presetRequestsFilter && allowedReq.indexOf(presetRequestsFilter) !== -1) {
+                  requestsFilterEl.value = presetRequestsFilter;
+                } else {
+                  requestsFilterEl.value = 'all';
+                }
+              }
+            } else if (presetRequestsFilter && requestsFilterEl && allowedReq.indexOf(presetRequestsFilter) !== -1) {
+              requestsFilterEl.value = presetRequestsFilter;
+              changed = true;
+            }
+
+            if (changed) filterTable();
           }
 
           function resetFilters() {
             document.getElementById('searchInput').value = '';
             document.getElementById('filterField').value = 'all';
             document.getElementById('dateRangeFilter').value = 'all';
-            document.getElementById('requestsFilter').value = 'all';
+            document.getElementById('requestsFilter').value = '0';
             document.getElementById('ratingFilter').value = 'all';
             filterTable();
           }
 
           function exportToCSV() {
-            const data = [
-              ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل'],
-              ${customers.results.map((customer: any) => {
-                const hasFr = customerIdsWithRequests.has(customer.id)
-                const ba = bankAgentByCustomer.get(customer.id)
-                const bankCol = !hasFr
-                  ? '—'
-                  : !ba?.agentUserId
-                    ? 'غير معيّن'
-                    : (ba.agentName || '—')
-                const src = customer.enrollment_source === 'calculator'
-                  ? 'الحاسبة'
-                  : customer.enrollment_source === 'affiliate'
-                    ? (customer.enrollment_source_label || 'affiliate')
-                    : ''
-                return `['${customer.id}', '${customer.full_name || '-'}', '${customer.phone || '-'}', '${customer.email || '-'}', '${String(src || '').replace(/'/g, "\\'")}', '${(customer.assigned_employee_name || 'غير مخصص').replace(/'/g, "\\'")}', '${String(bankCol).replace(/'/g, "\\'")}', '${customer.national_id || '-'}', '${new Date(customer.created_at).toLocaleDateString('ar-SA')}']`
-              }).join(',\n              ')}
-            ];
-            let csv = '\\uFEFF';
+            const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل'];
+            const rows = ${customersCsvRowsJson};
+            const data = [header, ...rows];
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => { csv += row.join(',') + '\\n'; });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'العملاء_' + new Date().toISOString().split('T')[0] + '.csv';
             link.click();
+          }
+
+          window.downloadCustomersSampleCSV = function() {
+            window.location.href = '/api/customers/sample-csv'
+          }
+
+          window.triggerCustomersCSVImport = function() {
+            const el = document.getElementById('customersCsvInput')
+            if (el) el.click()
+          }
+
+          function normalizeCsvHeaderCell(v) {
+            return String(v || '')
+              .replace(/^\uFEFF/, '')
+              .replace(/\u200F/g, '')
+              .trim()
+              .toLowerCase()
+          }
+
+          function parseCsvText(text) {
+            const s = String(text || '')
+              .replace(/^\uFEFF/, '')
+              .replace(/^sep=(?:,|;|\\t)(?:\\r\\n|\\n|\\r)/, '')
+            const rows = []
+            let row = []
+            let cur = ''
+            let inQuotes = false
+            for (let i = 0; i < s.length; i++) {
+              const ch = s[i]
+              const next = s[i + 1]
+              if (ch === '"') {
+                if (inQuotes && next === '"') { cur += '"'; i++; continue }
+                inQuotes = !inQuotes
+                continue
+              }
+              if (!inQuotes && (ch === ',')) { row.push(cur); cur = ''; continue }
+              if (!inQuotes && (ch === '\\n' || ch === '\\r')) {
+                if (ch === '\\r' && next === '\\n') i++
+                row.push(cur); cur = ''
+                if (row.some((c) => String(c || '').trim() !== '')) rows.push(row)
+                row = []
+                continue
+              }
+              cur += ch
+            }
+            row.push(cur)
+            if (row.some((c) => String(c || '').trim() !== '')) rows.push(row)
+            return rows
+          }
+
+          window.handleCustomersCSVFile = async function(evt) {
+            try {
+              const file = evt?.target?.files?.[0]
+              if (!file) return
+              const text = await file.text()
+              const rows = parseCsvText(text)
+              if (!rows || rows.length < 2) {
+                alert('ملف CSV فارغ أو غير صالح')
+                return
+              }
+              const header = rows[0].map(normalizeCsvHeaderCell)
+              const idx = (keys) => header.findIndex((h) => keys.indexOf(h) !== -1)
+              // Aligned with customers table/export: ['#','الاسم','الهاتف','البريد الإلكتروني',...,'الرقم الوطني','تاريخ التسجيل']
+              const iName = idx(['full_name', 'name', 'الاسم'])
+              const iPhone = idx(['phone', 'الهاتف', 'الجوال'])
+              const iEmail = idx(['email', 'البريد الإلكتروني', 'البريد'])
+              const iNat = idx(['national_id', 'nationalid', 'الرقم الوطني'])
+
+              const customers = []
+              for (let r = 1; r < rows.length; r++) {
+                const cols = rows[r]
+                const full_name = iName >= 0 ? String(cols[iName] || '').trim() : ''
+                const phone = iPhone >= 0 ? String(cols[iPhone] || '').trim() : ''
+                const email = iEmail >= 0 ? String(cols[iEmail] || '').trim() : ''
+                const national_id = iNat >= 0 ? String(cols[iNat] || '').trim() : ''
+                if (!full_name && !phone) continue
+                customers.push({ full_name, phone, email, national_id })
+              }
+
+              if (customers.length === 0) {
+                alert('لم يتم العثور على صفوف صالحة')
+                return
+              }
+
+              const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+              const headers = { 'Content-Type': 'application/json' }
+              if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+              const resp = await fetch('/api/customers/import-csv', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers,
+                body: JSON.stringify({ customers })
+              })
+              const data = await resp.json().catch(() => ({}))
+              if (!resp.ok || !data.success) {
+                alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
+                return
+              }
+              const errCount = Array.isArray(data.errors) ? data.errors.length : 0
+              alert((data.message || 'تم الاستيراد') + (errCount ? ('\\nأخطاء: ' + errCount) : ''))
+              window.location.reload()
+            } catch (e) {
+              alert('حدث خطأ أثناء الاستيراد')
+              console.error(e)
+            } finally {
+              const el = document.getElementById('customersCsvInput')
+              if (el) el.value = ''
+            }
           }
 
           refreshUnreadDot();
@@ -15054,7 +17403,7 @@ app.get('/admin/notifications', async (c) => {
       <body class="bg-gray-50">
         <div class="container mx-auto px-4 py-6">
           <div class="border-b border-slate-200/90 bg-slate-50/80 -mx-4 px-4 py-1.5 mb-5 sm:mx-0 sm:rounded-md">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
           </div>
           <div class="flex flex-wrap items-center gap-4 mb-8">
             <div>
@@ -15107,24 +17456,24 @@ app.get('/admin/notifications', async (c) => {
 
           <!-- Filters -->
           <div class="bg-white rounded-xl shadow-md p-6 mb-6">
-            <div class="flex flex-wrap gap-3">
-              <button onclick="filterNotifications('all')" class="filter-btn active px-6 py-2 rounded-lg font-bold transition">
+            <div id="notificationFilterBar" class="flex flex-wrap gap-3">
+              <button type="button" data-notification-filter="all" class="filter-btn active px-6 py-2 rounded-lg font-bold transition">
                 <i class="fas fa-list ml-2"></i>
                 الكل
               </button>
-              <button onclick="filterNotifications('unread')" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+              <button type="button" data-notification-filter="unread" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
                 <i class="fas fa-envelope ml-2"></i>
                 غير مقروءة
               </button>
-              <button onclick="filterNotifications('read')" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+              <button type="button" data-notification-filter="read" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
                 <i class="fas fa-envelope-open ml-2"></i>
                 مقروءة
               </button>
-              <button onclick="filterNotifications('request')" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+              <button type="button" data-notification-filter="request" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
                 <i class="fas fa-file-invoice ml-2"></i>
                 طلبات جديدة
               </button>
-              <button onclick="filterNotifications('status_change')" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+              <button type="button" data-notification-filter="status_change" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
                 <i class="fas fa-sync ml-2"></i>
                 تحديثات الحالة
               </button>
@@ -15147,6 +17496,11 @@ app.get('/admin/notifications', async (c) => {
           let allNotifications = [];
           let currentFilter = 'all';
 
+          function notificationIsUnread(n) {
+            var v = n.is_read;
+            return v === 0 || v === '0' || v === false;
+          }
+
           async function loadNotifications() {
             try {
               const response = await axios.get('/api/notifications');
@@ -15168,7 +17522,7 @@ app.get('/admin/notifications', async (c) => {
 
           function updateStats() {
             const total = allNotifications.length;
-            const unread = allNotifications.filter(n => n.is_read === 0).length;
+            const unread = allNotifications.filter(notificationIsUnread).length;
             const read = total - unread;
 
             document.getElementById('totalCount').textContent = total;
@@ -15176,17 +17530,19 @@ app.get('/admin/notifications', async (c) => {
             document.getElementById('readCount').textContent = read;
           }
 
-          function filterNotifications(filter) {
+          function setNotificationFilter(filter, activeButton) {
             currentFilter = filter;
-            
-            // Update active button
-            document.querySelectorAll('.filter-btn').forEach(btn => {
+            var bar = document.getElementById('notificationFilterBar');
+            var buttons = bar ? bar.querySelectorAll('[data-notification-filter]') : [];
+            buttons.forEach(function (btn) {
               btn.classList.remove('active', 'bg-blue-600', 'text-white');
               btn.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
             });
-            event.target.closest('button').classList.add('active', 'bg-blue-600', 'text-white');
-            event.target.closest('button').classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
-            
+            var btn = activeButton || (bar && bar.querySelector('[data-notification-filter="' + filter + '"]'));
+            if (btn) {
+              btn.classList.add('active', 'bg-blue-600', 'text-white');
+              btn.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+            }
             renderNotifications();
           }
 
@@ -15194,9 +17550,9 @@ app.get('/admin/notifications', async (c) => {
             let filtered = allNotifications;
 
             if (currentFilter === 'unread') {
-              filtered = allNotifications.filter(n => n.is_read === 0);
+              filtered = allNotifications.filter(function (n) { return notificationIsUnread(n); });
             } else if (currentFilter === 'read') {
-              filtered = allNotifications.filter(n => n.is_read === 1);
+              filtered = allNotifications.filter(function (n) { return !notificationIsUnread(n); });
             } else if (currentFilter === 'request' || currentFilter === 'status_change') {
               filtered = allNotifications.filter(n => n.category === currentFilter);
             }
@@ -15229,8 +17585,9 @@ app.get('/admin/notifications', async (c) => {
               const typeIcon = typeIcons[notification.type] || typeIcons.info;
               const categoryIcon = categoryIcons[notification.category] || categoryIcons.general;
               
+              var unreadCard = notificationIsUnread(notification);
               return \`
-                <div class="notification-card \${notification.is_read === 0 ? 'notification-unread' : 'notification-read'} rounded-lg p-4 shadow-sm">
+                <div class="notification-card \${unreadCard ? 'notification-unread' : 'notification-read'} rounded-lg p-4 shadow-sm">
                   <div class="flex items-start gap-4">
                     <div class="flex-shrink-0">
                       <i class="fas \${typeIcon} text-3xl"></i>
@@ -15239,7 +17596,7 @@ app.get('/admin/notifications', async (c) => {
                       <div class="flex items-start justify-between mb-2">
                         <h3 class="text-lg font-bold text-gray-800">\${notification.title}</h3>
                         <div class="flex gap-2">
-                          \${notification.is_read === 0 ? \`
+                          \${unreadCard ? \`
                             <button onclick="markAsRead(\${notification.id})" class="text-blue-600 hover:text-blue-800 transition" title="تحديد كمقروء">
                               <i class="fas fa-check"></i>
                             </button>
@@ -15310,6 +17667,19 @@ app.get('/admin/notifications', async (c) => {
             }
           }
 
+          (function bindNotificationFilterBar() {
+            var bar = document.getElementById('notificationFilterBar');
+            if (!bar) return;
+            bar.addEventListener('click', function (e) {
+              var t = e.target && e.target.closest ? e.target.closest('[data-notification-filter]') : null;
+              if (!t || !bar.contains(t)) return;
+              var f = t.getAttribute('data-notification-filter');
+              if (!f) return;
+              e.preventDefault();
+              setNotificationFilter(f, t);
+            });
+          })();
+
           // Load notifications on page load
           loadNotifications();
         </script>
@@ -15325,6 +17695,14 @@ app.get('/admin/notifications', async (c) => {
 app.get('/admin/requests/:id/edit', async (c) => {
   try {
     const id = c.req.param('id')
+
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.redirect('/login')
+    }
+    if (normalizeRoleId(userInfo.roleId) === 3) {
+      return c.redirect('/admin/requests')
+    }
     
     // Get request details
     const request = await c.env.DB.prepare(`
@@ -15332,6 +17710,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
         fr.*,
         c.full_name as customer_name,
         c.phone as customer_phone,
+        c.tenant_id as customer_tenant_id,
         b.bank_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
@@ -15341,6 +17720,26 @@ app.get('/admin/requests/:id/edit', async (c) => {
     
     if (!request) {
       return c.html('<h1>الطلب غير موجود</h1>')
+    }
+
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      const tid = userInfo.tenantId
+      if (!tid) {
+        return c.redirect('/admin/requests')
+      }
+      if (Number((request as any).customer_tenant_id) !== Number(tid)) {
+        return c.redirect('/admin/requests')
+      }
+      const assignedAgentId = Number((request as any).assigned_bank_agent_id)
+      if (
+        assignedAgentId !== Number(userInfo.userId) &&
+        !(await canUserAccessCustomer(c.env.DB, userInfo, {
+          id: Number((request as any).customer_id),
+          tenant_id: (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null
+        }))
+      ) {
+        return c.redirect('/admin/requests')
+      }
     }
 
     try {
@@ -15942,6 +18341,7 @@ app.get('/admin/requests', async (c) => {
         emp.id AS assigned_employee_id,
         c.full_name as customer_name,
         c.assigned_to as customer_assigned_to,
+        tl.name as enrollment_location_name,
         b.bank_name as bank_name,
         ws.stage_name as workflow_stage_name,
         ws.stage_name_ar as workflow_stage_name_ar,
@@ -15950,6 +18350,7 @@ app.get('/admin/requests', async (c) => {
         COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) as assigned_employee_name
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN tenant_locations tl ON c.location_id = tl.id
       LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
       LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 14)
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
@@ -16027,11 +18428,43 @@ app.get('/admin/requests', async (c) => {
     const allRequestStatusFilters = Array.from(new Set([...workflowStageNames, ...fallbackRequestStatuses]));
     const requestStatusFiltersJson = JSON.stringify(allRequestStatusFilters).replace(/</g, '\\u003c');
     
-    // Role 3: no edit/delete on existing rows; may still create new funding requests (same as other tenant roles)
+    // Role 3 (مشرف مبيعات): no edit/delete on existing rows; role 5 may edit/delete within scoped requests
     const ridNorm = normalizeRoleId(userInfo.roleId)
-    const canEdit = userInfo.roleId !== 3 && ridNorm !== 5;
+    const canEdit = ridNorm !== 3
     const canCreateFundingRequest = [1, 2, 3, 4].includes(Number(userInfo.roleId));
     const isBankAgent = ridNorm === 5;
+
+    const requestsCsvRowsJson = JSON.stringify(
+      requests.results.map((req: any) => {
+        const statusMap: Record<string, string> = {
+          pending: 'قيد الانتظار',
+          under_review: 'قيد المراجعة',
+          approved: 'مقبول',
+          rejected: 'مرفوض',
+          processing: 'قيد المعالجة',
+          completed: 'مكتمل',
+          cancelled: 'ملغي'
+        }
+        const statusAr = statusMap[String(req.status || '')] || String(req.status || '')
+        const customer = req.customer_name || ('عميل #' + String(req.customer_id || ''))
+        const bank = req.bank_name || ('بنك #' + String(req.selected_bank_id || '-'))
+        const employeeCol = req.assigned_employee_name ? String(req.assigned_employee_name) : '—'
+        const aid = req.bank_agent_role5_user_id != null ? Number(req.bank_agent_role5_user_id) : null
+        const aname = req.assigned_bank_agent_name ? String(req.assigned_bank_agent_name) : ''
+        const agentCol = aid != null && !Number.isNaN(aid) ? (aname || '—') : '—'
+        return [
+          String(customer),
+          String(req.enrollment_location_name || '—'),
+          String(employeeCol),
+          String(agentCol),
+          String(bank),
+          String(req.requested_amount || 0),
+          String(req.duration_months || ''),
+          String(statusAr || ''),
+          new Date(req.created_at).toLocaleDateString('ar-SA')
+        ]
+      })
+    ).replace(/</g, '\\u003c')
     
     return c.html(`
       <!DOCTYPE html>
@@ -16085,12 +18518,11 @@ app.get('/admin/requests', async (c) => {
           /* Hover-to-reveal horizontal scroll arrows (requests table) */
           .edge-scroll-wrap { position: relative; }
           /* Don't block clicks on the table (actions buttons near edges) */
-          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 10; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
           .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
           .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
-          .edge-scroll-zone .edge-scroll-btn { opacity: 0; pointer-events: none; transition: opacity 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
-          /* Wrap hover (not zone — zone uses pointer-events:none so table buttons stay clickable) */
-          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
           .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
           .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
           .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
@@ -16111,14 +18543,8 @@ app.get('/admin/requests', async (c) => {
             border-bottom: 0 !important;
           }
 
-          #tableBody.dropdown-open tr:not(.dropdown-active-row) {
-            pointer-events: none !important;
-          }
+          ${actionsDropdownCSS}
 
-          #tableBody.dropdown-open tr:not(.dropdown-active-row):hover td {
-            background-color: inherit !important;
-          }
-          
           ${getMobileResponsiveCSS()}
         </style>
       </head>
@@ -16144,8 +18570,8 @@ app.get('/admin/requests', async (c) => {
           })();
         </script>
         <div class="max-w-7xl mx-auto p-6">
-          <div class="mb-6">
-            ${isBankAgent ? '' : `<a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>`}
+          <div class="mb-6 relative z-20">
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800 inline-block">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -16165,8 +18591,19 @@ app.get('/admin/requests', async (c) => {
                 <button onclick="exportToCSV()" 
                         class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-file-export ml-2"></i>
-                  تصدير Excel
+                  تصدير CSV
                 </button>
+                ${canCreateFundingRequest ? `
+                <button onclick="downloadRequestsSampleCSV()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-download ml-2"></i>
+                  نموذج CSV
+                </button>
+                <button onclick="triggerRequestsCSVImport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-file-upload ml-2"></i>
+                  استيراد CSV
+                </button>
+                <input type="file" id="requestsCsvInput" accept=".csv" class="hidden" onchange="handleRequestsCSVFile(event)">
+                ` : ''}
                 ${!isBankAgent ? `
                 <a href="/admin/reports/requests-followup" 
                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all inline-block text-center">
@@ -16225,7 +18662,7 @@ app.get('/admin/requests', async (c) => {
             </div>
           </div>
           
-          <div class="bg-white rounded-xl shadow-lg overflow-x-hidden">
+          <div class="bg-white rounded-xl shadow-lg">
             <div class="edge-scroll-wrap">
               <div class="edge-scroll-zone left">
                 <div id="requestsEdgeLeft" class="edge-scroll-btn edge-hidden">
@@ -16247,6 +18684,7 @@ app.get('/admin/requests', async (c) => {
                   <tr>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">العميل</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموقع</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="الموظف (دور 4) المعيّن للعميل">الموظف المخصص</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="المستخدم بدور 5 المعيّن على الطلب">موظف البنك</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البنك</th>
@@ -16298,36 +18736,35 @@ app.get('/admin/requests', async (c) => {
                       data-bank-agent="${bankAgentRowSearch.replace(/"/g, '&quot;')}"
                       data-bank="${req.bank_name || ''}" 
                       data-status="${statusAr}">
-                    <td class="px-6 py-4 whitespace-nowrap text-right relative">
-                      <div class="relative inline-block text-right">
-                        <button onclick="toggleActionsDropdown(this)" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
-                          الإجراءات <i class="fas fa-chevron-down text-xs"></i>
-                        </button>
-                        <div class="actions-dropdown-menu hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-[1200] pointer-events-auto">
-                          ${!isBankAgent ? `
-                          <a href="/admin/requests/${req.id}/workflow" class="flex items-center gap-2 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">
-                            <i class="fas fa-clock w-4"></i> الجدول الزمني
-                          </a>
-                          <a href="/admin/requests/${req.id}/report" class="flex items-center gap-2 px-4 py-2 text-sm text-purple-700 hover:bg-purple-50">
-                            <i class="fas fa-file-alt w-4"></i> تقرير
-                          </a>
-                          ` : ''}
-                          <a href="/admin/requests/${req.id}" class="flex items-center gap-2 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">
-                            <i class="fas fa-eye w-4"></i> عرض
-                          </a>
-                          ${canEdit ? `
-                          <div class="border-t border-gray-100 my-1"></div>
-                          <a href="/admin/requests/${req.id}/edit" class="flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50">
-                            <i class="fas fa-edit w-4"></i> تعديل
-                          </a>
-                          <a href="/admin/requests/${req.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="flex items-center gap-2 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
-                            <i class="fas fa-trash w-4"></i> حذف
-                          </a>
-                          ` : ''}
-                        </div>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      <button type="button"
+                              data-actions-target="actions-request-${req.id}"
+                              class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium transition-colors">
+                        الإجراءات <i class="fas fa-chevron-down text-xs"></i>
+                      </button>
+                      <div id="actions-request-${req.id}" hidden class="actions-dropdown-menu">
+                        <a href="/admin/requests/${req.id}/workflow" class="actions-dropdown-item" style="color:#4338ca;">
+                          <i class="fas fa-clock"></i> الجدول الزمني
+                        </a>
+                        <a href="/admin/requests/${req.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
+                          <i class="fas fa-file-alt"></i> تقرير
+                        </a>
+                        <a href="/admin/requests/${req.id}" class="actions-dropdown-item" style="color:#1d4ed8;">
+                          <i class="fas fa-eye"></i> عرض
+                        </a>
+                        ${canEdit ? `
+                        <div class="actions-dropdown-divider"></div>
+                        <a href="/admin/requests/${req.id}/edit" class="actions-dropdown-item" style="color:#a16207;">
+                          <i class="fas fa-edit"></i> تعديل
+                        </a>
+                        <a href="/admin/requests/${req.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="actions-dropdown-item" style="color:#b91c1c;">
+                          <i class="fas fa-trash"></i> حذف
+                        </a>
+                        ` : ''}
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="truncate-cell">${req.customer_name || 'عميل #' + req.customer_id}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${req.enrollment_location_name ? escapeHtml(String(req.enrollment_location_name)) : '<span class="text-gray-400">—</span>'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
                       ${employeeName
                         ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${employeeName}</span></span>`
@@ -16360,7 +18797,7 @@ app.get('/admin/requests', async (c) => {
             <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
-                <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"></select>
+                <select id="requestsPageSize" onchange="setRequestsPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="15">15</option></select>
               </div>
               <div class="flex items-center gap-2">
                 <button id="requestsPrevBtn" onclick="setRequestsPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
@@ -16483,7 +18920,7 @@ app.get('/admin/requests', async (c) => {
             const rightWrap = document.getElementById(rightBtnId)
             if (!el || !leftWrap || !rightWrap) return
 
-            const canScroll = el.scrollWidth > el.clientWidth + 2
+            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5
             if (!canScroll) {
               leftWrap.classList.add('edge-hidden')
               rightWrap.classList.add('edge-hidden')
@@ -16513,7 +18950,18 @@ app.get('/admin/requests', async (c) => {
             el.addEventListener('scroll', tick, { passive: true })
             window.addEventListener('resize', tick)
             window.addEventListener('scroll', tick, { passive: true })
+            window.addEventListener('load', tick, { passive: true })
             setTimeout(tick, 0)
+            setTimeout(tick, 150)
+            setTimeout(tick, 500)
+            if (typeof ResizeObserver !== 'undefined') {
+              try {
+                const ro = new ResizeObserver(tick)
+                ro.observe(el)
+                const tbl = el.querySelector('table')
+                if (tbl) ro.observe(tbl)
+              } catch (e) {}
+            }
           }
 
           function renderRequestsPaginationUI(total) {
@@ -16573,185 +19021,11 @@ app.get('/admin/requests', async (c) => {
             setupEdgeScrollOnce('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
             updateEdgeScrollControls('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
           }
-          function closeAllDropdowns() {
-            document.querySelectorAll('.actions-dropdown-menu').forEach(m => {
-              restorePortaledMenu(m);
-              m.classList.add('hidden');
-              m.style.top = '';
-              m.style.bottom = '';
-              m.style.marginTop = '';
-              m.style.marginBottom = '';
-            });
-            document.querySelectorAll('td.actions-cell-active').forEach(td => {
-              td.classList.remove('actions-cell-active');
-              td.style.zIndex = '';
-            });
-            document.querySelectorAll('tbody.dropdown-open').forEach(tb => tb.classList.remove('dropdown-open'));
-            document.querySelectorAll('tr.dropdown-active-row').forEach(tr => tr.classList.remove('dropdown-active-row'));
-            document.querySelectorAll('tbody .actions-dropdown-btn').forEach(b => { b.style.visibility = ''; });
-          }
-
-          function unbindActionsMenuRepos(menu) {
-            if (!menu._actionsRepos) return;
-            const scrollEl = menu._actionsRepos.scrollEl;
-            const reposition = menu._actionsRepos.reposition;
-            if (scrollEl && reposition) scrollEl.removeEventListener('scroll', reposition);
-            if (reposition) window.removeEventListener('resize', reposition);
-            delete menu._actionsRepos;
-          }
-
-          function restorePortaledMenu(menu) {
-            if (!menu || menu.dataset.portal !== '1') return;
-            unbindActionsMenuRepos(menu);
-            const placeholder = document.querySelector('[data-actions-menu-placeholder-id="' + menu.dataset.portalPlaceholderId + '"]');
-            if (placeholder && placeholder.parentNode) {
-              placeholder.parentNode.replaceChild(menu, placeholder);
-            }
-            delete menu.dataset.portal;
-            delete menu.dataset.portalPlaceholderId;
-            menu.style.position = '';
-            menu.style.left = '';
-            menu.style.top = '';
-            menu.style.right = '';
-            menu.style.bottom = '';
-            menu.style.marginTop = '';
-            menu.style.marginBottom = '';
-            menu.style.zIndex = '';
-          }
-
-          /** Move menu onto .edge-scroll-wrap (outside horizontal scroll panel) — avoids scrollbar clipping without covering the navbar. */
-          function anchorActionsMenu(btn, menu) {
-            if (!menu || menu.dataset.portal === '1') return;
-            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
-            const wrap = scrollEl ? scrollEl.closest('.edge-scroll-wrap') : null;
-            const host = wrap || scrollEl;
-            if (!host || !menu.parentNode) return;
-            const placeholderId = String(Date.now()) + '-' + String(Math.random()).slice(2).slice(0, 14);
-            const placeholder = document.createElement('span');
-            placeholder.setAttribute('data-actions-menu-placeholder-id', placeholderId);
-            menu.parentNode.insertBefore(placeholder, menu);
-            menu.dataset.portal = '1';
-            menu.dataset.portalPlaceholderId = placeholderId;
-            host.appendChild(menu);
-          }
-
-          function positionAnchoredActionsMenu(btn, menu) {
-            if (!btn || !menu || !menu.parentElement) return;
-            const host = menu.parentElement;
-            const hr = host.getBoundingClientRect();
-            const br = btn.getBoundingClientRect();
-
-            menu.style.position = 'absolute';
-            menu.style.marginTop = '0';
-            menu.style.marginBottom = '0';
-            menu.style.right = 'auto';
-            menu.style.bottom = 'auto';
-
-            let w = menu.offsetWidth || 176;
-            let h = menu.offsetHeight || 200;
-            if (w < 10) w = 176;
-            if (h < 10) h = 200;
-
-            const hw = hr.width || host.clientWidth || 0;
-            let left = br.right - hr.left - w;
-            if (hw > 0 && Number.isFinite(left)) left = Math.max(4, Math.min(hw - w - 4, left));
-            else left = Number.isFinite(left) ? Math.max(4, left) : 4;
-
-            let top = br.bottom - hr.top + 6;
-            const spaceBelow = hr.bottom - br.bottom;
-            if (spaceBelow < Math.min(h, 72) && (br.top - hr.top) > Math.min(h, 72)) {
-              top = br.top - hr.top - h - 6;
-            }
-
-            menu.style.left = String(Math.round(left)) + 'px';
-            menu.style.top = String(Math.round(top)) + 'px';
-            menu.style.zIndex = '40';
-          }
-
-          function bindActionsMenuRepos(btn, menu) {
-            unbindActionsMenuRepos(menu);
-            const scrollEl = btn.closest('#customersTableScroll, #requestsTableScroll');
-            if (!scrollEl) return;
-            function reposition() {
-              if (menu.classList.contains('hidden')) return;
-              positionAnchoredActionsMenu(btn, menu);
-            }
-            menu._actionsRepos = { scrollEl: scrollEl, reposition: reposition };
-            scrollEl.addEventListener('scroll', reposition, { passive: true });
-            window.addEventListener('resize', reposition);
-          }
-
-          function positionDropdownMenu(menu) {
-            const triggerBtn = menu.previousElementSibling;
-            if (!triggerBtn) return;
-            const triggerRect = triggerBtn.getBoundingClientRect();
-            const menuHeight = menu.offsetHeight || 220;
-            const viewportTop = 8;
-            const viewportBottom = window.innerHeight - 8;
-            let boundsTop = viewportTop;
-            let boundsBottom = viewportBottom;
-
-            const spaceBelow = boundsBottom - triggerRect.bottom;
-            const spaceAbove = triggerRect.top - boundsTop;
-            const shouldOpenDown = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
-
-            menu.style.top = '100%';
-            menu.style.bottom = 'auto';
-            menu.style.marginTop = '0.25rem';
-            menu.style.marginBottom = '0';
-
-            if (!shouldOpenDown) {
-              menu.style.top = 'auto';
-              menu.style.bottom = '100%';
-              menu.style.marginTop = '0';
-              menu.style.marginBottom = '0.25rem';
-            }
-          }
-
-          function toggleActionsDropdown(btn) {
-            let menu = null;
-            const id = btn?.dataset?.actionsMenuId ? String(btn.dataset.actionsMenuId) : '';
-            if (id) {
-              const found = document.querySelector('.actions-dropdown-menu[data-actions-menu-id="' + id + '"]');
-              if (found) menu = found;
-            }
-            if (!menu) {
-              const sib = btn.nextElementSibling;
-              if (sib && sib.classList && sib.classList.contains('actions-dropdown-menu')) menu = sib;
-            }
-            if (!menu) return;
-            const willOpen = menu.classList.contains('hidden');
-            closeAllDropdowns();
-            if (willOpen) {
-              menu.classList.remove('hidden');
-              if (!menu.dataset.actionsMenuId) menu.dataset.actionsMenuId = String(Date.now()) + '-' + String(Math.random()).slice(2);
-              btn.dataset.actionsMenuId = menu.dataset.actionsMenuId;
-              anchorActionsMenu(btn, menu);
-              requestAnimationFrame(function() {
-                positionAnchoredActionsMenu(btn, menu);
-                bindActionsMenuRepos(btn, menu);
-              });
-              const cell = btn.closest('td');
-              if (cell) { cell.classList.add('actions-cell-active'); cell.style.zIndex = '80'; }
-              const row = btn.closest('tr');
-              if (row) row.classList.add('dropdown-active-row');
-              const tbody = btn.closest('tbody');
-              if (tbody) {
-                tbody.classList.add('dropdown-open');
-                tbody.querySelectorAll('.actions-dropdown-btn').forEach(b => {
-                  b.style.visibility = b === btn ? '' : 'hidden';
-                });
-              }
-            }
-          }
-          document.addEventListener('click', function(e) {
-            if (!e.target.closest('.actions-dropdown-btn') && !e.target.closest('.actions-dropdown-menu')) {
-              closeAllDropdowns();
-            }
-          });
+          ${actionsDropdownScript}
 
           // البحث والفلترة
           function filterTable() {
+            closeAllDropdowns();
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
             const filterField = document.getElementById('filterField').value
             const statusFilter = document.getElementById('statusFilter').value
@@ -16883,38 +19157,13 @@ app.get('/admin/requests', async (c) => {
             filterTable()
           }
 
-          hydrateStatusFilterOptions()
-          hydrateRequestsSidebarStatuses()
-          applyRequestStatusFilterFromUrl()
-          filterTable()
-          
-          function exportToCSV() {
-            const data = [
-              ['العميل', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'],
-              ${requests.results.map((req: any) => {
-                const statusMap: Record<string, string> = {
-                  'pending': 'قيد الانتظار',
-                  'under_review': 'قيد المراجعة',
-                  'approved': 'مقبول',
-                  'rejected': 'مرفوض',
-                  'processing': 'قيد المعالجة',
-                  'completed': 'مكتمل',
-                  'cancelled': 'ملغي'
-                };
-                const statusAr = statusMap[req.status] || req.status;
-                const customer = req.customer_name || `عميل #${req.customer_id}`;
-                const bank = req.bank_name || `بنك #${req.selected_bank_id || '-'}`;
-                const employeeCol = req.assigned_employee_name ? String(req.assigned_employee_name) : '—'
-                const aid = req.bank_agent_role5_user_id != null ? Number(req.bank_agent_role5_user_id) : null
-                const aname = req.assigned_bank_agent_name ? String(req.assigned_bank_agent_name) : ''
-                const agentCol = aid != null && !Number.isNaN(aid)
-                  ? (aname || '—')
-                  : '—'
-                return `['${String(customer).replace(/'/g, "\\'")}', '${String(employeeCol).replace(/'/g, "\\'")}', '${String(agentCol).replace(/'/g, "\\'")}', '${String(bank).replace(/'/g, "\\'")}', '${req.requested_amount || 0}', '${req.duration_months}', '${statusAr}', '${new Date(req.created_at).toLocaleDateString('ar-SA')}']`;
-              }).join(',\n              ')}
-            ];
+          // Expose handlers for inline onclick early, in case any init below throws
+          window.exportToCSV = function exportToCSV() {
+            const header = ['العميل', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'];
+            const rows = ${requestsCsvRowsJson};
+            const data = [header, ...rows];
             
-            let csv = '\\uFEFF';
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => {
               csv += row.join(',') + '\\n';
             });
@@ -16924,6 +19173,144 @@ app.get('/admin/requests', async (c) => {
             link.href = URL.createObjectURL(blob);
             link.download = 'طلبات_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
             link.click();
+          }
+
+          window.downloadRequestsSampleCSV = function() {
+            window.location.href = '/api/requests/sample-csv'
+          }
+
+          window.triggerRequestsCSVImport = function() {
+            const el = document.getElementById('requestsCsvInput')
+            if (el) el.click()
+          }
+
+          hydrateStatusFilterOptions()
+          hydrateRequestsSidebarStatuses()
+          applyRequestStatusFilterFromUrl()
+          filterTable()
+          
+          function normalizeCsvHeaderCell(v) {
+            return String(v || '')
+              .replace(/^\uFEFF/, '')
+              .replace(/\u200F/g, '')
+              .trim()
+              .toLowerCase()
+          }
+
+          function parseCsvText(text) {
+            const s = String(text || '')
+              .replace(/^\uFEFF/, '')
+              .replace(/^sep=(?:,|;|\\t)(?:\\r\\n|\\n|\\r)/, '')
+            const rows = []
+            let row = []
+            let cur = ''
+            let inQuotes = false
+            for (let i = 0; i < s.length; i++) {
+              const ch = s[i]
+              const next = s[i + 1]
+              if (ch === '"') {
+                if (inQuotes && next === '"') { cur += '"'; i++; continue }
+                inQuotes = !inQuotes
+                continue
+              }
+              if (!inQuotes && (ch === ',')) { row.push(cur); cur = ''; continue }
+              if (!inQuotes && (ch === '\\n' || ch === '\\r')) {
+                if (ch === '\\r' && next === '\\n') i++
+                row.push(cur); cur = ''
+                if (row.some((c) => String(c || '').trim() !== '')) rows.push(row)
+                row = []
+                continue
+              }
+              cur += ch
+            }
+            row.push(cur)
+            if (row.some((c) => String(c || '').trim() !== '')) rows.push(row)
+            return rows
+          }
+
+          window.handleRequestsCSVFile = async function(evt) {
+            try {
+              const file = evt?.target?.files?.[0]
+              if (!file) return
+              const text = await file.text()
+              const rows = parseCsvText(text)
+              if (!rows || rows.length < 2) {
+                alert('ملف CSV فارغ أو غير صالح')
+                return
+              }
+              const header = rows[0].map(normalizeCsvHeaderCell)
+              const idx = (keys) => header.findIndex((h) => keys.indexOf(h) !== -1)
+
+              // Aligned with requests table/export: ['العميل','الموظف المخصص','موظف البنك','البنك','المبلغ المطلوب','المدة (شهور)','الحالة','التاريخ']
+              const iCustomerName = idx(['customer', 'customer_name', 'العميل'])
+              const iCustomerPhone = idx(['customer_phone', 'phone', 'هاتف العميل', 'الهاتف'])
+              const iCustomerId = idx(['customer_id', 'معرف العميل'])
+              const iFinType = idx(['financing_type', 'financing_type_id', 'type', 'نوع التمويل'])
+              const iAmount = idx(['requested_amount', 'amount', 'المبلغ المطلوب', 'المبلغ'])
+              const iDuration = idx(['duration_months', 'duration', 'المدة', 'المدة (شهور)'])
+              const iSalary = idx(['salary_at_request', 'salary', 'الراتب'])
+              const iBank = idx(['selected_bank', 'selected_bank_id', 'bank', 'البنك'])
+              const iStatus = idx(['status', 'الحالة'])
+              const iNotes = idx(['notes', 'ملاحظات'])
+
+              const requests = []
+              for (let r = 1; r < rows.length; r++) {
+                const cols = rows[r]
+                const customer_name = iCustomerName >= 0 ? String(cols[iCustomerName] || '').trim() : ''
+                const customer_phone = iCustomerPhone >= 0 ? String(cols[iCustomerPhone] || '').trim() : ''
+                const customer_id = iCustomerId >= 0 ? String(cols[iCustomerId] || '').trim() : ''
+                const financing_type = iFinType >= 0 ? String(cols[iFinType] || '').trim() : ''
+                const requested_amount = iAmount >= 0 ? String(cols[iAmount] || '').trim() : ''
+                const duration_months = iDuration >= 0 ? String(cols[iDuration] || '').trim() : ''
+                const salary_at_request = iSalary >= 0 ? String(cols[iSalary] || '').trim() : ''
+                const selected_bank = iBank >= 0 ? String(cols[iBank] || '').trim() : ''
+                const status = iStatus >= 0 ? String(cols[iStatus] || '').trim() : ''
+                const notes = iNotes >= 0 ? String(cols[iNotes] || '').trim() : ''
+
+                if (!requested_amount && !customer_name && !customer_phone && !customer_id) continue
+                requests.push({
+                  customer_name,
+                  customer_phone,
+                  customer_id,
+                  financing_type,
+                  requested_amount,
+                  duration_months,
+                  salary_at_request,
+                  selected_bank,
+                  status,
+                  notes
+                })
+              }
+
+              if (requests.length === 0) {
+                alert('لم يتم العثور على صفوف صالحة')
+                return
+              }
+
+              const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+              const headers = { 'Content-Type': 'application/json' }
+              if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+              const resp = await fetch('/api/requests/import-csv', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers,
+                body: JSON.stringify({ requests })
+              })
+              const data = await resp.json().catch(() => ({}))
+              if (!resp.ok || !data.success) {
+                alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
+                return
+              }
+              const errCount = Array.isArray(data.errors) ? data.errors.length : 0
+              alert((data.message || 'تم الاستيراد') + (errCount ? ('\\nأخطاء: ' + errCount) : ''))
+              window.location.reload()
+            } catch (e) {
+              alert('حدث خطأ أثناء الاستيراد')
+              console.error(e)
+            } finally {
+              const el = document.getElementById('requestsCsvInput')
+              if (el) el.value = ''
+            }
           }
         </script>
       </body>
@@ -16940,7 +19327,43 @@ app.get('/admin/requests/:id/delete', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.redirect('/login')
+    if (normalizeRoleId(userInfo.roleId) === 3) {
+      return c.redirect('/admin/requests')
+    }
     const id = c.req.param('id')
+
+    if (normalizeRoleId(userInfo.roleId) === 5) {
+      const row = await c.env.DB.prepare(`
+        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.tenant_id, c.tenant_id AS customer_tenant_id
+        FROM financing_requests fr
+        LEFT JOIN customers c ON fr.customer_id = c.id
+        WHERE fr.id = ?
+      `)
+        .bind(id)
+        .first() as {
+          id?: number
+          customer_id?: number | null
+          assigned_bank_agent_id?: number | null
+          tenant_id?: number | null
+          customer_tenant_id?: number | null
+        } | null
+      if (!row?.id) return c.redirect('/admin/requests')
+      const tid = userInfo.tenantId
+      if (!tid) return c.redirect('/admin/requests')
+      const rowTenant = row.tenant_id != null ? Number(row.tenant_id) : Number(row.customer_tenant_id)
+      if (Number(tid) !== rowTenant) return c.redirect('/admin/requests')
+      const assignedAgentId = Number(row.assigned_bank_agent_id)
+      const cid = row.customer_id != null ? Number(row.customer_id) : null
+      const custTid = row.customer_tenant_id != null ? Number(row.customer_tenant_id) : null
+      if (
+        assignedAgentId !== Number(userInfo.userId) &&
+        (cid == null ||
+          !(await canUserAccessCustomer(c.env.DB, userInfo, { id: cid, tenant_id: custTid })))
+      ) {
+        return c.redirect('/admin/requests')
+      }
+    }
+
     await c.env.DB.prepare('DELETE FROM financing_requests WHERE id = ?').bind(id).run()
     return c.redirect('/admin/requests?deleted=1')
   } catch (error: any) {
@@ -17546,7 +19969,6 @@ app.get('/admin/requests/:id', async (c) => {
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة الطلبات
             </a>
-            ${!isBankAgentViewer ? `
             <div class="flex gap-2">
               <a href="/admin/requests/${id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded transition-all">
                 <i class="fas fa-edit ml-1"></i> تعديل
@@ -17555,7 +19977,6 @@ app.get('/admin/requests/:id', async (c) => {
                 <i class="fas fa-trash ml-1"></i> حذف
               </a>
             </div>
-            ` : ''}
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-8">
@@ -17857,6 +20278,52 @@ app.get('/admin/customers/:id/edit', async (c) => {
       }
     } catch (_) {}
 
+    const editTenantId = (customer as any).tenant_id as number | null
+    let editLocationSelectBlock = ''
+    if (editTenantId) {
+      const activeLocRes = await c.env.DB.prepare(
+        `SELECT id, name, slug, is_active FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
+      )
+        .bind(editTenantId)
+        .all<{ id: number; name: string; slug: string; is_active: number }>()
+      let locRows = (activeLocRes.results || []) as Array<{ id: number; name: string; slug: string; is_active: number }>
+      const curLid = Number((customer as any).location_id)
+      if (Number.isFinite(curLid) && curLid > 0 && !locRows.some((r) => r.id === curLid)) {
+        const cur = await c.env.DB.prepare(
+          `SELECT id, name, slug, is_active FROM tenant_locations WHERE id = ? AND tenant_id = ? LIMIT 1`
+        )
+          .bind(curLid, editTenantId)
+          .first<{ id: number; name: string; slug: string; is_active: number }>()
+        if (cur) locRows = [...locRows, cur]
+      }
+      const locOpts = locRows
+        .map((r) => {
+          const inactiveSuffix = r.is_active ? '' : ' (غير مفعّل)'
+          const sel = Number((customer as any).location_id) === r.id ? ' selected' : ''
+          return `<option value="${r.id}"${sel}>${escapeHtml(r.name)} — ${escapeHtml(r.slug)}${inactiveSuffix}</option>`
+        })
+        .join('')
+      editLocationSelectBlock = `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-map-marker-alt text-teal-600 ml-1"></i>
+                    موقع التسجيل (الفرع) ${locOpts ? '*' : ''}
+                  </label>
+                  <select name="location_id" id="edit_company_location_id" ${locOpts ? 'required' : ''}
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="">— اختر موقع التسجيل —</option>
+                    ${locOpts}
+                  </select>
+                  ${
+                    !locOpts
+                      ? `<p class="text-xs text-amber-700 mt-1">لا توجد مواقع مفعّلة لهذه الشركة. يمكن إضافة مواقع من <a href="/admin/company-settings/locations" class="underline font-semibold">إعدادات المواقع</a>.</p>`
+                      : `<p class="text-xs text-gray-500 mt-1">الفرع المرتبط بالعميل في قوائم التمويل والتقارير.</p>`
+                  }
+                </div>
+              </div>`
+    }
+
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -17897,6 +20364,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
                 </div>
               </div>
+              ${editLocationSelectBlock}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
@@ -19522,7 +21990,7 @@ app.get('/admin/banks', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -19684,7 +22152,7 @@ app.get('/admin/banks', async (c) => {
               ${banks.results.map((bank: any) => `['${bank.id}', '${bank.bank_name}', '${bank.description || ''}', '${bank.is_active ? 'نشط' : 'غير نشط'}']`).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFF';
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => {
               csv += row.join(',') + '\\n';
             });
@@ -19730,7 +22198,7 @@ app.get('/admin/rates', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -19988,7 +22456,7 @@ app.get('/admin/rates', async (c) => {
               ${rates.results.map((rate: any) => `['${rate.id}', '${rate.bank_name || 'غير محدد'}', '${rate.type_name || 'غير محدد'}', '${rate.rate || 0}%', '${rate.min_amount || 0}', '${rate.max_amount || 0}']`).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFF';
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => {
               csv += row.join(',') + '\\n';
             });
@@ -20562,7 +23030,7 @@ app.get('/admin/subscriptions', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -20744,7 +23212,7 @@ app.get('/admin/subscriptions', async (c) => {
               }).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFF';
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => {
               csv += row.join(',') + '\\n';
             });
@@ -21048,7 +23516,7 @@ app.get('/admin/packages', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -21215,7 +23683,7 @@ app.get('/admin/packages', async (c) => {
               ${packages.results.map((pkg: any) => `['${pkg.id}', '${pkg.package_name}', '${pkg.description || ''}', '${pkg.price}', '${pkg.duration_months}', '${pkg.max_calculations}', '${pkg.max_users}', '${pkg.is_active ? 'نشط' : 'غير نشط'}']`).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFF';
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => {
               csv += row.join(',') + '\\n';
             });
@@ -21491,7 +23959,7 @@ app.get('/admin/users', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
           <div class="mb-6 flex items-center justify-between">
-            <a href="/admin" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
             <div class="flex items-center gap-3">
               <i class="fas fa-user-circle text-2xl text-gray-600"></i>
               <div class="text-right">
@@ -21508,7 +23976,7 @@ app.get('/admin/users', async (c) => {
                 المستخدمين (<span id="totalCount">0</span>)
               </h1>
               
-              <div class="flex gap-3">
+              <div class="flex flex-wrap gap-3 items-center">
                 <a href="/admin/users-new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
@@ -21772,7 +24240,7 @@ app.get('/admin/users', async (c) => {
             document.getElementById('filterField').value = 'all';
             renderUsers(allUsers);
           }
-          
+
           function exportToCSV() {
             const data = [
               ['#', 'اسم المستخدم', 'الاسم الكامل', 'البريد الإلكتروني', 'الدور', 'الشركة', 'الحالة']
@@ -21790,7 +24258,7 @@ app.get('/admin/users', async (c) => {
               ]);
             });
             
-            let csv = '\\uFEFF';
+            let csv = '\\uFEFFsep=,\\r\\n';
             data.forEach(row => {
               csv += row.join(',') + '\\n';
             });
@@ -22519,6 +24987,24 @@ app.get('/admin/users-new', async (c) => {
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                          placeholder="مثال: 0512345678">
                 </div>
+
+                <!-- القسم — يُعرض في الموارد البشرية كعمود «القسم» (department) -->
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-sitemap text-cyan-600 ml-1"></i>
+                    القسم <span class="text-gray-400 font-normal text-xs">(اختياري)</span>
+                  </label>
+                  <select name="hr_section"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="">— بدون —</option>
+                    <option value="it">تقنية المعلومات</option>
+                    <option value="hr">الموارد البشرية</option>
+                    <option value="finance">المالية</option>
+                    <option value="sales">المبيعات</option>
+                    <option value="marketing">التسويق</option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">يُستخدم في قائمة موظفي الموارد البشرية.</p>
+                </div>
                 
                 <!-- نوع المستخدم -->
                 <div>
@@ -23148,8 +25634,12 @@ app.put('/api/hr/leaves/:id/approve', async (c) => {
     const id = c.req.param('id');
     const userInfo = await getUserInfo(c);
 
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'غير مصرح لك بالموافقة على الإجازات' }, 403);
+    }
+
     await c.env.DB.prepare(`
-      UPDATE hr_leaves 
+      UPDATE hr_leaves
       SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(userInfo.userId, id).run();
@@ -23168,8 +25658,12 @@ app.put('/api/hr/leaves/:id/reject', async (c) => {
     const userInfo = await getUserInfo(c);
     const { reason } = await c.req.json();
 
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'غير مصرح لك برفض الإجازات' }, 403);
+    }
+
     await c.env.DB.prepare(`
-      UPDATE hr_leaves 
+      UPDATE hr_leaves
       SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP, rejection_reason = ?
       WHERE id = ?
     `).bind(userInfo.userId, reason, id).run();
@@ -23191,6 +25685,78 @@ app.delete('/api/hr/leaves/:id', async (c) => {
     return c.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting leave:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// MY LEAVES APIs (for roles 3, 4, 5)
+// ===============================================
+
+// Get logged-in user's own leaves (matched by email to hr_employees)
+app.get('/api/my-leaves', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    // Find employee record by matching user email
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: true, data: [], employeeFound: false });
+
+    const employee = await c.env.DB.prepare(
+      'SELECT id, full_name_ar FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+
+    if (!employee) return c.json({ success: true, data: [], employeeFound: false });
+
+    const leaves = await c.env.DB.prepare(`
+      SELECT l.*, lt.type_name_ar as leave_type_name
+      FROM hr_leaves l
+      LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
+      WHERE l.employee_id = ?
+      ORDER BY l.created_at DESC
+    `).bind(employee.id).all();
+
+    return c.json({ success: true, data: leaves.results || [], employeeFound: true, employeeId: employee.id, employeeName: employee.full_name_ar });
+  } catch (error: any) {
+    console.error('Error fetching my leaves:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Submit a leave request (for roles 3, 4, 5 — employee linked by email)
+app.post('/api/my-leaves', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+
+    const employee = await c.env.DB.prepare(
+      'SELECT id FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+
+    if (!employee) return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+
+    const { leave_type, start_date, end_date, reason } = await c.req.json();
+    if (!leave_type || !start_date || !end_date) {
+      return c.json({ success: false, error: 'يرجى إدخال نوع الإجازة وتاريخ البداية والنهاية' }, 400);
+    }
+
+    const start = new Date(start_date);
+    const end = new Date(end_date);
+    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (totalDays < 1) return c.json({ success: false, error: 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية' }, 400);
+
+    const result = await c.env.DB.prepare(`
+      INSERT INTO hr_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).bind(userInfo.tenantId || 1, employee.id, leave_type, start_date, end_date, totalDays, reason || null).run();
+
+    return c.json({ success: true, id: result.meta.last_row_id });
+  } catch (error: any) {
+    console.error('Error submitting my leave:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -23888,11 +26454,16 @@ registerContractsModuleApi(app, getUserInfo)
 
 async function ensureContractsModuleAccess(
   c: any,
-  allowedForRole3: 'all' | 'list-new-only' = 'all'
+  allowedForRole3: 'all' | 'list-new-only' = 'all',
+  opts: { allowRole4?: boolean; blockRole5?: boolean } = {}
 ): Promise<Response | null> {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
-  if (userInfo.roleId === 4) return c.redirect('/admin/panel')
+  if (userInfo.roleId === 4) {
+    if (opts.allowRole4) return null
+    return c.redirect('/admin/contracts/list')
+  }
+  if (userInfo.roleId === 5 && opts.blockRole5) return c.redirect('/admin/contracts/list')
   if (userInfo.roleId === 3) {
     if (allowedForRole3 === 'list-new-only') return null
     return c.redirect('/admin/contracts/list')
@@ -23906,7 +26477,7 @@ app.get('/admin/contracts', async (c) => {
   return c.html(contractsDashboardPage)
 })
 app.get('/admin/contracts/list', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'list-new-only')
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
   const page =
@@ -23914,7 +26485,7 @@ app.get('/admin/contracts/list', async (c) => {
   return c.html(page)
 })
 app.get('/admin/contracts/new', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'list-new-only')
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) {
@@ -23923,7 +26494,7 @@ app.get('/admin/contracts/new', async (c) => {
   if (userInfo.roleId === 3 && c.req.query('edit')) {
     return c.redirect('/admin/contracts/list')
   }
-  if ((userInfo.roleId === 2 || userInfo.roleId === 3) && !userInfo.tenantId) {
+  if ((userInfo.roleId === 2 || userInfo.roleId === 3 || userInfo.roleId === 4 || userInfo.roleId === 5) && !userInfo.tenantId) {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
   }
   const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true })
@@ -23978,12 +26549,12 @@ app.get('/admin/contracts/new', async (c) => {
   return c.html(html)
 })
 app.get('/admin/contracts/view', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'list-new-only')
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
   return c.html(contractsViewPage)
 })
 app.get('/admin/contracts/templates', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all')
+  const denied = await ensureContractsModuleAccess(c, 'all', { allowRole4: true })
   if (denied) return denied
   return c.html(contractsTemplatesPage)
 })
@@ -23998,7 +26569,7 @@ app.get('/admin/contracts/archive', async (c) => {
   return c.html(contractsArchivePage)
 })
 app.get('/admin/contracts/settings', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all')
+  const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5: true })
   if (denied) return denied
   return c.html(contractsSettingsPage)
 })
@@ -24059,6 +26630,169 @@ app.get('/admin/hr/documents', (c) => {
 // HR Reports Page
 app.get('/admin/hr/reports', (c) => {
   return c.html(hrReportsPage)
+})
+
+// My Leaves Page (for roles 3, 4, 5)
+app.get('/admin/my-leaves', (c) => {
+  const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>طلبات إجازتي</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f8fafc; color: #1e293b; direction: rtl; }
+    .page-wrapper { max-width: 900px; margin: 40px auto; padding: 0 16px 80px; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #1e40af; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(15,23,42,0.08); padding: 24px; margin-bottom: 24px; }
+    .card h2 { font-size: 1.1rem; font-weight: 600; color: #334155; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 0.85rem; font-weight: 600; color: #475569; }
+    input, select, textarea { padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: #f8fafc; color: #1e293b; transition: border 0.2s; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; background: #fff; }
+    textarea { resize: vertical; min-height: 80px; }
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 22px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: #1e40af; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f1f5f9; padding: 11px 14px; text-align: right; font-size: 0.82rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; }
+    td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+    .badge-pending { background: #fef9c3; color: #854d0e; }
+    .badge-approved { background: #dcfce7; color: #166534; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; }
+    .no-employee { text-align: center; padding: 40px; color: #64748b; }
+    .no-employee i { font-size: 3rem; color: #cbd5e1; margin-bottom: 12px; display: block; }
+    .loading { text-align: center; padding: 30px; color: #94a3b8; }
+    @media(max-width:600px) { .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+  <h1><i class="fas fa-calendar-alt"></i> طلبات إجازتي</h1>
+
+  <div id="employeeAlert"></div>
+
+  <div class="card" id="submitCard">
+    <h2><i class="fas fa-plus-circle" style="color:#1e40af"></i> تقديم طلب إجازة جديد</h2>
+    <div id="formAlert"></div>
+    <form id="leaveForm">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>نوع الإجازة <span style="color:red">*</span></label>
+          <select name="leave_type" required>
+            <option value="">-- اختر نوع الإجازة --</option>
+            <option value="annual">إجازة سنوية</option>
+            <option value="sick">إجازة مرضية</option>
+            <option value="emergency">إجازة طارئة</option>
+            <option value="maternity">إجازة أمومة</option>
+            <option value="paternity">إجازة أبوة</option>
+            <option value="hajj">إجازة حج</option>
+            <option value="unpaid">إجازة بدون راتب</option>
+            <option value="other">أخرى</option>
+          </select>
+        </div>
+        <div class="form-group"></div>
+        <div class="form-group">
+          <label>تاريخ البداية <span style="color:red">*</span></label>
+          <input type="date" name="start_date" required>
+        </div>
+        <div class="form-group">
+          <label>تاريخ النهاية <span style="color:red">*</span></label>
+          <input type="date" name="end_date" required>
+        </div>
+        <div class="form-group full">
+          <label>سبب الإجازة</label>
+          <textarea name="reason" placeholder="اكتب سبب الإجازة (اختياري)"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:18px">
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <i class="fas fa-paper-plane"></i> تقديم الطلب
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2><i class="fas fa-list-alt" style="color:#1e40af"></i> طلباتي السابقة</h2>
+    <div id="leavesContainer"><div class="loading"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div></div>
+  </div>
+</div>
+<script>
+(async function() {
+  const leaveTypeLabels = {
+    annual: 'سنوية', sick: 'مرضية', emergency: 'طارئة',
+    maternity: 'أمومة', paternity: 'أبوة', hajj: 'حج',
+    unpaid: 'بدون راتب', other: 'أخرى'
+  };
+  const statusLabels = { pending: 'قيد الانتظار', approved: 'مقبولة', rejected: 'مرفوضة' };
+  const statusClass = { pending: 'badge-pending', approved: 'badge-approved', rejected: 'badge-rejected' };
+
+  async function loadLeaves() {
+    const container = document.getElementById('leavesContainer');
+    const alertEl = document.getElementById('employeeAlert');
+    try {
+      const res = await fetch('/api/my-leaves', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') } });
+      const data = await res.json();
+      if (!data.success) { container.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>' + (data.error || 'حدث خطأ') + '</div>'; return; }
+      if (!data.employeeFound) {
+        document.getElementById('submitCard').style.display = 'none';
+        alertEl.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> لم يتم ربط حسابك بسجل موظف. يرجى التواصل مع مدير الموارد البشرية لربط حسابك.</div>';
+        container.innerHTML = '<div class="no-employee"><i class="fas fa-user-slash"></i><p>لا يوجد سجل موظف مرتبط بحسابك</p></div>';
+        return;
+      }
+      const leaves = data.data;
+      if (!leaves.length) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:10px"></i>لا توجد طلبات إجازة سابقة</div>'; return; }
+      let rows = leaves.map(function(l) {
+        const type = leaveTypeLabels[l.leave_type] || l.leave_type || '-';
+        const status = statusLabels[l.status] || l.status;
+        const cls = statusClass[l.status] || '';
+        const rejection = l.rejection_reason ? '<br><small style="color:#ef4444">سبب الرفض: ' + l.rejection_reason + '</small>' : '';
+        return '<tr><td>' + (l.start_date || '-') + '</td><td>' + (l.end_date || '-') + '</td><td>' + type + '</td><td>' + (l.total_days || '-') + ' يوم</td><td><span class="badge ' + cls + '">' + status + '</span>' + rejection + '</td><td>' + (l.reason || '-') + '</td></tr>';
+      }).join('');
+      container.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>تاريخ البداية</th><th>تاريخ النهاية</th><th>النوع</th><th>الأيام</th><th>الحالة</th><th>السبب</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    } catch(e) { container.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>فشل تحميل البيانات</div>'; }
+  }
+
+  document.getElementById('leaveForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const alertEl = document.getElementById('formAlert');
+    btn.disabled = true;
+    const fd = new FormData(this);
+    const body = { leave_type: fd.get('leave_type'), start_date: fd.get('start_date'), end_date: fd.get('end_date'), reason: fd.get('reason') };
+    alertEl.innerHTML = '';
+    try {
+      const res = await fetch('/api/my-leaves', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.success) {
+        alertEl.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> تم تقديم طلب الإجازة بنجاح وهو الآن قيد مراجعة المدير</div>';
+        this.reset();
+        loadLeaves();
+      } else {
+        alertEl.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>' + (data.error || 'حدث خطأ') + '</div>';
+      }
+    } catch(e) { alertEl.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>فشل في الإرسال</div>'; }
+    btn.disabled = false;
+  });
+
+  loadLeaves();
+})();
+</script>
+</body>
+</html>`
+  return c.html(html)
 })
 
 // HR Dashboard Statistics API
@@ -24703,6 +27437,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     const customerPhone = String(payload?.customer_phone ?? '').trim()
     const customerMessage = String(payload?.customer_message ?? '').trim()
     const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
+    const locationSlugRaw = normalizeLocationSlugInput(payload?.location_slug)
 
     if (!customerName || !customerPhone || !customerMessage) {
       return c.json({ success: false, error: 'الاسم ورقم الجوال والرسالة مطلوبة' }, 400)
@@ -24740,22 +27475,66 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       affiliateLabel = affRow.label
     }
 
-    const insertFollowupResult = await c.env.DB.prepare(`
+    let locationIdForFollowup: number | null = null
+    if (locationSlugRaw) {
+      if (!isValidAffiliatePathSegment(locationSlugRaw)) {
+        return c.json({ success: false, error: 'مسار الموقع غير صالح' }, 400)
+      }
+      const locRow = await c.env.DB.prepare(`
+        SELECT id FROM tenant_locations
+        WHERE tenant_id = ? AND slug = ? AND is_active = 1
+        LIMIT 1
+      `)
+        .bind(tenant.id, locationSlugRaw)
+        .first<{ id: number }>()
+      if (!locRow) {
+        return c.json({ success: false, error: 'الموقع غير معروف' }, 400)
+      }
+      locationIdForFollowup = locRow.id
+    }
+
+    let insertFollowupResult: any
+    try {
+      insertFollowupResult = await c.env.DB.prepare(`
+      INSERT INTO company_contact_followups (
+        tenant_id, customer_name, customer_phone, customer_message, source_slug,
+        affiliate_path_segment, affiliate_label, location_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+        .bind(
+          tenant.id,
+          customerName,
+          customerPhone,
+          customerMessage,
+          slug,
+          affiliatePathSegment,
+          affiliateLabel,
+          locationIdForFollowup
+        )
+        .run()
+    } catch (insErr: unknown) {
+      const msg = String((insErr as Error)?.message ?? insErr ?? '')
+      if (msg.includes('location_id') && (msg.includes('no such column') || msg.includes('no column named'))) {
+        insertFollowupResult = await c.env.DB.prepare(`
       INSERT INTO company_contact_followups (
         tenant_id, customer_name, customer_phone, customer_message, source_slug,
         affiliate_path_segment, affiliate_label
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
-      .bind(
-        tenant.id,
-        customerName,
-        customerPhone,
-        customerMessage,
-        slug,
-        affiliatePathSegment,
-        affiliateLabel
-      )
-      .run()
+          .bind(
+            tenant.id,
+            customerName,
+            customerPhone,
+            customerMessage,
+            slug,
+            affiliatePathSegment,
+            affiliateLabel
+          )
+          .run()
+      } else {
+        throw insErr
+      }
+    }
 
     // Automatically create + assign a follow-up task to a role-4 staff member (fair queue).
     // If there are no active role-4 staff members, we still create the task unassigned.
@@ -24866,10 +27645,19 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
 
     const tenantRow = await c.env.DB.prepare(`SELECT slug FROM tenants WHERE id = ? LIMIT 1`).bind(tenantId).first<{ slug: string }>()
 
+    const locRes = await c.env.DB.prepare(`
+      SELECT id, name, slug FROM tenant_locations
+      WHERE tenant_id = ? AND is_active = 1
+      ORDER BY is_primary DESC, name ASC
+    `)
+      .bind(tenantId)
+      .all()
+
     return c.json({
       success: true,
       data: results || [],
-      tenant_slug: tenantRow?.slug ?? null
+      tenant_slug: tenantRow?.slug ?? null,
+      locations: locRes.results || [],
     })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -24967,12 +27755,13 @@ app.delete('/api/tenant-contact-affiliates/:id', async (c) => {
   }
 })
 
-// Follow-up module data (roles 1,2,3 only)
+// Follow-up module data (roles 1,2,3 — not employees (4) or bank agents (5))
 app.get('/api/follow-ups', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const linkFilterRaw = String(c.req.query('followupLinkFilter') ?? '').trim().toLowerCase()
     const linkFilter = linkFilterRaw === 'company' || linkFilterRaw === 'affiliate' ? linkFilterRaw : 'all'
@@ -24998,9 +27787,10 @@ app.get('/api/follow-ups', async (c) => {
       const tenantFilter = c.req.query('tenant_id')
       if (tenantFilter && /^\d+$/.test(String(tenantFilter))) {
         const stmt = c.env.DB.prepare(`
-          SELECT f.*, t.company_name
+          SELECT f.*, t.company_name, tl.slug AS location_slug
           FROM company_contact_followups f
           LEFT JOIN tenants t ON t.id = f.tenant_id
+          LEFT JOIN tenant_locations tl ON tl.id = f.location_id
           WHERE f.tenant_id = ?
           ${linkClause}
           ${priorityClause}
@@ -25014,9 +27804,10 @@ app.get('/api/follow-ups', async (c) => {
       }
 
       const stmt = c.env.DB.prepare(`
-        SELECT f.*, t.company_name
+        SELECT f.*, t.company_name, tl.slug AS location_slug
         FROM company_contact_followups f
         LEFT JOIN tenants t ON t.id = f.tenant_id
+        LEFT JOIN tenant_locations tl ON tl.id = f.location_id
         WHERE 1=1
         ${linkClause}
         ${priorityClause}
@@ -25034,9 +27825,10 @@ app.get('/api/follow-ups', async (c) => {
     }
 
     const stmt = c.env.DB.prepare(`
-      SELECT f.*, t.company_name
+      SELECT f.*, t.company_name, tl.slug AS location_slug
       FROM company_contact_followups f
       LEFT JOIN tenants t ON t.id = f.tenant_id
+      LEFT JOIN tenant_locations tl ON tl.id = f.location_id
       WHERE f.tenant_id = ?
       ${linkClause}
       ${priorityClause}
@@ -25057,7 +27849,8 @@ app.get('/api/follow-ups/:id/notes', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -25098,7 +27891,8 @@ app.post('/api/follow-ups/:id/notes', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -25142,7 +27936,8 @@ app.get('/api/follow-ups/:id/staff', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -25174,7 +27969,8 @@ app.get('/api/follow-ups/:id/tasks', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -25214,7 +28010,8 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -26275,7 +29072,7 @@ app.get('/admin/my-tasks', async (c) => {
         }
 
         function setActiveFilterButtons() {
-          document.querySelectorAll('.filter-btn').forEach(function (btn) {
+          document.querySelectorAll('#tasksPage .filter-btn').forEach(function (btn) {
             var f = btn.getAttribute('data-filter');
             var on = f === activeFilter;
             btn.className = 'filter-btn px-4 py-2 rounded-lg text-sm font-medium border ' +
@@ -26283,7 +29080,7 @@ app.get('/admin/my-tasks', async (c) => {
           });
         }
 
-        document.querySelectorAll('.filter-btn').forEach(function (btn) {
+        document.querySelectorAll('#tasksPage .filter-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
             activeFilter = btn.getAttribute('data-filter') || 'all';
             setActiveFilterButtons();
@@ -26332,17 +29129,25 @@ app.get('/admin/contact-affiliates', async (c) => {
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     </head>
     <body class="bg-gray-50 min-h-screen">
+      <div class="border-b border-slate-200/90 bg-slate-50/90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
+          <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+      </div>
       <div class="max-w-4xl mx-auto p-6">
-        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div class="mb-6">
           <div>
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900">
               <i class="fas fa-link ml-2 text-amber-600"></i>روابط التواصل التسويقية
             </h1>
-            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل (مثل /facebook) لتتبع مصدر كل طلب في بطاقات المتابعة.</p>
+            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل. مع الفروع، التنسيق الكامل: <span dir="ltr" class="font-mono text-xs bg-gray-100 px-1 rounded">/{شركة}/{فرع}/{مسار}</span></p>
           </div>
-          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
-            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
-          </a>
+        </div>
+
+        <div id="affiliateLocPick" class="mb-4 bg-amber-50/90 rounded-xl border border-amber-100 p-4 hidden">
+          <label class="block text-sm font-medium text-gray-800 mb-2">عرض الرابط الكامل حسب الفرع</label>
+          <select id="affiliateLocSelect" class="w-full border rounded-lg px-3 py-2 bg-white"></select>
+          <p class="text-xs text-gray-600 mt-2">اختر فرعاً لنسخ رابط التسويق والإحالة الصحيح.</p>
         </div>
 
         <div id="superTenantWrap" class="${isSuper ? '' : 'hidden'} mb-6 bg-white rounded-xl border p-4">
@@ -26428,6 +29233,21 @@ app.get('/admin/contact-affiliates', async (c) => {
             var rows = Array.isArray(res.data.data) ? res.data.data : [];
             var slug = res.data.tenant_slug || '';
             var origin = window.location.origin;
+            var locs = Array.isArray(res.data.locations) ? res.data.locations : [];
+            var pick = document.getElementById('affiliateLocPick');
+            var locSel = document.getElementById('affiliateLocSelect');
+            if (locs.length && pick && locSel) {
+              pick.classList.remove('hidden');
+              var prevLoc = locSel.value;
+              locSel.innerHTML = locs.map(function (l) {
+                return '<option value="' + escapeHtml(l.slug) + '">' + escapeHtml(l.name) + ' (' + escapeHtml(l.slug) + ')</option>';
+              }).join('');
+              if (prevLoc) locSel.value = prevLoc;
+              locSel.onchange = function () { loadList(); };
+            } else if (pick) {
+              pick.classList.add('hidden');
+            }
+            var locSlugForUrl = locSel && locSel.value ? locSel.value : '';
             if (!rows.length) {
               body.innerHTML = '<p class="text-gray-500">لا توجد روابط بعد.</p>';
               return;
@@ -26436,7 +29256,11 @@ app.get('/admin/contact-affiliates', async (c) => {
               '<ul class="divide-y">' +
               rows
                 .map(function (r) {
-                  var full = slug ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment) : '';
+                  var full = slug
+                    ? locSlugForUrl
+                      ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(locSlugForUrl) + '/' + encodeURIComponent(r.path_segment)
+                      : origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment)
+                    : '';
                   return (
                     '<li class="py-3 flex flex-wrap items-center justify-between gap-2">' +
                     '<div>' +
@@ -26519,7 +29343,8 @@ app.get('/admin/contact-affiliates', async (c) => {
 app.get('/admin/follow-ups', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId) return c.redirect('/login')
-  if (userInfo.roleId === 4) return c.redirect('/admin/panel')
+  const rid = normalizeRoleId(userInfo.roleId)
+  if (rid === 4 || rid === 5) return c.redirect('/admin/panel')
 
   // Auto-assign is now triggered at follow-up creation time.
   // Keep the backend endpoint as a safety net for legacy/unassigned tasks,
@@ -26544,6 +29369,11 @@ app.get('/admin/follow-ups', async (c) => {
       <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
     </head>
     <body class="bg-gray-50 min-h-screen">
+      <div class="border-b border-slate-200/90 bg-slate-50/90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
+          <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+        </div>
+      </div>
       <div class="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white shadow-2xl">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -26590,9 +29420,6 @@ app.get('/admin/follow-ups', async (c) => {
               </button>
               <a href="/admin/contact-affiliates" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
                 <i class="fas fa-funnel-dollar"></i>روابط الأفلييت
-              </a>
-              <a href="/admin/panel" class="inline-flex items-center gap-2 bg-gray-900/70 hover:bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/10">
-                <i class="fas fa-arrow-right"></i>لوحة التحكم
               </a>
             </div>
           </div>
@@ -27112,6 +29939,17 @@ app.get('/admin/follow-ups', async (c) => {
           document.getElementById('tasksModal').classList.remove('flex');
         }
 
+        function followupPublicPath(row) {
+          const s = String(row.source_slug || '').trim();
+          const loc = String(row.location_slug || '').trim();
+          const aff = String(row.affiliate_path_segment || '').trim();
+          if (!s) return '—';
+          if (loc && aff) return '/' + s + '/' + loc + '/' + aff;
+          if (loc) return '/' + s + '/' + loc;
+          if (aff) return '/' + s + '/' + aff;
+          return '/' + s;
+        }
+
         async function loadFollowUps() {
           const cards = document.getElementById('cards');
           cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
@@ -27143,7 +29981,7 @@ app.get('/admin/follow-ups', async (c) => {
                 </div>
                 <div class="space-y-2">
                   <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(row.customer_phone || '-')}</p>
-                  <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${row.affiliate_path_segment ? '/' + escapeHtml(row.source_slug || '') + '/' + escapeHtml(row.affiliate_path_segment) : '/' + escapeHtml(row.source_slug || '-')}</p>
+                  <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
                   <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
                   <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
                     <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
@@ -27388,22 +30226,56 @@ app.get('/admin/follow-ups', async (c) => {
   `)
 })
 
-// Public company contact with affiliate path (example: /mawad/facebook) — register before /:slug
-app.get('/:slug/:affiliatePath', async (c) => {
+// Public tenant contact + campaign URLs — no session/JWT required; keep handlers free of getUserInfo().
+// Order matters: most specific routes first (location + affiliate), then two-segment, then company root.
+
+// /{companySlug}/{locationSlug}/{affiliatePath}
+app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   const slug = normalizeTenantSlug(c.req.param('slug'))
+  const locationSlug = normalizeLocationSlugInput(c.req.param('locationSlug'))
   const affiliatePath = normalizeAffiliatePathSegment(c.req.param('affiliatePath'))
-  if (!slug || isReservedRootSlug(slug) || !affiliatePath || !isValidAffiliatePathSegment(affiliatePath)) {
+  if (
+    !slug ||
+    isReservedRootSlug(slug) ||
+    !locationSlug ||
+    !affiliatePath ||
+    !isValidAffiliatePathSegment(affiliatePath)
+  ) {
     return c.notFound()
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
-  `).bind(slug).first<PublicContactTenantRow & { id: number }>()
+  `)
+    .bind(slug)
+    .first<PublicContactTenantRow & { id: number }>()
 
   if (!tenant?.id) {
+    return c.notFound()
+  }
+
+  const location = await c.env.DB.prepare(`
+    SELECT id, name, slug, city, address, contact_phone, contact_email, logo_url
+    FROM tenant_locations
+    WHERE tenant_id = ? AND slug = ? AND is_active = 1
+    LIMIT 1
+  `)
+    .bind(tenant.id, locationSlug)
+    .first<{
+      id: number
+      name: string
+      slug: string
+      city: string
+      address: string
+      contact_phone: string | null
+      contact_email: string | null
+      logo_url: string | null
+    }>()
+
+  if (!location) {
     return c.notFound()
   }
 
@@ -27420,10 +30292,73 @@ app.get('/:slug/:affiliatePath', async (c) => {
     return c.notFound()
   }
 
-  return c.html(buildPublicContactPageHtml(tenant, affiliate))
+  const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
+  const merged = mergePublicContactForLocation(tenant, location, primary)
+  return c.html(buildPublicContactPageHtml(merged, affiliate, { locationSlug: location.slug }))
 })
 
-// Public company contact page via root slug (example: /mawad)
+// /{companySlug}/{locationOrLegacyAffiliate} — legacy affiliate links first, then branch slug
+app.get('/:slug/:secondSegment', async (c) => {
+  const slug = normalizeTenantSlug(c.req.param('slug'))
+  const second = normalizeLocationSlugInput(c.req.param('secondSegment'))
+  if (!slug || isReservedRootSlug(slug) || !second || !isValidAffiliatePathSegment(second)) {
+    return c.notFound()
+  }
+
+  const tenant = await c.env.DB.prepare(`
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url
+    FROM tenants
+    WHERE slug = ? AND status = 'active'
+    LIMIT 1
+  `)
+    .bind(slug)
+    .first<PublicContactTenantRow & { id: number }>()
+
+  if (!tenant?.id) {
+    return c.notFound()
+  }
+
+  const affiliate = await c.env.DB.prepare(`
+    SELECT path_segment, label
+    FROM tenant_contact_affiliate_links
+    WHERE tenant_id = ? AND path_segment = ?
+    LIMIT 1
+  `)
+    .bind(tenant.id, second)
+    .first<{ path_segment: string; label: string }>()
+
+  if (affiliate) {
+    return c.html(buildPublicContactPageHtml(tenant, affiliate))
+  }
+
+  const location = await c.env.DB.prepare(`
+    SELECT id, name, slug, city, address, contact_phone, contact_email, logo_url
+    FROM tenant_locations
+    WHERE tenant_id = ? AND slug = ? AND is_active = 1
+    LIMIT 1
+  `)
+    .bind(tenant.id, second)
+    .first<{
+      id: number
+      name: string
+      slug: string
+      city: string
+      address: string
+      contact_phone: string | null
+      contact_email: string | null
+      logo_url: string | null
+    }>()
+
+  if (!location) {
+    return c.notFound()
+  }
+
+  const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
+  const merged = mergePublicContactForLocation(tenant, location, primary)
+  return c.html(buildPublicContactPageHtml(merged, null, { locationSlug: location.slug }))
+})
+
+// Public tenant contact root (example: /mawad) — no session/JWT required.
 app.get('/:slug', async (c) => {
   const slug = normalizeTenantSlug(c.req.param('slug'))
   if (!slug || isReservedRootSlug(slug)) {
@@ -27431,7 +30366,7 @@ app.get('/:slug', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color
+    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1

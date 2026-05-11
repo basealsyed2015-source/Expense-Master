@@ -12,7 +12,7 @@ export const hrMainPage = `<!DOCTYPE html>
 <body class="bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 min-h-screen">
     <div class="border-b border-slate-200/90 bg-white/80">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Page Header -->

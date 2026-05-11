@@ -93,7 +93,7 @@ export const smartCalculator = `<!DOCTYPE html>
     <nav class="bg-white shadow-lg">
         <div class="container mx-auto px-4 py-4">
             <div class="flex justify-between items-center">
-                <a href="/" class="text-2xl font-bold text-blue-600">
+                <a href="/admin/panel" class="text-2xl font-bold text-blue-600">
                     <i class="fas fa-calculator ml-2"></i>
                     حاسبة التمويل الذكية
                 </a>

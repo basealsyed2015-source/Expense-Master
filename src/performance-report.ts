@@ -28,7 +28,7 @@ export const performanceReportPage = `
         <div class="flex justify-between items-center mb-6 no-print">
             <div>
                 <div class="mb-2 pb-1 border-b border-gray-100">
-                    <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+                    <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
                 </div>
                 <h1 class="text-4xl font-bold text-gray-800">
                     <i class="fas fa-chart-line text-green-600 ml-3"></i>

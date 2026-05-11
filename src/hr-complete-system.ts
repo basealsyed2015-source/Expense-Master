@@ -78,7 +78,7 @@ function getNavbar(title: string, subtitle: string, icon: string) {
     return `
     <div class="border-b border-slate-200/90 bg-white/80">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white shadow-2xl">
@@ -215,7 +215,7 @@ export const hrEmployeesPage = `<!DOCTYPE html>
                     <i class="fas fa-users ml-3 text-blue-600"></i>
                     قائمة الموظفين
                 </h2>
-                <div class="flex gap-3">
+                <div class="flex flex-wrap gap-3">
                     <button onclick="showModal('addEmployeeModal')" class="btn-primary">
                         <i class="fas fa-plus ml-2"></i>
                         إضافة موظف جديد
@@ -305,8 +305,8 @@ export const hrEmployeesPage = `<!DOCTYPE html>
                         <input type="text" name="full_name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الهوية *</label>
-                        <input type="text" name="national_id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الهوية</label>
+                        <input type="text" name="national_id" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label>
@@ -737,8 +737,8 @@ export const hrEmployeeEditPage = `<!DOCTYPE html>
                         <input type="text" name="full_name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الهوية *</label>
-                        <input type="text" name="national_id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">رقم الهوية</label>
+                        <input type="text" name="national_id" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label>

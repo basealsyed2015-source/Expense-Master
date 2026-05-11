@@ -968,7 +968,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
   <main class="main-content">
     <div class="contracts-page-back">
-      <a href="/admin">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <header class="topbar">
       <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
@@ -1122,6 +1122,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
     function buildTemplateCard(t) {
       const vars = parseTemplateVars(t);
       const isActive = t.is_active === true || t.is_active === 'true';
+      const roleId = getContractsRoleId();
+      const canManageExistingTemplates = roleId !== 4;
       return \`
         <div class="template-card \${isActive ? 'active-tpl' : ''}">
           <div class="template-card-header">
@@ -1149,8 +1151,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           <div class="template-card-footer">
             <a href="/admin/contracts/new?template=\${t.id}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> إنشاء عقد</a>
             <button class="btn btn-outline btn-sm" onclick="previewTemplate('\${t.id}')"><i class="fas fa-eye"></i></button>
-            <button class="btn btn-warning btn-sm" onclick="editTemplate('\${t.id}')"><i class="fas fa-edit"></i></button>
-            <button class="btn btn-danger btn-sm" onclick="deleteTemplate('\${t.id}')"><i class="fas fa-trash"></i></button>
+            \${canManageExistingTemplates ? \`<button class="btn btn-warning btn-sm" onclick="editTemplate('\${t.id}')"><i class="fas fa-edit"></i></button>\` : ''}
+            \${canManageExistingTemplates ? \`<button class="btn btn-danger btn-sm" onclick="deleteTemplate('\${t.id}')"><i class="fas fa-trash"></i></button>\` : ''}
           </div>
         </div>
       \`;

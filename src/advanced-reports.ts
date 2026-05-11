@@ -119,7 +119,7 @@ export const customersReportPage = `<!DOCTYPE html>
 <body class="bg-gray-50">
     <div class="border-b border-slate-200/90 bg-white/90">
         <div class="max-w-7xl mx-auto px-6 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
@@ -312,7 +312,7 @@ export const requestsReportPage = `<!DOCTYPE html>
 <body class="bg-gray-50">
     <div class="border-b border-slate-200/90 bg-white/90">
         <div class="max-w-7xl mx-auto px-6 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
@@ -535,7 +535,7 @@ export const financialReportPage = `<!DOCTYPE html>
 <body class="bg-gray-50">
     <div class="border-b border-slate-200/90 bg-white/90">
         <div class="max-w-7xl mx-auto px-6 py-1.5">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">

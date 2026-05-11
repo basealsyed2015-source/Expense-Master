@@ -12,6 +12,9 @@ const COMPANY = {
   court: 'الرياض'
 };
 
+const CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL = 'بانتظار موافقة ممثل البنك';
+const CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL = 'بانتظار موافقة الإدارة';
+
 // ===== API HELPERS =====
 /** When admin opens /admin/contracts/...?tenant_id=N, pass it through so super-admin writes resolve tenant (see contracts-module-api resolveWriteTenantId). */
 function contractTablesTenantQuerySuffix() {
@@ -127,6 +130,8 @@ function getStatusBadge(status) {
   const map = {
     'نشط': { cls: 'badge-active', icon: 'fa-check-circle' },
     'بانتظار التمويل': { cls: 'badge-pending', icon: 'fa-clock' },
+    [CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL]: { cls: 'badge-pending', icon: 'fa-user-clock' },
+    [CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL]: { cls: 'badge-pending', icon: 'fa-user-shield' },
     'مكتمل': { cls: 'badge-completed', icon: 'fa-trophy' },
     'مؤرشف': { cls: 'badge-archived', icon: 'fa-archive' },
     'ملغي': { cls: 'badge-cancelled', icon: 'fa-times-circle' }
@@ -311,7 +316,7 @@ function printPage() {
 
 function normalizeRoleId(value) {
   const numeric = parseInt(value, 10);
-  const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4 };
+  const legacyMap = { 11: 1, 12: 2, 13: 3, 14: 4, 15: 5 };
   return legacyMap[numeric] || numeric || null;
 }
 
@@ -341,9 +346,21 @@ function getContractsRoleId() {
 
 function applyRole3ContractsRestrictions() {
   const roleId = getContractsRoleId();
-  if (roleId !== 3) return;
+  if (![3, 4, 5].includes(roleId)) return;
 
-  const allowedSidebarLinks = new Set(['/admin/contracts/list', '/admin/contracts/new']);
+  const allowedSidebarLinks =
+    roleId === 4
+      ? new Set(['/admin/contracts/list', '/admin/contracts/new', '/admin/contracts/templates'])
+      : roleId === 5
+        ? new Set([
+            '/admin/contracts',
+            '/admin/contracts/list',
+            '/admin/contracts/new',
+            '/admin/contracts/templates',
+            '/admin/contracts/notes',
+            '/admin/contracts/archive'
+          ])
+        : new Set(['/admin/contracts/list', '/admin/contracts/new']);
   document.querySelectorAll('.sidebar-nav .nav-item[href]').forEach((link) => {
     const href = (link.getAttribute('href') || '').split('?')[0];
     if (!allowedSidebarLinks.has(href)) {
@@ -352,6 +369,15 @@ function applyRole3ContractsRestrictions() {
   });
 
   const hideRestrictedListActions = () => {
+    if (roleId === 4) {
+      document
+        .querySelectorAll('button[onclick*="editTemplate("], button[onclick*="deleteTemplate("]')
+        .forEach((el) => {
+          el.style.display = 'none';
+        });
+      return;
+    }
+    if (roleId !== 3) return;
     document
       .querySelectorAll(
         '.action-edit, .action-delete, a[href*="/admin/contracts/new?edit="], button[onclick*="archiveContract("]'
@@ -368,6 +394,13 @@ function applyRole3ContractsRestrictions() {
     const observer = new MutationObserver(() => hideRestrictedListActions());
     observer.observe(contractsBody, { childList: true, subtree: true });
   }
+  const templatesGrid = document.getElementById('templatesGrid');
+  if (templatesGrid && typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(() => hideRestrictedListActions());
+    observer.observe(templatesGrid, { childList: true, subtree: true });
+  }
+
+  if (roleId !== 3) return;
 
   document.addEventListener(
     'click',
@@ -393,6 +426,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.showToast = showToast;
   globalThis.toggleSidebar = toggleSidebar;
   globalThis.getContractsRoleId = getContractsRoleId;
+  globalThis.CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL = CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL;
+  globalThis.CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
 }
 
 // ===== INIT =====

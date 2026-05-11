@@ -9,6 +9,10 @@ type UserInfo = {
 
 type GetUserInfo = (c: Context) => Promise<UserInfo>
 
+const STATUS_AWAITING_BANK_AGENT_APPROVAL = 'بانتظار موافقة ممثل البنك'
+const STATUS_AWAITING_ADMIN_APPROVAL = 'بانتظار موافقة الإدارة'
+const FINAL_APPROVAL_STATUSES = new Set(['نشط', 'بانتظار التمويل', 'مكتمل'])
+
 function sqlTable(name: string): string | null {
   if (name === 'templates') return 'contract_templates'
   if (name === 'contracts' || name === 'promissory_notes' || name === 'customers') return name
@@ -27,11 +31,15 @@ function isSuperAdmin(info: UserInfo): boolean {
 }
 
 function isContractsModuleBlockedRole(info: UserInfo): boolean {
-  return info.roleId === 4
+  return false
 }
 
 function isContractsModuleReadOnlyRole(info: UserInfo): boolean {
   return info.roleId === 3
+}
+
+function isFinalApprover(info: UserInfo): boolean {
+  return info.roleId === 1 || info.roleId === 2
 }
 
 async function auth(c: Context, getUserInfo: GetUserInfo) {
@@ -147,12 +155,39 @@ function tenantFilterClause(
   return { sql: ' AND 1=0 ', binds: [] }
 }
 
+/**
+ * Role 5 bank agents sometimes have users.tenant_id unset even though assigned_bank_id points at a tenant-scoped bank.
+ * Prefer fixing this in `getUserInfo` / login token — this mirrors that resolution for defense in depth.
+ */
+async function withEffectiveTenantForContractsApi(c: Context, info: UserInfo): Promise<UserInfo> {
+  if (info.tenantId != null || isSuperAdmin(info)) return info
+  if (info.roleId !== 5 || info.userId == null || !c.env?.DB) return info
+  try {
+    const row = await c.env.DB.prepare(
+      `SELECT b.tenant_id AS tenant_id
+       FROM users u
+       INNER JOIN banks b ON b.id = u.assigned_bank_id
+       WHERE u.id = ? AND b.tenant_id IS NOT NULL
+       LIMIT 1`
+    )
+      .bind(info.userId)
+      .first<{ tenant_id: number }>()
+    if (row?.tenant_id != null) {
+      return { ...info, tenantId: Number(row.tenant_id) }
+    }
+  } catch (_) {
+    /* missing table/column in some environments */
+  }
+  return info
+}
+
 export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
   // Dedicated customer lookup for the new-contract form — fetches customers table
   // directly so the contracts module never depends on the generic :table route for this.
   app.get('/api/contract-tables/customer-list', async (c) => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
 
     let sql = `SELECT id, full_name, phone, national_id, city FROM customers`
     const binds: (number | string)[] = []
@@ -193,40 +228,47 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
 
   // REST shape matches reference: GET /api/contract-tables/:table?limit=...
   app.get('/api/contract-tables/:table', async (c) => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
     const name = c.req.param('table')
     const table = sqlTable(name)
     if (!table) return c.json({ error: 'Unknown table' }, 400)
     const limit = Math.min(parseInt(c.req.query('limit') || '200', 10) || 200, 500)
     const { sql: tsql, binds: tbinds } = tenantFilterClause(info, c, table)
+    const rowScopeSql = table === 'contracts' && info.roleId === 4 && info.userId ? ' AND created_by = ? ' : ''
+    const rowScopeBinds = table === 'contracts' && info.roleId === 4 && info.userId ? [info.userId] : []
     const { results } = await c.env.DB.prepare(
-      `SELECT * FROM ${table} WHERE 1=1 ${tsql} ORDER BY id DESC LIMIT ?`
+      `SELECT * FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
     )
-      .bind(...tbinds, limit)
+      .bind(...tbinds, ...rowScopeBinds, limit)
       .all()
     return c.json({ data: results || [] })
   })
 
   app.get('/api/contract-tables/:table/:id', async (c) => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
     const name = c.req.param('table')
     const table = sqlTable(name)
     if (!table) return c.json({ error: 'Unknown table' }, 400)
     const id = parseInt(c.req.param('id'), 10)
     if (!id) return c.json({ error: 'Invalid id' }, 400)
     const { sql: tsql, binds: tbinds } = tenantFilterClause(info, c, table)
-    const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql}`)
-      .bind(id, ...tbinds)
+    const rowScopeSql = table === 'contracts' && info.roleId === 4 && info.userId ? ' AND created_by = ? ' : ''
+    const rowScopeBinds = table === 'contracts' && info.roleId === 4 && info.userId ? [info.userId] : []
+    const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql} ${rowScopeSql}`)
+      .bind(id, ...tbinds, ...rowScopeBinds)
       .first()
     if (!row) return c.json({ error: 'Not found' }, 404)
     return c.json(row)
   })
 
   app.post('/api/contract-tables/:table', async (c) => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
     const name = c.req.param('table')
     const table = sqlTable(name)
     if (!table) return c.json({ error: 'Unknown table' }, 400)
@@ -264,19 +306,21 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (table === 'contracts') {
       const logoNorm = normalizePartyOneLogo(body)
       if (!logoNorm.ok) return logoNorm.response
+      const initialStatus = info.roleId === 4 ? STATUS_AWAITING_BANK_AGENT_APPROVAL : body.status ?? 'نشط'
       let r
       try {
         r = await c.env.DB.prepare(
           `INSERT INTO contracts (
-          tenant_id, contract_number, template_id, template_name, date_gregorian, day_name,
+          tenant_id, created_by, contract_number, template_id, template_name, date_gregorian, day_name,
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
+            info.userId,
             body.contract_number ?? null,
             body.template_id != null ? Number(body.template_id) : null,
             body.template_name ?? null,
@@ -297,7 +341,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.commission_rate != null ? Number(body.commission_rate) : null,
             body.note_order_number ?? null,
             body.note_due_date ?? null,
-            body.status ?? 'نشط',
+            initialStatus,
             body.property_description ?? null,
             body.property_location ?? null,
             body.bank_name ?? null,
@@ -312,7 +356,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             {
               error: 'database_schema',
               detail:
-                'العمود غير موجود في قاعدة البيانات. شغّل migration 0035_contracts_party_one_fields على D1.'
+                'العمود غير موجود في قاعدة البيانات. شغّل آخر migrations للعقود على D1، خاصة 0035 و0060.'
             },
             500
           )
@@ -361,8 +405,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
   })
 
   const updateRow = async (c: Context, method: 'PUT' | 'PATCH') => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
     if (isContractsModuleReadOnlyRole(info)) return c.json({ error: 'Forbidden' }, 403)
     const name = c.req.param('table')
     const table = sqlTable(name)
@@ -373,12 +418,18 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
 
     const existing = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ?`).bind(id).first<{
       tenant_id: number
+      created_by?: number | null
+      status?: string | null
     }>()
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contracts' && info.roleId === 4 && existing.created_by !== info.userId) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
 
     if (table === 'contract_templates') {
+      if (info.roleId === 4) return c.json({ error: 'Forbidden' }, 403)
       const fields: string[] = []
       const vals: unknown[] = []
       const touch = (col: string, key: string) => {
@@ -411,6 +462,30 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         const logoNorm = normalizePartyOneLogo(body)
         if (!logoNorm.ok) return logoNorm.response
         body.party_one_logo = logoNorm.value
+      }
+      const statusChanged = body.status !== undefined && body.status !== existing.status
+      const approvalFields: string[] = []
+      const approvalVals: unknown[] = []
+      if (statusChanged) {
+        const requestedStatus = String(body.status ?? '')
+        const currentStatus = String(existing.status ?? '')
+        const isArchiveRequest = requestedStatus === 'مؤرشف' && body.is_archived
+
+        if (info.roleId === 4) {
+          if (!isArchiveRequest) return c.json({ error: 'Forbidden' }, 403)
+        } else if (currentStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL) {
+          if (info.roleId !== 5 || requestedStatus !== STATUS_AWAITING_ADMIN_APPROVAL) {
+            return c.json({ error: 'Forbidden' }, 403)
+          }
+          approvalFields.push('bank_agent_approved_by = ?', 'bank_agent_approved_at = CURRENT_TIMESTAMP')
+          approvalVals.push(info.userId)
+        } else if (currentStatus === STATUS_AWAITING_ADMIN_APPROVAL) {
+          if (!isFinalApprover(info) || !FINAL_APPROVAL_STATUSES.has(requestedStatus)) {
+            return c.json({ error: 'Forbidden' }, 403)
+          }
+          approvalFields.push('admin_approved_by = ?', 'admin_approved_at = CURRENT_TIMESTAMP')
+          approvalVals.push(info.userId)
+        }
       }
       const fields: string[] = []
       const vals: unknown[] = []
@@ -455,6 +530,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       maybe('bank_name', 'bank_name')
       maybe('notes', 'notes')
       maybe('is_archived', 'is_archived')
+      fields.push(...approvalFields)
+      vals.push(...approvalVals)
       if (fields.length === 0) {
         const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
         return c.json(row)
@@ -468,7 +545,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             {
               error: 'database_schema',
               detail:
-                'العمود غير موجود. شغّل migration 0035_contracts_party_one_fields على D1.'
+                'العمود غير موجود. شغّل آخر migrations للعقود على D1، خاصة 0035 و0060.'
             },
             500
           )
@@ -516,8 +593,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
    * Key: `contracts/{tenantId}/party_logo_{timestamp}_{random}.ext`
    */
   app.post('/api/contracts/party-logo-upload', async (c) => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
     const attachments = (c.env as { ATTACHMENTS?: { put: (k: string, b: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> } }).ATTACHMENTS
     if (!attachments) {
       return c.json(
@@ -579,8 +657,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
   app.patch('/api/contract-tables/:table/:id', (c) => updateRow(c, 'PATCH'))
 
   app.delete('/api/contract-tables/:table/:id', async (c) => {
-    const { info, error } = await auth(c, getUserInfo)
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
     if (isContractsModuleReadOnlyRole(info)) return c.json({ error: 'Forbidden' }, 403)
     const name = c.req.param('table')
     const table = sqlTable(name)
@@ -589,10 +668,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (!id) return c.json({ error: 'Invalid id' }, 400)
     const existing = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ?`).bind(id).first<{
       tenant_id: number
+      created_by?: number | null
     }>()
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contract_templates' && info.roleId === 4) return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contracts' && info.roleId === 4 && existing.created_by !== info.userId) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
     await c.env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(id).run()
     return new Response(null, { status: 204 })
   })

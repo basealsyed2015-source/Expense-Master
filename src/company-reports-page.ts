@@ -168,7 +168,7 @@ export const companyReportsPage = `
 
         <!-- العودة للوحة الرئيسية -->
         <div class="border-t border-slate-200/90 pt-3 mt-6">
-            <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
 
@@ -372,7 +372,7 @@ export const companyReportsPage = `
 
         function exportReport() {
             const { requests, customers } = reportData;
-            let csv = 'الرقم,العميل,المبلغ,المدة,الحالة,التاريخ\\n';
+            let csv = '\\uFEFFsep=,\\r\\n' + 'الرقم,العميل,المبلغ,المدة,الحالة,التاريخ\\n';
             
             requests.forEach(req => {
                 const customer = customers.find(c => c.id == req.customer_id);

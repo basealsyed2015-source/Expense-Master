@@ -894,7 +894,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
 
   <main class="main-content">
     <div class="contracts-page-back">
-      <a href="/admin">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <header class="topbar">
       <div class="topbar-title"><h1><i class="fas fa-file-alt"></i> قائمة العقود</h1></div>
@@ -918,6 +918,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           <option value="">جميع الحالات</option>
           <option value="نشط">نشط</option>
           <option value="بانتظار التمويل">بانتظار التمويل</option>
+          <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
+          <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
           <option value="مكتمل">مكتمل</option>
           <option value="ملغي">ملغي</option>
         </select>
@@ -1053,6 +1055,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       renderContracts();
     }
 
+    function canApproveContract(c) {
+      const roleId = getContractsRoleId();
+      if (roleId === 5) return c.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL;
+      if (roleId === 1 || roleId === 2) return c.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
+      return false;
+    }
+
     function renderContracts() {
       const tbody = document.getElementById('contractsBody');
       const total = filteredContracts.length;
@@ -1089,6 +1098,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           <td>
             <div class="action-btns">
               <a href="/admin/contracts/view?id=\${c.id}" class="action-btn action-view" title="عرض"><i class="fas fa-eye"></i></a>
+              \${canApproveContract(c) ? \`<a href="/admin/contracts/view?id=\${c.id}&approve=1" class="action-btn action-approve" title="اعتماد" style="background:rgba(39,174,96,0.12);color:#27ae60;"><i class="fas fa-check"></i></a>\` : ''}
               <a href="/admin/contracts/new?edit=\${c.id}" class="action-btn action-edit" title="تعديل"><i class="fas fa-edit"></i></a>
               <a href="/admin/contracts/view?id=\${c.id}&print=1" class="action-btn action-pdf" title="طباعة"><i class="fas fa-print"></i></a>
               \${c.party_two_phone ? \`<button class="action-btn action-whatsapp" onclick="sendWA('\${c.party_two_phone}','\${c.party_two_name}','\${c.contract_number}')" title="واتساب"><i class="fab fa-whatsapp"></i></button>\` : ''}

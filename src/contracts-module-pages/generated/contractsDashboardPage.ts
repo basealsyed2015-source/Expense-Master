@@ -910,7 +910,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   <!-- Main Content -->
   <main class="main-content">
     <div class="contracts-page-back">
-      <a href="/admin">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <!-- Top Bar -->
     <header class="topbar">

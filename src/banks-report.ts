@@ -28,7 +28,7 @@ export const banksReportPage = `
         <div class="flex justify-between items-center mb-6 no-print">
             <div>
                 <div class="mb-2 pb-1 border-b border-gray-100">
-                    <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+                    <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
                 </div>
                 <h1 class="text-4xl font-bold text-gray-800">
                     <i class="fas fa-university text-blue-600 ml-3"></i>
@@ -289,7 +289,7 @@ export const banksReportPage = `
         }
 
         function exportToExcel() {
-            let csv = '\\uFEFF'; // BOM for UTF-8
+            let csv = '\\uFEFFsep=,\\r\\n'; // BOM + Excel comma hint for Arabic/RTL list-separator locales
             csv += 'اسم البنك,إجمالي الطلبات,طلبات مقبولة,طلبات مرفوضة,طلبات قيد المعالجة,معدل القبول,متوسط مبلغ التمويل\\n';
 
             banksData.forEach(bank => {

@@ -62,7 +62,7 @@ export const homePage = `<!DOCTYPE html>
 
             <!-- Menu Items -->
             <div class="space-y-2">
-                <a href="/" class="flex items-center space-x-3 space-x-reverse p-4 bg-blue-50 rounded-lg">
+                <a href="/admin/panel" class="flex items-center space-x-3 space-x-reverse p-4 bg-blue-50 rounded-lg">
                     <i class="fas fa-home text-xl text-blue-600"></i>
                     <span class="font-medium text-blue-600">الرئيسية</span>
                 </a>

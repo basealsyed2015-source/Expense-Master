@@ -18,7 +18,7 @@ export const hrLeavesPage = `
 <body class="bg-gray-50">
   <div class="border-b border-slate-200/90 bg-white/90">
     <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
   <div class="min-h-screen">
@@ -412,7 +412,7 @@ export const hrSalariesPage = `
 <body class="bg-gray-50">
   <div class="border-b border-slate-200/90 bg-white/90">
     <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
 
@@ -722,7 +722,7 @@ export const hrDepartmentsPage = `
 <body class="bg-gray-50">
   <div class="border-b border-slate-200/90 bg-white/90">
     <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
 
@@ -920,7 +920,7 @@ export const hrPerformancePage = `
 <body class="bg-gray-50">
   <div class="border-b border-slate-200/90 bg-white/90">
     <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
 
@@ -1174,7 +1174,7 @@ export const hrPromotionsPage = `
 <body class="bg-gray-50">
   <div class="border-b border-slate-200/90 bg-white/90">
     <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
 
@@ -1440,7 +1440,7 @@ export const hrDocumentsPage = `
 <body class="bg-gray-100">
   <div class="border-b border-slate-200/90 bg-white">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
 
@@ -1938,7 +1938,7 @@ export const hrReportsPage = `
 <body class="bg-gray-100">
   <div class="border-b border-slate-200/90 bg-white">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
-      <a href="/admin" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
     </div>
   </div>
 

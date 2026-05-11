@@ -340,7 +340,7 @@
 <main class="main-content">
 
   <div class="contracts-page-back no-print">
-    <a href="/admin">← العودة للوحة الرئيسية</a>
+    <a href="/admin/panel">← العودة للوحة الرئيسية</a>
   </div>
   <header class="topbar">
     <div class="topbar-title">
@@ -1714,7 +1714,7 @@ function doExportCSV() {
       n.amount,n.issue_date,n.due_date,n.payment_place,n.status,n.notes||'']
       .map(function(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }).join(',');
   });
-  var csv  = '\uFEFF' + hd.join(',') + '\n' + rows.join('\n');
+  var csv  = '\uFEFFsep=,\r\n' + hd.join(',') + '\n' + rows.join('\n');
   var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   var url  = URL.createObjectURL(blob);
   var a    = document.createElement('a');

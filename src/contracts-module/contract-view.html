@@ -325,7 +325,7 @@
 
   <main class="main-content">
     <div class="contracts-page-back no-print">
-      <a href="/admin">← العودة للوحة الرئيسية</a>
+      <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <header class="topbar no-print">
       <div class="topbar-title"><h1 id="topbarTitle"><i class="fas fa-file-contract"></i> عرض العقد</h1></div>
@@ -349,6 +349,9 @@
         <button class="btn btn-success" id="whatsappBtn" onclick="sendContractWhatsApp()">
           <i class="fab fa-whatsapp"></i> إرسال واتساب
         </button>
+        <button class="btn btn-success" id="approveContractBtn" onclick="approveContract()" style="display:none;">
+          <i class="fas fa-check-circle"></i> اعتماد
+        </button>
         <a id="noteLink" href="#" class="btn btn-secondary" style="display:none;">
           <i class="fas fa-money-check-alt"></i> عرض سند الأمر
         </a>
@@ -357,6 +360,8 @@
           <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
             <option value="نشط">نشط</option>
             <option value="بانتظار التمويل">بانتظار التمويل</option>
+            <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
+            <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
             <option value="مكتمل">مكتمل ✓</option>
             <option value="مؤرشف">مؤرشف</option>
             <option value="ملغي">ملغي</option>
@@ -394,6 +399,7 @@
           nl.style.display = 'inline-flex';
         }
         renderContractDoc(currentContract);
+        configureApprovalActions();
         if (getParam('print') === '1') setTimeout(printPage, 1200);
       } catch (e) {
         document.getElementById('contractDoc').innerHTML =
@@ -703,6 +709,30 @@
     }
 
     // ======= ACTIONS =======
+    function isContractPendingApprovalForCurrentRole() {
+      const roleId = getContractsRoleId();
+      if (!currentContract) return false;
+      if (roleId === 5) return currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL;
+      if (roleId === 1 || roleId === 2) return currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
+      return false;
+    }
+
+    function configureApprovalActions() {
+      const approveBtn = document.getElementById('approveContractBtn');
+      if (!approveBtn || !currentContract) return;
+      const roleId = getContractsRoleId();
+      const statusSelect = document.getElementById('statusSelect');
+      approveBtn.style.display = isContractPendingApprovalForCurrentRole() ? 'inline-flex' : 'none';
+
+      if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+        statusSelect.value = 'نشط';
+        approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
+      } else if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
+        statusSelect.value = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
+        approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد وإرسال للإدارة';
+      }
+    }
+
     function editContract() {
       window.location.href = `new-contract.html?edit=${currentContract.id}`;
     }
@@ -731,12 +761,39 @@
     }
 
     async function updateStatus() {
+      if (isContractPendingApprovalForCurrentRole()) {
+        configureApprovalActions();
+        showToast('استخدم زر الاعتماد لإكمال خطوة الموافقة الحالية', 'warning');
+        return;
+      }
       const newStatus = document.getElementById('statusSelect').value;
       try {
         await API.patch('contracts', currentContract.id, { status: newStatus });
         currentContract.status = newStatus;
         showToast(`✓ تم تغيير الحالة إلى: ${newStatus}`, 'success');
       } catch (e) { showToast('خطأ في تحديث الحالة', 'error'); }
+    }
+
+    async function approveContract() {
+      if (!currentContract) return;
+      const roleId = getContractsRoleId();
+      let newStatus = null;
+      if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
+        newStatus = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
+      } else if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+        const selected = document.getElementById('statusSelect').value;
+        newStatus = ['نشط', 'بانتظار التمويل', 'مكتمل'].includes(selected) ? selected : 'نشط';
+      }
+      if (!newStatus) return;
+      try {
+        const updated = await API.patch('contracts', currentContract.id, { status: newStatus });
+        currentContract = updated || { ...currentContract, status: newStatus };
+        document.getElementById('statusSelect').value = currentContract.status || newStatus;
+        configureApprovalActions();
+        showToast('تم اعتماد العقد بنجاح', 'success');
+      } catch (e) {
+        showToast('خطأ في اعتماد العقد', 'error');
+      }
     }
 
     async function archiveContract() {
