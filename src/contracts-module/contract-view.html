@@ -33,6 +33,7 @@
       box-shadow: 0 2px 20px rgba(0,0,0,0.10);
       border: 1px solid #ddd;
       position: relative;
+      isolation: isolate;
     }
 
     /* ===== HEADER ===== */
@@ -291,10 +292,84 @@
         border: none !important;
         max-width: 100% !important;
         padding: 20px 40px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .contract-doc-body {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       .doc-sig-clear, .no-print { display: none !important; }
       body { background: #fff; }
       @page { size: A4; margin: 15mm; }
+      .contract-doc.is-draft::before {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        background: rgba(255, 255, 255, 0.38) !important;
+      }
+      /*
+       * position:fixed repeats on every printed page.
+       * The diagonal text is embedded as an SVG background-image (set by JS in
+       * fitDraftWatermark) so there is no CSS transform to trigger Chrome's
+       * "transform eats the page" compositing bug.
+       */
+      .draft-watermark {
+        position: fixed !important;
+        inset: 0 !important;
+        display: block !important;
+        background-repeat: no-repeat !important;
+        background-size: 100% 100% !important;
+        background-position: center center !important;
+        overflow: visible !important;
+        z-index: 9999 !important;
+        pointer-events: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      /* The HTML inner element is hidden; SVG bg image does the drawing */
+      .draft-watermark__inner {
+        display: none !important;
+      }
+    }
+
+    /* ===== Unapproved draft — document-relative diagonal ===== */
+    .contract-doc-body {
+      position: relative;
+      z-index: 0;
+    }
+    .contract-doc.is-draft::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.45);
+      z-index: 1;
+      pointer-events: none;
+      border-radius: inherit;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .draft-watermark {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* background-image intentionally unset — SVG is injected into a @media print <style> tag by JS */
+    }
+    .draft-watermark__inner {
+      text-align: center;
+      font-family: 'Tajawal', sans-serif;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      color: rgba(40, 40, 40, 0.22);
+      white-space: nowrap;
+      user-select: none;
+      direction: rtl;
+      /* angle + font-size set dynamically by fitDraftWatermark() */
     }
   </style>
 </head>
@@ -316,7 +391,7 @@
       <a href="templates.html" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
       <a href="notes.html" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
       <a href="archive.html" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
-      <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+      
     </nav>
     <div class="sidebar-footer">
       <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
@@ -384,6 +459,70 @@
   <script>
     let currentContract = null;
 
+    function isContractCompletedStatus(status) {
+      const s = String(status ?? '').trim();
+      return s === 'مكتمل' || s.toLowerCase() === 'completed';
+    }
+
+    function fitDraftWatermark() {
+      const watermark = document.getElementById('draftWatermarkInner');
+      const inner = watermark && watermark.querySelector('.draft-watermark__inner');
+      const doc = document.getElementById('printArea');
+      if (!inner || !doc || watermark.hidden) return;
+
+      const W = doc.offsetWidth || 820;
+      const H = doc.offsetHeight || 1400;
+      const diag = Math.round(Math.sqrt(W * W + H * H));
+      // Negative = counter-clockwise: top-right → bottom-left (RTL diagonal)
+      const angleDeg = -(Math.atan2(H, W) * 180 / Math.PI);
+      const fontSize = Math.max(40, Math.round(W * 0.12));
+
+      // ── Screen: rotate + size the HTML element ──
+      inner.style.width = diag + 'px';
+      inner.style.transform = 'rotate(' + angleDeg.toFixed(1) + 'deg)';
+      inner.style.fontSize = fontSize + 'px';
+
+      // ── Print: bake rotation into an SVG background-image ──
+      // A4 page (595 × 842 pt). Keep the same angle.
+      const svgW = 595, svgH = 842;
+      const cx = (svgW / 2).toFixed(1);
+      const cy = (svgH / 2).toFixed(1);
+      const svgDiag = Math.round(Math.sqrt(svgW * svgW + svgH * svgH));
+      // font-size scaled to the same proportion as on screen
+      const svgFontSize = Math.round(svgW * 0.12);
+      const svgAngle = angleDeg.toFixed(1);
+      const svg =
+        '<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 ' + svgW + ' ' + svgH + '\'>' +
+        '<text x=\'' + cx + '\' y=\'' + cy + '\' text-anchor=\'middle\' dominant-baseline=\'middle\'' +
+        ' font-family=\'Tajawal,Arial,sans-serif\' font-weight=\'800\' font-size=\'' + svgFontSize + '\'' +
+        ' fill=\'rgb(40,40,40)\' fill-opacity=\'0.22\'' +
+        ' transform=\'rotate(' + svgAngle + ' ' + cx + ' ' + cy + ')\'>' +
+        '\u0645\u0633\u0648\u062f\u0629 \u063a\u064a\u0631 \u0645\u0639\u062a\u0645\u062f\u0629' +
+        '</text></svg>';
+      // Inject SVG into a @media print <style> tag so it ONLY applies during printing,
+      // never on screen (avoids any inline-style vs screen-CSS specificity fights).
+      let printStyle = document.getElementById('_wmPrintStyle');
+      if (!printStyle) {
+        printStyle = document.createElement('style');
+        printStyle.id = '_wmPrintStyle';
+        document.head.appendChild(printStyle);
+      }
+      printStyle.textContent =
+        '@media print{#draftWatermarkInner{background-image:url("data:image/svg+xml,' +
+        encodeURIComponent(svg) + '")!important;}}';
+    }
+
+    function updateDraftWatermark() {
+      const watermark = document.getElementById('draftWatermarkInner');
+      const doc = document.getElementById('printArea');
+      if (!watermark || !doc) return;
+      const show = currentContract && !isContractCompletedStatus(currentContract.status);
+      watermark.hidden = !show;
+      watermark.setAttribute('aria-hidden', show ? 'false' : 'true');
+      doc.classList.toggle('is-draft', show);
+      fitDraftWatermark();
+    }
+
     // ======= LOAD =======
     async function loadContract() {
       const id = getParam('id');
@@ -400,6 +539,9 @@
         }
         renderContractDoc(currentContract);
         configureApprovalActions();
+        updateDraftWatermark();
+        // Re-fit after layout is painted so offsetHeight is accurate
+        requestAnimationFrame(fitDraftWatermark);
         if (getParam('print') === '1') setTimeout(printPage, 1200);
       } catch (e) {
         document.getElementById('contractDoc').innerHTML =
@@ -431,8 +573,10 @@
         ? `<div class="doc-logo-img-wrap"><img src="${logoSrc}" alt="" /></div>`
         : `<div class="doc-logo-icon"><i class="fas fa-building"></i></div>`;
 
+      const isDraft = !isContractCompletedStatus(c.status);
       document.getElementById('contractDoc').innerHTML = `
-      <div class="contract-doc" id="printArea">
+      <div class="contract-doc${isDraft ? ' is-draft' : ''}" id="printArea">
+        <div class="contract-doc-body">
 
         <!-- ===== HEADER ===== -->
         <div class="doc-header">
@@ -631,6 +775,12 @@
           </div>
         </div>
 
+        </div><!-- /contract-doc-body -->
+
+        <div id="draftWatermarkInner" class="draft-watermark"${isDraft ? '' : ' hidden aria-hidden="true"'}>
+          <div class="draft-watermark__inner">مسودة غير معتمدة</div>
+        </div>
+
       </div><!-- /contract-doc -->
       `;
 
@@ -770,6 +920,7 @@
       try {
         await API.patch('contracts', currentContract.id, { status: newStatus });
         currentContract.status = newStatus;
+        updateDraftWatermark();
         showToast(`✓ تم تغيير الحالة إلى: ${newStatus}`, 'success');
       } catch (e) { showToast('خطأ في تحديث الحالة', 'error'); }
     }
@@ -790,6 +941,7 @@
         currentContract = updated || { ...currentContract, status: newStatus };
         document.getElementById('statusSelect').value = currentContract.status || newStatus;
         configureApprovalActions();
+        updateDraftWatermark();
         showToast('تم اعتماد العقد بنجاح', 'success');
       } catch (e) {
         showToast('خطأ في اعتماد العقد', 'error');
@@ -806,6 +958,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', loadContract);
+    window.addEventListener('resize', fitDraftWatermark);
+    window.addEventListener('beforeprint', () => {
+      requestAnimationFrame(fitDraftWatermark);
+    });
   </script>
 </body>
 </html>

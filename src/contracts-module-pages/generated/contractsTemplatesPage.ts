@@ -404,6 +404,21 @@ body {
 .form-control.is-invalid { border-color: var(--danger); }
 .invalid-feedback { font-size: 12px; color: var(--danger); display: none; }
 .form-control.is-invalid ~ .invalid-feedback { display: block; }
+/* Phone input with +966 prefix (RTL: prefix appears on the right, input on the left) */
+.phone-input-group { display: flex; align-items: stretch; }
+.phone-input-group .phone-prefix {
+  display: flex; align-items: center; padding: 0 12px;
+  background: #f0f4f8; border: 1.5px solid var(--border); border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 14px; font-weight: 600; color: var(--primary);
+  white-space: nowrap; direction: ltr;
+}
+.phone-input-group .form-control {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm); border-right: none; flex: 1;
+}
+.phone-input-group .form-control.is-invalid { border-color: var(--danger); }
+.phone-input-group .form-control.is-invalid + .phone-prefix { border-color: var(--danger); }
+.phone-input-group.is-invalid ~ .invalid-feedback { display: block; }
 
 .form-note {
   padding: 12px 16px;
@@ -860,6 +875,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   display: none !important;
 }
 
+/* Role 5 (bank agent): cannot create contracts — matches app.js sidebar/topbar hiding. */
+html.contracts-role-5-hide-new .sidebar-nav a.nav-item[href="/admin/contracts/new"],
+html.contracts-role-5-hide-new .topbar a.btn.btn-primary[href="/admin/contracts/new"],
+html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
+  display: none !important;
+}
+
   </style>
 
   <meta charset="UTF-8" />
@@ -959,7 +981,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       <a href="/admin/contracts/templates" class="nav-item active"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
       <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
       <a href="/admin/contracts/archive" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
-      <a href="/admin/contracts/settings" class="nav-item"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+      
     </nav>
     <div class="sidebar-footer">
       <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>

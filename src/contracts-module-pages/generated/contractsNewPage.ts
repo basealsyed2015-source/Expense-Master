@@ -404,6 +404,21 @@ body {
 .form-control.is-invalid { border-color: var(--danger); }
 .invalid-feedback { font-size: 12px; color: var(--danger); display: none; }
 .form-control.is-invalid ~ .invalid-feedback { display: block; }
+/* Phone input with +966 prefix (RTL: prefix appears on the right, input on the left) */
+.phone-input-group { display: flex; align-items: stretch; }
+.phone-input-group .phone-prefix {
+  display: flex; align-items: center; padding: 0 12px;
+  background: #f0f4f8; border: 1.5px solid var(--border); border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 14px; font-weight: 600; color: var(--primary);
+  white-space: nowrap; direction: ltr;
+}
+.phone-input-group .form-control {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm); border-right: none; flex: 1;
+}
+.phone-input-group .form-control.is-invalid { border-color: var(--danger); }
+.phone-input-group .form-control.is-invalid + .phone-prefix { border-color: var(--danger); }
+.phone-input-group.is-invalid ~ .invalid-feedback { display: block; }
 
 .form-note {
   padding: 12px 16px;
@@ -860,6 +875,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
   display: none !important;
 }
 
+/* Role 5 (bank agent): cannot create contracts — matches app.js sidebar/topbar hiding. */
+html.contracts-role-5-hide-new .sidebar-nav a.nav-item[href="/admin/contracts/new"],
+html.contracts-role-5-hide-new .topbar a.btn.btn-primary[href="/admin/contracts/new"],
+html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
+  display: none !important;
+}
+
   </style>
 
   <meta charset="UTF-8" />
@@ -892,7 +914,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       <a href="/admin/contracts/templates" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
       <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
       <a href="/admin/contracts/archive" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
-      <a href="/admin/contracts/settings" class="nav-item"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+      
     </nav>
     <div class="sidebar-footer">
       <div class="cr-number"><i class="fas fa-registered"></i> س.ت: 3350140062</div>
@@ -1000,6 +1022,16 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
               <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> اختيار عميل يملأ الحقول تلقائياً · تعديل الحقول يدوياً بعد الاختيار يلغي الربط بالعميل</div>
             </div>
 
+            <!-- Funding request — populated automatically when a customer is selected -->
+            <div class="form-group form-full" id="financing_request_section" style="display:none;margin-bottom:16px;">
+              <label class="form-label"><i class="fas fa-file-invoice-dollar" style="color:var(--secondary);margin-left:6px;"></i> طلب التمويل</label>
+              <select class="form-control" id="financing_request_lookup" onchange="fillFromFinancingRequest(this.value)">
+                <option value="">— اختر طلب التمويل —</option>
+              </select>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> يُحدَّد تلقائياً عند اختيار العميل · يمكن تغييره إذا كان للعميل أكثر من طلب</div>
+            </div>
+            <input type="hidden" id="financing_request_id" value="" />
+
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">الاسم الكامل <span class="required">*</span></label>
@@ -1007,14 +1039,17 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
                 <div class="invalid-feedback">يرجى إدخال اسم العميل</div>
               </div>
               <div class="form-group">
-                <label class="form-label">رقم الهوية الوطنية <span class="required">*</span></label>
-                <input type="text" class="form-control" id="party_two_id" placeholder="10 أرقام" maxlength="10" required />
-                <div class="invalid-feedback">رقم الهوية يجب أن يكون 10 أرقام</div>
+                <label class="form-label">رقم الهوية الوطنية (اختياري)</label>
+                <input type="text" class="form-control" id="party_two_id" placeholder="10 أرقام" maxlength="10" />
+                <div class="invalid-feedback">إن أُدخل، يجب أن يكون 10 أرقام</div>
               </div>
               <div class="form-group">
                 <label class="form-label">رقم الجوال <span class="required">*</span></label>
-                <input type="text" class="form-control" id="party_two_phone" placeholder="05XXXXXXXX" maxlength="10" required />
-                <div class="invalid-feedback">يرجى إدخال رقم جوال صحيح</div>
+                <div class="phone-input-group">
+                  <span class="phone-prefix">+966</span>
+                  <input type="text" class="form-control" id="party_two_phone" placeholder="5XXXXXXXX" maxlength="9" />
+                </div>
+                <div class="invalid-feedback">يرجى إدخال رقم جوال صحيح (9 أرقام تبدأ بـ 5)</div>
               </div>
               <div class="form-group">
                 <label class="form-label">العنوان / المدينة</label>
@@ -1177,6 +1212,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
     </div>
   </main>
 
+  <!--CONTRACTS_FINANCING_REQUESTS_JSON-->
   <script src="/contracts-module/js/app.js?v=20260401"></script>
   <script>
     /** Rows from GET /api/contract-tables/templates (قوالب العقود) */
@@ -1268,20 +1304,77 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       // options are already in the DOM — nothing to load
     }
 
+    function normalizePhone(raw) {
+      if (!raw) return '';
+      const digits = raw.replace(/[^0-9]/g, '');
+      if (digits.startsWith('00966') && digits.length >= 13) return digits.slice(5);
+      if (digits.startsWith('966') && digits.length >= 12) return digits.slice(3);
+      if (digits.startsWith('0') && digits.length === 10) return digits.slice(1);
+      if (digits.length === 9 && digits.startsWith('5')) return digits;
+      return digits.length >= 9 ? digits.slice(-9) : raw;
+    }
+
     function fillFromCustomer(customerId) {
       if (!customerId) return;
       const select = document.getElementById('customer_lookup');
       const opt = select.querySelector(\`option[value="\${customerId}"]\`);
       if (!opt) return;
-      document.getElementById('party_two_name').value = opt.dataset.name || '';
-      document.getElementById('party_two_id').value = opt.dataset.national_id || '';
-      document.getElementById('party_two_phone').value = opt.dataset.phone || '';
-      document.getElementById('party_two_address').value = opt.dataset.city || '';
-      // Clear validation states
+      document.getElementById('party_two_name').value = opt.getAttribute('data-name') || '';
+      document.getElementById('party_two_id').value = opt.getAttribute('data-national-id') || '';
+      document.getElementById('party_two_phone').value = normalizePhone(opt.getAttribute('data-phone') || '');
+      document.getElementById('party_two_address').value = opt.getAttribute('data-city') || '';
       ['party_two_name','party_two_id','party_two_phone','party_two_address'].forEach(id => {
-        document.getElementById(id)?.classList.remove('is-invalid');
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('is-invalid');
+        const wrapper = el.closest('.phone-input-group');
+        if (wrapper) wrapper.classList.remove('is-invalid');
       });
+      updateFinancingRequestsDropdown(customerId);
       showToast('تم تعبئة بيانات العميل تلقائياً', 'success');
+    }
+
+    function updateFinancingRequestsDropdown(customerId, opts) {
+      const section = document.getElementById('financing_request_section');
+      const select = document.getElementById('financing_request_lookup');
+      const hidden = document.getElementById('financing_request_id');
+      if (!section || !select || !hidden) return;
+      select.innerHTML = '<option value="">— اختر طلب التمويل —</option>';
+      hidden.value = '';
+      if (!customerId) { section.style.display = 'none'; return; }
+      const frs = (window._contractsFRs && window._contractsFRs[String(customerId)]) || [];
+      if (frs.length === 0) { section.style.display = 'none'; return; }
+      frs.forEach(function(fr) {
+        const o = document.createElement('option');
+        o.value = String(fr.id);
+        o.setAttribute('data-amount', fr.requested_amount != null ? String(fr.requested_amount) : '');
+        o.setAttribute('data-type', fr.type_name || '');
+        o.setAttribute('data-bank', fr.bank_name || '');
+        const parts = [fr.type_name, fr.bank_name, fr.requested_amount != null ? Number(fr.requested_amount).toLocaleString('ar-SA') + ' ر.س' : null].filter(Boolean);
+        o.textContent = parts.length ? parts.join(' — ') : 'طلب #' + fr.id;
+        select.appendChild(o);
+      });
+      section.style.display = 'block';
+      if (frs.length === 1 && !(opts && opts.skipFill)) {
+        select.value = String(frs[0].id);
+        fillFromFinancingRequest(String(frs[0].id));
+      }
+    }
+
+    function fillFromFinancingRequest(requestId) {
+      const hidden = document.getElementById('financing_request_id');
+      if (hidden) hidden.value = requestId || '';
+      if (!requestId) return;
+      const select = document.getElementById('financing_request_lookup');
+      if (!select) return;
+      const opt = select.querySelector('option[value="' + requestId + '"]');
+      if (!opt) return;
+      const amount = opt.getAttribute('data-amount');
+      const typeName = opt.getAttribute('data-type');
+      const bankName = opt.getAttribute('data-bank');
+      if (amount) document.getElementById('finance_amount').value = amount;
+      if (typeName) document.getElementById('finance_type').value = typeName;
+      if (bankName) document.getElementById('bank_name').value = bankName;
     }
 
     function autoFillDay() {
@@ -1490,8 +1583,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
       let valid = true;
       const fields = [
         { id: 'party_two_name', msg: 'يرجى إدخال اسم العميل', check: v => v.trim().length >= 3 },
-        { id: 'party_two_id', msg: 'رقم الهوية يجب أن يكون 10 أرقام', check: v => /^\\d{10}$/.test(v) },
-        { id: 'party_two_phone', msg: 'رقم الجوال يجب أن يبدأ بـ05 ويكون 10 أرقام', check: v => /^05\\d{8}$/.test(v) },
+        { id: 'party_two_id', msg: 'إن أُدخل، يجب أن يكون رقم الهوية 10 أرقام', check: v => { const t = String(v || '').trim(); return !t || /^\\d{10}$/.test(t); } },
+        { id: 'party_two_phone', msg: 'يرجى إدخال رقم جوال صحيح (9 أرقام تبدأ بـ 5)', check: v => /^5\\d{8}$/.test(v.replace(/\\s/g, '')) },
         { id: 'finance_type', msg: 'يرجى اختيار نوع التمويل', check: v => v !== '' },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
         { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 },
@@ -1502,6 +1595,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         if (!el) return;
         const ok = f.check(el.value);
         el.classList.toggle('is-invalid', !ok);
+        const wrapper = el.closest('.phone-input-group');
+        if (wrapper) wrapper.classList.toggle('is-invalid', !ok);
         if (!ok) valid = false;
       });
       if (!valid) showToast('يرجى تصحيح الأخطاء المميزة', 'warning');
@@ -1539,7 +1634,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
             <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;">بيانات العميل (الطرف الثاني)</div>
             <div class="info-row">
               <div class="info-item"><label>الاسم</label><span>\${data.party_two_name}</span></div>
-              <div class="info-item"><label>رقم الهوية</label><span>\${data.party_two_id}</span></div>
+              <div class="info-item"><label>رقم الهوية</label><span>\${data.party_two_id ? escHtml(data.party_two_id) : '—'}</span></div>
               <div class="info-item"><label>الجوال</label><span>\${data.party_two_phone}</span></div>
               <div class="info-item"><label>العنوان</label><span>\${data.party_two_address || '—'}</span></div>
             </div>
@@ -1700,8 +1795,8 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         party_one_phone: document.getElementById('party_one_phone')?.value || '',
         party_one_logo: document.getElementById('party_one_logo')?.value || '',
         party_two_name: document.getElementById('party_two_name').value,
-        party_two_id: document.getElementById('party_two_id').value,
-        party_two_phone: document.getElementById('party_two_phone').value,
+        party_two_id: (document.getElementById('party_two_id').value || '').trim(),
+        party_two_phone: (function(){ const v = document.getElementById('party_two_phone').value.trim(); return v ? '+966' + v : ''; })(),
         party_two_address: document.getElementById('party_two_address').value,
         finance_type: document.getElementById('finance_type').value,
         finance_amount: parseFloat(document.getElementById('finance_amount').value) || 0,
@@ -1715,7 +1810,11 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
         note_due_date: document.getElementById('note_due_date').value,
         status: statusValue,
         notes: document.getElementById('notes').value,
-        is_archived: false
+        is_archived: false,
+        financing_request_id: (function() {
+          const v = document.getElementById('financing_request_id')?.value;
+          return (v && /^\\d+$/.test(v)) ? Number(v) : null;
+        })()
       };
     }
 
@@ -1862,7 +1961,7 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           setPartyOneLogoPreview(c.party_one_logo || '');
           document.getElementById('party_two_name').value = c.party_two_name || '';
           document.getElementById('party_two_id').value = c.party_two_id || '';
-          document.getElementById('party_two_phone').value = c.party_two_phone || '';
+          document.getElementById('party_two_phone').value = normalizePhone(c.party_two_phone || '');
           document.getElementById('party_two_address').value = c.party_two_address || '';
           document.getElementById('finance_type').value = c.finance_type || '';
           document.getElementById('finance_amount').value = c.finance_amount || '';
@@ -1879,6 +1978,13 @@ html.contracts-role-3 .sidebar-nav a.nav-item[href^="/admin/contracts"]:not([hre
           if (c.customer_id) {
             const customerLookup = document.getElementById('customer_lookup');
             if (customerLookup) customerLookup.value = String(c.customer_id);
+            updateFinancingRequestsDropdown(String(c.customer_id), { skipFill: true });
+            if (c.financing_request_id) {
+              const frLookup = document.getElementById('financing_request_lookup');
+              if (frLookup) frLookup.value = String(c.financing_request_id);
+              const frHidden = document.getElementById('financing_request_id');
+              if (frHidden) frHidden.value = String(c.financing_request_id);
+            }
           }
         }, 200);
       } catch (e) { showToast('خطأ في تحميل العقد', 'error'); }

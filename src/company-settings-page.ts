@@ -6,7 +6,7 @@ export const companySettingsPage = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>إعدادات الشركة</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/tailwind.css">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 </head>
@@ -111,6 +111,7 @@ export const companySettingsPage = `<!DOCTYPE html>
           <img id="logoPreview" alt="" class="max-h-28 max-w-[240px] object-contain rounded-md" />
         </div>
       </div>
+
       <div class="flex flex-wrap gap-3 pt-2 border-t border-gray-100" dir="rtl">
         <button type="submit" id="saveBtn"
           class="inline-flex items-center gap-2 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition-all">

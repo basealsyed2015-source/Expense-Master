@@ -15,6 +15,11 @@ export const fullAdminPanel = `<!DOCTYPE html>
         .content-section { display: none; min-width: 0; }
         .content-section.active { display: block; animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0)} }
+        #alarm-panel { position:fixed; top:0; left:0; bottom:0; width:400px; max-width:95vw; background:#fff; box-shadow:4px 0 30px rgba(0,0,0,.15); z-index:1100; display:flex; flex-direction:column; transform:translateX(-100%); transition:transform .3s ease; }
+        #alarm-panel.open { transform:translateX(0); }
+        #alarm-panel-overlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:1099; display:none; }
+        #alarm-panel-overlay.open { display:block; }
         .quick-access-btn { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .quick-access-btn:active { transform: scale(0.95) !important; }
         
@@ -249,8 +254,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 <button type="button" onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button type="button" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الإشعارات">
+                <button type="button" id="notif-bell-btn" onclick="openAlarmPanel()" class="relative p-2 hover:bg-white/10 rounded-lg" style="display:none" title="الإشعارات">
                     <i class="fas fa-bell"></i>
+                    <span id="notif-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none"></span>
                 </button>
                 <button type="button" onclick="doLogout()" class="p-2 hover:bg-red-500 rounded-lg transition-colors hidden md:inline-block" title="تسجيل الخروج">
                     <i class="fas fa-sign-out-alt"></i>
@@ -757,18 +763,37 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
                 
                 <div class="bg-white rounded-xl shadow-lg p-6 min-w-0 w-full">
-                    <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." oninput="loadCustomers()" 
-                               class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <div class="flex items-center gap-2">
-                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
-                            <input type="date" id="filterDateFrom" onchange="loadCustomers()" 
-                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
-                            <input type="date" id="filterDateTo" onchange="loadCustomers()" 
-                                   class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                    <div class="mb-4">
+                        <!-- Search bar always visible -->
+                        <input type="text" id="searchCustomers" placeholder="بحث في العملاء..." oninput="loadCustomers()"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-3">
+                        <!-- Collapsible filters toggle -->
+                        <button type="button" onclick="toggleCustomersFilters()" dir="rtl" class="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
+                            <span dir="rtl" class="inline-block text-right">الفلاتر</span>
+                            <i class="fas fa-filter text-blue-500"></i>
+                            <i id="customersFiltersIcon" class="fas fa-chevron-down text-xs transition-transform" style="transform: rotate(-90deg);"></i>
+                        </button>
+                        <div id="customersFiltersPanel" class="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style="display:none;">
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
+                                <input type="date" id="filterDateFrom" onchange="loadCustomers()"
+                                       class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
+                                <input type="date" id="filterDateTo" onchange="loadCustomers()"
+                                       class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex-1">
+                            </div>
+                            <select id="filterCustomerEmployee" onchange="loadCustomers()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">جميع الموظفين</option>
+                            </select>
+                            <select id="filterCustomerBankAgent" onchange="loadCustomers()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">جميع موظفي البنك</option>
+                            </select>
+                            <button type="button" onclick="resetCustomersFilters()" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
+                                <i class="fas fa-undo text-xs"></i>
+                                إعادة تعيين
+                            </button>
                         </div>
                     </div>
                     
@@ -830,34 +855,53 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
             <!-- Financing Requests Section -->
             <div id="financing-requests-section" class="content-section">
-                <div class="flex items-center justify-between mb-6 min-w-0 w-full flex-wrap gap-2">
+                <div class="flex items-center justify-between mb-4 min-w-0 w-full flex-wrap gap-2">
                     <h1 class="text-3xl font-bold text-gray-800">
                         <i class="fas fa-file-invoice text-green-600 ml-2"></i>
                         طلبات التمويل من العملاء
                     </h1>
-                    <div class="flex space-x-reverse space-x-3 items-center flex-wrap gap-2 min-w-0">
+                    <button onclick="loadFinancingRequests()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-sync ml-2"></i>
+                        تحديث
+                    </button>
+                </div>
+
+                <!-- Collapsible Filters -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+                    <button type="button" onclick="toggleRequestsFilters()" dir="rtl" class="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
+                        <span dir="rtl" class="inline-block text-right">الفلاتر</span>
+                        <i class="fas fa-filter text-blue-500"></i>
+                        <i id="requestsFiltersIcon" class="fas fa-chevron-down text-xs transition-transform" style="transform: rotate(-90deg);"></i>
+                    </button>
+                    <div id="requestsFiltersPanel" class="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style="display:none;">
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">من تاريخ:</label>
-                            <input type="date" id="filterRequestDateFrom" onchange="loadFinancingRequests()" 
-                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                            <input type="date" id="filterRequestDateFrom" onchange="loadFinancingRequests()"
+                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm flex-1">
                         </div>
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">إلى تاريخ:</label>
-                            <input type="date" id="filterRequestDateTo" onchange="loadFinancingRequests()" 
-                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                            <input type="date" id="filterRequestDateTo" onchange="loadFinancingRequests()"
+                                   class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm flex-1">
                         </div>
-                        <select id="filterStatus" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg">
+                        <select id="filterStatus" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                             <option value="">جميع الحالات</option>
                             <option value="pending">قيد الانتظار</option>
                             <option value="approved">مقبول</option>
                             <option value="rejected">مرفوض</option>
                         </select>
-                        <select id="filterBank" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg">
+                        <select id="filterBank" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                             <option value="">جميع البنوك</option>
                         </select>
-                        <button onclick="loadFinancingRequests()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                            <i class="fas fa-sync ml-2"></i>
-                            تحديث
+                        <select id="filterRequestEmployee" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">جميع الموظفين</option>
+                        </select>
+                        <select id="filterRequestBankAgent" onchange="loadFinancingRequests()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">جميع موظفي البنك</option>
+                        </select>
+                        <button type="button" onclick="resetRequestsFilters()" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
+                            <i class="fas fa-undo text-xs"></i>
+                            إعادة تعيين
                         </button>
                     </div>
                 </div>
@@ -1285,7 +1329,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         </div>
         
         <!-- Modals Section -->
-        
+
         <!-- Add Customer Modal -->
         <div id="addCustomerModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
             <div class="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -2040,7 +2084,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     '1': [ // Super Admin
                         '/admin/panel',
                         '/admin/dashboard',
-                        '/admin/customers', 
+                        '/admin/customers',
+                        '/admin/customers/completed',
                         '/admin/requests',
                         '/admin/banks',
                         '/admin/rates',
@@ -2065,6 +2110,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
+                        '/admin/customers/completed',
                         '/admin/requests',
                         '/admin/reports',
                         '/admin/follow-ups',
@@ -2084,6 +2130,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
+                        '/admin/customers/completed',
                         '/admin/requests',
                         '/admin/reports',
                         '/admin/follow-ups',
@@ -2098,6 +2145,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
+                        '/admin/customers/completed',
                         '/admin/requests',
                         '/admin/contracts',
                         '/admin/contracts/list',
@@ -2111,6 +2159,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/panel',
                         '/admin/dashboard',
                         '/admin/customers',
+                        '/admin/customers/completed',
                         '/admin/requests',
                         '/admin/contact-affiliates',
                         '/admin/contracts',
@@ -2336,9 +2385,11 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     await loadDashboardStats();
                     break;
                 case 'customers':
+                    await loadRoleDropdowns();
                     await loadCustomers();
                     break;
                 case 'financing-requests':
+                    await loadRoleDropdowns();
                     await loadFinancingRequests();
                     break;
                 case 'banks':
@@ -2859,6 +2910,78 @@ export const fullAdminPanel = `<!DOCTYPE html>
             loadFinancingRequests();
         }
 
+        // Collapsible filter toggles
+        window.toggleCustomersFilters = function() {
+            const panel = document.getElementById('customersFiltersPanel');
+            const icon = document.getElementById('customersFiltersIcon');
+            if (!panel) return;
+            const hidden = panel.style.display === 'none';
+            panel.style.display = hidden ? 'grid' : 'none';
+            if (icon) icon.style.transform = hidden ? '' : 'rotate(-90deg)';
+        }
+
+        window.toggleRequestsFilters = function() {
+            const panel = document.getElementById('requestsFiltersPanel');
+            const icon = document.getElementById('requestsFiltersIcon');
+            if (!panel) return;
+            const hidden = panel.style.display === 'none';
+            panel.style.display = hidden ? 'grid' : 'none';
+            if (icon) icon.style.transform = hidden ? '' : 'rotate(-90deg)';
+        }
+
+        window.resetCustomersFilters = function() {
+            const el = (id) => document.getElementById(id);
+            if (el('filterDateFrom')) el('filterDateFrom').value = '';
+            if (el('filterDateTo')) el('filterDateTo').value = '';
+            if (el('filterCustomerEmployee')) el('filterCustomerEmployee').value = '';
+            if (el('filterCustomerBankAgent')) el('filterCustomerBankAgent').value = '';
+            loadCustomers();
+        }
+
+        window.resetRequestsFilters = function() {
+            const el = (id) => document.getElementById(id);
+            if (el('filterRequestDateFrom')) el('filterRequestDateFrom').value = '';
+            if (el('filterRequestDateTo')) el('filterRequestDateTo').value = '';
+            if (el('filterStatus')) el('filterStatus').value = '';
+            if (el('filterBank')) el('filterBank').value = '';
+            if (el('filterRequestEmployee')) el('filterRequestEmployee').value = '';
+            if (el('filterRequestBankAgent')) el('filterRequestBankAgent').value = '';
+            loadFinancingRequests();
+        }
+
+        // Populate employee (role 4) and bank agent (role 5) dropdowns
+        async function loadRoleDropdowns() {
+            try {
+                const response = await axios.get('/api/users');
+                if (!response.data.success) return;
+                const users = response.data.data;
+                const employees = users.filter((u) => u.role_id === 4);
+                const bankAgents = users.filter((u) => Number(u.role_id) === 5);
+
+                const empSelectors = ['filterCustomerEmployee', 'filterRequestEmployee'];
+                empSelectors.forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    const current = el.value;
+                    el.innerHTML = '<option value="">جميع الموظفين</option>' +
+                        employees.map((u) => \`<option value="\${u.id}">\${u.full_name || u.username}</option>\`).join('');
+                    el.value = current;
+                });
+
+                const agentSelectors = ['filterCustomerBankAgent', 'filterRequestBankAgent'];
+                agentSelectors.forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    const current = el.value;
+                    el.innerHTML = '<option value="">جميع موظفي البنك</option>' +
+                        bankAgents.map((u) => \`<option value="\${u.id}">\${u.full_name || u.username}</option>\`).join('');
+                    el.value = current;
+                });
+            } catch (e) {
+                console.error('Error loading role dropdowns:', e);
+            }
+        }
+
         // Load Customers
         async function loadCustomers() {
             try {
@@ -2867,24 +2990,24 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     let customers = response.data.data;
                     const tbody = document.getElementById('customersTable');
                     
-                    // Apply date filter
+                    // Apply filters
                     const filterDateFrom = document.getElementById('filterDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterDateTo')?.value;
                     const searchQuery = (document.getElementById('searchCustomers')?.value || '').trim().toLowerCase();
-                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, searchQuery });
+                    const filterCustomerEmployee = document.getElementById('filterCustomerEmployee')?.value || '';
+                    const filterCustomerBankAgent = document.getElementById('filterCustomerBankAgent')?.value || '';
+                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, searchQuery, filterCustomerEmployee, filterCustomerBankAgent });
                     if (sig !== customersPaging.lastSig) {
                         customersPaging.lastSig = sig;
                         customersPaging.page = 1;
                     }
-                    
+
                     if (filterDateFrom || filterDateTo) {
                         customers = customers.filter(customer => {
                             if (!customer.created_at) return false;
                             const customerDate = new Date(customer.created_at);
-                            
                             if (filterDateFrom && customerDate < new Date(filterDateFrom)) return false;
                             if (filterDateTo && customerDate > new Date(filterDateTo + 'T23:59:59')) return false;
-                            
                             return true;
                         });
                     }
@@ -2895,6 +3018,16 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             const phone = String(customer.phone || '').toLowerCase();
                             return name.includes(searchQuery) || phone.includes(searchQuery);
                         });
+                    }
+
+                    if (filterCustomerEmployee) {
+                        const empId = Number(filterCustomerEmployee);
+                        customers = customers.filter((c) => Number(c.assigned_employee_id) === empId);
+                    }
+
+                    if (filterCustomerBankAgent) {
+                        const agentId = Number(filterCustomerBankAgent);
+                        customers = customers.filter((c) => Number(c.assigned_bank_agent_id) === agentId);
                     }
                     
                     closeAllDropdowns();
@@ -2980,25 +3113,25 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     let requests = response.data.data;
                     const tbody = document.getElementById('requestsTable');
                     
-                    // Apply date filter
+                    // Apply filters
                     const filterDateFrom = document.getElementById('filterRequestDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterRequestDateTo')?.value;
                     const filterStatus = document.getElementById('filterStatus')?.value || '';
                     const filterBank = document.getElementById('filterBank')?.value || '';
-                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, filterStatus, filterBank });
+                    const filterRequestEmployee = document.getElementById('filterRequestEmployee')?.value || '';
+                    const filterRequestBankAgent = document.getElementById('filterRequestBankAgent')?.value || '';
+                    const sig = JSON.stringify({ filterDateFrom, filterDateTo, filterStatus, filterBank, filterRequestEmployee, filterRequestBankAgent });
                     if (sig !== requestsPaging.lastSig) {
                         requestsPaging.lastSig = sig;
                         requestsPaging.page = 1;
                     }
-                    
+
                     if (filterDateFrom || filterDateTo) {
                         requests = requests.filter(req => {
                             if (!req.created_at) return false;
                             const requestDate = new Date(req.created_at);
-                            
                             if (filterDateFrom && requestDate < new Date(filterDateFrom)) return false;
                             if (filterDateTo && requestDate > new Date(filterDateTo + 'T23:59:59')) return false;
-                            
                             return true;
                         });
                     }
@@ -3013,6 +3146,16 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             if (Number.isFinite(bankIdNum)) return Number(req.selected_bank_id) === bankIdNum;
                             return String(req.selected_bank_name || '') === filterBank;
                         });
+                    }
+
+                    if (filterRequestEmployee) {
+                        const empId = Number(filterRequestEmployee);
+                        requests = requests.filter((req) => Number(req.assigned_employee_id) === empId);
+                    }
+
+                    if (filterRequestBankAgent) {
+                        const agentId = Number(filterRequestBankAgent);
+                        requests = requests.filter((req) => Number(req.assigned_bank_agent_id) === agentId);
                     }
                     
                     closeAllDropdowns();
@@ -5197,6 +5340,29 @@ export const fullAdminPanel = `<!DOCTYPE html>
         
         // رابط الحاسبة يُحمَّل من applyUserPermissions → loadCalculatorLink لجميع الأدوار
         
+        // Bell badge: counts unread customer alarms only
+        async function loadNotifCount() {
+            try {
+                const resp = await fetch('/api/customer-alarms/unread-count', { credentials: 'same-origin' });
+                const data = await resp.json();
+                const count = (data.success ? data.count : 0) || 0;
+                const btn = document.getElementById('notif-bell-btn');
+                const badge = document.getElementById('notif-badge');
+                if (btn && badge) {
+                    if (count > 0) {
+                        badge.textContent = count > 99 ? '99+' : String(count);
+                        btn.style.display = 'inline-block';
+                    } else {
+                        btn.style.display = 'none';
+                    }
+                }
+            } catch (e) {
+                console.warn('alarms count:', e);
+            }
+        }
+        loadNotifCount();
+        setInterval(loadNotifCount, 60000);
+
         // Show Section function
         window.showSection = function(sectionName) {
             console.log('🔄 Switching to section:', sectionName);
@@ -5284,6 +5450,104 @@ export const fullAdminPanel = `<!DOCTYPE html>
     
     <!-- Mobile Sidebar Overlay -->
     <div id="sidebar-overlay"></div>
+
+    <!-- Alarm Side Panel -->
+    <div id="alarm-panel-overlay" onclick="closeAlarmPanel()"></div>
+    <div id="alarm-panel">
+        <div class="bg-gradient-to-r from-orange-400 to-red-500 px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <h2 class="text-white text-xl font-bold"><i class="fas fa-bell ml-2"></i> التنبيهات</h2>
+            <div class="flex items-center gap-3">
+                <button onclick="markAllPanelAlarmsRead()" class="text-white text-sm hover:text-orange-100 font-medium" title="تحديد الكل كمقروء">
+                    <i class="fas fa-check-double ml-1"></i> تحديد الكل
+                </button>
+                <button onclick="closeAlarmPanel()" class="text-white hover:text-orange-100 text-2xl leading-none">&times;</button>
+            </div>
+        </div>
+        <div id="alarm-panel-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>
+        </div>
+    </div>
+
+    <script>
+        async function openAlarmPanel() {
+            document.getElementById('alarm-panel').classList.add('open');
+            document.getElementById('alarm-panel-overlay').classList.add('open');
+            await loadPanelAlarms();
+        }
+        function closeAlarmPanel() {
+            document.getElementById('alarm-panel').classList.remove('open');
+            document.getElementById('alarm-panel-overlay').classList.remove('open');
+        }
+
+        async function loadPanelAlarms() {
+            const list = document.getElementById('alarm-panel-list');
+            list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>';
+            try {
+                const resp = await fetch('/api/customer-alarms', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success || !data.data.length) {
+                    list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
+                    return;
+                }
+                list.innerHTML = data.data.map(function(a) {
+                    const isUnread = !a.is_read;
+                    const dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
+                    const timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                    const cid = a.customer_id;
+                    const customerHref = (cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#';
+                    return \`<div id="ap-alarm-\${a.id}" class="rounded-xl border \${isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'} shadow-sm transition-all flex items-stretch overflow-hidden">
+                        <a href="\${customerHref}" class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none rounded-s-xl">
+                            <div class="flex items-center gap-2 mb-1">
+                                \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
+                                <p class="font-bold text-gray-800 text-sm truncate">\${a.customer_name}</p>
+                            </div>
+                            \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-calendar-alt text-orange-400 ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
+                            \${a.note ? \`<p class="text-sm text-gray-600 mt-1 line-clamp-3">\${a.note}</p>\` : ''}
+                        </a>
+                        <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80'}">
+                            \${isUnread ? \`<button type="button" onclick="markPanelAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
+                            <button type="button" onclick="deletePanelAlarm(\${a.id})" title="حذف" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center transition-colors"><i class="fas fa-trash text-xs"></i></button>
+                        </div>
+                    </div>\`;
+                }).join('');
+            } catch(e) {
+                list.innerHTML = '<div class="text-center text-red-400 py-10"><i class="fas fa-exclamation-circle text-3xl mb-2"></i><p class="text-sm">فشل تحميل التنبيهات</p></div>';
+            }
+        }
+
+        async function markPanelAlarmRead(id) {
+            await fetch('/api/customer-alarms/' + id + '/read', { method: 'PUT', credentials: 'same-origin' });
+            const el = document.getElementById('ap-alarm-' + id);
+            if (el) {
+                el.classList.remove('border-orange-300', 'bg-orange-50');
+                el.classList.add('border-gray-200', 'bg-white');
+                const dot = el.querySelector('.rounded-full.bg-red-500');
+                if (dot) dot.remove();
+                const readBtn = el.querySelector('button[onclick^="markPanelAlarmRead"]');
+                if (readBtn) readBtn.remove();
+                const sideDiv = el.querySelector('.flex.flex-col');
+                if (sideDiv) { sideDiv.classList.remove('bg-orange-50\\/80'); sideDiv.classList.add('bg-gray-50\\/80'); }
+            }
+            loadNotifCount();
+        }
+
+        async function deletePanelAlarm(id) {
+            await fetch('/api/customer-alarms/' + id, { method: 'DELETE', credentials: 'same-origin' });
+            const el = document.getElementById('ap-alarm-' + id);
+            if (el) el.remove();
+            const list = document.getElementById('alarm-panel-list');
+            if (!list.querySelector('[id^="ap-alarm-"]')) {
+                list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
+            }
+            loadNotifCount();
+        }
+
+        async function markAllPanelAlarmsRead() {
+            await fetch('/api/customer-alarms/read-all', { method: 'PUT', credentials: 'same-origin' });
+            await loadPanelAlarms();
+            loadNotifCount();
+        }
+    </script>
 </body>
 </html>
 `;

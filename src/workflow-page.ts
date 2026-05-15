@@ -2,7 +2,7 @@
 // Workflow Timeline Page - صفحة مراحل سير العمل
 // ============================================
 
-export function generateWorkflowTimelinePage(requestId: number, request: any, stages: any[], timeline: any) {
+export function generateWorkflowTimelinePage(requestId: number, request: any, stages: any[], timeline: any, roleId?: number | null) {
   const { transitions = [], actions = [], tasks = [] } = timeline
 
   // Calculate duration between stages
@@ -24,7 +24,7 @@ export function generateWorkflowTimelinePage(requestId: number, request: any, st
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>مراحل الطلب - ${request.customer_name}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/tailwind.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     /* Timeline Styles */
@@ -136,6 +136,13 @@ export function generateWorkflowTimelinePage(requestId: number, request: any, st
           <p class="text-blue-100">الطلب رقم: ${requestId} | العميل: ${request.customer_name}</p>
         </div>
         <div class="flex gap-2">
+          ${(roleId === 5 || roleId === 2) ? `
+          <button onclick="completeRequest()" id="completeBtn"
+            class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition-colors font-bold">
+            <i class="fas fa-check-double ml-2"></i>
+            إتمام الإفراغ
+          </button>
+          ` : ''}
           <button onclick="window.print()" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors">
             <i class="fas fa-print ml-2"></i>
             طباعة
@@ -534,8 +541,28 @@ export function generateWorkflowTimelinePage(requestId: number, request: any, st
         '</div></div>';
       document.body.appendChild(modal);
     }
+
+    async function completeRequest() {
+      if (!confirm('هل أنت متأكد من إتمام الإفراغ؟\\nسيتم إغلاق هذا الطلب ونقل العميل إلى صفحة المكتملة ولن يظهرا في القوائم الرئيسية.')) return;
+      const btn = document.getElementById('completeBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>جاري...'; }
+      try {
+        const resp = await fetch('/api/requests/${requestId}/complete', { method: 'PUT', credentials: 'same-origin' });
+        const data = await resp.json();
+        if (data.success) {
+          alert('✓ تم إتمام الإفراغ بنجاح');
+          window.location.href = '/admin/requests/completed';
+        } else {
+          alert('حدث خطأ: ' + (data.error || 'غير معروف'));
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double ml-2"></i>إتمام الإفراغ'; }
+        }
+      } catch(e) {
+        alert('فشل الاتصال بالخادم');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double ml-2"></i>إتمام الإفراغ'; }
+      }
+    }
   </script>
-  
+
 </body>
 </html>
   `

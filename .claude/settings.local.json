@@ -20,7 +20,20 @@
       "Bash(curl -sL \"https://tamweel-calc.com/admin/requests\" -o /tmp/req.html)",
       "Read(//tmp/**)",
       "Bash(awk 'NR>=17427 && NR<=18351 && /\\\\/[^\\\\/]*\\\\/[gimsu]/ {print NR\": \"$0}' src/index.tsx)",
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(node scripts/build-contracts-ts-pages.mjs)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(xargs grep *)",
+      "Bash(grep -n \"app\\\\\\\\.get.*contracts\" \"C:/Users/Kyo/OneDrive/Desktop/Zat code/Expense-Cloudflare/Expense-Master/src/full-admin-panel.ts\")",
+      "Bash(awk -F: '$1 >= 16474 && $1 <= 19460')",
+      "Bash(awk -F: '$1 >= 16900 && $1 <= 17100')",
+      "Bash(awk -F: '$1 >= 19800 && $1 <= 21000')",
+      "Bash(awk -F: '$1 >= 20350 && $1 <= 20500')",
+      "Bash(awk -F: '$1 >= 17900 && $1 <= 18010')",
+      "Bash(awk -F: '$1 >= 20300 && $1 <= 20500')",
+      "Bash(awk -F: '$1 > 30912')"
     ]
   }
 }

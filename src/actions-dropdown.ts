@@ -31,11 +31,13 @@
 //        spacing uses padding-top instead, so moving from the button into the
 //        menu never crosses “dead air” over the table.
 //     6. While open, `body.actions-dropdown-open` sets pointer-events:none on
-//        the admin table scrollers so rows/cells underneath cannot receive
-//        :hover (the main flicker source). The menu and action triggers use
-//        pointer-events:auto again (children can override the parent).
+//        the admin table scrollers and tbody rows so nothing under the menu
+//        receives :hover (flicker from overflow clipping + hit-testing).
+//        The menu and action triggers use pointer-events:auto again.
+//     7. While open, the active menu node is moved to document.body so
+//        position:fixed is not clipped by #customersTableScroll / overflow-x.
 //
-//   No globals beyond a small back-compat shim. No portaling. No popover.
+//   No globals beyond a small back-compat shim. No popover.
 //
 // Markup contract:
 //   <button type="button"
@@ -92,6 +94,10 @@ export const actionsDropdownCSS = `
   body.actions-dropdown-open #requestsTableScroll {
     pointer-events: none;
   }
+  body.actions-dropdown-open #customersTableScroll tbody tr,
+  body.actions-dropdown-open #requestsTableScroll tbody tr {
+    pointer-events: none;
+  }
   body.actions-dropdown-open .actions-dropdown-menu,
   body.actions-dropdown-open .actions-dropdown-btn {
     pointer-events: auto;
@@ -138,6 +144,32 @@ export const actionsDropdownScript = `
       return menu && menu.classList && menu.classList.contains('actions-dropdown-menu') ? menu : null;
     }
 
+    /** Fixed menus inside overflow-x ancestors get clipped; hit-testing then misses the menu and hits rows behind it (flicker). */
+    function portalMenuToBody(menu) {
+      if (!menu || menu.parentElement === document.body) return;
+      menu.__adRestore = {
+        parent: menu.parentElement,
+        next: menu.nextSibling
+      };
+      document.body.appendChild(menu);
+    }
+
+    function restoreMenuFromBody(menu) {
+      if (!menu || !menu.__adRestore) return;
+      var r = menu.__adRestore;
+      menu.__adRestore = null;
+      if (!r.parent) return;
+      try {
+        if (r.next && r.next.parentNode === r.parent) {
+          r.parent.insertBefore(menu, r.next);
+        } else {
+          r.parent.appendChild(menu);
+        }
+      } catch (e) {
+        try { document.body.appendChild(menu); } catch (e2) {}
+      }
+    }
+
     function place(btn, menu) {
       var br = btn.getBoundingClientRect();
       var w = MENU_WIDTH;
@@ -165,11 +197,13 @@ export const actionsDropdownScript = `
       document.body.classList.remove('actions-dropdown-open');
       lastRepositionKey = '';
       if (!openMenu) return;
-      openMenu.setAttribute('hidden', '');
-      openMenu.style.left = '';
-      openMenu.style.top = '';
+      var m = openMenu;
       openMenu = null;
       openBtn = null;
+      m.setAttribute('hidden', '');
+      m.style.left = '';
+      m.style.top = '';
+      restoreMenuFromBody(m);
       restoreTriggerButtons();
     }
 
@@ -178,6 +212,7 @@ export const actionsDropdownScript = `
       if (!menu) return;
       // Reset any previous open menu first.
       close();
+      portalMenuToBody(menu);
       // Position BEFORE unhiding so first paint is correct.
       place(btn, menu);
       menu.removeAttribute('hidden');

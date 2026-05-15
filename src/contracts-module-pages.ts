@@ -38,6 +38,11 @@ export function markContractsHtmlRole3Restricted(html: string): string {
   return html.replace('<html lang="ar" dir="rtl">', '<html lang="ar" dir="rtl" class="contracts-role-3">')
 }
 
+/** Role 5 cannot create contracts — hide new-contract entry points before app.js runs. */
+export function markContractsHtmlRole5HideNewContract(html: string): string {
+  return html.replace('<html lang="ar" dir="rtl">', '<html lang="ar" dir="rtl" class="contracts-role-5-hide-new">')
+}
+
 export function patchContractsHtml(html: string): string {
   let h = injectContractsCss(stripExternalContractsStylesheet(html.replace(/\r\n/g, '\n')))
   h = h.replace(/src="js\/app\.js"/g, `src="/contracts-module/js/app.js${LEGACY_ASSETS_QUERY}"`)

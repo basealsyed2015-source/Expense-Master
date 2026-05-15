@@ -13,7 +13,9 @@ type GetUserInfo = (c: Context) => Promise<UserInfo>
 
 /**
  * Serve contracts JS from the Worker (bundled from src/contracts-module/js).
- * Do not add copies under public/contracts-module/js — static files there override this route and hide edits.
+ * Do not add a `public/contracts-module/` directory: Vite copies it to `dist/contracts-module/`, and
+ * @hono/vite-build's Cloudflare Pages plugin excludes every top-level dist folder as `/name/*`,
+ * which bypasses the Worker for `/contracts-module/js/*` and breaks API + RBAC (stale or missing JS).
  */
 export function registerContractsStaticRoutes(app: any, getUserInfo: GetUserInfo) {
   app.get('/contracts-module/js/app.js', async (c) => {

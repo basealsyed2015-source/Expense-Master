@@ -48,14 +48,21 @@ import {
   contractsNotesPage,
   contractsArchivePage,
   contractsSettingsPage,
-  markContractsHtmlRole3Restricted
+  markContractsHtmlRole3Restricted,
+  markContractsHtmlRole5HideNewContract
 } from './contracts-module-pages'
 import { registerContractsModuleApi } from './contracts-module-api'
 import { registerContractsStaticRoutes } from './contracts-module-static-routes'
+import { sendPasswordResetCodeEmail } from './resend-email'
+import tailwindCss from '../public/tailwind.css?raw'
 
 type Bindings = {
   DB: D1Database;
   ATTACHMENTS: R2Bucket;
+  /** Resend API key — set with `wrangler secret put RESEND_API_KEY` */
+  RESEND_API_KEY?: string;
+  /** Verified sender, e.g. `Tamweel <noreply@yourdomain.com>` (Worker var or secret) */
+  EMAIL_FROM?: string;
 }
 
 type Variables = {
@@ -104,6 +111,27 @@ function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
 function isMissingCustomerLocationIdColumnError(e: unknown): boolean {
   const m = String((e as Error)?.message ?? e ?? '')
   return m.includes('location_id') && (m.includes('no such column') || m.includes('no column named'))
+}
+
+function isMissingFinancingRequestLocationIdColumnError(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? e ?? '')
+  return m.includes('location_id') && (m.includes('no such column') || m.includes('no column named'))
+}
+
+async function syncFinancingRequestsLocationForCustomer(
+  db: any,
+  customerId: string | number | null | undefined,
+  locationId: number | null
+) {
+  if (!customerId) return
+  try {
+    await db
+      .prepare(`UPDATE financing_requests SET location_id = ? WHERE customer_id = ?`)
+      .bind(locationId, customerId)
+      .run()
+  } catch (e: unknown) {
+    if (!isMissingFinancingRequestLocationIdColumnError(e)) throw e
+  }
 }
 
 type AttachmentSyncPayload = {
@@ -170,7 +198,7 @@ function normalizeCustomerPhoneForStorage(rawPhone: string | null | undefined): 
   if (!/^5\d{8}$/.test(localPart)) {
     return {
       normalized: null,
-      error: 'صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). مثال: 512345678'
+      error: 'صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). الصيغة: 5XXXXXXXX'
     }
   }
 
@@ -258,6 +286,20 @@ function escapeHtmlAttr(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
+}
+
+function contractStatusBadge(status: string | null | undefined): string {
+  if (!status) return '<span class="text-xs text-gray-400">لا يوجد عقد</span>'
+  const map: Record<string, string> = {
+    'نشط': 'bg-green-100 text-green-800 border-green-200',
+    'بانتظار موافقة ممثل البنك': 'bg-amber-100 text-amber-800 border-amber-200',
+    'بانتظار موافقة الإدارة': 'bg-blue-100 text-blue-800 border-blue-200',
+    'بانتظار التمويل': 'bg-purple-100 text-purple-800 border-purple-200',
+    'مكتمل': 'bg-teal-100 text-teal-800 border-teal-200',
+    'مؤرشف': 'bg-gray-100 text-gray-600 border-gray-200',
+  }
+  const cls = map[status] ?? 'bg-gray-100 text-gray-700 border-gray-200'
+  return `<span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full border ${cls}">${escapeHtml(status)}</span>`
 }
 
 /** Saudi mobile digits only (9665xxxxxxxx); null if not a valid KSA mobile after normalization. */
@@ -349,6 +391,14 @@ type PublicContactTenantRow = {
   /** Branch / marketing location — shown under title */
   public_city?: string | null
   public_address?: string | null
+  /** Optional solid background color for the contact page (overrides primary/secondary gradient) */
+  contact_bg_color?: string | null
+  /** Optional solid background color for the form card (overrides white) */
+  contact_form_color?: string | null
+  /** Text color for form fields: 'white' | 'black' | null (null = default dark) */
+  contact_text_color?: string | null
+  /** JSON array of up to 3 custom fields: [{label:string, required:boolean}] */
+  contact_custom_fields?: string | null
 }
 
 function pickFirstNonEmptyContactField(
@@ -411,10 +461,79 @@ function buildPublicContactPageHtml(
   const waHrefAttr = waHref ? escapeHtmlAttr(waHref) : ''
   const primaryColor = escapeHtml(tenant.primary_color || '#0f766e')
   const secondaryColor = escapeHtml(tenant.secondary_color || '#14b8a6')
+  const bgStyle = tenant.contact_bg_color
+    ? `background:${escapeHtmlAttr(tenant.contact_bg_color)};`
+    : `background:linear-gradient(135deg,${primaryColor},${secondaryColor});`
+  const formCardStyle = tenant.contact_form_color
+    ? `background:${escapeHtmlAttr(tenant.contact_form_color)};`
+    : 'background:#ffffff;'
+  const isWhiteText = tenant.contact_text_color === 'white'
+  const textColorCss = isWhiteText ? `
+    <style>
+      #contactCardHeader h1,
+      #contactCardHeader > p { color: rgba(255,255,255,0.92) !important; }
+      #contactCardHeader .text-gray-900,
+      #contactCardHeader .text-gray-700,
+      #contactCardHeader .text-gray-600,
+      #contactCardHeader .text-gray-500,
+      #contactCardHeader .text-gray-400,
+      #contactCardHeader .text-emerald-700 { color: rgba(255,255,255,0.88) !important; }
+      #contactForm label { color: rgba(255,255,255,0.88) !important; }
+      #contactForm p, #contactForm span.text-xs { color: rgba(255,255,255,0.65) !important; }
+      #contactForm input:not([type=submit]):not([type=button]),
+      #contactForm textarea {
+        color: #ffffff !important;
+        background-color: rgba(255,255,255,0.08) !important;
+        border-color: rgba(255,255,255,0.28) !important;
+      }
+      #contactForm input::placeholder, #contactForm textarea::placeholder { color: rgba(255,255,255,0.45) !important; }
+      #contactForm .bg-gray-100 { background-color: rgba(255,255,255,0.12) !important; }
+      #contactForm .text-gray-700 { color: rgba(255,255,255,0.85) !important; }
+      #contactForm .border-gray-300, #contactForm .border-l { border-color: rgba(255,255,255,0.25) !important; }
+    </style>` : ''
   const affiliatePathJson = JSON.stringify(affiliate?.path_segment ?? null)
   const locationSlugJson = JSON.stringify(opts?.locationSlug ?? null)
   const logoNorm = normalizeTenantLogoUrl(tenant.logo_url)
   const logoAttr = logoNorm ? escapeHtmlAttr(logoNorm) : ''
+
+  // Parse custom fields
+  type CustomField = { label: string; required: boolean }
+  let customFields: CustomField[] = []
+  if (tenant.contact_custom_fields) {
+    try {
+      const parsed = JSON.parse(tenant.contact_custom_fields)
+      if (Array.isArray(parsed)) {
+        customFields = parsed
+          .filter((f: any) => f && typeof f === 'object' && String(f.label || '').trim())
+          .slice(0, 3)
+          .map((f: any) => ({ label: String(f.label).trim(), required: !!f.required }))
+      }
+    } catch (_) {}
+  }
+  const customFieldsJson = JSON.stringify(customFields)
+
+  // Responsive grid class for custom fields
+  const customFieldsGridClass =
+    customFields.length === 3
+      ? 'grid grid-cols-1 sm:grid-cols-3 gap-4'
+      : customFields.length === 2
+        ? 'grid grid-cols-1 sm:grid-cols-2 gap-4'
+        : ''
+
+  const customFieldsHtml = customFields.length > 0
+    ? `<div class="${customFieldsGridClass}">
+        ${customFields.map((f, i) => `
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              ${escapeHtml(f.label)}${f.required ? '<span class="text-red-500 mr-1">*</span>' : ''}
+            </label>
+            <input id="custom_field_${i}" type="text"
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="${escapeHtmlAttr(f.label)}"
+              ${f.required ? 'required' : ''} />
+          </div>`).join('')}
+      </div>`
+    : ''
 
   return `
     <!DOCTYPE html>
@@ -425,16 +544,17 @@ function buildPublicContactPageHtml(
       <title>تواصل مع ${companyName}</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      ${textColorCss}
     </head>
     <body class="min-h-screen bg-gray-50">
-      <div class="min-h-screen p-6" style="background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor});">
+      <div class="min-h-screen p-6" style="${bgStyle}">
         <div class="w-full max-w-3xl mx-auto">
-          <div class="bg-white rounded-2xl shadow-2xl p-8">
-            <div class="mb-8">
+          <div class="rounded-2xl shadow-2xl p-8" style="${formCardStyle}">
+            <div id="contactCardHeader" class="mb-8">
               ${
                 logoNorm
                   ? `<div class="flex justify-center mb-5"><img src="${logoAttr}" alt="" class="max-h-24 max-w-[220px] object-contain rounded-xl shadow-md bg-white p-3 border border-gray-100" width="220" height="96" loading="lazy" decoding="async" /></div>`
-                  : `<div class="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center text-white text-3xl shadow-md" style="background: ${primaryColor};">
+                  : `<div class="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center text-white text-3xl shadow-md" style="background:${primaryColor};">
                 <i class="fas fa-comments"></i>
               </div>`
               }
@@ -447,12 +567,12 @@ function buildPublicContactPageHtml(
                   : ''
               }
               <p class="text-gray-600 text-center text-sm mt-2 mb-6">أرسل بياناتك وسيتم التواصل معك</p>
-              <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-4 md:p-5">
+              <div class="mb-2">
                 <p class="text-center text-xs font-medium text-gray-500 mb-3">بيانات التواصل</p>
                 <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3">
                   ${
                     phoneRaw
-                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-black/8 px-4 py-3" style="background:rgba(0,0,0,0.04);">
                     <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white text-sm shadow-sm" style="background:#25D366;">
                       <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
                     </span>
@@ -465,7 +585,7 @@ function buildPublicContactPageHtml(
                       }
                     </span>
                   </div>`
-                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white/60 px-4 py-3 text-gray-400">
+                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-black/10 px-4 py-3 text-gray-400" style="background:rgba(0,0,0,0.02);">
                     <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500 text-sm">
                       <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
                     </span>
@@ -474,7 +594,7 @@ function buildPublicContactPageHtml(
                   }
                   ${
                     emailRaw
-                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-black/8 px-4 py-3" style="background:rgba(0,0,0,0.04);">
                     <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white text-sm shadow-sm" style="background:${primaryColor};">
                       <i class="fas fa-envelope" aria-hidden="true"></i>
                     </span>
@@ -483,7 +603,7 @@ function buildPublicContactPageHtml(
                       <span class="text-sm font-semibold text-gray-900 dir-ltr block break-all">${contactEmail}</span>
                     </span>
                   </div>`
-                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-gray-200 bg-white/60 px-4 py-3 text-gray-400">
+                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-black/10 px-4 py-3 text-gray-400" style="background:rgba(0,0,0,0.02);">
                     <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500 text-sm">
                       <i class="fas fa-envelope" aria-hidden="true"></i>
                     </span>
@@ -495,15 +615,24 @@ function buildPublicContactPageHtml(
             </div>
             <form id="contactForm" class="space-y-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">الاسم</label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">الاسم <span class="text-red-500">*</span></label>
                 <input id="customer_name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب اسمك" required />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال</label>
-                <input id="customer_phone" type="tel" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="05xxxxxxxx" required />
+                <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال <span class="text-red-500">*</span></label>
+                <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent overflow-hidden">
+                  <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
+                  <input id="customer_phone" type="tel" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl"
+                         class="w-full px-4 py-3 border-0 focus:ring-0 focus:outline-none text-right placeholder:text-right"
+                         placeholder="5xxxxxxxx"
+                         oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
+                         oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، الصيغة: 5XXXXXXXX')" />
+                </div>
+                <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
               </div>
+              ${customFieldsHtml}
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">رسالتك</label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">رسالتك <span class="text-red-500">*</span></label>
                 <textarea id="customer_message" rows="5" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب رسالتك هنا..." required></textarea>
               </div>
               <button id="submitBtn" type="submit" class="w-full text-white font-semibold py-3 rounded-lg" style="background:${primaryColor};">
@@ -517,6 +646,7 @@ function buildPublicContactPageHtml(
       <script>
         const AFFILIATE_PATH = ${affiliatePathJson};
         const LOCATION_SLUG = ${locationSlugJson};
+        const CUSTOM_FIELDS = ${customFieldsJson};
         const form = document.getElementById('contactForm');
         const statusEl = document.getElementById('formStatus');
         const submitBtn = document.getElementById('submitBtn');
@@ -535,6 +665,13 @@ function buildPublicContactPageHtml(
           };
           if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
           if (LOCATION_SLUG) payload.location_slug = LOCATION_SLUG;
+          if (CUSTOM_FIELDS.length > 0) {
+            payload.custom_fields = {};
+            CUSTOM_FIELDS.forEach((f, i) => {
+              const el = document.getElementById('custom_field_' + i);
+              if (el) payload.custom_fields[f.label] = el.value.trim();
+            });
+          }
 
           try {
             const res = await fetch('/api/public/${tenant.slug}/contact-submissions', {
@@ -720,7 +857,52 @@ async function bulkSyncUsersToHrEmployees(
   return { synced, skipped, errors }
 }
 
+/** Replace `<link href="/tailwind.css">` with an inline `<style>` so UI stays styled if the stylesheet request fails (Pages routing, static-only hosts, or dev proxies). */
+async function maybeInlineTailwindIntoHtmlResponse(c: { res?: Response }): Promise<void> {
+  const res = c.res
+  if (!res?.body) return
+  const ct = res.headers.get('content-type') || ''
+  if (!ct.includes('text/html')) return
+  if (res.status < 200 || res.status >= 300) return
+  try {
+    const cloned = res.clone()
+    let html = await cloned.text()
+    if (html.includes('id="tailwind-inline-budget"')) return
+    const linkRe = /<link[^>]+href=["']\/tailwind\.css(?:\?[^"']*)?["'][^>]*\s*\/?>/gi
+    if (!linkRe.test(html)) return
+    linkRe.lastIndex = 0
+    html = html.replace(linkRe, '')
+    const block = `<style id="tailwind-inline-budget">\n${tailwindCss}\n</style>`
+    const hc = '</head>'
+    const hi = html.lastIndexOf(hc)
+    if (hi !== -1) html = html.slice(0, hi) + block + html.slice(hi)
+    else html = block + html
+    const headers = new Headers(res.headers)
+    headers.set('content-type', 'text/html; charset=UTF-8')
+    c.res = new Response(html, { status: res.status, statusText: res.statusText, headers })
+  } catch {
+    // keep original response
+  }
+}
+
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
+
+// Outermost wrapper: after the full handler chain, inline Tailwind into HTML when the page still references it.
+app.use('*', async (c, next) => {
+  await next()
+  await maybeInlineTailwindIntoHtmlResponse(c)
+})
+
+// When `_routes.json` omits `/tailwind.css`, Pages sends this URL to the Worker and static
+// files are not used — admin/settings/login pages would load unstyled. Serving the same
+// file from the bundle fixes that; when routing excludes `/tailwind.css`, the static asset
+// is still served first at the edge.
+app.get('/tailwind.css', (c) =>
+  c.newResponse(tailwindCss, 200, {
+    'Content-Type': 'text/css; charset=utf-8',
+    'Cache-Control': 'public, max-age=86400',
+  })
+)
 
 // Contracts module static assets (JS; CSS is inlined in HTML). Register early so routes are matched.
 registerContractsStaticRoutes(app, getUserInfo)
@@ -1014,6 +1196,11 @@ app.use('/api/*', async (c, next) => {
     await next()
     return
   }
+  // Update existing customer (edit form); handler enforces canUserAccessCustomer (incl. role 5 via assigned request).
+  if (method === 'POST' && /^\/api\/customers\/\d+$/.test(p)) {
+    await next()
+    return
+  }
   if (p === '/api/requests' && method === 'POST') {
     await next()
     return
@@ -1042,6 +1229,54 @@ app.use('/api/*', async (c, next) => {
     await next()
     return
   }
+  if (p === '/api/customer-alarms' && (method === 'GET' || method === 'POST')) {
+    await next()
+    return
+  }
+  if (p.startsWith('/api/customer-alarms/') && (method === 'GET' || method === 'PUT' || method === 'DELETE')) {
+    await next()
+    return
+  }
+  if (method === 'PUT' && /^\/api\/requests\/\d+\/complete$/.test(p)) {
+    await next()
+    return
+  }
+  if (p === '/api/reports/requests-followup' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/follow-ups' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p.startsWith('/api/follow-ups/') && (method === 'GET' || method === 'POST' || method === 'PATCH')) {
+    await next()
+    return
+  }
+  if (p === '/api/my-followup-tasks' && (method === 'GET' || method === 'PATCH')) {
+    await next()
+    return
+  }
+  if (p.startsWith('/api/my-followup-tasks/') && (method === 'GET' || method === 'PATCH' || method === 'POST')) {
+    await next()
+    return
+  }
+  if (p === '/api/my-tenant-followup-staff' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/my-followup-task-passes/incoming' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p.startsWith('/api/my-followup-task-passes/') && method === 'PATCH') {
+    await next()
+    return
+  }
+  if (p === '/api/requests/sample-csv' && method === 'GET') {
+    await next()
+    return
+  }
   if (p === '/api/sidebar-filter-counts' && method === 'GET') {
     await next()
     return
@@ -1055,7 +1290,8 @@ app.use('/api/*', async (c, next) => {
     p === '/api/banks' ||
     p === '/api/rates' ||
     p === '/api/financing-types' ||
-    p === '/api/tenants'
+    p === '/api/tenants' ||
+    p === '/api/admin/bank-agents'
   )) {
     await next()
     return
@@ -1280,24 +1516,81 @@ async function canUserAccessCustomer(
   userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
   customer: { id: number; tenant_id: number | null } | null
 ): Promise<boolean> {
-  if (!userInfo.userId || !userInfo.roleId || !customer) return false
-  if (userInfo.roleId === 1) return true
+  if (!userInfo.userId || !customer) return false
+  const rid = normalizeRoleId(userInfo.roleId)
+  if (!rid) return false
+  if (rid === 1) return true
   if (userInfo.tenantId == null || customer.tenant_id == null || customer.tenant_id !== userInfo.tenantId) return false
-  if (userInfo.roleId === 4) {
+  if (rid === 4) {
     const assignment = await db
       .prepare('SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1')
       .bind(customer.id, userInfo.userId)
       .first<{ ok: number }>()
     return Boolean(assignment?.ok)
   }
-  if (normalizeRoleId(userInfo.roleId) === 5) {
-    const assignment = await db
-      .prepare('SELECT 1 as ok FROM financing_requests WHERE customer_id = ? AND assigned_bank_agent_id = ? LIMIT 1')
-      .bind(customer.id, userInfo.userId)
-      .first<{ ok: number }>()
-    return Boolean(assignment?.ok)
+  if (rid === 5) {
+    // Must match loadCustomersForAdminForms / customer list APIs: agents see customers they
+    // created OR customers tied via assigned_bank_agent_id on any financing request.
+    try {
+      const row = await db
+        .prepare(
+          `SELECT 1 AS ok FROM customers c
+           WHERE c.id = ? AND c.tenant_id = ? AND (
+             c.created_by = ?
+             OR EXISTS (
+               SELECT 1 FROM financing_requests fr
+               WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+             )
+           ) LIMIT 1`
+        )
+        .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId)
+        .first<{ ok: number }>()
+      return Boolean(row?.ok)
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || e || '')
+      if (/no such column:\s*c\.created_by|no such column:\s*created_by/i.test(msg)) {
+        const assignment = await db
+          .prepare(
+            'SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? AND assigned_bank_agent_id = ? LIMIT 1'
+          )
+          .bind(customer.id, userInfo.userId)
+          .first<{ ok: number }>()
+        return Boolean(assignment?.ok)
+      }
+      throw e
+    }
   }
-  return userInfo.roleId === 2 || userInfo.roleId === 3
+  return rid === 2 || rid === 3
+}
+
+/** Role 5: request row is "theirs" if they are assignee or recorded creator (matches list scope). */
+function bankAgentOwnsFinancingRequestRow(
+  userId: number,
+  row: { assigned_bank_agent_id?: unknown; created_by?: unknown }
+): boolean {
+  if (Number(row.assigned_bank_agent_id) === userId) return true
+  if (row.created_by != null && Number(row.created_by) === userId) return true
+  return false
+}
+
+/** Role 5: may view/edit/delete a financing request if assignee, creator, or customer is in their scope. */
+async function canRole5AccessFinancingRequest(
+  db: D1Database,
+  userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
+  row: {
+    customer_id?: number | null
+    customer_tenant_id?: number | null
+    assigned_bank_agent_id?: number | null
+    created_by?: number | null
+  }
+): Promise<boolean> {
+  if (!userInfo.userId) return false
+  const uid = Number(userInfo.userId)
+  if (bankAgentOwnsFinancingRequestRow(uid, row)) return true
+  const cid = row.customer_id != null ? Number(row.customer_id) : NaN
+  if (Number.isNaN(cid)) return false
+  const ctid = row.customer_tenant_id != null ? Number(row.customer_tenant_id) : null
+  return canUserAccessCustomer(db, userInfo, { id: cid, tenant_id: ctid })
 }
 
 // Get tenant_id for current user (for multi-tenancy filtering)
@@ -1527,9 +1820,9 @@ async function getUserTenantId(c: any): Promise<number | null> {
 async function loadCustomersForAdminForms(
   c: any,
   userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
-  opts?: { scopeSuperAdminToTenant?: boolean }
+  opts?: { scopeSuperAdminToTenant?: boolean; filterRole4ByFundingRequests?: boolean }
 ): Promise<{ results: any[] }> {
-  let customersQuery = 'SELECT id, full_name, phone, national_id, city, tenant_id FROM customers'
+  let customersQuery = 'SELECT id, full_name, phone, national_id, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers'
   const customersParams: any[] = []
 
   if (userInfo.roleId === 1) {
@@ -1563,27 +1856,61 @@ async function loadCustomersForAdminForms(
     if (!userInfo.tenantId || !userInfo.userId) {
       return { results: [] }
     }
-    customersQuery += ` WHERE tenant_id = ? AND EXISTS (
-      SELECT 1 FROM customer_assignments ca
-      WHERE ca.customer_id = customers.id AND ca.employee_id = ?
-    )`
-    customersParams.push(userInfo.tenantId, userInfo.userId)
+    if (opts?.filterRole4ByFundingRequests) {
+      customersQuery += ` WHERE tenant_id = ? AND EXISTS (
+        SELECT 1 FROM customer_assignments ca
+        WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+      ) AND EXISTS (
+        SELECT 1 FROM financing_requests fr
+        WHERE fr.customer_id = customers.id AND fr.tenant_id = ?
+          AND COALESCE(fr.is_completed, 0) = 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM contracts co
+        WHERE co.customer_id = customers.id AND co.tenant_id = ?
+          AND COALESCE(co.is_archived, 0) = 0
+          AND co.status NOT IN ('مكتمل', 'مؤرشف')
+      )`
+      customersParams.push(userInfo.tenantId, userInfo.userId, userInfo.tenantId, userInfo.tenantId)
+    } else {
+      customersQuery += ` WHERE tenant_id = ? AND EXISTS (
+        SELECT 1 FROM customer_assignments ca
+        WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+      )`
+      customersParams.push(userInfo.tenantId, userInfo.userId)
+    }
   } else if (normalizeRoleId(userInfo.roleId) === 5) {
     if (!userInfo.tenantId || !userInfo.userId) {
       return { results: [] }
     }
-    customersQuery += ` WHERE tenant_id = ? AND EXISTS (
-      SELECT 1 FROM financing_requests fr
-      WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+    customersQuery += ` WHERE tenant_id = ? AND (
+      created_by = ?
+      OR EXISTS (
+        SELECT 1 FROM financing_requests fr
+        WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+      )
     )`
-    customersParams.push(userInfo.tenantId, userInfo.userId)
+    customersParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
   } else {
     customersQuery += ' WHERE 1 = 0'
   }
   customersQuery += ' ORDER BY full_name'
-  const customers = customersParams.length
-    ? await c.env.DB.prepare(customersQuery).bind(...customersParams).all()
-    : await c.env.DB.prepare(customersQuery).all()
+  let customers: { results?: unknown[] }
+  try {
+    customers = customersParams.length
+      ? await c.env.DB.prepare(customersQuery).bind(...customersParams).all()
+      : await c.env.DB.prepare(customersQuery).all()
+  } catch (e: any) {
+    // Backwards-compatible fallback if is_completed column does not exist yet.
+    const msg = String(e?.message || e || '')
+    if (/no such column:\s*is_completed/i.test(msg) && userInfo.tenantId != null) {
+      const safeQuery = customersQuery.replace('COALESCE(is_completed, 0) as is_completed', '0 as is_completed')
+      customers = customersParams.length
+        ? await c.env.DB.prepare(safeQuery).bind(...customersParams).all()
+        : await c.env.DB.prepare(safeQuery).all()
+    } else {
+      throw e
+    }
+  }
   return { results: (customers.results || []) as any[] }
 }
 
@@ -1642,7 +1969,9 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
   '1': [
     '/admin/dashboard',
     '/admin/customers',
+    '/admin/customers/completed',
     '/admin/requests',
+    '/admin/requests/completed',
     '/admin/banks',
     '/admin/rates',
     '/admin/subscriptions',
@@ -1665,7 +1994,9 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
   '2': [
     '/admin/dashboard',
     '/admin/customers',
+    '/admin/customers/completed',
     '/admin/requests',
+    '/admin/requests/completed',
     '/admin/reports',
     '/admin/banks',
     '/admin/rates',
@@ -1683,7 +2014,9 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
   '3': [
     '/admin/dashboard',
     '/admin/customers',
+    '/admin/customers/completed',
     '/admin/requests',
+    '/admin/requests/completed',
     '/admin/reports',
     '/admin/banks',
     '/admin/rates',
@@ -1697,7 +2030,9 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
   '4': [
     '/admin/dashboard',
     '/admin/customers',
+    '/admin/customers/completed',
     '/admin/requests',
+    '/admin/requests/completed',
     '/admin/contracts',
     '/admin/contracts/list',
     '/admin/contracts/new',
@@ -1713,12 +2048,13 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/panel',
     '/admin/dashboard',
     '/admin/customers',
+    '/admin/customers/completed',
     '/admin/requests',
+    '/admin/requests/completed',
     '/admin/contact-affiliates',
     '/admin/contracts',
     '/admin/contracts/list',
-    '/admin/contracts/new',
-    '/admin/contracts/templates',
+    '/admin/contracts/view',
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
@@ -1957,6 +2293,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     </div>
   </div>
   <nav class="gps-nav">
+    <a href="/admin/panel"><i class="fas fa-home"></i>الصفحة الرئيسية</a>
     <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>ملخص العملاء</a>
     <a href="/admin/customers" data-customers-main-link><i class="fas fa-users"></i>العملاء</a>
     <div class="gps-collapsible gps-open" data-customers-collapsible>
@@ -1977,6 +2314,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/customers?ratingFilter=3&amp;requestsFilter=all" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل مقبول</a>
         <a href="/admin/customers?ratingFilter=2&amp;requestsFilter=all" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
         <a href="/admin/customers?ratingFilter=1&amp;requestsFilter=all" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
+        <a href="/admin/customers/completed" data-completed-customers-link><i class="fas fa-check-double"></i>المكتملة</a>
       </div>
     </div>
     <a href="/admin/requests" data-requests-main-link><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
@@ -1992,6 +2330,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
       </div>
       <div class="gps-submenu">
         <a href="/admin/requests?requestStatusFilter=all" data-request-status-filter="all"><i class="fas fa-list"></i>الكل</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%B8%D8%A7%D8%B1" data-request-status-filter="قيد الانتظار"><i class="fas fa-hourglass-half"></i>قيد الانتظار</a>
         <a href="/admin/requests?requestStatusFilter=%D9%85%D8%B3%D9%88%D8%AF%D8%A9" data-request-status-filter="مسودة"><i class="fas fa-file"></i>مسودة</a>
         <a href="/admin/requests?requestStatusFilter=%D8%AA%D9%85%20%D8%A7%D9%84%D8%A5%D8%B1%D8%B3%D8%A7%D9%84" data-request-status-filter="تم الإرسال"><i class="fas fa-paper-plane"></i>تم الإرسال</a>
         <a href="/admin/requests?requestStatusFilter=%D9%86%D9%88%D8%A7%D9%82%D8%B5%20%D9%85%D8%B3%D8%AA%D9%86%D8%AF%D8%A7%D8%AA" data-request-status-filter="نواقص مستندات"><i class="fas fa-file-alt"></i>نواقص مستندات</a>
@@ -1999,13 +2338,14 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/requests?requestStatusFilter=%D9%85%D9%84%D8%BA%D9%8A%20%D9%85%D9%86%20%D8%A7%D9%84%D8%B9%D9%85%D9%8A%D9%84" data-request-status-filter="ملغي من العميل"><i class="fas fa-ban"></i>ملغي من العميل</a>
         <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D9%85%D8%B9%D8%A7%D9%84%D8%AC%D8%A9" data-request-status-filter="قيد المعالجة"><i class="fas fa-cogs"></i>قيد المعالجة</a>
         <a href="/admin/requests?requestStatusFilter=%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%AF%D8%B1%D8%A7%D8%B3%D8%A9%20%D8%A7%D9%84%D8%A7%D8%A6%D8%AA%D9%85%D8%A7%D9%86%D9%8A%D8%A9" data-request-status-filter="قيد الدراسة الائتمانية"><i class="fas fa-search"></i>قيد الدراسة الائتمانية</a>
-        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%85%D8%B4%D8%B1%D9%88%D8%B7%D8%A9" data-request-status-filter="موافقة مشروطة"><i class="fas fa-check-double"></i>موافقة مشروطة</a>
+        <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%85%D8%B4%D8%B1%D9%88%D8%B7%D8%A9" data-request-status-filter="موافقة مشروطة"><i class="fas fa-clipboard-check"></i>موافقة مشروطة</a>
         <a href="/admin/requests?requestStatusFilter=%D8%AC%D8%A7%D9%87%D8%B2%20%D9%84%D9%84%D8%AA%D9%88%D9%82%D9%8A%D8%B9%2F%D8%AA%D9%88%D8%AB%D9%8A%D9%82" data-request-status-filter="جاهز للتوقيع/توثيق"><i class="fas fa-pen-fancy"></i>جاهز للتوقيع/توثيق</a>
         <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%20%D8%B9%D9%84%D9%8A%D9%87" data-request-status-filter="موافق عليه"><i class="fas fa-check-circle"></i>موافق عليه</a>
         <a href="/admin/requests?requestStatusFilter=%D9%85%D9%88%D8%A7%D9%81%D9%82%D8%A9%20%D9%86%D9%87%D8%A7%D8%A6%D9%8A%D8%A9" data-request-status-filter="موافقة نهائية"><i class="fas fa-check-circle"></i>موافقة نهائية</a>
         <a href="/admin/requests?requestStatusFilter=%D8%AA%D9%85%20%D8%A7%D9%84%D8%B5%D8%B1%D9%81" data-request-status-filter="تم الصرف"><i class="fas fa-money-bill-wave"></i>تم الصرف</a>
         <a href="/admin/requests?requestStatusFilter=%D9%86%D8%B4%D8%B7%2F%D9%82%D9%8A%D8%AF%20%D8%A7%D9%84%D8%B3%D8%AF%D8%A7%D8%AF" data-request-status-filter="نشط/قيد السداد"><i class="fas fa-sync"></i>نشط/قيد السداد</a>
         <a href="/admin/requests?requestStatusFilter=%D9%85%D9%8F%D8%BA%D9%84%D9%82%2F%D9%85%D8%B3%D8%AF%D8%AF" data-request-status-filter="مُغلق/مسدد"><i class="fas fa-archive"></i>مُغلق/مسدد</a>
+        <a href="/admin/requests/completed" data-completed-requests-link><i class="fas fa-check-double"></i>المكتملة</a>
       </div>
     </div>
     <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>مهام المتابعة</a>
@@ -2051,7 +2391,6 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <a href="/admin/saas-settings" data-superadmin-only="true"><i class="fas fa-cogs"></i>إعدادات SaaS</a>
     <hr class="gps-divider">
     <a href="/calculator"><i class="fas fa-calculator"></i>الحاسبة</a>
-    <a href="/admin/panel"><i class="fas fa-home"></i>الصفحة الرئيسية</a>
     <hr class="gps-divider">
     <button onclick="(function(){localStorage.removeItem('authToken');document.cookie='authToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';window.location.href='/login';})()">
       <i class="fas fa-sign-out-alt"></i>تسجيل الخروج
@@ -2237,6 +2576,41 @@ ${isAdminPanelRail ? `
             if (typeof value !== 'number') value = 0;
             renderSidebarCount(link, value);
           });
+
+          // المكتملة link — always visible, just show the count badge
+          var completedLink = document.querySelector('#global-persistent-sidebar [data-completed-requests-link]');
+          if (completedLink) {
+            var completedN = typeof requests.completed === 'number' ? requests.completed : 0;
+            var existingBadge = completedLink.querySelector('.gps-count-badge');
+            if (completedN > 0) {
+              if (!existingBadge) {
+                var newBadge = document.createElement('span');
+                newBadge.className = 'gps-count-badge';
+                completedLink.appendChild(newBadge);
+                existingBadge = newBadge;
+              }
+              existingBadge.textContent = String(completedN);
+            } else if (existingBadge) {
+              existingBadge.remove();
+            }
+          }
+
+          var completedCustomersLink = document.querySelector('#global-persistent-sidebar [data-completed-customers-link]');
+          if (completedCustomersLink) {
+            var completedCustomersN = typeof customers.completed === 'number' ? customers.completed : 0;
+            var existingCustomersBadge = completedCustomersLink.querySelector('.gps-count-badge');
+            if (completedCustomersN > 0) {
+              if (!existingCustomersBadge) {
+                var newCustomersBadge = document.createElement('span');
+                newCustomersBadge.className = 'gps-count-badge';
+                completedCustomersLink.appendChild(newCustomersBadge);
+                existingCustomersBadge = newCustomersBadge;
+              }
+              existingCustomersBadge.textContent = String(completedCustomersN);
+            } else if (existingCustomersBadge) {
+              existingCustomersBadge.remove();
+            }
+          }
         })
         .catch(function () {});
     }
@@ -2456,13 +2830,15 @@ app.use('/admin/*', async (c, next) => {
     return c.redirect('/admin/dashboard')
   }
   if (rid === 5) {
-    // Bank agent: allow the same app surface as the sidebar / role-4-style workflows; APIs still enforce scope. No marketing (/admin/follow-ups).
+    // Bank agent: same app surface as role 4.
     const ok =
       pathname === '/admin' ||
       pathname === '/admin/panel' ||
       pathname === '/admin/dashboard' ||
       pathname.startsWith('/admin/customers') ||
       pathname.startsWith('/admin/requests') ||
+      pathname.startsWith('/admin/reports') ||
+      pathname.startsWith('/admin/follow-ups') ||
       pathname === '/admin/my-tasks' ||
       pathname === '/my-tasks' ||
       pathname === '/admin/my-leaves' ||
@@ -2506,6 +2882,10 @@ app.use('/admin/*', async (c, next) => {
           }
           const effectiveSidebarRole = normalizeRoleId(info.roleId) ?? 4
           updated = injectPersistentAdminSidebar(pathname, updated, { roleId: effectiveSidebarRole })
+          // Contracts module pages skip GPS injection but still need the role for client-side approval logic.
+          if ((pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) && updated.includes('</head>')) {
+            updated = updated.replace('</head>', `<script>window.USER_ROLE_ID=${effectiveSidebarRole};</script></head>`)
+          }
           console.log('🔒 [RBAC] HTML processed, updated length:', updated.length)
           const headers = new Headers(res.headers)
           headers.set('content-type', 'text/html; charset=UTF-8')
@@ -2890,7 +3270,7 @@ app.get('/api/my-tenant', async (c) => {
       return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
     }
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
       FROM tenants WHERE id = ? LIMIT 1
     `).bind(info.tenantId).first<{
       company_name: string
@@ -2901,6 +3281,10 @@ app.get('/api/my-tenant', async (c) => {
       logo_url: string | null
       slug: string
       public_uuid: string | null
+      contact_bg_color: string | null
+      contact_form_color: string | null
+      contact_text_color: string | null
+      contact_custom_fields: string | null
     }>()
     if (!row) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
@@ -3060,6 +3444,50 @@ app.patch('/api/my-tenant', async (c) => {
         return c.json({ success: false, error: addrNorm.error }, 400)
       }
       updates.address = addrNorm.value
+    }
+    if ('contact_bg_color' in body) {
+      const raw = String(body.contact_bg_color ?? '').trim()
+      if (raw === '') {
+        updates.contact_bg_color = null
+      } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
+        updates.contact_bg_color = raw
+      } else {
+        return c.json({ success: false, error: 'لون الخلفية غير صالح، استخدم صيغة hex مثل #0f766e' }, 400)
+      }
+    }
+    if ('contact_form_color' in body) {
+      const raw = String(body.contact_form_color ?? '').trim()
+      if (raw === '') {
+        updates.contact_form_color = null
+      } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
+        updates.contact_form_color = raw
+      } else {
+        return c.json({ success: false, error: 'لون النافذة غير صالح، استخدم صيغة hex مثل #ffffff' }, 400)
+      }
+    }
+    if ('contact_text_color' in body) {
+      const raw = String(body.contact_text_color ?? '').trim()
+      if (raw === '' || raw === 'black') {
+        updates.contact_text_color = raw === '' ? null : 'black'
+      } else if (raw === 'white') {
+        updates.contact_text_color = 'white'
+      } else {
+        return c.json({ success: false, error: 'لون النص يجب أن يكون black أو white' }, 400)
+      }
+    }
+    if ('contact_custom_fields' in body) {
+      const raw = body.contact_custom_fields
+      if (raw == null || (Array.isArray(raw) && raw.length === 0)) {
+        updates.contact_custom_fields = null
+      } else if (Array.isArray(raw)) {
+        const items = (raw as any[])
+          .filter((f: any) => f && typeof f === 'object' && String(f.label ?? '').trim())
+          .slice(0, 3)
+          .map((f: any) => ({ label: String(f.label).trim().slice(0, 100), required: !!f.required }))
+        updates.contact_custom_fields = items.length > 0 ? JSON.stringify(items) : null
+      } else {
+        return c.json({ success: false, error: 'contact_custom_fields يجب أن يكون مصفوفة' }, 400)
+      }
     }
 
     const keys = Object.keys(updates)
@@ -3815,36 +4243,71 @@ app.post('/api/auth/logout', async (c) => {
 app.post('/api/auth/forgot-password', async (c) => {
   try {
     const { email } = await c.req.json()
-    
+    const apiKey = c.env.RESEND_API_KEY?.trim()
+    if (!apiKey) {
+      console.error('Forgot password: RESEND_API_KEY is not set')
+      return c.json(
+        {
+          success: false,
+          message:
+            'خدمة البريد غير مهيأة على الخادم. أضف سر RESEND_API_KEY (راجع إعدادات النشر).',
+        },
+        503
+      )
+    }
+
     // Check if user exists
     const user = await c.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
-    `).bind(email, email).first()
-    
+    `).bind(email, email).first<{ id: number; email: string | null; username: string }>()
+
     if (!user) {
       return c.json({ success: false, message: 'البريد الإلكتروني أو اسم المستخدم غير موجود' }, 404)
     }
-    
+
+    const to = String(user.email ?? '').trim()
+    if (!to) {
+      return c.json(
+        {
+          success: false,
+          message: 'لا يوجد بريد إلكتروني مسجل لهذا الحساب. تواصل مع المسؤول لتحديث بريدك.',
+        },
+        400
+      )
+    }
+
     // Generate 6-digit verification code
     const code = Math.floor(100000 + Math.random() * 900000).toString()
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
-    
-    // Store verification code in password_change_notifications table
-    await c.env.DB.prepare(`
+
+    const inserted = await c.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
       VALUES (?, ?, ?, 0)
-    `).bind(user.id, code, expiresAt.toISOString()).run()
-    
-    // TODO: Send email with verification code (for now, just return success)
-    // In production, integrate with email service like SendGrid or AWS SES
-    
-    console.log(`Verification code for ${user.email}: ${code}`)
-    
-    return c.json({ 
-      success: true, 
+      RETURNING id
+    `).bind(user.id, code, expiresAt.toISOString()).first<{ id: number }>()
+
+    if (!inserted?.id) {
+      console.error('Forgot password: INSERT RETURNING id failed')
+      return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
+    }
+
+    const from = (c.env.EMAIL_FROM?.trim() || 'Tamweel <onboarding@resend.dev>').trim()
+    const sent = await sendPasswordResetCodeEmail({ apiKey, from, to, code })
+    if (!sent.ok) {
+      console.error('Resend forgot-password error:', sent.error)
+      await c.env.DB.prepare(`DELETE FROM password_change_notifications WHERE id = ?`).bind(inserted.id).run()
+      return c.json(
+        {
+          success: false,
+          message: 'تعذر إرسال البريد الإلكتروني. تحقق من عنوان المرسل في Resend أو حاول لاحقاً.',
+        },
+        502
+      )
+    }
+
+    return c.json({
+      success: true,
       message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
-      // For development only - remove in production:
-      devCode: code
     })
   } catch (error: any) {
     console.error('Forgot password error:', error)
@@ -5282,7 +5745,7 @@ app.get('/api/admin/company-banks', async (c) => {
 app.get('/api/admin/bank-agents', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
-    if (!userInfo.userId || normalizeRoleId(userInfo.roleId) === 5) {
+    if (!userInfo.userId) {
       return c.json({ success: false, error: 'Unauthorized' }, 401)
     }
     const tidRaw = c.req.query('tenant_id')
@@ -5369,53 +5832,89 @@ app.get('/api/customers', async (c) => {
     
     // Build query with role-based filtering
     let query = `
-      SELECT 
+      SELECT
         c.*,
         COUNT(f.id) as total_requests,
         SUM(CASE WHEN f.status = 'pending' THEN 1 ELSE 0 END) as pending_requests,
         SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
-        tl.name as enrollment_location_name
+        tl.name as enrollment_location_name,
+        (SELECT ca.employee_id FROM customer_assignments ca WHERE ca.customer_id = c.id LIMIT 1) as assigned_employee_id,
+        (SELECT u2.full_name FROM customer_assignments ca JOIN users u2 ON ca.employee_id = u2.id WHERE ca.customer_id = c.id LIMIT 1) as assigned_employee_name,
+        (SELECT f2.assigned_bank_agent_id FROM financing_requests f2 WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_id,
+        (SELECT u3.full_name FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_name
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id
       LEFT JOIN tenant_locations tl ON c.location_id = tl.id`
     
+    let whereSql = ''
+    const whereParams: any[] = []
+
     // Apply filtering based on role
     if (userInfo.roleId === 1) {
       // Role 1: Super Admin - sees ALL customers (no filter)
     } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       // Role 2: Company Admin & Role 3: Supervisor - see company customers only
       if (userInfo.tenantId) {
-        query += ` WHERE c.tenant_id = ${userInfo.tenantId}`
+        whereSql = ` WHERE c.tenant_id = ?`
+        whereParams.push(userInfo.tenantId)
+      } else {
+        whereSql = ` WHERE 1 = 0`
       }
     } else if (userInfo.roleId === 4) {
       // Role 4: Employee - sees only assigned customers in same company
       if (userInfo.tenantId && userInfo.userId) {
-        query += ` WHERE c.tenant_id = ${userInfo.tenantId} AND EXISTS (
+        whereSql = ` WHERE c.tenant_id = ? AND EXISTS (
           SELECT 1 FROM customer_assignments ca
-          WHERE ca.customer_id = c.id AND ca.employee_id = ${userInfo.userId}
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
         )`
+        whereParams.push(userInfo.tenantId, userInfo.userId)
       } else {
-        query += ` WHERE 1 = 0` // No data if tenant scope is missing
+        whereSql = ` WHERE 1 = 0` // No data if tenant scope is missing
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
-        query += ` WHERE c.tenant_id = ${userInfo.tenantId} AND EXISTS (
-          SELECT 1 FROM financing_requests fr
-          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ${userInfo.userId}
+        // Role 5 (bank agent): see customers they created OR customers assigned to them via a funding request.
+        // Fallback for older DBs without customers.created_by is handled below.
+        whereSql = ` WHERE c.tenant_id = ? AND (
+          c.created_by = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )
         )`
+        whereParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
       } else {
-        query += ` WHERE 1 = 0`
+        whereSql = ` WHERE 1 = 0`
       }
     } else {
       // Unknown role - no data
-      query += ` WHERE 1 = 0`
+      whereSql = ` WHERE 1 = 0`
     }
     
-    query += `
+    query += `${whereSql}
       GROUP BY c.id
       ORDER BY c.created_at DESC`
     
-    const { results } = await c.env.DB.prepare(query).all()
+    let results: any[] = []
+    try {
+      const r = whereParams.length ? await c.env.DB.prepare(query).bind(...whereParams).all() : await c.env.DB.prepare(query).all()
+      results = (r.results || []) as any[]
+    } catch (e: any) {
+      // Backwards-compatible fallback: if created_by is missing, revert role 5 scope to assigned financing requests.
+      const msg = String(e?.message || e || '')
+      const isMissingCreatedBy = /no such column:\s*c\.created_by|no such column:\s*created_by/i.test(msg)
+      if (normalizeRoleId(userInfo.roleId) === 5 && isMissingCreatedBy && userInfo.tenantId && userInfo.userId) {
+        const fallbackWhereSql = ` WHERE c.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+        )`
+        const fallbackQuery = query.replace(whereSql, fallbackWhereSql)
+        const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId).all()
+        results = (fr.results || []) as any[]
+      } else {
+        throw e
+      }
+    }
     return c.json({ success: true, data: results })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -5511,10 +6010,22 @@ app.post('/api/customers/import-csv', async (c) => {
           ).bind(full_name, email, national_id, existing.id, tenant_id).run()
           updated++
         } else {
-          await c.env.DB.prepare(
+          const insertRes = await c.env.DB.prepare(
             `INSERT INTO customers (full_name, phone, email, national_id, tenant_id)
              VALUES (?, ?, ?, ?, ?)`
-          ).bind(full_name, phone, email, national_id, tenant_id).run()
+          ).bind(full_name, phone, email, national_id, tenant_id).run() as { meta?: { last_row_id?: number } }
+
+          // Best-effort: track creator for role 5 visibility scope.
+          const createdCustomerId = Number(insertRes?.meta?.last_row_id || 0)
+          if (userInfo.userId && createdCustomerId) {
+            try {
+              await c.env.DB.prepare(`UPDATE customers SET created_by = ? WHERE id = ?`)
+                .bind(userInfo.userId, createdCustomerId)
+                .run()
+            } catch (_) {
+              /* column may not exist in older DBs */
+            }
+          }
           created++
         }
       } catch (e: any) {
@@ -5536,12 +6047,25 @@ app.post('/api/customers/import-csv', async (c) => {
 
 // Add new customer
 app.post('/api/customers', async (c) => {
+  const inlineCustomerForm = c.req.header('X-Customer-Form') === '1'
   try {
     const formData = await c.req.formData()
     const full_name = formData.get('full_name') as string
     const rawPhone = formData.get('phone') as string
     const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
     if (!normalizedPhoneResult.normalized) {
+      if (inlineCustomerForm) {
+        return c.json(
+          {
+            ok: false,
+            code: 'INVALID_PHONE',
+            message: normalizedPhoneResult.error || 'يرجى مراجعة رقم الجوال',
+            hint:
+              'أدخل فقط 9 أرقام تبدأ بـ 5. الصيغة: 5XXXXXXXX (يُحفظ تلقائياً كـ 9665XXXXXXXX).',
+          },
+          400
+        )
+      }
       return c.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
@@ -5562,7 +6086,7 @@ app.post('/api/customers', async (c) => {
               <p class="text-amber-700 mb-3">${normalizedPhoneResult.error || 'يرجى مراجعة رقم الجوال'}</p>
               <div class="bg-white rounded-lg p-3 text-sm text-gray-700 mb-4">
                 <p><strong>الطريقة الصحيحة:</strong> أدخل فقط 9 أرقام تبدأ بـ <span dir="ltr">5</span>.</p>
-                <p><strong>مثال:</strong> <span dir="ltr">512345678</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">966512345678</span>).</p>
+                <p><strong>الصيغة:</strong> <span dir="ltr">5XXXXXXXX</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">9665XXXXXXXX</span>).</p>
               </div>
               <a href="/admin/customers/add" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold transition-all">
                 <i class="fas fa-arrow-right ml-2"></i>
@@ -5576,7 +6100,11 @@ app.post('/api/customers', async (c) => {
     }
     const phone = normalizedPhoneResult.normalized
     const email = formData.get('email') as string || null
-    const national_id = formData.get('national_id') as string || null
+    const national_id_raw = formData.get('national_id') as string | null
+    const national_id =
+      national_id_raw != null && String(national_id_raw).trim()
+        ? String(national_id_raw).trim()
+        : null
     const date_of_birth = formData.get('date_of_birth') as string || null
     const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
@@ -5588,16 +6116,22 @@ app.post('/api/customers', async (c) => {
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
-    const enrollment_source =
-      (() => {
-        const raw = String(formData.get('enrollment_source') ?? '').trim()
-        if (raw === 'affiliate' || raw === 'calculator') return raw
-        return null
-      })()
-    const enrollment_source_label =
-      enrollment_source === 'affiliate'
-        ? (String(formData.get('enrollment_source_label') ?? '').trim().slice(0, 200) || null)
-        : null
+    const rawEnrollmentSource = String(formData.get('enrollment_source') ?? '').trim()
+    let enrollment_source: string | null = null
+    let enrollment_source_label: string | null = null
+    if (rawEnrollmentSource === 'affiliate' || rawEnrollmentSource === 'calculator') {
+      enrollment_source = rawEnrollmentSource
+      enrollment_source_label =
+        rawEnrollmentSource === 'affiliate'
+          ? (String(formData.get('enrollment_source_label') ?? '').trim().slice(0, 200) || null)
+          : null
+    } else {
+      const manualSource = String(formData.get('manual_enrollment_source') ?? '').trim().slice(0, 200)
+      if (manualSource) {
+        enrollment_source = 'manual'
+        enrollment_source_label = manualSource
+      }
+    }
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
     const identity_attachment_url = (formData.get('identity_attachment_url') as string || '').trim() || null
     const signature_attachment_url = (formData.get('signature_attachment_url') as string || '').trim() || null
@@ -5611,6 +6145,7 @@ app.post('/api/customers', async (c) => {
     // Resolve tenant from authenticated user (supports both cookie + bearer flows).
     const userInfo = await getUserInfo(c)
     let tenant_id = userInfo.tenantId
+    const creatorUserId = userInfo.userId
 
     // Super admin may not have a fixed tenant on account; accept form tenant first.
     if (!tenant_id && userInfo.roleId === 1) {
@@ -5646,6 +6181,12 @@ app.post('/api/customers', async (c) => {
     if (locationIdRaw != null && String(locationIdRaw).trim() !== '') {
       const lid = Number.parseInt(String(locationIdRaw), 10)
       if (!Number.isFinite(lid) || lid <= 0) {
+        if (inlineCustomerForm) {
+          return c.json(
+            { ok: false, code: 'INVALID_LOCATION', message: 'يرجى اختيار موقع تسجيل صحيح.' },
+            400
+          )
+        }
         return c.html(
           `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع غير صالح</h1><p class="text-amber-800 mt-2">يرجى اختيار موقع تسجيل صحيح.</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
           400
@@ -5657,6 +6198,12 @@ app.post('/api/customers', async (c) => {
         .bind(lid, tenant_id)
         .first<{ id: number }>()
       if (!locOk) {
+        if (inlineCustomerForm) {
+          return c.json(
+            { ok: false, code: 'LOCATION_NOT_ALLOWED', message: 'الموقع المختار لا يتبع هذه الشركة أو غير مفعّل.' },
+            400
+          )
+        }
         return c.html(
           `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة</h1><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
           400
@@ -5664,6 +6211,16 @@ app.post('/api/customers', async (c) => {
       }
       resolvedLocationId = lid
     } else if (activeLocationCount > 0) {
+      if (inlineCustomerForm) {
+        return c.json(
+          {
+            ok: false,
+            code: 'LOCATION_REQUIRED',
+            message: 'موقع التسجيل مطلوب. اختر الفرع الذي سُجّل فيه العميل.',
+          },
+          400
+        )
+      }
       return c.html(
         `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع الذي سُجّل فيه العميل.</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
         400
@@ -5683,6 +6240,21 @@ app.post('/api/customers', async (c) => {
       const existing = await c.env.DB.prepare(checkQuery).bind(...bindParams).first()
       
       if (existing) {
+        if (inlineCustomerForm) {
+          return c.json(
+            {
+              ok: false,
+              code: 'DUPLICATE_NATIONAL_ID',
+              message: `الرقم الوطني "${national_id}" مسجل مسبقاً في هذه الشركة لعميل آخر.`,
+              hint: 'احذف القيمة من حقل (الرقم الوطني) أو أدخل رقماً مختلفاً. تحقق أيضاً من خاصية الحفظ التلقائي (Autofill) في المتصفح إن كنت قد أزلت القيمة ولا تزال تظهر هذه الرسالة.',
+              details: {
+                national_id,
+                existing: { id: existing.id, full_name: existing.full_name },
+              },
+            },
+            409
+          )
+        }
         return c.html(`
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -5744,6 +6316,20 @@ app.post('/api/customers', async (c) => {
     const existingPhone = await c.env.DB.prepare(phoneCheckQuery).bind(...phoneBindParams).first()
     
     if (existingPhone) {
+      if (inlineCustomerForm) {
+        return c.json(
+          {
+            ok: false,
+            code: 'DUPLICATE_PHONE',
+            message: 'يوجد عميل آخر بنفس رقم الهاتف في هذه الشركة.',
+            details: {
+              phone,
+              existing: { id: existingPhone.id, full_name: existingPhone.full_name },
+            },
+          },
+          409
+        )
+      }
       return c.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
@@ -5956,6 +6542,16 @@ app.post('/api/customers', async (c) => {
         throw e
       }
     }
+
+    // Best-effort: track creator (role 5 visibility scope). Ignore if column doesn't exist yet.
+    const createdCustomerId = Number(result?.meta?.last_row_id || 0)
+    if (creatorUserId && createdCustomerId) {
+      try {
+        await c.env.DB.prepare(`UPDATE customers SET created_by = ? WHERE id = ?`).bind(creatorUserId, createdCustomerId).run()
+      } catch (_) {
+        /* column may not exist in older DBs */
+      }
+    }
     const newId = result.meta?.last_row_id
     const obligationsJson = formData.get('obligations_json') as string | null
     if (newId && obligationsJson) {
@@ -5996,8 +6592,25 @@ app.post('/api/customers', async (c) => {
         console.error('Auto-assign new customer to employee (role 4) failed:', e)
       }
     }
+    if (inlineCustomerForm) {
+      return c.json({
+        ok: true,
+        redirect: '/admin/customers',
+        id: newId || null,
+      })
+    }
     return c.redirect('/admin/customers')
   } catch (error: any) {
+    if (inlineCustomerForm) {
+      return c.json(
+        {
+          ok: false,
+          code: 'SERVER_ERROR',
+          message: error?.message || 'لم نتمكن من إضافة العميل.',
+        },
+        500
+      )
+    }
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -6037,6 +6650,26 @@ app.post('/api/customers', async (c) => {
 app.post('/api/customers/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.redirect('/login')
+    }
+    const existingCustomer = await c.env.DB.prepare(
+      'SELECT id, tenant_id, enrollment_source, enrollment_source_label FROM customers WHERE id = ?'
+    )
+      .bind(id)
+      .first() as {
+      id: number
+      tenant_id: number | null
+      enrollment_source?: string | null
+      enrollment_source_label?: string | null
+    } | null
+    if (!existingCustomer) {
+      return c.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير موجود</title></head><body class="p-8"><h1>العميل غير موجود</h1></body></html>', 404)
+    }
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, existingCustomer))) {
+      return c.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير مصرح</title></head><body class="p-8"><h1>غير مصرح بتعديل هذا العميل</h1></body></html>', 403)
+    }
     const formData = await c.req.formData()
     const full_name = formData.get('full_name') as string
     const rawPhone = formData.get('phone') as string
@@ -6062,7 +6695,7 @@ app.post('/api/customers/:id', async (c) => {
               <p class="text-amber-700 mb-3">${normalizedPhoneResult.error || 'يرجى مراجعة رقم الجوال'}</p>
               <div class="bg-white rounded-lg p-3 text-sm text-gray-700 mb-4">
                 <p><strong>الطريقة الصحيحة:</strong> أدخل فقط 9 أرقام تبدأ بـ <span dir="ltr">5</span>.</p>
-                <p><strong>مثال:</strong> <span dir="ltr">512345678</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">966512345678</span>).</p>
+                <p><strong>الصيغة:</strong> <span dir="ltr">5XXXXXXXX</span> (وسيتم حفظه تلقائياً كـ <span dir="ltr">9665XXXXXXXX</span>).</p>
               </div>
               <a href="/admin/customers/${id}/edit" class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold transition-all">
                 <i class="fas fa-arrow-right ml-2"></i>
@@ -6076,7 +6709,11 @@ app.post('/api/customers/:id', async (c) => {
     }
     const phone = normalizedPhoneResult.normalized
     const email = formData.get('email') as string || null
-    const national_id = formData.get('national_id') as string || null
+    const national_id_raw = formData.get('national_id') as string | null
+    const national_id =
+      national_id_raw != null && String(national_id_raw).trim()
+        ? String(national_id_raw).trim()
+        : null
     const date_of_birth = formData.get('date_of_birth') as string || null
     const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
@@ -6112,21 +6749,24 @@ app.post('/api/customers/:id', async (c) => {
     const additional_2_attachment_url = (formData.get('additional_2_attachment_url') as string | null)?.trim() || null
     const additional_3_attachment_url = (formData.get('additional_3_attachment_url') as string | null)?.trim() || null
 
-    const enrollmentTenantRow = await c.env.DB.prepare('SELECT tenant_id FROM customers WHERE id = ?').bind(id).first() as { tenant_id: number | null } | null
-    if (!enrollmentTenantRow) {
-      return c.json({ success: false, error: 'Customer not found' }, 404)
-    }
-    const enrollmentTenantId = enrollmentTenantRow.tenant_id
-    let resolvedLocationId: number | null = null
-    if (enrollmentTenantId) {
+    let enrollmentLocationUpdate: number | null | undefined = undefined
+    const tenantIdForLoc =
+      existingCustomer.tenant_id != null ? Number(existingCustomer.tenant_id) : NaN
+    if (Number.isFinite(tenantIdForLoc) && tenantIdForLoc > 0) {
       const activeLocCountRow = await c.env.DB.prepare(
         `SELECT COUNT(*) as n FROM tenant_locations WHERE tenant_id = ? AND is_active = 1`
       )
-        .bind(enrollmentTenantId)
+        .bind(tenantIdForLoc)
         .first<{ n: number }>()
       const activeLocationCount = Number(activeLocCountRow?.n ?? 0)
-      const locationIdRaw = formData.get('location_id')
-      if (locationIdRaw != null && String(locationIdRaw).trim() !== '') {
+      if (activeLocationCount > 0) {
+        const locationIdRaw = formData.get('location_id')
+        if (locationIdRaw == null || String(locationIdRaw).trim() === '') {
+          return c.html(
+            `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع الذي سُجّل فيه العميل.</p><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
+            400
+          )
+        }
         const lid = Number.parseInt(String(locationIdRaw), 10)
         if (!Number.isFinite(lid) || lid <= 0) {
           return c.html(
@@ -6134,32 +6774,18 @@ app.post('/api/customers/:id', async (c) => {
             400
           )
         }
-        let locOk = await c.env.DB.prepare(
+        const locOk = await c.env.DB.prepare(
           `SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1`
         )
-          .bind(lid, enrollmentTenantId)
+          .bind(lid, tenantIdForLoc)
           .first<{ id: number }>()
         if (!locOk) {
-          const stillCurrent = await c.env.DB.prepare(
-            `SELECT c.location_id AS lid FROM customers c
-             INNER JOIN tenant_locations tl ON tl.id = c.location_id AND tl.tenant_id = ?
-             WHERE c.id = ? AND c.location_id = ? LIMIT 1`
+          return c.html(
+            `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة</h1><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
+            400
           )
-            .bind(enrollmentTenantId, id, lid)
-            .first<{ lid: number }>()
-          if (!stillCurrent) {
-            return c.html(
-              `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة أو غير مفعّل</h1><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
-              400
-            )
-          }
         }
-        resolvedLocationId = lid
-      } else if (activeLocationCount > 0) {
-        return c.html(
-          `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع المرتبط بالعميل.</p><a href="/admin/customers/${id}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,
-          400
-        )
+        enrollmentLocationUpdate = lid
       }
     }
     
@@ -6239,10 +6865,13 @@ app.post('/api/customers/:id', async (c) => {
         throw e
       }
     }
-    try {
-      await c.env.DB.prepare(`UPDATE customers SET location_id = ? WHERE id = ?`).bind(resolvedLocationId, id).run()
-    } catch (locErr: unknown) {
-      if (!isMissingCustomerLocationIdColumnError(locErr)) throw locErr
+    if (enrollmentLocationUpdate !== undefined) {
+      try {
+        await c.env.DB.prepare('UPDATE customers SET location_id = ? WHERE id = ?').bind(enrollmentLocationUpdate, id).run()
+      } catch (e: unknown) {
+        if (!isMissingCustomerLocationIdColumnError(e)) throw e
+      }
+      await syncFinancingRequestsLocationForCustomer(c.env.DB, id, enrollmentLocationUpdate)
     }
     const obligationsJson = formData.get('obligations_json') as string | null
     if (obligationsJson) {
@@ -6277,6 +6906,23 @@ app.post('/api/customers/:id', async (c) => {
       additional_2_attachment_url,
       additional_3_attachment_url
     })
+    const prevEnrollmentSrc = String(existingCustomer?.enrollment_source ?? '').trim()
+    const enrollmentSourceLocked =
+      prevEnrollmentSrc === 'calculator' || prevEnrollmentSrc === 'affiliate'
+    if (!enrollmentSourceLocked) {
+      const manualSource = String(formData.get('manual_enrollment_source') ?? '').trim().slice(0, 200)
+      const newSrc = manualSource ? 'manual' : null
+      const newLab = manualSource ? manualSource : null
+      try {
+        await c.env.DB.prepare(
+          `UPDATE customers SET enrollment_source = ?, enrollment_source_label = ? WHERE id = ?`
+        )
+          .bind(newSrc, newLab, id)
+          .run()
+      } catch (_) {
+        /* columns may be missing on very old DBs */
+      }
+    }
     return c.redirect('/admin/customers')
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -6435,7 +7081,7 @@ app.get('/api/financing-requests', async (c) => {
     }
     
     let query = `
-      SELECT 
+      SELECT
         f.*,
         c.full_name as customer_name,
         c.phone as customer_phone,
@@ -6446,14 +7092,16 @@ app.get('/api/financing-requests', async (c) => {
         ft.type_name as financing_type_name,
         ca.employee_id as assigned_employee_id,
         u.full_name as assigned_employee_name,
+        ba.full_name as assigned_bank_agent_name,
         tl.name as enrollment_location_name
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
-      LEFT JOIN tenant_locations tl ON c.location_id = tl.id
+      LEFT JOIN tenant_locations tl ON tl.id = COALESCE(f.location_id, c.location_id)
       LEFT JOIN banks b ON f.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id`
+      LEFT JOIN users u ON ca.employee_id = u.id
+      LEFT JOIN users ba ON f.assigned_bank_agent_id = ba.id`
 
     const queryParams: any[] = []
     if (userInfo.roleId === 1) {
@@ -6476,14 +7124,11 @@ app.get('/api/financing-requests', async (c) => {
         query += ' WHERE 1 = 0'
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      // Bank agent: assigned requests plus requests for customers assigned to them
+      // Bank agent: requests assigned to them or that they created (created_by), same tenant
       if (userInfo.tenantId && userInfo.userId) {
         query += ` WHERE f.tenant_id = ? AND (
           f.assigned_bank_agent_id = ?
-          OR EXISTS (
-            SELECT 1 FROM customer_assignments ca2
-            WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
-          )
+          OR f.created_by = ?
         )`
         queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
       } else {
@@ -6535,15 +7180,17 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         customerWhereParts.push('1 = 0')
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      // Role 5 mirrors role 4 navigation, but their customer scope is based on financing requests assigned to them.
-      // This keeps sidebar rating filters/counts consistent with what they can actually access.
+      // Role 5: customers they created OR assigned via a funding request.
       if (userInfo.tenantId && userInfo.userId) {
         customerWhereParts.push('c.tenant_id = ?')
-        customerWhereParts.push(`EXISTS (
-          SELECT 1 FROM financing_requests fr
-          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+        customerWhereParts.push(`(
+          c.created_by = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )
         )`)
-        customerParams.push(userInfo.tenantId, userInfo.userId)
+        customerParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
       } else {
         customerWhereParts.push('1 = 0')
       }
@@ -6596,6 +7243,16 @@ app.get('/api/sidebar-filter-counts', async (c) => {
       Number(customerCountsRow?.rating_5 || 0)
     const withoutRating = Math.max(0, allCustomers - ratedCustomers)
 
+    const completedCustomerWhereSql = customerWhereSql
+      ? `${customerWhereSql} AND COALESCE(c.is_completed, 0) = 1`
+      : 'WHERE COALESCE(c.is_completed, 0) = 1'
+    const completedCustomersRow = (await c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM customers c
+      ${completedCustomerWhereSql}
+    `).bind(...customerParams).first()) as { count?: number } | null
+    const completedCustomersCount = Number(completedCustomersRow?.count || 0)
+
     const requestWhereParts: string[] = []
     const requestParams: any[] = []
 
@@ -6620,15 +7277,14 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         requestWhereParts.push('1 = 0')
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      // Role 5: scope requests to those assigned to the bank agent.
-      // Don't fail closed on missing tenant_id, because role-5 visibility is primarily by assignment.
+      // Role 5: requests assigned to them or that they created
       if (userInfo.userId) {
         if (userInfo.tenantId) {
           requestWhereParts.push('c.tenant_id = ?')
           requestParams.push(userInfo.tenantId)
         }
-        requestWhereParts.push('fr.assigned_bank_agent_id = ?')
-        requestParams.push(userInfo.userId)
+        requestWhereParts.push('(fr.assigned_bank_agent_id = ? OR fr.created_by = ?)')
+        requestParams.push(userInfo.userId, userInfo.userId)
       } else {
         requestWhereParts.push('1 = 0')
       }
@@ -6637,6 +7293,11 @@ app.get('/api/sidebar-filter-counts', async (c) => {
     }
 
     const requestWhereSql = requestWhereParts.length > 0 ? `WHERE ${requestWhereParts.join(' AND ')}` : ''
+    // Exclude completed requests — they live on /admin/requests/completed, not the main table
+    const activeRequestWhereSql = requestWhereSql
+      ? `${requestWhereSql} AND COALESCE(fr.is_completed, 0) = 0`
+      : 'WHERE COALESCE(fr.is_completed, 0) = 0'
+
     const requestRows = (await c.env.DB.prepare(`
       SELECT
         COALESCE(
@@ -6657,7 +7318,7 @@ app.get('/api/sidebar-filter-counts', async (c) => {
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
-      ${requestWhereSql}
+      ${activeRequestWhereSql}
       GROUP BY status_label
     `).bind(...requestParams).all()).results as Array<{ status_label?: string; count?: number }>
 
@@ -6671,6 +7332,18 @@ app.get('/api/sidebar-filter-counts', async (c) => {
       allRequests += val
     })
 
+    // Count completed requests separately (shown on /admin/requests/completed)
+    const completedWhereSql = requestWhereSql
+      ? `${requestWhereSql} AND COALESCE(fr.is_completed, 0) = 1`
+      : 'WHERE COALESCE(fr.is_completed, 0) = 1'
+    const completedRow = (await c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      ${completedWhereSql}
+    `).bind(...requestParams).first()) as { count?: number } | null
+    const completedCount = Number(completedRow?.count || 0)
+
     return c.json({
       success: true,
       customers: {
@@ -6681,10 +7354,12 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         '3': Number(customerCountsRow?.rating_3 || 0),
         '4': Number(customerCountsRow?.rating_4 || 0),
         '5': Number(customerCountsRow?.rating_5 || 0),
+        completed: completedCustomersCount,
       },
       requests: {
         all: allRequests,
         byState: requestCountsByState,
+        completed: completedCount,
       },
     })
   } catch (error: any) {
@@ -6728,12 +7403,17 @@ app.post('/api/requests', async (c) => {
     }
 
     const customer = await c.env.DB.prepare(`
-      SELECT id, tenant_id FROM customers WHERE id = ?
-    `).bind(customer_id).first()
+      SELECT id, tenant_id, location_id FROM customers WHERE id = ?
+    `).bind(customer_id).first() as { id: number; tenant_id: number | null; location_id?: number | null } | null
 
     if (!customer) {
       return c.json({ success: false, error: 'العميل غير موجود' }, 400)
     }
+
+    const requestLocationId =
+      customer.location_id != null && Number.isFinite(Number(customer.location_id))
+        ? Number(customer.location_id)
+        : null
 
     // Enforce tenant scope for non-superadmins
     if (userInfo.roleId !== 1) {
@@ -6786,14 +7466,10 @@ app.post('/api/requests', async (c) => {
       }
     }
     
-    // Insert financing request directly (customer already exists from dropdown)
-    const result = await c.env.DB.prepare(`
-      INSERT INTO financing_requests (
-        customer_id, financing_type_id, selected_bank_id, 
-        requested_amount, salary_at_request, duration_months, 
-        status, notes, tenant_id, assigned_bank_agent_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    // Insert financing request directly (customer already exists from dropdown).
+    // Prefer created_by + location_id; fall back for legacy DBs missing either column.
+    const creatorId = userInfo.userId as number
+    const bindCommon = [
       customer_id,
       financing_type_id,
       selected_bank_id,
@@ -6803,8 +7479,81 @@ app.post('/api/requests', async (c) => {
       status,
       notes,
       tenant_id,
-      assigned_bank_agent_id
-    ).run()
+      assigned_bank_agent_id,
+    ]
+    const attempts: Array<{ loc: boolean; cb: boolean }> = [
+      { loc: true, cb: true },
+      { loc: false, cb: true },
+      { loc: true, cb: false },
+      { loc: false, cb: false },
+    ]
+    let result: { meta: { last_row_id?: number } } | undefined
+    let lastInsertErr: unknown
+    for (const a of attempts) {
+      try {
+        if (a.loc && a.cb) {
+          result = (await c.env.DB
+            .prepare(
+              `
+      INSERT INTO financing_requests (
+        customer_id, financing_type_id, selected_bank_id, 
+        requested_amount, salary_at_request, duration_months, 
+        status, notes, tenant_id, assigned_bank_agent_id, created_by, location_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+            )
+            .bind(...bindCommon, creatorId, requestLocationId)
+            .run()) as { meta: { last_row_id?: number } }
+        } else if (!a.loc && a.cb) {
+          result = (await c.env.DB
+            .prepare(
+              `
+      INSERT INTO financing_requests (
+        customer_id, financing_type_id, selected_bank_id, 
+        requested_amount, salary_at_request, duration_months, 
+        status, notes, tenant_id, assigned_bank_agent_id, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+            )
+            .bind(...bindCommon, creatorId)
+            .run()) as { meta: { last_row_id?: number } }
+        } else if (a.loc && !a.cb) {
+          result = (await c.env.DB
+            .prepare(
+              `
+      INSERT INTO financing_requests (
+        customer_id, financing_type_id, selected_bank_id, 
+        requested_amount, salary_at_request, duration_months, 
+        status, notes, tenant_id, assigned_bank_agent_id, location_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+            )
+            .bind(...bindCommon, requestLocationId)
+            .run()) as { meta: { last_row_id?: number } }
+        } else {
+          result = (await c.env.DB
+            .prepare(
+              `
+      INSERT INTO financing_requests (
+        customer_id, financing_type_id, selected_bank_id, 
+        requested_amount, salary_at_request, duration_months, 
+        status, notes, tenant_id, assigned_bank_agent_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+            )
+            .bind(...bindCommon)
+            .run()) as { meta: { last_row_id?: number } }
+        }
+        lastInsertErr = undefined
+        break
+      } catch (e: unknown) {
+        lastInsertErr = e
+        result = undefined
+      }
+    }
+    if (result == null) {
+      throw lastInsertErr instanceof Error ? lastInsertErr : new Error(String(lastInsertErr))
+    }
     
     if (wantsJson) {
       return c.json({ success: true, id: result.meta.last_row_id }, 201)
@@ -6820,10 +7569,10 @@ app.post('/api/requests', async (c) => {
 app.get('/api/requests/sample-csv', async (c) => {
   try {
     // Keep header aligned with Requests table/export
-    const header = ['العميل', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ']
+    const header = ['العميل', 'الهاتف', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ']
     const rows = [
-      ['محمد أحمد', '', '', 'الراجحي', '50000', '60', 'pending', ''],
-      ['سارة علي', '', '', '', '250000', '48', 'under_review', '']
+      ['محمد أحمد', '501234567', '', '', '', 'الراجحي', '50000', '60', 'pending', ''],
+      ['سارة علي', '', '', '', '', '', '250000', '48', 'under_review', '']
     ]
     const csv = EXCEL_UTF8_CSV_PREFIX + [header, ...rows].map((r) => r.join(',')).join('\r\n') + '\r\n'
     return new Response(csv, {
@@ -6938,12 +7687,17 @@ app.post('/api/requests/import-csv', async (c) => {
         }
 
         const customer = await c.env.DB.prepare(
-          `SELECT id, tenant_id FROM customers WHERE id = ?`
-        ).bind(customerId).first<{ id: number; tenant_id: number | null }>()
+          `SELECT id, tenant_id, location_id FROM customers WHERE id = ?`
+        ).bind(customerId).first<{ id: number; tenant_id: number | null; location_id?: number | null }>()
         if (!customer?.id) {
           errors.push(`Row ${i + 1}: customer not found`)
           continue
         }
+
+        const csvRequestLocationId =
+          customer.location_id != null && Number.isFinite(Number(customer.location_id))
+            ? Number(customer.location_id)
+            : null
 
         // Enforce tenant scope for non-superadmins
         if (userInfo.roleId !== 1) {
@@ -7027,25 +7781,49 @@ app.post('/api/requests/import-csv', async (c) => {
           row.status != null && String(row.status).trim() ? String(row.status).trim() : 'pending'
         const notes = row.notes != null && String(row.notes).trim() ? String(row.notes).trim() : ''
 
-        await c.env.DB.prepare(
-          `INSERT INTO financing_requests (
+        try {
+          await c.env.DB.prepare(
+            `INSERT INTO financing_requests (
+            customer_id, financing_type_id, selected_bank_id,
+            requested_amount, salary_at_request, duration_months,
+            status, notes, tenant_id, created_by, assigned_bank_agent_id, location_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            customerId,
+            financing_type_id,
+            selected_bank_id,
+            requested_amount,
+            salary_at_request,
+            duration_months,
+            status,
+            notes,
+            tenant_id,
+            userInfo.userId,
+            assigned_bank_agent_csv,
+            csvRequestLocationId
+          ).run()
+        } catch (e: unknown) {
+          if (!isMissingFinancingRequestLocationIdColumnError(e)) throw e
+          await c.env.DB.prepare(
+            `INSERT INTO financing_requests (
             customer_id, financing_type_id, selected_bank_id,
             requested_amount, salary_at_request, duration_months,
             status, notes, tenant_id, created_by, assigned_bank_agent_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          customerId,
-          financing_type_id,
-          selected_bank_id,
-          requested_amount,
-          salary_at_request,
-          duration_months,
-          status,
-          notes,
-          tenant_id,
-          userInfo.userId,
-          assigned_bank_agent_csv
-        ).run()
+          ).bind(
+            customerId,
+            financing_type_id,
+            selected_bank_id,
+            requested_amount,
+            salary_at_request,
+            duration_months,
+            status,
+            notes,
+            tenant_id,
+            userInfo.userId,
+            assigned_bank_agent_csv
+          ).run()
+        }
 
         created++
       } catch (e: any) {
@@ -8076,7 +8854,7 @@ app.put('/api/financing-requests/:id', async (c) => {
 
     if (normRid === 5) {
       const scopeRow = await c.env.DB.prepare(`
-        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.tenant_id, c.tenant_id AS customer_tenant_id
+        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, fr.tenant_id, c.tenant_id AS customer_tenant_id
         FROM financing_requests fr
         LEFT JOIN customers c ON fr.customer_id = c.id
         WHERE fr.id = ?
@@ -8086,6 +8864,7 @@ app.put('/api/financing-requests/:id', async (c) => {
           id?: number
           customer_id?: number | null
           assigned_bank_agent_id?: number | null
+          created_by?: number | null
           tenant_id?: number | null
           customer_tenant_id?: number | null
         } | null
@@ -8100,22 +8879,19 @@ app.put('/api/financing-requests/:id', async (c) => {
       if (Number(tid) !== rowTenant) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
-      const assignedAgentId = Number(scopeRow.assigned_bank_agent_id)
-      const customerId = scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null
-      const custTid =
-        scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null
       if (
-        assignedAgentId !== Number(userInfo.userId) &&
-        (customerId == null ||
-          !(await canUserAccessCustomer(c.env.DB, userInfo, {
-            id: customerId,
-            tenant_id: custTid
-          })))
+        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
+          customer_id: scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null,
+          customer_tenant_id: scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null,
+          assigned_bank_agent_id: scopeRow.assigned_bank_agent_id,
+          created_by: scopeRow.created_by,
+        }))
       ) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
     }
     
+    const body = await c.req.json() as Record<string, unknown>
     const {
       requested_amount,
       duration_months,
@@ -8129,22 +8905,96 @@ app.put('/api/financing-requests/:id', async (c) => {
       additional_1_attachment_url,
       additional_2_attachment_url,
       additional_3_attachment_url
-    } = await c.req.json()
-    
+    } = body as Record<string, any>
+
+    const parseOptionalIntField = (raw: unknown): number | null | undefined => {
+      if (raw === undefined) return undefined
+      if (raw === null || raw === '') return null
+      const n = parseInt(String(raw), 10)
+      return Number.isNaN(n) ? null : n
+    }
+
+    const financing_type_id = parseOptionalIntField(body.financing_type_id)
+    const selected_bank_id = parseOptionalIntField(body.selected_bank_id)
+    const assigned_bank_agent_id = parseOptionalIntField(body.assigned_bank_agent_id)
+    const statusRaw = body.status
+    const notesRaw = body.notes
+
+    // Determine the row's effective tenant for downstream validation lookups
+    const rowMeta = await c.env.DB.prepare(
+      `SELECT fr.tenant_id, fr.customer_id, c.tenant_id AS customer_tenant_id
+       FROM financing_requests fr
+       LEFT JOIN customers c ON fr.customer_id = c.id
+       WHERE fr.id = ?`
+    ).bind(id).first() as { tenant_id?: number | null; customer_id?: number | null; customer_tenant_id?: number | null } | null
+    const effectiveTenantId =
+      rowMeta?.tenant_id != null
+        ? Number(rowMeta.tenant_id)
+        : rowMeta?.customer_tenant_id != null
+          ? Number(rowMeta.customer_tenant_id)
+          : null
+
+    // Validate the bank belongs to this tenant (when one is provided)
+    if (selected_bank_id != null && effectiveTenantId != null) {
+      const bankOk = await validateAssignedBankBelongsToTenant(c.env.DB, effectiveTenantId, selected_bank_id)
+      if (!bankOk) {
+        return c.json({ success: false, error: 'البنك غير صالح لهذه الشركة' }, 400)
+      }
+    }
+
+    // Validate the bank agent (role 5) belongs to this tenant and a bank is selected
+    if (assigned_bank_agent_id != null) {
+      if (selected_bank_id == null) {
+        return c.json({ success: false, error: 'يجب اختيار البنك عند تعيين موظف التمويل' }, 400)
+      }
+      if (effectiveTenantId == null) {
+        return c.json({ success: false, error: 'تعذر تحديد الشركة لتعيين موظف التمويل' }, 400)
+      }
+      const agentOk = await validateBankAgentForFinancingRequest(c.env.DB, effectiveTenantId, assigned_bank_agent_id)
+      if (!agentOk) {
+        return c.json({ success: false, error: 'موظف التمويل غير صالح لهذه الشركة' }, 400)
+      }
+    }
+
     // Build update query with tenant_id check
-    let updateFields = [
+    let updateFields: string[] = [
       'requested_amount = ?',
       'duration_months = ?',
       'salary_at_request = ?',
       'monthly_obligations = ?'
     ]
-    
-    const params = [
+
+    const params: any[] = [
       requested_amount,
       duration_months,
       salary_at_request || 0,
       monthly_obligations || 0
     ]
+
+    // Optionally update editable fields when they are present in the body
+    if (financing_type_id !== undefined) {
+      updateFields.push('financing_type_id = ?')
+      params.push(financing_type_id)
+    }
+    if (selected_bank_id !== undefined) {
+      updateFields.push('selected_bank_id = ?')
+      params.push(selected_bank_id)
+    }
+    if (assigned_bank_agent_id !== undefined) {
+      updateFields.push('assigned_bank_agent_id = ?')
+      params.push(assigned_bank_agent_id)
+    }
+    if (statusRaw !== undefined && statusRaw !== null) {
+      const statusStr = String(statusRaw).trim()
+      if (statusStr !== '') {
+        updateFields.push('status = ?')
+        params.push(statusStr)
+      }
+    }
+    if (notesRaw !== undefined) {
+      updateFields.push('notes = ?')
+      params.push(notesRaw == null ? '' : String(notesRaw))
+    }
     
     // Add attachment URLs if provided
     if (identity_attachment_url) { updateFields.push('identity_attachment_url = ?'); params.push(identity_attachment_url) }
@@ -8603,6 +9453,50 @@ app.put('/api/customers/:id/unarchive', async (c) => {
     return c.json({ success: true })
   } catch (error: any) {
     console.error('Error unarchiving customer:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Mark a financing request (and its customer) as completed — role 5 only
+app.put('/api/requests/:id/complete', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const _rid = normalizeRoleId(userInfo.roleId)
+    if (_rid !== 5 && _rid !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const id = c.req.param('id')
+
+    // Add columns if they don't yet exist (idempotent; errors ignored)
+    for (const stmt of [
+      `ALTER TABLE financing_requests ADD COLUMN is_completed INTEGER DEFAULT 0`,
+      `ALTER TABLE financing_requests ADD COLUMN completed_at TEXT`,
+      `ALTER TABLE financing_requests ADD COLUMN completed_by INTEGER`,
+      `ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`,
+      `ALTER TABLE customers ADD COLUMN completed_at TEXT`,
+      `ALTER TABLE customers ADD COLUMN completed_by INTEGER`,
+    ]) {
+      try { await c.env.DB.prepare(stmt).run() } catch (_) {}
+    }
+
+    const req = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(id).first()
+    if (!req) return c.json({ success: false, error: 'Request not found' }, 404)
+
+    await c.env.DB.prepare(`
+      UPDATE financing_requests
+      SET is_completed = 1, completed_at = CURRENT_TIMESTAMP, completed_by = ?, status = 'completed'
+      WHERE id = ?
+    `).bind(userInfo.userId, id).run()
+
+    await c.env.DB.prepare(`
+      UPDATE customers
+      SET is_completed = 1, completed_at = CURRENT_TIMESTAMP, completed_by = ?
+      WHERE id = ?
+    `).bind(userInfo.userId, (req as any).customer_id).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    console.error('Error completing request:', error)
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -9112,7 +10006,7 @@ app.delete('/api/financing-requests/:id', async (c) => {
     }
     if (normRid === 5) {
       const scopeRow = await c.env.DB.prepare(`
-        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.tenant_id, c.tenant_id AS customer_tenant_id
+        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, fr.tenant_id, c.tenant_id AS customer_tenant_id
         FROM financing_requests fr
         LEFT JOIN customers c ON fr.customer_id = c.id
         WHERE fr.id = ?
@@ -9122,6 +10016,7 @@ app.delete('/api/financing-requests/:id', async (c) => {
           id?: number
           customer_id?: number | null
           assigned_bank_agent_id?: number | null
+          created_by?: number | null
           tenant_id?: number | null
           customer_tenant_id?: number | null
         } | null
@@ -9136,17 +10031,13 @@ app.delete('/api/financing-requests/:id', async (c) => {
       if (Number(tid) !== rowTenant) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
-      const assignedAgentId = Number(scopeRow.assigned_bank_agent_id)
-      const customerId = scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null
-      const custTid =
-        scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null
       if (
-        assignedAgentId !== Number(userInfo.userId) &&
-        (customerId == null ||
-          !(await canUserAccessCustomer(c.env.DB, userInfo, {
-            id: customerId,
-            tenant_id: custTid
-          })))
+        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
+          customer_id: scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null,
+          customer_tenant_id: scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null,
+          assigned_bank_agent_id: scopeRow.assigned_bank_agent_id,
+          created_by: scopeRow.created_by,
+        }))
       ) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
@@ -11696,7 +12587,7 @@ app.get('/admin/dashboard', async (c) => {
         requestsJoinWhere = 'AND 1 = 0';
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
-      // Role 5: Bank agent - behaves like role 4, but scoped to customers/requests they can access
+      // Role 5: Bank agent — customers/requests aligned with admin lists
       if (userInfo.tenantId && userInfo.userId) {
         customersWhere = `WHERE tenant_id = ${userInfo.tenantId} AND EXISTS (
           SELECT 1 FROM financing_requests fr
@@ -11704,17 +12595,11 @@ app.get('/admin/dashboard', async (c) => {
         )`;
         requestsWhere = `WHERE tenant_id = ${userInfo.tenantId} AND (
           assigned_bank_agent_id = ${userInfo.userId}
-          OR EXISTS (
-            SELECT 1 FROM customer_assignments ca
-            WHERE ca.customer_id = financing_requests.customer_id AND ca.employee_id = ${userInfo.userId}
-          )
+          OR created_by = ${userInfo.userId}
         )`;
         requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId} AND (
           fr.assigned_bank_agent_id = ${userInfo.userId}
-          OR EXISTS (
-            SELECT 1 FROM customer_assignments ca
-            WHERE ca.customer_id = fr.customer_id AND ca.employee_id = ${userInfo.userId}
-          )
+          OR fr.created_by = ${userInfo.userId}
         )`;
         queryParams.push(userInfo.tenantId);
       } else {
@@ -12173,6 +13058,138 @@ app.get('/admin/dashboard', async (c) => {
   }
 })
 
+// ==================== العملاء المكتملون ====================
+app.get('/admin/customers/completed', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+
+    // Ensure columns exist
+    for (const stmt of [
+      `ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`,
+      `ALTER TABLE customers ADD COLUMN completed_at TEXT`,
+      `ALTER TABLE customers ADD COLUMN completed_by INTEGER`,
+    ]) { try { await c.env.DB.prepare(stmt).run() } catch (_) {} }
+
+    let query = `SELECT customers.*, u.full_name AS completed_by_name
+      FROM customers
+      LEFT JOIN users u ON customers.completed_by = u.id
+      WHERE customers.is_completed = 1`
+    const queryParams: any[] = []
+    if (userInfo.roleId === 1) {
+      // sees all
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) { query += ' AND customers.tenant_id = ?'; queryParams.push(userInfo.tenantId) }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId) { query += ' AND customers.tenant_id = ?'; queryParams.push(userInfo.tenantId) }
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else query += ' AND 1 = 0'
+    query += ' ORDER BY customers.completed_at DESC'
+
+    const customers = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all()
+
+    return c.html(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>العملاء المكتملون</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    .overflow-x-auto { overflow-x: scroll !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+    .overflow-x-auto table { min-width: 900px; width: max-content; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-7xl mx-auto p-6">
+    <div class="mb-6">
+      <a href="/admin/customers" class="text-blue-600 hover:text-blue-800">← العودة للعملاء</a>
+    </div>
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-center flex-wrap gap-3">
+        <h1 class="text-3xl font-bold text-emerald-700">
+          <i class="fas fa-check-double text-emerald-500 ml-2"></i>
+          العملاء المكتملون (<span id="completedCount">${customers.results.length}</span>)
+        </h1>
+        <div class="relative">
+          <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
+          <input type="text" id="searchInput" placeholder="بحث..." onkeyup="filterTable()"
+            class="pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 w-72">
+        </div>
+      </div>
+    </div>
+
+    ${customers.results.length === 0 ? `
+    <div class="bg-white rounded-xl shadow-lg p-16 text-center text-gray-400">
+      <i class="fas fa-check-double text-6xl mb-4 text-emerald-200"></i>
+      <p class="text-xl font-medium">لا يوجد عملاء مكتملون بعد</p>
+    </div>` : `
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full" id="dataTable">
+          <thead class="bg-emerald-50">
+            <tr>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهاتف</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الإكمال</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">أُكمل بواسطة</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-100" id="tableBody">
+            ${(customers.results as any[]).map((c: any) => `
+              <tr class="hover:bg-gray-50" data-name="${c.full_name || ''}" data-phone="${c.phone || ''}">
+                <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-500">${c.id}</td>
+                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-700">${c.full_name || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.phone || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.email || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">${c.completed_at ? new Date(c.completed_at).toLocaleDateString('ar-SA') : '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">${c.completed_by_name || '-'}</td>
+                <td class="px-3 py-3 whitespace-nowrap text-right">
+                  <a href="/admin/customers/${c.id}" class="inline-flex items-center gap-1 px-3 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium transition-colors">
+                    <i class="fas fa-eye"></i> عرض
+                  </a>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`}
+  </div>
+  <script>
+    function filterTable() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const rows = document.getElementById('tableBody').getElementsByTagName('tr');
+      let count = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const name = (rows[i].getAttribute('data-name') || '').toLowerCase();
+        const phone = (rows[i].getAttribute('data-phone') || '').toLowerCase();
+        const show = !q || name.includes(q) || phone.includes(q);
+        rows[i].style.display = show ? '' : 'none';
+        if (show) count++;
+      }
+      document.getElementById('completedCount').textContent = count;
+    }
+  </script>
+</body>
+</html>`)
+  } catch (error) {
+    return c.html('<h1>خطأ في تحميل البيانات</h1>')
+  }
+})
+
 // ==================== أرشيف العملاء ====================
 app.get('/admin/customers/archived', async (c) => {
   try {
@@ -12373,10 +13390,11 @@ app.get('/admin/customers/add', async (c) => {
       .bind(resolvedTenantIdForLocations)
       .all<{ id: number; name: string; slug: string }>()
     const locRows = (locRes.results || []) as Array<{ id: number; name: string; slug: string }>
+    const defaultNewCustomerLocationId = locRows[0]?.id
     locationOptionsHtml = locRows
       .map(
         (r) =>
-          `<option value="${r.id}">${escapeHtml(r.name)} — ${escapeHtml(r.slug)}</option>`
+          `<option value="${r.id}"${r.id === defaultNewCustomerLocationId ? ' selected' : ''}>${escapeHtml(r.name)} — ${escapeHtml(r.slug)}</option>`
       )
       .join('')
   }
@@ -12439,7 +13457,7 @@ app.get('/admin/customers/add', async (c) => {
                          placeholder="5xxxxxxxx"
                          value="${escapeHtml(prefillPhone)}"
                          oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
-                         oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
+                         oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، الصيغة: 5XXXXXXXX')">
                 </div>
                 <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
               </div>
@@ -12487,7 +13505,20 @@ app.get('/admin/customers/add', async (c) => {
               </div>
             </div>
             `
-                : ''
+                : `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-tag text-slate-600 ml-1"></i>
+                  المصدر (اختياري)
+                </label>
+                <input type="text" name="manual_enrollment_source" maxlength="200"
+                       value="يدوي"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       placeholder="مثال: زيارة ميدانية، إعلان، تحويل من فرع آخر…">
+              </div>
+            </div>
+            `
             }
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -12504,11 +13535,14 @@ app.get('/admin/customers/add', async (c) => {
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-id-card text-purple-600 ml-1"></i>
-                  الرقم الوطني *
+                  الرقم الوطني (اختياري)
                 </label>
-                <input type="text" name="national_id" required
+                <input type="text" name="national_id" autocomplete="off"
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="1xxxxxxxxx">
+                <p class="text-xs text-gray-500 mt-1">
+                  اتركه فارغاً إن لم تكن متأكداً. يجب أن يكون فريداً داخل الشركة.
+                </p>
               </div>
             </div>
             
@@ -12796,7 +13830,7 @@ app.get('/admin/customers/add', async (c) => {
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-calendar-check text-pink-600 ml-1"></i>
-                  تاريخ بدء العمل
+                  تاريخ التعيين
                 </label>
                 <input type="hidden" name="work_start_calendar_type" id="work_start_calendar_type" value="gregorian">
                 <input type="hidden" name="work_start_date" id="work_start_date">
@@ -13206,7 +14240,7 @@ app.get('/admin/customers/add', async (c) => {
               </button>
             </div>
             
-            <div class="flex gap-4">
+            <div class="flex gap-4 flex-wrap">
               <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold">
                 <i class="fas fa-plus ml-2"></i>
                 إضافة العميل
@@ -13216,7 +14250,7 @@ app.get('/admin/customers/add', async (c) => {
                 إلغاء
               </a>
             </div>
-            <div id="customer-create-message" class="mt-2"></div>
+            <div id="customer-create-message" class="mt-6 pt-4 border-t border-gray-200 text-right" dir="rtl" aria-live="polite"></div>
           </form>
         </div>
       </div>
@@ -13285,15 +14319,98 @@ app.get('/admin/customers/add', async (c) => {
             additional_3: 'customer_additional_3_attachment_url'
           };
 
+          function escapeHtmlMsg(s) {
+            return String(s == null ? '' : s)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+          }
           function setMessage(type, text) {
             if (!messageEl) return;
             var className = type === 'error'
-              ? 'bg-red-100 border-red-300 text-red-700'
-              : (type === 'success' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-blue-100 border-blue-300 text-blue-700');
-            messageEl.innerHTML = '<div class="border px-4 py-3 rounded ' + className + '">' +
+              ? 'bg-red-100 border-r-4 border-red-400 text-red-800 text-right'
+              : (type === 'success' ? 'bg-green-100 border-r-4 border-green-400 text-green-800 text-right' : 'bg-blue-100 border-r-4 border-blue-400 text-blue-800 text-right');
+            messageEl.innerHTML = '<div role="status" class="px-4 py-3 rounded-lg ' + className + '">' +
               '<i class="fas ' + (type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin')) + ' ml-2"></i>' +
-              text +
+              escapeHtmlMsg(text) +
               '</div>';
+          }
+          function applyCustomerCreateApiError(data) {
+            if (!messageEl || !data || data.ok !== false) return;
+            var code = String(data.code || '');
+            var msg = escapeHtmlMsg(data.message || 'حدث خطأ');
+            var hint = data.hint ? '<p class="text-sm mt-2 text-gray-700 leading-relaxed">' + escapeHtmlMsg(data.hint) + '</p>' : '';
+            var extra = '';
+            var d = data.details || {};
+            if (code === 'DUPLICATE_NATIONAL_ID' && d.existing && d.existing.id) {
+              var nid = escapeHtmlMsg(d.national_id || '');
+              var fn = escapeHtmlMsg(d.existing.full_name || '');
+              var eid = Number(d.existing.id) || 0;
+              extra = '<div class="mt-3 text-sm bg-white/70 rounded-lg p-3 space-y-1 text-gray-800">' +
+                '<p><strong>الرقم الوطني:</strong> ' + nid + '</p>' +
+                '<p><strong>مسجل باسم:</strong> ' + fn + '</p>' +
+                '<p><strong>رقم العميل:</strong> #' + eid + '</p></div>' +
+                '<div class="mt-3 flex flex-wrap gap-2 justify-end">' +
+                '<a href="/admin/customers/' + eid + '" class="inline-flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">عرض العميل الموجود</a>' +
+                '<a href="/admin/customers" class="inline-flex items-center bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">قائمة العملاء</a></div>';
+            } else if (code === 'DUPLICATE_PHONE' && d.existing && d.existing.id) {
+              var ph = escapeHtmlMsg(d.phone || '');
+              var pfn = escapeHtmlMsg(d.existing.full_name || '');
+              var peid = Number(d.existing.id) || 0;
+              extra = '<div class="mt-3 text-sm bg-white/70 rounded-lg p-3 space-y-1 text-gray-800">' +
+                '<p><strong>رقم الهاتف:</strong> <span dir="ltr">' + ph + '</span></p>' +
+                '<p><strong>مسجل باسم:</strong> ' + pfn + '</p>' +
+                '<p><strong>رقم العميل:</strong> #' + peid + '</p></div>' +
+                '<div class="mt-3 flex flex-wrap gap-2 justify-end">' +
+                '<a href="/admin/customers/' + peid + '" class="inline-flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">عرض العميل الموجود</a></div>';
+            }
+            var tone = (code === 'INVALID_PHONE' || code === 'LOCATION_REQUIRED' || code === 'INVALID_LOCATION' || code === 'LOCATION_NOT_ALLOWED')
+              ? 'amber'
+              : (code.indexOf('DUPLICATE') === 0 ? 'yellow' : 'red');
+            var border = tone === 'amber'
+              ? 'border-amber-500 bg-amber-50 text-amber-950'
+              : (tone === 'yellow' ? 'border-yellow-500 bg-yellow-50 text-yellow-950' : 'border-red-500 bg-red-50 text-red-950');
+            var icon = code === 'INVALID_PHONE' ? 'fa-phone-slash' : (code.indexOf('DUPLICATE') === 0 ? 'fa-exclamation-triangle' : 'fa-exclamation-circle');
+            messageEl.innerHTML = '<div role="alert" class="rounded-lg p-4 border-r-4 ' + border + '">' +
+              '<div class="flex items-start gap-3 flex-row-reverse text-right">' +
+              '<i class="fas ' + icon + ' text-2xl flex-shrink-0 opacity-90"></i>' +
+              '<div class="flex-1 min-w-0">' +
+              '<p class="font-bold leading-snug">' + msg + '</p>' + hint + extra +
+              '</div></div></div>';
+            messageEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+          function extractCustomerCreateErrorText(responseText) {
+            var text = String(responseText || '')
+              .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
+              .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\\s+/g, ' ')
+              .trim();
+            if (!text) return '';
+            return text.slice(0, 220);
+          }
+          function showCustomerCreateFallbackError(response, responseText) {
+            var status = Number(response && response.status) || 0;
+            var detail = extractCustomerCreateErrorText(responseText);
+            var msg = '';
+            if (status === 400 || status === 422) {
+              msg = 'تعذر إضافة العميل بسبب مشكلة في البيانات المدخلة. راجع الحقول المطلوبة والقيم المختارة.';
+            } else if (status === 401) {
+              msg = 'انتهت الجلسة أو لم يتم تسجيل الدخول. سجّل الدخول ثم حاول مرة أخرى.';
+            } else if (status === 403) {
+              msg = 'لا تملك صلاحية تنفيذ هذه العملية لهذا الحساب.';
+            } else if (status === 409) {
+              msg = 'يوجد تعارض في البيانات، غالباً رقم جوال أو رقم وطني مسجل مسبقاً.';
+            } else if (status >= 500) {
+              msg = 'حدث خطأ في الخادم أثناء حفظ العميل. حاول لاحقاً أو راجع المسؤول.';
+            } else {
+              msg = 'تعذر إضافة العميل. راجع البيانات المدخلة وحاول مرة أخرى.';
+            }
+            if (detail && detail.indexOf(msg) === -1) {
+              msg += ' التفاصيل: ' + detail;
+            }
+            setMessage('error', msg);
           }
 
           function handleAttachmentSelect(type) {
@@ -13427,6 +14544,7 @@ app.get('/admin/customers/add', async (c) => {
 
           form.addEventListener('submit', async function (event) {
             event.preventDefault();
+            if (messageEl) messageEl.innerHTML = '';
             var dobType = document.getElementById('dob_calendar_type');
             var dobHidden = document.getElementById('date_of_birth');
             if (dobType && dobHidden) {
@@ -13513,29 +14631,59 @@ app.get('/admin/customers/add', async (c) => {
                 method: 'POST',
                 body: formData,
                 credentials: 'include',
-                redirect: 'follow'
+                redirect: 'manual',
+                headers: { 'X-Customer-Form': '1' }
               });
               const responseText = await response.text();
               console.log('[CustomerCreate] Response:', {
                 status: response.status,
                 ok: response.ok,
-                redirected: response.redirected,
                 url: response.url,
                 bodyPreview: responseText.slice(0, 500)
               });
 
-              if (response.url.includes('/admin/customers') && !responseText.includes('حدث خطأ') && !responseText.includes('مكرر')) {
+              if (response.status >= 301 && response.status <= 308) {
+                var loc = response.headers.get('Location');
+                if (loc) {
+                  window.location.href = loc;
+                  return;
+                }
                 window.location.href = '/admin/customers';
                 return;
               }
 
-              document.open();
-              document.write(responseText);
-              document.close();
+              var ct = (response.headers.get('content-type') || '').toLowerCase();
+              if (ct.indexOf('application/json') !== -1) {
+                try {
+                  var json = JSON.parse(responseText);
+                  if (json && json.ok === false) {
+                    applyCustomerCreateApiError(json);
+                    return;
+                  }
+                  if (json && json.ok === true) {
+                    window.location.href = json.redirect || '/admin/customers';
+                    return;
+                  }
+                  if (!response.ok) {
+                    setMessage('error', json && json.message ? json.message : 'تعذر إضافة العميل بسبب مشكلة غير محددة في رد الخادم.');
+                    return;
+                  }
+                } catch (parseErr) {
+                  console.error('[CustomerCreate] JSON parse failed:', parseErr);
+                }
+                showCustomerCreateFallbackError(response, responseText);
+                return;
+              }
+
+              if (response.ok && responseText.indexOf('مكرر') === -1 && responseText.indexOf('حدث خطأ') === -1) {
+                window.location.href = '/admin/customers';
+                return;
+              }
+
+              showCustomerCreateFallbackError(response, responseText);
             } catch (error) {
               console.error('[CustomerCreate] Request failed:', error);
-              setMessage('error', 'حدث خطأ أثناء إضافة العميل.');
-              alert('حدث خطأ أثناء إضافة العميل. راجع Console للمزيد من التفاصيل.');
+              setMessage('error', 'حدث خطأ أثناء إضافة العميل. راجع الاتصال أو حاول لاحقاً.');
             } finally {
               if (submitBtn) submitBtn.disabled = false;
             }
@@ -15577,15 +16725,38 @@ app.get('/admin/customers', async (c) => {
       `);
     }
     
-    // Build query based on role — always exclude archived customers (employee assignee: role_id 4 or legacy 14)
+    // Ensure is_completed column exists (safe no-op if already present)
+    try { await c.env.DB.prepare(`ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`).run() } catch (_) {}
+
+    // Build query based on role — always exclude archived and completed customers
     let query = `
       SELECT customers.*, u.full_name AS assigned_employee_name,
-        tl.name AS enrollment_location_name
+        tl.name AS enrollment_location_name,
+        COALESCE(
+          (
+            SELECT co.status
+            FROM contracts co
+            JOIN financing_requests fr2 ON fr2.id = co.financing_request_id
+            WHERE co.customer_id = customers.id
+              AND co.tenant_id = customers.tenant_id
+              AND COALESCE(co.is_archived, 0) = 0
+            ORDER BY fr2.id DESC, co.id DESC
+            LIMIT 1
+          ),
+          (
+            SELECT status FROM contracts
+            WHERE customer_id = customers.id
+              AND tenant_id = customers.tenant_id
+              AND COALESCE(is_archived, 0) = 0
+            ORDER BY id DESC LIMIT 1
+          )
+        ) AS contract_status
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 14)
       LEFT JOIN tenant_locations tl ON customers.location_id = tl.id
-      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)`;
+      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)
+        AND (customers.is_completed IS NULL OR customers.is_completed = 0)`;
     let queryParams: any[] = [];
     
     if (userInfo.roleId === 1) {
@@ -15610,12 +16781,15 @@ app.get('/admin/customers', async (c) => {
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
-        query += ` AND customers.tenant_id = ? AND EXISTS (
-          SELECT 1
-          FROM financing_requests fr
-          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        query += ` AND customers.tenant_id = ? AND (
+          customers.created_by = ?
+          OR EXISTS (
+            SELECT 1
+            FROM financing_requests fr
+            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+          )
         )`;
-        queryParams.push(userInfo.tenantId, userInfo.userId);
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
       } else {
         query += ' AND 1 = 0';
       }
@@ -15625,17 +16799,36 @@ app.get('/admin/customers', async (c) => {
     
     query += ' ORDER BY customers.created_at DESC';
     
-    const customers = queryParams.length > 0
-      ? await c.env.DB.prepare(query).bind(...queryParams).all()
-      : await c.env.DB.prepare(query).all();
+    let customers: { results: any[] } = { results: [] };
+    try {
+      customers = queryParams.length > 0
+        ? (await c.env.DB.prepare(query).bind(...queryParams).all()) as { results: any[] }
+        : (await c.env.DB.prepare(query).all()) as { results: any[] };
+    } catch (e: any) {
+      const msg = String(e?.message || e || '')
+      const isMissingCreatedBy = /no such column:\s*customers\.created_by|no such column:\s*created_by/i.test(msg)
+      if (normalizeRoleId(userInfo.roleId) === 5 && isMissingCreatedBy && userInfo.tenantId && userInfo.userId) {
+        const fallbackQuery = query.replace(
+          /AND\s+customers\.tenant_id\s*=\s*\?\s+AND\s*\(\s*customers\.created_by\s*=\s*\?\s+OR\s+EXISTS\s*\(\s*SELECT 1\s+FROM financing_requests fr\s+WHERE fr\.customer_id = customers\.id AND fr\.assigned_bank_agent_id = \?\s*\)\s*\)/i,
+          `AND customers.tenant_id = ? AND EXISTS (
+            SELECT 1
+            FROM financing_requests fr
+            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+          )`
+        )
+        customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId).all()) as { results: any[] }
+      } else {
+        throw e
+      }
+    }
 
     // Fetch customer IDs that have at least one financing request (same scope)
     let reqQuery = 'SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1';
     const reqParams: any[] = [];
     if (userInfo.roleId !== 1) {
       if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
-        reqQuery += ' AND tenant_id = ? AND assigned_bank_agent_id = ?';
-        reqParams.push(userInfo.tenantId, userInfo.userId);
+        reqQuery += ' AND tenant_id = ? AND (assigned_bank_agent_id = ? OR created_by = ?)';
+        reqParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
       } else if (userInfo.tenantId) { reqQuery += ' AND tenant_id = ?'; reqParams.push(userInfo.tenantId); }
       else if (userInfo.userId) { reqQuery += ' AND user_id = ?'; reqParams.push(userInfo.userId); }
     }
@@ -15649,8 +16842,8 @@ app.get('/admin/customers', async (c) => {
     const latestFrParams: any[] = []
     if (userInfo.roleId !== 1) {
       if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
-        latestFrScope += ' AND tenant_id = ? AND assigned_bank_agent_id = ?'
-        latestFrParams.push(userInfo.tenantId, userInfo.userId)
+        latestFrScope += ' AND tenant_id = ? AND (assigned_bank_agent_id = ? OR created_by = ?)'
+        latestFrParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
       } else if (userInfo.tenantId) {
         latestFrScope += ' AND tenant_id = ?'
         latestFrParams.push(userInfo.tenantId)
@@ -15697,7 +16890,9 @@ app.get('/admin/customers', async (c) => {
             ? 'الحاسبة'
             : customer.enrollment_source === 'affiliate'
               ? (customer.enrollment_source_label || 'affiliate')
-              : ''
+              : customer.enrollment_source === 'manual'
+                ? String(customer.enrollment_source_label || '').trim() || 'يدوي'
+                : String(customer.enrollment_source_label || '').trim()
         return [
           String(customer.id ?? ''),
           String(customer.full_name || '-'),
@@ -15720,7 +16915,8 @@ app.get('/admin/customers', async (c) => {
     // Customer auto-assign is now automatic on calculator intake,
     // so we remove the button from the customers list page UI.
     const showCustomerAutoAssignButton = false
-    
+    const defaultRequestsFilterValue = userInfo.roleId === 4 ? '0' : 'all'
+
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -15783,6 +16979,11 @@ app.get('/admin/customers', async (c) => {
                 العملاء (<span id="totalCount">${customers.results.length}</span>)
               </h1>
               <div class="flex gap-3 flex-wrap">
+                <a href="/admin/customers/completed"
+                   class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-5 py-3 rounded-lg font-bold transition-all shadow-md">
+                  <i class="fas fa-check-double ml-2"></i>
+                  المكتملة
+                </a>
                 <a href="/admin/customers/archived"
                    class="bg-gradient-to-r from-gray-500 to-gray-700 hover:from-gray-600 hover:to-gray-800 text-white px-5 py-3 rounded-lg font-bold transition-all shadow-md">
                   <i class="fas fa-archive ml-2"></i>
@@ -15807,21 +17008,27 @@ app.get('/admin/customers', async (c) => {
                   تعيين تلقائي عادل
                 </button>
                 ` : ''}
-                <button onclick="exportToCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-file-export ml-2"></i>
-                  تصدير CSV
-                </button>
-                ${canEdit ? `
-                <button onclick="downloadCustomersSampleCSV()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-download ml-2"></i>
-                  نموذج CSV
-                </button>
-                <button onclick="triggerCustomersCSVImport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-file-upload ml-2"></i>
-                  استيراد CSV
-                </button>
-                <input type="file" id="customersCsvInput" accept=".csv" class="hidden" onchange="handleCustomersCSVFile(event)">
-                ` : ''}
+                <div class="relative" id="customersCsvDropdownWrap">
+                  <button type="button" onclick="toggleCustomersCsvDropdown()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2">
+                    <i class="fas fa-file-csv"></i>
+                    CSV
+                    <i class="fas fa-chevron-down text-xs"></i>
+                  </button>
+                  <div id="customersCsvDropdownMenu" class="hidden absolute left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    <button onclick="exportToCSV(); toggleCustomersCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 text-right">
+                      <i class="fas fa-file-export w-4"></i> تصدير CSV
+                    </button>
+                    ${canEdit ? `
+                    <button onclick="downloadCustomersSampleCSV(); toggleCustomersCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 text-right">
+                      <i class="fas fa-download w-4"></i> نموذج CSV
+                    </button>
+                    <button onclick="triggerCustomersCSVImport(); toggleCustomersCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 text-right">
+                      <i class="fas fa-file-upload w-4"></i> استيراد CSV
+                    </button>
+                    ` : ''}
+                  </div>
+                </div>
+                ${canEdit ? `<input type="file" id="customersCsvInput" accept=".csv" class="hidden" onchange="handleCustomersCSVFile(event)">` : ''}
                 ${canEdit ? `
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
@@ -15833,11 +17040,8 @@ app.get('/admin/customers', async (c) => {
             <div class="border-t pt-4">
               <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
 
-                <!-- Row 1: Search -->
+                <!-- Row 1: Search (always visible) -->
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-xs font-bold text-gray-400 uppercase tracking-wide w-20 flex-shrink-0">
-                    <i class="fas fa-search ml-1"></i>بحث
-                  </span>
                   <div class="relative flex-1 min-w-[180px]">
                     <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
                     <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
@@ -15850,50 +17054,33 @@ app.get('/admin/customers', async (c) => {
                     <option value="phone">الهاتف فقط</option>
                     <option value="email">البريد فقط</option>
                   </select>
+                  <button type="button" onclick="toggleCustomersFilters()" dir="rtl" class="flex items-center gap-1.5 px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:text-green-600 bg-white transition-colors whitespace-nowrap">
+                    <span dir="rtl" class="inline-block text-right">فلاتر</span>
+                    <i class="fas fa-filter text-green-500"></i>
+                    <i id="customersFiltersIcon" class="fas fa-chevron-down text-xs transition-transform" style="transform:rotate(-90deg)"></i>
+                  </button>
                 </div>
 
-                <!-- Divider -->
-                <div class="border-t border-gray-200"></div>
+                <!-- Collapsible filters -->
+                <div id="customersFiltersPanel" style="display:none;" class="space-y-3">
+                  <div class="border-t border-gray-200"></div>
+                  <div class="flex items-center gap-3 flex-wrap">
 
-                <!-- Row 2: Structured filters -->
-                <div class="flex items-center gap-4 flex-wrap">
-
-                  <!-- Date range -->
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                      <i class="fas fa-calendar-alt ml-1"></i>التاريخ
-                    </span>
                     <select id="dateRangeFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
-                      <option value="all">الكل</option>
+                      <option value="all">التاريخ: الكل</option>
                       <option value="30">آخر 30 يوم</option>
                       <option value="60">آخر 60 يوم</option>
                       <option value="90">آخر 90 يوم</option>
                     </select>
-                  </div>
 
-                  <div class="w-px h-8 bg-gray-300 hidden md:block"></div>
-
-                  <!-- Requests filter -->
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                      <i class="fas fa-file-invoice ml-1"></i>طلبات
-                    </span>
                     <select id="requestsFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
-                      <option value="all">الكل</option>
+                      <option value="all"${defaultRequestsFilterValue === 'all' ? ' selected' : ''}>الطلبات: الكل</option>
                       <option value="1">لديه طلب ✓</option>
-                      <option value="0" selected>بدون طلب ✗</option>
+                      <option value="0"${defaultRequestsFilterValue === '0' ? ' selected' : ''}>بدون طلب ✗</option>
                     </select>
-                  </div>
 
-                  <div class="w-px h-8 bg-gray-300 hidden md:block"></div>
-
-                  <!-- Rating filter -->
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                      <i class="fas fa-user-check ml-1"></i>التقييم
-                    </span>
                     <select id="ratingFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
-                      <option value="all">الكل</option>
+                      <option value="all">التقييم: الكل</option>
                       <option value="0">بدون تقييم</option>
                       <option value="5">عميل ممتاز</option>
                       <option value="4">عميل جيد</option>
@@ -15901,13 +17088,20 @@ app.get('/admin/customers', async (c) => {
                       <option value="2">عميل سيئ</option>
                       <option value="1">عميل موقوف</option>
                     </select>
+
+                    <select id="employeeFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">الموظف: الكل</option>
+                    </select>
+
+                    <select id="bankAgentFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">موظف البنك: الكل</option>
+                    </select>
+
+                    <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
+                      <i class="fas fa-redo"></i> إعادة تعيين
+                    </button>
+
                   </div>
-
-                  <!-- Reset pushed to end -->
-                  <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
-                    <i class="fas fa-redo"></i> إعادة تعيين
-                  </button>
-
                 </div>
               </div>
             </div>
@@ -15944,6 +17138,7 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="موظف البنك (دور 5) المعيّن على آخر طلب تمويل">موظف البنك</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">العقد</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
                 </tr>
               </thead>
@@ -15961,8 +17156,10 @@ app.get('/admin/customers', async (c) => {
                     enrollmentSource === 'calculator'
                       ? 'الحاسبة'
                       : enrollmentSource === 'affiliate'
-                        ? enrollmentSourceLabel
-                        : ''
+                        ? enrollmentSourceLabel || 'affiliate'
+                        : enrollmentSource === 'manual'
+                          ? enrollmentSourceLabel || 'يدوي'
+                          : enrollmentSourceLabel
                   const enrollmentSourceDataEsc = String(enrollmentSourceSearch || '').replace(/"/g, '&quot;')
                   return `
                   <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-source="${enrollmentSourceDataEsc}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-bank-agent="${bankAgentDataEsc}" data-created-at="${customer.created_at || ''}" data-has-request="${hasFr ? '1' : '0'}" data-rating="0">
@@ -16018,9 +17215,11 @@ app.get('/admin/customers', async (c) => {
                       ${
                         enrollmentSource === 'calculator'
                           ? `<span class="inline-flex items-center rounded-full bg-blue-100 text-blue-900 px-2.5 py-0.5 text-xs font-semibold border border-blue-200"><i class="fas fa-calculator ml-1"></i>الحاسبة</span>`
-                          : enrollmentSource === 'affiliate' && enrollmentSourceLabel
-                            ? `<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>${escapeHtml(enrollmentSourceLabel)}</span>`
-                            : `<span class="text-gray-300 text-sm">—</span>`
+                          : enrollmentSource === 'affiliate'
+                            ? `<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>${escapeHtml(enrollmentSourceLabel || 'affiliate')}</span>`
+                            : enrollmentSource === 'manual' || enrollmentSourceLabel
+                              ? `<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-800 px-2.5 py-0.5 text-xs font-semibold border border-slate-200"><i class="fas fa-user-edit ml-1"></i>${escapeHtml(enrollmentSource === 'manual' ? enrollmentSourceLabel || 'يدوي' : enrollmentSourceLabel)}</span>`
+                              : `<span class="text-gray-300 text-sm">—</span>`
                       }
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
@@ -16046,6 +17245,9 @@ app.get('/admin/customers', async (c) => {
                           ? `<span class="text-xs text-amber-700">غير معيّن</span>`
                           : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${ba.agentUserId}"><span class="truncate-cell sm">${(ba.agentName || '—')}</span></span>`
                       }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${contractStatusBadge(customer.contract_status)}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${customer.id}">
                       <span class="text-gray-300 text-sm">—</span>
@@ -16210,6 +17412,7 @@ app.get('/admin/customers', async (c) => {
           ${actionsDropdownScript}
 
           const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
+          const DEFAULT_REQUESTS_FILTER = ${JSON.stringify(defaultRequestsFilterValue)};
           const pageParams = new URLSearchParams(window.location.search);
           const presetRatingFilter = pageParams.get('ratingFilter');
           const presetRequestsFilter = pageParams.get('requestsFilter');
@@ -16782,6 +17985,37 @@ app.get('/admin/customers', async (c) => {
             updateEdgeScrollControls('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
           }
 
+          function toggleCustomersFilters() {
+            const panel = document.getElementById('customersFiltersPanel');
+            const icon = document.getElementById('customersFiltersIcon');
+            if (!panel) return;
+            const opening = panel.style.display === 'none';
+            panel.style.display = opening ? 'block' : 'none';
+            if (icon) icon.style.transform = opening ? '' : 'rotate(-90deg)';
+          }
+
+          function hydrateCustomersRoleFilters() {
+            const empEl = document.getElementById('employeeFilter');
+            const agentEl = document.getElementById('bankAgentFilter');
+            if (!empEl || !agentEl) return;
+            const empNames = new Set();
+            const agentNames = new Set();
+            document.querySelectorAll('#tableBody tr').forEach((row) => {
+              const emp = (row.getAttribute('data-assigned') || '').trim();
+              const agent = (row.getAttribute('data-bank-agent') || '').trim();
+              if (emp) empNames.add(emp);
+              if (agent) agentNames.add(agent);
+            });
+            const currentEmp = empEl.value;
+            const currentAgent = agentEl.value;
+            empEl.innerHTML = '<option value="all">الموظف: الكل</option>' +
+              Array.from(empNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('');
+            agentEl.innerHTML = '<option value="all">موظف البنك: الكل</option>' +
+              Array.from(agentNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('');
+            empEl.value = currentEmp;
+            agentEl.value = currentAgent;
+          }
+
           function filterTable() {
             closeAllDropdowns();
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -16789,10 +18023,12 @@ app.get('/admin/customers', async (c) => {
             const dateRangeFilter = document.getElementById('dateRangeFilter').value;
             const requestsFilter = document.getElementById('requestsFilter').value;
             const ratingFilter = document.getElementById('ratingFilter').value;
+            const employeeFilter = (document.getElementById('employeeFilter') || {value: 'all'}).value;
+            const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value;
             const rows = document.getElementById('tableBody').getElementsByTagName('tr');
             let visibleCount = 0;
-            const sig = JSON.stringify({ searchInput, filterField, dateRangeFilter, requestsFilter, ratingFilter })
-            if (sig !== customersPaging.lastSig) { customersPaging.lastSig = sig; customersPaging.page = 1 }
+            const sig = JSON.stringify({ searchInput, filterField, dateRangeFilter, requestsFilter, ratingFilter, employeeFilter, bankAgentFilter });
+            if (sig !== customersPaging.lastSig) { customersPaging.lastSig = sig; customersPaging.page = 1; }
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i];
               const name = row.getAttribute('data-name') || '';
@@ -16816,10 +18052,12 @@ app.get('/admin/customers', async (c) => {
                 matchesDateRange = !isNaN(createdDate.getTime()) && createdDate >= cutoffDate;
               }
 
-              let matchesRequests = requestsFilter === 'all' || hasRequest === requestsFilter;
-              let matchesRating = ratingFilter === 'all' || rating === ratingFilter;
+              const matchesRequests = requestsFilter === 'all' || hasRequest === requestsFilter;
+              const matchesRating = ratingFilter === 'all' || rating === ratingFilter;
+              const matchesEmployee = employeeFilter === 'all' || assigned === employeeFilter;
+              const matchesBankAgent = bankAgentFilter === 'all' || bankAgent === bankAgentFilter;
 
-              const visible = matchesSearch && matchesDateRange && matchesRequests && matchesRating;
+              const visible = matchesSearch && matchesDateRange && matchesRequests && matchesRating && matchesEmployee && matchesBankAgent;
               row.classList.toggle('filter-hidden', !visible);
               if (visible) visibleCount++;
             }
@@ -16856,10 +18094,25 @@ app.get('/admin/customers', async (c) => {
             document.getElementById('searchInput').value = '';
             document.getElementById('filterField').value = 'all';
             document.getElementById('dateRangeFilter').value = 'all';
-            document.getElementById('requestsFilter').value = '0';
+            document.getElementById('requestsFilter').value = DEFAULT_REQUESTS_FILTER;
             document.getElementById('ratingFilter').value = 'all';
+            const empEl = document.getElementById('employeeFilter');
+            const agentEl = document.getElementById('bankAgentFilter');
+            if (empEl) empEl.value = 'all';
+            if (agentEl) agentEl.value = 'all';
             filterTable();
           }
+
+          function toggleCustomersCsvDropdown() {
+            const menu = document.getElementById('customersCsvDropdownMenu');
+            if (menu) menu.classList.toggle('hidden');
+          }
+
+          document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('customersCsvDropdownWrap');
+            const menu = document.getElementById('customersCsvDropdownMenu');
+            if (wrap && menu && !wrap.contains(e.target)) menu.classList.add('hidden');
+          });
 
           function exportToCSV() {
             const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل'];
@@ -16985,6 +18238,7 @@ app.get('/admin/customers', async (c) => {
           refreshUnreadDot();
           // Initialize table paging + page-size dropdown on first load
           filterTable();
+          hydrateCustomersRoleFilters();
           loadCustomerRatings();
           applyPresetFiltersFromUrl();
         </script>
@@ -17691,6 +18945,199 @@ app.get('/admin/notifications', async (c) => {
   }
 })
 
+// ==================== الطلبات المكتملة ====================
+app.get('/admin/requests/completed', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+
+    // Ensure columns exist
+    for (const stmt of [
+      `ALTER TABLE financing_requests ADD COLUMN is_completed INTEGER DEFAULT 0`,
+      `ALTER TABLE financing_requests ADD COLUMN completed_at TEXT`,
+      `ALTER TABLE financing_requests ADD COLUMN completed_by INTEGER`,
+    ]) { try { await c.env.DB.prepare(stmt).run() } catch (_) {} }
+
+    let query = `
+      SELECT fr.*, c.full_name as customer_name,
+             c.phone as customer_phone,
+             b.bank_name,
+             u.full_name AS completed_by_name
+      FROM financing_requests fr
+      LEFT JOIN customers c ON fr.customer_id = c.id
+      LEFT JOIN banks b ON fr.selected_bank_id = b.id
+      LEFT JOIN users u ON fr.completed_by = u.id
+      WHERE fr.is_completed = 1`
+    const queryParams: any[] = []
+    if (userInfo.roleId === 1) {
+      // sees all
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) { query += ' AND c.tenant_id = ?'; queryParams.push(userInfo.tenantId) }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ' AND c.tenant_id = ? AND (fr.assigned_bank_agent_id = ? OR fr.created_by = ?)'
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND c.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else query += ' AND 1 = 0'
+    query += ' ORDER BY fr.completed_at DESC'
+
+    const requests = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
+      : await c.env.DB.prepare(query).all()
+
+    const statusMap: Record<string, string> = {
+      pending: 'قيد الانتظار', under_review: 'قيد المراجعة', approved: 'مقبول',
+      rejected: 'مرفوض', processing: 'قيد المعالجة', completed: 'مكتمل', cancelled: 'ملغي'
+    }
+
+    return c.html(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الطلبات المكتملة</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    .overflow-x-auto { overflow-x: scroll !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+    .overflow-x-auto table { min-width: 1000px; width: max-content; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-7xl mx-auto p-6">
+    <div class="mb-6">
+      <a href="/admin/requests" class="text-blue-600 hover:text-blue-800">← العودة للطلبات</a>
+    </div>
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <div class="flex justify-between items-center flex-wrap gap-3">
+        <h1 class="text-3xl font-bold text-emerald-700">
+          <i class="fas fa-check-double text-emerald-500 ml-2"></i>
+          الطلبات المكتملة (<span id="completedCount">${requests.results.length}</span>)
+        </h1>
+        <div class="relative">
+          <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
+          <input type="text" id="searchInput" placeholder="بحث..." onkeyup="filterTable()"
+            class="pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 w-72">
+        </div>
+      </div>
+    </div>
+
+    ${requests.results.length === 0 ? `
+    <div class="bg-white rounded-xl shadow-lg p-16 text-center text-gray-400">
+      <i class="fas fa-check-double text-6xl mb-4 text-emerald-200"></i>
+      <p class="text-xl font-medium">لا توجد طلبات مكتملة بعد</p>
+    </div>` : `
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full" id="dataTable">
+          <thead class="bg-emerald-50">
+            <tr>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">العميل</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الهاتف</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">البنك</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">المبلغ</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الإكمال</th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">أُكمل بواسطة</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-100" id="tableBody">
+            ${(requests.results as any[]).map((r: any) => {
+              const phoneEsc = String(r.customer_phone || '').replace(/'/g, "\\'")
+              return `
+              <tr class="hover:bg-gray-50" data-name="${r.customer_name || ''}" data-phone="${(customerPhoneInputValue(r.customer_phone) || '').replace(/"/g, '&quot;')}" data-bank="${r.bank_name || ''}">
+                <td class="px-4 py-3 whitespace-nowrap font-bold text-gray-500">${r.id}</td>
+                <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-700">${r.customer_name || '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="inline-flex items-center gap-2">
+                    <span dir="ltr">${customerPhoneInputValue(r.customer_phone) || '—'}</span>
+                    <button
+                      type="button"
+                      onclick="openCustomerWhatsApp('${phoneEsc}')"
+                      class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
+                      title="فتح واتساب"
+                    >
+                      <i class="fab fa-whatsapp"></i>
+                    </button>
+                  </div>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-600">${r.bank_name || '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-700 font-bold">${Number(r.requested_amount || 0).toLocaleString('ar-SA')} ريال</td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                    ${statusMap[r.status] || r.status || '-'}
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-500 text-sm">${r.completed_at ? new Date(r.completed_at).toLocaleDateString('ar-SA') : '-'}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-500 text-sm">${r.completed_by_name || '-'}</td>
+                <td class="px-3 py-3 whitespace-nowrap text-right">
+                  <a href="/admin/requests/${r.id}/report" class="inline-flex items-center gap-1 px-3 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium transition-colors">
+                    <i class="fas fa-eye"></i> عرض
+                  </a>
+                </td>
+              </tr>
+            `}).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`}
+  </div>
+  <script>
+    function normalizePhoneDigits(phoneValue) {
+      const raw = String(phoneValue || '').trim();
+      const westernDigits = raw
+        .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+        .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+      return westernDigits.replace(/[^\\d]/g, '');
+    }
+    function toSaudiWaNumber(phoneValue) {
+      let digits = normalizePhoneDigits(phoneValue);
+      if (!digits) return '';
+      if (digits.startsWith('00966')) digits = digits.slice(2);
+      if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+      if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+      if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+      return '';
+    }
+    function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+      const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+      if (!normalizedPhone) {
+        alert('لا يوجد رقم واتساب صالح لهذا العميل');
+        return;
+      }
+      window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+    }
+    function filterTable() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const rows = document.getElementById('tableBody').getElementsByTagName('tr');
+      let count = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const name = (rows[i].getAttribute('data-name') || '').toLowerCase();
+        const phone = (rows[i].getAttribute('data-phone') || '').toLowerCase();
+        const bank = (rows[i].getAttribute('data-bank') || '').toLowerCase();
+        const show = !q || name.includes(q) || phone.includes(q) || bank.includes(q);
+        rows[i].style.display = show ? '' : 'none';
+        if (show) count++;
+      }
+      document.getElementById('completedCount').textContent = count;
+    }
+  </script>
+</body>
+</html>`)
+  } catch (error) {
+    return c.html('<h1>خطأ في تحميل البيانات</h1>')
+  }
+})
+
 // Edit financing request page
 app.get('/admin/requests/:id/edit', async (c) => {
   try {
@@ -17730,12 +19177,13 @@ app.get('/admin/requests/:id/edit', async (c) => {
       if (Number((request as any).customer_tenant_id) !== Number(tid)) {
         return c.redirect('/admin/requests')
       }
-      const assignedAgentId = Number((request as any).assigned_bank_agent_id)
       if (
-        assignedAgentId !== Number(userInfo.userId) &&
-        !(await canUserAccessCustomer(c.env.DB, userInfo, {
-          id: Number((request as any).customer_id),
-          tenant_id: (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null
+        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
+          customer_id: Number((request as any).customer_id),
+          customer_tenant_id:
+            (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null,
+          assigned_bank_agent_id: (request as any).assigned_bank_agent_id,
+          created_by: (request as any).created_by,
         }))
       ) {
         return c.redirect('/admin/requests')
@@ -17779,11 +19227,116 @@ app.get('/admin/requests/:id/edit', async (c) => {
       if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
     }
     
-    // Get all banks for dropdown
-    const banks = await c.env.DB.prepare(`
-      SELECT id, bank_name FROM banks ORDER BY bank_name
-    `).all()
-    
+    // Determine tenant scope for downstream lookups (banks/employees/bank agents)
+    const viewerRoleNorm = normalizeRoleId(userInfo.roleId)
+    const requestTenantId =
+      (request as any).tenant_id != null
+        ? Number((request as any).tenant_id)
+        : (request as any).customer_tenant_id != null
+          ? Number((request as any).customer_tenant_id)
+          : null
+    const scopeTenantId = viewerRoleNorm === 1
+      ? requestTenantId
+      : (userInfo.tenantId != null ? Number(userInfo.tenantId) : requestTenantId)
+
+    // Get banks for dropdown (scoped to the same tenant as the request when not super-admin)
+    let banks: { results: any[] }
+    try {
+      if (scopeTenantId != null) {
+        banks = await c.env.DB.prepare(
+          `SELECT id, bank_name FROM banks
+           WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)
+           ORDER BY bank_name`
+        ).bind(scopeTenantId).all() as any
+      } else {
+        banks = await c.env.DB.prepare(
+          `SELECT id, bank_name FROM banks WHERE is_active = 1 ORDER BY bank_name`
+        ).all() as any
+      }
+    } catch (banksErr) {
+      console.error('Error loading banks for edit request page:', banksErr)
+      banks = await c.env.DB.prepare(`SELECT id, bank_name FROM banks ORDER BY bank_name`).all() as any
+    }
+
+    // Financing types (same dropdown as the create form)
+    const financingTypes = await c.env.DB
+      .prepare(`SELECT id, type_name FROM financing_types ORDER BY type_name`)
+      .all() as { results: any[] }
+
+    // Employees of this tenant (role 4 / legacy 14) for the role-2 assignment dropdown
+    let employees: { results: any[] } = { results: [] }
+    const canManageAssignment = viewerRoleNorm === 1 || viewerRoleNorm === 2
+    if (canManageAssignment && scopeTenantId != null) {
+      try {
+        employees = await c.env.DB.prepare(
+          `SELECT id, full_name, username, email
+           FROM users
+           WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
+           ORDER BY full_name`
+        ).bind(scopeTenantId).all() as any
+      } catch (empErr) {
+        console.error('Error loading employees for edit request page:', empErr)
+        employees = { results: [] }
+      }
+    }
+
+    // Current customer assignment (role 4 employee) for this request's customer
+    let currentAssignedEmployeeId: number | null = null
+    try {
+      const assignedRow = await c.env.DB.prepare(
+        `SELECT employee_id FROM customer_assignments WHERE customer_id = ? LIMIT 1`
+      ).bind((request as any).customer_id).first() as { employee_id?: number | null } | null
+      if (assignedRow?.employee_id != null) {
+        currentAssignedEmployeeId = Number(assignedRow.employee_id)
+      }
+    } catch (assignErr) {
+      console.error('Error loading current assignment for edit request page:', assignErr)
+    }
+
+    // Bank agents (role 5) for the currently selected bank's tenant
+    let bankAgents: { results: any[] } = { results: [] }
+    if (scopeTenantId != null) {
+      try {
+        bankAgents = await c.env.DB.prepare(
+          `SELECT id, full_name, username, email
+           FROM users
+           WHERE tenant_id = ? AND is_active = 1 AND role_id = 5
+           ORDER BY full_name`
+        ).bind(scopeTenantId).all() as any
+      } catch (agentErr) {
+        console.error('Error loading bank agents for edit request page:', agentErr)
+        bankAgents = { results: [] }
+      }
+    }
+
+    const currentStatus = String((request as any).status || 'pending')
+    const currentNotes = String((request as any).notes || '')
+    const currentFinancingTypeId = (request as any).financing_type_id != null
+      ? Number((request as any).financing_type_id)
+      : null
+    const currentSelectedBankId = (request as any).selected_bank_id != null
+      ? Number((request as any).selected_bank_id)
+      : null
+    const currentAssignedBankAgentId = (request as any).assigned_bank_agent_id != null
+      ? Number((request as any).assigned_bank_agent_id)
+      : null
+    const currentDurationMonths = (request as any).duration_months != null
+      ? Number((request as any).duration_months)
+      : null
+
+    const durationOptions = Array.from({ length: 30 }, (_, idx) => (idx + 1) * 12)
+    const escapeAttr = (val: unknown) => String(val == null ? '' : val).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    const editRequestCtxJson = JSON.stringify({
+      viewerRoleId: viewerRoleNorm,
+      viewerTenantId: scopeTenantId,
+      canManageAssignment,
+      customerId: Number((request as any).customer_id),
+      currentAssignedEmployeeId,
+      currentAssignedBankAgentId,
+      currentSelectedBankId
+    }).replace(/</g, '\\u003c')
+
     return c.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -17817,7 +19370,6 @@ app.get('/admin/requests/:id/edit', async (c) => {
                 <div class="bg-gray-50 p-4 rounded-lg">
                   <p class="text-gray-700"><strong>اسم العميل:</strong> ${request.customer_name || 'غير محدد'}</p>
                   <p class="text-gray-700"><strong>رقم الجوال:</strong> ${request.customer_phone || 'غير محدد'}</p>
-                  <p class="text-gray-700"><strong>البنك:</strong> ${request.bank_name || 'غير محدد'}</p>
                 </div>
               </div>
               
@@ -17828,6 +19380,39 @@ app.get('/admin/requests/:id/edit', async (c) => {
                   معلومات التمويل
                 </h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-file-invoice text-purple-600 ml-1"></i>
+                      نوع التمويل
+                    </label>
+                    <select
+                      id="financing_type_id"
+                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- اختر نوع التمويل --</option>
+                      ${financingTypes.results.map((ft: any) => `
+                        <option value="${ft.id}"${currentFinancingTypeId != null && Number(ft.id) === currentFinancingTypeId ? ' selected' : ''}>${escapeAttr(ft.type_name)}</option>
+                      `).join('')}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-flag text-blue-600 ml-1"></i>
+                      الحالة
+                    </label>
+                    <select
+                      id="status"
+                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="pending"${currentStatus === 'pending' ? ' selected' : ''}>قيد المراجعة</option>
+                      <option value="under_review"${currentStatus === 'under_review' ? ' selected' : ''}>قيد المراجعة (دراسة)</option>
+                      <option value="processing"${currentStatus === 'processing' ? ' selected' : ''}>قيد المعالجة</option>
+                      <option value="approved"${currentStatus === 'approved' ? ' selected' : ''}>مقبول</option>
+                      <option value="rejected"${currentStatus === 'rejected' ? ' selected' : ''}>مرفوض</option>
+                      <option value="completed"${currentStatus === 'completed' ? ' selected' : ''}>مكتمل</option>
+                      <option value="cancelled"${currentStatus === 'cancelled' ? ' selected' : ''}>ملغي</option>
+                    </select>
+                  </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">المبلغ المطلوب</label>
                     <input 
@@ -17840,14 +19425,81 @@ app.get('/admin/requests/:id/edit', async (c) => {
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">مدة التمويل (بالأشهر)</label>
-                    <input 
-                      type="number" 
+                    <select
                       id="duration_months"
-                      value="${request.duration_months || 0}"
                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       required
                     >
+                      <option value="">-- اختر المدة --</option>
+                      ${durationOptions.map((m) => `
+                        <option value="${m}"${currentDurationMonths === m ? ' selected' : ''}>${m} شهر${m % 12 === 0 ? ` (${m / 12} سنوات)` : ''}</option>
+                      `).join('')}
+                      ${currentDurationMonths != null && !durationOptions.includes(currentDurationMonths) ? `
+                        <option value="${currentDurationMonths}" selected>${currentDurationMonths} شهر</option>
+                      ` : ''}
+                    </select>
                   </div>
+                </div>
+              </div>
+
+              <!-- Bank & Assignments -->
+              <div class="border-b pb-6">
+                <h2 class="text-xl font-bold text-gray-700 mb-4">
+                  <i class="fas fa-university ml-2"></i>
+                  البنك والتعيينات
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-university text-yellow-600 ml-1"></i>
+                      البنك المختار
+                    </label>
+                    <select
+                      id="selected_bank_id"
+                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- بدون بنك --</option>
+                      ${banks.results.map((b: any) => `
+                        <option value="${b.id}"${currentSelectedBankId != null && Number(b.id) === currentSelectedBankId ? ' selected' : ''}>${escapeAttr(b.bank_name)}</option>
+                      `).join('')}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      <i class="fas fa-user-tie text-amber-600 ml-1"></i>
+                      موظف التمويل (اختياري)
+                    </label>
+                    <select
+                      id="assigned_bank_agent_id"
+                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- بدون موظف تمويل --</option>
+                      ${bankAgents.results.map((u: any) => {
+                        const label = `${u.full_name || u.username || ('#' + u.id)}${u.email ? ' — ' + u.email : ''}`
+                        return `<option value="${u.id}"${currentAssignedBankAgentId != null && Number(u.id) === currentAssignedBankAgentId ? ' selected' : ''}>${escapeAttr(label)}</option>`
+                      }).join('')}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">يجب اختيار البنك عند تعيين موظف التمويل.</p>
+                  </div>
+                  ${canManageAssignment ? `
+                    <div class="md:col-span-2">
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-user-check text-green-600 ml-1"></i>
+                        الموظف المخصص (للعميل)
+                      </label>
+                      <select
+                        id="assigned_employee_id"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">-- بدون موظف --</option>
+                        ${employees.results.map((e: any) => {
+                          const label = `${e.full_name || e.username || ('#' + e.id)}${e.email ? ' — ' + e.email : ''}`
+                          return `<option value="${e.id}"${currentAssignedEmployeeId != null && Number(e.id) === currentAssignedEmployeeId ? ' selected' : ''}>${escapeAttr(label)}</option>`
+                        }).join('')}
+                      </select>
+                      <p class="text-xs text-gray-500 mt-1">يتم تطبيق هذا التغيير على تعيين العميل بالكامل (وليس هذا الطلب فقط).</p>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
               
@@ -17876,6 +19528,18 @@ app.get('/admin/requests/:id/edit', async (c) => {
                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
                   </div>
+                </div>
+                <div class="mt-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-comment text-gray-600 ml-1"></i>
+                    ملاحظات
+                  </label>
+                  <textarea
+                    id="notes"
+                    rows="3"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="أي ملاحظات إضافية..."
+                  >${escapeAttr(currentNotes)}</textarea>
                 </div>
               </div>
               
@@ -18101,7 +19765,54 @@ app.get('/admin/requests/:id/edit', async (c) => {
           </div>
         </div>
         
+        <script type="application/json" id="editRequestPageCtx">${editRequestCtxJson}</script>
         <script>
+          var editRequestPageCtx = { viewerRoleId: null, viewerTenantId: null, canManageAssignment: false, customerId: null, currentAssignedEmployeeId: null, currentAssignedBankAgentId: null, currentSelectedBankId: null };
+          try {
+            var __ctxEl = document.getElementById('editRequestPageCtx');
+            if (__ctxEl && __ctxEl.textContent) {
+              editRequestPageCtx = JSON.parse(__ctxEl.textContent) || editRequestPageCtx;
+            }
+          } catch (e) {}
+
+          (function wireBankAgentReload() {
+            var bankSelect = document.getElementById('selected_bank_id');
+            var agentSelect = document.getElementById('assigned_bank_agent_id');
+            if (!bankSelect || !agentSelect) return;
+            async function refreshAgents() {
+              var tid = editRequestPageCtx.viewerTenantId;
+              var bid = bankSelect.value ? parseInt(bankSelect.value, 10) : NaN;
+              if (!bid || isNaN(bid) || tid == null) {
+                return;
+              }
+              var token = localStorage.getItem('authToken');
+              try {
+                var res = await fetch('/api/admin/bank-agents?tenant_id=' + encodeURIComponent(String(tid)) + '&bank_id=' + encodeURIComponent(String(bid)), {
+                  credentials: 'same-origin',
+                  headers: token ? { Authorization: 'Bearer ' + token } : {}
+                });
+                var data = await res.json();
+                if (!data || !data.success || !Array.isArray(data.data)) return;
+                var current = agentSelect.value;
+                agentSelect.innerHTML = '';
+                var emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.textContent = '-- بدون موظف تمويل --';
+                agentSelect.appendChild(emptyOpt);
+                data.data.forEach(function (u) {
+                  var o = document.createElement('option');
+                  o.value = String(u.id);
+                  o.textContent = (u.full_name || u.username || ('#' + u.id)) + (u.email ? (' — ' + u.email) : '');
+                  if (String(u.id) === String(current)) o.selected = true;
+                  agentSelect.appendChild(o);
+                });
+              } catch (err) {
+                console.error('Failed to refresh bank agents:', err);
+              }
+            }
+            bankSelect.addEventListener('change', refreshAgents);
+          })();
+
           (function initRequestAttachmentsModal() {
             var modal = document.getElementById('requestAttachmentsModal');
             var openBtn = document.getElementById('openRequestAttachmentsModal');
@@ -18189,11 +19900,36 @@ app.get('/admin/requests/:id/edit', async (c) => {
               </div>
             \`
             
+            function readOptionalInt(elId) {
+              var el = document.getElementById(elId);
+              if (!el) return null;
+              var v = String(el.value || '').trim();
+              if (v === '') return null;
+              var n = parseInt(v, 10);
+              return isNaN(n) ? null : n;
+            }
+            var statusEl = document.getElementById('status');
+            var notesEl = document.getElementById('notes');
+            var financingTypeEl = document.getElementById('financing_type_id');
             const data = {
               requested_amount: parseFloat(document.getElementById('requested_amount').value),
               duration_months: parseInt(document.getElementById('duration_months').value),
               salary_at_request: parseFloat(document.getElementById('salary_at_request').value) || 0,
-              monthly_obligations: parseFloat(document.getElementById('monthly_obligations').value) || 0
+              monthly_obligations: parseFloat(document.getElementById('monthly_obligations').value) || 0,
+              financing_type_id: readOptionalInt('financing_type_id'),
+              selected_bank_id: readOptionalInt('selected_bank_id'),
+              assigned_bank_agent_id: readOptionalInt('assigned_bank_agent_id'),
+              status: statusEl ? String(statusEl.value || '') : null,
+              notes: notesEl ? String(notesEl.value || '') : null
+            }
+            if (data.assigned_bank_agent_id != null && data.selected_bank_id == null) {
+              document.getElementById('message').innerHTML = \`
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  <i class="fas fa-exclamation-circle ml-2"></i>
+                  يجب اختيار البنك عند تعيين موظف التمويل.
+                </div>
+              \`
+              return
             }
             
             try {
@@ -18289,6 +20025,33 @@ app.get('/admin/requests/:id/edit', async (c) => {
               const response = await axios.put('/api/financing-requests/${id}', data)
               
               if (response.data.success) {
+                if (editRequestPageCtx.canManageAssignment) {
+                  var employeeEl = document.getElementById('assigned_employee_id');
+                  if (employeeEl) {
+                    var newEmpVal = String(employeeEl.value || '').trim();
+                    var newEmpId = newEmpVal === '' ? null : parseInt(newEmpVal, 10);
+                    if (newEmpId != null && isNaN(newEmpId)) newEmpId = null;
+                    var currentEmpId = editRequestPageCtx.currentAssignedEmployeeId;
+                    if (Number(newEmpId) !== Number(currentEmpId) && !(newEmpId == null && currentEmpId == null)) {
+                      try {
+                        await axios.post('/api/customer-assignment', {
+                          customer_id: editRequestPageCtx.customerId,
+                          employee_id: newEmpId,
+                          notes: 'تم التعديل من صفحة تعديل طلب التمويل'
+                        });
+                      } catch (assignErr) {
+                        console.error('Failed to update customer assignment:', assignErr);
+                        document.getElementById('message').innerHTML = \`
+                          <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+                            <i class="fas fa-exclamation-circle ml-2"></i>
+                            تم حفظ الطلب لكن تعذر تحديث تعيين الموظف: \${assignErr.response?.data?.error || assignErr.message}
+                          </div>
+                        \`
+                        return
+                      }
+                    }
+                  }
+                }
                 document.getElementById('message').innerHTML = \`
                   <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
                     <i class="fas fa-check-circle ml-2"></i>
@@ -18324,10 +20087,10 @@ app.get('/admin/requests', async (c) => {
   try {
     // Get user info (userId, tenantId, roleId)
     const userInfo = await getUserInfo(c);
-    
+
     // Build query with role-based filtering
     let query = `
-      SELECT 
+      SELECT
         fr.id,
         fr.customer_id,
         fr.selected_bank_id,
@@ -18340,6 +20103,7 @@ app.get('/admin/requests', async (c) => {
         bagent.id AS bank_agent_role5_user_id,
         emp.id AS assigned_employee_id,
         c.full_name as customer_name,
+        c.phone as customer_phone,
         c.assigned_to as customer_assigned_to,
         tl.name as enrollment_location_name,
         b.bank_name as bank_name,
@@ -18347,10 +20111,27 @@ app.get('/admin/requests', async (c) => {
         ws.stage_name_ar as workflow_stage_name_ar,
         ws.stage_color as workflow_stage_color,
         COALESCE(NULLIF(TRIM(bagent.full_name), ''), NULLIF(TRIM(bagent.username), '')) as assigned_bank_agent_name,
-        COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) as assigned_employee_name
+        COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) as assigned_employee_name,
+        COALESCE(
+          (
+            SELECT status FROM contracts
+            WHERE financing_request_id = fr.id
+              AND tenant_id = COALESCE(fr.tenant_id, c.tenant_id)
+              AND COALESCE(is_archived, 0) = 0
+            ORDER BY id DESC LIMIT 1
+          ),
+          (
+            SELECT status FROM contracts
+            WHERE customer_id = fr.customer_id
+              AND financing_request_id IS NULL
+              AND tenant_id = COALESCE(fr.tenant_id, c.tenant_id)
+              AND COALESCE(is_archived, 0) = 0
+            ORDER BY id DESC LIMIT 1
+          )
+        ) AS contract_status
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN tenant_locations tl ON c.location_id = tl.id
+      LEFT JOIN tenant_locations tl ON tl.id = COALESCE(fr.location_id, c.location_id)
       LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
       LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 14)
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
@@ -18385,10 +20166,7 @@ app.get('/admin/requests', async (c) => {
       if (userInfo.tenantId && userInfo.userId) {
         query += ` WHERE c.tenant_id = ? AND (
           fr.assigned_bank_agent_id = ?
-          OR EXISTS (
-            SELECT 1 FROM customer_assignments ca
-            WHERE ca.customer_id = c.id AND ca.employee_id = ?
-          )
+          OR fr.created_by = ?
         )`;
         queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
       } else {
@@ -18399,8 +20177,12 @@ app.get('/admin/requests', async (c) => {
       query += ' WHERE 1 = 0';
     }
     
+    // Exclude completed requests from main view (uses existing status column — no migration needed)
+    query += query.toLowerCase().includes('where')
+      ? " AND (fr.status IS NULL OR fr.status != 'completed')"
+      : " WHERE (fr.status IS NULL OR fr.status != 'completed')"
     query += ' ORDER BY fr.created_at DESC';
-    
+
     const requests = queryParams.length > 0
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
@@ -18428,11 +20210,11 @@ app.get('/admin/requests', async (c) => {
     const allRequestStatusFilters = Array.from(new Set([...workflowStageNames, ...fallbackRequestStatuses]));
     const requestStatusFiltersJson = JSON.stringify(allRequestStatusFilters).replace(/</g, '\\u003c');
     
-    // Role 3 (مشرف مبيعات): no edit/delete on existing rows; role 5 may edit/delete within scoped requests
+    // Role 3 (مشرف مبيعات): no edit/delete on existing rows; role 5 same access as role 4
     const ridNorm = normalizeRoleId(userInfo.roleId)
     const canEdit = ridNorm !== 3
-    const canCreateFundingRequest = [1, 2, 3, 4].includes(Number(userInfo.roleId));
-    const isBankAgent = ridNorm === 5;
+    const canCreateFundingRequest = [1, 2, 3, 4, 5].includes(Number(ridNorm));
+    const isBankAgent = false; // role 5 gets same buttons as role 4
 
     const requestsCsvRowsJson = JSON.stringify(
       requests.results.map((req: any) => {
@@ -18454,6 +20236,7 @@ app.get('/admin/requests', async (c) => {
         const agentCol = aid != null && !Number.isNaN(aid) ? (aname || '—') : '—'
         return [
           String(customer),
+          String(customerPhoneInputValue(req.customer_phone) || '—'),
           String(req.enrollment_location_name || '—'),
           String(employeeCol),
           String(agentCol),
@@ -18582,28 +20365,38 @@ app.get('/admin/requests', async (c) => {
               </h1>
               
               <div class="flex gap-3">
+                <a href="/admin/requests/completed"
+                   class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-5 py-3 rounded-lg font-bold transition-all shadow-md">
+                  <i class="fas fa-check-double ml-2"></i>
+                  المكتملة
+                </a>
                 ${canCreateFundingRequest ? `
                 <a href="/admin/requests/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
                   إضافة جديد
                 </a>
                 ` : ''}
-                <button onclick="exportToCSV()" 
-                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-file-export ml-2"></i>
-                  تصدير CSV
-                </button>
-                ${canCreateFundingRequest ? `
-                <button onclick="downloadRequestsSampleCSV()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-download ml-2"></i>
-                  نموذج CSV
-                </button>
-                <button onclick="triggerRequestsCSVImport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-file-upload ml-2"></i>
-                  استيراد CSV
-                </button>
-                <input type="file" id="requestsCsvInput" accept=".csv" class="hidden" onchange="handleRequestsCSVFile(event)">
-                ` : ''}
+                <div class="relative" id="csvDropdownWrap">
+                  <button type="button" onclick="toggleCsvDropdown()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2">
+                    <i class="fas fa-file-csv"></i>
+                    CSV
+                    <i class="fas fa-chevron-down text-xs"></i>
+                  </button>
+                  <div id="csvDropdownMenu" class="hidden absolute left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
+                    <button onclick="exportToCSV(); toggleCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 text-right">
+                      <i class="fas fa-file-export w-4"></i> تصدير CSV
+                    </button>
+                    ${canCreateFundingRequest ? `
+                    <button onclick="downloadRequestsSampleCSV(); toggleCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 text-right">
+                      <i class="fas fa-download w-4"></i> نموذج CSV
+                    </button>
+                    <button onclick="triggerRequestsCSVImport(); toggleCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 text-right">
+                      <i class="fas fa-file-upload w-4"></i> استيراد CSV
+                    </button>
+                    ` : ''}
+                  </div>
+                </div>
+                ${canCreateFundingRequest ? `<input type="file" id="requestsCsvInput" accept=".csv" class="hidden" onchange="handleRequestsCSVFile(event)">` : ''}
                 ${!isBankAgent ? `
                 <a href="/admin/reports/requests-followup" 
                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all inline-block text-center">
@@ -18616,48 +20409,46 @@ app.get('/admin/requests', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="relative">
-                  <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
-                  <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="بحث في جميع الحقول..." 
-                    class="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onkeyup="filterTable()"
-                  >
-                </div>
-                
-                <div>
-                  <select 
-                    id="filterField" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="filterTable()"
-                  >
-                    <option value="all">البحث في: الكل</option>
+              <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                <!-- Search row: always visible -->
+                <div class="flex items-center gap-2 flex-wrap">
+                  <div class="relative flex-1 min-w-[180px]">
+                    <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
+                      class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                      onkeyup="filterTable()">
+                  </div>
+                  <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white" onchange="filterTable()">
+                    <option value="all">الكل</option>
                     <option value="customer">اسم العميل فقط</option>
+                    <option value="phone">الهاتف فقط</option>
                     <option value="bank">البنك فقط</option>
                     <option value="status">الحالة فقط</option>
                   </select>
+                  <button type="button" onclick="toggleRequestsFilters()" dir="rtl" class="flex items-center gap-1.5 px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:text-purple-600 bg-white transition-colors whitespace-nowrap">
+                    <span dir="rtl" class="inline-block text-right">فلاتر</span>
+                    <i class="fas fa-filter text-purple-400"></i>
+                    <i id="requestsFiltersIcon" class="fas fa-chevron-down text-xs transition-transform" style="transform:rotate(-90deg)"></i>
+                  </button>
                 </div>
-
-                <div>
-                  <select
-                    id="statusFilter"
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    onchange="filterTable()"
-                  >
-                    <option value="all">تصفية الحالة: الكل</option>
-                  </select>
+                <!-- Collapsible filters -->
+                <div id="requestsFiltersPanel" style="display:none;" class="space-y-3">
+                  <div class="border-t border-gray-200"></div>
+                  <div class="flex items-center gap-3 flex-wrap">
+                    <select id="statusFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white" onchange="filterTable()">
+                      <option value="all">تصفية الحالة: الكل</option>
+                    </select>
+                    <select id="employeeFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white" onchange="filterTable()">
+                      <option value="all">الموظف: الكل</option>
+                    </select>
+                    <select id="bankAgentFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white" onchange="filterTable()">
+                      <option value="all">موظف البنك: الكل</option>
+                    </select>
+                    <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
+                      <i class="fas fa-redo"></i> إعادة تعيين
+                    </button>
+                  </div>
                 </div>
-                
-                <button 
-                  onclick="resetFilters()" 
-                  class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                >
-                  <i class="fas fa-redo ml-2"></i>
-                  إعادة تعيين
-                </button>
               </div>
             </div>
           </div>
@@ -18684,6 +20475,7 @@ app.get('/admin/requests', async (c) => {
                   <tr>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الإجراءات</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">العميل</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الهاتف</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموقع</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="الموظف (دور 4) المعيّن للعميل">الموظف المخصص</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="المستخدم بدور 5 المعيّن على الطلب">موظف البنك</th>
@@ -18691,6 +20483,7 @@ app.get('/admin/requests', async (c) => {
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المبلغ</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">المدة</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">العقد</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">التاريخ</th>
                 </tr>
               </thead>
@@ -18732,6 +20525,7 @@ app.get('/admin/requests', async (c) => {
                   return `
                   <tr class="hover:bg-gray-50" 
                       data-customer="${req.customer_name || ''}" 
+                      data-phone="${(customerPhoneInputValue(req.customer_phone) || '').replace(/"/g, '&quot;')}"
                       data-employee="${employeeName.replace(/"/g, '&quot;')}"
                       data-bank-agent="${bankAgentRowSearch.replace(/"/g, '&quot;')}"
                       data-bank="${req.bank_name || ''}" 
@@ -18764,6 +20558,19 @@ app.get('/admin/requests', async (c) => {
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="truncate-cell">${req.customer_name || 'عميل #' + req.customer_id}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="inline-flex items-center gap-2">
+                        <span dir="ltr">${customerPhoneInputValue(req.customer_phone) || '—'}</span>
+                        <button
+                          type="button"
+                          onclick="openCustomerWhatsApp('${String(req.customer_phone || '').replace(/'/g, "\\'")}')"
+                          class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
+                          title="فتح واتساب"
+                        >
+                          <i class="fab fa-whatsapp"></i>
+                        </button>
+                      </div>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${req.enrollment_location_name ? escapeHtml(String(req.enrollment_location_name)) : '<span class="text-gray-400">—</span>'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
                       ${employeeName
@@ -18784,6 +20591,9 @@ app.get('/admin/requests', async (c) => {
                       <span class="px-2 py-1 text-xs rounded-full ${statusColor}" style="${statusInlineStyle}">
                         ${statusAr}
                       </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                      ${contractStatusBadge(req.contract_status)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
                   </tr>
@@ -18810,6 +20620,34 @@ app.get('/admin/requests', async (c) => {
         
         <script>
           const REQUEST_STATUS_OPTIONS = ${requestStatusFiltersJson};
+
+          function normalizePhoneDigits(phoneValue) {
+            const raw = String(phoneValue || '').trim();
+            const westernDigits = raw
+              .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+              .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+            return westernDigits.replace(/[^\\d]/g, '');
+          }
+
+          function toSaudiWaNumber(phoneValue) {
+            let digits = normalizePhoneDigits(phoneValue);
+            if (!digits) return '';
+            if (digits.startsWith('00966')) digits = digits.slice(2);
+            if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+            if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+            if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+            return '';
+          }
+
+          function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+            const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+            if (!normalizedPhone) {
+              alert('لا يوجد رقم واتساب صالح لهذا العميل');
+              return;
+            }
+            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+          }
+          window.openCustomerWhatsApp = openCustomerWhatsApp;
           // Pagination + edge-scroll (Requests list page)
           const requestsPaging = { page: 1, pageSize: 15, lastSig: '' }
           function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
@@ -19024,33 +20862,70 @@ app.get('/admin/requests', async (c) => {
           ${actionsDropdownScript}
 
           // البحث والفلترة
+          function toggleRequestsFilters() {
+            const panel = document.getElementById('requestsFiltersPanel')
+            const icon = document.getElementById('requestsFiltersIcon')
+            if (!panel) return
+            const opening = panel.style.display === 'none'
+            panel.style.display = opening ? 'block' : 'none'
+            if (icon) icon.style.transform = opening ? '' : 'rotate(-90deg)'
+          }
+
+          function hydrateRequestsRoleFilters() {
+            const empEl = document.getElementById('employeeFilter')
+            const agentEl = document.getElementById('bankAgentFilter')
+            if (!empEl || !agentEl) return
+            const empNames = new Set()
+            const agentNames = new Set()
+            document.querySelectorAll('#tableBody tr').forEach((row) => {
+              const emp = (row.getAttribute('data-employee') || '').trim()
+              const agent = (row.getAttribute('data-bank-agent') || '').trim()
+              if (emp) empNames.add(emp)
+              if (agent) agentNames.add(agent)
+            })
+            const currentEmp = empEl.value
+            const currentAgent = agentEl.value
+            empEl.innerHTML = '<option value="all">الموظف: الكل</option>' +
+              Array.from(empNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('')
+            agentEl.innerHTML = '<option value="all">موظف البنك: الكل</option>' +
+              Array.from(agentNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('')
+            empEl.value = currentEmp
+            agentEl.value = currentAgent
+          }
+
           function filterTable() {
             closeAllDropdowns();
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
             const filterField = document.getElementById('filterField').value
             const statusFilter = document.getElementById('statusFilter').value
+            const employeeFilter = (document.getElementById('employeeFilter') || {value: 'all'}).value
+            const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value
             const tableBody = document.getElementById('tableBody')
             const rows = tableBody.getElementsByTagName('tr')
             let visibleCount = 0
-            const sig = JSON.stringify({ searchInput, filterField, statusFilter })
+            const sig = JSON.stringify({ searchInput, filterField, statusFilter, employeeFilter, bankAgentFilter })
             if (sig !== requestsPaging.lastSig) { requestsPaging.lastSig = sig; requestsPaging.page = 1 }
-            
+
             for (let i = 0; i < rows.length; i++) {
               const row = rows[i]
               const customer = row.getAttribute('data-customer') || ''
+              const phone = row.getAttribute('data-phone') || ''
               const employee = row.getAttribute('data-employee') || ''
               const bankAgent = row.getAttribute('data-bank-agent') || ''
               const bank = row.getAttribute('data-bank') || ''
               const status = row.getAttribute('data-status') || ''
-              
+
               let shouldShow = false
-              
+
               if (searchInput === '') {
                 shouldShow = true
               } else {
                 switch(filterField) {
                   case 'customer':
                     shouldShow = customer.toLowerCase().includes(searchInput)
+                    break
+                  case 'phone':
+                    shouldShow = phone.toLowerCase().includes(searchInput)
                     break
                   case 'bank':
                     shouldShow = bank.toLowerCase().includes(searchInput)
@@ -19059,21 +20934,24 @@ app.get('/admin/requests', async (c) => {
                     shouldShow = status.toLowerCase().includes(searchInput)
                     break
                   default: // 'all'
-                    shouldShow = customer.toLowerCase().includes(searchInput) || 
+                    shouldShow = customer.toLowerCase().includes(searchInput) ||
+                                phone.toLowerCase().includes(searchInput) ||
                                 employee.toLowerCase().includes(searchInput) ||
-                                bank.toLowerCase().includes(searchInput) || 
+                                bank.toLowerCase().includes(searchInput) ||
                                 bankAgent.toLowerCase().includes(searchInput) ||
                                 status.toLowerCase().includes(searchInput)
                 }
               }
-              
+
               const statusMatches = statusFilter === 'all' || status === statusFilter
-              const visible = shouldShow && statusMatches
+              const employeeMatches = employeeFilter === 'all' || employee === employeeFilter
+              const bankAgentMatches = bankAgentFilter === 'all' || bankAgent === bankAgentFilter
+              const visible = shouldShow && statusMatches && employeeMatches && bankAgentMatches
 
               row.classList.toggle('filter-hidden', !visible)
               if (visible) visibleCount++
             }
-            
+
             document.getElementById('totalCount').textContent = visibleCount
             applyRequestsPagination()
           }
@@ -19154,12 +21032,28 @@ app.get('/admin/requests', async (c) => {
             document.getElementById('searchInput').value = ''
             document.getElementById('filterField').value = 'all'
             document.getElementById('statusFilter').value = 'all'
+            const empEl = document.getElementById('employeeFilter')
+            const agentEl = document.getElementById('bankAgentFilter')
+            if (empEl) empEl.value = 'all'
+            if (agentEl) agentEl.value = 'all'
             filterTable()
           }
 
+          function toggleCsvDropdown() {
+            const menu = document.getElementById('csvDropdownMenu')
+            if (!menu) return
+            menu.classList.toggle('hidden')
+          }
+
+          document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('csvDropdownWrap')
+            const menu = document.getElementById('csvDropdownMenu')
+            if (wrap && menu && !wrap.contains(e.target)) menu.classList.add('hidden')
+          })
+
           // Expose handlers for inline onclick early, in case any init below throws
           window.exportToCSV = function exportToCSV() {
-            const header = ['العميل', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'];
+            const header = ['العميل', 'الهاتف', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'];
             const rows = ${requestsCsvRowsJson};
             const data = [header, ...rows];
             
@@ -19185,6 +21079,7 @@ app.get('/admin/requests', async (c) => {
           }
 
           hydrateStatusFilterOptions()
+          hydrateRequestsRoleFilters()
           hydrateRequestsSidebarStatuses()
           applyRequestStatusFilterFromUrl()
           filterTable()
@@ -19241,7 +21136,7 @@ app.get('/admin/requests', async (c) => {
               const header = rows[0].map(normalizeCsvHeaderCell)
               const idx = (keys) => header.findIndex((h) => keys.indexOf(h) !== -1)
 
-              // Aligned with requests table/export: ['العميل','الموظف المخصص','موظف البنك','البنك','المبلغ المطلوب','المدة (شهور)','الحالة','التاريخ']
+              // Aligned with requests table/export; phone is used only to resolve the linked customer.
               const iCustomerName = idx(['customer', 'customer_name', 'العميل'])
               const iCustomerPhone = idx(['customer_phone', 'phone', 'هاتف العميل', 'الهاتف'])
               const iCustomerId = idx(['customer_id', 'معرف العميل'])
@@ -19334,7 +21229,7 @@ app.get('/admin/requests/:id/delete', async (c) => {
 
     if (normalizeRoleId(userInfo.roleId) === 5) {
       const row = await c.env.DB.prepare(`
-        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.tenant_id, c.tenant_id AS customer_tenant_id
+        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, fr.tenant_id, c.tenant_id AS customer_tenant_id
         FROM financing_requests fr
         LEFT JOIN customers c ON fr.customer_id = c.id
         WHERE fr.id = ?
@@ -19344,6 +21239,7 @@ app.get('/admin/requests/:id/delete', async (c) => {
           id?: number
           customer_id?: number | null
           assigned_bank_agent_id?: number | null
+          created_by?: number | null
           tenant_id?: number | null
           customer_tenant_id?: number | null
         } | null
@@ -19352,13 +21248,13 @@ app.get('/admin/requests/:id/delete', async (c) => {
       if (!tid) return c.redirect('/admin/requests')
       const rowTenant = row.tenant_id != null ? Number(row.tenant_id) : Number(row.customer_tenant_id)
       if (Number(tid) !== rowTenant) return c.redirect('/admin/requests')
-      const assignedAgentId = Number(row.assigned_bank_agent_id)
-      const cid = row.customer_id != null ? Number(row.customer_id) : null
-      const custTid = row.customer_tenant_id != null ? Number(row.customer_tenant_id) : null
       if (
-        assignedAgentId !== Number(userInfo.userId) &&
-        (cid == null ||
-          !(await canUserAccessCustomer(c.env.DB, userInfo, { id: cid, tenant_id: custTid })))
+        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
+          customer_id: row.customer_id != null ? Number(row.customer_id) : null,
+          customer_tenant_id: row.customer_tenant_id != null ? Number(row.customer_tenant_id) : null,
+          assigned_bank_agent_id: row.assigned_bank_agent_id,
+          created_by: row.created_by,
+        }))
       ) {
         return c.redirect('/admin/requests')
       }
@@ -19379,10 +21275,6 @@ app.get('/admin/requests/new', async (c) => {
     if (!userInfo.userId || !userInfo.roleId) {
       return c.redirect('/login')
     }
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      return c.redirect('/admin/requests')
-    }
-
     if (userInfo.roleId === 2 || userInfo.roleId === 3) {
       if (!userInfo.tenantId) {
         return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
@@ -19430,7 +21322,8 @@ app.get('/admin/requests/new', async (c) => {
         id: cust.id,
         name: cust.full_name || '',
         text: `${cust.full_name} - ${cust.phone}`,
-        tenant_id: cust.tenant_id != null ? Number(cust.tenant_id) : null
+        tenant_id: cust.tenant_id != null ? Number(cust.tenant_id) : null,
+        is_completed: cust.is_completed ? 1 : 0
       }))
     ).replace(/</g, '\\u003c')
 
@@ -19635,6 +21528,30 @@ app.get('/admin/requests/new', async (c) => {
             </form>
           </div>
         </div>
+        <!-- Modal must appear before the script so confirm/cancel listeners bind to real nodes -->
+        <div id="completedCustomerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black bg-opacity-50" id="completedModalBackdrop"></div>
+          <div class="relative z-10 bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-right">
+            <div class="flex items-center justify-center mb-4">
+              <div class="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                <i class="fas fa-exclamation-triangle text-3xl text-amber-500"></i>
+              </div>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-3 text-center">تنبيه: عميل مكتمل</h3>
+            <p class="text-gray-600 mb-6 text-center leading-relaxed">
+              هذا العميل لديه طلب تمويل مكتمل بالفعل.<br>
+              هل تريد المتابعة وإضافة طلب جديد له؟
+            </p>
+            <div class="flex gap-3">
+              <button type="button" id="completedModalConfirm" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl transition-all">
+                نعم، المتابعة
+              </button>
+              <button type="button" id="completedModalCancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-all">
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
         <script type="application/json" id="newRequestCustomersJSON">${newRequestCustomersJson}</script>
         <script type="application/json" id="newRequestPrefillCustomerId">${JSON.stringify(prefillCustomerIdAllowed ? prefillCustomerIdNum : null)}</script>
         <script type="application/json" id="newRequestPageCtx">${newRequestPageCtxJson}</script>
@@ -19834,8 +21751,16 @@ app.get('/admin/requests/new', async (c) => {
                 if (!isNaN(bPre) && bPre > 0) loadBankAgentsForBank(bPre);
               }
             })();
-            form.addEventListener('submit', async (event) => {
-              event.preventDefault();
+            var pendingSubmit = false;
+            function getSelectedCustomer() {
+              var custId = hidden ? String(hidden.value || '') : '';
+              if (!custId) return null;
+              for (var i = 0; i < customerRows.length; i++) {
+                if (String(customerRows[i].id) === custId) return customerRows[i];
+              }
+              return null;
+            }
+            async function doSubmitForm() {
               try {
                 const formData = new FormData(form);
                 const response = await fetch('/api/requests', {
@@ -19858,6 +21783,29 @@ app.get('/admin/requests/new', async (c) => {
                 }
               } catch (error) {
                 console.error('Request error:', error);
+              }
+            }
+            form.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              if (pendingSubmit) { await doSubmitForm(); return; }
+              var cust = getSelectedCustomer();
+              if (cust && cust.is_completed) {
+                var modal = document.getElementById('completedCustomerModal');
+                if (modal) modal.classList.remove('hidden');
+                return;
+              }
+              await doSubmitForm();
+            });
+            document.getElementById('completedModalCancel')?.addEventListener('click', function () {
+              document.getElementById('completedCustomerModal')?.classList.add('hidden');
+            });
+            document.getElementById('completedModalConfirm')?.addEventListener('click', async function () {
+              document.getElementById('completedCustomerModal')?.classList.add('hidden');
+              pendingSubmit = true;
+              try {
+                await doSubmitForm();
+              } finally {
+                pendingSubmit = false;
               }
             });
           })();
@@ -19901,12 +21849,13 @@ app.get('/admin/requests/:id', async (c) => {
       if (Number((request as any).customer_tenant_id) !== Number(tid)) {
         return c.redirect('/admin/requests')
       }
-      const assignedAgentId = Number((request as any).assigned_bank_agent_id)
       if (
-        assignedAgentId !== Number(userInfo.userId) &&
-        !(await canUserAccessCustomer(c.env.DB, userInfo, {
-          id: Number((request as any).customer_id),
-          tenant_id: (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null
+        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
+          customer_id: Number((request as any).customer_id),
+          customer_tenant_id:
+            (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null,
+          assigned_bank_agent_id: (request as any).assigned_bank_agent_id,
+          created_by: (request as any).created_by,
         }))
       ) {
         return c.redirect('/admin/requests')
@@ -20278,51 +22227,92 @@ app.get('/admin/customers/:id/edit', async (c) => {
       }
     } catch (_) {}
 
-    const editTenantId = (customer as any).tenant_id as number | null
-    let editLocationSelectBlock = ''
-    if (editTenantId) {
-      const activeLocRes = await c.env.DB.prepare(
-        `SELECT id, name, slug, is_active FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
+    const customerTenantIdEdit =
+      (customer as any).tenant_id != null ? Number((customer as any).tenant_id) : null
+    let editCustomerLocationSectionHtml = ''
+    if (customerTenantIdEdit && customerTenantIdEdit > 0) {
+      const locRes = await c.env.DB.prepare(
+        `SELECT id, name, slug FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
       )
-        .bind(editTenantId)
-        .all<{ id: number; name: string; slug: string; is_active: number }>()
-      let locRows = (activeLocRes.results || []) as Array<{ id: number; name: string; slug: string; is_active: number }>
-      const curLid = Number((customer as any).location_id)
-      if (Number.isFinite(curLid) && curLid > 0 && !locRows.some((r) => r.id === curLid)) {
-        const cur = await c.env.DB.prepare(
-          `SELECT id, name, slug, is_active FROM tenant_locations WHERE id = ? AND tenant_id = ? LIMIT 1`
-        )
-          .bind(curLid, editTenantId)
-          .first<{ id: number; name: string; slug: string; is_active: number }>()
-        if (cur) locRows = [...locRows, cur]
-      }
-      const locOpts = locRows
+        .bind(customerTenantIdEdit)
+        .all<{ id: number; name: string; slug: string }>()
+      const locRows = (locRes.results || []) as Array<{ id: number; name: string; slug: string }>
+      const currentLocId =
+        (customer as any).location_id != null ? Number((customer as any).location_id) : NaN
+      const optionsHtml = locRows
         .map((r) => {
-          const inactiveSuffix = r.is_active ? '' : ' (غير مفعّل)'
-          const sel = Number((customer as any).location_id) === r.id ? ' selected' : ''
-          return `<option value="${r.id}"${sel}>${escapeHtml(r.name)} — ${escapeHtml(r.slug)}${inactiveSuffix}</option>`
+          const sel = Number.isFinite(currentLocId) && r.id === currentLocId ? ' selected' : ''
+          return `<option value="${r.id}"${sel}>${escapeHtml(r.name)} — ${escapeHtml(r.slug)}</option>`
         })
         .join('')
-      editLocationSelectBlock = `
+      if (optionsHtml) {
+        editCustomerLocationSectionHtml = `
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="md:col-span-2">
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-map-marker-alt text-teal-600 ml-1"></i>
-                    موقع التسجيل (الفرع) ${locOpts ? '*' : ''}
+                    موقع التسجيل (الفرع) *
                   </label>
-                  <select name="location_id" id="edit_company_location_id" ${locOpts ? 'required' : ''}
+                  <select name="location_id" id="edit_company_location_id" required
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
                     <option value="">— اختر موقع التسجيل —</option>
-                    ${locOpts}
+                    ${optionsHtml}
                   </select>
-                  ${
-                    !locOpts
-                      ? `<p class="text-xs text-amber-700 mt-1">لا توجد مواقع مفعّلة لهذه الشركة. يمكن إضافة مواقع من <a href="/admin/company-settings/locations" class="underline font-semibold">إعدادات المواقع</a>.</p>`
-                      : `<p class="text-xs text-gray-500 mt-1">الفرع المرتبط بالعميل في قوائم التمويل والتقارير.</p>`
-                  }
+                  <p class="text-xs text-gray-500 mt-1">يُحدّث الموقع في بيانات العميل وجميع طلبات التمويل المرتبطة به.</p>
                 </div>
               </div>`
+      } else {
+        editCustomerLocationSectionHtml = `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="md:col-span-2">
+                  <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                    لا توجد مواقع مفعّلة لهذه الشركة. أضف مواقع من
+                    <a href="/admin/company-settings/locations" class="underline font-semibold">إعدادات المواقع</a>
+                    لتمكين تعديل الفرع لاحقاً.
+                  </p>
+                </div>
+              </div>`
+      }
     }
+
+    const custEnrollSrc = String((customer as any).enrollment_source || '').trim()
+    const custEnrollLab = String((customer as any).enrollment_source_label || '').trim()
+    const editEnrollmentLocked = custEnrollSrc === 'calculator' || custEnrollSrc === 'affiliate'
+    let editManualSourceInputValue = ''
+    if (!editEnrollmentLocked) {
+      if (custEnrollSrc === 'manual') editManualSourceInputValue = custEnrollLab
+      else if (!custEnrollSrc) editManualSourceInputValue = custEnrollLab
+    }
+    const editEnrollmentSourceSectionHtml = editEnrollmentLocked
+      ? `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-tag text-amber-600 ml-1"></i>
+                    مصدر التسجيل
+                  </label>
+                  <input type="text" readonly
+                         value="${
+                           custEnrollSrc === 'calculator'
+                             ? 'الحاسبة'
+                             : escapeHtml(custEnrollLab || 'affiliate')
+                         }"
+                         class="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800">
+                  <p class="text-xs text-gray-500 mt-1">مصدر التسجيل تلقائي ولا يمكن تعديله.</p>
+                </div>
+              </div>`
+      : `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-tag text-slate-600 ml-1"></i>
+                    المصدر (اختياري)
+                  </label>
+                  <input type="text" name="manual_enrollment_source" maxlength="200"
+                         value="${escapeHtmlAttr(editManualSourceInputValue)}"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+              </div>`
 
     return c.html(`
       <!DOCTYPE html>
@@ -20359,12 +22349,13 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     <input type="tel" name="phone" value="${customerPhoneInputValue((customer as any).phone)}" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl" class="w-full px-4 py-3 border-0 focus:ring-0 text-right placeholder:text-right"
                            placeholder="5xxxxxxxx"
                            oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
-                           oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، مثال: 512345678')">
+                           oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، الصيغة: 5XXXXXXXX')">
                   </div>
                   <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
                 </div>
               </div>
-              ${editLocationSelectBlock}
+              ${editCustomerLocationSectionHtml}
+              ${editEnrollmentSourceSectionHtml}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
@@ -20434,7 +22425,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ بدء العمل</label>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ التعيين</label>
                   <input type="date" name="work_start_date" value="${(customer as any).work_start_date || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 </div>
                 <div>
@@ -21768,11 +23759,13 @@ app.get('/admin/requests/:id/workflow', async (c) => {
     
     const timelineData = { data: { transitions, actions, tasks } }
     
+    const userInfo = await getUserInfo(c)
     const html = generateWorkflowTimelinePage(
       parseInt(id),
       request,
       stages,
-      timelineData.data || { transitions: [], actions: [], tasks: [] }
+      timelineData.data || { transitions: [], actions: [], tasks: [] },
+      userInfo.roleId
     )
     
     return c.html(html)
@@ -26455,7 +28448,7 @@ registerContractsModuleApi(app, getUserInfo)
 async function ensureContractsModuleAccess(
   c: any,
   allowedForRole3: 'all' | 'list-new-only' = 'all',
-  opts: { allowRole4?: boolean; blockRole5?: boolean } = {}
+  opts: { allowRole4?: boolean; blockRole5?: boolean; blockRole5Panel?: boolean } = {}
 ): Promise<Response | null> {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
@@ -26463,7 +28456,14 @@ async function ensureContractsModuleAccess(
     if (opts.allowRole4) return null
     return c.redirect('/admin/contracts/list')
   }
-  if (userInfo.roleId === 5 && opts.blockRole5) return c.redirect('/admin/contracts/list')
+  // Role 5 cannot access contracts dashboard, templates, notes, archive, settings.
+  // They may access /admin/contracts/list and /admin/contracts/view?id=X.
+  if (userInfo.roleId === 5 && opts.blockRole5) {
+    return c.redirect('/admin/requests')
+  }
+  if (userInfo.roleId === 5 && opts.blockRole5Panel) {
+    return c.redirect('/admin/contracts/list')
+  }
   if (userInfo.roleId === 3) {
     if (allowedForRole3 === 'list-new-only') return null
     return c.redirect('/admin/contracts/list')
@@ -26472,7 +28472,7 @@ async function ensureContractsModuleAccess(
 }
 
 app.get('/admin/contracts', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all')
+  const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
   return c.html(contractsDashboardPage)
 })
@@ -26480,12 +28480,13 @@ app.get('/admin/contracts/list', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
-  const page =
-    userInfo.roleId === 3 ? markContractsHtmlRole3Restricted(contractsListPage) : contractsListPage
+  let page = contractsListPage
+  if (userInfo.roleId === 3) page = markContractsHtmlRole3Restricted(page)
+  else if (userInfo.roleId === 5) page = markContractsHtmlRole5HideNewContract(page)
   return c.html(page)
 })
 app.get('/admin/contracts/new', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true, blockRole5Panel: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) {
@@ -26497,7 +28498,7 @@ app.get('/admin/contracts/new', async (c) => {
   if ((userInfo.roleId === 2 || userInfo.roleId === 3 || userInfo.roleId === 4 || userInfo.roleId === 5) && !userInfo.tenantId) {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
   }
-  const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true })
+  const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true, filterRole4ByFundingRequests: true })
   const escAttr = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const escText = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const optionsHtml = (results as any[]).map((cust: any) => {
@@ -26505,7 +28506,7 @@ app.get('/admin/contracts/new', async (c) => {
     const label = escText(cust.full_name || '')
       + (cust.phone ? ' — ' + escText(cust.phone) : '')
       + (natId ? ' (' + escText(natId) + ')' : '')
-    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national_id="${escAttr(natId)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}">${label}</option>`
+    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national-id="${escAttr(natId)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}">${label}</option>`
   }).join('\n')
 
   let partyOneSummaryHtml = ''
@@ -26538,11 +28539,52 @@ app.get('/admin/contracts/new', async (c) => {
         : '<span class="text-muted">تعذر تحميل بيانات الشركة.</span>'
   }
 
+  // Build financing requests JSON keyed by customer_id for the funding request dropdown
+  let frScriptTag = ''
+  try {
+    const frTenantId = userInfo.tenantId
+    if (frTenantId) {
+      let frSql: string
+      let frBinds: (number | string)[]
+      if (userInfo.roleId === 4 && userInfo.userId) {
+        frSql = `SELECT fr.id, fr.customer_id, fr.requested_amount,
+                        ft.type_name, b.bank_name
+                 FROM financing_requests fr
+                 LEFT JOIN financing_types ft ON ft.id = fr.financing_type_id
+                 LEFT JOIN banks b ON b.id = fr.selected_bank_id
+                 WHERE fr.tenant_id = ?
+                   AND COALESCE(fr.is_completed, 0) = 0
+                   AND EXISTS (SELECT 1 FROM customer_assignments ca
+                               WHERE ca.customer_id = fr.customer_id AND ca.employee_id = ?)
+                 ORDER BY fr.id DESC LIMIT 500`
+        frBinds = [frTenantId, userInfo.userId]
+      } else {
+        frSql = `SELECT fr.id, fr.customer_id, fr.requested_amount,
+                        ft.type_name, b.bank_name
+                 FROM financing_requests fr
+                 LEFT JOIN financing_types ft ON ft.id = fr.financing_type_id
+                 LEFT JOIN banks b ON b.id = fr.selected_bank_id
+                 WHERE fr.tenant_id = ?
+                 ORDER BY fr.id DESC LIMIT 500`
+        frBinds = [frTenantId]
+      }
+      const frRows = (await c.env.DB.prepare(frSql).bind(...frBinds).all()).results as any[]
+      const frMap: Record<string, { id: number; requested_amount: number | null; type_name: string | null; bank_name: string | null }[]> = {}
+      for (const row of frRows) {
+        const key = String(row.customer_id)
+        if (!frMap[key]) frMap[key] = []
+        frMap[key].push({ id: row.id, requested_amount: row.requested_amount ?? null, type_name: row.type_name ?? null, bank_name: row.bank_name ?? null })
+      }
+      frScriptTag = `<script>window._contractsFRs = ${JSON.stringify(frMap)};</script>`
+    }
+  } catch (_) {}
+
   let html = contractsNewPage
     .replace('<!--CONTRACTS_CUSTOMERS_OPTIONS-->', optionsHtml)
     .replace('<!--CONTRACTS_PARTY_ONE_SUMMARY-->', partyOneSummaryHtml)
     .replace('<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->', partyOneNameAttr)
     .replace('<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->', partyOnePhoneAttr)
+    .replace('<!--CONTRACTS_FINANCING_REQUESTS_JSON-->', frScriptTag)
   if (userInfo.roleId === 3) {
     html = markContractsHtmlRole3Restricted(html)
   }
@@ -26551,27 +28593,30 @@ app.get('/admin/contracts/new', async (c) => {
 app.get('/admin/contracts/view', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
-  return c.html(contractsViewPage)
+  const userInfo = await getUserInfo(c)
+  const html =
+    userInfo.roleId === 5 ? markContractsHtmlRole5HideNewContract(contractsViewPage) : contractsViewPage
+  return c.html(html)
 })
 app.get('/admin/contracts/templates', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all', { allowRole4: true })
+  const denied = await ensureContractsModuleAccess(c, 'all', { allowRole4: true, blockRole5Panel: true })
   if (denied) return denied
   return c.html(contractsTemplatesPage)
 })
 app.get('/admin/contracts/notes', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all')
+  const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
   return c.html(contractsNotesPage)
 })
 app.get('/admin/contracts/archive', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all')
+  const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
   return c.html(contractsArchivePage)
 })
 app.get('/admin/contracts/settings', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5: true })
-  if (denied) return denied
-  return c.html(contractsSettingsPage)
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  return c.redirect('/admin/contracts/list')
 })
 
 // HR SYSTEM ROUTES & APIs
@@ -27434,14 +29479,29 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
 
     const payload = await c.req.json().catch(() => ({}))
     const customerName = String(payload?.customer_name ?? '').trim()
-    const customerPhone = String(payload?.customer_phone ?? '').trim()
+    const customerPhoneRaw = String(payload?.customer_phone ?? '').trim()
     const customerMessage = String(payload?.customer_message ?? '').trim()
     const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
     const locationSlugRaw = normalizeLocationSlugInput(payload?.location_slug)
 
-    if (!customerName || !customerPhone || !customerMessage) {
+    if (!customerName || !customerPhoneRaw || !customerMessage) {
       return c.json({ success: false, error: 'الاسم ورقم الجوال والرسالة مطلوبة' }, 400)
     }
+
+    // Collect custom field values (keyed by label)
+    let customFieldsDataJson: string | null = null
+    if (payload?.custom_fields && typeof payload.custom_fields === 'object' && !Array.isArray(payload.custom_fields)) {
+      const entries = Object.entries(payload.custom_fields as Record<string, unknown>)
+        .filter(([k]) => String(k).trim())
+        .map(([k, v]) => [String(k).trim().slice(0, 100), String(v ?? '').trim().slice(0, 1000)])
+      if (entries.length > 0) customFieldsDataJson = JSON.stringify(Object.fromEntries(entries))
+    }
+
+    const phoneNorm = normalizeCustomerPhoneForStorage(customerPhoneRaw)
+    if (!phoneNorm.normalized) {
+      return c.json({ success: false, error: phoneNorm.error || 'صيغة رقم الجوال غير صحيحة' }, 400)
+    }
+    const customerPhone = phoneNorm.normalized
 
     const tenant = await c.env.DB.prepare(`
       SELECT id
@@ -27493,51 +29553,34 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       locationIdForFollowup = locRow.id
     }
 
-    let insertFollowupResult: any
-    try {
-      insertFollowupResult = await c.env.DB.prepare(`
-      INSERT INTO company_contact_followups (
-        tenant_id, customer_name, customer_phone, customer_message, source_slug,
-        affiliate_path_segment, affiliate_label, location_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-        .bind(
-          tenant.id,
-          customerName,
-          customerPhone,
-          customerMessage,
-          slug,
-          affiliatePathSegment,
-          affiliateLabel,
-          locationIdForFollowup
-        )
-        .run()
-    } catch (insErr: unknown) {
-      const msg = String((insErr as Error)?.message ?? insErr ?? '')
-      if (msg.includes('location_id') && (msg.includes('no such column') || msg.includes('no column named'))) {
-        insertFollowupResult = await c.env.DB.prepare(`
-      INSERT INTO company_contact_followups (
-        tenant_id, customer_name, customer_phone, customer_message, source_slug,
-        affiliate_path_segment, affiliate_label
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
-          .bind(
-            tenant.id,
-            customerName,
-            customerPhone,
-            customerMessage,
-            slug,
-            affiliatePathSegment,
-            affiliateLabel
-          )
-          .run()
-      } else {
-        throw insErr
-      }
-    }
+    // Ensure new columns exist (safe no-op if already present)
+    for (const stmt of [
+      `ALTER TABLE company_contact_followups ADD COLUMN location_id INTEGER`,
+      `ALTER TABLE company_contact_followups ADD COLUMN custom_fields_data TEXT`,
+    ]) { try { await c.env.DB.prepare(stmt).run() } catch (_) {} }
 
-    // Automatically create + assign a follow-up task to a role-4 staff member (fair queue).
-    // If there are no active role-4 staff members, we still create the task unassigned.
+    let insertFollowupResult: any
+    insertFollowupResult = await c.env.DB.prepare(`
+      INSERT INTO company_contact_followups (
+        tenant_id, customer_name, customer_phone, customer_message, source_slug,
+        affiliate_path_segment, affiliate_label, location_id, custom_fields_data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+      .bind(
+        tenant.id,
+        customerName,
+        customerPhone,
+        customerMessage,
+        slug,
+        affiliatePathSegment,
+        affiliateLabel,
+        locationIdForFollowup,
+        customFieldsDataJson
+      )
+      .run()
+
+    // Automatically create + assign a follow-up task to a company employee (role 4/14 only; not bank staff).
+    // Fair queue among eligible staff. If none, the task is created unassigned.
     const createdFollowupIdRaw =
       (insertFollowupResult as any)?.meta?.last_row_id ??
       (insertFollowupResult as any)?.meta?.lastRowId ??
@@ -27552,7 +29595,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     try {
       const { results: staffRows } = await c.env.DB.prepare(`
         SELECT id FROM users
-        WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+        WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
         ORDER BY id ASC
       `).bind(tenant.id).all<{ id: number }>()
 
@@ -27887,6 +29930,42 @@ app.get('/api/follow-ups/:id/notes', async (c) => {
   }
 })
 
+app.get('/api/follow-ups/:id/task-notes', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(followupId).first<{ id: number; tenant_id: number }>()
+    if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT tn.id, tn.user_id, tn.user_name, tn.note_text, tn.note_type, tn.created_at,
+             t.task_title
+      FROM company_contact_followup_task_notes tn
+      INNER JOIN company_contact_followup_tasks t ON t.id = tn.task_id
+      WHERE t.followup_id = ? AND tn.tenant_id = ?
+      ORDER BY tn.created_at DESC
+      LIMIT 200
+    `).bind(followupId, followup.tenant_id).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 app.post('/api/follow-ups/:id/notes', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -27955,7 +30034,8 @@ app.get('/api/follow-ups/:id/staff', async (c) => {
 
     const { results } = await c.env.DB.prepare(`
       SELECT id, full_name FROM users
-      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      WHERE tenant_id = ? AND is_active = 1
+        AND role_id IN (4, 5, 14, 15)
       ORDER BY full_name
     `).bind(followup.tenant_id).all()
 
@@ -28050,7 +30130,9 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
         return c.json({ success: false, error: 'معرّف الموظف غير صالح' }, 400)
       }
       const staffUser = await c.env.DB.prepare(`
-        SELECT id FROM users WHERE id = ? AND role_id = 4 AND tenant_id = ? LIMIT 1
+        SELECT id FROM users
+        WHERE id = ? AND tenant_id = ? AND role_id IN (4, 5, 14, 15)
+        LIMIT 1
       `).bind(uid, followup.tenant_id).first()
       if (!staffUser?.id) return c.json({ success: false, error: 'الموظف غير موجود في هذه الشركة' }, 400)
       assignedUserId = uid
@@ -28102,7 +30184,7 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
   }
 })
 
-/** Company admin (role 2): assign all unassigned pending follow-up tasks using fair round-robin among role-4 staff (ordered by user id). Manual assignments are unchanged; cursor advances only here. */
+/** Company admin (role 2): assign unassigned pending follow-up tasks round-robin among company employees (roles 4/14 only; not bank staff). */
 app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -28116,7 +30198,7 @@ app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
 
     const { results: staffRows } = await c.env.DB.prepare(`
       SELECT id FROM users
-      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+      WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
       ORDER BY id ASC
     `).bind(tenantId).all<{ id: number }>()
 
@@ -28192,12 +30274,13 @@ app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
   }
 })
 
-// Follow-up tasks assigned to the logged-in employee (role 4)
+// Follow-up tasks assigned to the logged-in user (company employees or bank staff; role 4/5)
 app.get('/api/my-followup-tasks', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const filter = String(c.req.query('status') ?? '').trim().toLowerCase()
@@ -28207,6 +30290,19 @@ app.get('/api/my-followup-tasks', async (c) => {
         : filter === 'completed'
           ? " AND LOWER(TRIM(t.status)) = 'completed' "
           : ''
+
+    const sortParam = String(c.req.query('sort') ?? 'newest').trim().toLowerCase()
+    const validSorts = ['newest', 'oldest', 'scheduled_asc', 'scheduled_desc', 'priority']
+    const sort = validSorts.includes(sortParam) ? sortParam : 'newest'
+    const completedLastClause = (filter !== 'pending' && filter !== 'completed')
+      ? "CASE WHEN LOWER(TRIM(COALESCE(t.status, ''))) = 'completed' THEN 1 ELSE 0 END,"
+      : ''
+    const innerSort =
+      sort === 'oldest'        ? 't.created_at ASC, t.id ASC' :
+      sort === 'scheduled_asc' ? 't.scheduled_at_gregorian ASC, t.id DESC' :
+      sort === 'scheduled_desc'? 't.scheduled_at_gregorian DESC, t.id DESC' :
+      sort === 'priority'      ? "CASE WHEN t.priority = 'important' THEN 0 ELSE 1 END ASC, t.id DESC" :
+                                 't.created_at DESC, t.id DESC'
 
     const { results } = await c.env.DB.prepare(`
       SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
@@ -28226,10 +30322,7 @@ app.get('/api/my-followup-tasks', async (c) => {
       LEFT JOIN users tu_out ON tu_out.id = pr_out.to_user_id
       WHERE t.assigned_user_id = ? AND t.tenant_id = ?
       ${statusClause}
-      ORDER BY
-        CASE WHEN LOWER(TRIM(COALESCE(t.status, ''))) = 'completed' THEN 1 ELSE 0 END,
-        t.scheduled_at_gregorian ASC,
-        t.id DESC
+      ORDER BY ${completedLastClause} ${innerSort}
       LIMIT 300
     `).bind(userInfo.userId, userInfo.userId, userInfo.tenantId).all()
 
@@ -28243,7 +30336,8 @@ app.patch('/api/my-followup-tasks/:id', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const taskId = parseInt(c.req.param('id'), 10)
@@ -28298,6 +30392,17 @@ app.patch('/api/my-followup-tasks/:id', async (c) => {
         SET employee_note_text = ?, employee_note_updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).bind(noteText, taskId).run()
+
+      const userRow = await c.env.DB.prepare(`
+        SELECT full_name FROM users WHERE id = ? LIMIT 1
+      `).bind(userInfo.userId).first<{ full_name: string }>()
+      const userName = userRow?.full_name || ''
+
+      await c.env.DB.prepare(`
+        INSERT INTO company_contact_followup_task_notes
+          (task_id, tenant_id, user_id, user_name, note_text, note_type)
+        VALUES (?, ?, ?, ?, ?, 'employee_note')
+      `).bind(taskId, userInfo.tenantId, userInfo.userId, userName, noteText).run()
     }
 
     const msg =
@@ -28313,16 +30418,52 @@ app.patch('/api/my-followup-tasks/:id', async (c) => {
   }
 })
 
+app.get('/api/my-followup-tasks/:id/notes', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const taskId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    // Verify user is assigned to this task
+    const task = await c.env.DB.prepare(`
+      SELECT id FROM company_contact_followup_tasks
+      WHERE id = ? AND tenant_id = ? AND assigned_user_id = ? LIMIT 1
+    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number }>()
+    if (!task?.id) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, user_id, user_name, note_text, note_type, created_at
+      FROM company_contact_followup_task_notes
+      WHERE task_id = ? AND tenant_id = ?
+      ORDER BY created_at DESC
+      LIMIT 200
+    `).bind(taskId, userInfo.tenantId).all()
+
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 app.get('/api/my-tenant-followup-staff', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const { results } = await c.env.DB.prepare(`
       SELECT id, full_name FROM users
-      WHERE role_id = 4 AND tenant_id = ? AND is_active = 1 AND id != ?
+      WHERE tenant_id = ? AND is_active = 1 AND id != ?
+        AND role_id IN (4, 5, 14, 15)
       ORDER BY full_name
     `).bind(userInfo.tenantId, userInfo.userId).all()
 
@@ -28336,7 +30477,8 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const taskId = parseInt(c.req.param('taskId'), 10)
@@ -28355,7 +30497,8 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
 
     const target = await c.env.DB.prepare(`
       SELECT id FROM users
-      WHERE id = ? AND role_id = 4 AND tenant_id = ? AND is_active = 1
+      WHERE id = ? AND tenant_id = ? AND is_active = 1
+        AND role_id IN (4, 5, 14, 15)
       LIMIT 1
     `).bind(toUserId, userInfo.tenantId).first<{ id: number }>()
     if (!target?.id) return c.json({ success: false, error: 'الموظف غير موجود في شركتك' }, 400)
@@ -28399,6 +30542,17 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
       VALUES (?, ?, ?, ?, 'pending', ?)
     `).bind(taskId, userInfo.tenantId, userInfo.userId, toUserId, passNote).run()
 
+    const passUserRow = await c.env.DB.prepare(`
+      SELECT full_name FROM users WHERE id = ? LIMIT 1
+    `).bind(userInfo.userId).first<{ full_name: string }>()
+    const passUserName = passUserRow?.full_name || ''
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_contact_followup_task_notes
+        (task_id, tenant_id, user_id, user_name, note_text, note_type)
+      VALUES (?, ?, ?, ?, ?, 'pass_note')
+    `).bind(taskId, userInfo.tenantId, userInfo.userId, passUserName, passNote).run()
+
     return c.json({ success: true, message: 'تم إرسال طلب التمرير' })
   } catch (error: any) {
     const msg = error?.message || 'Server error'
@@ -28413,7 +30567,8 @@ app.get('/api/my-followup-task-passes/incoming', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const { results } = await c.env.DB.prepare(`
@@ -28442,7 +30597,8 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    if (userInfo.roleId !== 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const rid = normalizeRoleId(userInfo.roleId)
+    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const passId = parseInt(c.req.param('id'), 10)
@@ -28584,10 +30740,26 @@ app.get('/admin/my-tasks', async (c) => {
         </div>
 
         <div id="tasksPage">
-          <div class="flex flex-wrap gap-2 mb-4">
+          <div class="flex flex-wrap gap-2 mb-3">
             <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
             <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
             <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 mb-4">
+            <div class="relative flex-1">
+              <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+              <input type="text" id="taskSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full border border-gray-300 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div class="relative">
+              <select id="taskSortSelect" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white pr-8 appearance-none cursor-pointer">
+                <option value="newest">الأحدث أولاً</option>
+                <option value="oldest">الأقدم أولاً</option>
+                <option value="scheduled_asc">الموعد: الأقرب</option>
+                <option value="scheduled_desc">الموعد: الأبعد</option>
+                <option value="priority">الأولوية أولاً</option>
+              </select>
+              <i class="fas fa-sort absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+            </div>
           </div>
           <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
           <div id="cards" class="space-y-3"></div>
@@ -28625,8 +30797,10 @@ app.get('/admin/my-tasks', async (c) => {
 
       <script>
         let activeFilter = 'all';
+        let activeSort = 'newest';
         let activePageTab = 'tasks';
         let tenantStaff = [];
+        let allTasks = [];
         let noteModalState = { open: false, required: false, resolve: null };
 
         function escapeHtml(v) {
@@ -28800,7 +30974,7 @@ app.get('/admin/my-tasks', async (c) => {
         function renderTasks(tasks) {
           const root = document.getElementById('cards');
           if (!Array.isArray(tasks) || !tasks.length) {
-            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد مهام في هذا القسم.</div>';
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد مهام معيّنة لك في هذا القسم.</div>';
             return;
           }
           root.innerHTML = tasks.map(function (task) {
@@ -28816,6 +30990,16 @@ app.get('/admin/my-tasks', async (c) => {
                 ? '<div class="mt-2 text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
                   (task.employee_note_updated_at ? '<div class="mt-1 text-xs text-gray-400">' + escapeHtml(formatDate(task.employee_note_updated_at)) + '</div>' : '')
                 : '<div class="mt-2 text-sm text-gray-500">لا توجد ملاحظة محفوظة.</div>') +
+              '</div>';
+            var historyBlock =
+              '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+              '<button type="button" data-history="' + task.id + '" class="flex items-center justify-between w-full text-xs font-medium text-gray-700">' +
+              '<span><i class="fas fa-history ml-1 text-indigo-500"></i>سجل الملاحظات</span>' +
+              '<i class="fas fa-chevron-down text-gray-400" id="historyChevron-' + task.id + '"></i>' +
+              '</button>' +
+              '<div id="noteHistoryBody-' + task.id + '" class="hidden mt-2">' +
+              '<div class="text-xs text-gray-400">جاري التحميل...</div>' +
+              '</div>' +
               '</div>';
             var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
               '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
@@ -28873,6 +31057,7 @@ app.get('/admin/my-tasks', async (c) => {
                   '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
                 '</div>' +
                 noteBlock +
+                historyBlock +
                 passBlock +
                 actionBtn +
               '</div>'
@@ -28912,6 +31097,25 @@ app.get('/admin/my-tasks', async (c) => {
           });
           root.querySelectorAll('[data-pass-cancel]').forEach(function (btn) {
             btn.addEventListener('click', function () { patchPass(btn.getAttribute('data-pass-cancel'), 'cancel'); });
+          });
+          root.querySelectorAll('[data-history]').forEach(function (btn) {
+            var loaded = false;
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-history');
+              var body = document.getElementById('noteHistoryBody-' + tid);
+              var chevron = document.getElementById('historyChevron-' + tid);
+              if (body.classList.contains('hidden')) {
+                body.classList.remove('hidden');
+                if (chevron) { chevron.classList.remove('fa-chevron-down'); chevron.classList.add('fa-chevron-up'); }
+                if (!loaded) {
+                  loaded = true;
+                  loadNoteHistory(tid, body);
+                }
+              } else {
+                body.classList.add('hidden');
+                if (chevron) { chevron.classList.remove('fa-chevron-up'); chevron.classList.add('fa-chevron-down'); }
+              }
+            });
           });
         }
 
@@ -28979,18 +31183,46 @@ app.get('/admin/my-tasks', async (c) => {
           }
         }
 
+        function applySearchFilter() {
+          var q = String(document.getElementById('taskSearchInput').value || '').trim().toLowerCase();
+          if (!q) {
+            renderTasks(allTasks);
+            return;
+          }
+          var filtered = allTasks.filter(function(t) {
+            return (String(t.task_title || '').toLowerCase().includes(q)) ||
+                   (String(t.customer_name || '').toLowerCase().includes(q)) ||
+                   (String(t.customer_phone || '').toLowerCase().includes(q));
+          });
+          renderTasks(filtered);
+        }
+
         async function loadTasks() {
           setListStatus('جاري التحميل...', 'neutral');
           document.getElementById('cards').innerHTML = '';
           try {
-            var url = '/api/my-followup-tasks';
-            if (activeFilter === 'pending' || activeFilter === 'completed') url += '?status=' + encodeURIComponent(activeFilter);
-            const res = await axios.get(url);
-            const tasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            var params = new URLSearchParams();
+            if (activeFilter === 'pending' || activeFilter === 'completed') params.set('status', activeFilter);
+            params.set('sort', activeSort);
+            const res = await axios.get('/api/my-followup-tasks?' + params.toString());
+            if (res && res.data && res.data.success === false) {
+              setListStatus(String(res.data.error || 'تعذر تحميل المهام'), 'error');
+              document.getElementById('cards').innerHTML = '';
+              return;
+            }
+            allTasks = Array.isArray(res?.data?.data) ? res.data.data : [];
             setListStatus('', 'neutral');
-            renderTasks(tasks);
+            applySearchFilter();
           } catch (e) {
-            setListStatus('تعذر تحميل المهام', 'error');
+            var st = e.response && e.response.status;
+            var errBody = e.response && e.response.data && e.response.data.error;
+            if (st === 403) {
+              setListStatus(String(errBody || 'غير مسموح لك بعرض هذه المهام'), 'error');
+            } else if (st === 401) {
+              setListStatus('يجب تسجيل الدخول', 'error');
+            } else {
+              setListStatus(String(errBody || 'تعذر تحميل المهام'), 'error');
+            }
             document.getElementById('cards').innerHTML = '';
           }
         }
@@ -29056,6 +31288,32 @@ app.get('/admin/my-tasks', async (c) => {
           }
         }
 
+        async function loadNoteHistory(taskId, containerEl) {
+          try {
+            const res = await axios.get('/api/my-followup-tasks/' + taskId + '/notes');
+            const notes = Array.isArray(res?.data?.data) ? res.data.data : [];
+            if (!notes.length) {
+              containerEl.innerHTML = '<div class="text-xs text-gray-400 py-1">لا يوجد سجل ملاحظات بعد.</div>';
+              return;
+            }
+            containerEl.innerHTML = notes.map(function(n) {
+              var typeBadge = n.note_type === 'pass_note'
+                ? '<span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة تمرير</span>'
+                : '<span class="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة مهمة</span>';
+              return '<div class="py-2 border-b border-gray-100 last:border-0">' +
+                '<div class="flex flex-wrap items-center gap-2 mb-1">' +
+                typeBadge +
+                '<span class="text-xs font-semibold text-gray-700">' + escapeHtml(n.user_name || '') + '</span>' +
+                '<span class="text-xs text-gray-400">' + escapeHtml(formatDate(n.created_at)) + '</span>' +
+                '</div>' +
+                '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(n.note_text) + '</div>' +
+                '</div>';
+            }).join('');
+          } catch(e) {
+            containerEl.innerHTML = '<div class="text-xs text-red-500 py-1">تعذر تحميل السجل.</div>';
+          }
+        }
+
         async function patchPass(passId, action) {
           if (!passId) return;
           try {
@@ -29087,6 +31345,19 @@ app.get('/admin/my-tasks', async (c) => {
             loadTasks();
           });
         });
+
+        document.getElementById('taskSortSelect').addEventListener('change', function () {
+          activeSort = this.value;
+          loadTasks();
+        });
+
+        (function () {
+          var searchTimeout;
+          document.getElementById('taskSearchInput').addEventListener('input', function () {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(applySearchFilter, 200);
+          });
+        })();
 
         document.querySelectorAll('.page-tab').forEach(function (btn) {
           btn.addEventListener('click', function () {
@@ -29431,6 +31702,107 @@ app.get('/admin/follow-ups', async (c) => {
           يعيّن المهام غير المعيّنة فقط لموظفي الشركة بالتناوب: بعد أن يحصل موظف على مهمة بالتعيين التلقائي، يُعاد الدور للبقية قبل أن يُعاد إليه. التعيين اليدوي لا يؤثر على هذا التوزيع.
         </p>
 
+        <!-- Contact Page Customization Panel -->
+        <div class="bg-white rounded-2xl shadow border border-amber-100 mb-6" dir="rtl">
+          <button type="button" id="contactCustomToggle"
+            class="w-full flex items-center justify-between px-5 py-4 text-right focus:outline-none">
+            <span class="flex items-center gap-2 font-bold text-gray-800 text-sm">
+              <i class="fas fa-palette text-amber-500"></i>
+              تخصيص صفحة التواصل
+            </span>
+            <i id="contactCustomChevron" class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
+          </button>
+          <div id="contactCustomBody" class="hidden px-5 pb-5 border-t border-gray-100 pt-5 space-y-6">
+
+            <!-- Colors row -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <!-- Background Color -->
+              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
+                  <i class="fas fa-fill-drip text-amber-500 ml-1"></i>
+                  لون الخلفية
+                </label>
+                <div class="flex items-center gap-2 mb-2">
+                  <input type="color" id="cc_bg_picker"
+                    class="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 p-1 bg-white shrink-0" />
+                  <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e"
+                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent font-mono text-xs text-left" />
+                </div>
+                <button type="button" id="cc_bg_clear" class="text-xs text-red-500 hover:text-red-700">مسح</button>
+              </div>
+
+              <!-- Form Card Color -->
+              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
+                  <i class="fas fa-square text-amber-500 ml-1"></i>
+                  لون النافذة
+                </label>
+                <div class="flex items-center gap-2 mb-2">
+                  <input type="color" id="cc_form_picker" value="#ffffff"
+                    class="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 p-1 bg-white shrink-0" />
+                  <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff"
+                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent font-mono text-xs text-left" />
+                </div>
+                <button type="button" id="cc_form_clear" class="text-xs text-red-500 hover:text-red-700">مسح</button>
+              </div>
+
+              <!-- Text Color Toggle -->
+              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
+                  <i class="fas fa-font text-amber-500 ml-1"></i>
+                  لون النص
+                </label>
+                <div class="flex gap-2 mt-1">
+                  <button type="button" id="cc_text_black"
+                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white">
+                    <span class="w-3.5 h-3.5 rounded-full bg-black border border-white/30 inline-block"></span>
+                    أسود
+                  </button>
+                  <button type="button" id="cc_text_white"
+                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700">
+                    <span class="w-3.5 h-3.5 rounded-full bg-white border border-gray-300 inline-block"></span>
+                    أبيض
+                  </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-2 leading-relaxed">يؤثر على النموذج والعناوين داخل النافذة.</p>
+              </div>
+            </div>
+
+            <!-- Custom Fields -->
+            <div>
+              <p class="text-sm font-bold text-gray-700 mb-3">
+                <i class="fas fa-list-ul text-amber-500 ml-1"></i>
+                حقول إضافية في نموذج التواصل
+                <span class="text-xs font-normal text-gray-400 mr-1">(حد أقصى 3)</span>
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                ${[0, 1, 2].map(i => `
+                <div class="flex flex-col gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-400 w-4 shrink-0">${i + 1}</span>
+                    <input type="text" id="cc_field_label_${i}" maxlength="100" placeholder="اسم الحقل"
+                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent text-sm text-right" />
+                  </div>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none pr-6">
+                    <input type="checkbox" id="cc_field_required_${i}" class="rounded border-gray-300 text-amber-500 focus:ring-amber-400" />
+                    مطلوب
+                  </label>
+                </div>`).join('')}
+              </div>
+              <p class="text-xs text-gray-400 mt-2">اتركها فارغة لإخفائها.</p>
+            </div>
+
+            <div class="flex items-center gap-3 pt-1 border-t border-gray-100">
+              <button type="button" id="cc_save_btn"
+                class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow transition-all">
+                <i class="fas fa-save"></i>
+                حفظ الإعدادات
+              </button>
+              <span id="cc_msg" class="text-sm"></span>
+            </div>
+          </div>
+        </div>
+
         <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </div>
 
@@ -29455,15 +31827,29 @@ app.get('/admin/follow-ups', async (c) => {
 
       <!-- Notes Modal -->
       <div id="notesModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
-        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
-          <div class="flex items-center justify-between px-5 py-4 border-b">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height:90vh">
+          <div class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
             <h2 class="text-xl font-bold text-gray-900">ملاحظات المتابعة</h2>
             <button id="closeNotesModalBtn" class="text-gray-500 hover:text-gray-700">
               <i class="fas fa-times text-xl"></i>
             </button>
           </div>
-          <div class="p-5 space-y-4">
-            <div id="notesHistory" class="max-h-72 overflow-y-auto space-y-3 bg-gray-50 border rounded-xl p-3"></div>
+          <div class="p-5 space-y-4 overflow-y-auto flex-1">
+            <!-- Task notes history (collapsible) -->
+            <div class="rounded-xl border border-indigo-100 bg-indigo-50">
+              <button type="button" id="taskNotesHistoryToggle" class="flex items-center justify-between w-full px-4 py-3 text-sm font-semibold text-indigo-800">
+                <span><i class="fas fa-history ml-2 text-indigo-500"></i>سجل ملاحظات الموظفين على المهام</span>
+                <i class="fas fa-chevron-down text-indigo-400" id="taskNotesHistoryChevron"></i>
+              </button>
+              <div id="taskNotesHistoryBody" class="hidden px-4 pb-4">
+                <div id="taskNotesHistoryContent" class="space-y-2 text-sm text-gray-500">جاري التحميل...</div>
+              </div>
+            </div>
+            <!-- Follow-up level notes -->
+            <div>
+              <div class="text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-sticky-note ml-1 text-fuchsia-500"></i>ملاحظات المتابعة</div>
+              <div id="notesHistory" class="max-h-60 overflow-y-auto space-y-3 bg-gray-50 border rounded-xl p-3"></div>
+            </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">إضافة ملاحظة</label>
               <textarea id="noteInput" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-500" placeholder="اكتب ملاحظتك هنا..."></textarea>
@@ -29785,6 +32171,34 @@ app.get('/admin/follow-ups', async (c) => {
           }
         }
 
+        async function loadTaskNotes(followupId) {
+          const content = document.getElementById('taskNotesHistoryContent');
+          try {
+            const res = await axios.get('/api/follow-ups/' + followupId + '/task-notes');
+            const notes = Array.isArray(res?.data?.data) ? res.data.data : [];
+            if (!notes.length) {
+              content.innerHTML = '<div class="text-gray-400 py-1">لا توجد ملاحظات مهام مسجلة بعد.</div>';
+              return;
+            }
+            content.innerHTML = notes.map(function(n) {
+              var typeBadge = n.note_type === 'pass_note'
+                ? '<span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة تمرير</span>'
+                : '<span class="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة مهمة</span>';
+              return '<div class="bg-white border border-gray-100 rounded-lg p-3">' +
+                '<div class="flex flex-wrap items-center gap-2 mb-1">' +
+                typeBadge +
+                '<span class="text-xs font-semibold text-gray-700">' + escapeHtml(n.user_name || '') + '</span>' +
+                '<span class="text-xs text-gray-400">' + escapeHtml(formatDate(n.created_at)) + '</span>' +
+                '</div>' +
+                (n.task_title ? '<div class="text-xs text-gray-400 mb-1"><i class="fas fa-tasks ml-1"></i>' + escapeHtml(n.task_title) + '</div>' : '') +
+                '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(n.note_text) + '</div>' +
+                '</div>';
+            }).join('');
+          } catch(e) {
+            content.innerHTML = '<div class="text-red-500 text-xs py-1">تعذر تحميل السجل.</div>';
+          }
+        }
+
         async function loadTasksInModal(followupId) {
           const history = document.getElementById('tasksHistory');
           history.innerHTML = '<div class="text-sm text-gray-500">جاري تحميل المهام...</div>';
@@ -29901,6 +32315,15 @@ app.get('/admin/follow-ups', async (c) => {
           activeFollowupId = followupId;
           document.getElementById('noteInput').value = '';
           setNoteStatus('', 'neutral');
+          // Reset task notes history panel to collapsed
+          const taskBody = document.getElementById('taskNotesHistoryBody');
+          const taskChevron = document.getElementById('taskNotesHistoryChevron');
+          taskBody.classList.add('hidden');
+          taskChevron.classList.remove('fa-chevron-up');
+          taskChevron.classList.add('fa-chevron-down');
+          document.getElementById('taskNotesHistoryContent').textContent = 'جاري التحميل...';
+          // Pre-load task notes so they're ready when user expands
+          loadTaskNotes(followupId);
           document.getElementById('notesModal').classList.remove('hidden');
           document.getElementById('notesModal').classList.add('flex');
           loadNotes(followupId);
@@ -30068,6 +32491,19 @@ app.get('/admin/follow-ups', async (c) => {
         document.getElementById('notesModal').addEventListener('click', (event) => {
           if (event.target.id === 'notesModal') closeNotesModal();
         });
+        document.getElementById('taskNotesHistoryToggle').addEventListener('click', function() {
+          var body = document.getElementById('taskNotesHistoryBody');
+          var chevron = document.getElementById('taskNotesHistoryChevron');
+          if (body.classList.contains('hidden')) {
+            body.classList.remove('hidden');
+            chevron.classList.remove('fa-chevron-down');
+            chevron.classList.add('fa-chevron-up');
+          } else {
+            body.classList.add('hidden');
+            chevron.classList.remove('fa-chevron-up');
+            chevron.classList.add('fa-chevron-down');
+          }
+        });
         document.getElementById('saveNoteBtn').addEventListener('click', async () => {
           if (!activeFollowupId) return;
           const noteInput = document.getElementById('noteInput');
@@ -30219,6 +32655,119 @@ app.get('/admin/follow-ups', async (c) => {
           }
         });
 
+        // ── Contact page customization panel ──────────────────────────────────
+        (function () {
+          var toggle = document.getElementById('contactCustomToggle');
+          var body = document.getElementById('contactCustomBody');
+          var chevron = document.getElementById('contactCustomChevron');
+          var bgPicker = document.getElementById('cc_bg_picker');
+          var bgText = document.getElementById('cc_bg_text');
+          var bgClear = document.getElementById('cc_bg_clear');
+          var formPicker = document.getElementById('cc_form_picker');
+          var formText = document.getElementById('cc_form_text');
+          var formClear = document.getElementById('cc_form_clear');
+          var textBlackBtn = document.getElementById('cc_text_black');
+          var textWhiteBtn = document.getElementById('cc_text_white');
+          var saveBtn = document.getElementById('cc_save_btn');
+          var msgEl = document.getElementById('cc_msg');
+          var selectedTextColor = 'black';
+
+          toggle.addEventListener('click', function () {
+            var hidden = body.classList.toggle('hidden');
+            chevron.style.transform = hidden ? '' : 'rotate(180deg)';
+          });
+
+          bgPicker.addEventListener('input', function () { bgText.value = this.value; });
+          bgText.addEventListener('input', function () {
+            var v = this.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(v)) bgPicker.value = v;
+          });
+          bgClear.addEventListener('click', function () { bgText.value = ''; bgPicker.value = '#0f766e'; });
+
+          formPicker.addEventListener('input', function () { formText.value = this.value; });
+          formText.addEventListener('input', function () {
+            var v = this.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(v)) formPicker.value = v;
+          });
+          formClear.addEventListener('click', function () { formText.value = ''; formPicker.value = '#ffffff'; });
+
+          function setTextColorToggle(val) {
+            selectedTextColor = val === 'white' ? 'white' : 'black';
+            if (selectedTextColor === 'black') {
+              textBlackBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white';
+              textWhiteBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700';
+            } else {
+              textBlackBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700';
+              textWhiteBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white';
+            }
+          }
+          textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); });
+          textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); });
+
+          async function loadContactCustom() {
+            try {
+              var res = await axios.get('/api/my-tenant');
+              if (!res.data || res.data.success !== true || !res.data.data) return;
+              var d = res.data.data;
+              var bg = d.contact_bg_color || '';
+              bgText.value = bg;
+              if (/^#[0-9a-fA-F]{6}$/.test(bg)) bgPicker.value = bg;
+              var fc = d.contact_form_color || '';
+              formText.value = fc;
+              if (/^#[0-9a-fA-F]{6}$/.test(fc)) formPicker.value = fc;
+              setTextColorToggle(d.contact_text_color || 'black');
+              var fields = [];
+              if (d.contact_custom_fields) { try { fields = JSON.parse(d.contact_custom_fields); } catch (_) {} }
+              for (var i = 0; i < 3; i++) {
+                var f = fields[i] || {};
+                var lbl = document.getElementById('cc_field_label_' + i);
+                var req = document.getElementById('cc_field_required_' + i);
+                if (lbl) lbl.value = f.label || '';
+                if (req) req.checked = !!f.required;
+              }
+            } catch (_) {}
+          }
+
+          saveBtn.addEventListener('click', async function () {
+            saveBtn.disabled = true;
+            msgEl.textContent = '';
+            msgEl.className = 'text-sm';
+            var bg = bgText.value.trim();
+            var fc = formText.value.trim();
+            var customFields = [];
+            for (var i = 0; i < 3; i++) {
+              var lbl = document.getElementById('cc_field_label_' + i);
+              var req = document.getElementById('cc_field_required_' + i);
+              if (lbl && lbl.value.trim()) {
+                customFields.push({ label: lbl.value.trim(), required: !!(req && req.checked) });
+              }
+            }
+            try {
+              var res = await axios.patch('/api/my-tenant', {
+                contact_bg_color: bg === '' ? null : bg,
+                contact_form_color: fc === '' ? null : fc,
+                contact_text_color: selectedTextColor,
+                contact_custom_fields: customFields
+              });
+              if (res.data && res.data.success) {
+                msgEl.textContent = 'تم الحفظ بنجاح.';
+                msgEl.className = 'text-sm text-green-700';
+              } else {
+                msgEl.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الحفظ.';
+                msgEl.className = 'text-sm text-red-600';
+              }
+            } catch (err) {
+              var em = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : 'فشل الحفظ.';
+              msgEl.textContent = em;
+              msgEl.className = 'text-sm text-red-600';
+            } finally {
+              saveBtn.disabled = false;
+            }
+          });
+
+          loadContactCustom();
+        })();
+
         loadFollowUps();
       </script>
     </body>
@@ -30245,7 +32794,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -30306,7 +32855,7 @@ app.get('/:slug/:secondSegment', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -30366,7 +32915,7 @@ app.get('/:slug', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url
+    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1

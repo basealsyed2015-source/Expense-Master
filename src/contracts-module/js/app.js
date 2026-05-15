@@ -355,7 +355,6 @@ function applyRole3ContractsRestrictions() {
         ? new Set([
             '/admin/contracts',
             '/admin/contracts/list',
-            '/admin/contracts/new',
             '/admin/contracts/templates',
             '/admin/contracts/notes',
             '/admin/contracts/archive'
@@ -367,6 +366,16 @@ function applyRole3ContractsRestrictions() {
       link.style.display = 'none';
     }
   });
+
+  if (roleId === 5) {
+    document
+      .querySelectorAll(
+        '.topbar a.btn.btn-primary[href="/admin/contracts/new"], .topbar-trailing a[href="/admin/contracts/new"]'
+      )
+      .forEach((el) => {
+        el.style.display = 'none';
+      });
+  }
 
   const hideRestrictedListActions = () => {
     if (roleId === 4) {

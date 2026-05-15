@@ -26,6 +26,13 @@ function normalizeVariablesList(v: unknown): string | null {
   return JSON.stringify(v)
 }
 
+/** Empty or whitespace-only national / debtor id → null for D1. */
+function optionalNationalId(value: unknown): string | null {
+  if (value == null) return null
+  const s = String(value).trim()
+  return s ? s : null
+}
+
 function isSuperAdmin(info: UserInfo): boolean {
   return info.roleId === 1 && (info.tokenRoleId === null || info.tokenRoleId === 1)
 }
@@ -214,16 +221,48 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       return c.json({ data: [], debug: 'no_tenant' })
     }
 
-    // Align with GET /api/customers: employees (role 4) only see customers assigned to them
+    // Role 4: only customers assigned to them, with an active (non-completed) funding request,
+    // and no existing active contract.
     if (info.roleId === 4 && info.userId) {
-      sql += ` AND assigned_to = ?`
+      sql += ` AND EXISTS (
+        SELECT 1 FROM customer_assignments ca
+        WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+      ) AND EXISTS (
+        SELECT 1 FROM financing_requests fr
+        WHERE fr.customer_id = customers.id AND fr.tenant_id = ?
+          AND COALESCE(fr.is_completed, 0) = 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM contracts co
+        WHERE co.customer_id = customers.id AND co.tenant_id = ?
+          AND COALESCE(co.is_archived, 0) = 0
+          AND co.status NOT IN ('مكتمل', 'مؤرشف')
+      )`
+      binds.push(info.userId, effectiveTenantId!, effectiveTenantId!)
+    }
+
+    // Role 5 bank agent: customers they created (fallback handled below if column missing).
+    if (info.roleId === 5 && info.userId) {
+      sql += ` AND created_by = ?`
       binds.push(info.userId)
     }
 
     sql += ` ORDER BY full_name ASC LIMIT 500`
 
-    const { results } = await c.env.DB.prepare(sql).bind(...binds).all()
-    return c.json({ data: results || [] })
+    try {
+      const { results } = await c.env.DB.prepare(sql).bind(...binds).all()
+      return c.json({ data: results || [] })
+    } catch (e: any) {
+      const msg = String(e?.message || e || '')
+      const isMissingCreatedBy = /no such column:\s*created_by/i.test(msg)
+      if (info.roleId === 5 && isMissingCreatedBy) {
+        // Older DB: keep previous behavior rather than erroring.
+        const fallbackSql = sql.replace(/\s+AND\s+created_by\s*=\s*\?\s*/i, ' ')
+        const fallbackBinds = binds.slice(0, -1)
+        const { results } = await c.env.DB.prepare(fallbackSql).bind(...fallbackBinds).all()
+        return c.json({ data: results || [] })
+      }
+      throw e
+    }
   })
 
   // REST shape matches reference: GET /api/contract-tables/:table?limit=...
@@ -236,8 +275,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (!table) return c.json({ error: 'Unknown table' }, 400)
     const limit = Math.min(parseInt(c.req.query('limit') || '200', 10) || 200, 500)
     const { sql: tsql, binds: tbinds } = tenantFilterClause(info, c, table)
-    const rowScopeSql = table === 'contracts' && info.roleId === 4 && info.userId ? ' AND created_by = ? ' : ''
-    const rowScopeBinds = table === 'contracts' && info.roleId === 4 && info.userId ? [info.userId] : []
+    let rowScopeSql = ''
+    let rowScopeBinds: (number | string)[] = []
+    if (table === 'contracts' && info.roleId === 4 && info.userId) {
+      rowScopeSql = ' AND created_by = ? '
+      rowScopeBinds = [info.userId]
+    } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
+      rowScopeSql = ' AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) '
+      rowScopeBinds = [info.userId, info.tenantId]
+    }
     const { results } = await c.env.DB.prepare(
       `SELECT * FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
     )
@@ -256,10 +302,17 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     const id = parseInt(c.req.param('id'), 10)
     if (!id) return c.json({ error: 'Invalid id' }, 400)
     const { sql: tsql, binds: tbinds } = tenantFilterClause(info, c, table)
-    const rowScopeSql = table === 'contracts' && info.roleId === 4 && info.userId ? ' AND created_by = ? ' : ''
-    const rowScopeBinds = table === 'contracts' && info.roleId === 4 && info.userId ? [info.userId] : []
-    const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql} ${rowScopeSql}`)
-      .bind(id, ...tbinds, ...rowScopeBinds)
+    let rowScopeSqlId = ''
+    let rowScopeBindsId: (number | string)[] = []
+    if (table === 'contracts' && info.roleId === 4 && info.userId) {
+      rowScopeSqlId = ' AND created_by = ? '
+      rowScopeBindsId = [info.userId]
+    } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
+      rowScopeSqlId = ' AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) '
+      rowScopeBindsId = [info.userId, info.tenantId]
+    }
+    const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql} ${rowScopeSqlId}`)
+      .bind(id, ...tbinds, ...rowScopeBindsId)
       .first()
     if (!row) return c.json({ error: 'Not found' }, 404)
     return c.json(row)
@@ -304,8 +357,40 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     }
 
     if (table === 'contracts') {
+      if (info.roleId === 5) return c.json({ error: 'Forbidden' }, 403)
+
       const logoNorm = normalizePartyOneLogo(body)
       if (!logoNorm.ok) return logoNorm.response
+
+      // Role 4: validate the customer is eligible (assigned, active FR, no active contract),
+      // then derive financing_request_id from the most recent active financing request.
+      if (info.roleId === 4) {
+        const customerId = body.customer_id != null ? Number(body.customer_id) : null
+        if (customerId && info.userId) {
+          const eligible = await c.env.DB.prepare(
+            `SELECT 1 FROM customers
+             WHERE id = ? AND tenant_id = ?
+               AND EXISTS (SELECT 1 FROM customer_assignments ca WHERE ca.customer_id = customers.id AND ca.employee_id = ?)
+               AND EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0)
+               AND NOT EXISTS (SELECT 1 FROM contracts co WHERE co.customer_id = customers.id AND co.tenant_id = ? AND COALESCE(co.is_archived, 0) = 0 AND co.status NOT IN ('مكتمل', 'مؤرشف'))`
+          )
+            .bind(customerId, tenantId, info.userId, tenantId, tenantId)
+            .first()
+          if (!eligible) return c.json({ error: 'Forbidden' }, 403)
+
+          const frRow = await c.env.DB.prepare(
+            `SELECT id FROM financing_requests
+             WHERE customer_id = ? AND tenant_id = ? AND COALESCE(is_completed, 0) = 0
+             ORDER BY id DESC LIMIT 1`
+          )
+            .bind(customerId, tenantId)
+            .first<{ id: number }>()
+          if (frRow) {
+            body.financing_request_id = frRow.id
+          }
+        }
+      }
+
       const initialStatus = info.roleId === 4 ? STATUS_AWAITING_BANK_AGENT_APPROVAL : body.status ?? 'نشط'
       let r
       try {
@@ -315,8 +400,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
-          property_description, property_location, bank_name, notes, is_archived
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          property_description, property_location, bank_name, notes, is_archived, financing_request_id
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -331,7 +416,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             logoNorm.value,
             body.customer_id != null ? Number(body.customer_id) : null,
             body.party_two_name ?? null,
-            body.party_two_id ?? null,
+            optionalNationalId(body.party_two_id),
             body.party_two_phone ?? null,
             body.party_two_address ?? null,
             body.finance_type ?? null,
@@ -346,7 +431,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.property_location ?? null,
             body.bank_name ?? null,
             body.notes ?? null,
-            body.is_archived ? 1 : 0
+            body.is_archived ? 1 : 0,
+            body.financing_request_id != null ? Number(body.financing_request_id) : null
           )
           .run()
       } catch (e) {
@@ -388,7 +474,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           note_number,
           contract_id,
           body.debtor_name ?? null,
-          body.debtor_id ?? null,
+          optionalNationalId(body.debtor_id),
           body.amount != null ? Number(body.amount) : null,
           body.due_date ?? null,
           body.issue_date ?? null,
@@ -477,6 +563,20 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           if (info.roleId !== 5 || requestedStatus !== STATUS_AWAITING_ADMIN_APPROVAL) {
             return c.json({ error: 'Forbidden' }, 403)
           }
+          const contractCustomerId = (existing as any).customer_id
+          if (!contractCustomerId) {
+            return c.json({ error: 'Forbidden', detail: 'العقد غير مرتبط بعميل' }, 403)
+          }
+          const frRow = await c.env.DB.prepare(
+            `SELECT id FROM financing_requests
+             WHERE customer_id = ? AND assigned_bank_agent_id = ? AND tenant_id = ?
+             LIMIT 1`
+          )
+            .bind(contractCustomerId, info.userId, info.tenantId)
+            .first()
+          if (!frRow) {
+            return c.json({ error: 'Forbidden', detail: 'غير مصرح لك باعتماد هذا العقد' }, 403)
+          }
           approvalFields.push('bank_agent_approved_by = ?', 'bank_agent_approved_at = CURRENT_TIMESTAMP')
           approvalVals.push(info.userId)
         } else if (currentStatus === STATUS_AWAITING_ADMIN_APPROVAL) {
@@ -501,6 +601,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             vals.push(body[key] != null ? Number(body[key]) : null)
           else if (key === 'template_id') vals.push(body[key] != null ? Number(body[key]) : null)
           else if (key === 'is_archived') vals.push(body[key] ? 1 : 0)
+          else if (key === 'party_two_id') vals.push(optionalNationalId(body[key]))
           else vals.push(body[key] ?? null)
         }
       }
@@ -530,6 +631,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       maybe('bank_name', 'bank_name')
       maybe('notes', 'notes')
       maybe('is_archived', 'is_archived')
+      maybe('financing_request_id', 'financing_request_id')
       fields.push(...approvalFields)
       vals.push(...approvalVals)
       if (fields.length === 0) {
@@ -564,6 +666,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           fields.push(`${col} = ?`)
           if (key === 'amount') vals.push(body[key] != null ? Number(body[key]) : null)
           else if (key === 'contract_id') vals.push(body[key] != null ? Number(body[key]) : null)
+          else if (key === 'debtor_id') vals.push(optionalNationalId(body[key]))
           else vals.push(body[key] ?? null)
         }
       }
