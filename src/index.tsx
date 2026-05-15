@@ -113,6 +113,72 @@ function isMissingCustomerLocationIdColumnError(e: unknown): boolean {
   return m.includes('location_id') && (m.includes('no such column') || m.includes('no column named'))
 }
 
+const CUSTOMER_PRODUCT_TYPE_OPTIONS = [
+  'شراء عقار',
+  'رهن حر',
+  'فك رهن',
+  'شراء مديونية',
+  'بناء ذاتي',
+  'أرض وقرض',
+  'قرض شخصي',
+  'تمويل مؤسسات ( نقاط بيع)',
+  'إعادة تمويل',
+] as const
+
+function normalizeCustomerProductType(raw: unknown): string | null {
+  const v = String(raw ?? '').trim()
+  if (!v) return null
+  return (CUSTOMER_PRODUCT_TYPE_OPTIONS as readonly string[]).includes(v) ? v : null
+}
+
+function renderCustomerProductTypeFieldHtml(
+  selected: string | null | undefined,
+  inputClass: string
+): string {
+  const sel = String(selected ?? '').trim()
+  const options = [
+    '<option value="">-- اختر نوع المنتج --</option>',
+    ...CUSTOMER_PRODUCT_TYPE_OPTIONS.map((label) => {
+      const esc = escapeHtml(label)
+      const selectedAttr = label === sel ? ' selected' : ''
+      return `<option value="${esc}"${selectedAttr}>${esc}</option>`
+    }),
+  ].join('')
+  return `<select name="product_type" class="${escapeHtmlAttr(inputClass)}">${options}</select>`
+}
+
+const CUSTOMER_PROPERTY_TYPE_OPTIONS = [
+  'ارض',
+  'فيلا',
+  'شقه',
+  'عمارة تجاريه',
+  'أرض زراعيه',
+  'استراحة',
+  'دور',
+] as const
+
+function normalizeCustomerPropertyType(raw: unknown): string | null {
+  const v = String(raw ?? '').trim()
+  if (!v) return null
+  return (CUSTOMER_PROPERTY_TYPE_OPTIONS as readonly string[]).includes(v) ? v : null
+}
+
+function renderCustomerPropertyTypeFieldHtml(
+  selected: string | null | undefined,
+  inputClass: string
+): string {
+  const sel = String(selected ?? '').trim()
+  const options = [
+    '<option value="">-- اختر نوع المنتج --</option>',
+    ...CUSTOMER_PROPERTY_TYPE_OPTIONS.map((label) => {
+      const esc = escapeHtml(label)
+      const selectedAttr = label === sel ? ' selected' : ''
+      return `<option value="${esc}"${selectedAttr}>${esc}</option>`
+    }),
+  ].join('')
+  return `<select name="property_type" class="${escapeHtmlAttr(inputClass)}">${options}</select>`
+}
+
 function isMissingFinancingRequestLocationIdColumnError(e: unknown): boolean {
   const m = String((e as Error)?.message ?? e ?? '')
   return m.includes('location_id') && (m.includes('no such column') || m.includes('no column named'))
@@ -1970,6 +2036,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
+    '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
     '/admin/banks',
@@ -1995,6 +2062,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
+    '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
     '/admin/reports',
@@ -2015,6 +2083,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
+    '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
     '/admin/reports',
@@ -2031,6 +2100,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
+    '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
     '/admin/contracts',
@@ -2049,6 +2119,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
+    '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
     '/admin/contact-affiliates',
@@ -2315,6 +2386,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/customers?ratingFilter=2&amp;requestsFilter=all" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
         <a href="/admin/customers?ratingFilter=1&amp;requestsFilter=all" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
         <a href="/admin/customers/completed" data-completed-customers-link><i class="fas fa-check-double"></i>المكتملة</a>
+        <a href="/admin/customers/archived" data-archived-customers-link><i class="fas fa-archive"></i>الأرشيف</a>
       </div>
     </div>
     <a href="/admin/requests" data-requests-main-link><i class="fas fa-file-invoice-dollar"></i>طلبات التمويل</a>
@@ -2609,6 +2681,23 @@ ${isAdminPanelRail ? `
               existingCustomersBadge.textContent = String(completedCustomersN);
             } else if (existingCustomersBadge) {
               existingCustomersBadge.remove();
+            }
+          }
+
+          var archivedCustomersLink = document.querySelector('#global-persistent-sidebar [data-archived-customers-link]');
+          if (archivedCustomersLink) {
+            var archivedCustomersN = typeof customers.archived === 'number' ? customers.archived : 0;
+            var existingArchivedBadge = archivedCustomersLink.querySelector('.gps-count-badge');
+            if (archivedCustomersN > 0) {
+              if (!existingArchivedBadge) {
+                var newArchivedBadge = document.createElement('span');
+                newArchivedBadge.className = 'gps-count-badge';
+                archivedCustomersLink.appendChild(newArchivedBadge);
+                existingArchivedBadge = newArchivedBadge;
+              }
+              existingArchivedBadge.textContent = String(archivedCustomersN);
+            } else if (existingArchivedBadge) {
+              existingArchivedBadge.remove();
             }
           }
         })
@@ -6113,6 +6202,8 @@ app.post('/api/customers', async (c) => {
     const military_rank = formData.get('military_rank') as string || null
     const work_start_date = formData.get('work_start_date') as string || null
     const city = formData.get('city') as string || null
+    const product_type = normalizeCustomerProductType(formData.get('product_type'))
+    const property_type = normalizeCustomerPropertyType(formData.get('property_type'))
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
@@ -6552,6 +6643,18 @@ app.post('/api/customers', async (c) => {
         /* column may not exist in older DBs */
       }
     }
+    if (createdCustomerId) {
+      try {
+        await c.env.DB.prepare(`UPDATE customers SET product_type = ? WHERE id = ?`).bind(product_type, createdCustomerId).run()
+      } catch (_) {
+        /* column may not exist until migration 0071 is applied */
+      }
+      try {
+        await c.env.DB.prepare(`UPDATE customers SET property_type = ? WHERE id = ?`).bind(property_type, createdCustomerId).run()
+      } catch (_) {
+        /* column may not exist until migration 0072 is applied */
+      }
+    }
     const newId = result.meta?.last_row_id
     const obligationsJson = formData.get('obligations_json') as string | null
     if (newId && obligationsJson) {
@@ -6722,6 +6825,8 @@ app.post('/api/customers/:id', async (c) => {
     const military_rank = formData.get('military_rank') as string || null
     const work_start_date = formData.get('work_start_date') as string || null
     const city = formData.get('city') as string || null
+    const product_type = normalizeCustomerProductType(formData.get('product_type'))
+    const property_type = normalizeCustomerPropertyType(formData.get('property_type'))
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
@@ -6872,6 +6977,16 @@ app.post('/api/customers/:id', async (c) => {
         if (!isMissingCustomerLocationIdColumnError(e)) throw e
       }
       await syncFinancingRequestsLocationForCustomer(c.env.DB, id, enrollmentLocationUpdate)
+    }
+    try {
+      await c.env.DB.prepare(`UPDATE customers SET product_type = ? WHERE id = ?`).bind(product_type, id).run()
+    } catch (_) {
+      /* column may not exist until migration 0071 is applied */
+    }
+    try {
+      await c.env.DB.prepare(`UPDATE customers SET property_type = ? WHERE id = ?`).bind(property_type, id).run()
+    } catch (_) {
+      /* column may not exist until migration 0072 is applied */
     }
     const obligationsJson = formData.get('obligations_json') as string | null
     if (obligationsJson) {
@@ -7253,6 +7368,53 @@ app.get('/api/sidebar-filter-counts', async (c) => {
     `).bind(...customerParams).first()) as { count?: number } | null
     const completedCustomersCount = Number(completedCustomersRow?.count || 0)
 
+    const archivedCustomerWhereParts: string[] = ['COALESCE(c.is_archived, 0) = 1']
+    const archivedCustomerParams: any[] = []
+    if (userInfo.roleId === 1) {
+      // Super admin sees all archived
+    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+      if (userInfo.tenantId) {
+        archivedCustomerWhereParts.push('c.tenant_id = ?')
+        archivedCustomerParams.push(userInfo.tenantId)
+      } else {
+        archivedCustomerWhereParts.push('1 = 0')
+      }
+    } else if (userInfo.roleId === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        archivedCustomerWhereParts.push('c.tenant_id = ?')
+        archivedCustomerWhereParts.push(`EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = c.id AND ca.employee_id = ?
+        )`)
+        archivedCustomerParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        archivedCustomerWhereParts.push('1 = 0')
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        archivedCustomerWhereParts.push('c.tenant_id = ?')
+        archivedCustomerWhereParts.push(`(
+          c.created_by = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`)
+        archivedCustomerParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+      } else {
+        archivedCustomerWhereParts.push('1 = 0')
+      }
+    } else {
+      archivedCustomerWhereParts.push('1 = 0')
+    }
+    const archivedCustomerWhereSql = `WHERE ${archivedCustomerWhereParts.join(' AND ')}`
+    const archivedCustomersRow = (await c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM customers c
+      ${archivedCustomerWhereSql}
+    `).bind(...archivedCustomerParams).first()) as { count?: number } | null
+    const archivedCustomersCount = Number(archivedCustomersRow?.count || 0)
+
     const requestWhereParts: string[] = []
     const requestParams: any[] = []
 
@@ -7355,6 +7517,7 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         '4': Number(customerCountsRow?.rating_4 || 0),
         '5': Number(customerCountsRow?.rating_5 || 0),
         completed: completedCustomersCount,
+        archived: archivedCustomersCount,
       },
       requests: {
         all: allRequests,
@@ -13210,6 +13373,17 @@ app.get('/admin/customers/archived', async (c) => {
         )`
         queryParams.push(userInfo.tenantId, userInfo.userId)
       } else query += ' AND 1 = 0'
+    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND tenant_id = ? AND (
+          created_by = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+      } else query += ' AND 1 = 0'
     } else query += ' AND 1 = 0'
     query += ' ORDER BY archived_at DESC'
 
@@ -14071,6 +14245,26 @@ app.get('/admin/customers/add', async (c) => {
                 <input type="number" name="monthly_salary" step="0.01" required
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="10000.00">
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-box text-violet-600 ml-1"></i>
+                  نوع منتج التمويل
+                </label>
+                ${renderCustomerProductTypeFieldHtml(
+                  null,
+                  'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                )}
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-home text-sky-600 ml-1"></i>
+                  نوع المنتج
+                </label>
+                ${renderCustomerPropertyTypeFieldHtml(
+                  null,
+                  'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                )}
               </div>
             </div>
 
@@ -22440,6 +22634,20 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <label class="block text-sm font-bold text-gray-700 mb-2">الراتب الشهري *</label>
                   <input type="number" name="monthly_salary" step="0.01" value="${(customer as any).monthly_salary ?? ''}" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">نوع منتج التمويل</label>
+                  ${renderCustomerProductTypeFieldHtml(
+                    (customer as any).product_type,
+                    'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                  )}
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">نوع المنتج</label>
+                  ${renderCustomerPropertyTypeFieldHtml(
+                    (customer as any).property_type,
+                    'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                  )}
+                </div>
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -23163,6 +23371,26 @@ app.get('/admin/customers/:id/report', async (c) => {
                 <div>
                   <p class="text-sm text-gray-500">نوع التمويل</p>
                   <p class="text-xl font-bold text-purple-600">${cust.financing_type_name || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-violet-100 p-3 rounded-lg">
+                  <i class="fas fa-box text-violet-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">نوع منتج التمويل</p>
+                  <p class="text-xl font-bold text-violet-600">${cust.product_type || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-sky-100 p-3 rounded-lg">
+                  <i class="fas fa-home text-sky-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">نوع المنتج</p>
+                  <p class="text-xl font-bold text-sky-600">${cust.property_type || 'غير محدد'}</p>
                 </div>
               </div>
             </div>
