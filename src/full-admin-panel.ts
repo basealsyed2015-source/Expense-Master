@@ -297,7 +297,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
                     <a href="/admin/my-tasks" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-tasks text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">مهام المتابعة</div>
+                        <div class="text-sm font-bold">الإعلانات</div>
                     </a>
                     
                     <!-- زر التقارير -->
@@ -1448,6 +1448,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                 <i class="fas fa-plus ml-1"></i> إضافة صف
                             </button>
                         </div>
+                    </div>
+                    <div id="addCustomerBankAgentSection" style="display: none;" class="col-span-full">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-user-tie text-indigo-600 ml-1"></i>
+                            موظف التمويل (اختياري)
+                        </label>
+                        <select id="addCustomerBankAgentSelect" name="assigned_bank_agent_id" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">— بدون تعيين —</option>
+                        </select>
                     </div>
                     <div class="flex gap-3 mt-6">
                         <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-bold">
@@ -2982,6 +2991,22 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         bankAgents.map((u) => \`<option value="\${u.id}">\${u.full_name || u.username}</option>\`).join('');
                     el.value = current;
                 });
+
+                // Add customer modal: show bank agent selector for role 2/1
+                const addCustAgentSelect = document.getElementById('addCustomerBankAgentSelect');
+                const addCustAgentSection = document.getElementById('addCustomerBankAgentSection');
+                if (addCustAgentSelect && addCustAgentSection) {
+                    const normalizeRId = (v) => { const n = parseInt(v, 10); const m = {11:1,12:2,13:3,14:4,15:5}; return m[n] || n || null; };
+                    const currentRoleId = normalizeRId(typeof window.USER_ROLE_ID !== 'undefined' ? window.USER_ROLE_ID : null)
+                        || normalizeRId((JSON.parse(localStorage.getItem('userData') || 'null') || {}).role_id);
+                    if (currentRoleId === 2 || currentRoleId === 1) {
+                        if (bankAgents.length > 0) {
+                            addCustAgentSelect.innerHTML = '<option value="">— بدون تعيين —</option>' +
+                                bankAgents.map((u) => \`<option value="\${u.id}">\${u.full_name || u.username}</option>\`).join('');
+                            addCustAgentSection.style.display = '';
+                        }
+                    }
+                }
             } catch (e) {
                 console.error('Error loading role dropdowns:', e);
             }
@@ -4616,13 +4641,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         obligationsJsonEl.value = JSON.stringify(arr);
                     }
                     const formData = new FormData(e.target);
-                    const data = Object.fromEntries(formData.entries());
                     try {
-                        const response = await axios.post('/api/customers', data);
-                        if (response.data.success) {
-                            alert('✅ ' + response.data.message);
+                        const response = await axios.post('/api/customers', formData, {
+                            headers: { 'X-Customer-Form': '1' }
+                        });
+                        if (response.data.ok) {
                             closeModal('addCustomerModal');
                             loadCustomers();
+                        } else {
+                            alert('❌ ' + (response.data.message || 'حدث خطأ أثناء الإضافة'));
                         }
                     } catch (error) {
                         console.error('Error:', error);

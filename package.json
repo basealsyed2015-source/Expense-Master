@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:contracts-pages": "node scripts/build-contracts-ts-pages.mjs",
     "preview": "wrangler pages dev dist",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name tamweel-calc-prod",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name tamweel-calc-prod --branch=\"ZAT  _developer\" --commit-dirty=true",
     "test": "echo 'Tests coming soon...'"
   },
   "dependencies": {

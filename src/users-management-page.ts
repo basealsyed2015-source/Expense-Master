@@ -188,8 +188,8 @@ export const usersManagementPage = () => `
           </div>
           
           <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
-            <input type="email" name="email" required
+            <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني *</label>
+            <input type="email" name="email" required autocomplete="email"
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
           </div>
         </div>

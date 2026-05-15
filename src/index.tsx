@@ -169,7 +169,7 @@ function renderCustomerPropertyTypeFieldHtml(
 ): string {
   const sel = String(selected ?? '').trim()
   const options = [
-    '<option value="">-- اختر نوع المنتج --</option>',
+    '<option value="">-- اختر نوع العقار --</option>',
     ...CUSTOMER_PROPERTY_TYPE_OPTIONS.map((label) => {
       const esc = escapeHtml(label)
       const selectedAttr = label === sel ? ' selected' : ''
@@ -401,6 +401,27 @@ function isValidAffiliatePathSegment(seg: string): boolean {
   if (!/^[a-z0-9_-]+$/.test(seg)) return false
   if (RESERVED_ROOT_SLUGS.has(seg)) return false
   return true
+}
+
+/** Label for contact follow-ups submitted via the tenant root contact URL (no affiliate path). */
+const CONTACT_COMPANY_LINK_SOURCE_LABEL = 'رابط الشركة'
+
+function resolveContactFollowupSourceLabel(
+  affiliateLabel: unknown,
+  affiliatePathSegment: unknown
+): string {
+  const label = String(affiliateLabel ?? '').trim()
+  if (label) return label
+  const path = String(affiliatePathSegment ?? '').trim()
+  if (!path) return CONTACT_COMPANY_LINK_SOURCE_LABEL
+  return ''
+}
+
+function normalizeContactFollowupRowForApi<T extends Record<string, unknown>>(row: T): T {
+  if (!row || typeof row !== 'object') return row
+  const resolved = resolveContactFollowupSourceLabel(row.affiliate_label, row.affiliate_path_segment)
+  if (!resolved) return row
+  return { ...row, affiliate_label: resolved }
 }
 
 const MAX_TENANT_LOGO_URL_LEN = 2000
@@ -1595,26 +1616,42 @@ async function canUserAccessCustomer(
     return Boolean(assignment?.ok)
   }
   if (rid === 5) {
-    // Must match loadCustomersForAdminForms / customer list APIs: agents see customers they
-    // created OR customers tied via assigned_bank_agent_id on any financing request.
+    // Agents see customers they created, directly assigned to, OR tied via a financing request.
     try {
       const row = await db
         .prepare(
           `SELECT 1 AS ok FROM customers c
            WHERE c.id = ? AND c.tenant_id = ? AND (
              c.created_by = ?
+             OR c.assigned_bank_agent_id = ?
              OR EXISTS (
                SELECT 1 FROM financing_requests fr
                WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
              )
            ) LIMIT 1`
         )
-        .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId)
+        .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
         .first<{ ok: number }>()
       return Boolean(row?.ok)
     } catch (e: unknown) {
       const msg = String((e as { message?: string })?.message || e || '')
       if (/no such column:\s*c\.created_by|no such column:\s*created_by/i.test(msg)) {
+        const assignment = await db
+          .prepare(
+            `SELECT 1 AS ok FROM customers c
+             WHERE c.id = ? AND c.tenant_id = ? AND (
+               c.assigned_bank_agent_id = ?
+               OR EXISTS (
+                 SELECT 1 FROM financing_requests fr
+                 WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+               )
+             ) LIMIT 1`
+          )
+          .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId)
+          .first<{ ok: number }>()
+        return Boolean(assignment?.ok)
+      }
+      if (/no such column:\s*c\.assigned_bank_agent_id|no such column:\s*assigned_bank_agent_id/i.test(msg)) {
         const assignment = await db
           .prepare(
             'SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? AND assigned_bank_agent_id = ? LIMIT 1'
@@ -2420,7 +2457,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/requests/completed" data-completed-requests-link><i class="fas fa-check-double"></i>المكتملة</a>
       </div>
     </div>
-    <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>مهام المتابعة</a>
+    <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>الإعلانات</a>
     <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
     <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>التسويق</a>
     <div class="gps-collapsible gps-open" data-followups-collapsible>
@@ -5579,7 +5616,8 @@ app.get('/api/users', async (c) => {
     const { results } = await c.env.DB.prepare(query).all()
     const normalizedResults = (results || []).map((u: any) => ({
       ...u,
-      role_name: getRoleDisplayName(u.role_id, u.role_name)
+      role_name: getRoleDisplayName(u.role_id, u.role_name),
+      company_name: u.tenant_name || null,
     }))
     return c.json({ success: true, data: normalizedResults })
   } catch (error: any) {
@@ -5632,10 +5670,14 @@ app.post('/api/admin/sync-users-to-hr', async (c) => {
 app.post('/api/users', async (c) => {
   try {
     const formData = await c.req.formData()
-    const username = formData.get('username')
+    const username = String(formData.get('username') ?? '').trim()
     const password = formData.get('password')
     const full_name = formData.get('full_name')
-    const email = formData.get('email')
+    const emailRaw = formData.get('email')
+    const email =
+      emailRaw != null && String(emailRaw).trim() !== ''
+        ? String(emailRaw).trim().toLowerCase()
+        : null
     const phone = formData.get('phone')
     const hr_section_raw = formData.get('hr_section')
     const hr_section =
@@ -5695,9 +5737,24 @@ app.post('/api/users', async (c) => {
       assigned_bank_id = null
     }
     
-    // Check for duplicate username
+    if (!username) {
+      return c.json({ success: false, error: 'اسم المستخدم مطلوب' }, 400)
+    }
+
+    if (!email) {
+      return c.json({
+        success: false,
+        error: 'البريد الإلكتروني مطلوب — يُستخدم لإرسال رمز استعادة كلمة المرور.',
+      }, 400)
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return c.json({ success: false, error: 'صيغة البريد الإلكتروني غير صحيحة' }, 400)
+    }
+
+    // Check for duplicate username (case-insensitive, trimmed)
     const existingUser = await c.env.DB.prepare(`
-      SELECT id FROM users WHERE username = ?
+      SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)
     `).bind(username).first()
     
     if (existingUser) {
@@ -5707,18 +5764,16 @@ app.post('/api/users', async (c) => {
       }, 400)
     }
     
-    // Check for duplicate email if provided
-    if (email) {
-      const existingEmail = await c.env.DB.prepare(`
-        SELECT id FROM users WHERE email = ?
-      `).bind(email).first()
-      
-      if (existingEmail) {
-        return c.json({ 
-          success: false, 
-          error: 'البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر.' 
-        }, 400)
-      }
+    const existingEmail = await c.env.DB.prepare(`
+      SELECT id FROM users
+      WHERE email IS NOT NULL AND LOWER(TRIM(email)) = ?
+    `).bind(email).first()
+
+    if (existingEmail) {
+      return c.json({
+        success: false,
+        error: 'البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر.',
+      }, 400)
     }
     
     const result = await c.env.DB.prepare(`
@@ -5750,7 +5805,7 @@ app.post('/api/users', async (c) => {
     if (needsHrRow && newUserId != null && Number(newUserId) > 0 && typeof tenant_id === 'number') {
       try {
         const hrTenantId = tenant_id
-        const emailStr = email != null && String(email).trim() !== '' ? String(email).trim() : null
+        const emailStr = email
         const phoneStr = phone != null && String(phone).trim() !== '' ? String(phone).trim() : null
         const fullStr = full_name != null ? String(full_name).trim() : ''
         await syncNewUserToHrEmployees(c.env.DB, {
@@ -5785,6 +5840,21 @@ app.post('/api/users', async (c) => {
     })
   } catch (error: any) {
     console.error('Error adding user:', error)
+    const msg = String(error?.message ?? '')
+    if (msg.includes('UNIQUE constraint')) {
+      if (msg.includes('users.email')) {
+        return c.json({
+          success: false,
+          error: 'البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر.',
+        }, 400)
+      }
+      if (msg.includes('users.username')) {
+        return c.json({
+          success: false,
+          error: 'اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر.',
+        }, 400)
+      }
+    }
     return c.json({ 
       success: false, 
       error: error.message || 'حدث خطأ أثناء إضافة المستخدم' 
@@ -5929,8 +5999,8 @@ app.get('/api/customers', async (c) => {
         tl.name as enrollment_location_name,
         (SELECT ca.employee_id FROM customer_assignments ca WHERE ca.customer_id = c.id LIMIT 1) as assigned_employee_id,
         (SELECT u2.full_name FROM customer_assignments ca JOIN users u2 ON ca.employee_id = u2.id WHERE ca.customer_id = c.id LIMIT 1) as assigned_employee_name,
-        (SELECT f2.assigned_bank_agent_id FROM financing_requests f2 WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_id,
-        (SELECT u3.full_name FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_name
+        COALESCE(c.assigned_bank_agent_id, (SELECT f2.assigned_bank_agent_id FROM financing_requests f2 WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1)) as assigned_bank_agent_id,
+        COALESCE((SELECT u4.full_name FROM users u4 WHERE u4.id = c.assigned_bank_agent_id LIMIT 1), (SELECT u3.full_name FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1)) as assigned_bank_agent_name
       FROM customers c
       LEFT JOIN financing_requests f ON c.id = f.customer_id
       LEFT JOIN tenant_locations tl ON c.location_id = tl.id`
@@ -5962,16 +6032,16 @@ app.get('/api/customers', async (c) => {
       }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
-        // Role 5 (bank agent): see customers they created OR customers assigned to them via a funding request.
-        // Fallback for older DBs without customers.created_by is handled below.
+        // Role 5: see customers they created, directly assigned to, OR tied via a financing request.
         whereSql = ` WHERE c.tenant_id = ? AND (
           c.created_by = ?
+          OR c.assigned_bank_agent_id = ?
           OR EXISTS (
             SELECT 1 FROM financing_requests fr
             WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
           )
         )`
-        whereParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+        whereParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else {
         whereSql = ` WHERE 1 = 0`
       }
@@ -5979,27 +6049,48 @@ app.get('/api/customers', async (c) => {
       // Unknown role - no data
       whereSql = ` WHERE 1 = 0`
     }
-    
+
     query += `${whereSql}
       GROUP BY c.id
       ORDER BY c.created_at DESC`
-    
+
     let results: any[] = []
     try {
       const r = whereParams.length ? await c.env.DB.prepare(query).bind(...whereParams).all() : await c.env.DB.prepare(query).all()
       results = (r.results || []) as any[]
     } catch (e: any) {
-      // Backwards-compatible fallback: if created_by is missing, revert role 5 scope to assigned financing requests.
+      // Backwards-compatible fallback: if created_by or assigned_bank_agent_id column is missing.
       const msg = String(e?.message || e || '')
       const isMissingCreatedBy = /no such column:\s*c\.created_by|no such column:\s*created_by/i.test(msg)
-      if (normalizeRoleId(userInfo.roleId) === 5 && isMissingCreatedBy && userInfo.tenantId && userInfo.userId) {
-        const fallbackWhereSql = ` WHERE c.tenant_id = ? AND EXISTS (
-          SELECT 1 FROM financing_requests fr
-          WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
-        )`
-        const fallbackQuery = query.replace(whereSql, fallbackWhereSql)
-        const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId).all()
-        results = (fr.results || []) as any[]
+      const isMissingDirectAgent = /no such column:\s*c\.assigned_bank_agent_id/i.test(msg)
+      if (isMissingCreatedBy || isMissingDirectAgent) {
+        // Rebuild query without the columns that may not exist yet.
+        const legacySelect = query
+          .replace(
+            /COALESCE\(c\.assigned_bank_agent_id,\s*\(SELECT f2\.assigned_bank_agent_id[^)]+\)\) as assigned_bank_agent_id/,
+            '(SELECT f2.assigned_bank_agent_id FROM financing_requests f2 WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_id'
+          )
+          .replace(
+            /COALESCE\(\(SELECT u4\.full_name[^)]+\),\s*\(SELECT u3\.full_name[^)]+\)\) as assigned_bank_agent_name/,
+            '(SELECT u3.full_name FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_name'
+          )
+        if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
+          const fallbackWhereSql = ` WHERE c.tenant_id = ? AND EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )`
+          const fallbackQuery = legacySelect.replace(whereSql, fallbackWhereSql)
+          const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId).all()
+          results = (fr.results || []) as any[]
+        } else {
+          const legacyParams = isMissingCreatedBy ? whereParams.slice(0, -1) : whereParams
+          const legacyWhere = isMissingCreatedBy
+            ? whereSql.replace(/\s*c\.created_by = \?\s*OR\s*/g, '').replace(/\s*OR\s*c\.assigned_bank_agent_id = \?/g, '')
+            : whereSql.replace(/\s*OR\s*c\.assigned_bank_agent_id = \?/g, '')
+          const fallbackQuery = legacySelect.replace(whereSql, legacyWhere)
+          const r2 = legacyParams.length ? await c.env.DB.prepare(fallbackQuery).bind(...legacyParams).all() : await c.env.DB.prepare(fallbackQuery).all()
+          results = (r2.results || []) as any[]
+        }
       } else {
         throw e
       }
@@ -6695,6 +6786,37 @@ app.post('/api/customers', async (c) => {
         console.error('Auto-assign new customer to employee (role 4) failed:', e)
       }
     }
+    // Bank agents (role 5): auto-assign directly to new customer.
+    // Role 2/1: can also assign a bank agent from the form field.
+    if (newId) {
+      let bankAgentIdToAssign: number | null = null
+      const normRole = normalizeRoleId(userInfo.roleId)
+      console.log('[customer create] roleId:', userInfo.roleId, 'normRole:', normRole, 'userId:', userInfo.userId)
+      if (normRole === 5 && userInfo.userId) {
+        bankAgentIdToAssign = Number(userInfo.userId)
+      } else if ((normRole === 2 || normRole === 1) && tenant_id) {
+        const rawAgentField = formData.get('assigned_bank_agent_id')
+        if (rawAgentField) {
+          const agentId = Number(rawAgentField)
+          if (agentId > 0) {
+            const agentValid = await c.env.DB.prepare(
+              `SELECT 1 AS ok FROM users WHERE id = ? AND is_active = 1 AND role_id = 5 AND tenant_id = ? LIMIT 1`
+            ).bind(agentId, tenant_id).first()
+            if (agentValid) bankAgentIdToAssign = agentId
+          }
+        }
+      }
+      console.log('[customer create] bankAgentIdToAssign:', bankAgentIdToAssign, 'newId:', newId)
+      if (bankAgentIdToAssign) {
+        try {
+          await c.env.DB.prepare(`UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`)
+            .bind(bankAgentIdToAssign, newId).run()
+          console.log('[customer create] assigned_bank_agent_id set successfully')
+        } catch (e) {
+          console.error('[customer create] failed to set assigned_bank_agent_id:', e)
+        }
+      }
+    }
     if (inlineCustomerForm) {
       return c.json({
         ok: true,
@@ -6987,6 +7109,30 @@ app.post('/api/customers/:id', async (c) => {
       await c.env.DB.prepare(`UPDATE customers SET property_type = ? WHERE id = ?`).bind(property_type, id).run()
     } catch (_) {
       /* column may not exist until migration 0072 is applied */
+    }
+    // Role 2: can reassign or clear the bank agent on a customer.
+    if (normalizeRoleId(userInfo.roleId) === 2) {
+      const rawAgentField = formData.get('assigned_bank_agent_id')
+      if (rawAgentField !== null) {
+        const agentId = rawAgentField ? Number(rawAgentField) : null
+        try {
+          if (!agentId) {
+            await c.env.DB.prepare(`UPDATE customers SET assigned_bank_agent_id = NULL WHERE id = ?`).bind(id).run()
+          } else {
+            const custTenantId = existingCustomer.tenant_id
+            if (custTenantId) {
+              const agentValid = await c.env.DB.prepare(
+                `SELECT 1 AS ok FROM users WHERE id = ? AND is_active = 1 AND role_id = 5 AND tenant_id = ? LIMIT 1`
+              ).bind(agentId, custTenantId).first()
+              if (agentValid) {
+                await c.env.DB.prepare(`UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`).bind(agentId, id).run()
+              }
+            }
+          }
+        } catch (_) {
+          /* column may not exist in older DBs */
+        }
+      }
     }
     const obligationsJson = formData.get('obligations_json') as string | null
     if (obligationsJson) {
@@ -8116,6 +8262,9 @@ app.post('/api/workflow/update-stage', async (c) => {
   try {
     const requester = await getUserInfo(c)
     if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(requester.roleId) === 4) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const { requestId, newStageId, notes, userId } = await c.req.json()
 
     const stage = await c.env.DB.prepare(`
@@ -8190,6 +8339,11 @@ app.post('/api/workflow/update-stage', async (c) => {
 // Add action to a stage
 app.post('/api/workflow/add-action', async (c) => {
   try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(requester.roleId) === 5) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const { requestId, stageId, actionType, actionData, performedBy, notes } = await c.req.json()
     
     await c.env.DB.prepare(`
@@ -13573,6 +13727,32 @@ app.get('/admin/customers/add', async (c) => {
       .join('')
   }
 
+  // Bank agent dropdown: role 2/1 can pick a role-5 user; role 5 is auto-assigned server-side.
+  let bankAgentSectionHtml = ''
+  const normRoleForAddPage = normalizeRoleId(userInfo.roleId)
+  if ((normRoleForAddPage === 2 || normRoleForAddPage === 1) && resolvedTenantIdForLocations) {
+    const agentsRes = await c.env.DB.prepare(
+      `SELECT id, full_name, username FROM users WHERE role_id = 5 AND is_active = 1 AND tenant_id = ? ORDER BY full_name ASC`
+    ).bind(resolvedTenantIdForLocations).all<{ id: number; full_name: string | null; username: string }>()
+    const agents = (agentsRes.results || []) as Array<{ id: number; full_name: string | null; username: string }>
+    if (agents.length > 0) {
+      bankAgentSectionHtml = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-user-tie text-indigo-600 ml-1"></i>
+                  موظف التمويل (اختياري)
+                </label>
+                <select name="assigned_bank_agent_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                  <option value="">— بدون تعيين —</option>
+                  ${agents.map(a => `<option value="${a.id}">${escapeHtml(a.full_name || a.username)}</option>`).join('')}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">موظف التمويل المسؤول عن متابعة هذا العميل.</p>
+              </div>
+            </div>`
+    }
+  }
+
   return c.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -14259,7 +14439,7 @@ app.get('/admin/customers/add', async (c) => {
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-home text-sky-600 ml-1"></i>
-                  نوع المنتج
+                  نوع العقار
                 </label>
                 ${renderCustomerPropertyTypeFieldHtml(
                   null,
@@ -14434,6 +14614,8 @@ app.get('/admin/customers/add', async (c) => {
               </button>
             </div>
             
+            ${bankAgentSectionHtml}
+
             <div class="flex gap-4 flex-wrap">
               <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold">
                 <i class="fas fa-plus ml-2"></i>
@@ -17049,6 +17231,7 @@ app.get('/admin/customers', async (c) => {
     const bankAgentSql = `
       SELECT
         fr.customer_id,
+        fr.id AS latest_request_id,
         u.id AS bank_agent_role5_user_id,
         COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.username), '')) AS bank_agent_display_name
       FROM financing_requests fr
@@ -17064,11 +17247,12 @@ app.get('/admin/customers', async (c) => {
       latestFrParams.length > 0
         ? await c.env.DB.prepare(bankAgentSql).bind(...latestFrParams).all()
         : await c.env.DB.prepare(bankAgentSql).all()
-    const bankAgentByCustomer = new Map<number, { agentUserId: number | null; agentName: string | null }>()
+    const bankAgentByCustomer = new Map<number, { latestRequestId: number | null; agentUserId: number | null; agentName: string | null }>()
     for (const row of (bankAgentRows.results || []) as any[]) {
       const cid = Number(row.customer_id)
       if (Number.isNaN(cid)) continue
       bankAgentByCustomer.set(cid, {
+        latestRequestId: row.latest_request_id != null ? Number(row.latest_request_id) : null,
         agentUserId: row.bank_agent_role5_user_id != null ? Number(row.bank_agent_role5_user_id) : null,
         agentName: row.bank_agent_display_name != null ? String(row.bank_agent_display_name) : null
       })
@@ -17340,6 +17524,7 @@ app.get('/admin/customers', async (c) => {
                 ${customers.results.map((customer: any) => {
                   const hasFr = customerIdsWithRequests.has(customer.id)
                   const ba = bankAgentByCustomer.get(customer.id)
+                  const latestRequestId = ba?.latestRequestId ?? null
                   const bankAgentSearch = hasFr
                     ? `${ba?.agentName || ''} ${ba?.agentUserId != null ? '#' + ba.agentUserId : ''}`.trim()
                     : ''
@@ -17375,6 +17560,11 @@ app.get('/admin/customers', async (c) => {
                         <a href="/admin/customers/${customer.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
+                        ${hasFr && latestRequestId ? `
+                        <a href="/admin/requests/${latestRequestId}/workflow" class="actions-dropdown-item" style="color:#4338ca;">
+                          <i class="fas fa-clock"></i> الجدول الزمني
+                        </a>
+                        ` : ''}
                         <a href="/admin/customers/${customer.id}" class="actions-dropdown-item" style="color:#1d4ed8;">
                           <i class="fas fa-eye"></i> عرض
                         </a>
@@ -22469,6 +22659,35 @@ app.get('/admin/customers/:id/edit', async (c) => {
       }
     }
 
+    // Bank agent section for role 2: fetch role-5 users in the same tenant.
+    let editBankAgentSectionHtml = ''
+    if (normalizeRoleId(userInfo.roleId) === 2) {
+      const custTenantId = (customer as any).tenant_id != null ? Number((customer as any).tenant_id) : null
+      if (custTenantId) {
+        const agentsRes = await c.env.DB.prepare(
+          `SELECT id, full_name, username FROM users WHERE role_id = 5 AND is_active = 1 AND tenant_id = ? ORDER BY full_name ASC`
+        ).bind(custTenantId).all<{ id: number; full_name: string | null; username: string }>()
+        const agents = (agentsRes.results || []) as Array<{ id: number; full_name: string | null; username: string }>
+        const currentAgentId = (customer as any).assigned_bank_agent_id != null ? Number((customer as any).assigned_bank_agent_id) : null
+        if (agents.length > 0) {
+          editBankAgentSectionHtml = `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-user-tie text-indigo-600 ml-1"></i>
+                    موظف التمويل
+                  </label>
+                  <select name="assigned_bank_agent_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="">— بدون تعيين —</option>
+                    ${agents.map(a => `<option value="${a.id}"${currentAgentId === a.id ? ' selected' : ''}>${escapeHtml(a.full_name || a.username)}</option>`).join('')}
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">موظف التمويل المسؤول عن متابعة هذا العميل.</p>
+                </div>
+              </div>`
+        }
+      }
+    }
+
     const custEnrollSrc = String((customer as any).enrollment_source || '').trim()
     const custEnrollLab = String((customer as any).enrollment_source_label || '').trim()
     const editEnrollmentLocked = custEnrollSrc === 'calculator' || custEnrollSrc === 'affiliate'
@@ -22642,7 +22861,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   )}
                 </div>
                 <div>
-                  <label class="block text-sm font-bold text-gray-700 mb-2">نوع المنتج</label>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">نوع العقار</label>
                   ${renderCustomerPropertyTypeFieldHtml(
                     (customer as any).property_type,
                     'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
@@ -22813,6 +23032,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   إضافة صف
                 </button>
               </div>
+              ${editBankAgentSectionHtml}
               <div class="flex gap-4">
                 <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold">
                   <i class="fas fa-save ml-2"></i>
@@ -23978,7 +24198,11 @@ app.get('/admin/requests/:id/workflow', async (c) => {
     `).bind(id).all()
     
     const { results: actions } = await c.env.DB.prepare(`
-      SELECT * FROM workflow_stage_actions WHERE request_id = ? ORDER BY created_at DESC
+      SELECT wsa.*, u.full_name AS performed_by_name
+      FROM workflow_stage_actions wsa
+      LEFT JOIN users u ON wsa.performed_by = u.id
+      WHERE wsa.request_id = ?
+      ORDER BY wsa.created_at DESC
     `).bind(id).all()
     
     const { results: tasks } = await c.env.DB.prepare(`
@@ -27191,11 +27415,13 @@ app.get('/admin/users-new', async (c) => {
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-envelope text-purple-600 ml-1"></i>
-                    البريد الإلكتروني
+                    البريد الإلكتروني *
                   </label>
-                  <input type="email" name="email" 
+                  <input type="email" name="email" required
                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                         placeholder="مثال: ahmed@example.com">
+                         placeholder="مثال: ahmed@example.com"
+                         autocomplete="email">
+                  <p class="text-xs text-gray-500 mt-1">مطلوب لإرسال رمز استعادة كلمة المرور.</p>
                 </div>
                 
                 <!-- رقم الجوال -->
@@ -29761,6 +29987,8 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       }
       affiliatePathSegment = affRow.path_segment
       affiliateLabel = affRow.label
+    } else {
+      affiliateLabel = CONTACT_COMPANY_LINK_SOURCE_LABEL
     }
 
     let locationIdForFollowup: number | null = null
@@ -30071,7 +30299,10 @@ app.get('/api/follow-ups', async (c) => {
         const binds: any[] = [parseInt(String(tenantFilter), 10)]
         if (priorityClause) binds.push(priorityFilter)
         const { results } = await (stmt as any).bind(...binds).all()
-        return c.json({ success: true, data: results || [] })
+        const data = (results || []).map((row: Record<string, unknown>) =>
+          normalizeContactFollowupRowForApi(row)
+        )
+        return c.json({ success: true, data })
       }
 
       const stmt = c.env.DB.prepare(`
@@ -30088,7 +30319,10 @@ app.get('/api/follow-ups', async (c) => {
       const binds: any[] = []
       if (priorityClause) binds.push(priorityFilter)
       const { results } = await (binds.length ? (stmt as any).bind(...binds) : stmt).all()
-      return c.json({ success: true, data: results || [] })
+      const data = (results || []).map((row: Record<string, unknown>) =>
+        normalizeContactFollowupRowForApi(row)
+      )
+      return c.json({ success: true, data })
     }
 
     if (!userInfo.tenantId) {
@@ -30110,7 +30344,10 @@ app.get('/api/follow-ups', async (c) => {
     if (priorityClause) binds.push(priorityFilter)
     const { results } = await (stmt as any).bind(...binds).all()
 
-    return c.json({ success: true, data: results || [] })
+    const data = (results || []).map((row: Record<string, unknown>) =>
+      normalizeContactFollowupRowForApi(row)
+    )
+    return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -30554,7 +30791,10 @@ app.get('/api/my-followup-tasks', async (c) => {
       LIMIT 300
     `).bind(userInfo.userId, userInfo.userId, userInfo.tenantId).all()
 
-    return c.json({ success: true, data: results || [] })
+    const data = (results || []).map((row: Record<string, unknown>) =>
+      normalizeContactFollowupRowForApi(row)
+    )
+    return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -30942,7 +31182,7 @@ app.get('/admin/my-tasks', async (c) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>مهام المتابعة</title>
+      <title>الإعلانات</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
@@ -30951,7 +31191,7 @@ app.get('/admin/my-tasks', async (c) => {
       <div class="max-w-5xl mx-auto p-6">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>مهام المتابعة</h1>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>الإعلانات</h1>
             <p class="text-gray-600 mt-2 text-sm">المهام المعيّنة لك من وحدة متابعة التواصل</p>
           </div>
           <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
@@ -31038,6 +31278,28 @@ app.get('/admin/my-tasks', async (c) => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+        }
+
+        const CONTACT_COMPANY_LINK_SOURCE_LABEL = 'رابط الشركة';
+
+        function followupSourceLabel(row) {
+          const label = String((row && row.affiliate_label) || '').trim();
+          if (label) return label;
+          const path = String((row && row.affiliate_path_segment) || '').trim();
+          if (!path) return CONTACT_COMPANY_LINK_SOURCE_LABEL;
+          return '';
+        }
+
+        function followupSourceBadgeHtml(row) {
+          const label = followupSourceLabel(row);
+          if (!label) return '';
+          const path = String((row && row.affiliate_path_segment) || '').trim();
+          const isCompany = !path || label === CONTACT_COMPANY_LINK_SOURCE_LABEL;
+          const icon = isCompany ? 'fa-building' : 'fa-tag';
+          const cls = isCompany
+            ? 'bg-slate-100 text-slate-800 border-slate-200'
+            : 'bg-amber-100 text-amber-900 border-amber-200';
+          return '<span class="inline-flex items-center rounded-full ' + cls + ' px-2.5 py-0.5 text-xs font-semibold border"><i class="fas ' + icon + ' ml-1"></i>' + escapeHtml(label) + '</span>';
         }
 
         function formatDate(value) {
@@ -31231,10 +31493,11 @@ app.get('/admin/my-tasks', async (c) => {
               '</div>';
             var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
               '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
-            if (task.affiliate_label) {
+            var enrollSourceLabel = followupSourceLabel(task);
+            if (enrollSourceLabel) {
               enrollHref +=
                 '&enrollment_source=affiliate' +
-                '&affiliate_label=' + encodeURIComponent(String(task.affiliate_label || '').trim());
+                '&affiliate_label=' + encodeURIComponent(enrollSourceLabel);
             }
             var enrollCustomerBtn =
               '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
@@ -31272,7 +31535,7 @@ app.get('/admin/my-tasks', async (c) => {
                   '<div class="min-w-0 flex-1">' +
                     '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
                     '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) + statusBadge(task) +
-                    (task.affiliate_label ? '<span class="inline-block bg-amber-100 text-amber-900 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-200"><i class="fas fa-tag ml-1"></i>' + escapeHtml(task.affiliate_label) + '</span>' : '') +
+                    followupSourceBadgeHtml(task) +
                     '</div>' +
                   '</div>' +
                 '</div>' +
@@ -32096,7 +32359,7 @@ app.get('/admin/follow-ups', async (c) => {
       <div id="tasksModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
         <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col" style="max-height:90vh">
           <div class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
-            <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>مهام المتابعة</h2>
+            <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>الإعلانات</h2>
             <button id="closeTasksModalBtn" class="text-gray-500 hover:text-gray-700">
               <i class="fas fa-times text-xl"></i>
             </button>
@@ -32174,6 +32437,28 @@ app.get('/admin/follow-ups', async (c) => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+        }
+
+        const CONTACT_COMPANY_LINK_SOURCE_LABEL = 'رابط الشركة';
+
+        function followupSourceLabel(row) {
+          const label = String((row && row.affiliate_label) || '').trim();
+          if (label) return label;
+          const path = String((row && row.affiliate_path_segment) || '').trim();
+          if (!path) return CONTACT_COMPANY_LINK_SOURCE_LABEL;
+          return '';
+        }
+
+        function followupSourceBadgeHtml(row) {
+          const label = followupSourceLabel(row);
+          if (!label) return '';
+          const path = String((row && row.affiliate_path_segment) || '').trim();
+          const isCompany = !path || label === CONTACT_COMPANY_LINK_SOURCE_LABEL;
+          const icon = isCompany ? 'fa-building' : 'fa-tag';
+          const cls = isCompany
+            ? 'bg-slate-100 text-slate-800 border-slate-200'
+            : 'bg-amber-100 text-amber-900 border-amber-200';
+          return '<span class="inline-flex items-center rounded-full ' + cls + ' px-2.5 py-0.5 text-xs font-semibold border"><i class="fas ' + icon + ' ml-1"></i>' + escapeHtml(label) + '</span>';
         }
 
         function formatDate(value) {
@@ -32624,7 +32909,7 @@ app.get('/admin/follow-ups', async (c) => {
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
-                      \${row.affiliate_label ? '<span class="inline-flex items-center rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-semibold border border-amber-200"><i class="fas fa-tag ml-1"></i>' + escapeHtml(row.affiliate_label) + '</span>' : ''}
+                      \${followupSourceBadgeHtml(row)}
                     </div>
                     <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
                   </div>
