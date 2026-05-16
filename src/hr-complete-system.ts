@@ -262,7 +262,6 @@ export const hrEmployeesPage = `<!DOCTYPE html>
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">م</th>
-                            <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">رقم الموظف</th>
                             <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الاسم الكامل</th>
                             <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">القسم</th>
                             <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">المسمى الوظيفي</th>
@@ -274,7 +273,7 @@ export const hrEmployeesPage = `<!DOCTYPE html>
                     </thead>
                     <tbody id="employeesTable" class="divide-y divide-gray-200">
                         <tr>
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">
                                 <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
                                 <p>جاري تحميل البيانات...</p>
                             </td>
@@ -388,7 +387,7 @@ export const hrEmployeesPage = `<!DOCTYPE html>
                     const tbody = document.getElementById('employeesTable');
                     
                     if (employees.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">لا توجد بيانات</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">لا توجد بيانات</td></tr>';
                         return;
                     }
 
@@ -403,7 +402,6 @@ export const hrEmployeesPage = `<!DOCTYPE html>
                         return \`
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 text-sm text-gray-900">\${index + 1}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">\${emp.employee_number}</td>
                             <td class="px-4 py-3 text-sm font-medium text-gray-900">\${emp.full_name}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">\${emp.department}</td>
                             <td class="px-4 py-3 text-sm text-gray-600">\${emp.job_title}</td>

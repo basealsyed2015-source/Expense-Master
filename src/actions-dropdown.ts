@@ -91,11 +91,13 @@ export const actionsDropdownCSS = `
   .actions-dropdown-divider { height: 1px; background: rgba(229, 231, 235, 1); margin: 0.25rem 0; }
 
   body.actions-dropdown-open #customersTableScroll,
-  body.actions-dropdown-open #requestsTableScroll {
+  body.actions-dropdown-open #requestsTableScroll,
+  body.actions-dropdown-open #usersTableScroll {
     pointer-events: none;
   }
   body.actions-dropdown-open #customersTableScroll tbody tr,
-  body.actions-dropdown-open #requestsTableScroll tbody tr {
+  body.actions-dropdown-open #requestsTableScroll tbody tr,
+  body.actions-dropdown-open #usersTableScroll tbody tr {
     pointer-events: none;
   }
   body.actions-dropdown-open .actions-dropdown-menu,

@@ -25,7 +25,7 @@ import { customersReportPage, requestsReportPage, financialReportPage } from './
 import { paymentsPage } from './payments-page'
 import { banksManagementPage } from './banks-management-page'
 import { generateAddRatePage, generateEditRatePage } from './rates-forms'
-import { generateWorkflowTimelinePage } from './workflow-page'
+import { generateCustomerWorkflowPage, generateWorkflowTimelinePage } from './workflow-page'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
 import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
@@ -1386,7 +1386,10 @@ app.use('/api/*', async (c, next) => {
   if (method === 'POST' && (
     p === '/api/calculator/save-customer' ||
     p === '/api/calculator/submit-request' ||
-    p === '/api/workflow/update-stage'
+    p === '/api/workflow/update-stage' ||
+    p === '/api/workflow/customer-update-stage' ||
+    p === '/api/workflow/customer-add-action' ||
+    p === '/api/workflow/customer-create-task'
   )) {
     await next()
     return
@@ -1617,7 +1620,7 @@ async function canUserAccessCustomer(
   }
   if (rid === 5) {
     // Agents see customers they created, directly assigned to, OR tied via a financing request.
-    try {
+        try {
       const row = await db
         .prepare(
           `SELECT 1 AS ok FROM customers c
@@ -1626,11 +1629,16 @@ async function canUserAccessCustomer(
              OR c.assigned_bank_agent_id = ?
              OR EXISTS (
                SELECT 1 FROM financing_requests fr
-               WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+               LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+               WHERE fr.customer_id = c.id
+                 AND (
+                   fr.assigned_bank_agent_id = ?
+                   OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+                 )
              )
            ) LIMIT 1`
         )
-        .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+        .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId)
         .first<{ ok: number }>()
       return Boolean(row?.ok)
     } catch (e: unknown) {
@@ -1643,11 +1651,16 @@ async function canUserAccessCustomer(
                c.assigned_bank_agent_id = ?
                OR EXISTS (
                  SELECT 1 FROM financing_requests fr
-                 WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+                 LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+                 WHERE fr.customer_id = c.id
+                   AND (
+                     fr.assigned_bank_agent_id = ?
+                     OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+                   )
                )
              ) LIMIT 1`
           )
-          .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId)
+          .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
           .first<{ ok: number }>()
         return Boolean(assignment?.ok)
       }
@@ -1870,20 +1883,76 @@ async function getUserInfo(
   }
 }
 
+/** Same tenant scope as GET /api/users for bank agents (role 5 / legacy 15). */
+async function isActiveBankAgentForTenant(
+  db: D1Database,
+  agentUserId: number,
+  tenantId: number | null
+): Promise<boolean> {
+  if (tenantId == null || Number.isNaN(Number(tenantId))) return false
+  const tid = Number(tenantId)
+  const row = await db
+    .prepare(
+      `SELECT 1 AS ok FROM users u
+       WHERE u.id = ? AND u.is_active = 1 AND u.role_id IN (5, 15)
+         AND (
+           u.tenant_id = ?
+           OR EXISTS (
+             SELECT 1 FROM banks b
+             WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+           )
+         )
+       LIMIT 1`
+    )
+    .bind(agentUserId, tid, tid)
+    .first()
+  return Boolean(row)
+}
+
 async function validateBankAgentForFinancingRequest(
   db: D1Database,
   tenantId: number,
   agentUserId: number
 ): Promise<boolean> {
-  const row = await db
-    .prepare(
-      `SELECT 1 AS ok FROM users
-       WHERE id = ? AND is_active = 1 AND role_id = 5
-         AND tenant_id = ?`
-    )
-    .bind(agentUserId, tenantId)
-    .first()
-  return Boolean(row)
+  return isActiveBankAgentForTenant(db, agentUserId, tenantId)
+}
+
+async function setCustomerAssignedBankAgent(
+  db: D1Database,
+  customerId: number,
+  agentId: number | null
+): Promise<{ ok: boolean; missingColumn?: boolean }> {
+  try {
+    await db
+      .prepare(`UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`)
+      .bind(agentId, customerId)
+      .run()
+    return { ok: true }
+  } catch (e: unknown) {
+    const msg = String((e as { message?: string })?.message || e || '')
+    if (/no such column:\s*assigned_bank_agent_id/i.test(msg)) {
+      return { ok: false, missingColumn: true }
+    }
+    throw e
+  }
+}
+
+/** Keep financing_requests.assigned_bank_agent_id aligned with the customer record. */
+async function syncFinancingRequestsBankAgentForCustomer(
+  db: D1Database,
+  customerId: number,
+  agentId: number | null
+): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE customer_id = ?`
+      )
+      .bind(agentId, customerId)
+      .run()
+  } catch (_) {
+    /* column may not exist on very old DBs */
+  }
 }
 
 async function validateAssignedBankBelongsToTenant(
@@ -2015,6 +2084,14 @@ async function loadCustomersForAdminForms(
     }
   }
   return { results: (customers.results || []) as any[] }
+}
+
+/** True if this customer already has any financing_requests row (one request per customer). */
+async function customerHasFinancingRequest(db: any, customerId: number | string | null | undefined): Promise<boolean> {
+  const id = Number(customerId)
+  if (!Number.isFinite(id) || id <= 0) return false
+  const row = await db.prepare('SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? LIMIT 1').bind(id).first()
+  return row != null
 }
 
 function isSuperAdminUser(info: { roleId: number | null; tokenRoleId: number | null }): boolean {
@@ -5605,9 +5682,9 @@ app.get('/api/users', async (c) => {
       LEFT JOIN tenants t ON u.tenant_id = t.id`
     
     // Superadmin (role_id = 1) can see all users
-    // Other roles see only their tenant's users
+    // Other roles see only their tenant's users + bank agents whose bank belongs to the same tenant
     if (roleId !== 1 && tenantId) {
-      query += ` WHERE u.tenant_id = ${tenantId}`
+      query += ` WHERE (u.tenant_id = ${tenantId} OR (u.role_id IN (5, 15) AND EXISTS (SELECT 1 FROM banks b WHERE b.id = u.assigned_bank_id AND b.tenant_id = ${tenantId})))`
     }
     
     query += `
@@ -5990,28 +6067,68 @@ app.get('/api/customers', async (c) => {
     const userInfo = await getUserInfo(c);
     
     // Build query with role-based filtering
+    // No JOIN to financing_requests + GROUP BY: that duplicates rows and can make c.* / assigned_bank_agent_id
+    // ambiguous in SQLite. Count requests via scalar subqueries instead (one row per customer).
     let query = `
       SELECT
         c.*,
-        COUNT(f.id) as total_requests,
-        SUM(CASE WHEN f.status = 'pending' THEN 1 ELSE 0 END) as pending_requests,
-        SUM(CASE WHEN f.status = 'approved' THEN 1 ELSE 0 END) as approved_requests,
+        (SELECT COUNT(*) FROM financing_requests f WHERE f.customer_id = c.id) as total_requests,
+        (SELECT COUNT(*) FROM financing_requests f WHERE f.customer_id = c.id AND f.status = 'pending') as pending_requests,
+        (SELECT COUNT(*) FROM financing_requests f WHERE f.customer_id = c.id AND f.status = 'approved') as approved_requests,
         tl.name as enrollment_location_name,
         (SELECT ca.employee_id FROM customer_assignments ca WHERE ca.customer_id = c.id LIMIT 1) as assigned_employee_id,
         (SELECT u2.full_name FROM customer_assignments ca JOIN users u2 ON ca.employee_id = u2.id WHERE ca.customer_id = c.id LIMIT 1) as assigned_employee_name,
-        COALESCE(c.assigned_bank_agent_id, (SELECT f2.assigned_bank_agent_id FROM financing_requests f2 WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1)) as assigned_bank_agent_id,
-        COALESCE((SELECT u4.full_name FROM users u4 WHERE u4.id = c.assigned_bank_agent_id LIMIT 1), (SELECT u3.full_name FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1)) as assigned_bank_agent_name
+        COALESCE(
+          NULLIF(c.assigned_bank_agent_id, 0),
+          (
+            SELECT CASE
+              WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
+                THEN frx.assigned_bank_agent_id
+              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+                THEN frx.created_by
+              ELSE NULL
+            END
+            FROM financing_requests frx
+            LEFT JOIN users ucx ON ucx.id = frx.created_by
+            WHERE frx.customer_id = c.id
+            ORDER BY frx.created_at DESC
+            LIMIT 1
+          )
+        ) AS resolved_bank_agent_id,
+        (
+          SELECT COALESCE(NULLIF(TRIM(ub.full_name),''), ub.username) FROM users ub
+          WHERE ub.id = COALESCE(
+            NULLIF(c.assigned_bank_agent_id, 0),
+            (
+              SELECT CASE
+                WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
+                  THEN frx.assigned_bank_agent_id
+                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+                  THEN frx.created_by
+                ELSE NULL
+              END
+              FROM financing_requests frx
+              LEFT JOIN users ucx ON ucx.id = frx.created_by
+              WHERE frx.customer_id = c.id
+              ORDER BY frx.created_at DESC
+              LIMIT 1
+            )
+          )
+          LIMIT 1
+        ) AS assigned_bank_agent_name
       FROM customers c
-      LEFT JOIN financing_requests f ON c.id = f.customer_id
       LEFT JOIN tenant_locations tl ON c.location_id = tl.id`
     
     let whereSql = ''
     const whereParams: any[] = []
 
-    // Apply filtering based on role
-    if (userInfo.roleId === 1) {
+    const listRoleNorm = normalizeRoleId(userInfo.roleId)
+    const listRoleEffective = listRoleNorm ?? userInfo.roleId
+
+    // Apply filtering based on role (normalized so legacy IDs 11–15 still match tenant lists)
+    if (listRoleEffective === 1) {
       // Role 1: Super Admin - sees ALL customers (no filter)
-    } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
+    } else if (listRoleEffective === 2 || listRoleEffective === 3) {
       // Role 2: Company Admin & Role 3: Supervisor - see company customers only
       if (userInfo.tenantId) {
         whereSql = ` WHERE c.tenant_id = ?`
@@ -6019,7 +6136,7 @@ app.get('/api/customers', async (c) => {
       } else {
         whereSql = ` WHERE 1 = 0`
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (listRoleEffective === 4) {
       // Role 4: Employee - sees only assigned customers in same company
       if (userInfo.tenantId && userInfo.userId) {
         whereSql = ` WHERE c.tenant_id = ? AND EXISTS (
@@ -6030,7 +6147,7 @@ app.get('/api/customers', async (c) => {
       } else {
         whereSql = ` WHERE 1 = 0` // No data if tenant scope is missing
       }
-    } else if (normalizeRoleId(userInfo.roleId) === 5) {
+    } else if (listRoleEffective === 5) {
       if (userInfo.tenantId && userInfo.userId) {
         // Role 5: see customers they created, directly assigned to, OR tied via a financing request.
         whereSql = ` WHERE c.tenant_id = ? AND (
@@ -6038,10 +6155,15 @@ app.get('/api/customers', async (c) => {
           OR c.assigned_bank_agent_id = ?
           OR EXISTS (
             SELECT 1 FROM financing_requests fr
-            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+            LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = c.id
+              AND (
+                fr.assigned_bank_agent_id = ?
+                OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+              )
           )
         )`
-        whereParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+        whereParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else {
         whereSql = ` WHERE 1 = 0`
       }
@@ -6051,7 +6173,6 @@ app.get('/api/customers', async (c) => {
     }
 
     query += `${whereSql}
-      GROUP BY c.id
       ORDER BY c.created_at DESC`
 
     let results: any[] = []
@@ -6065,22 +6186,28 @@ app.get('/api/customers', async (c) => {
       const isMissingDirectAgent = /no such column:\s*c\.assigned_bank_agent_id/i.test(msg)
       if (isMissingCreatedBy || isMissingDirectAgent) {
         // Rebuild query without the columns that may not exist yet.
-        const legacySelect = query
-          .replace(
-            /COALESCE\(c\.assigned_bank_agent_id,\s*\(SELECT f2\.assigned_bank_agent_id[^)]+\)\) as assigned_bank_agent_id/,
-            '(SELECT f2.assigned_bank_agent_id FROM financing_requests f2 WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_id'
-          )
-          .replace(
-            /COALESCE\(\(SELECT u4\.full_name[^)]+\),\s*\(SELECT u3\.full_name[^)]+\)\) as assigned_bank_agent_name/,
-            '(SELECT u3.full_name FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_name'
-          )
+        const bankBlockNeedle = ',\n        COALESCE(\n          NULLIF(c.assigned_bank_agent_id, 0),'
+        const bankBlockEndMarker = ') AS assigned_bank_agent_name\n      FROM customers c'
+        const bStart = query.indexOf(bankBlockNeedle)
+        const bEnd = bStart !== -1 ? query.indexOf(bankBlockEndMarker, bStart) : -1
+        const bankFieldsFallback =
+          ', (SELECT COALESCE(NULLIF(TRIM(u3.full_name),\'\'), u3.username) FROM financing_requests f2 JOIN users u3 ON f2.assigned_bank_agent_id = u3.id WHERE f2.customer_id = c.id AND f2.assigned_bank_agent_id IS NOT NULL ORDER BY f2.created_at DESC LIMIT 1) as assigned_bank_agent_name'
+        const legacySelect =
+          bStart !== -1 && bEnd !== -1
+            ? query.slice(0, bStart) + bankFieldsFallback + query.slice(bEnd + ') AS assigned_bank_agent_name'.length)
+            : query
         if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
           const fallbackWhereSql = ` WHERE c.tenant_id = ? AND EXISTS (
             SELECT 1 FROM financing_requests fr
-            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+            LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = c.id
+              AND (
+                fr.assigned_bank_agent_id = ?
+                OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+              )
           )`
           const fallbackQuery = legacySelect.replace(whereSql, fallbackWhereSql)
-          const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId).all()
+          const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId).all()
           results = (fr.results || []) as any[]
         } else {
           const legacyParams = isMissingCreatedBy ? whereParams.slice(0, -1) : whereParams
@@ -6105,7 +6232,7 @@ app.get('/api/customers', async (c) => {
 app.get('/api/customers/sample-csv', async (c) => {
   try {
     // Keep header aligned with Customers table/export
-    const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل']
+    const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'الرقم الوطني', 'تاريخ التسجيل']
     const rows = [
       ['', 'محمد أحمد', '512345678', 'user@example.com', '', '', '', '', '1234567890', ''],
       ['', 'سارة علي', '501234567', '', '', '', '', '', '', '']
@@ -6725,13 +6852,39 @@ app.post('/api/customers', async (c) => {
       }
     }
 
-    // Best-effort: track creator (role 5 visibility scope). Ignore if column doesn't exist yet.
+    // Track creator + (for bank agents) assign self in one UPDATE so scopes stay aligned.
     const createdCustomerId = Number(result?.meta?.last_row_id || 0)
+    const normRoleAfterInsert = normalizeRoleId(userInfo.roleId)
     if (creatorUserId && createdCustomerId) {
       try {
-        await c.env.DB.prepare(`UPDATE customers SET created_by = ? WHERE id = ?`).bind(creatorUserId, createdCustomerId).run()
+        const uidNum = Number(creatorUserId)
+        const isBankAgentCreator = normRoleAfterInsert === 5 && uidNum > 0
+        if (isBankAgentCreator) {
+          try {
+            await c.env.DB
+              .prepare(
+                `UPDATE customers SET created_by = ?, assigned_bank_agent_id = ? WHERE id = ?`
+              )
+              .bind(uidNum, uidNum, createdCustomerId)
+              .run()
+            await syncFinancingRequestsBankAgentForCustomer(c.env.DB, createdCustomerId, uidNum)
+          } catch (eCol: unknown) {
+            const m = String((eCol as { message?: string })?.message || eCol || '')
+            if (/no such column:\s*assigned_bank_agent_id/i.test(m)) {
+              await c.env.DB
+                .prepare(`UPDATE customers SET created_by = ? WHERE id = ?`)
+                .bind(creatorUserId, createdCustomerId)
+                .run()
+            }
+          }
+        } else {
+          await c.env.DB
+            .prepare(`UPDATE customers SET created_by = ? WHERE id = ?`)
+            .bind(creatorUserId, createdCustomerId)
+            .run()
+        }
       } catch (_) {
-        /* column may not exist in older DBs */
+        /* columns may not exist in older DBs */
       }
     }
     if (createdCustomerId) {
@@ -6768,7 +6921,7 @@ app.post('/api/customers', async (c) => {
     // Employees (role 4): auto-assign the new customer to themselves (same rows as admin/customer-assignment)
     if (
       newId &&
-      userInfo.roleId === 4 &&
+      normalizeRoleId(userInfo.roleId) === 4 &&
       userInfo.userId &&
       userInfo.tenantId != null &&
       userInfo.tenantId === tenant_id
@@ -6786,34 +6939,35 @@ app.post('/api/customers', async (c) => {
         console.error('Auto-assign new customer to employee (role 4) failed:', e)
       }
     }
-    // Bank agents (role 5): auto-assign directly to new customer.
-    // Role 2/1: can also assign a bank agent from the form field.
-    if (newId) {
-      let bankAgentIdToAssign: number | null = null
-      const normRole = normalizeRoleId(userInfo.roleId)
-      console.log('[customer create] roleId:', userInfo.roleId, 'normRole:', normRole, 'userId:', userInfo.userId)
-      if (normRole === 5 && userInfo.userId) {
-        bankAgentIdToAssign = Number(userInfo.userId)
-      } else if ((normRole === 2 || normRole === 1) && tenant_id) {
+    // Role 2/1: optional bank agent from form (role 5 self-assign is handled with created_by above).
+    const customerIdForAgent = createdCustomerId || Number(newId || 0)
+    if (customerIdForAgent > 0) {
+      const normRolePick = normalizeRoleId(userInfo.roleId)
+      if ((normRolePick === 2 || normRolePick === 1) && tenant_id) {
         const rawAgentField = formData.get('assigned_bank_agent_id')
         if (rawAgentField) {
           const agentId = Number(rawAgentField)
-          if (agentId > 0) {
-            const agentValid = await c.env.DB.prepare(
-              `SELECT 1 AS ok FROM users WHERE id = ? AND is_active = 1 AND role_id = 5 AND tenant_id = ? LIMIT 1`
-            ).bind(agentId, tenant_id).first()
-            if (agentValid) bankAgentIdToAssign = agentId
+          if (
+            agentId > 0 &&
+            (await isActiveBankAgentForTenant(c.env.DB, agentId, tenant_id))
+          ) {
+            const persisted = await setCustomerAssignedBankAgent(
+              c.env.DB,
+              customerIdForAgent,
+              agentId
+            )
+            if (persisted.missingColumn) {
+              console.error(
+                '[customer create] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1'
+              )
+            } else if (persisted.ok) {
+              await syncFinancingRequestsBankAgentForCustomer(
+                c.env.DB,
+                customerIdForAgent,
+                agentId
+              )
+            }
           }
-        }
-      }
-      console.log('[customer create] bankAgentIdToAssign:', bankAgentIdToAssign, 'newId:', newId)
-      if (bankAgentIdToAssign) {
-        try {
-          await c.env.DB.prepare(`UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`)
-            .bind(bankAgentIdToAssign, newId).run()
-          console.log('[customer create] assigned_bank_agent_id set successfully')
-        } catch (e) {
-          console.error('[customer create] failed to set assigned_bank_agent_id:', e)
         }
       }
     }
@@ -7110,27 +7264,55 @@ app.post('/api/customers/:id', async (c) => {
     } catch (_) {
       /* column may not exist until migration 0072 is applied */
     }
-    // Role 2: can reassign or clear the bank agent on a customer.
-    if (normalizeRoleId(userInfo.roleId) === 2) {
+    // Role 2/1: reassign or clear the bank agent on a customer (single source of truth).
+    const editorRole = normalizeRoleId(userInfo.roleId)
+    if (editorRole === 2 || editorRole === 1) {
       const rawAgentField = formData.get('assigned_bank_agent_id')
       if (rawAgentField !== null) {
-        const agentId = rawAgentField ? Number(rawAgentField) : null
-        try {
-          if (!agentId) {
-            await c.env.DB.prepare(`UPDATE customers SET assigned_bank_agent_id = NULL WHERE id = ?`).bind(id).run()
-          } else {
-            const custTenantId = existingCustomer.tenant_id
-            if (custTenantId) {
-              const agentValid = await c.env.DB.prepare(
-                `SELECT 1 AS ok FROM users WHERE id = ? AND is_active = 1 AND role_id = 5 AND tenant_id = ? LIMIT 1`
-              ).bind(agentId, custTenantId).first()
-              if (agentValid) {
-                await c.env.DB.prepare(`UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`).bind(agentId, id).run()
-              }
+        const custTenantId =
+          existingCustomer.tenant_id != null ? Number(existingCustomer.tenant_id) : null
+
+        let skipBankAgentPersist = false
+        const parsedRaw =
+          rawAgentField != null ? String(rawAgentField).trim() : ''
+
+        /** null = explicitly clear dropdown; omit invalid numbers (do not wipe column). */
+        let agentToStore: number | null = null
+
+        if (parsedRaw === '') {
+          agentToStore = null
+        } else {
+          const n = Number(parsedRaw)
+          if (Number.isFinite(n) && n > 0) {
+            const pick = Math.floor(n)
+            if (await isActiveBankAgentForTenant(c.env.DB, pick, custTenantId)) {
+              agentToStore = pick
+            } else {
+              console.warn(
+                '[customer edit] bank agent rejected — keeping existing assignment',
+                pick,
+                custTenantId
+              )
+              skipBankAgentPersist = true
             }
+          } else {
+            skipBankAgentPersist = true
           }
-        } catch (_) {
-          /* column may not exist in older DBs */
+        }
+
+        if (!skipBankAgentPersist) {
+          const persisted = await setCustomerAssignedBankAgent(
+            c.env.DB,
+            Number(id),
+            agentToStore
+          )
+          if (persisted.missingColumn) {
+            console.error(
+              '[customer edit] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1'
+            )
+          } else if (persisted.ok) {
+            await syncFinancingRequestsBankAgentForCustomer(c.env.DB, Number(id), agentToStore)
+          }
         }
       }
     }
@@ -7353,7 +7535,7 @@ app.get('/api/financing-requests', async (c) => {
         ft.type_name as financing_type_name,
         ca.employee_id as assigned_employee_id,
         u.full_name as assigned_employee_name,
-        ba.full_name as assigned_bank_agent_name,
+        COALESCE(NULLIF(TRIM(ba.full_name),''), ba.username) as assigned_bank_agent_name,
         tl.name as enrollment_location_name
       FROM financing_requests f
       JOIN customers c ON f.customer_id = c.id
@@ -7362,7 +7544,7 @@ app.get('/api/financing-requests', async (c) => {
       LEFT JOIN financing_types ft ON f.financing_type_id = ft.id
       LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id
-      LEFT JOIN users ba ON f.assigned_bank_agent_id = ba.id`
+      LEFT JOIN users ba ON ba.id = c.assigned_bank_agent_id`
 
     const queryParams: any[] = []
     if (userInfo.roleId === 1) {
@@ -7388,10 +7570,11 @@ app.get('/api/financing-requests', async (c) => {
       // Bank agent: requests assigned to them or that they created (created_by), same tenant
       if (userInfo.tenantId && userInfo.userId) {
         query += ` WHERE f.tenant_id = ? AND (
-          f.assigned_bank_agent_id = ?
+          c.assigned_bank_agent_id = ?
+          OR f.assigned_bank_agent_id = ?
           OR f.created_by = ?
         )`
-        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else {
         query += ' WHERE 1 = 0'
       }
@@ -7446,12 +7629,18 @@ app.get('/api/sidebar-filter-counts', async (c) => {
         customerWhereParts.push('c.tenant_id = ?')
         customerWhereParts.push(`(
           c.created_by = ?
+          OR c.assigned_bank_agent_id = ?
           OR EXISTS (
             SELECT 1 FROM financing_requests fr
-            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+            LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = c.id
+              AND (
+                fr.assigned_bank_agent_id = ?
+                OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+              )
           )
         )`)
-        customerParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+        customerParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else {
         customerWhereParts.push('1 = 0')
       }
@@ -7696,12 +7885,12 @@ app.post('/api/requests', async (c) => {
       selected_bank_id = null
     }
     const assigned_agent_raw = formData.get('assigned_bank_agent_id')
-    let assigned_bank_agent_id: number | null =
+    let formAssignedBankAgent: number | null =
       assigned_agent_raw != null && String(assigned_agent_raw).trim() !== ''
         ? parseInt(String(assigned_agent_raw), 10)
         : null
-    if (assigned_bank_agent_id != null && Number.isNaN(assigned_bank_agent_id)) {
-      assigned_bank_agent_id = null
+    if (formAssignedBankAgent != null && Number.isNaN(formAssignedBankAgent)) {
+      formAssignedBankAgent = null
     }
     const status = formData.get('status') || 'pending'
     const notes = formData.get('notes') || ''
@@ -7712,11 +7901,20 @@ app.post('/api/requests', async (c) => {
     }
 
     const customer = await c.env.DB.prepare(`
-      SELECT id, tenant_id, location_id FROM customers WHERE id = ?
-    `).bind(customer_id).first() as { id: number; tenant_id: number | null; location_id?: number | null } | null
+      SELECT id, tenant_id, location_id, assigned_bank_agent_id FROM customers WHERE id = ?
+    `).bind(customer_id).first() as {
+      id: number
+      tenant_id: number | null
+      location_id?: number | null
+      assigned_bank_agent_id?: number | null
+    } | null
 
     if (!customer) {
       return c.json({ success: false, error: 'العميل غير موجود' }, 400)
+    }
+
+    if (await customerHasFinancingRequest(c.env.DB, customer.id)) {
+      return c.json({ success: false, error: 'يوجد طلب تمويل مسبق لهذا العميل' }, 400)
     }
 
     const requestLocationId =
@@ -7740,13 +7938,16 @@ app.post('/api/requests', async (c) => {
       }
     }
     // Bank agents (role 5): same as employees for existing scope, OR first touch on a new customer by assigning themselves on this request
+    const effectiveBankAgent: number | null =
+      formAssignedBankAgent ?? customer.assigned_bank_agent_id ?? null
+
     if (normalizeRoleId(userInfo.roleId) === 5) {
       const custRow = customer as { id: number; tenant_id: number | null }
       const hasAccess = await canUserAccessCustomer(c.env.DB, userInfo, custRow)
       const selfAssign =
         userInfo.userId != null &&
-        assigned_bank_agent_id != null &&
-        Number(assigned_bank_agent_id) === Number(userInfo.userId)
+        formAssignedBankAgent != null &&
+        Number(formAssignedBankAgent) === Number(userInfo.userId)
       if (!hasAccess && !selfAssign) {
         return c.json(
           {
@@ -7761,7 +7962,7 @@ app.post('/api/requests', async (c) => {
 
     const tenant_id = userInfo.roleId === 1 ? customer.tenant_id : userInfo.tenantId
 
-    if (assigned_bank_agent_id != null) {
+    if (effectiveBankAgent != null) {
       if (!selected_bank_id || Number.isNaN(selected_bank_id)) {
         return c.json({ success: false, error: 'يجب اختيار البنك عند تعيين موظف التمويل' }, 400)
       }
@@ -7769,7 +7970,7 @@ app.post('/api/requests', async (c) => {
       if (!tidNum || Number.isNaN(tidNum)) {
         return c.json({ success: false, error: 'تعذر تحديد الشركة لتعيين موظف التمويل' }, 400)
       }
-      const agentOk = await validateBankAgentForFinancingRequest(c.env.DB, tidNum, assigned_bank_agent_id)
+      const agentOk = await validateBankAgentForFinancingRequest(c.env.DB, tidNum, effectiveBankAgent)
       if (!agentOk) {
         return c.json({ success: false, error: 'موظف التمويل غير صالح لهذه الشركة' }, 400)
       }
@@ -7788,7 +7989,7 @@ app.post('/api/requests', async (c) => {
       status,
       notes,
       tenant_id,
-      assigned_bank_agent_id,
+      effectiveBankAgent,
     ]
     const attempts: Array<{ loc: boolean; cb: boolean }> = [
       { loc: true, cb: true },
@@ -7863,7 +8064,27 @@ app.post('/api/requests', async (c) => {
     if (result == null) {
       throw lastInsertErr instanceof Error ? lastInsertErr : new Error(String(lastInsertErr))
     }
-    
+
+    // Single source of truth: customers.assigned_bank_agent_id; mirror onto the new financing_requests row.
+    try {
+      if (formAssignedBankAgent != null) {
+        await setCustomerAssignedBankAgent(c.env.DB, Number(customer_id), formAssignedBankAgent)
+      }
+      const custRow = await c.env.DB.prepare(
+        `SELECT assigned_bank_agent_id FROM customers WHERE id = ? LIMIT 1`
+      )
+        .bind(customer_id)
+        .first<{ assigned_bank_agent_id: number | null }>()
+      const finalAgent = custRow?.assigned_bank_agent_id ?? null
+      if (result.meta.last_row_id != null) {
+        await c.env.DB.prepare(`UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE id = ?`)
+          .bind(finalAgent, result.meta.last_row_id)
+          .run()
+      }
+    } catch (_) {
+      // Non-fatal: sync failure should not block the request creation response.
+    }
+
     if (wantsJson) {
       return c.json({ success: true, id: result.meta.last_row_id }, 201)
     }
@@ -8025,6 +8246,11 @@ app.post('/api/requests/import-csv', async (c) => {
             errors.push(`Row ${i + 1}: customer not assigned`)
             continue
           }
+        }
+
+        if (await customerHasFinancingRequest(c.env.DB, customerId)) {
+          errors.push(`Row ${i + 1}: يوجد طلب تمويل مسبق لهذا العميل`)
+          continue
         }
 
         const ridCsv = normalizeRoleId(userInfo.roleId)
@@ -8272,8 +8498,28 @@ app.post('/api/workflow/update-stage', async (c) => {
     `).bind(newStageId).first() as { stage_name?: string } | null
 
     const currentRequest = await c.env.DB.prepare(`
-      SELECT status FROM financing_requests WHERE id = ?
-    `).bind(requestId).first() as { status?: string } | null
+      SELECT status, current_stage_id FROM financing_requests WHERE id = ?
+    `).bind(requestId).first() as { status?: string; current_stage_id?: number | null } | null
+
+    // Ignore duplicate submits (double-click) for the same stage within a short window
+    const recentDup = await c.env.DB.prepare(`
+      SELECT id FROM workflow_stage_transitions
+      WHERE request_id = ? AND to_stage_id = ?
+        AND created_at >= datetime('now', '-20 seconds')
+      LIMIT 1
+    `).bind(requestId, newStageId).first()
+    if (recentDup && currentRequest?.current_stage_id === newStageId) {
+      if (notes) {
+        await c.env.DB.prepare(`
+          UPDATE workflow_stage_transitions
+          SET notes = ?, transitioned_by = ?
+          WHERE request_id = ? AND to_stage_id = ?
+          ORDER BY created_at DESC
+          LIMIT 1
+        `).bind(notes, userId, requestId, newStageId).run()
+      }
+      return c.json({ success: true, message: 'تم تحديث مرحلة الطلب بنجاح' })
+    }
 
     const mappedStatus = mapWorkflowStageToRequestStatus(stage?.stage_name || null)
 
@@ -8329,7 +8575,32 @@ app.post('/api/workflow/update-stage', async (c) => {
         VALUES (?, ?, ?, ?, ?)
       `).bind(requestId, currentRequest.status, mappedStatus, userId || null, notes || '').run()
     }
-    
+
+    // Notify the other party (role 4 ↔ role 5) about this stage update
+    try {
+      const actorRole = normalizeRoleId(requester.roleId)
+      const targetRole = actorRole === 5 ? 4 : actorRole === 4 ? 5 : null
+      if (targetRole) {
+        const stageNameAr = (await c.env.DB.prepare(`SELECT stage_name_ar FROM workflow_stages WHERE id = ?`).bind(newStageId).first() as any)?.stage_name_ar || stage?.stage_name || ''
+        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+        const actorName = actorRow?.full_name || ''
+        const actorTenant = actorRow?.tenant_id ?? null
+        const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
+        const customerId = reqRow?.customer_id ?? null
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+        const linkUrl = `/admin/requests/${requestId}/workflow#request`
+        const { results: targets } = await c.env.DB.prepare(
+          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
+        ).bind(targetRole, actorTenant).all()
+        for (const t of targets as any[]) {
+          await c.env.DB.prepare(
+            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(customerId, `تحديث مرحلة: ${stageNameAr}`, `قام ${actorName} بتحديث مرحلة الطلب #${requestId} إلى: ${stageNameAr}`, t.id, actorTenant, 'workflow', linkUrl).run()
+        }
+      }
+    } catch (_) {}
+
     return c.json({ success: true, message: 'تم تحديث مرحلة الطلب بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -8345,13 +8616,49 @@ app.post('/api/workflow/add-action', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
     const { requestId, stageId, actionType, actionData, performedBy, notes } = await c.req.json()
-    
+    const actorId = performedBy || requester.userId
+
+    const recentDup = await c.env.DB.prepare(`
+      SELECT id FROM workflow_stage_actions
+      WHERE request_id = ? AND stage_id = ? AND action_type = ?
+        AND performed_by = ?
+        AND COALESCE(notes, '') = COALESCE(?, '')
+        AND created_at >= datetime('now', '-20 seconds')
+      LIMIT 1
+    `).bind(requestId, stageId, actionType, actorId, notes ?? '').first()
+    if (recentDup) return c.json({ success: true })
+
     await c.env.DB.prepare(`
-      INSERT INTO workflow_stage_actions 
+      INSERT INTO workflow_stage_actions
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(requestId, stageId, actionType, actionData, performedBy, notes).run()
-    
+    `).bind(requestId, stageId, actionType, actionData, actorId, notes).run()
+
+    // Notify the other party about this action
+    try {
+      const actorRole = normalizeRoleId(requester.roleId)
+      const targetRole = actorRole === 4 ? 5 : actorRole === 5 ? 4 : null
+      if (targetRole) {
+        const actionLabel = ({ call: 'اتصال هاتفي', email: 'بريد إلكتروني', meeting: 'اجتماع', document: 'مستند', approval: 'موافقة', rejection: 'رفض', followup: 'متابعة', other: 'أخرى' } as Record<string,string>)[actionType] || actionType
+        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+        const actorName = actorRow?.full_name || ''
+        const actorTenant = actorRow?.tenant_id ?? null
+        const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
+        const customerId = reqRow?.customer_id ?? null
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+        const linkUrl = `/admin/requests/${requestId}/workflow#request`
+        const { results: targets } = await c.env.DB.prepare(
+          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
+        ).bind(targetRole, actorTenant).all()
+        for (const t of targets as any[]) {
+          await c.env.DB.prepare(
+            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(customerId, `إجراء: ${actionLabel}`, `قام ${actorName} بإضافة إجراء "${actionLabel}" على الطلب #${requestId}${notes ? ' — ' + notes : ''}`, t.id, actorTenant, 'workflow', linkUrl).run()
+        }
+      }
+    } catch (_) {}
+
     return c.json({ success: true, message: 'تم إضافة الإجراء بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -8684,6 +8991,10 @@ app.post('/api/c/:tenant/calculator/submit-request', async (c) => {
         }
       }
     }
+
+    if (await customerHasFinancingRequest(c.env.DB, customer_id)) {
+      return c.json({ success: false, error: 'يوجد طلب تمويل مسبق لهذا العميل' }, 400)
+    }
     
     // Step 2: Create financing request with tenant_id
     const requestResult = await c.env.DB.prepare(`
@@ -8909,12 +9220,12 @@ app.post('/api/calculator/save-customer', async (c) => {
 
       if (!existingAssignment?.ok) {
         const { results: staffRows } = await c.env.DB.prepare(`
-          SELECT id FROM users
+          SELECT id, customer_limit FROM users
           WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
           ORDER BY id ASC
-        `).bind(tenant_id).all<{ id: number }>()
+        `).bind(tenant_id).all<{ id: number; customer_limit: number | null }>()
 
-        const staff = (staffRows || []) as { id: number }[]
+        const staff = (staffRows || []) as { id: number; customer_limit: number | null }[]
         if (staff.length) {
           const stateRow = await c.env.DB.prepare(`
             SELECT last_auto_assigned_user_id
@@ -8925,35 +9236,59 @@ app.post('/api/calculator/save-customer', async (c) => {
 
           const staffIds = staff.map((s) => s.id)
           const lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
-          function pickNextUserId(last: number | null): number {
-            if (last == null) return staffIds[0]
-            const idx = staffIds.indexOf(last)
-            if (idx === -1) return staffIds[0]
-            return staffIds[(idx + 1) % staffIds.length]
-          }
 
-          const employeeId = pickNextUserId(lastId)
-          const assignedBy = 1
-          const noteAr = 'تعيين تلقائي (الحاسبة)'
+          // Build eligible list respecting customer_limit
+          const calcPlaceholders = staffIds.map(() => '?').join(',')
+          const { results: calcCountRows } = await c.env.DB.prepare(`
+            SELECT employee_id, COUNT(*) as cnt
+            FROM customer_assignments
+            WHERE employee_id IN (${calcPlaceholders})
+            GROUP BY employee_id
+          `).bind(...staffIds).all<{ employee_id: number; cnt: number }>()
 
-          const ins = await c.env.DB.prepare(`
-            INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-            VALUES (?, ?, ?, ?)
-          `).bind(customer_id, employeeId, assignedBy, noteAr).run()
+          const calcCounts = new Map<number, number>()
+          for (const row of (calcCountRows || [])) calcCounts.set(row.employee_id, row.cnt)
 
-          if (ins.meta.changes > 0) {
-            await c.env.DB.prepare(`
-              INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
-              VALUES (?, NULL, ?, ?, ?)
+          const eligibleIds = staffIds.filter((id) => {
+            const s = staff.find((x) => x.id === id)!
+            if (s.customer_limit == null) return true
+            return (calcCounts.get(id) ?? 0) < s.customer_limit
+          })
+
+          if (eligibleIds.length) {
+            function pickNextUserId(last: number | null): number {
+              if (last == null) return eligibleIds[0]
+              const lastIdx = staffIds.indexOf(last)
+              for (let i = 1; i <= staffIds.length; i++) {
+                const candidateId = staffIds[(lastIdx + i) % staffIds.length]
+                if (eligibleIds.includes(candidateId)) return candidateId
+              }
+              return eligibleIds[0]
+            }
+
+            const employeeId = pickNextUserId(lastId)
+            const assignedBy = 1
+            const noteAr = 'تعيين تلقائي (الحاسبة)'
+
+            const ins = await c.env.DB.prepare(`
+              INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+              VALUES (?, ?, ?, ?)
             `).bind(customer_id, employeeId, assignedBy, noteAr).run()
 
-            await c.env.DB.prepare(`
-              INSERT INTO tenant_customer_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
-              VALUES (?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(tenant_id) DO UPDATE SET
-                last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
-                updated_at = CURRENT_TIMESTAMP
-            `).bind(tenant_id, employeeId).run()
+            if (ins.meta.changes > 0) {
+              await c.env.DB.prepare(`
+                INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+                VALUES (?, NULL, ?, ?, ?)
+              `).bind(customer_id, employeeId, assignedBy, noteAr).run()
+
+              await c.env.DB.prepare(`
+                INSERT INTO tenant_customer_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(tenant_id) DO UPDATE SET
+                  last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+                  updated_at = CURRENT_TIMESTAMP
+              `).bind(tenant_id, employeeId).run()
+            }
           }
         }
       }
@@ -9089,6 +9424,10 @@ app.post('/api/calculator/submit-request', async (c) => {
           throw insertError
         }
       }
+    }
+
+    if (await customerHasFinancingRequest(c.env.DB, customer_id)) {
+      return c.json({ success: false, error: 'يوجد طلب تمويل مسبق لهذا العميل' }, 400)
     }
     
     // Step 2: Create financing request
@@ -9339,6 +9678,21 @@ app.put('/api/financing-requests/:id', async (c) => {
     }
     
     await c.env.DB.prepare(updateQuery).bind(...params).run()
+
+    if (assigned_bank_agent_id !== undefined && rowMeta?.customer_id != null) {
+      const persisted = await setCustomerAssignedBankAgent(
+        c.env.DB,
+        Number(rowMeta.customer_id),
+        assigned_bank_agent_id
+      )
+      if (persisted.ok) {
+        await syncFinancingRequestsBankAgentForCustomer(
+          c.env.DB,
+          Number(rowMeta.customer_id),
+          assigned_bank_agent_id
+        )
+      }
+    }
 
     // Keep customer and all related requests in sync with request edit screen.
     const customerIdRow = await c.env.DB.prepare(`
@@ -10704,14 +11058,20 @@ app.delete('/api/roles/:id', async (c) => {
 app.put('/api/users/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    const { full_name, email, phone, role_id, is_active } = await c.req.json()
-    
+    const body = await c.req.json()
+    const { full_name, email, phone, role_id, is_active } = body
+    const customerLimitRaw = body.customer_limit
+    const customerLimit =
+      customerLimitRaw === '' || customerLimitRaw == null
+        ? null
+        : parseInt(String(customerLimitRaw), 10) || null
+
     await c.env.DB.prepare(`
-      UPDATE users 
-      SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?
+      UPDATE users
+      SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, customer_limit = ?
       WHERE id = ?
-    `).bind(full_name, email, phone, role_id, is_active, id).run()
-    
+    `).bind(full_name, email, phone, role_id, is_active, customerLimit, id).run()
+
     return c.json({ success: true, message: 'تم تحديث بيانات المستخدم بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -13732,8 +14092,17 @@ app.get('/admin/customers/add', async (c) => {
   const normRoleForAddPage = normalizeRoleId(userInfo.roleId)
   if ((normRoleForAddPage === 2 || normRoleForAddPage === 1) && resolvedTenantIdForLocations) {
     const agentsRes = await c.env.DB.prepare(
-      `SELECT id, full_name, username FROM users WHERE role_id = 5 AND is_active = 1 AND tenant_id = ? ORDER BY full_name ASC`
-    ).bind(resolvedTenantIdForLocations).all<{ id: number; full_name: string | null; username: string }>()
+      `SELECT u.id, u.full_name, u.username FROM users u
+       WHERE u.role_id IN (5, 15) AND u.is_active = 1
+         AND (
+           u.tenant_id = ?
+           OR EXISTS (
+             SELECT 1 FROM banks b
+             WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+           )
+         )
+       ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
+    ).bind(resolvedTenantIdForLocations, resolvedTenantIdForLocations).all<{ id: number; full_name: string | null; username: string }>()
     const agents = (agentsRes.results || []) as Array<{ id: number; full_name: string | null; username: string }>
     if (agents.length > 0) {
       bankAgentSectionHtml = `
@@ -15889,14 +16258,50 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     }
 
     const { results: staffRows } = await c.env.DB.prepare(`
-      SELECT id FROM users
+      SELECT id, customer_limit FROM users
       WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
       ORDER BY id ASC
-    `).bind(tenantId).all<{ id: number }>()
+    `).bind(tenantId).all<{ id: number; customer_limit: number | null }>()
 
-    const staff = (staffRows || []) as { id: number }[]
+    const staff = (staffRows || []) as { id: number; customer_limit: number | null }[]
     if (!staff.length) {
       return c.json({ success: false, error: 'لا يوجد موظفون نشطون بدور الموظف في هذه الشركة' }, 400)
+    }
+
+    // Build remaining capacity map (null limit = unlimited)
+    const staffIds = staff.map((s) => s.id)
+    const placeholders = staffIds.map(() => '?').join(',')
+    const { results: countRows } = await c.env.DB.prepare(`
+      SELECT employee_id, COUNT(*) as cnt
+      FROM customer_assignments
+      WHERE employee_id IN (${placeholders})
+      GROUP BY employee_id
+    `).bind(...staffIds).all<{ employee_id: number; cnt: number }>()
+
+    const assignmentCounts = new Map<number, number>()
+    for (const row of (countRows || [])) {
+      assignmentCounts.set(row.employee_id, row.cnt)
+    }
+
+    // remaining = null means unlimited; 0 means full
+    const remaining = new Map<number, number | null>()
+    for (const s of staff) {
+      const current = assignmentCounts.get(s.id) ?? 0
+      remaining.set(s.id, s.customer_limit == null ? null : Math.max(0, s.customer_limit - current))
+    }
+
+    let eligibleIds = staffIds.filter((id) => {
+      const r = remaining.get(id)
+      return r === null || r > 0
+    })
+
+    if (!eligibleIds.length) {
+      return c.json({
+        success: true,
+        assigned_count: 0,
+        employee_count: staff.length,
+        message: 'جميع الموظفين وصلوا للحد الأقصى من العملاء',
+      })
     }
 
     const stateRow = await c.env.DB.prepare(`
@@ -15929,12 +16334,16 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
       })
     }
 
-    const staffIds = staff.map((s) => s.id)
-    function pickNextUserId(last: number | null): number {
-      if (last == null) return staffIds[0]
-      const idx = staffIds.indexOf(last)
-      if (idx === -1) return staffIds[0]
-      return staffIds[(idx + 1) % staffIds.length]
+    // Pick next eligible employee after `last` in the full staff order
+    function pickNextUserId(last: number | null, eligible: number[]): number | null {
+      if (!eligible.length) return null
+      if (last == null) return eligible[0]
+      const lastIdx = staffIds.indexOf(last)
+      for (let i = 1; i <= staffIds.length; i++) {
+        const candidateId = staffIds[(lastIdx + i) % staffIds.length]
+        if (eligible.includes(candidateId)) return candidateId
+      }
+      return eligible[0]
     }
 
     const assignedBy = userInfo.userId ?? 1
@@ -15942,7 +16351,11 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     const noteAr = 'تعيين تلقائي عادل'
 
     for (const row of customers) {
-      const employeeId = pickNextUserId(lastId)
+      if (!eligibleIds.length) break
+
+      const employeeId = pickNextUserId(lastId, eligibleIds)
+      if (employeeId === null) break
+
       const ins = await c.env.DB.prepare(`
         INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
         VALUES (?, ?, ?, ?)
@@ -15955,6 +16368,16 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
         `).bind(row.id, employeeId, assignedBy, noteAr).run()
         lastId = employeeId
         assignedCount += 1
+
+        // Decrement remaining capacity and remove from pool if full
+        const r = remaining.get(employeeId)
+        if (r !== null && r !== undefined) {
+          const newR = r - 1
+          remaining.set(employeeId, newR)
+          if (newR <= 0) {
+            eligibleIds = eligibleIds.filter((id) => id !== employeeId)
+          }
+        }
       }
     }
 
@@ -17126,7 +17549,45 @@ app.get('/admin/customers', async (c) => {
               AND COALESCE(is_archived, 0) = 0
             ORDER BY id DESC LIMIT 1
           )
-        ) AS contract_status
+        ) AS contract_status,
+        COALESCE(
+          NULLIF(customers.assigned_bank_agent_id, 0),
+          (
+            SELECT CASE
+              WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
+                THEN frx.assigned_bank_agent_id
+              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+                THEN frx.created_by
+              ELSE NULL
+            END
+            FROM financing_requests frx
+            LEFT JOIN users ucx ON ucx.id = frx.created_by
+            WHERE frx.customer_id = customers.id
+            ORDER BY frx.created_at DESC
+            LIMIT 1
+          )
+        ) AS resolved_bank_agent_id,
+        (
+          SELECT COALESCE(NULLIF(TRIM(ub.full_name),''), ub.username) FROM users ub
+          WHERE ub.id = COALESCE(
+            NULLIF(customers.assigned_bank_agent_id, 0),
+            (
+              SELECT CASE
+                WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
+                  THEN frx.assigned_bank_agent_id
+                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+                  THEN frx.created_by
+                ELSE NULL
+              END
+              FROM financing_requests frx
+              LEFT JOIN users ucx ON ucx.id = frx.created_by
+              WHERE frx.customer_id = customers.id
+              ORDER BY frx.created_at DESC
+              LIMIT 1
+            )
+          )
+          LIMIT 1
+        ) AS assigned_bank_agent_name
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 14)
@@ -17159,13 +17620,19 @@ app.get('/admin/customers', async (c) => {
       if (userInfo.tenantId && userInfo.userId) {
         query += ` AND customers.tenant_id = ? AND (
           customers.created_by = ?
+          OR customers.assigned_bank_agent_id = ?
           OR EXISTS (
             SELECT 1
             FROM financing_requests fr
-            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+            LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = customers.id
+              AND (
+                fr.assigned_bank_agent_id = ?
+                OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+              )
           )
         )`;
-        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId);
       } else {
         query += ' AND 1 = 0';
       }
@@ -17185,84 +17652,57 @@ app.get('/admin/customers', async (c) => {
       const isMissingCreatedBy = /no such column:\s*customers\.created_by|no such column:\s*created_by/i.test(msg)
       if (normalizeRoleId(userInfo.roleId) === 5 && isMissingCreatedBy && userInfo.tenantId && userInfo.userId) {
         const fallbackQuery = query.replace(
-          /AND\s+customers\.tenant_id\s*=\s*\?\s+AND\s*\(\s*customers\.created_by\s*=\s*\?\s+OR\s+EXISTS\s*\(\s*SELECT 1\s+FROM financing_requests fr\s+WHERE fr\.customer_id = customers\.id AND fr\.assigned_bank_agent_id = \?\s*\)\s*\)/i,
-          `AND customers.tenant_id = ? AND EXISTS (
+          /AND\s+customers\.tenant_id\s*=\s*\?\s+AND\s*\(\s*customers\.created_by\s*=\s*\?\s+OR\s+customers\.assigned_bank_agent_id\s*=\s*\?\s+OR\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+financing_requests\s+fr\s+LEFT\s+JOIN\s+users\s+fr_creator\s+ON\s+fr_creator\.id\s*=\s*fr\.created_by\s+WHERE\s+fr\.customer_id\s*=\s*customers\.id\s+AND\s*\(\s*fr\.assigned_bank_agent_id\s*=\s*\?\s+OR\s*\(\s*fr\.created_by\s*=\s*\?\s+AND\s+fr_creator\.role_id\s+IN\s*\(\s*5,\s*15\s*\)\s*\)\s*\)\s*\)\s*\)/i,
+          `AND customers.tenant_id = ? AND (
+          customers.assigned_bank_agent_id = ?
+          OR EXISTS (
             SELECT 1
             FROM financing_requests fr
-            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
-          )`
+            LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = customers.id
+              AND (
+                fr.assigned_bank_agent_id = ?
+                OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+              )
+          )
+        )`
         )
-        customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId).all()) as { results: any[] }
+        customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId).all()) as { results: any[] }
       } else {
         throw e
       }
     }
 
-    // Fetch customer IDs that have at least one financing request (same scope)
-    let reqQuery = 'SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1';
+    // Fetch customer IDs that have at least one financing request, plus their latest request ID
+    let reqQuery = 'SELECT customer_id, MAX(id) AS latest_request_id FROM financing_requests WHERE 1=1';
     const reqParams: any[] = [];
     if (userInfo.roleId !== 1) {
-      if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
-        reqQuery += ' AND tenant_id = ? AND (assigned_bank_agent_id = ? OR created_by = ?)';
-        reqParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
-      } else if (userInfo.tenantId) { reqQuery += ' AND tenant_id = ?'; reqParams.push(userInfo.tenantId); }
-      else if (userInfo.userId) { reqQuery += ' AND user_id = ?'; reqParams.push(userInfo.userId); }
+      if (userInfo.tenantId) {
+        reqQuery += ' AND tenant_id = ?'
+        reqParams.push(userInfo.tenantId)
+      } else if (userInfo.userId) {
+        reqQuery += ' AND user_id = ?'
+        reqParams.push(userInfo.userId)
+      }
     }
+    reqQuery += ' GROUP BY customer_id';
     const reqRows = reqParams.length > 0
       ? await c.env.DB.prepare(reqQuery).bind(...reqParams).all()
       : await c.env.DB.prepare(reqQuery).all();
-    const customerIdsWithRequests = new Set((reqRows.results as any[]).map((r: any) => r.customer_id));
-
-    // Latest financing request per customer (same tenant scope as request list) → role-5 bank agent on that request
-    let latestFrScope = 'WHERE 1=1'
-    const latestFrParams: any[] = []
-    if (userInfo.roleId !== 1) {
-      if (normalizeRoleId(userInfo.roleId) === 5 && userInfo.tenantId && userInfo.userId) {
-        latestFrScope += ' AND tenant_id = ? AND (assigned_bank_agent_id = ? OR created_by = ?)'
-        latestFrParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
-      } else if (userInfo.tenantId) {
-        latestFrScope += ' AND tenant_id = ?'
-        latestFrParams.push(userInfo.tenantId)
-      } else if (userInfo.userId) {
-        latestFrScope += ' AND user_id = ?'
-        latestFrParams.push(userInfo.userId)
-      }
-    }
-    const bankAgentSql = `
-      SELECT
-        fr.customer_id,
-        fr.id AS latest_request_id,
-        u.id AS bank_agent_role5_user_id,
-        COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.username), '')) AS bank_agent_display_name
-      FROM financing_requests fr
-      LEFT JOIN users u ON u.id = fr.assigned_bank_agent_id AND u.role_id = 5
-      INNER JOIN (
-        SELECT customer_id, MAX(id) AS max_req_id
-        FROM financing_requests
-        ${latestFrScope}
-        GROUP BY customer_id
-      ) latest ON fr.id = latest.max_req_id
-    `
-    const bankAgentRows =
-      latestFrParams.length > 0
-        ? await c.env.DB.prepare(bankAgentSql).bind(...latestFrParams).all()
-        : await c.env.DB.prepare(bankAgentSql).all()
-    const bankAgentByCustomer = new Map<number, { latestRequestId: number | null; agentUserId: number | null; agentName: string | null }>()
-    for (const row of (bankAgentRows.results || []) as any[]) {
-      const cid = Number(row.customer_id)
-      if (Number.isNaN(cid)) continue
-      bankAgentByCustomer.set(cid, {
-        latestRequestId: row.latest_request_id != null ? Number(row.latest_request_id) : null,
-        agentUserId: row.bank_agent_role5_user_id != null ? Number(row.bank_agent_role5_user_id) : null,
-        agentName: row.bank_agent_display_name != null ? String(row.bank_agent_display_name) : null
-      })
-    }
+    const customerIdsWithRequests = new Set((reqRows.results as any[]).map((r: any) => r.customer_id))
+    const customerLatestRequestMap = new Map<number, number>((reqRows.results as any[]).map((r: any) => [r.customer_id, r.latest_request_id]))
 
     const customersCsvRowsJson = JSON.stringify(
       customers.results.map((customer: any) => {
-        const hasFr = customerIdsWithRequests.has(customer.id)
-        const ba = bankAgentByCustomer.get(customer.id)
-        const bankCol = !hasFr ? '—' : !ba?.agentUserId ? 'غير معيّن' : (ba.agentName || '—')
+        const custAgentId =
+          customer.resolved_bank_agent_id != null && customer.resolved_bank_agent_id !== ''
+            ? Number(customer.resolved_bank_agent_id)
+            : customer.assigned_bank_agent_id != null && customer.assigned_bank_agent_id !== ''
+              ? Number(customer.assigned_bank_agent_id)
+              : null
+        const custAgentName = customer.assigned_bank_agent_name ? String(customer.assigned_bank_agent_name) : ''
+        const bankCol =
+          !custAgentId || Number.isNaN(custAgentId) ? 'غير معيّن' : custAgentName || '—'
         const src =
           customer.enrollment_source === 'calculator'
             ? 'الحاسبة'
@@ -17515,7 +17955,7 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">الموظف المخصص</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ التسجيل</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-px whitespace-nowrap">طلبات</th>
-                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="موظف البنك (دور 5) المعيّن على آخر طلب تمويل">موظف البنك</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="موظف البنك المعيّن على سجل العميل">موظف البنك</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">العقد</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
                 </tr>
@@ -17523,11 +17963,15 @@ app.get('/admin/customers', async (c) => {
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
                 ${customers.results.map((customer: any) => {
                   const hasFr = customerIdsWithRequests.has(customer.id)
-                  const ba = bankAgentByCustomer.get(customer.id)
-                  const latestRequestId = ba?.latestRequestId ?? null
-                  const bankAgentSearch = hasFr
-                    ? `${ba?.agentName || ''} ${ba?.agentUserId != null ? '#' + ba.agentUserId : ''}`.trim()
-                    : ''
+                  const latestRequestId = customerLatestRequestMap.get(customer.id) ?? null
+                  const custAgentId =
+                    customer.resolved_bank_agent_id != null && customer.resolved_bank_agent_id !== ''
+                      ? Number(customer.resolved_bank_agent_id)
+                      : customer.assigned_bank_agent_id != null && customer.assigned_bank_agent_id !== ''
+                        ? Number(customer.assigned_bank_agent_id)
+                        : null
+                  const custAgentName = customer.assigned_bank_agent_name ? String(customer.assigned_bank_agent_name) : ''
+                  const bankAgentSearch = `${custAgentName} ${custAgentId != null && !Number.isNaN(custAgentId) ? '#' + custAgentId : ''}`.trim()
                   const bankAgentDataEsc = bankAgentSearch.replace(/"/g, '&quot;')
                   const enrollmentSource = String(customer.enrollment_source || '').trim()
                   const enrollmentSourceLabel = String(customer.enrollment_source_label || '').trim()
@@ -17560,11 +18004,9 @@ app.get('/admin/customers', async (c) => {
                         <a href="/admin/customers/${customer.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
-                        ${hasFr && latestRequestId ? `
-                        <a href="/admin/requests/${latestRequestId}/workflow" class="actions-dropdown-item" style="color:#4338ca;">
+                        <a href="/admin/customers/${customer.id}/workflow#customer" class="actions-dropdown-item" style="color:#4338ca;">
                           <i class="fas fa-clock"></i> الجدول الزمني
                         </a>
-                        ` : ''}
                         <a href="/admin/customers/${customer.id}" class="actions-dropdown-item" style="color:#1d4ed8;">
                           <i class="fas fa-eye"></i> عرض
                         </a>
@@ -17623,11 +18065,9 @@ app.get('/admin/customers', async (c) => {
                       }
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
-                      ${!hasFr
-                        ? `<span class="text-gray-300 text-sm">—</span>`
-                        : !ba?.agentUserId
-                          ? `<span class="text-xs text-amber-700">غير معيّن</span>`
-                          : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${ba.agentUserId}"><span class="truncate-cell sm">${(ba.agentName || '—')}</span></span>`
+                      ${!custAgentId || Number.isNaN(custAgentId)
+                        ? `<span class="text-xs text-amber-700">غير معيّن</span>`
+                        : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${custAgentId}"><span class="truncate-cell sm">${custAgentName || '—'}</span></span>`
                       }
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
@@ -18499,7 +18939,7 @@ app.get('/admin/customers', async (c) => {
           });
 
           function exportToCSV() {
-            const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك — آخر طلب', 'الرقم الوطني', 'تاريخ التسجيل'];
+            const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'الرقم الوطني', 'تاريخ التسجيل'];
             const rows = ${customersCsvRowsJson};
             const data = [header, ...rows];
             let csv = '\\uFEFFsep=,\\r\\n';
@@ -19027,6 +19467,15 @@ app.get('/admin/notifications', async (c) => {
             background: #FFFFFF;
             opacity: 0.85;
           }
+          .notification-workflow-unread {
+            background: linear-gradient(to right, #FFF7ED, #FFFBF5);
+            border-right: 4px solid #F59E0B;
+          }
+          .notification-workflow-read {
+            background: #FFFFFF;
+            border-right: 4px solid #E5E7EB;
+            opacity: 0.85;
+          }
           .badge-pulse {
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
           }
@@ -19115,6 +19564,10 @@ app.get('/admin/notifications', async (c) => {
                 <i class="fas fa-sync ml-2"></i>
                 تحديثات الحالة
               </button>
+              <button type="button" data-notification-filter="workflow_action" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+                <i class="fas fa-route ml-2"></i>
+                إجراءات سير العمل
+              </button>
             </div>
           </div>
 
@@ -19191,7 +19644,7 @@ app.get('/admin/notifications', async (c) => {
               filtered = allNotifications.filter(function (n) { return notificationIsUnread(n); });
             } else if (currentFilter === 'read') {
               filtered = allNotifications.filter(function (n) { return !notificationIsUnread(n); });
-            } else if (currentFilter === 'request' || currentFilter === 'status_change') {
+            } else if (currentFilter === 'request' || currentFilter === 'status_change' || currentFilter === 'workflow_action') {
               filtered = allNotifications.filter(n => n.category === currentFilter);
             }
 
@@ -19206,10 +19659,12 @@ app.get('/admin/notifications', async (c) => {
             }
 
             const html = filtered.map(notification => {
+              const isWorkflow = notification.category === 'workflow_action';
+
               const typeIcons = {
                 info: 'fa-info-circle text-blue-600',
                 success: 'fa-check-circle text-green-600',
-                warning: 'fa-exclamation-triangle text-yellow-600',
+                warning: isWorkflow ? 'fa-route text-amber-500' : 'fa-exclamation-triangle text-yellow-600',
                 error: 'fa-times-circle text-red-600'
               };
 
@@ -19217,22 +19672,27 @@ app.get('/admin/notifications', async (c) => {
                 request: 'fa-file-invoice',
                 status_change: 'fa-sync',
                 system: 'fa-cog',
-                general: 'fa-bell'
+                general: 'fa-bell',
+                workflow_action: 'fa-route'
               };
 
               const typeIcon = typeIcons[notification.type] || typeIcons.info;
               const categoryIcon = categoryIcons[notification.category] || categoryIcons.general;
-              
+
               var unreadCard = notificationIsUnread(notification);
+              var cardClass = isWorkflow
+                ? (unreadCard ? 'notification-workflow-unread' : 'notification-workflow-read')
+                : (unreadCard ? 'notification-unread' : 'notification-read');
+
               return \`
-                <div class="notification-card \${unreadCard ? 'notification-unread' : 'notification-read'} rounded-lg p-4 shadow-sm">
+                <div class="notification-card \${cardClass} rounded-lg p-4 shadow-sm">
                   <div class="flex items-start gap-4">
                     <div class="flex-shrink-0">
                       <i class="fas \${typeIcon} text-3xl"></i>
                     </div>
                     <div class="flex-1">
                       <div class="flex items-start justify-between mb-2">
-                        <h3 class="text-lg font-bold text-gray-800">\${notification.title}</h3>
+                        <h3 class="text-lg font-bold \${isWorkflow ? 'text-amber-800' : 'text-gray-800'}">\${notification.title}</h3>
                         <div class="flex gap-2">
                           \${unreadCard ? \`
                             <button onclick="markAsRead(\${notification.id})" class="text-blue-600 hover:text-blue-800 transition" title="تحديد كمقروء">
@@ -19244,12 +19704,13 @@ app.get('/admin/notifications', async (c) => {
                           </button>
                         </div>
                       </div>
-                      <p class="text-gray-700 mb-3">\${notification.message}</p>
+                      <p class="\${isWorkflow ? 'text-amber-900' : 'text-gray-700'} mb-3">\${notification.message}</p>
                       <div class="flex items-center gap-4 text-sm text-gray-600">
                         <span>
                           <i class="fas \${categoryIcon} ml-1"></i>
-                          \${notification.category === 'request' ? 'طلب جديد' : 
-                            notification.category === 'status_change' ? 'تحديث حالة' : 
+                          \${notification.category === 'request' ? 'طلب جديد' :
+                            notification.category === 'status_change' ? 'تحديث حالة' :
+                            notification.category === 'workflow_action' ? 'سير العمل' :
                             notification.category === 'system' ? 'نظام' : 'عام'}
                         </span>
                         <span>
@@ -19257,9 +19718,9 @@ app.get('/admin/notifications', async (c) => {
                           \${new Date(notification.created_at).toLocaleString('ar-SA')}
                         </span>
                         \${notification.related_request_id ? \`
-                          <a href="/admin/requests/\${notification.related_request_id}" class="text-blue-600 hover:text-blue-800 font-bold">
+                          <a href="/admin/requests/\${notification.related_request_id}/workflow" class="\${isWorkflow ? 'text-amber-700 hover:text-amber-900' : 'text-blue-600 hover:text-blue-800'} font-bold">
                             <i class="fas fa-external-link-alt ml-1"></i>
-                            عرض الطلب #\${notification.related_request_id}
+                            عرض سير العمل #\${notification.related_request_id}
                           </a>
                         \` : ''}
                       </div>
@@ -20520,7 +20981,7 @@ app.get('/admin/requests', async (c) => {
       LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 14)
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
-      LEFT JOIN users bagent ON bagent.id = fr.assigned_bank_agent_id AND bagent.role_id = 5
+      LEFT JOIN users bagent ON bagent.id = c.assigned_bank_agent_id
     `;
     
     let queryParams: any[] = [];
@@ -20549,10 +21010,11 @@ app.get('/admin/requests', async (c) => {
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
         query += ` WHERE c.tenant_id = ? AND (
-          fr.assigned_bank_agent_id = ?
+          c.assigned_bank_agent_id = ?
+          OR fr.assigned_bank_agent_id = ?
           OR fr.created_by = ?
         )`;
-        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId);
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId);
       } else {
         query += ' WHERE 1 = 0';
       }
@@ -20921,7 +21383,7 @@ app.get('/admin/requests', async (c) => {
                         الإجراءات <i class="fas fa-chevron-down text-xs"></i>
                       </button>
                       <div id="actions-request-${req.id}" hidden class="actions-dropdown-menu">
-                        <a href="/admin/requests/${req.id}/workflow" class="actions-dropdown-item" style="color:#4338ca;">
+                        <a href="/admin/requests/${req.id}/workflow#request" class="actions-dropdown-item" style="color:#4338ca;">
                           <i class="fas fa-clock"></i> الجدول الزمني
                         </a>
                         <a href="/admin/requests/${req.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
@@ -21666,6 +22128,31 @@ app.get('/admin/requests/new', async (c) => {
     }
     const { results: customerRows } = await loadCustomersForAdminForms(c, userInfo)
 
+    // Customers who already have a financing request (same scope as customers list actions dropdown)
+    let reqQueryNew = 'SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1'
+    const reqParamsNew: any[] = []
+    if (userInfo.roleId !== 1) {
+      if (userInfo.tenantId) {
+        reqQueryNew += ' AND tenant_id = ?'
+        reqParamsNew.push(userInfo.tenantId)
+      } else if (userInfo.userId) {
+        reqQueryNew += ' AND user_id = ?'
+        reqParamsNew.push(userInfo.userId)
+      }
+    }
+    const reqRowsNew =
+      reqParamsNew.length > 0
+        ? await c.env.DB.prepare(reqQueryNew).bind(...reqParamsNew).all()
+        : await c.env.DB.prepare(reqQueryNew).all()
+    const customerIdsWithExistingRequest = new Set(
+      (reqRowsNew.results as any[])
+        .map((r: any) => Number(r.customer_id))
+        .filter((n) => Number.isFinite(n))
+    )
+    const customerRowsForNewRequest = customerRows.filter(
+      (cust: any) => !customerIdsWithExistingRequest.has(Number(cust.id))
+    )
+
     const prefillRaw = c.req.query('customer_id')
     let prefillCustomerIdNum: number | null = null
     if (prefillRaw != null && String(prefillRaw).trim() !== '') {
@@ -21674,7 +22161,8 @@ app.get('/admin/requests/new', async (c) => {
     }
     const prefillCustomerIdAllowed =
       prefillCustomerIdNum != null &&
-      customerRows.some((cust: any) => Number(cust.id) === prefillCustomerIdNum)
+      customerRows.some((cust: any) => Number(cust.id) === prefillCustomerIdNum) &&
+      !customerIdsWithExistingRequest.has(prefillCustomerIdNum)
 
     // Get banks scoped by tenant (allow global banks if tenant_id is NULL)
     let banksQuery = 'SELECT id, bank_name FROM banks WHERE is_active = 1'
@@ -21702,7 +22190,7 @@ app.get('/admin/requests/new', async (c) => {
     const financingTypes = await c.env.DB.prepare('SELECT id, type_name FROM financing_types ORDER BY type_name').all()
 
     const newRequestCustomersJson = JSON.stringify(
-      customerRows.map((cust: any) => ({
+      customerRowsForNewRequest.map((cust: any) => ({
         id: cust.id,
         name: cust.full_name || '',
         text: `${cust.full_name} - ${cust.phone}`,
@@ -22164,7 +22652,12 @@ app.get('/admin/requests/new', async (c) => {
                 }
                 if (response.ok && body && body.success) {
                   window.location.href = '/admin/requests';
+                  return;
                 }
+                var errMsg = (typeof body === 'object' && body !== null && (body.error || body.message))
+                  ? String(body.error || body.message)
+                  : ('خطأ ' + response.status);
+                alert(errMsg);
               } catch (error) {
                 console.error('Request error:', error);
               }
@@ -22558,8 +23051,22 @@ app.get('/admin/customers/:id', async (c) => {
                 <p class="text-sm text-gray-500 mb-1">تاريخ التسجيل</p>
                 <p class="text-xl font-bold text-gray-800">${new Date((customer as any).created_at).toLocaleDateString('ar-SA')}</p>
               </div>
+              ${(customer as any).assigned_bank_agent_id ? `
+              <div class="border-r-4 border-teal-500 pr-4">
+                <p class="text-sm text-gray-500 mb-1">موظف التمويل المعين</p>
+                <p class="text-xl font-bold text-gray-800" id="customer-bank-agent-name">جاري التحميل...</p>
+              </div>
+              <script>
+                fetch('/api/users').then(r=>r.json()).then(d=>{
+                  if(d.success){
+                    const u=d.data.find(x=>x.id===${(customer as any).assigned_bank_agent_id});
+                    const el=document.getElementById('customer-bank-agent-name');
+                    if(el) el.textContent=u?(u.full_name||u.username):'(مستخدم ${(customer as any).assigned_bank_agent_id})';
+                  }
+                }).catch(()=>{});
+              </script>` : ''}
             </div>
-            
+
             <div class="mt-8 flex gap-4">
               <a href="/admin/customers/${id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold">
                 <i class="fas fa-edit ml-2"></i>
@@ -22665,11 +23172,49 @@ app.get('/admin/customers/:id/edit', async (c) => {
       const custTenantId = (customer as any).tenant_id != null ? Number((customer as any).tenant_id) : null
       if (custTenantId) {
         const agentsRes = await c.env.DB.prepare(
-          `SELECT id, full_name, username FROM users WHERE role_id = 5 AND is_active = 1 AND tenant_id = ? ORDER BY full_name ASC`
-        ).bind(custTenantId).all<{ id: number; full_name: string | null; username: string }>()
-        const agents = (agentsRes.results || []) as Array<{ id: number; full_name: string | null; username: string }>
-        const currentAgentId = (customer as any).assigned_bank_agent_id != null ? Number((customer as any).assigned_bank_agent_id) : null
-        if (agents.length > 0) {
+          `SELECT u.id, u.full_name, u.username FROM users u
+           WHERE u.role_id IN (5, 15) AND u.is_active = 1
+             AND (
+               u.tenant_id = ?
+               OR EXISTS (
+                 SELECT 1 FROM banks b
+                 WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+               )
+             )
+           ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
+        ).bind(custTenantId, custTenantId).all<{ id: number; full_name: string | null; username: string }>()
+        let agents = (agentsRes.results || []) as Array<{
+          id: number
+          full_name: string | null
+          username: string
+        }>
+        const currentAgentId =
+          (customer as any).assigned_bank_agent_id != null
+            ? Number((customer as any).assigned_bank_agent_id)
+            : null
+        const byId = new Set(agents.map((a) => a.id))
+        if (
+          currentAgentId != null &&
+          currentAgentId > 0 &&
+          !byId.has(currentAgentId)
+        ) {
+          const curRow = await c.env.DB.prepare(
+            `SELECT id, full_name, username FROM users WHERE id = ? LIMIT 1`
+          )
+            .bind(currentAgentId)
+            .first<{ id: number; full_name: string | null; username: string }>()
+          if (curRow) agents = [curRow, ...agents]
+        }
+        // Show control whenever we can edit and there is anyone to choose (or a current assignment to clear).
+        if (agents.length > 0 || (currentAgentId != null && currentAgentId > 0)) {
+          const options =
+            '<option value="">— بدون تعيين —</option>' +
+            agents
+              .map(
+                (a) =>
+                  `<option value="${a.id}"${currentAgentId === a.id ? ' selected' : ''}>${escapeHtml(a.full_name || a.username)}</option>`
+              )
+              .join('')
           editBankAgentSectionHtml = `
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -22677,9 +23222,17 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     <i class="fas fa-user-tie text-indigo-600 ml-1"></i>
                     موظف التمويل
                   </label>
+                  ${
+                    agents.length === 0 && currentAgentId != null && currentAgentId > 0
+                      ? `
+                  <p class="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-3 py-2 mb-2">
+                    لا توجد قائمة موظفي تمويل مطابقة لشركتك؛ سيُعرض الموظّف المعيّن الحالي للحفاظ على القيمة. أضِف موظف تمويل (دور 5) لنفس الشركة أو البنك.
+                  </p>`
+                      : ''
+                  }
                   <select name="assigned_bank_agent_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
-                    <option value="">— بدون تعيين —</option>
-                    ${agents.map(a => `<option value="${a.id}"${currentAgentId === a.id ? ' selected' : ''}>${escapeHtml(a.full_name || a.username)}</option>`).join('')}
+                    ${options ||
+                      `<option value="${currentAgentId}" selected>(#${currentAgentId})</option>`}
                   </select>
                   <p class="text-xs text-gray-500 mt-1">موظف التمويل المسؤول عن متابعة هذا العميل.</p>
                 </div>
@@ -22736,6 +23289,12 @@ app.get('/admin/customers/:id/edit', async (c) => {
         <title>تعديل العميل</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
       </head>
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
@@ -22787,7 +23346,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <div class="flex gap-2 items-center flex-wrap">
                     <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                       <input type="date" id="edit_date_of_birth_gregorian" value="${(customer as any).birthdate && (customer as any).dob_calendar_type !== 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                      <input type="text" id="edit_date_of_birth_hijri" style="display:none" placeholder="1445-01-01 (هـ)" value="${(customer as any).birthdate && (customer as any).dob_calendar_type === 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <input type="text" id="edit_date_of_birth_hijri" style="display:none" placeholder="اختر التاريخ الهجري" autocomplete="off" value="${(customer as any).birthdate && (customer as any).dob_calendar_type === 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
                     </div>
                     <div class="flex rounded-lg border border-gray-300 bg-gray-50">
                       <button type="button" id="edit_dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg ${(customer as any).dob_calendar_type === 'hijri' ? 'text-gray-600 hover:bg-gray-100' : 'bg-blue-600 text-white'}" title="ميلادي">م</button>
@@ -22839,7 +23398,17 @@ app.get('/admin/customers/:id/edit', async (c) => {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ التعيين</label>
-                  <input type="date" name="work_start_date" value="${(customer as any).work_start_date || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <input type="hidden" name="work_start_date" id="edit_work_start_date" value="${(customer as any).work_start_date || ''}">
+                  <div class="flex gap-2 items-center flex-wrap">
+                    <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                      <input type="date" id="edit_work_start_date_gregorian" value="${(customer as any).work_start_date || ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <input type="text" id="edit_work_start_date_hijri" style="display:none" placeholder="اختر التاريخ الهجري" autocomplete="off" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    </div>
+                    <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group">
+                      <button type="button" id="edit_work_start_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                      <button type="button" id="edit_work_start_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">المدينة</label>
@@ -23141,15 +23710,43 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   return payload.url;
                 }
                 var g=document.getElementById('edit_date_of_birth_gregorian'),h=document.getElementById('edit_date_of_birth_hijri'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri');
-                if(!g||!h||!hidden||!type) return;
-                hidden.value = cust.birthdate || '';
-                function setGregorian(){ g.style.display=''; h.style.display='none'; type.value='gregorian'; hidden.value=g.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100'; }
-                function setHijri(){ g.style.display='none'; h.style.display=''; type.value='hijri'; hidden.value=h.value||''; btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100'; btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white'; }
-                btnG.onclick=setGregorian; btnH.onclick=setHijri;
-                g.onchange=function(){ if(type.value==='gregorian') hidden.value=g.value||''; };
-                h.oninput=h.onchange=function(){ if(type.value==='hijri') hidden.value=h.value||''; };
-                if(cust.dob_calendar_type==='hijri'){ setHijri(); } else { setGregorian(); }
-                document.getElementById('edit-customer-form').addEventListener('submit',function(){ hidden.value=type.value==='hijri'?h.value:g.value; });
+                if(g&&h&&hidden&&type&&btnG&&btnH){
+                  var isDobSyncing=false,hijriDobPicker=null;
+                  function editNormalizeArabicDigits(value){if(!value)return'';var a='٠١٢٣٤٥٦٧٨٩',e='۰۱۲۳۴۵۶۷۸۹';return String(value).replace(/[٠-٩۰-۹]/g,function(c){var ai=a.indexOf(c);if(ai>=0)return String(ai);var ei=e.indexOf(c);return ei>=0?String(ei):c;});}
+                  function editFormatHijriFromGregorian(dateValue){if(!dateValue)return'';try{var parts=String(dateValue).split('-').map(Number),year=parts[0],month=parts[1],day=parts[2];if(!year||!month||!day)return'';var d=new Date(year,month-1,day,12,0,0);if(Number.isNaN(d.getTime()))return'';return d.toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'});}catch(_){return'';}}
+                  function editParseHijriInput(value){var normalized=editNormalizeArabicDigits(value).replace(/‏/g,'').replace(/‎/g,'').trim();if(!normalized)return null;var parts=normalized.split(/[^\d]+/).filter(Boolean);if(parts.length!==3)return null;var year,month,day;if(parts[0].length===4){year=Number(parts[0]);month=Number(parts[1]);day=Number(parts[2]);}else if(parts[2].length===4){day=Number(parts[0]);month=Number(parts[1]);year=Number(parts[2]);}else{return null;}if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;if(year<1200||year>1700)return null;if(month<1||month>12)return null;if(day<1||day>30)return null;return{year:year,month:month,day:day};}
+                  function editExtractHijriParts(dateObject){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(dateObject);var year=Number((parts.find(function(p){return p.type==='year';})||{}).value),month=Number((parts.find(function(p){return p.type==='month';})||{}).value),day=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;return{year:year,month:month,day:day};}
+                  function editFormatGregorianValue(dateObject){var year=dateObject.getFullYear(),month=String(dateObject.getMonth()+1).padStart(2,'0'),day=String(dateObject.getDate()).padStart(2,'0');return year+'-'+month+'-'+day;}
+                  function editFindGregorianFromHijri(hijriParts){var approxGregorianYear=hijriParts.year+579,start=new Date(approxGregorianYear-2,0,1,12,0,0),end=new Date(approxGregorianYear+2,11,31,12,0,0);for(var cursor=new Date(start);cursor<=end;cursor.setDate(cursor.getDate()+1)){var cur=editExtractHijriParts(cursor);if(!cur)continue;if(cur.year===hijriParts.year&&cur.month===hijriParts.month&&cur.day===hijriParts.day)return editFormatGregorianValue(cursor);}return'';}
+                  function editSyncFromGregorian(){if(isDobSyncing)return;isDobSyncing=true;h.value=editFormatHijriFromGregorian(g.value);hidden.value=g.value||'';type.value='gregorian';if(hijriDobPicker&&g.value)hijriDobPicker.setDate(g.value,false,'Y-m-d');isDobSyncing=false;}
+                  function editSyncFromHijri(){if(isDobSyncing)return;var parsedHijri=editParseHijriInput(h.value);if(!parsedHijri)return;var gregorianValue=editFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isDobSyncing=true;g.value=gregorianValue;h.value=editFormatHijriFromGregorian(gregorianValue);hidden.value=gregorianValue;type.value='gregorian';if(hijriDobPicker)hijriDobPicker.setDate(gregorianValue,false,'Y-m-d');isDobSyncing=false;}
+                  function editInitHijriDobPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriDobPicker=flatpickr(h,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(g.value)instance.setDate(g.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isDobSyncing)return;var gregorianValue=editFormatGregorianValue(selectedDates[0]);isDobSyncing=true;g.value=gregorianValue;h.value=editFormatHijriFromGregorian(gregorianValue);hidden.value=gregorianValue;type.value='gregorian';isDobSyncing=false;}]});}
+                  function setGregorian(){g.style.display='';h.style.display='none';type.value='gregorian';hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
+                  function setHijri(){g.style.display='none';h.style.display='';type.value='hijri';if(g.value)h.value=editFormatHijriFromGregorian(g.value);hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
+                  btnG.onclick=setGregorian;btnH.onclick=setHijri;
+                  g.onchange=editSyncFromGregorian;g.oninput=editSyncFromGregorian;h.onblur=editSyncFromHijri;
+                  if(cust.dob_calendar_type==='hijri'&&h.value){editSyncFromHijri();}
+                  editInitHijriDobPicker();
+                  if(cust.dob_calendar_type==='hijri'){setHijri();}else{setGregorian();}
+                }
+                var wsG=document.getElementById('edit_work_start_date_gregorian'),wsH=document.getElementById('edit_work_start_date_hijri'),wsHidden=document.getElementById('edit_work_start_date'),wsBtnG=document.getElementById('edit_work_start_toggle_gregorian'),wsBtnH=document.getElementById('edit_work_start_toggle_hijri');
+                if(wsG&&wsH&&wsHidden&&wsBtnG&&wsBtnH){
+                  var isWSSyncing=false,hijriWSPicker=null;
+                  function wsFormatHijriFromGregorian(dateValue){if(!dateValue)return'';try{var parts=String(dateValue).split('-').map(Number),year=parts[0],month=parts[1],day=parts[2];if(!year||!month||!day)return'';var d=new Date(year,month-1,day,12,0,0);if(Number.isNaN(d.getTime()))return'';return d.toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'});}catch(_){return'';}}
+                  function wsParseHijriInput(value){var a='٠١٢٣٤٥٦٧٨٩',e='۰۱۲۳۴۵۶۷۸۹';var normalized=String(value||'').replace(/[٠-٩۰-۹]/g,function(c){var ai=a.indexOf(c);if(ai>=0)return String(ai);var ei=e.indexOf(c);return ei>=0?String(ei):c;}).replace(/‏/g,'').replace(/‎/g,'').trim();if(!normalized)return null;var parts=normalized.split(/[^\d]+/).filter(Boolean);if(parts.length!==3)return null;var year,month,day;if(parts[0].length===4){year=Number(parts[0]);month=Number(parts[1]);day=Number(parts[2]);}else if(parts[2].length===4){day=Number(parts[0]);month=Number(parts[1]);year=Number(parts[2]);}else{return null;}if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;if(year<1200||year>1700)return null;if(month<1||month>12)return null;if(day<1||day>30)return null;return{year:year,month:month,day:day};}
+                  function wsExtractHijriParts(dateObject){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(dateObject);var year=Number((parts.find(function(p){return p.type==='year';})||{}).value),month=Number((parts.find(function(p){return p.type==='month';})||{}).value),day=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;return{year:year,month:month,day:day};}
+                  function wsFormatGregorianValue(dateObject){var year=dateObject.getFullYear(),month=String(dateObject.getMonth()+1).padStart(2,'0'),day=String(dateObject.getDate()).padStart(2,'0');return year+'-'+month+'-'+day;}
+                  function wsFindGregorianFromHijri(hijriParts){var approxGregorianYear=hijriParts.year+579,start=new Date(approxGregorianYear-2,0,1,12,0,0),end=new Date(approxGregorianYear+2,11,31,12,0,0);for(var cursor=new Date(start);cursor<=end;cursor.setDate(cursor.getDate()+1)){var cur=wsExtractHijriParts(cursor);if(!cur)continue;if(cur.year===hijriParts.year&&cur.month===hijriParts.month&&cur.day===hijriParts.day)return wsFormatGregorianValue(cursor);}return'';}
+                  function wsSyncFromGregorian(){if(isWSSyncing)return;isWSSyncing=true;wsH.value=wsFormatHijriFromGregorian(wsG.value);wsHidden.value=wsG.value||'';if(hijriWSPicker&&wsG.value)hijriWSPicker.setDate(wsG.value,false,'Y-m-d');isWSSyncing=false;}
+                  function wsSyncFromHijri(){if(isWSSyncing)return;var parsedHijri=wsParseHijriInput(wsH.value);if(!parsedHijri)return;var gregorianValue=wsFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isWSSyncing=true;wsG.value=gregorianValue;wsH.value=wsFormatHijriFromGregorian(gregorianValue);wsHidden.value=gregorianValue;if(hijriWSPicker)hijriWSPicker.setDate(gregorianValue,false,'Y-m-d');isWSSyncing=false;}
+                  function wsInitHijriPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriWSPicker=flatpickr(wsH,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(wsG.value)instance.setDate(wsG.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isWSSyncing)return;var gregorianValue=wsFormatGregorianValue(selectedDates[0]);isWSSyncing=true;wsG.value=gregorianValue;wsH.value=wsFormatHijriFromGregorian(gregorianValue);wsHidden.value=gregorianValue;isWSSyncing=false;}]});}
+                  function wsSetGregorian(){wsG.style.display='';wsH.style.display='none';wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
+                  function wsSetHijri(){wsG.style.display='none';wsH.style.display='';if(wsG.value)wsH.value=wsFormatHijriFromGregorian(wsG.value);wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
+                  wsBtnG.onclick=wsSetGregorian;wsBtnH.onclick=wsSetHijri;
+                  wsG.onchange=wsSyncFromGregorian;wsG.oninput=wsSyncFromGregorian;wsH.onblur=wsSyncFromHijri;
+                  wsInitHijriPicker();
+                  wsSetGregorian();
+                }
                 var jobTypeEl=document.getElementById('edit_job_type'),civilianWrap=document.getElementById('edit_job_title_civilian_wrap'),militaryWrap=document.getElementById('edit_military_rank_wrap'),jobTitleInput=document.getElementById('edit_job_title_input'),militarySelect=document.getElementById('edit_military_rank_select');
                 if(jobTypeEl&&civilianWrap&&militaryWrap){
                   function updateEditJobType(){ var isMilitary=jobTypeEl.value==='military'; civilianWrap.style.display=isMilitary?'none':'block'; militaryWrap.style.display=isMilitary?'block':'none'; if(jobTitleInput) jobTitleInput.disabled=isMilitary; if(militarySelect) militarySelect.disabled=!isMilitary; }
@@ -23755,6 +24352,143 @@ app.get('/admin/customers/:id/report', async (c) => {
   }
 })
 
+// سير عمل العميل (بدون طلب تمويل — تبويب العميل فقط)
+app.get('/admin/customers/:id/workflow', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+
+    const id = c.req.param('id')
+    await ensureCustomerWorkflowTables(c.env.DB)
+
+    const customer = await c.env.DB.prepare(`
+      SELECT c.* FROM customers c WHERE c.id = ?
+    `).bind(id).first() as any
+
+    if (!customer) {
+      return c.html('<h1>العميل غير موجود</h1>')
+    }
+    const hasAccess = await canUserAccessCustomer(c.env.DB, userInfo, customer as { id: number; tenant_id: number | null })
+    if (!hasAccess) {
+      // Allow cross-party workflow access: role 4/5 notified about this customer's workflow
+      const rid = normalizeRoleId(userInfo.roleId)
+      if ((rid === 4 || rid === 5) && customer.tenant_id != null && customer.tenant_id === userInfo.tenantId) {
+        const notif = await c.env.DB.prepare(
+          `SELECT 1 as ok FROM customer_alarms WHERE customer_id = ? AND user_id = ? AND alarm_type = 'workflow' LIMIT 1`
+        ).bind(customer.id, userInfo.userId).first<{ ok: number }>()
+        if (!notif?.ok) return c.html('<h1>غير مصرح بعرض سير عمل هذا العميل</h1>', 403)
+      } else {
+        return c.html('<h1>غير مصرح بعرض سير عمل هذا العميل</h1>', 403)
+      }
+    }
+
+    const { results: stages } = await c.env.DB.prepare(`
+      SELECT * FROM workflow_stages
+      WHERE is_active = 1
+      ORDER BY stage_order ASC
+    `).all()
+
+    const { results: custTransitions } = await c.env.DB.prepare(`
+      SELECT cwt.*,
+             ws_from.stage_name_ar as from_stage_name,
+             ws_to.stage_name_ar as to_stage_name,
+             ws_to.stage_color as to_stage_color,
+             ws_to.stage_icon as to_stage_icon,
+             u.full_name as transitioned_by_name,
+             u.role_id as transitioned_by_role_id
+      FROM customer_workflow_transitions cwt
+      LEFT JOIN workflow_stages ws_from ON cwt.from_stage_id = ws_from.id
+      LEFT JOIN workflow_stages ws_to ON cwt.to_stage_id = ws_to.id
+      LEFT JOIN users u ON cwt.transitioned_by = u.id
+      WHERE cwt.customer_id = ?
+      ORDER BY cwt.created_at ASC
+    `).bind(id).all()
+
+    const { results: custActions } = await c.env.DB.prepare(`
+      SELECT cwa.*, u.full_name as performed_by_name, u.role_id as performed_by_role_id
+      FROM customer_workflow_actions cwa
+      LEFT JOIN users u ON cwa.performed_by = u.id
+      WHERE cwa.customer_id = ?
+      ORDER BY cwa.created_at DESC
+    `).bind(id).all()
+
+    const { results: custTasks } = await c.env.DB.prepare(`
+      SELECT cwt.*, u.full_name as assigned_to_name
+      FROM customer_workflow_tasks cwt
+      LEFT JOIN users u ON cwt.assigned_to = u.id
+      WHERE cwt.customer_id = ?
+      ORDER BY cwt.created_at DESC
+    `).bind(id).all()
+
+    // Latest request for this customer (optional second tab)
+    const latestRequest = await c.env.DB.prepare(`
+      SELECT fr.*, ws.stage_name_ar, ws.stage_color, ws.stage_icon
+      FROM financing_requests fr
+      LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
+      WHERE fr.customer_id = ?
+      ORDER BY fr.created_at DESC
+      LIMIT 1
+    `).bind(id).first() as any
+
+    let requestId: number | null = null
+    let requestTimeline: { transitions: any[]; actions: any[]; tasks: any[] } | undefined
+
+    if (latestRequest?.id) {
+      requestId = latestRequest.id
+      const { results: reqTransitions } = await c.env.DB.prepare(`
+        SELECT wst.*,
+               ws_from.stage_name_ar as from_stage_name,
+               ws_to.stage_name_ar as to_stage_name,
+               ws_to.stage_color as to_stage_color,
+               ws_to.stage_icon as to_stage_icon,
+               u.full_name as transitioned_by_name,
+               u.role_id as transitioned_by_role_id
+        FROM workflow_stage_transitions wst
+        LEFT JOIN workflow_stages ws_from ON wst.from_stage_id = ws_from.id
+        LEFT JOIN workflow_stages ws_to ON wst.to_stage_id = ws_to.id
+        LEFT JOIN users u ON wst.transitioned_by = u.id
+        WHERE wst.request_id = ?
+        ORDER BY wst.created_at ASC
+      `).bind(requestId).all()
+
+      const { results: reqActions } = await c.env.DB.prepare(`
+        SELECT wsa.*, u.full_name AS performed_by_name, u.role_id AS performed_by_role_id
+        FROM workflow_stage_actions wsa
+        LEFT JOIN users u ON wsa.performed_by = u.id
+        WHERE wsa.request_id = ?
+        ORDER BY wsa.created_at DESC
+      `).bind(requestId).all()
+
+      const { results: reqTasks } = await c.env.DB.prepare(`
+        SELECT wst.*, u.full_name as assigned_to_name
+        FROM workflow_stage_tasks wst
+        LEFT JOIN users u ON wst.assigned_to = u.id
+        WHERE wst.request_id = ?
+        ORDER BY wst.created_at DESC
+      `).bind(requestId).all()
+
+      requestTimeline = { transitions: reqTransitions, actions: reqActions, tasks: reqTasks }
+    }
+
+    const html = generateCustomerWorkflowPage({
+      customerId: parseInt(id, 10),
+      customer,
+      stages,
+      customerTimeline: { transitions: custTransitions, actions: custActions, tasks: custTasks },
+      requestId,
+      request: latestRequest ?? null,
+      requestTimeline,
+      roleId: userInfo.roleId,
+      activeTab: 'customer',
+    })
+
+    return c.html(html)
+  } catch (error: any) {
+    console.error('خطأ في عرض سير عمل العميل:', error)
+    return c.html(`<h1>حدث خطأ: ${error.message}</h1>`)
+  }
+})
+
 // تقرير طلب التمويل الكامل
 app.get('/admin/requests/:id/report', async (c) => {
   try {
@@ -24152,16 +24886,175 @@ app.get('/admin/requests/:id/report', async (c) => {
   }
 })
 
-// التقرير الزمني (Timeline) لطلب التمويل
+// ── Customer Workflow APIs ─────────────────────────────────────────────────
+
+// Ensure customer workflow tables exist (idempotent)
+async function ensureCustomerWorkflowTables(db: any) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS customer_workflow_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    from_stage_id INTEGER,
+    to_stage_id INTEGER NOT NULL,
+    transitioned_by INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run()
+  await db.prepare(`CREATE TABLE IF NOT EXISTS customer_workflow_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    stage_id INTEGER,
+    action_type TEXT,
+    action_data TEXT,
+    performed_by INTEGER,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run()
+  await db.prepare(`CREATE TABLE IF NOT EXISTS customer_workflow_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    stage_id INTEGER,
+    task_title TEXT NOT NULL,
+    task_description TEXT,
+    assigned_to INTEGER,
+    due_date TEXT,
+    priority TEXT DEFAULT 'medium',
+    status TEXT DEFAULT 'pending',
+    completed_at TEXT,
+    completed_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run()
+  try { await db.prepare(`ALTER TABLE customers ADD COLUMN current_workflow_stage_id INTEGER`).run() } catch (_) {}
+}
+
+app.post('/api/workflow/customer-update-stage', async (c) => {
+  try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(requester.roleId) === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const { customerId, newStageId, notes, userId } = await c.req.json()
+    await ensureCustomerWorkflowTables(c.env.DB)
+    const currentCustomer = await c.env.DB.prepare(`SELECT current_workflow_stage_id FROM customers WHERE id = ?`).bind(customerId).first() as any
+
+    const recentDup = await c.env.DB.prepare(`
+      SELECT id FROM customer_workflow_transitions
+      WHERE customer_id = ? AND to_stage_id = ?
+        AND created_at >= datetime('now', '-20 seconds')
+      LIMIT 1
+    `).bind(customerId, newStageId).first()
+    if (recentDup && currentCustomer?.current_workflow_stage_id === newStageId) {
+      return c.json({ success: true })
+    }
+
+    await c.env.DB.prepare(`UPDATE customers SET current_workflow_stage_id = ? WHERE id = ?`).bind(newStageId, customerId).run()
+    await c.env.DB.prepare(`INSERT INTO customer_workflow_transitions (customer_id, from_stage_id, to_stage_id, transitioned_by, notes) VALUES (?, ?, ?, ?, ?)`)
+      .bind(customerId, currentCustomer?.current_workflow_stage_id ?? null, newStageId, userId || requester.userId, notes || null).run()
+
+    // Notify the other party about this stage update
+    try {
+      const actorRole = normalizeRoleId(requester.roleId)
+      const targetRole = actorRole === 5 ? 4 : actorRole === 4 ? 5 : null
+      if (targetRole) {
+        const stageRow = await c.env.DB.prepare(`SELECT stage_name_ar FROM workflow_stages WHERE id = ?`).bind(newStageId).first() as any
+        const stageNameAr = stageRow?.stage_name_ar || ''
+        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+        const actorName = actorRow?.full_name || ''
+        const actorTenant = actorRow?.tenant_id ?? null
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+        const linkUrl = `/admin/customers/${customerId}/workflow#customer`
+        const { results: targets } = await c.env.DB.prepare(
+          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
+        ).bind(targetRole, actorTenant).all()
+        for (const t of targets as any[]) {
+          await c.env.DB.prepare(
+            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(customerId, `تحديث مرحلة: ${stageNameAr}`, `قام ${actorName} بتحديث مرحلة العميل #${customerId} إلى: ${stageNameAr}`, t.id, actorTenant, 'workflow', linkUrl).run()
+        }
+      }
+    } catch (_) {}
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.post('/api/workflow/customer-add-action', async (c) => {
+  try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (normalizeRoleId(requester.roleId) === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const { customerId, stageId, actionType, notes, performedBy } = await c.req.json()
+    await ensureCustomerWorkflowTables(c.env.DB)
+    const actorId = performedBy || requester.userId
+
+    const recentDup = await c.env.DB.prepare(`
+      SELECT id FROM customer_workflow_actions
+      WHERE customer_id = ? AND stage_id = ? AND action_type = ?
+        AND performed_by = ?
+        AND COALESCE(notes, '') = COALESCE(?, '')
+        AND created_at >= datetime('now', '-20 seconds')
+      LIMIT 1
+    `).bind(customerId, stageId, actionType, actorId, notes ?? '').first()
+    if (recentDup) return c.json({ success: true })
+
+    await c.env.DB.prepare(`INSERT INTO customer_workflow_actions (customer_id, stage_id, action_type, performed_by, notes) VALUES (?, ?, ?, ?, ?)`)
+      .bind(customerId, stageId, actionType, actorId, notes || null).run()
+
+    // Notify the other party about this action
+    try {
+      const actorRole = normalizeRoleId(requester.roleId)
+      const targetRole = actorRole === 4 ? 5 : actorRole === 5 ? 4 : null
+      if (targetRole) {
+        const actionLabel = ({ call: 'اتصال هاتفي', email: 'بريد إلكتروني', meeting: 'اجتماع', document: 'مستند', approval: 'موافقة', rejection: 'رفض', followup: 'متابعة', other: 'أخرى' } as Record<string,string>)[actionType] || actionType
+        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+        const actorName = actorRow?.full_name || ''
+        const actorTenant = actorRow?.tenant_id ?? null
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+        const linkUrl = `/admin/customers/${customerId}/workflow#customer`
+        const { results: targets } = await c.env.DB.prepare(
+          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
+        ).bind(targetRole, actorTenant).all()
+        for (const t of targets as any[]) {
+          await c.env.DB.prepare(
+            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(customerId, `إجراء: ${actionLabel}`, `قام ${actorName} بإضافة إجراء "${actionLabel}" على العميل #${customerId}${notes ? ' — ' + notes : ''}`, t.id, actorTenant, 'workflow', linkUrl).run()
+        }
+      }
+    } catch (_) {}
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.post('/api/workflow/customer-create-task', async (c) => {
+  try {
+    const { customerId, stageId, taskTitle, taskDescription, assignedTo, dueDate, priority } = await c.req.json()
+    await ensureCustomerWorkflowTables(c.env.DB)
+    await c.env.DB.prepare(`INSERT INTO customer_workflow_tasks (customer_id, stage_id, task_title, task_description, assigned_to, due_date, priority) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .bind(customerId, stageId, taskTitle, taskDescription || null, assignedTo || null, dueDate || null, priority || 'medium').run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// التقرير الزمني (Timeline) لطلب التمويل — tabbed: customer workflow + request workflow
 app.get('/admin/requests/:id/workflow', async (c) => {
   try {
     const id = c.req.param('id')
-    
-    // Get request data with current stage
+    await ensureCustomerWorkflowTables(c.env.DB)
+
+    // Get request data with current stage and customer id
     const request = await c.env.DB.prepare(`
-      SELECT 
+      SELECT
         fr.*,
         c.full_name as customer_name,
+        c.id as customer_id,
+        c.current_workflow_stage_id,
         ws.stage_name_ar,
         ws.stage_color,
         ws.stage_icon
@@ -24169,57 +25062,99 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
       WHERE fr.id = ?
-    `).bind(id).first()
-    
+    `).bind(id).first() as any
+
     if (!request) {
       return c.html('<h1>الطلب غير موجود</h1>')
     }
-    
+
+    const customerId = request.customer_id
+
     // Get all stages
     const { results: stages } = await c.env.DB.prepare(`
-      SELECT * FROM workflow_stages 
-      WHERE is_active = 1 
+      SELECT * FROM workflow_stages
+      WHERE is_active = 1
       ORDER BY stage_order ASC
     `).all()
-    
-    // Get workflow timeline (transitions, actions, tasks) - Direct DB query instead of internal API call
+
+    // Request workflow data
     const { results: transitions } = await c.env.DB.prepare(`
-      SELECT 
+      SELECT
         wst.*,
         ws_from.stage_name_ar as from_stage_name,
         ws_to.stage_name_ar as to_stage_name,
-        u.full_name as changed_by_name
+        ws_to.stage_color as to_stage_color,
+        ws_to.stage_icon as to_stage_icon,
+        u.full_name as transitioned_by_name,
+        u.role_id as transitioned_by_role_id
       FROM workflow_stage_transitions wst
       LEFT JOIN workflow_stages ws_from ON wst.from_stage_id = ws_from.id
       LEFT JOIN workflow_stages ws_to ON wst.to_stage_id = ws_to.id
       LEFT JOIN users u ON wst.transitioned_by = u.id
       WHERE wst.request_id = ?
-      ORDER BY wst.created_at DESC
+      ORDER BY wst.created_at ASC
     `).bind(id).all()
-    
+
     const { results: actions } = await c.env.DB.prepare(`
-      SELECT wsa.*, u.full_name AS performed_by_name
+      SELECT wsa.*, u.full_name AS performed_by_name, u.role_id AS performed_by_role_id
       FROM workflow_stage_actions wsa
       LEFT JOIN users u ON wsa.performed_by = u.id
       WHERE wsa.request_id = ?
       ORDER BY wsa.created_at DESC
     `).bind(id).all()
-    
+
     const { results: tasks } = await c.env.DB.prepare(`
-      SELECT * FROM workflow_stage_tasks WHERE request_id = ? ORDER BY created_at DESC
+      SELECT wst.*, u.full_name as assigned_to_name
+      FROM workflow_stage_tasks wst
+      LEFT JOIN users u ON wst.assigned_to = u.id
+      WHERE wst.request_id = ?
+      ORDER BY wst.created_at DESC
     `).bind(id).all()
-    
-    const timelineData = { data: { transitions, actions, tasks } }
-    
+
+    // Customer-level workflow data
+    const { results: custTransitions } = await c.env.DB.prepare(`
+      SELECT cwt.*,
+             ws_from.stage_name_ar as from_stage_name,
+             ws_to.stage_name_ar as to_stage_name,
+             ws_to.stage_color as to_stage_color,
+             ws_to.stage_icon as to_stage_icon,
+             u.full_name as transitioned_by_name,
+             u.role_id as transitioned_by_role_id
+      FROM customer_workflow_transitions cwt
+      LEFT JOIN workflow_stages ws_from ON cwt.from_stage_id = ws_from.id
+      LEFT JOIN workflow_stages ws_to ON cwt.to_stage_id = ws_to.id
+      LEFT JOIN users u ON cwt.transitioned_by = u.id
+      WHERE cwt.customer_id = ?
+      ORDER BY cwt.created_at ASC
+    `).bind(customerId).all()
+
+    const { results: custActions } = await c.env.DB.prepare(`
+      SELECT cwa.*, u.full_name as performed_by_name, u.role_id as performed_by_role_id
+      FROM customer_workflow_actions cwa
+      LEFT JOIN users u ON cwa.performed_by = u.id
+      WHERE cwa.customer_id = ?
+      ORDER BY cwa.created_at DESC
+    `).bind(customerId).all()
+
+    const { results: custTasks } = await c.env.DB.prepare(`
+      SELECT cwt.*, u.full_name as assigned_to_name
+      FROM customer_workflow_tasks cwt
+      LEFT JOIN users u ON cwt.assigned_to = u.id
+      WHERE cwt.customer_id = ?
+      ORDER BY cwt.created_at DESC
+    `).bind(customerId).all()
+
     const userInfo = await getUserInfo(c)
     const html = generateWorkflowTimelinePage(
       parseInt(id),
       request,
       stages,
-      timelineData.data || { transitions: [], actions: [], tasks: [] },
-      userInfo.roleId
+      { transitions, actions, tasks },
+      { transitions: custTransitions, actions: custActions, tasks: custTasks },
+      userInfo.roleId,
+      'request'
     )
-    
+
     return c.html(html)
   } catch (error: any) {
     console.error('خطأ في عرض Workflow:', error)
@@ -26400,6 +27335,28 @@ app.get('/admin/users', async (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <style>
+          .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; max-width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #6366f1 #f7fafc; }
+          .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
+          .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
+          .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
+          .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%); border-color: #d1d5db; }
+          .overflow-x-auto table { min-width: 100%; width: max-content; }
+          .edge-scroll-wrap { position: relative; }
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+          .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
+          .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
+          .no-hscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+          ${actionsDropdownCSS}
+          ${getMobileResponsiveCSS()}
+        </style>
       </head>
       <body class="bg-gray-50">
         <div class="max-w-7xl mx-auto p-6">
@@ -26472,29 +27429,48 @@ app.get('/admin/users', async (c) => {
             </div>
           </div>
           
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <table class="w-full" id="dataTable">
-              <thead class="bg-gray-100">
+          <div class="bg-white rounded-xl shadow-lg">
+            <div class="edge-scroll-wrap">
+              <div class="edge-scroll-zone left">
+                <div id="usersEdgeLeft" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('usersTableScroll', 'left')" aria-label="scroll left">
+                    <i class="fas fa-chevron-left text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="edge-scroll-zone right">
+                <div id="usersEdgeRight" class="edge-scroll-btn edge-hidden">
+                  <button type="button" onclick="edgeScrollStep('usersTableScroll', 'right')" aria-label="scroll right">
+                    <i class="fas fa-chevron-right text-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div id="usersTableScroll" class="overflow-x-auto no-hscrollbar">
+            <table class="min-w-full w-max" id="dataTable">
+              <thead class="bg-gray-50">
                 <tr>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">#</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">اسم المستخدم</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الاسم الكامل</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">البريد الإلكتروني</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الدور</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الشركة</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحالة</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap w-px">الإجراءات</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">اسم المستخدم</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم الكامل</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الإلكتروني</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الدور</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الشركة</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">حد العملاء</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200" id="tableBody">
                 <tr>
-                  <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="9" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
                     <div>جاري تحميل البيانات...</div>
                   </td>
                 </tr>
               </tbody>
             </table>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -26565,7 +27541,7 @@ app.get('/admin/users', async (c) => {
               console.error('❌ خطأ في تحميل المستخدمين:', error);
               document.getElementById('tableBody').innerHTML = \`
                 <tr>
-                  <td colspan="8" class="px-6 py-8 text-center text-red-500">
+                  <td colspan="9" class="px-6 py-8 text-center text-red-500">
                     <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
                     <div>فشل تحميل البيانات: \${error.message}</div>
                   </td>
@@ -26581,7 +27557,7 @@ app.get('/admin/users', async (c) => {
             if (!users || users.length === 0) {
               tbody.innerHTML = \`
                 <tr>
-                  <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="9" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-users text-3xl mb-2"></i>
                     <div>لا توجد بيانات مستخدمين</div>
                   </td>
@@ -26601,10 +27577,32 @@ app.get('/admin/users', async (c) => {
               const statusText = user.is_active ? 'نشط' : 'غير نشط';
               
               return \`
-                <tr class="hover:bg-gray-50" 
-                    data-username="\${user.username || ''}" 
-                    data-fullname="\${user.full_name || ''}" 
+                <tr class="hover:bg-gray-50"
+                    data-username="\${user.username || ''}"
+                    data-fullname="\${user.full_name || ''}"
                     data-email="\${user.email || ''}">
+                  <td class="px-3 py-3 whitespace-nowrap text-right align-middle w-px">
+                    <button type="button"
+                            data-actions-target="actions-user-\${user.id}"
+                            class="actions-dropdown-btn inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap w-full">
+                      <span class="hidden sm:inline">إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                    </button>
+                    <div id="actions-user-\${user.id}" hidden class="actions-dropdown-menu">
+                      <a href="/admin/users/\${user.id}" class="actions-dropdown-item" style="color:#1d4ed8;">
+                        <i class="fas fa-eye"></i> عرض
+                      </a>
+                      <a href="/admin/users/\${user.id}/edit" class="actions-dropdown-item" style="color:#a16207;">
+                        <i class="fas fa-edit"></i> تعديل
+                      </a>
+                      <a href="/admin/users/\${user.id}/permissions" class="actions-dropdown-item" style="color:#6d28d9;">
+                        <i class="fas fa-user-shield"></i> الصلاحيات
+                      </a>
+                      <div class="actions-dropdown-divider"></div>
+                      <a href="/admin/users/\${user.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="actions-dropdown-item" style="color:#dc2626;">
+                        <i class="fas fa-trash"></i> حذف
+                      </a>
+                    </div>
+                  </td>
                   <td class="px-6 py-4 text-sm text-gray-900">\${user.id}</td>
                   <td class="px-6 py-4">
                     <div class="flex items-center">
@@ -26625,31 +27623,21 @@ app.get('/admin/users', async (c) => {
                       \${statusText}
                     </span>
                   </td>
-                  <td class="px-6 py-4">
-                    <div class="flex gap-2 justify-end">
-                      <a href="/admin/users/\${user.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
-                        <i class="fas fa-eye"></i> عرض
-                      </a>
-                      <a href="/admin/users/\${user.id}/permissions" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded text-xs transition-all" title="إدارة الصلاحيات">
-                        <i class="fas fa-user-shield"></i> صلاحيات
-                      </a>
-                      <a href="/admin/users/\${user.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
-                        <i class="fas fa-edit"></i> تعديل
-                      </a>
-                      <a href="/admin/users/\${user.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
-                        <i class="fas fa-trash"></i> حذف
-                      </a>
-                    </div>
+                  <td class="px-6 py-4 text-sm text-center">
+                    \${(nr === 4 || nr === 14) ? (user.customer_limit != null ? \`<span class="font-bold text-indigo-700">\${user.customer_limit}</span>\` : '<span class="text-gray-400">-</span>') : '<span class="text-gray-300">—</span>'}
                   </td>
                 </tr>
               \`;
             }).join('');
             
             document.getElementById('totalCount').textContent = users.length;
+            setupEdgeScrollOnce('usersTableScroll', 'usersEdgeLeft', 'usersEdgeRight');
+            updateEdgeScrollControls('usersTableScroll', 'usersEdgeLeft', 'usersEdgeRight');
           }
-          
+
           // البحث والفلترة
           function filterTable() {
+            if (typeof closeAllDropdowns === 'function') closeAllDropdowns();
             const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
             const filterField = document.getElementById('filterField').value;
             
@@ -26715,6 +27703,149 @@ app.get('/admin/users', async (c) => {
             link.click();
           }
           
+          window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+            const step = 360;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            let delta = visualDirection === 'left' ? -step : step;
+            if (dir === 'rtl') delta = -delta;
+            const current = getNormalizedScrollLeft(el);
+            animateNormalizedScrollLeft(el, current + delta, 260);
+            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'usersEdgeLeft', 'usersEdgeRight'));
+          };
+
+          function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth;
+            const clamped = Math.max(0, Math.min(max, normalizedLeft));
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') { el.scrollLeft = clamped; return; }
+            const type = getRtlScrollType();
+            if (type === 'negative') el.scrollLeft = -clamped;
+            else if (type === 'reverse') el.scrollLeft = max - clamped;
+            else el.scrollLeft = clamped;
+          }
+
+          function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReduced) { setNormalizedScrollLeft(el, target); return; }
+            const max = el.scrollWidth - el.clientWidth;
+            const to = Math.max(0, Math.min(max, target));
+            const from = getNormalizedScrollLeft(el);
+            const delta = to - from;
+            if (Math.abs(delta) < 1) return;
+            const start = performance.now();
+            const duration = Math.max(120, Number(durationMs) || 260);
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1);
+            el.dataset.edgeScrollAnimToken = animToken;
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+            const tick = (now) => {
+              if (el.dataset.edgeScrollAnimToken !== animToken) return;
+              const t = Math.min(1, (now - start) / duration);
+              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t));
+              if (t < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          }
+
+          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId);
+            const arrow = document.getElementById(arrowBtnId);
+            if (!el || !arrow) return;
+            const wrap = el.closest('.edge-scroll-wrap');
+            if (!wrap) return;
+            const wrapRect = wrap.getBoundingClientRect();
+            const vhCenter = window.innerHeight / 2;
+            const padding = 16;
+            const minY = wrapRect.top + padding;
+            const maxY = wrapRect.bottom - padding;
+            const clamped = Math.max(minY, Math.min(maxY, vhCenter));
+            arrow.style.top = String(clamped - wrapRect.top) + 'px';
+          }
+
+          let __usersRtlScrollType = null;
+          function getRtlScrollType() {
+            if (__usersRtlScrollType) return __usersRtlScrollType;
+            const div = document.createElement('div');
+            div.style.width = '4px';
+            div.style.height = '1px';
+            div.style.overflow = 'scroll';
+            div.style.direction = 'rtl';
+            div.style.position = 'absolute';
+            div.style.top = '-9999px';
+            const inner = document.createElement('div');
+            inner.style.width = '8px';
+            inner.style.height = '1px';
+            div.appendChild(inner);
+            document.body.appendChild(div);
+            if (div.scrollLeft > 0) __usersRtlScrollType = 'reverse';
+            else {
+              div.scrollLeft = 1;
+              __usersRtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default';
+            }
+            document.body.removeChild(div);
+            return __usersRtlScrollType;
+          }
+
+          function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') return el.scrollLeft;
+            const type = getRtlScrollType();
+            if (type === 'negative') return -el.scrollLeft;
+            if (type === 'reverse') return max - el.scrollLeft;
+            return el.scrollLeft;
+          }
+
+          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            const leftWrap = document.getElementById(leftBtnId);
+            const rightWrap = document.getElementById(rightBtnId);
+            if (!el || !leftWrap || !rightWrap) return;
+            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5;
+            if (!canScroll) {
+              leftWrap.classList.add('edge-hidden');
+              rightWrap.classList.add('edge-hidden');
+              return;
+            }
+            const maxScrollLeft = el.scrollWidth - el.clientWidth;
+            const sl = getNormalizedScrollLeft(el);
+            const canLeft = sl > 1;
+            const canRight = sl < maxScrollLeft - 1;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            const showLeft = dir === 'rtl' ? canRight : canLeft;
+            const showRight = dir === 'rtl' ? canLeft : canRight;
+            leftWrap.classList.toggle('edge-hidden', !showLeft);
+            rightWrap.classList.toggle('edge-hidden', !showRight);
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId);
+          }
+
+          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+            if (el.dataset.edgeScrollBound === '1') return;
+            el.dataset.edgeScrollBound = '1';
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId);
+            el.addEventListener('scroll', tick, { passive: true });
+            window.addEventListener('resize', tick);
+            window.addEventListener('scroll', tick, { passive: true });
+            window.addEventListener('load', tick, { passive: true });
+            setTimeout(tick, 0);
+            setTimeout(tick, 150);
+            setTimeout(tick, 500);
+            if (typeof ResizeObserver !== 'undefined') {
+              try {
+                const ro = new ResizeObserver(tick);
+                ro.observe(el);
+                const tbl = el.querySelector('table');
+                if (tbl) ro.observe(tbl);
+              } catch (e) {}
+            }
+          }
+
+          ${actionsDropdownScript}
+
           // تحميل البيانات عند تحميل الصفحة
           document.addEventListener('DOMContentLoaded', () => {
             loadCurrentUser();
@@ -27048,8 +28179,19 @@ app.get('/admin/users/:id/edit', async (c) => {
                     <option value="0" ${!user.is_active ? 'selected' : ''}>غير نشط</option>
                   </select>
                 </div>
+
+                <div id="customerLimitSection" style="display:${[4,14].includes(normalizeRoleId(user.role_id)) ? 'block' : 'none'};">
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    الحد الأقصى للعملاء (التوزيع التلقائي)
+                  </label>
+                  <input type="number" name="customer_limit" min="0"
+                         value="${user.customer_limit != null ? user.customer_limit : ''}"
+                         placeholder="اتركه فارغاً بدون حد"
+                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                  <p class="text-xs text-gray-500 mt-1">عدد العملاء الذين يمكن تعيينهم تلقائياً لهذا الموظف. اتركه فارغاً لعدم تطبيق أي حد.</p>
+                </div>
               </div>
-              
+
               <div class="flex gap-3 pt-6 border-t border-gray-200">
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-save ml-2"></i> حفظ التعديلات
@@ -27064,7 +28206,12 @@ app.get('/admin/users/:id/edit', async (c) => {
         <script>
           (function () {
             var roleSelect = document.getElementById('roleSelect');
-            if (!roleSelect) return;
+            var limitSection = document.getElementById('customerLimitSection');
+            if (!roleSelect || !limitSection) return;
+            roleSelect.addEventListener('change', function () {
+              var rid = parseInt(this.value, 10);
+              limitSection.style.display = (rid === 4 || rid === 14) ? 'block' : 'none';
+            });
           })();
         </script>
       </body>
@@ -27095,6 +28242,11 @@ app.post('/admin/users/:id', async (c) => {
     const role_id = formData.get('role_id')
     const tenant_id = formData.get('tenant_id') || null
     const is_active = formData.get('is_active')
+    const customerLimitRaw = formData.get('customer_limit')
+    const customer_limit =
+      customerLimitRaw === '' || customerLimitRaw == null
+        ? null
+        : parseInt(String(customerLimitRaw), 10) || null
 
     const requestedRoleId = Number.parseInt(String(role_id || ''), 10)
     if (Number.isNaN(requestedRoleId)) {
@@ -27143,22 +28295,22 @@ app.post('/admin/users/:id', async (c) => {
     
     // Build UPDATE query
     let query = `
-      UPDATE users 
-      SET username = ?, full_name = ?, email = ?, phone = ?, 
-          role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
+      UPDATE users
+      SET username = ?, full_name = ?, email = ?, phone = ?,
+          role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?
     `
-    let params = [username, full_name, email, phone, requestedRoleId, finalTenantId, is_active, assigned_bank_id]
-    
+    let params = [username, full_name, email, phone, requestedRoleId, finalTenantId, is_active, assigned_bank_id, customer_limit]
+
     // Only update password if provided
     if (password && password.toString().trim() !== '') {
       query = `
-        UPDATE users 
-        SET username = ?, full_name = ?, email = ?, phone = ?, 
-            password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?
+        UPDATE users
+        SET username = ?, full_name = ?, email = ?, phone = ?,
+            password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?
       `
-      params = [username, full_name, email, phone, password, requestedRoleId, finalTenantId, is_active, assigned_bank_id]
+      params = [username, full_name, email, phone, password, requestedRoleId, finalTenantId, is_active, assigned_bank_id, customer_limit]
     }
-    
+
     query += ` WHERE id = ?`
     params.push(id)
     

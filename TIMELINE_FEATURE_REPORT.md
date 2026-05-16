@@ -12,7 +12,7 @@
 
 ```sql
 CREATE TABLE financing_request_status_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT, --
   request_id INTEGER NOT NULL,           -- رقم الطلب
   old_status TEXT,                       -- الحالة القديمة
   new_status TEXT NOT NULL,              -- الحالة الجديدة

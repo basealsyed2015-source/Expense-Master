@@ -292,7 +292,15 @@ export const usersManagementPage = () => `
             <option value="0">غير نشط</option>
           </select>
         </div>
-        
+
+        <div id="editCustomerLimitSection" style="display:none;">
+          <label class="block text-sm font-bold text-gray-700 mb-2">الحد الأقصى للعملاء (التوزيع التلقائي)</label>
+          <input type="number" name="customer_limit" id="editCustomerLimit" min="0"
+                 placeholder="اتركه فارغاً بدون حد"
+                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
+          <p class="text-xs text-gray-500 mt-1">عدد العملاء الذين يمكن تعيينهم تلقائياً لهذا الموظف. اتركه فارغاً لعدم تطبيق أي حد.</p>
+        </div>
+
         <div class="flex gap-3 pt-4">
           <button type="submit" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-xl font-bold transition-all">
             <i class="fas fa-save ml-2"></i>
@@ -564,18 +572,29 @@ export const usersManagementPage = () => `
       }
     });
 
+    function toggleCustomerLimitSection(roleId) {
+      const section = document.getElementById('editCustomerLimitSection');
+      section.style.display = (parseInt(roleId) === 4 || parseInt(roleId) === 14) ? 'block' : 'none';
+    }
+
+    document.getElementById('editUserRole').addEventListener('change', function() {
+      toggleCustomerLimitSection(this.value);
+    });
+
     // تعديل مستخدم
     function editUser(id) {
       const user = allUsers.find(u => u.id === id);
       if (!user) return;
-      
+
       document.getElementById('editUserId').value = user.id;
       document.getElementById('editUserName').value = user.full_name;
       document.getElementById('editUserEmail').value = user.email;
       document.getElementById('editUserPhone').value = user.phone || '';
       document.getElementById('editUserRole').value = user.role_id || '';
       document.getElementById('editUserStatus').value = user.is_active ? '1' : '0';
-      
+      document.getElementById('editCustomerLimit').value = user.customer_limit != null ? user.customer_limit : '';
+      toggleCustomerLimitSection(user.role_id);
+
       showEditUserModal();
     }
 

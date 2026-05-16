@@ -15,7 +15,6 @@ CUSTOMERS=$(curl -s http://localhost:8087/api/customers \
 echo "Customers response:"
 echo "$CUSTOMERS" | head -c 500
 echo ""
-
 # Count customers
 COUNT=$(echo "$CUSTOMERS" | grep -o '"id"' | wc -l)
 echo "Total customers found: $COUNT"

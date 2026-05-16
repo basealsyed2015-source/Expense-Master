@@ -825,11 +825,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">مبلغ التمويل</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الالتزامات</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">نوع التمويل</th>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">موظف التمويل</th>
                                 </tr>
                             </thead>
                             <tbody id="customersTable">
                                 <tr>
-                                    <td colspan="9" class="text-center py-8">
+                                    <td colspan="10" class="text-center py-8">
                                         <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
                                     </td>
                                 </tr>
@@ -2970,7 +2971,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 if (!response.data.success) return;
                 const users = response.data.data;
                 const employees = users.filter((u) => u.role_id === 4);
-                const bankAgents = users.filter((u) => Number(u.role_id) === 5);
+                const bankAgents = users.filter((u) => { const r = Number(u.role_id); return r === 5 || r === 15; });
 
                 const empSelectors = ['filterCustomerEmployee', 'filterRequestEmployee'];
                 empSelectors.forEach((id) => {
@@ -3057,12 +3058,19 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
                     if (filterCustomerBankAgent) {
                         const agentId = Number(filterCustomerBankAgent);
-                        customers = customers.filter((c) => Number(c.assigned_bank_agent_id) === agentId);
+                        customers = customers.filter((c) => {
+                            const rid = c.resolved_bank_agent_id != null && c.resolved_bank_agent_id !== ''
+                                ? Number(c.resolved_bank_agent_id)
+                                : c.assigned_bank_agent_id != null && c.assigned_bank_agent_id !== ''
+                                  ? Number(c.assigned_bank_agent_id)
+                                  : NaN;
+                            return rid === agentId;
+                        });
                     }
                     
                     closeAllDropdowns();
                     if (customers.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>';
                         renderPaginationUI('customers', 0, customersPaging);
                         return;
                     }
@@ -3122,6 +3130,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <td class="px-4 py-3 font-medium text-purple-600">\${customer.financing_amount ? customer.financing_amount.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm text-orange-600">\${customer.monthly_obligations ? customer.monthly_obligations.toLocaleString('ar-SA') + ' ريال' : '-'}</td>
                             <td class="px-4 py-3 text-sm">\${customer.financing_type_name || '-'}</td>
+                            <td class="px-4 py-3 text-sm text-indigo-700">\${customer.assigned_bank_agent_name || ((customer.resolved_bank_agent_id ?? customer.assigned_bank_agent_id) ? '(#' + (customer.resolved_bank_agent_id ?? customer.assigned_bank_agent_id) + ')' : '-')}</td>
                         </tr>
                     \`).join('');
 
@@ -3709,7 +3718,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
         }
         
         window.editCustomer = function(id) {
-            alert('تعديل العميل رقم: ' + id);
+            window.location.href = '/admin/customers/' + id + '/edit';
         }
         
         window.deleteCustomer = async function(id) {
@@ -5523,20 +5532,30 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 }
                 list.innerHTML = data.data.map(function(a) {
                     const isUnread = !a.is_read;
+                    const isWorkflow = a.alarm_type === 'workflow';
                     const dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
                     const timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
                     const cid = a.customer_id;
-                    const customerHref = (cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#';
-                    return \`<div id="ap-alarm-\${a.id}" class="rounded-xl border \${isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'} shadow-sm transition-all flex items-stretch overflow-hidden">
+                    const customerHref = isWorkflow ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
+                    const borderClass = isWorkflow
+                        ? (isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white')
+                        : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
+                    const sideBgClass = isWorkflow
+                        ? (isUnread ? 'bg-blue-50/80' : 'bg-gray-50/80')
+                        : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
+                    const dotColor = isWorkflow ? 'bg-blue-500' : 'bg-red-500';
+                    const icon = isWorkflow ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>' : '';
+                    return \`<div id="ap-alarm-\${a.id}" class="rounded-xl border \${borderClass} shadow-sm transition-all flex items-stretch overflow-hidden">
                         <a href="\${customerHref}" class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none rounded-s-xl">
                             <div class="flex items-center gap-2 mb-1">
-                                \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
-                                <p class="font-bold text-gray-800 text-sm truncate">\${a.customer_name}</p>
+                                \${isUnread ? \`<span class="inline-block w-2.5 h-2.5 rounded-full \${dotColor} flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>\` : ''}
+                                \${icon}
+                                <p class="font-bold \${isWorkflow ? 'text-blue-800' : 'text-gray-800'} text-sm truncate">\${a.customer_name}</p>
                             </div>
                             \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-calendar-alt text-orange-400 ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
-                            \${a.note ? \`<p class="text-sm text-gray-600 mt-1 line-clamp-3">\${a.note}</p>\` : ''}
+                            \${a.note ? \`<p class="text-sm \${isWorkflow ? 'text-blue-700' : 'text-gray-600'} mt-1 line-clamp-3">\${a.note}</p>\` : ''}
                         </a>
-                        <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80'}">
+                        <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${sideBgClass}">
                             \${isUnread ? \`<button type="button" onclick="markPanelAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
                             <button type="button" onclick="deletePanelAlarm(\${a.id})" title="حذف" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center transition-colors"><i class="fas fa-trash text-xs"></i></button>
                         </div>

@@ -34,7 +34,11 @@
       "Bash(awk -F: '$1 >= 17900 && $1 <= 18010')",
       "Bash(awk -F: '$1 >= 20300 && $1 <= 20500')",
       "Bash(awk -F: '$1 > 30912')",
-      "Bash(npx wrangler *)"
+      "Bash(npx wrangler *)",
+      "Bash(wrangler pages *)",
+      "Bash(grep *)",
+      "WebFetch(domain:zat--developer.tamweel-calc.pages.dev)",
+      "WebFetch(domain:tamweel-calc.com)"
     ]
   }
 }

@@ -184,3 +184,4 @@ export const homePage = `<!DOCTYPE html>
 </body>
 </html>
 `;
+
