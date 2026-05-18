@@ -11298,19 +11298,29 @@ app.get('/api/reports/requests-followup', async (c) => {
     
     const listRoleEffective = normalizeRoleId(userInfo.roleId)
     const queryTenantId = c.req.query('tenant_id')
-    let tenant_id = queryTenantId ? parseInt(queryTenantId) : userInfo.tenantId
+    const requestedTenantId = queryTenantId ? parseInt(queryTenantId, 10) : null
+    let tenant_id = Number.isFinite(requestedTenantId as number) ? requestedTenantId : userInfo.tenantId
 
     if (listRoleEffective === 1 && !tenant_id) {
       tenant_id = null
     }
-    // Roles 4/5: always own tenant; scoped to financing requests they are assigned to
-    if (listRoleEffective === 4 || listRoleEffective === 5) {
+    // Company roles: never trust tenant_id from query — always JWT tenant (prevents cross-company leak)
+    if (listRoleEffective === 2 || listRoleEffective === 3 || listRoleEffective === 4 || listRoleEffective === 5) {
+      if (
+        requestedTenantId != null &&
+        userInfo.tenantId != null &&
+        requestedTenantId !== userInfo.tenantId
+      ) {
+        return c.json({ success: false, error: 'غير مصرح لهذه الشركة' }, 403)
+      }
       tenant_id = userInfo.tenantId
     }
 
     console.log('📊 Requests followup report - User:', userInfo.userId, 'Role:', userInfo.roleId, 'Tenant:', tenant_id)
     
-    // Get requests with customer and employee info
+    // Customer tenant is source of truth; block mismatched fr.tenant_id pointing at another company
+    const companyTenantSql = 'c.tenant_id'
+    const frTenantAlignedSql = '(fr.tenant_id IS NULL OR fr.tenant_id = c.tenant_id)'
     let query = `
       SELECT 
         fr.id,
@@ -11318,12 +11328,21 @@ app.get('/api/reports/requests-followup', async (c) => {
         fr.approved_at,
         fr.rejected_at,
         fr.reviewed_at,
+        fr.pending_at,
+        fr.under_review_at,
+        fr.processing_at,
         fr.status,
         fr.requested_amount,
         c.full_name as customer_name,
         c.phone as customer_phone,
-        u.full_name as employee_name,
-        u.username as employee_username,
+        (SELECT u2.full_name FROM customer_assignments ca2
+          JOIN users u2 ON u2.id = ca2.employee_id
+          WHERE ca2.customer_id = fr.customer_id
+          LIMIT 1) as employee_name,
+        (SELECT u2.username FROM customer_assignments ca2
+          JOIN users u2 ON u2.id = ca2.employee_id
+          WHERE ca2.customer_id = fr.customer_id
+          LIMIT 1) as employee_username,
         t.company_name as tenant_name,
         CASE 
           WHEN fr.status = 'approved' AND fr.approved_at IS NOT NULL THEN fr.approved_at
@@ -11345,39 +11364,37 @@ app.get('/api/reports/requests-followup', async (c) => {
         END as is_closed
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
-      LEFT JOIN customer_assignments ca ON c.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id
-      LEFT JOIN tenants t ON c.tenant_id = t.id
+      LEFT JOIN tenants t ON t.id = c.tenant_id
     `
 
     const queryParams: unknown[] = []
     if (listRoleEffective === 1) {
       if (tenant_id) {
-        query += ' WHERE c.tenant_id = ?'
+        query += ` WHERE ${companyTenantSql} = ? AND ${frTenantAlignedSql}`
         queryParams.push(tenant_id)
       }
     } else if (listRoleEffective === 2 || listRoleEffective === 3) {
       if (userInfo.tenantId) {
-        query += ' WHERE c.tenant_id = ?'
+        query += ` WHERE ${companyTenantSql} = ? AND ${frTenantAlignedSql}`
         queryParams.push(userInfo.tenantId)
       } else {
         query += ' WHERE 1 = 0'
       }
     } else if (listRoleEffective === 4) {
-      // Employee: financing requests for customers assigned to them
+      // Role 4: only existing financing_requests for customers they are assigned to (same scope as /admin/requests)
       if (userInfo.tenantId && userInfo.userId) {
-        query += ` WHERE c.tenant_id = ? AND EXISTS (
-          SELECT 1 FROM customer_assignments ca2
-          WHERE ca2.customer_id = fr.customer_id AND ca2.employee_id = ?
+        query += ` WHERE ${companyTenantSql} = ? AND ${frTenantAlignedSql} AND EXISTS (
+          SELECT 1 FROM customer_assignments ca_scope
+          WHERE ca_scope.customer_id = fr.customer_id AND ca_scope.employee_id = ?
         )`
         queryParams.push(userInfo.tenantId, userInfo.userId)
       } else {
         query += ' WHERE 1 = 0'
       }
     } else if (listRoleEffective === 5) {
-      // Bank agent: financing requests they are assigned to or created
+      // Role 5: only financing_requests assigned on the request row (not whole customer)
       if (userInfo.tenantId && userInfo.userId) {
-        query += ` WHERE c.tenant_id = ? AND (
+        query += ` WHERE ${companyTenantSql} = ? AND ${frTenantAlignedSql} AND (
           fr.assigned_bank_agent_id = ?
           OR fr.created_by = ?
         )`
@@ -11391,9 +11408,30 @@ app.get('/api/reports/requests-followup', async (c) => {
 
     query += ' ORDER BY fr.created_at DESC'
 
-    const { results } = queryParams.length > 0
-      ? await c.env.DB.prepare(query).bind(...queryParams).all()
-      : await c.env.DB.prepare(query).all()
+    const runFollowupQuery = async (sql: string, params: unknown[]) => {
+      const row = params.length > 0
+        ? await c.env.DB.prepare(sql).bind(...params).all()
+        : await c.env.DB.prepare(sql).all()
+      return Array.isArray(row?.results) ? row.results : []
+    }
+
+    let results: unknown[] = []
+    try {
+      results = await runFollowupQuery(query, queryParams)
+    } catch (dbErr: unknown) {
+      const msg = String((dbErr as { message?: string })?.message || dbErr || '')
+      const missingAgentCol = /no such column:\s*fr\.assigned_bank_agent_id|no such column:\s*assigned_bank_agent_id/i.test(msg)
+      if (listRoleEffective === 5 && missingAgentCol && userInfo.tenantId && userInfo.userId) {
+        const fallbackQuery = query.replace(
+          /WHERE c\.tenant_id = \? AND \(fr\.tenant_id IS NULL OR fr\.tenant_id = c\.tenant_id\) AND \(\s*fr\.assigned_bank_agent_id = \?\s*OR fr\.created_by = \?\s*\)/,
+          'WHERE c.tenant_id = ? AND (fr.tenant_id IS NULL OR fr.tenant_id = c.tenant_id) AND fr.created_by = ?'
+        )
+        const fallbackParams = [userInfo.tenantId, userInfo.userId]
+        results = await runFollowupQuery(fallbackQuery, fallbackParams)
+      } else {
+        throw dbErr
+      }
+    }
 
     return c.json({ success: true, data: results })
   } catch (error: any) {
@@ -11577,13 +11615,16 @@ app.get('/api/reports/performance', async (c) => {
   }
 });
 
-// Workflow Report API
+// Workflow Report API (super admin only for now)
 app.get('/api/reports/workflow', async (c) => {
   try {
-    const userInfo = await getUserInfo(c);
+    const userInfo = await getUserInfo(c)
 
     if (!userInfo.userId || !userInfo.roleId) {
-      return c.json({ success: false, error: 'غير مصرح بالوصول' }, 401);
+      return c.json({ success: false, error: 'غير مصرح بالوصول' }, 401)
+    }
+    if (normalizeRoleId(userInfo.roleId) !== 1) {
+      return c.json({ success: false, error: 'غير مصرح بالوصول' }, 403)
     }
 
     const customerId = c.req.query('customer_id');
@@ -12010,43 +12051,37 @@ app.get('/admin/reports/requests-followup', async (c) => {
               <p class="text-gray-600">جاري تحميل البيانات...</p>
             </div>
             
-            <!-- Table Container with Scroll Buttons -->
+            <!-- Table with edge-scroll (same as customers / requests modules) -->
             <div class="hidden" id="tableWrapper">
-              <div class="relative">
-                <!-- Right Scroll Button -->
-                <button 
-                  id="scrollLeftBtn" 
-                  onclick="scrollTable('left')"
-                  class="scroll-btn scroll-btn-left hidden"
-                  aria-label="تمرير لليسار"
-                >
-                  <i class="fas fa-chevron-left"></i>
-                </button>
-                
-                <!-- Left Scroll Button -->
-                <button 
-                  id="scrollRightBtn" 
-                  onclick="scrollTable('right')"
-                  class="scroll-btn scroll-btn-right hidden"
-                  aria-label="تمرير لليمين"
-                >
-                  <i class="fas fa-chevron-right"></i>
-                </button>
-                
-                <div id="tableContainer" class="overflow-x-auto">
-                  <table class="w-full">
+              <div class="edge-scroll-wrap">
+                <div class="edge-scroll-zone left">
+                  <div id="followupEdgeLeft" class="edge-scroll-btn edge-hidden">
+                    <button type="button" onclick="edgeScrollStep('followupTableScroll', 'left')" aria-label="scroll left">
+                      <i class="fas fa-chevron-left text-lg"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="edge-scroll-zone right">
+                  <div id="followupEdgeRight" class="edge-scroll-btn edge-hidden">
+                    <button type="button" onclick="edgeScrollStep('followupTableScroll', 'right')" aria-label="scroll right">
+                      <i class="fas fa-chevron-right text-lg"></i>
+                    </button>
+                  </div>
+                </div>
+                <div id="followupTableScroll" class="overflow-x-auto no-hscrollbar">
+                  <table class="min-w-full w-max">
                 <thead class="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
                   <tr>
-                    <th class="px-4 py-3 text-right text-sm font-bold">#</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">اسم العميل</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">رقم الهاتف</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">الموظف المخصص</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">تاريخ تقديم الطلب</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">مراحل الطلب</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">آخر تحديث</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">إجمالي الوقت</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">المبلغ المطلوب</th>
-                    <th class="px-4 py-3 text-right text-sm font-bold">حالة الطلب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">#</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">اسم العميل</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">رقم الهاتف</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">الموظف المخصص</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">تاريخ تقديم الطلب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">مراحل الطلب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">آخر تحديث</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">إجمالي الوقت</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">المبلغ المطلوب</th>
+                    <th class="px-4 py-3 text-right text-sm font-bold whitespace-nowrap">حالة الطلب</th>
                   </tr>
                 </thead>
                 <tbody id="reportTable" class="divide-y divide-gray-200">
@@ -12070,29 +12105,50 @@ app.get('/admin/reports/requests-followup', async (c) => {
           async function loadReport() {
             try {
               const urlParams = new URLSearchParams(window.location.search);
-              const tenantId = urlParams.get('tenant_id');
+              let user = null;
+              try {
+                user = JSON.parse(localStorage.getItem('userData') || 'null');
+              } catch (e) { user = null; }
+              const roleId = user && user.role_id != null ? Number(user.role_id) : null;
+              const userTenantId = user && user.tenant_id != null ? String(user.tenant_id) : '';
+              const urlTenantId = urlParams.get('tenant_id') || '';
+              // Company roles (2–5): always use session tenant, never URL alone (prevents cross-company leak)
+              const isCompanyRole = roleId === 2 || roleId === 3 || roleId === 4 || roleId === 5
+                || roleId === 12 || roleId === 13 || roleId === 14 || roleId === 15;
+              const tenantId = isCompanyRole ? userTenantId : (urlTenantId || userTenantId);
               
               if (!tenantId) {
                 alert('خطأ: لم يتم تحديد الشركة');
                 return;
               }
+              if (isCompanyRole && urlTenantId && userTenantId && urlTenantId !== userTenantId) {
+                urlParams.set('tenant_id', userTenantId);
+                window.history.replaceState({}, '', '/admin/reports/requests-followup?' + urlParams.toString());
+              }
               
               const authToken = localStorage.getItem('authToken');
               const response = await axios.get('/api/reports/requests-followup', {
+                params: isCompanyRole ? {} : { tenant_id: tenantId },
                 headers: {
                   'Authorization': 'Bearer ' + authToken
                 }
               });
               
               if (response.data.success) {
-                reportData = response.data.data;
+                reportData = Array.isArray(response.data.data) ? response.data.data : [];
                 displayReport(reportData);
               } else {
-                alert('خطأ: ' + response.data.error);
+                alert('خطأ: ' + (response.data.error || 'فشل تحميل التقرير'));
               }
             } catch (error) {
               console.error('Error loading report:', error);
-              alert('حدث خطأ أثناء تحميل التقرير');
+              const apiMsg = error?.response?.data?.error;
+              const status = error?.response?.status;
+              alert(
+                apiMsg
+                  ? ('خطأ: ' + apiMsg)
+                  : (status ? ('حدث خطأ أثناء تحميل التقرير (HTTP ' + status + ')') : 'حدث خطأ أثناء تحميل التقرير')
+              );
             } finally {
               document.getElementById('loading').classList.add('hidden');
             }
@@ -12100,18 +12156,22 @@ app.get('/admin/reports/requests-followup', async (c) => {
           
           function displayReport(data) {
             const tbody = document.getElementById('reportTable');
-            const tableContainer = document.getElementById('tableContainer');
             const emptyState = document.getElementById('emptyState');
-            
-            if (data.length === 0) {
-              emptyState.classList.remove('hidden');
+            const rows = Array.isArray(data) ? data : [];
+
+            if (!tbody) {
+              console.error('reportTable element not found');
               return;
             }
             
-            tableContainer.classList.remove('hidden');
+            if (rows.length === 0) {
+              emptyState?.classList.remove('hidden');
+              return;
+            }
+            
             document.getElementById('tableWrapper')?.classList.remove('hidden');
             
-            tbody.innerHTML = data.map((row, index) => {
+            tbody.innerHTML = rows.map((row, index) => {
               const statusColors = {
                 'pending': 'bg-yellow-100 text-yellow-800',
                 'approved': 'bg-green-100 text-green-800',
@@ -12254,7 +12314,10 @@ app.get('/admin/reports/requests-followup', async (c) => {
                     \${isClosed ? '<div class="text-xs text-gray-500 mt-1">⏸️ منتهي</div>' : '<div class="text-xs text-purple-600 mt-1">⏱️ جاري العد</div>'}
                   </td>
                   <td class="px-4 py-4 font-bold text-green-600">
-                    \${row.requested_amount ? row.requested_amount.toLocaleString('ar-SA') + ' ريال' : '-'}
+                    \${(() => {
+                      const amt = Number(row.requested_amount);
+                      return Number.isFinite(amt) ? amt.toLocaleString('ar-SA') + ' ريال' : '-';
+                    })()}
                   </td>
                   <td class="px-4 py-4">
                     <span class="px-3 py-1 rounded-full text-xs font-bold \${statusClass}">
@@ -12264,6 +12327,16 @@ app.get('/admin/reports/requests-followup', async (c) => {
                 </tr>
               \`;
             }).join('');
+            requestAnimationFrame(() => refreshFollowupEdgeScroll());
+          }
+
+          function refreshFollowupEdgeScroll() {
+            try {
+              setupEdgeScrollOnce('followupTableScroll', 'followupEdgeLeft', 'followupEdgeRight');
+              updateEdgeScrollControls('followupTableScroll', 'followupEdgeLeft', 'followupEdgeRight');
+            } catch (e) {
+              console.error('refreshFollowupEdgeScroll', e);
+            }
           }
           
           function exportToExcel() {
@@ -12322,72 +12395,150 @@ app.get('/admin/reports/requests-followup', async (c) => {
                 row.style.display = 'none';
               }
             });
+            refreshFollowupEdgeScroll();
           }
-          
-          // Scroll table function
-          function scrollTable(direction) {
-            const container = document.getElementById('tableContainer');
-            const scrollAmount = 300; // pixels to scroll
-            
-            if (direction === 'right') {
-              container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-            } else {
-              container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-            }
-            
-            // Update button visibility after scroll
-            setTimeout(checkScrollButtons, 300);
+
+          window.edgeScrollStep = function(scrollElId, visualDirection) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+            const step = 360;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            let delta = visualDirection === 'left' ? -step : step;
+            if (dir === 'rtl') delta = -delta;
+            const current = getNormalizedScrollLeft(el);
+            animateNormalizedScrollLeft(el, current + delta, 260);
+            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'followupEdgeLeft', 'followupEdgeRight'));
+          };
+
+          function setNormalizedScrollLeft(el, normalizedLeft) {
+            const max = el.scrollWidth - el.clientWidth;
+            const clamped = Math.max(0, Math.min(max, normalizedLeft));
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') { el.scrollLeft = clamped; return; }
+            const type = getRtlScrollType();
+            if (type === 'negative') el.scrollLeft = -clamped;
+            else if (type === 'reverse') el.scrollLeft = max - clamped;
+            else el.scrollLeft = clamped;
           }
-          
-          // Check if scroll buttons should be visible
-          function checkScrollButtons() {
-            const container = document.getElementById('tableContainer');
-            const leftBtn = document.getElementById('scrollLeftBtn');
-            const rightBtn = document.getElementById('scrollRightBtn');
-            
-            if (!container || !leftBtn || !rightBtn) return;
-            
-            const canScrollLeft = container.scrollLeft > 0;
-            const canScrollRight = container.scrollLeft < (container.scrollWidth - container.clientWidth - 10);
-            
-            // Show/hide buttons based on scroll position
-            if (canScrollLeft) {
-              leftBtn.classList.remove('hidden');
-            } else {
-              leftBtn.classList.add('hidden');
+
+          function animateNormalizedScrollLeft(el, target, durationMs) {
+            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReduced) { setNormalizedScrollLeft(el, target); return; }
+            const max = el.scrollWidth - el.clientWidth;
+            const to = Math.max(0, Math.min(max, target));
+            const from = getNormalizedScrollLeft(el);
+            const delta = to - from;
+            if (Math.abs(delta) < 1) return;
+            const start = performance.now();
+            const duration = Math.max(120, Number(durationMs) || 260);
+            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1);
+            el.dataset.edgeScrollAnimToken = animToken;
+            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+            const tick = (now) => {
+              if (el.dataset.edgeScrollAnimToken !== animToken) return;
+              const t = Math.min(1, (now - start) / duration);
+              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t));
+              if (t < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          }
+
+          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
+            const el = document.getElementById(scrollElId);
+            const arrow = document.getElementById(arrowBtnId);
+            if (!el || !arrow) return;
+            const wrap = el.closest('.edge-scroll-wrap');
+            if (!wrap) return;
+            const wrapRect = wrap.getBoundingClientRect();
+            const vhCenter = window.innerHeight / 2;
+            const padding = 16;
+            const minY = wrapRect.top + padding;
+            const maxY = wrapRect.bottom - padding;
+            const clamped = Math.max(minY, Math.min(maxY, vhCenter));
+            arrow.style.top = String(clamped - wrapRect.top) + 'px';
+          }
+
+          let __followupRtlScrollType = null;
+          function getRtlScrollType() {
+            if (__followupRtlScrollType) return __followupRtlScrollType;
+            const div = document.createElement('div');
+            div.style.width = '4px';
+            div.style.height = '1px';
+            div.style.overflow = 'scroll';
+            div.style.direction = 'rtl';
+            div.style.position = 'absolute';
+            div.style.top = '-9999px';
+            const inner = document.createElement('div');
+            inner.style.width = '8px';
+            inner.style.height = '1px';
+            div.appendChild(inner);
+            document.body.appendChild(div);
+            if (div.scrollLeft > 0) __followupRtlScrollType = 'reverse';
+            else {
+              div.scrollLeft = 1;
+              __followupRtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default';
             }
-            
-            if (canScrollRight) {
-              rightBtn.classList.remove('hidden');
-            } else {
-              rightBtn.classList.add('hidden');
+            document.body.removeChild(div);
+            return __followupRtlScrollType;
+          }
+
+          function getNormalizedScrollLeft(el) {
+            const max = el.scrollWidth - el.clientWidth;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            if (dir !== 'rtl') return el.scrollLeft;
+            const type = getRtlScrollType();
+            if (type === 'negative') return -el.scrollLeft;
+            if (type === 'reverse') return max - el.scrollLeft;
+            return el.scrollLeft;
+          }
+
+          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            const leftWrap = document.getElementById(leftBtnId);
+            const rightWrap = document.getElementById(rightBtnId);
+            if (!el || !leftWrap || !rightWrap) return;
+            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5;
+            if (!canScroll) {
+              leftWrap.classList.add('edge-hidden');
+              rightWrap.classList.add('edge-hidden');
+              return;
+            }
+            const maxScrollLeft = el.scrollWidth - el.clientWidth;
+            const sl = getNormalizedScrollLeft(el);
+            const canLeft = sl > 1;
+            const canRight = sl < maxScrollLeft - 1;
+            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            const showLeft = dir === 'rtl' ? canRight : canLeft;
+            const showRight = dir === 'rtl' ? canLeft : canRight;
+            leftWrap.classList.toggle('edge-hidden', !showLeft);
+            rightWrap.classList.toggle('edge-hidden', !showRight);
+            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
+            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId);
+          }
+
+          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
+            const el = document.getElementById(scrollElId);
+            if (!el) return;
+            if (el.dataset.edgeScrollBound === '1') return;
+            el.dataset.edgeScrollBound = '1';
+            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId);
+            el.addEventListener('scroll', tick, { passive: true });
+            window.addEventListener('resize', tick);
+            window.addEventListener('scroll', tick, { passive: true });
+            setTimeout(tick, 0);
+            setTimeout(tick, 150);
+            setTimeout(tick, 500);
+            if (typeof ResizeObserver !== 'undefined') {
+              try {
+                const ro = new ResizeObserver(tick);
+                ro.observe(el);
+                const tbl = el.querySelector('table');
+                if (tbl) ro.observe(tbl);
+              } catch (e) {}
             }
           }
-          
-          // Initialize scroll buttons after table loads
-          function initScrollButtons() {
-            const container = document.getElementById('tableContainer');
-            const wrapper = document.getElementById('tableWrapper');
-            
-            if (container && wrapper) {
-              wrapper.classList.remove('hidden');
-              
-              // Check initially
-              checkScrollButtons();
-              
-              // Check on scroll
-              container.addEventListener('scroll', checkScrollButtons);
-              
-              // Check on window resize
-              window.addEventListener('resize', checkScrollButtons);
-            }
-          }
-          
-          // Load report on page load
-          loadReport().then(() => {
-            // Initialize scroll buttons after data is loaded
-            setTimeout(initScrollButtons, 500);
-          });
+
+          loadReport();
         </script>
       </body>
       </html>
@@ -13106,7 +13257,16 @@ app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
 app.get('/admin/reports/banks', (c) => c.html(banksReportPage))
 app.get('/admin/reports/performance', (c) => c.html(performanceReportPage))
 app.get('/admin/reports/clicks', (c) => c.html(clicksReportPage))
-app.get('/admin/reports/workflow', (c) => c.html(workflowReportPage))
+app.get('/admin/reports/workflow', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId || !userInfo.roleId) {
+    return c.html('<h1>غير مصرح بالوصول</h1>', 401)
+  }
+  if (normalizeRoleId(userInfo.roleId) !== 1) {
+    return c.html('<h1>غير مصرح بالوصول</h1>', 403)
+  }
+  return c.html(workflowReportPage)
+})
 app.get('/admin/reports/employee-performance', (c) => c.html(employeePerformanceReportPage))
 app.get('/admin/payments', (c) => c.html(paymentsPage))
 app.get('/admin/banks', (c) => c.html(banksManagementPage))
@@ -14384,12 +14544,12 @@ app.get('/admin/customers/add', async (c) => {
                       if (!gregorianValue) return;
                       isDobSyncing = true;
                       g.value = gregorianValue;
-                      h.value = formatHijriDateFromGregorian(gregorianValue);
                       hidden.value = gregorianValue;
-                      type.value = 'gregorian';
+                      type.value = 'hijri';
                       if (hijriDobPicker) {
                         hijriDobPicker.setDate(gregorianValue, false, 'Y-m-d');
                       }
+                      h.value = formatHijriDateFromGregorian(gregorianValue);
                       isDobSyncing = false;
                     }
 
@@ -14416,9 +14576,8 @@ app.get('/admin/customers/add', async (c) => {
                           var gregorianValue = formatGregorianValue(selectedDates[0]);
                           isDobSyncing = true;
                           g.value = gregorianValue;
-                          h.value = formatHijriDateFromGregorian(gregorianValue);
                           hidden.value = gregorianValue;
-                          type.value = 'gregorian';
+                          h.value = formatHijriDateFromGregorian(gregorianValue);
                           isDobSyncing = false;
                         }]
                       });
@@ -14663,12 +14822,12 @@ app.get('/admin/customers/add', async (c) => {
                       if (!gregorianValue) return;
                       isWorkStartSyncing = true;
                       g.value = gregorianValue;
-                      h.value = formatHijriDateFromGregorian(gregorianValue);
                       hidden.value = gregorianValue;
-                      type.value = 'gregorian';
+                      type.value = 'hijri';
                       if (hijriWorkStartPicker) {
                         hijriWorkStartPicker.setDate(gregorianValue, false, 'Y-m-d');
                       }
+                      h.value = formatHijriDateFromGregorian(gregorianValue);
                       isWorkStartSyncing = false;
                     }
 
@@ -14695,9 +14854,8 @@ app.get('/admin/customers/add', async (c) => {
                           var gregorianValue = formatGregorianValue(selectedDates[0]);
                           isWorkStartSyncing = true;
                           g.value = gregorianValue;
-                          h.value = formatHijriDateFromGregorian(gregorianValue);
                           hidden.value = gregorianValue;
-                          type.value = 'gregorian';
+                          h.value = formatHijriDateFromGregorian(gregorianValue);
                           isWorkStartSyncing = false;
                         }]
                       });
@@ -23684,8 +23842,8 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   function editFormatGregorianValue(dateObject){var year=dateObject.getFullYear(),month=String(dateObject.getMonth()+1).padStart(2,'0'),day=String(dateObject.getDate()).padStart(2,'0');return year+'-'+month+'-'+day;}
                   function editFindGregorianFromHijri(hijriParts){var approxGregorianYear=hijriParts.year+579,start=new Date(approxGregorianYear-2,0,1,12,0,0),end=new Date(approxGregorianYear+2,11,31,12,0,0);for(var cursor=new Date(start);cursor<=end;cursor.setDate(cursor.getDate()+1)){var cur=editExtractHijriParts(cursor);if(!cur)continue;if(cur.year===hijriParts.year&&cur.month===hijriParts.month&&cur.day===hijriParts.day)return editFormatGregorianValue(cursor);}return'';}
                   function editSyncFromGregorian(){if(isDobSyncing)return;isDobSyncing=true;h.value=editFormatHijriFromGregorian(g.value);hidden.value=g.value||'';type.value='gregorian';if(hijriDobPicker&&g.value)hijriDobPicker.setDate(g.value,false,'Y-m-d');isDobSyncing=false;}
-                  function editSyncFromHijri(){if(isDobSyncing)return;var parsedHijri=editParseHijriInput(h.value);if(!parsedHijri)return;var gregorianValue=editFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isDobSyncing=true;g.value=gregorianValue;h.value=editFormatHijriFromGregorian(gregorianValue);hidden.value=gregorianValue;type.value='gregorian';if(hijriDobPicker)hijriDobPicker.setDate(gregorianValue,false,'Y-m-d');isDobSyncing=false;}
-                  function editInitHijriDobPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriDobPicker=flatpickr(h,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(g.value)instance.setDate(g.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isDobSyncing)return;var gregorianValue=editFormatGregorianValue(selectedDates[0]);isDobSyncing=true;g.value=gregorianValue;h.value=editFormatHijriFromGregorian(gregorianValue);hidden.value=gregorianValue;type.value='gregorian';isDobSyncing=false;}]});}
+                  function editSyncFromHijri(){if(isDobSyncing)return;var parsedHijri=editParseHijriInput(h.value);if(!parsedHijri)return;var gregorianValue=editFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isDobSyncing=true;g.value=gregorianValue;hidden.value=gregorianValue;type.value='hijri';if(hijriDobPicker)hijriDobPicker.setDate(gregorianValue,false,'Y-m-d');h.value=editFormatHijriFromGregorian(gregorianValue);isDobSyncing=false;}
+                  function editInitHijriDobPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriDobPicker=flatpickr(h,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(g.value)instance.setDate(g.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isDobSyncing)return;var gregorianValue=editFormatGregorianValue(selectedDates[0]);isDobSyncing=true;g.value=gregorianValue;hidden.value=gregorianValue;h.value=editFormatHijriFromGregorian(gregorianValue);isDobSyncing=false;}]});}
                   function setGregorian(){g.style.display='';h.style.display='none';type.value='gregorian';hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
                   function setHijri(){g.style.display='none';h.style.display='';type.value='hijri';if(g.value)h.value=editFormatHijriFromGregorian(g.value);hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
                   btnG.onclick=setGregorian;btnH.onclick=setHijri;
@@ -23703,8 +23861,8 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   function wsFormatGregorianValue(dateObject){var year=dateObject.getFullYear(),month=String(dateObject.getMonth()+1).padStart(2,'0'),day=String(dateObject.getDate()).padStart(2,'0');return year+'-'+month+'-'+day;}
                   function wsFindGregorianFromHijri(hijriParts){var approxGregorianYear=hijriParts.year+579,start=new Date(approxGregorianYear-2,0,1,12,0,0),end=new Date(approxGregorianYear+2,11,31,12,0,0);for(var cursor=new Date(start);cursor<=end;cursor.setDate(cursor.getDate()+1)){var cur=wsExtractHijriParts(cursor);if(!cur)continue;if(cur.year===hijriParts.year&&cur.month===hijriParts.month&&cur.day===hijriParts.day)return wsFormatGregorianValue(cursor);}return'';}
                   function wsSyncFromGregorian(){if(isWSSyncing)return;isWSSyncing=true;wsH.value=wsFormatHijriFromGregorian(wsG.value);wsHidden.value=wsG.value||'';if(hijriWSPicker&&wsG.value)hijriWSPicker.setDate(wsG.value,false,'Y-m-d');isWSSyncing=false;}
-                  function wsSyncFromHijri(){if(isWSSyncing)return;var parsedHijri=wsParseHijriInput(wsH.value);if(!parsedHijri)return;var gregorianValue=wsFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isWSSyncing=true;wsG.value=gregorianValue;wsH.value=wsFormatHijriFromGregorian(gregorianValue);wsHidden.value=gregorianValue;if(hijriWSPicker)hijriWSPicker.setDate(gregorianValue,false,'Y-m-d');isWSSyncing=false;}
-                  function wsInitHijriPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriWSPicker=flatpickr(wsH,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(wsG.value)instance.setDate(wsG.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isWSSyncing)return;var gregorianValue=wsFormatGregorianValue(selectedDates[0]);isWSSyncing=true;wsG.value=gregorianValue;wsH.value=wsFormatHijriFromGregorian(gregorianValue);wsHidden.value=gregorianValue;isWSSyncing=false;}]});}
+                  function wsSyncFromHijri(){if(isWSSyncing)return;var parsedHijri=wsParseHijriInput(wsH.value);if(!parsedHijri)return;var gregorianValue=wsFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isWSSyncing=true;wsG.value=gregorianValue;wsHidden.value=gregorianValue;if(hijriWSPicker)hijriWSPicker.setDate(gregorianValue,false,'Y-m-d');wsH.value=wsFormatHijriFromGregorian(gregorianValue);isWSSyncing=false;}
+                  function wsInitHijriPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriWSPicker=flatpickr(wsH,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(wsG.value)instance.setDate(wsG.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isWSSyncing)return;var gregorianValue=wsFormatGregorianValue(selectedDates[0]);isWSSyncing=true;wsG.value=gregorianValue;wsHidden.value=gregorianValue;wsH.value=wsFormatHijriFromGregorian(gregorianValue);isWSSyncing=false;}]});}
                   function wsSetGregorian(){wsG.style.display='';wsH.style.display='none';wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
                   function wsSetHijri(){wsG.style.display='none';wsH.style.display='';if(wsG.value)wsH.value=wsFormatHijriFromGregorian(wsG.value);wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
                   wsBtnG.onclick=wsSetGregorian;wsBtnH.onclick=wsSetHijri;

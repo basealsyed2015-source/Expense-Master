@@ -175,8 +175,8 @@ export const reportsPage = `<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- Workflow Report -->
-            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+            <!-- Workflow Report (super admin only) -->
+            <div id="workflowReportCard" class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
                 <div class="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white p-6">
                     <i class="fas fa-project-diagram text-3xl mb-2"></i>
                     <h3 class="text-xl font-bold">تقرير سير العمل</h3>
@@ -260,13 +260,12 @@ export const reportsPage = `<!DOCTYPE html>
 
         // Apply report permissions based on role
         function applyReportPermissions() {
-            const userRole = userData.role || userData.user_type;
-            const roleId = userData.role_id;
-            console.log('🔐 Applying permissions for role:', userRole, 'role_id:', roleId);
-            
-            // Show Requests Followup Report for all roles now
-            // Previously was hidden for employees, but now accessible to all
-            console.log('✅ Showing Requests Followup Report for all users');
+            const roleId = userData.role_id != null ? Number(userData.role_id) : null;
+            const isSuperAdmin = roleId === 1 || roleId === 11;
+            const workflowCard = document.getElementById('workflowReportCard');
+            if (workflowCard && !isSuperAdmin) {
+                workflowCard.style.display = 'none';
+            }
         }
 
         // Load stats on page load
