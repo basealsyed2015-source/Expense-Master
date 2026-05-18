@@ -11296,16 +11296,18 @@ app.get('/api/reports/requests-followup', async (c) => {
       return c.json({ success: false, error: 'غير مصرح بالوصول' }, 401)
     }
     
-    // Get tenant_id from query parameter (for Super Admin) or user info
+    const listRoleEffective = normalizeRoleId(userInfo.roleId)
     const queryTenantId = c.req.query('tenant_id')
     let tenant_id = queryTenantId ? parseInt(queryTenantId) : userInfo.tenantId
-    
-    // Super Admin (role_id = 1) can access all tenants if no specific tenant_id provided
-    if (userInfo.roleId === 1 && !tenant_id) {
-      // If no tenant_id specified, show all requests
+
+    if (listRoleEffective === 1 && !tenant_id) {
       tenant_id = null
     }
-    
+    // Roles 4/5: always own tenant; scoped to financing requests they are assigned to
+    if (listRoleEffective === 4 || listRoleEffective === 5) {
+      tenant_id = userInfo.tenantId
+    }
+
     console.log('📊 Requests followup report - User:', userInfo.userId, 'Role:', userInfo.roleId, 'Tenant:', tenant_id)
     
     // Get requests with customer and employee info
@@ -11347,18 +11349,52 @@ app.get('/api/reports/requests-followup', async (c) => {
       LEFT JOIN users u ON ca.employee_id = u.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
     `
-    
-    // Add WHERE clause if tenant_id is specified
-    if (tenant_id) {
-      query += ' WHERE c.tenant_id = ?'
+
+    const queryParams: unknown[] = []
+    if (listRoleEffective === 1) {
+      if (tenant_id) {
+        query += ' WHERE c.tenant_id = ?'
+        queryParams.push(tenant_id)
+      }
+    } else if (listRoleEffective === 2 || listRoleEffective === 3) {
+      if (userInfo.tenantId) {
+        query += ' WHERE c.tenant_id = ?'
+        queryParams.push(userInfo.tenantId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
+    } else if (listRoleEffective === 4) {
+      // Employee: financing requests for customers assigned to them
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE c.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca2
+          WHERE ca2.customer_id = fr.customer_id AND ca2.employee_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
+    } else if (listRoleEffective === 5) {
+      // Bank agent: financing requests they are assigned to or created
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE c.tenant_id = ? AND (
+          fr.assigned_bank_agent_id = ?
+          OR fr.created_by = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
+    } else {
+      query += ' WHERE 1 = 0'
     }
-    
+
     query += ' ORDER BY fr.created_at DESC'
-    
-    const { results } = tenant_id 
-      ? await c.env.DB.prepare(query).bind(tenant_id).all()
+
+    const { results } = queryParams.length > 0
+      ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all()
-    
+
     return c.json({ success: true, data: results })
   } catch (error: any) {
     console.error('Requests follow-up report error:', error)
@@ -11887,103 +11923,32 @@ app.get('/admin/reports/requests-followup', async (c) => {
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <style>
-          /* Custom Scrollbar - Enhanced */
           .overflow-x-auto {
             overflow-x: auto !important;
+            overflow-y: visible !important;
+            max-width: 100%;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: #3b82f6 #f7fafc;
           }
-          
-          .overflow-x-auto::-webkit-scrollbar {
-            height: 12px;
-            width: 12px;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar-track {
-            background: #e5e7eb;
-            border-radius: 10px;
-            margin: 0 10px;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
-          }
-          
-          .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-            border-color: #d1d5db;
-          }
-          
-          /* Force scrollbar to always show */
-          .overflow-x-auto {
-            overflow-x: scroll !important; /* Always show scrollbar */
-          }
-          
-          .overflow-x-auto table {
-            min-width: 1200px; /* Force table to be wide enough for scrollbar */
-            width: max-content;
-          }
-          
+          .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
+          .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
+          .overflow-x-auto::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%); border-radius: 10px; border: 2px solid #e5e7eb; }
+          .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%); border-color: #d1d5db; }
+          .overflow-x-auto table { min-width: 100%; width: max-content; }
+          .edge-scroll-wrap { position: relative; }
+          .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+          .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
+          .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
+          .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
+          .no-hscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
           ${getMobileResponsiveCSS()}
-          
-          /* Scroll Buttons for Tables */
-          .scroll-btn {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white;
-            border: 3px solid white;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            z-index: 10;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-            transition: all 0.3s ease;
-            font-size: 18px;
-          }
-          
-          .scroll-btn:hover {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            transform: translateY(-50%) scale(1.1);
-            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.6);
-          }
-          
-          .scroll-btn:active {
-            transform: translateY(-50%) scale(0.95);
-          }
-          
-          .scroll-btn-right {
-            right: -20px;
-          }
-          
-          .scroll-btn-left {
-            left: -20px;
-          }
-          
-          @media (max-width: 768px) {
-            .scroll-btn {
-              width: 44px;
-              height: 44px;
-              font-size: 16px;
-              border-width: 2px;
-            }
-            
-            .scroll-btn-right {
-              right: 8px;
-            }
-            
-            .scroll-btn-left {
-              left: 8px;
-            }
-          }
         </style>
       </head>
       <body class="bg-gray-50">
@@ -30528,11 +30493,12 @@ app.get('/api/hr/dashboard/stats', async (c) => {
 app.get('/api/hr/employees', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
-    console.log('🔍 HR Employees API - UserInfo:', { userId: userInfo.userId, tenantId: userInfo.tenantId, roleId: userInfo.roleId })
+    const tenantId = userInfo.tenantId
+    console.log('🔍 HR Employees API - UserInfo:', { userId: userInfo.userId, tenantId, roleId: userInfo.roleId })
     
     // Map actual database columns to expected API format
     // NOTE: Use existing column names from migrations (no date_of_birth column)
-    const query = `SELECT 
+    const selectCols = `SELECT 
         id,
         tenant_id,
         COALESCE(employee_number, employee_code) AS employee_number,
@@ -30559,10 +30525,14 @@ app.get('/api/hr/employees', async (c) => {
         notes,
         created_at,
         updated_at
-      FROM hr_employees 
-      ORDER BY created_at DESC, hire_date DESC`
+      FROM hr_employees`
+    const query = tenantId != null
+      ? `${selectCols} WHERE tenant_id = ? ORDER BY created_at DESC, hire_date DESC`
+      : `${selectCols} ORDER BY created_at DESC, hire_date DESC`
     
-    const result = await c.env.DB.prepare(query).all()
+    const result = tenantId != null
+      ? await c.env.DB.prepare(query).bind(tenantId).all()
+      : await c.env.DB.prepare(query).all()
     console.log('🔍 HR Employees API - Results count:', result.results?.length || 0)
     
     return c.json({ success: true, data: result.results || [] })
@@ -30575,9 +30545,11 @@ app.get('/api/hr/employees', async (c) => {
 // Get Single Employee
 app.get('/api/hr/employees/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
     const id = c.req.param('id')
     // Use the same COALESCE mapping as the list API for consistency
-    const query = `SELECT 
+    const selectCols = `SELECT 
         id,
         tenant_id,
         COALESCE(employee_number, employee_code) AS employee_number,
@@ -30605,10 +30577,14 @@ app.get('/api/hr/employees/:id', async (c) => {
         notes,
         created_at,
         updated_at
-      FROM hr_employees 
-      WHERE id = ?`
+      FROM hr_employees`
+    const query = tenantId != null
+      ? `${selectCols} WHERE id = ? AND tenant_id = ?`
+      : `${selectCols} WHERE id = ?`
     
-    const employee = await c.env.DB.prepare(query).bind(id).first()
+    const employee = tenantId != null
+      ? await c.env.DB.prepare(query).bind(id, tenantId).first()
+      : await c.env.DB.prepare(query).bind(id).first()
     
     if (!employee) {
       return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
@@ -30668,19 +30644,13 @@ app.post('/api/hr/employees', async (c) => {
 // Update Employee
 app.put('/api/hr/employees/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
     const id = c.req.param('id')
     const data = await c.req.json()
     
-    await c.env.DB.prepare(`
-      UPDATE hr_employees SET
-        employee_number = ?, full_name = ?, national_id = ?, email = ?, phone = ?,
-        birthdate = ?, gender = ?, department = ?, job_title = ?, basic_salary = ?,
-        housing_allowance = ?, transportation_allowance = ?, hire_date = ?,
-        contract_start_date = ?, contract_end_date = ?, direct_manager = ?,
-        employment_type = ?, work_schedule = ?, status = ?, notes = ?,
-        updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(
+    const whereTenant = tenantId != null ? ' AND tenant_id = ?' : ''
+    const updateBinds = [
       data.employee_number || null,
       data.full_name,
       data.national_id || null,
@@ -30701,8 +30671,24 @@ app.put('/api/hr/employees/:id', async (c) => {
       data.work_schedule || 'regular',
       data.status || 'active',
       data.notes || null,
-      id
-    ).run()
+      id,
+    ]
+    if (tenantId != null) updateBinds.push(tenantId)
+
+    const result = await c.env.DB.prepare(`
+      UPDATE hr_employees SET
+        employee_number = ?, full_name = ?, national_id = ?, email = ?, phone = ?,
+        birthdate = ?, gender = ?, department = ?, job_title = ?, basic_salary = ?,
+        housing_allowance = ?, transportation_allowance = ?, hire_date = ?,
+        contract_start_date = ?, contract_end_date = ?, direct_manager = ?,
+        employment_type = ?, work_schedule = ?, status = ?, notes = ?,
+        updated_at = datetime('now')
+      WHERE id = ?${whereTenant}
+    `).bind(...updateBinds).run()
+
+    if (!result.meta.changes) {
+      return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
+    }
     
     return c.json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح' })
   } catch (error: any) {
@@ -30714,8 +30700,18 @@ app.put('/api/hr/employees/:id', async (c) => {
 // Delete Employee
 app.delete('/api/hr/employees/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const tenantId = userInfo.tenantId
     const id = c.req.param('id')
-    await c.env.DB.prepare(`DELETE FROM hr_employees WHERE id = ?`).bind(id).run()
+    const query = tenantId != null
+      ? `DELETE FROM hr_employees WHERE id = ? AND tenant_id = ?`
+      : `DELETE FROM hr_employees WHERE id = ?`
+    const result = tenantId != null
+      ? await c.env.DB.prepare(query).bind(id, tenantId).run()
+      : await c.env.DB.prepare(query).bind(id).run()
+    if (!result.meta.changes) {
+      return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
+    }
     return c.json({ success: true, message: 'تم حذف الموظف بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
