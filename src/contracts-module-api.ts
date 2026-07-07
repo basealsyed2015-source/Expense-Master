@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { customerEligibleForContractCreate } from './notification-access'
 
 type UserInfo = {
   userId: number | null
@@ -168,7 +169,7 @@ function tenantFilterClause(
  */
 async function withEffectiveTenantForContractsApi(c: Context, info: UserInfo): Promise<UserInfo> {
   if (info.tenantId != null || isSuperAdmin(info)) return info
-  if (info.roleId !== 5 || info.userId == null || !c.env?.DB) return info
+  if ((info.roleId !== 5 && info.roleId !== 6) || info.userId == null || !c.env?.DB) return info
   try {
     const row = await c.env.DB.prepare(
       `SELECT b.tenant_id AS tenant_id
@@ -221,8 +222,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       return c.json({ data: [], debug: 'no_tenant' })
     }
 
-    // Role 4: only customers assigned to them, with an active (non-completed) funding request,
-    // and no existing active contract.
+    // Role 4 / Role 6: customers in scope with an active funding request and no blocking contract.
     if (info.roleId === 4 && info.userId) {
       sql += ` AND EXISTS (
         SELECT 1 FROM customer_assignments ca
@@ -238,6 +238,28 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           AND co.status NOT IN ('مكتمل', 'مؤرشف')
       )`
       binds.push(info.userId, effectiveTenantId!, effectiveTenantId!)
+    } else if (info.roleId === 6 && info.userId) {
+      sql += ` AND (
+        EXISTS (
+          SELECT 1 FROM customer_assignments ca
+          WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+        )
+        OR customers.assigned_bank_agent_id = ?
+        OR EXISTS (
+          SELECT 1 FROM financing_requests fr0
+          WHERE fr0.customer_id = customers.id AND fr0.assigned_bank_agent_id = ?
+        )
+      ) AND EXISTS (
+        SELECT 1 FROM financing_requests fr
+        WHERE fr.customer_id = customers.id AND fr.tenant_id = ?
+          AND COALESCE(fr.is_completed, 0) = 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM contracts co
+        WHERE co.customer_id = customers.id AND co.tenant_id = ?
+          AND COALESCE(co.is_archived, 0) = 0
+          AND co.status NOT IN ('مكتمل', 'مؤرشف')
+      )`
+      binds.push(info.userId, info.userId, info.userId, effectiveTenantId!, effectiveTenantId!)
     }
 
     // Role 5 bank agent: customers they created (fallback handled below if column missing).
@@ -283,6 +305,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
       rowScopeSql = ' AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) '
       rowScopeBinds = [info.userId, info.tenantId]
+    } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
+      // Role 6: contracts they created (employee column) OR customer assigned as bank agent
+      rowScopeSql = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeBinds = [info.userId, info.userId, info.tenantId]
     }
     const { results } = await c.env.DB.prepare(
       `SELECT * FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
@@ -310,6 +336,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
       rowScopeSqlId = ' AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) '
       rowScopeBindsId = [info.userId, info.tenantId]
+    } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
+      rowScopeSqlId = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     }
     const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql} ${rowScopeSqlId}`)
       .bind(id, ...tbinds, ...rowScopeBindsId)
@@ -362,36 +391,72 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       const logoNorm = normalizePartyOneLogo(body)
       if (!logoNorm.ok) return logoNorm.response
 
-      // Role 4: validate the customer is eligible (assigned, active FR, no active contract),
-      // then derive financing_request_id from the most recent active financing request.
-      if (info.roleId === 4) {
+      let role6IsBothColumns = false
+
+      // Role 4 / Role 6: validate customer scope (employee and/or bank-agent for role 6), active FR, no blocking contract.
+      if ((info.roleId === 4 || info.roleId === 6) && info.userId) {
         const customerId = body.customer_id != null ? Number(body.customer_id) : null
-        if (customerId && info.userId) {
-          const eligible = await c.env.DB.prepare(
-            `SELECT 1 FROM customers
-             WHERE id = ? AND tenant_id = ?
-               AND EXISTS (SELECT 1 FROM customer_assignments ca WHERE ca.customer_id = customers.id AND ca.employee_id = ?)
-               AND EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0)
-               AND NOT EXISTS (SELECT 1 FROM contracts co WHERE co.customer_id = customers.id AND co.tenant_id = ? AND COALESCE(co.is_archived, 0) = 0 AND co.status NOT IN ('مكتمل', 'مؤرشف'))`
-          )
-            .bind(customerId, tenantId, info.userId, tenantId, tenantId)
-            .first()
+        if (customerId) {
+          let eligible = false
+          try {
+            eligible = await customerEligibleForContractCreate(c.env.DB, {
+              customerId,
+              tenantId,
+              userId: info.userId,
+              roleId: info.roleId,
+            })
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            return c.json({ error: 'database_error', detail: msg }, 500)
+          }
           if (!eligible) return c.json({ error: 'Forbidden' }, 403)
 
-          const frRow = await c.env.DB.prepare(
-            `SELECT id FROM financing_requests
-             WHERE customer_id = ? AND tenant_id = ? AND COALESCE(is_completed, 0) = 0
-             ORDER BY id DESC LIMIT 1`
-          )
-            .bind(customerId, tenantId)
-            .first<{ id: number }>()
+          let frRow: { id: number } | null = null
+          try {
+            frRow = await c.env.DB.prepare(
+              `SELECT id FROM financing_requests
+               WHERE customer_id = ? AND tenant_id = ? AND COALESCE(is_completed, 0) = 0
+               ORDER BY id DESC LIMIT 1`
+            )
+              .bind(customerId, tenantId)
+              .first<{ id: number }>()
+          } catch (e: unknown) {
+            const msg = String((e as { message?: string })?.message || e || '')
+            if (/no such column:\s*is_completed/i.test(msg)) {
+              frRow = await c.env.DB.prepare(
+                `SELECT id FROM financing_requests
+                 WHERE customer_id = ? AND tenant_id = ?
+                 ORDER BY id DESC LIMIT 1`
+              )
+                .bind(customerId, tenantId)
+                .first<{ id: number }>()
+            } else {
+              return c.json({ error: 'database_error', detail: msg }, 500)
+            }
+          }
           if (frRow) {
             body.financing_request_id = frRow.id
+            if (info.roleId === 6) {
+              const agentRow = await c.env.DB.prepare(
+                `SELECT 1 FROM financing_requests WHERE id = ? AND assigned_bank_agent_id = ? LIMIT 1`
+              )
+                .bind(frRow.id, info.userId)
+                .first()
+              role6IsBothColumns = Boolean(agentRow)
+            }
           }
         }
       }
 
-      const initialStatus = info.roleId === 4 ? STATUS_AWAITING_BANK_AGENT_APPROVAL : body.status ?? 'نشط'
+      let initialStatus: string
+      if (info.roleId === 4) {
+        initialStatus = STATUS_AWAITING_BANK_AGENT_APPROVAL
+      } else if (info.roleId === 6) {
+        // Same user in both columns → skip bank approval step
+        initialStatus = role6IsBothColumns ? STATUS_AWAITING_ADMIN_APPROVAL : STATUS_AWAITING_BANK_AGENT_APPROVAL
+      } else {
+        initialStatus = String(body.status ?? 'نشط')
+      }
       let r
       try {
         r = await c.env.DB.prepare(
@@ -450,6 +515,18 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         return c.json({ error: 'database_error', detail: msg }, 500)
       }
       const id = r.meta.last_row_id as number
+      // Role 6 both-column: set bank-agent audit fields for traceability
+      if (info.roleId === 6 && role6IsBothColumns && info.userId) {
+        try {
+          await c.env.DB.prepare(
+            `UPDATE contracts SET bank_agent_approved_by = ?, bank_agent_approved_at = CURRENT_TIMESTAMP WHERE id = ?`
+          )
+            .bind(info.userId, id)
+            .run()
+        } catch (_) {
+          /* columns may not exist on older schemas — non-fatal */
+        }
+      }
       const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
       return c.json({ ...row, id })
     }
@@ -510,12 +587,13 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
-    if (table === 'contracts' && info.roleId === 4 && existing.created_by !== info.userId) {
-      return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contracts' && (info.roleId === 4 || info.roleId === 6) && existing.created_by !== info.userId) {
+      // Role 6 may still approve via bank-agent path without being the creator — allow that below
+      if (info.roleId === 4) return c.json({ error: 'Forbidden' }, 403)
     }
 
     if (table === 'contract_templates') {
-      if (info.roleId === 4) return c.json({ error: 'Forbidden' }, 403)
+      if (info.roleId === 4 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
       const fields: string[] = []
       const vals: unknown[] = []
       const touch = (col: string, key: string) => {
@@ -549,6 +627,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         if (!logoNorm.ok) return logoNorm.response
         body.party_one_logo = logoNorm.value
       }
+      // Creators (role 4/6) save form fields via PUT; do not treat workflow status dropdown drift as approval actions.
+      if ((info.roleId === 4 || info.roleId === 6) && existing.created_by === info.userId && body.status !== undefined) {
+        const requestedStatus = String(body.status ?? '')
+        const currentStatus = String(existing.status ?? '')
+        const isArchiveRequest = requestedStatus === 'مؤرشف' && body.is_archived
+        if (!isArchiveRequest && requestedStatus !== currentStatus) {
+          delete body.status
+        }
+      }
       const statusChanged = body.status !== undefined && body.status !== existing.status
       const approvalFields: string[] = []
       const approvalVals: unknown[] = []
@@ -559,6 +646,32 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
 
         if (info.roleId === 4) {
           if (!isArchiveRequest) return c.json({ error: 'Forbidden' }, 403)
+        } else if (info.roleId === 6) {
+          const isCreator = existing.created_by === info.userId
+          if (isArchiveRequest && isCreator) {
+            // Role 6 creator can archive their own contract — fall through to field update
+          } else if (currentStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL && requestedStatus === STATUS_AWAITING_ADMIN_APPROVAL) {
+            // Role 6 as bank agent must be assigned as bank agent on the financing request —
+            // same verification as role 5 (inlined here because the else-if chain won't reach the role 5 block)
+            const contractCustomerId = (existing as any).customer_id
+            if (!contractCustomerId) {
+              return c.json({ error: 'Forbidden', detail: 'العقد غير مرتبط بعميل' }, 403)
+            }
+            const frRow = await c.env.DB.prepare(
+              `SELECT id FROM financing_requests
+               WHERE customer_id = ? AND assigned_bank_agent_id = ? AND tenant_id = ?
+               LIMIT 1`
+            )
+              .bind(contractCustomerId, info.userId, info.tenantId)
+              .first()
+            if (!frRow) {
+              return c.json({ error: 'Forbidden', detail: 'غير مصرح لك باعتماد هذا العقد' }, 403)
+            }
+            approvalFields.push('bank_agent_approved_by = ?', 'bank_agent_approved_at = CURRENT_TIMESTAMP')
+            approvalVals.push(info.userId)
+          } else {
+            return c.json({ error: 'Forbidden' }, 403)
+          }
         } else if (currentStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL) {
           if (info.roleId !== 5 || requestedStatus !== STATUS_AWAITING_ADMIN_APPROVAL) {
             return c.json({ error: 'Forbidden' }, 403)
@@ -776,8 +889,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
-    if (table === 'contract_templates' && info.roleId === 4) return c.json({ error: 'Forbidden' }, 403)
-    if (table === 'contracts' && info.roleId === 4 && existing.created_by !== info.userId) {
+    if (table === 'contract_templates' && (info.roleId === 4 || info.roleId === 6)) return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contracts' && (info.roleId === 4 || info.roleId === 6) && existing.created_by !== info.userId) {
       return c.json({ error: 'Forbidden' }, 403)
     }
     await c.env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(id).run()

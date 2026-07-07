@@ -16,9 +16,15 @@ database_id = "67526746-97fb-4914-aa8f-d3cc73a6ab87"
 binding = "ATTACHMENTS"
 bucket_name = "tamweel-calc-r2"
 
+# Company chat DO: deployed via wrangler.chat-do.toml; Pages binds in wrangler.jsonc (script_name).
+# Do not add durable_objects here — wrangler pages deploy uses wrangler.jsonc, not this file.
+
 # Forgot-password emails use Resend (https://resend.com).
 # This repo deploys as Cloudflare Pages — use Pages secrets, not Workers secrets:
 #   wrangler pages secret put RESEND_API_KEY --project-name <your-pages-project>
 # Optional: add plain-text var EMAIL_FROM, e.g. "Tamweel <noreply@your-verified-domain.com>"
 # (default without EMAIL_FROM is Resend's onboarding@resend.dev — limited to testing)
+
+[triggers]
+crons = ["0 6 * * *"]
 

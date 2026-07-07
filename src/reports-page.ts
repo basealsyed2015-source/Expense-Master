@@ -258,6 +258,19 @@ export const reportsPage = `<!DOCTYPE html>
             }
         }
 
+        function normalizeReportRoleId(roleId) {
+            if (roleId == null || roleId === '') return null;
+            const n = Number(roleId);
+            if (!Number.isFinite(n)) return null;
+            const legacy = { 11: 1, 12: 2, 13: 3, 14: 4, 15: 5 };
+            return legacy[n] != null ? legacy[n] : n;
+        }
+
+        function canAccessRequestsFollowup(roleId) {
+            const r = normalizeReportRoleId(roleId);
+            return r === 1 || r === 2 || r === 3;
+        }
+
         // Apply report permissions based on role
         function applyReportPermissions() {
             const roleId = userData.role_id != null ? Number(userData.role_id) : null;
@@ -265,6 +278,10 @@ export const reportsPage = `<!DOCTYPE html>
             const workflowCard = document.getElementById('workflowReportCard');
             if (workflowCard && !isSuperAdmin) {
                 workflowCard.style.display = 'none';
+            }
+            const followupCard = document.getElementById('requestsFollowupReport');
+            if (followupCard && !canAccessRequestsFollowup(roleId)) {
+                followupCard.style.display = 'none';
             }
         }
 

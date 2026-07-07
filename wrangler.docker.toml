@@ -1,0 +1,17 @@
+# Local Docker only — do not use for deploy or with --remote.
+# Production config remains in wrangler.toml / wrangler.jsonc.
+
+name = "tamweel-calc-docker"
+main = "src/index.tsx"
+compatibility_date = "2024-12-14"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tamweel-docker-local"
+database_id = "00000000-0000-4000-8000-000000000001"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "tamweel-calc-r2-docker-local"

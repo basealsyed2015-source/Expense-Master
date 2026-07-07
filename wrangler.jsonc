@@ -16,5 +16,25 @@
       "binding": "ATTACHMENTS",
       "bucket_name": "tamweel-calc-r2"
     }
-  ]
+  ],
+  // Pages deploy reads this file (not wrangler.toml). DO classes live on tamweel-chat-do Worker.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_ROOMS",
+        "class_name": "ChatConversationRoom",
+        "script_name": "tamweel-chat-do"
+      },
+      {
+        "name": "USER_NOTIFICATIONS",
+        "class_name": "UserNotificationRoom",
+        "script_name": "tamweel-chat-do"
+      },
+      {
+        "name": "BROADCAST_ROOMS",
+        "class_name": "BroadcastRoom",
+        "script_name": "tamweel-chat-do"
+      }
+    ]
+  }
 }

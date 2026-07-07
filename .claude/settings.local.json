@@ -38,7 +38,28 @@
       "Bash(wrangler pages *)",
       "Bash(grep *)",
       "WebFetch(domain:zat--developer.tamweel-calc.pages.dev)",
-      "WebFetch(domain:tamweel-calc.com)"
+      "WebFetch(domain:tamweel-calc.com)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "Bash(node fix_hijri.js)",
+      "Bash(node fix_hijri.cjs)",
+      "Bash(python3 *)",
+      "Bash(node *)",
+      "Bash(npm test *)",
+      "Bash(npx tsx *)",
+      "Bash(curl -s -c /tmp/chat-cookie.txt -b /tmp/chat-cookie.txt \"http://localhost:8789/admin/chat\" -L -w \"\\\\nHTTP_STATUS: %{http_code}\")",
+      "Bash(npx vite *)",
+      "Bash(awk '/^app\\\\.\\(get|post|put|delete\\)/{route=$0; line=NR} NR==16689{print line, route; exit}' src/index.tsx)",
+      "Bash(awk 'NR>=18442 && NR<=22000 && /<tbody|tbody id=/{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=18560 && NR<=18660 && /customers\\\\s*=/{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=18442 && NR<=20100 && /^app\\\\.\\(get|post|put|delete\\)/{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=20100 && NR<=20933 && /^app\\\\.|^\\\\}\\\\\\)/{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=18442 && NR<=20214 && /<\\\\/body>|<\\\\/html>/{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=21810 && NR<=23078 && \\(/<tbody/||/<\\\\/body>/||/customer_name|customer\\\\.full_name|customer_id|request\\\\.customer/\\){print NR\": \"substr\\($0,1,160\\)}' src/index.tsx)",
+      "Bash(awk 'NR>=21810 && NR<=22230 && /requests\\\\.results|const requests|requests = await|\\\\.all\\\\\\(\\\\\\)/{print NR\": \"substr\\($0,1,180\\)}' src/index.tsx)",
+      "Bash(awk 'NR>=21830 && NR<=23120 && /<\\\\/body>/{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=19550 && NR<=19650{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk 'NR>=19500 && NR<=19556{print NR\": \"$0}' src/index.tsx)"
     ]
   }
 }

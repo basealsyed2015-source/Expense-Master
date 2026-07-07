@@ -1,3 +1,5 @@
+import { HTML_CSV_PREFIX, HTML_CSV_UTF16_DOWNLOAD_SCRIPT } from './csv-export'
+
 export const companyReportsPage = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -370,21 +372,18 @@ export const companyReportsPage = `
             document.getElementById('requestsTable').innerHTML = requestsHTML || '<tr><td colspan="7" class="text-center py-8 text-gray-500">لا توجد طلبات</td></tr>';
         }
 
+        ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
         function exportReport() {
             const { requests, customers } = reportData;
-            let csv = '\\uFEFFsep=,\\r\\n' + 'الرقم,العميل,المبلغ,المدة,الحالة,التاريخ\\n';
+            let csv = ${HTML_CSV_PREFIX} + 'الرقم\\tالعميل\\tالمبلغ\\tالمدة\\tالحالة\\tالتاريخ\\r\\n';
             
             requests.forEach(req => {
                 const customer = customers.find(c => c.id == req.customer_id);
                 const customerName = customer ? customer.full_name : 'غير معروف';
-                csv += \`\${req.id},\${customerName},\${req.requested_amount},\${req.duration_months},\${req.status},\${req.created_at}\\n\`;
+                csv += \`\${req.id}\\t\${customerName}\\t\${req.requested_amount}\\t\${req.duration_months}\\t\${req.status}\\t\${req.created_at}\\r\\n\`;
             });
 
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'تقرير-الشركة-' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'تقرير-الشركة-' + new Date().toISOString().split('T')[0] + '.csv');
         }
 
         // تحميل البيانات عند بدء الصفحة

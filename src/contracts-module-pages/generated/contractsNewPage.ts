@@ -889,12 +889,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   <title>عقد جديد | شركة الموعد للمقاولات العامة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
 </head>
 <body>
 
@@ -1076,7 +1070,20 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               </div>
               <div class="form-group">
                 <label class="form-label">التاريخ الهجري</label>
-                <input type="text" class="form-control" id="date_hijri" placeholder="1447/06/04" autocomplete="off" onblur="syncContractDateFromHijri()" />
+                <div style="display:flex;gap:4px;">
+                  <select id="date_hijri_day" class="form-control" title="يوم" onchange="syncContractDateFromHijri()">
+                    <option value="">يوم</option>
+                    ${Array.from({length:30},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+                  </select>
+                  <select id="date_hijri_month" class="form-control" title="الشهر" onchange="syncContractDateFromHijri()">
+                    <option value="">الشهر</option>
+                    <option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option>
+                  </select>
+                  <select id="date_hijri_year" class="form-control" title="السنة" onchange="syncContractDateFromHijri()">
+                    <option value="">السنة</option>
+                    ${Array.from({length:161},(_,i)=>`<option value="${1300+i}">${1300+i}</option>`).join('')}
+                  </select>
+                </div>
               </div>
               <div class="form-group">
                 <label class="form-label">المحكمة المختصة</label>
@@ -1221,7 +1228,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     let selectedTemplate = null;
     let editingContractId = null;
     let isContractDateSyncing = false;
-    let contractHijriPicker = null;
 
     function isTemplateActive(t) {
       return t.is_active === true || t.is_active === 1 || t.is_active === '1';
@@ -1387,171 +1393,63 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       } catch(e) {}
     }
 
-    function normalizeArabicDigits(value) {
-      if (!value) return '';
-      const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-      const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
-      return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
-        const arabicIndex = arabicDigits.indexOf(char);
-        if (arabicIndex >= 0) return String(arabicIndex);
-        const easternArabicIndex = easternArabicDigits.indexOf(char);
-        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
-      });
-    }
-
-    function formatHijriDateFromGregorian(dateValue) {
-      if (!dateValue) return '';
-      try {
-        const [year, month, day] = String(dateValue).split('-').map(Number);
-        if (!year || !month || !day) return '';
-        const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
-        if (Number.isNaN(gregorianDate.getTime())) return '';
-        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        });
-      } catch (_) {
-        return '';
-      }
-    }
-
-    function parseHijriInput(value) {
-      const normalized = normalizeArabicDigits(value)
-        .replace(/\\u200f/g, '')
-        .replace(/\\u200e/g, '')
-        .trim();
-      if (!normalized) return null;
-      const parts = normalized.split(/[^\\d]+/).filter(Boolean);
-      if (parts.length !== 3) return null;
-
-      let year;
-      let month;
-      let day;
-
-      if (parts[0].length === 4) {
-        year = Number(parts[0]);
-        month = Number(parts[1]);
-        day = Number(parts[2]);
-      } else if (parts[2].length === 4) {
-        day = Number(parts[0]);
-        month = Number(parts[1]);
-        year = Number(parts[2]);
-      } else {
-        return null;
-      }
-
-      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-      if (year < 1200 || year > 1700) return null;
-      if (month < 1 || month > 12) return null;
-      if (day < 1 || day > 30) return null;
-      return { year, month, day };
-    }
-
     function extractHijriPartsFromDate(dateObject) {
       const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
+        year: 'numeric', month: '2-digit', day: '2-digit'
       }).formatToParts(dateObject);
-      const year = Number(parts.find((part) => part.type === 'year')?.value);
-      const month = Number(parts.find((part) => part.type === 'month')?.value);
-      const day = Number(parts.find((part) => part.type === 'day')?.value);
+      const year = Number(parts.find((p) => p.type === 'year')?.value);
+      const month = Number(parts.find((p) => p.type === 'month')?.value);
+      const day = Number(parts.find((p) => p.type === 'day')?.value);
       if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
       return { year, month, day };
     }
 
     function findGregorianFromHijri(hijriParts) {
-      const approxGregorianYear = hijriParts.year + 579;
-      const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
-      const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
-      for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
-        const currentHijriParts = extractHijriPartsFromDate(cursor);
-        if (!currentHijriParts) continue;
-        if (
-          currentHijriParts.year === hijriParts.year &&
-          currentHijriParts.month === hijriParts.month &&
-          currentHijriParts.day === hijriParts.day
-        ) {
-          const year = cursor.getFullYear();
-          const month = String(cursor.getMonth() + 1).padStart(2, '0');
-          const day = String(cursor.getDate()).padStart(2, '0');
-          return year + '-' + month + '-' + day;
+      const start = new Date(hijriParts.year + 577, 0, 1, 12, 0, 0);
+      const end = new Date(hijriParts.year + 582, 11, 31, 12, 0, 0);
+      for (let c = new Date(start); c <= end; c.setDate(c.getDate() + 1)) {
+        const hp = extractHijriPartsFromDate(c);
+        if (hp && hp.year === hijriParts.year && hp.month === hijriParts.month && hp.day === hijriParts.day) {
+          return c.getFullYear() + '-' + String(c.getMonth()+1).padStart(2,'0') + '-' + String(c.getDate()).padStart(2,'0');
         }
       }
       return '';
     }
 
+    function setHijriDropdowns(gregorianValue) {
+      const dayEl = document.getElementById('date_hijri_day');
+      const monthEl = document.getElementById('date_hijri_month');
+      const yearEl = document.getElementById('date_hijri_year');
+      if (!dayEl || !monthEl || !yearEl) return;
+      if (!gregorianValue) { dayEl.value = ''; monthEl.value = ''; yearEl.value = ''; return; }
+      const pts = String(gregorianValue).split('-').map(Number);
+      const d = new Date(pts[0], pts[1]-1, pts[2], 12, 0, 0);
+      if (isNaN(d.getTime())) return;
+      const hp = extractHijriPartsFromDate(d);
+      if (!hp) return;
+      yearEl.value = String(hp.year); monthEl.value = String(hp.month); dayEl.value = String(hp.day);
+    }
+
     function syncContractDateFromGregorian() {
       if (isContractDateSyncing) return;
-      const gregorianInput = document.getElementById('date_gregorian');
-      const hijriInput = document.getElementById('date_hijri');
-      if (!gregorianInput || !hijriInput) return;
       isContractDateSyncing = true;
-      hijriInput.value = formatHijriDateFromGregorian(gregorianInput.value);
-      if (contractHijriPicker && gregorianInput.value) {
-        contractHijriPicker.setDate(gregorianInput.value, false, 'Y-m-d');
-      }
+      const gregorianInput = document.getElementById('date_gregorian');
+      if (gregorianInput) setHijriDropdowns(gregorianInput.value);
       isContractDateSyncing = false;
     }
 
     function syncContractDateFromHijri() {
       if (isContractDateSyncing) return;
-      const gregorianInput = document.getElementById('date_gregorian');
-      const hijriInput = document.getElementById('date_hijri');
-      if (!gregorianInput || !hijriInput) return;
-      const parsedHijri = parseHijriInput(hijriInput.value);
-      if (!parsedHijri) return;
-      const gregorianValue = findGregorianFromHijri(parsedHijri);
-      if (!gregorianValue) return;
+      const y = Number(document.getElementById('date_hijri_year')?.value);
+      const m = Number(document.getElementById('date_hijri_month')?.value);
+      const d = Number(document.getElementById('date_hijri_day')?.value);
+      if (!y || !m || !d) return;
+      const gv = findGregorianFromHijri({ year: y, month: m, day: d });
+      if (!gv) return;
       isContractDateSyncing = true;
-      gregorianInput.value = gregorianValue;
-      autoFillDay();
-      hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
-      if (contractHijriPicker) {
-        contractHijriPicker.setDate(gregorianValue, false, 'Y-m-d');
-      }
-      isContractDateSyncing = false;
-    }
-
-    function initContractHijriDatePicker() {
-      const hijriInput = document.getElementById('date_hijri');
       const gregorianInput = document.getElementById('date_gregorian');
-      if (!hijriInput || !gregorianInput) return;
-      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
-        return;
-      }
-
-      contractHijriPicker = flatpickr(hijriInput, {
-        locale: 'ar',
-        disableMobile: true,
-        dateFormat: 'Y-m-d',
-        allowInput: true,
-        plugins: [
-          hijriCalendarPlugin(window.luxon.DateTime, {
-            showHijriDates: true,
-            showHijriToggle: false
-          })
-        ],
-        onOpen: [(_, __, instance) => {
-          if (gregorianInput.value) {
-            instance.setDate(gregorianInput.value, false, 'Y-m-d');
-          }
-        }],
-        onChange: [(selectedDates) => {
-          if (!selectedDates.length || isContractDateSyncing) return;
-          const d = selectedDates[0];
-          const year = d.getFullYear();
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          const gregorianValue = year + '-' + month + '-' + day;
-          isContractDateSyncing = true;
-          gregorianInput.value = gregorianValue;
-          autoFillDay();
-          hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
-          isContractDateSyncing = false;
-        }]
-      });
+      if (gregorianInput) { gregorianInput.value = gv; autoFillDay(); }
+      isContractDateSyncing = false;
     }
 
     function goStep1() {
@@ -1609,7 +1507,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function buildReview() {
       const data = getFormData();
-      const reviewHijriDate = formatHijriDateFromGregorian(data.date_gregorian) || '—';
+      const _rhy = document.getElementById('date_hijri_year')?.value;
+      const _rhm = document.getElementById('date_hijri_month')?.value;
+      const _rhd = document.getElementById('date_hijri_day')?.value;
+      const _hijriMonthNames = ['محرم','صفر','ربيع الأول','ربيع الثاني','جمادى الأولى','جمادى الثانية','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
+      const reviewHijriDate = (_rhy && _rhm && _rhd) ? (_rhd + ' ' + (_hijriMonthNames[Number(_rhm)-1]||_rhm) + ' ' + _rhy) : '—';
       document.getElementById('reviewContent').innerHTML = \`
         <div style="display:grid;gap:16px;">
           <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
@@ -1781,7 +1683,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
       const roleId = getContractsRoleId();
       const statusValue =
-        roleId === 4 && !editingContractId
+        (roleId === 4 || roleId === 6) && !editingContractId
           ? CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL
           : document.getElementById('status').value;
       return {
@@ -1845,7 +1747,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             });
           }
           showToast(
-            getContractsRoleId() === 4
+            (getContractsRoleId() === 4 || getContractsRoleId() === 6)
               ? 'تم إنشاء العقد وإرساله لاعتماد ممثل البنك'
               : 'تم إنشاء العقد وسند الأمر بنجاح',
             'success'
@@ -1898,8 +1800,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         autoFillDay();
         syncContractDateFromGregorian();
       });
-      document.getElementById('date_hijri')?.addEventListener('blur', syncContractDateFromHijri);
-      initContractHijriDatePicker();
+      ['date_hijri_day','date_hijri_month','date_hijri_year'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', syncContractDateFromHijri);
+      });
 
       // Manual edits to any Party Two field after autofill → clear dropdown so customer_id becomes null
       ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach(fieldId => {
@@ -1944,16 +1847,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         setTimeout(() => {
           document.getElementById('contract_number').value = c.contract_number || '';
           document.getElementById('date_gregorian').value = c.date_gregorian || '';
-          document.getElementById('date_hijri').value = c.date_hijri || '';
           autoFillDay();
-          if (!c.date_gregorian && c.date_hijri) {
-            syncContractDateFromHijri();
-          } else {
-            syncContractDateFromGregorian();
-          }
-          if (contractHijriPicker && c.date_gregorian) {
-            contractHijriPicker.setDate(c.date_gregorian, false, 'Y-m-d');
-          }
+          syncContractDateFromGregorian();
           const p1n = document.getElementById('party_one_name');
           const p1p = document.getElementById('party_one_phone');
           if (p1n) p1n.value = c.party_one_name || '';

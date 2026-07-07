@@ -899,7 +899,7 @@
       const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
       const roleId = getContractsRoleId();
       const statusValue =
-        roleId === 4 && !editingContractId
+        (roleId === 4 || roleId === 6) && !editingContractId
           ? CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL
           : document.getElementById('status').value;
       return {
@@ -963,7 +963,7 @@
             });
           }
           showToast(
-            getContractsRoleId() === 4
+            (getContractsRoleId() === 4 || getContractsRoleId() === 6)
               ? 'تم إنشاء العقد وإرساله لاعتماد ممثل البنك'
               : 'تم إنشاء العقد وسند الأمر بنجاح',
             'success'

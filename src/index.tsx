@@ -1,3 +1,19 @@
+// =============================================================================
+// ROUTING MAP — READ FIRST BEFORE EDITING TABLE/UI FEATURES
+// =============================================================================
+//   • Live customers table page  -> app.get('/admin/customers', ...) in THIS file
+//       tbody id = "tableBody", SSR loop renders <tr data-customer-id=...>
+//       Customer name <td> has <span class="customer-alarm-slot"> for glow dot.
+//   • Live requests table page    -> app.get('/admin/requests', ...) in THIS file
+//       Same tbody id "tableBody", same slot pattern.
+//   • The "full admin panel" SPA at src/full-admin-panel.ts is a SEPARATE legacy
+//       client-side view (its own /admin/full route). Editing its tables does
+//       NOT affect /admin/customers or /admin/requests. Do not confuse them.
+//   • Customer-alarm glow feature spans:
+//       - SSR data attach (this file, both routes — search "CUSTOMER ALARM GLOW")
+//       - Row template attrs: data-unread-alarms + .customer-alarm-slot span
+//       - Painter + popup modal injected just before </body> on each page
+// =============================================================================
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { homePage } from './home-page'
@@ -14,6 +30,11 @@ import { tenantCalculatorsPage } from './tenant-calculators-page'
 import { saasSettingsPage } from './saas-settings-page'
 import { companySettingsPage } from './company-settings-page'
 import {
+  buildWaGreetingClientScript,
+  fetchTenantWhatsappSettings,
+  normalizeTenantWhatsappGreetingField,
+} from './tenant-whatsapp-settings'
+import {
   buildCompanyLocationEditPage,
   companyLocationNewPage,
   companyLocationsListPage,
@@ -25,7 +46,36 @@ import { customersReportPage, requestsReportPage, financialReportPage } from './
 import { paymentsPage } from './payments-page'
 import { banksManagementPage } from './banks-management-page'
 import { generateAddRatePage, generateEditRatePage } from './rates-forms'
+import {
+  HTML_CSV_PREFIX,
+  HTML_CSV_UTF16_DOWNLOAD_SCRIPT,
+  buildCsvContent,
+  buildSpreadsheetML,
+  csvAttachmentResponse,
+  spreadsheetMLAttachmentResponse,
+} from './csv-export'
 import { generateCustomerWorkflowPage, generateWorkflowTimelinePage } from './workflow-page'
+import {
+  normalizeRoleId,
+  canAddWorkflowNote,
+  canInlineAssignCustomers,
+  canUserAccessCustomer,
+  canUserAccessCustomerWorkflow,
+  canUserAccessRequestWorkflow,
+  canCreateFinancingRequest,
+  resolveWorkflowCrossPartyNotifyTargetUserIds,
+  insertWorkflowCrossPartyAlarms,
+  validateStaffRoleChange,
+} from './notification-access'
+import {
+  canAccessRequestsFollowupReport,
+  isRequestsFollowupReportAdminPath,
+} from './reports-access'
+import {
+  findBankDuplicate,
+  bankDuplicateMessage,
+  mapBankDbError,
+} from './bank-tenant-uniqueness'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
 import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
@@ -53,6 +103,14 @@ import {
 } from './contracts-module-pages'
 import { registerContractsModuleApi } from './contracts-module-api'
 import { registerContractsStaticRoutes } from './contracts-module-static-routes'
+import { registerChatModuleApi, ChatConversationRoom, UserNotificationRoom } from './chat-module-api'
+import { chatPage } from './chat-page'
+import { renderChatWidget } from './chat-widget'
+
+// Temporary kill-switch for the chat UI. Backend + DO + tests stay intact so
+// flipping this back to `true` re-enables the launcher, /admin/chat page, and
+// sidebar entry without any other changes.
+const CHAT_UI_ENABLED = true
 import { sendPasswordResetCodeEmail } from './resend-email'
 import tailwindCss from '../public/tailwind.css?raw'
 
@@ -90,9 +148,6 @@ function isMissingCustomerSolutionsColumnError(e: unknown): boolean {
   return m.includes('solutions_json') && (m.includes('no such column') || m.includes('no column named'))
 }
 
-/** UTF-8 BOM + Excel "sep=" hint so Arabic/RTL locales (list separator often `;`) still split columns on comma. */
-const EXCEL_UTF8_CSV_PREFIX = `${String.fromCharCode(0xfeff)}sep=,\r\n`
-
 function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
   const m = String((e as Error)?.message ?? e ?? '')
   if (!(m.includes('no such column') || m.includes('no column named'))) return false
@@ -106,6 +161,918 @@ function isMissingCustomerAttachmentsColumnError(e: unknown): boolean {
     m.includes('additional_2_attachment_url') ||
     m.includes('additional_3_attachment_url')
   )
+}
+
+function isMissingCustomerAttachmentsJsonColumnError(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? e ?? '')
+  return m.includes('attachments_json') && (m.includes('no such column') || m.includes('no column named'))
+}
+
+const MAX_CUSTOMER_ATTACHMENTS = 15
+const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024
+const MAX_ATTACHMENT_SIZE_MB = 20
+
+type CustomerAttachmentItem = {
+  id: string
+  label: string
+  url: string
+  page_count?: number | null
+}
+
+const LEGACY_CUSTOMER_ATTACHMENT_FIELDS: { column: string; label: string }[] = [
+  { column: 'identity_attachment_url', label: 'ملف الهوية' },
+  { column: 'signature_attachment_url', label: 'ملف السمة' },
+  { column: 'salary_profile_attachment_url', label: 'ملف تعريف الراتب' },
+  { column: 'gosi_attachment_url', label: 'ملف التأمينات الاجتماعية' },
+  { column: 'tax_exemption_attachment_url', label: 'شهادة الإعفاء الضريبي' },
+  { column: 'additional_1_attachment_url', label: 'مستند إضافي 1' },
+  { column: 'additional_2_attachment_url', label: 'مستند إضافي 2' },
+  { column: 'additional_3_attachment_url', label: 'مستند إضافي 3' },
+]
+
+/** Normalize stored attachment URLs (relative view path, absolute URL, or bare R2 key). */
+function normalizeCustomerAttachmentUrl(url: unknown): string | null {
+  const raw = String(url ?? '').trim()
+  if (!raw || raw === 'null') return null
+  if (raw.includes('..') || raw.includes('\\')) return null
+
+  const viewPrefix = '/api/attachments/view/'
+  if (raw.startsWith(viewPrefix)) return raw
+
+  const embedded = raw.indexOf(viewPrefix)
+  if (embedded >= 0) return raw.slice(embedded)
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw)
+      if (u.pathname.startsWith(viewPrefix)) return u.pathname
+    } catch {
+      return null
+    }
+  }
+
+  // Bare R2 object key from older uploads (e.g. customers/12/identity_123.pdf or 12/identity_123.pdf)
+  if (/^(customers\/\d+\/|temp\/|\d+\/)/.test(raw)) {
+    return `${viewPrefix}${raw.replace(/^\/+/, '')}`
+  }
+
+  return null
+}
+
+function isValidStoredAttachmentUrl(url: unknown): url is string {
+  return normalizeCustomerAttachmentUrl(url) != null
+}
+
+function normalizeCustomerAttachmentsJson(raw: unknown): CustomerAttachmentItem[] {
+  let parsed: unknown = raw
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return []
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(parsed)) return []
+  const out: CustomerAttachmentItem[] = []
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== 'object') continue
+    const label = String((entry as { label?: unknown }).label ?? '').trim().slice(0, 200)
+    const url = normalizeCustomerAttachmentUrl((entry as { url?: unknown }).url)
+    const id = String((entry as { id?: unknown }).id ?? '').trim() || `att_${Date.now()}_${out.length}`
+    const pageCountRaw = (entry as { page_count?: unknown }).page_count
+    let page_count: number | null = null
+    if (pageCountRaw != null && pageCountRaw !== '') {
+      const n = Number(pageCountRaw)
+      if (Number.isFinite(n) && n > 0 && n <= 9999) page_count = Math.floor(n)
+    }
+    if (!label || !url) continue
+    out.push(page_count != null ? { id, label, url, page_count } : { id, label, url })
+    if (out.length >= MAX_CUSTOMER_ATTACHMENTS) break
+  }
+  return out
+}
+
+function legacyCustomerAttachmentsFromRow(row: Record<string, unknown>): CustomerAttachmentItem[] {
+  const out: CustomerAttachmentItem[] = []
+  for (const field of LEGACY_CUSTOMER_ATTACHMENT_FIELDS) {
+    const url = normalizeCustomerAttachmentUrl(row[field.column])
+    if (!url) continue
+    out.push({ id: `legacy-${field.column}`, label: field.label, url })
+  }
+  return out
+}
+
+function getCustomerAttachmentsFromRow(row: Record<string, unknown> | null | undefined): CustomerAttachmentItem[] {
+  if (!row) return []
+  const fromJson = normalizeCustomerAttachmentsJson(row.attachments_json)
+  const legacy = legacyCustomerAttachmentsFromRow(row)
+  if (fromJson.length === 0) return legacy
+  const seen = new Set(fromJson.map((item) => item.url))
+  const merged = [...fromJson]
+  for (const item of legacy) {
+    if (seen.has(item.url)) continue
+    merged.push(item)
+    seen.add(item.url)
+    if (merged.length >= MAX_CUSTOMER_ATTACHMENTS) break
+  }
+  return merged
+}
+
+const CUSTOMER_ATTACHMENT_COLUMNS_SELECT = `
+  attachments_json,
+  identity_attachment_url,
+  signature_attachment_url,
+  salary_profile_attachment_url,
+  gosi_attachment_url,
+  tax_exemption_attachment_url,
+  additional_1_attachment_url,
+  additional_2_attachment_url,
+  additional_3_attachment_url
+`
+
+async function mergeCustomerAttachmentsIntoTarget(
+  db: D1Database,
+  target: Record<string, unknown>,
+  customerId: string | number
+): Promise<void> {
+  const applyRow = (row: Record<string, unknown> | null) => {
+    if (!row) return
+    if (!target.attachments_json && row.attachments_json) {
+      target.attachments_json = row.attachments_json
+    }
+    for (const field of LEGACY_CUSTOMER_ATTACHMENT_FIELDS) {
+      const normalized = normalizeCustomerAttachmentUrl(row[field.column])
+      const existing = normalizeCustomerAttachmentUrl(target[field.column])
+      if (!existing && normalized) {
+        target[field.column] = normalized
+      }
+    }
+  }
+  try {
+    const row = await db
+      .prepare(`SELECT ${CUSTOMER_ATTACHMENT_COLUMNS_SELECT} FROM customers WHERE id = ?`)
+      .bind(customerId)
+      .first() as Record<string, unknown> | null
+    applyRow(row)
+  } catch (e: unknown) {
+    if (isMissingCustomerAttachmentsJsonColumnError(e)) {
+      try {
+        const legacyRow = await db
+          .prepare(`
+            SELECT
+              identity_attachment_url,
+              signature_attachment_url,
+              salary_profile_attachment_url,
+              gosi_attachment_url,
+              tax_exemption_attachment_url,
+              additional_1_attachment_url,
+              additional_2_attachment_url,
+              additional_3_attachment_url
+            FROM customers WHERE id = ?
+          `)
+          .bind(customerId)
+          .first() as Record<string, unknown> | null
+        applyRow(legacyRow)
+      } catch (legacyErr) {
+        if (!isMissingCustomerAttachmentsColumnError(legacyErr)) throw legacyErr
+      }
+      return
+    }
+    if (!isMissingCustomerAttachmentsColumnError(e)) throw e
+  }
+}
+
+function serializeCustomerAttachmentsJson(items: CustomerAttachmentItem[]): string {
+  return JSON.stringify(
+    items.map((item) => {
+      const row: { id: string; label: string; url: string; page_count?: number } = {
+        id: item.id,
+        label: item.label,
+        url: item.url,
+      }
+      if (item.page_count != null && item.page_count > 0) row.page_count = item.page_count
+      return row
+    })
+  )
+}
+
+async function saveCustomerAttachmentsJson(
+  db: D1Database,
+  customerId: string | number,
+  items: CustomerAttachmentItem[]
+): Promise<void> {
+  const json = serializeCustomerAttachmentsJson(items)
+  try {
+    await db
+      .prepare(`UPDATE customers SET attachments_json = ? WHERE id = ?`)
+      .bind(json, customerId)
+      .run()
+  } catch (e: unknown) {
+    if (!isMissingCustomerAttachmentsJsonColumnError(e)) throw e
+  }
+}
+
+function renderCustomerAttachmentsListHtml(
+  attachments: CustomerAttachmentItem[],
+  emptyMessage = 'لا توجد مرفقات'
+): string {
+  if (!attachments.length) {
+    return `<div class="text-sm text-gray-500 text-center py-2">${escapeHtml(emptyMessage)}</div>`
+  }
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    ${attachments
+      .map(
+        (doc) => `
+      <div class="border border-gray-200 rounded-lg p-3 bg-white">
+        <p class="text-sm font-medium text-gray-800 mb-2">${escapeHtml(doc.label)}</p>
+        ${
+          doc.page_count != null && doc.page_count > 0
+            ? `<p class="text-xs text-gray-500 mb-2">${doc.page_count} صفحة</p>`
+            : ''
+        }
+        <a href="${escapeAttr(doc.url)}" target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 text-sm">
+          <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
+        </a>
+      </div>`
+      )
+      .join('')}
+  </div>`
+}
+
+function renderDynamicAttachmentsEditorHtml(options: {
+  hiddenInputId: string
+  listContainerId: string
+  addButtonId: string
+  includeHidden?: boolean
+}): string {
+  const { hiddenInputId, listContainerId, addButtonId, includeHidden = true } = options
+  return `
+    ${includeHidden ? `<input type="hidden" name="attachments_json" id="${escapeHtmlAttr(hiddenInputId)}" value="[]">` : ''}
+    <div id="${escapeHtmlAttr(listContainerId)}" class="space-y-3"></div>
+    <button type="button" id="${escapeHtmlAttr(addButtonId)}"
+            class="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center gap-1">
+      <i class="fas fa-plus ml-1"></i>
+      إضافة مرفق
+    </button>
+    <p class="text-xs text-gray-500 mt-2">JPG, PNG أو PDF (حد أقصى ${MAX_ATTACHMENT_SIZE_MB}MB لكل ملف)</p>
+  `
+}
+
+const CUSTOMER_ATTACHMENTS_MODAL_STYLES = `
+.modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+.modal-backdrop.hidden { display:none; }
+`
+
+/** List-page attachments popup — above actions dropdown (10050) and portaled to body when opened. */
+const LIST_ATTACHMENTS_MODAL_STYLES = `
+#listAttachmentsModal.list-attachments-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10100;
+  margin: 0;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#listAttachmentsModal.list-attachments-modal.hidden {
+  display: none !important;
+}
+#listAttachmentsModal .list-attachments-modal-panel {
+  width: 100%;
+  max-width: 48rem;
+  max-height: min(90vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#listAttachmentsModal .list-attachments-modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+body.list-attachments-modal-open {
+  overflow: hidden;
+}
+`
+
+function renderCustomerAttachmentsModalSectionHtml(options: {
+  modalId: string
+  openBtnId: string
+  closeBtnId: string
+  doneBtnId: string
+  hiddenInputId: string
+  listContainerId: string
+  addButtonId: string
+  existingAttachments?: CustomerAttachmentItem[]
+  sectionTitle?: string
+  modalTitle?: string
+}): string {
+  const {
+    modalId,
+    openBtnId,
+    closeBtnId,
+    doneBtnId,
+    hiddenInputId,
+    listContainerId,
+    addButtonId,
+    existingAttachments = [],
+    sectionTitle = 'المرفقات',
+    modalTitle = 'المرفقات (اختياري)',
+  } = options
+
+  const existingBlock =
+    existingAttachments.length > 0
+      ? `
+      <div class="mt-4 bg-white p-4 rounded-lg border border-gray-100">
+        <h3 class="font-bold text-gray-700 mb-3 text-sm">المرفقات الحالية:</h3>
+        ${renderCustomerAttachmentsListHtml(existingAttachments)}
+      </div>`
+      : ''
+
+  return `
+    <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <h2 class="text-xl font-bold text-gray-700">
+          <i class="fas fa-paperclip ml-2"></i>
+          ${escapeHtml(sectionTitle)}
+        </h2>
+        <button type="button" id="${escapeHtmlAttr(openBtnId)}"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition">
+          <i class="fas fa-paperclip ml-1"></i>
+          إدارة المرفقات
+        </button>
+      </div>
+      <p class="text-sm text-gray-500 mt-2">أضف المرفقات مع تسمية كل ملف حسب ما تريد.</p>
+      ${existingBlock}
+      <input type="hidden" name="attachments_json" id="${escapeHtmlAttr(hiddenInputId)}" value="[]">
+    </div>
+    <div id="${escapeHtmlAttr(modalId)}" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold text-gray-800">
+            <i class="fas fa-paperclip ml-2 text-blue-600"></i>
+            ${escapeHtml(modalTitle)}
+          </h3>
+          <button type="button" id="${escapeHtmlAttr(closeBtnId)}" class="text-gray-500 hover:text-gray-800">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        ${renderDynamicAttachmentsEditorHtml({ hiddenInputId, listContainerId, addButtonId, includeHidden: false })}
+        <div class="flex justify-end gap-3 mt-6">
+          <button type="button" id="${escapeHtmlAttr(doneBtnId)}"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
+            تم
+          </button>
+        </div>
+      </div>
+    </div>`
+}
+
+function getCustomerAttachmentsModalInitScript(options: {
+  modalId: string
+  openBtnId: string
+  closeBtnId: string
+  doneBtnId: string
+}): string {
+  const { modalId, openBtnId, closeBtnId, doneBtnId } = options
+  return `
+(function () {
+  var modal = document.getElementById('${escapeHtmlAttr(modalId)}');
+  var openBtn = document.getElementById('${escapeHtmlAttr(openBtnId)}');
+  var closeBtn = document.getElementById('${escapeHtmlAttr(closeBtnId)}');
+  var doneBtn = document.getElementById('${escapeHtmlAttr(doneBtnId)}');
+  if (!modal || !openBtn) return;
+  function open() { modal.classList.remove('hidden'); }
+  function close() { modal.classList.add('hidden'); }
+  openBtn.addEventListener('click', open);
+  if (closeBtn) closeBtn.addEventListener('click', close);
+  if (doneBtn) doneBtn.addEventListener('click', close);
+  modal.addEventListener('click', function (e) {
+    if (e && e.target === modal) close();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e && e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+  });
+})();`
+}
+
+function customerAttachmentsDataAttr(row: Record<string, unknown>): string {
+  return escapeHtmlAttr(JSON.stringify(getCustomerAttachmentsFromRow(row)))
+}
+
+function renderListAttachmentsModalHtml(): string {
+  return `
+    <div id="listAttachmentsModal" class="list-attachments-modal modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="listAttachmentsModalTitle">
+      <div class="list-attachments-modal-panel bg-white rounded-2xl shadow-2xl mx-auto" onclick="event.stopPropagation()">
+        <div class="flex-shrink-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+          <h2 id="listAttachmentsModalTitle" class="text-xl font-bold text-gray-800">
+            <i class="fas fa-paperclip ml-2 text-blue-600"></i>
+            <span>المرفقات</span>
+          </h2>
+          <button type="button" onclick="closeListAttachmentsModal()" class="text-gray-500 hover:text-gray-800" aria-label="إغلاق">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="list-attachments-modal-body p-6">
+          ${renderDynamicAttachmentsEditorHtml({
+            hiddenInputId: 'list_attachments_json',
+            listContainerId: 'list_attachments_list',
+            addButtonId: 'list_attachments_add',
+          })}
+        </div>
+        <div class="flex-shrink-0 bg-white border-t px-6 py-4 flex justify-end gap-3">
+          <button type="button" onclick="closeListAttachmentsModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium">إلغاء</button>
+          <button type="button" onclick="saveListAttachments()" id="listAttachmentsSaveBtn" class="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold">
+            <i class="fas fa-save ml-1"></i> حفظ المرفقات
+          </button>
+        </div>
+      </div>
+    </div>`
+}
+
+function getListAttachmentsModalScript(): string {
+  return `
+  var listAttCustomerId = null;
+  var listAttRequestId = null;
+  function openListAttachmentsFromRow(btn, requestId) {
+    if (!btn) return;
+    var customerId = btn.getAttribute('data-customer-id');
+    var name = btn.getAttribute('data-customer-name') || '';
+    var att = btn.getAttribute('data-attachments') || '[]';
+    if (!customerId && btn.closest) {
+      var tr = btn.closest('tr');
+      if (tr) {
+        customerId = tr.getAttribute('data-customer-id');
+        name = tr.getAttribute('data-customer-name') || tr.getAttribute('data-name') || name;
+        att = tr.getAttribute('data-attachments') || att;
+      }
+    }
+    if (!customerId) return;
+    openListAttachmentsModal(customerId, name, att, requestId || null);
+  }
+  function portalListAttachmentsModal(modal) {
+    if (!modal || modal.parentElement === document.body) return;
+    modal.__listAttRestore = { parent: modal.parentElement, next: modal.nextSibling };
+    document.body.appendChild(modal);
+  }
+  function restoreListAttachmentsModal(modal) {
+    if (!modal || !modal.__listAttRestore) return;
+    var r = modal.__listAttRestore;
+    modal.__listAttRestore = null;
+    if (!r.parent) return;
+    try {
+      if (r.next && r.next.parentNode === r.parent) r.parent.insertBefore(modal, r.next);
+      else r.parent.appendChild(modal);
+    } catch (e) {
+      try { document.body.appendChild(modal); } catch (e2) {}
+    }
+  }
+  function openListAttachmentsModal(customerId, customerName, attachmentsJson, requestId) {
+    listAttCustomerId = customerId;
+    listAttRequestId = requestId || null;
+    var modal = document.getElementById('listAttachmentsModal');
+    if (!modal) return;
+    var title = document.getElementById('listAttachmentsModalTitle');
+    if (title) {
+      var titleSpan = title.querySelector('span');
+      var label = 'المرفقات — ' + (customerName || ('عميل #' + customerId));
+      if (titleSpan) titleSpan.textContent = label;
+      else title.textContent = label;
+    }
+    portalListAttachmentsModal(modal);
+    var listEl = document.getElementById('list_attachments_list');
+    var addBtn = document.getElementById('list_attachments_add');
+    if (listEl) listEl.innerHTML = '';
+    if (addBtn && addBtn.parentNode) {
+      var freshAdd = addBtn.cloneNode(true);
+      addBtn.parentNode.replaceChild(freshAdd, addBtn);
+    }
+    if (typeof window.initDynamicCustomerAttachments === 'function') {
+      window.initDynamicCustomerAttachments({
+        hiddenInputId: 'list_attachments_json',
+        listContainerId: 'list_attachments_list',
+        addButtonId: 'list_attachments_add',
+        customerId: String(customerId),
+        initialAttachments: attachmentsJson || '[]'
+      });
+    }
+    modal.classList.remove('hidden');
+    document.body.classList.add('list-attachments-modal-open');
+  }
+  function closeListAttachmentsModal() {
+    var modal = document.getElementById('listAttachmentsModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      restoreListAttachmentsModal(modal);
+    }
+    document.body.classList.remove('list-attachments-modal-open');
+    listAttCustomerId = null;
+    listAttRequestId = null;
+  }
+  (function () {
+    var modal = document.getElementById('listAttachmentsModal');
+    if (!modal) return;
+    modal.addEventListener('click', function (e) { if (e.target === modal) closeListAttachmentsModal(); });
+    document.addEventListener('keydown', function (e) {
+      if (e && e.key === 'Escape' && !modal.classList.contains('hidden')) closeListAttachmentsModal();
+    });
+  })();
+  async function saveListAttachments() {
+    if (!listAttCustomerId) return;
+    var saveBtn = document.getElementById('listAttachmentsSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      var uploaded = [];
+      if (typeof window.uploadDynamicCustomerAttachments === 'function') {
+        uploaded = await window.uploadDynamicCustomerAttachments({
+          customerId: String(listAttCustomerId),
+          onProgress: function (msg) {
+            if (typeof showToast === 'function') showToast(msg, 'info');
+          }
+        });
+      }
+      var attJson = JSON.stringify(uploaded || []);
+      if (listAttRequestId) {
+        var resp = await fetch('/api/financing-requests/' + listAttRequestId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ attachments_json: attJson })
+        });
+        var data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.error || 'فشل الحفظ');
+      } else {
+        var fd = new FormData();
+        fd.append('attachments_only', '1');
+        fd.append('attachments_json', attJson);
+        var resp2 = await fetch('/api/customers/' + listAttCustomerId, {
+          method: 'POST',
+          credentials: 'include',
+          body: fd
+        });
+        var data2 = await resp2.json();
+        if (!resp2.ok || !data2.success) throw new Error(data2.error || 'فشل الحفظ');
+      }
+      var row = document.querySelector('tr[data-customer-id="' + listAttCustomerId + '"]');
+      if (row) row.setAttribute('data-attachments', attJson);
+      document.querySelectorAll('button.actions-dropdown-item[data-customer-id="' + listAttCustomerId + '"]').forEach(function (b) {
+        b.setAttribute('data-attachments', attJson);
+      });
+      closeListAttachmentsModal();
+      if (typeof showToast === 'function') showToast('تم حفظ المرفقات بنجاح', 'success');
+    } catch (e) {
+      console.error('[listAttachments]', e);
+      if (typeof showToast === 'function') showToast('فشل حفظ المرفقات: ' + (e.message || e), 'error');
+      else alert('فشل حفظ المرفقات: ' + (e.message || e));
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }`
+}
+
+const OBLIGATION_DROPDOWN_CUSTOM_VALUE = '__custom__'
+
+function getObligationDropdownHelpersScript(): string {
+  return `
+if (!window.__obligationDropdownHelpersLoaded) {
+  window.__obligationDropdownHelpersLoaded = true;
+  window.OBLIGATION_DROPDOWN_CUSTOM_VALUE = ${JSON.stringify(OBLIGATION_DROPDOWN_CUSTOM_VALUE)};
+  window.collectObligationDropdownFromRow = function (tr, selectClass, customClass) {
+    var sel = tr.querySelector('.' + selectClass);
+    if (!sel) return '';
+    if (sel.value === window.OBLIGATION_DROPDOWN_CUSTOM_VALUE) {
+      var custom = tr.querySelector('.' + customClass);
+      return custom ? String(custom.value || '').trim() : '';
+    }
+    return String(sel.value || '').trim();
+  };
+  window.collectObligationTypeFromRow = window.collectObligationDropdownFromRow;
+  window.buildObligationDropdownCellHtml = function (selectedValue, selectClass, customClass, optionNames, esc, emptyLabel, customLabel, placeholder) {
+    esc = esc || function (s) { return String(s == null ? '' : s); };
+    emptyLabel = emptyLabel || '— اختر —';
+    customLabel = customLabel || 'أخرى (إدخال يدوي)';
+    placeholder = placeholder || '';
+    var sel = selectedValue == null ? '' : String(selectedValue).trim();
+    var isKnown = sel && optionNames.indexOf(sel) >= 0;
+    var isCustom = sel && !isKnown;
+    var opts = '<option value="">' + esc(emptyLabel) + '</option>';
+    for (var i = 0; i < optionNames.length; i++) {
+      var name = optionNames[i];
+      opts += '<option value="' + esc(name) + '"' + (sel === name ? ' selected' : '') + '>' + esc(name) + '</option>';
+    }
+    opts += '<option value="' + window.OBLIGATION_DROPDOWN_CUSTOM_VALUE + '"' + (isCustom ? ' selected' : '') + '>أخرى (إدخال يدوي)</option>';
+    var customHidden = isCustom ? '' : ' hidden';
+    return '<div class="space-y-1">' +
+      '<select class="' + selectClass + ' w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>' +
+      '<input type="text" class="' + customClass + customHidden + ' w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" placeholder="' + esc(placeholder) + '" maxlength="200" value="' + (isCustom ? esc(sel) : '') + '">' +
+      '</div>';
+  };
+  window.buildObligationTypeCellHtml = function (selectedValue, selectClass, customClass, typeNames, esc) {
+    return window.buildObligationDropdownCellHtml(selectedValue, selectClass, customClass, typeNames, esc, '— اختر نوع الالتزام —', 'أخرى (إدخال يدوي)', 'أدخل نوع الالتزام');
+  };
+  window.wireObligationDropdownRow = function (tr, selectClass, customClass) {
+    var sel = tr.querySelector('.' + selectClass);
+    var custom = tr.querySelector('.' + customClass);
+    if (!sel || !custom) return;
+    function sync() {
+      if (sel.value === window.OBLIGATION_DROPDOWN_CUSTOM_VALUE) {
+        custom.classList.remove('hidden');
+      } else {
+        custom.classList.add('hidden');
+      }
+    }
+    sel.addEventListener('change', sync);
+    sync();
+  };
+  window.wireObligationTypeRow = window.wireObligationDropdownRow;
+}`
+}
+
+function getCustomerObligationsTableInitScript(options: {
+  tbodyId: string
+  addBtnId: string
+  typeSelectClass: string
+  typeCustomInputClass: string
+  totalClass: string
+  monthlyClass: string
+  dueClass: string
+  removeClass: string
+  obligationTypeNamesJson: string
+  initialRowsJson?: string
+}): string {
+  const {
+    tbodyId,
+    addBtnId,
+    typeSelectClass,
+    typeCustomInputClass,
+    totalClass,
+    monthlyClass,
+    dueClass,
+    removeClass,
+    obligationTypeNamesJson,
+    initialRowsJson = '[]',
+  } = options
+  return `
+${getObligationDropdownHelpersScript()}
+(function () {
+  var tbody = document.getElementById(${JSON.stringify(tbodyId)});
+  var addBtn = document.getElementById(${JSON.stringify(addBtnId)});
+  if (!tbody || !addBtn) return;
+  var obligationTypeNames = ${obligationTypeNamesJson};
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+  function addRow(data) {
+    data = data || {};
+    var tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-200';
+    tr.innerHTML =
+      '<td class="py-1 px-2">' +
+      window.buildObligationTypeCellHtml(data.obligation_type || '', ${JSON.stringify(typeSelectClass)}, ${JSON.stringify(typeCustomInputClass)}, obligationTypeNames, esc) +
+      '</td>' +
+      '<td class="py-1 px-2"><input type="number" class="${totalClass} w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
+      '<td class="py-1 px-2"><input type="number" class="${monthlyClass} w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
+      '<td class="py-1 px-2"><input type="text" class="${dueClass} w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" maxlength="200"></td>' +
+      '<td class="py-1 px-2"><button type="button" class="${removeClass} text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
+    if (data.total_amount != null) tr.querySelector('.${totalClass}').value = data.total_amount;
+    if (data.monthly_installment != null) tr.querySelector('.${monthlyClass}').value = data.monthly_installment;
+    if (data.due_date) tr.querySelector('.${dueClass}').value = data.due_date;
+    window.wireObligationTypeRow(tr, ${JSON.stringify(typeSelectClass)}, ${JSON.stringify(typeCustomInputClass)});
+    tr.querySelector('.${removeClass}').onclick = function () { tr.remove(); };
+    tbody.appendChild(tr);
+  }
+  var initialRows = ${initialRowsJson};
+  if (initialRows && initialRows.length) initialRows.forEach(function (o) { addRow(o); });
+  else addRow();
+  addBtn.onclick = function () { addRow(); };
+})();`
+}
+
+function getDynamicCustomerAttachmentsScript(): string {
+  return `
+(function () {
+  if (window.initDynamicCustomerAttachments) return;
+  var MAX_ATTACHMENTS = ${MAX_CUSTOMER_ATTACHMENTS};
+  var MAX_FILE_BYTES = ${MAX_ATTACHMENT_SIZE_BYTES};
+  var MAX_FILE_MB = ${MAX_ATTACHMENT_SIZE_MB};
+  var PDFJS_VERSION = '3.11.174';
+  var pdfJsLoading = null;
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function newId() {
+    return 'att_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+  }
+  function isPdfFile(file) {
+    var name = String(file.name || '').toLowerCase();
+    return file.type === 'application/pdf' || name.endsWith('.pdf');
+  }
+  function loadPdfJsLib() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!pdfJsLoading) {
+      pdfJsLoading = new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VERSION + '/pdf.min.js';
+        script.onload = function () {
+          if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+              'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VERSION + '/pdf.worker.min.js';
+            resolve(window.pdfjsLib);
+          } else {
+            reject(new Error('pdf.js unavailable'));
+          }
+        };
+        script.onerror = function () { reject(new Error('pdf.js load failed')); };
+        document.head.appendChild(script);
+      });
+    }
+    return pdfJsLoading;
+  }
+  async function readPdfPageCount(file) {
+    try {
+      var pdfjsLib = await loadPdfJsLib();
+      var data = await file.arrayBuffer();
+      var doc = await pdfjsLib.getDocument({ data: data }).promise;
+      var count = doc.numPages;
+      if (doc.destroy) await doc.destroy();
+      return count > 0 ? count : null;
+    } catch (e) {
+      console.warn('PDF page count failed', e);
+      return null;
+    }
+  }
+  function pageCountHint(it) {
+    if (it.page_count_pending) {
+      return '<span class="text-xs text-gray-600 block mt-1"><i class="fas fa-spinner fa-spin ml-1"></i>جاري حساب عدد الصفحات...</span>';
+    }
+    if (it.page_count != null && it.page_count > 0) {
+      return '<span class="text-xs text-gray-600 block mt-1"><i class="fas fa-file-alt ml-1"></i>' + it.page_count + ' صفحة</span>';
+    }
+    return '';
+  }
+  window.initDynamicCustomerAttachments = function (opts) {
+    opts = opts || {};
+    var hidden = document.getElementById(opts.hiddenInputId);
+    var listEl = document.getElementById(opts.listContainerId);
+    var addBtn = document.getElementById(opts.addButtonId);
+    if (!hidden || !listEl || !addBtn) return;
+    var customerId = opts.customerId != null ? String(opts.customerId) : '';
+    var items = [];
+    try {
+      var initial = opts.initialAttachments;
+      if (typeof initial === 'string' && initial.trim()) initial = JSON.parse(initial);
+      if (Array.isArray(initial)) {
+        initial.forEach(function (entry) {
+          if (!entry) return;
+          var label = String(entry.label || '').trim();
+          var url = String(entry.url || '').trim();
+          var id = String(entry.id || '').trim() || newId();
+          var pageCount = entry.page_count != null ? Number(entry.page_count) : null;
+          if (pageCount != null && (!Number.isFinite(pageCount) || pageCount <= 0)) pageCount = null;
+          if (!label || !url) return;
+          items.push({
+            id: id,
+            label: label,
+            url: url,
+            file: null,
+            page_count: pageCount != null ? Math.floor(pageCount) : null,
+            page_count_pending: false
+          });
+        });
+      }
+    } catch (e) {}
+    function attachmentPayload(it) {
+      var row = { id: it.id, label: it.label, url: it.url };
+      if (it.page_count != null && it.page_count > 0) row.page_count = it.page_count;
+      return row;
+    }
+    function syncHidden() {
+      var payload = items
+        .filter(function (it) { return it.url; })
+        .map(attachmentPayload);
+      hidden.value = JSON.stringify(payload);
+    }
+    function updateAddButton() {
+      addBtn.style.display = items.length >= MAX_ATTACHMENTS ? 'none' : '';
+    }
+    function render() {
+      listEl.innerHTML = '';
+      items.forEach(function (it, index) {
+        var row = document.createElement('div');
+        row.className = 'border border-gray-200 rounded-lg p-3 bg-gray-50';
+        var hasUrl = !!it.url;
+        var fileHint = it.file
+          ? '<span class="text-xs text-green-700 block mt-1"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' + esc(it.file.name) + '</span>'
+          : (hasUrl
+            ? '<span class="text-xs text-blue-700 block mt-1"><i class="fas fa-link ml-1"></i>مرفق محفوظ</span>'
+            : '');
+        var pagesHint = pageCountHint(it);
+        row.innerHTML =
+          '<div class="flex flex-wrap items-start gap-2 justify-between mb-2">' +
+            '<label class="block text-xs font-medium text-gray-600 w-full">اسم المرفق</label>' +
+            '<input type="text" class="dyn-att-label flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="مثال: عقد الإيجار" value="' + esc(it.label) + '">' +
+            '<button type="button" class="dyn-att-remove text-red-600 hover:text-red-800 px-2 py-2" title="حذف"><i class="fas fa-trash"></i></button>' +
+          '</div>' +
+          '<input type="file" accept="image/*,application/pdf" class="dyn-att-file w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">' +
+          fileHint +
+          pagesHint +
+          (hasUrl
+            ? '<a href="' + esc(it.url) + '" target="_blank" rel="noopener" class="inline-block mt-2 text-blue-600 text-xs hover:underline"><i class="fas fa-external-link-alt ml-1"></i>عرض الملف الحالي</a>'
+            : '');
+        var labelInput = row.querySelector('.dyn-att-label');
+        var fileInput = row.querySelector('.dyn-att-file');
+        var removeBtn = row.querySelector('.dyn-att-remove');
+        labelInput.addEventListener('input', function () {
+          it.label = String(labelInput.value || '').trim();
+          syncHidden();
+        });
+        fileInput.addEventListener('change', function () {
+          var file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+          if (!file) {
+            it.file = null;
+            it.page_count = null;
+            it.page_count_pending = false;
+            render();
+            return;
+          }
+          if (file.size > MAX_FILE_BYTES) {
+            fileInput.value = '';
+            alert('الملف كبير جداً. الحد الأقصى ' + MAX_FILE_MB + 'MB');
+            return;
+          }
+          it.file = file;
+          it.page_count = null;
+          it.page_count_pending = isPdfFile(file);
+          render();
+          if (isPdfFile(file)) {
+            readPdfPageCount(file).then(function (count) {
+              if (it.file !== file) return;
+              it.page_count_pending = false;
+              it.page_count = count;
+              render();
+              syncHidden();
+            });
+          }
+        });
+        removeBtn.addEventListener('click', function () {
+          items.splice(index, 1);
+          syncHidden();
+          render();
+          updateAddButton();
+        });
+        listEl.appendChild(row);
+      });
+      updateAddButton();
+      syncHidden();
+    }
+    addBtn.addEventListener('click', function () {
+      if (items.length >= MAX_ATTACHMENTS) return;
+      items.push({ id: newId(), label: '', url: '', file: null, page_count: null, page_count_pending: false });
+      render();
+      updateAddButton();
+    });
+    window.uploadDynamicCustomerAttachments = async function (uploadOpts) {
+      uploadOpts = uploadOpts || {};
+      var onProgress = typeof uploadOpts.onProgress === 'function' ? uploadOpts.onProgress : function () {};
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (!it.file) continue;
+        if (!String(it.label || '').trim()) {
+          throw new Error('يرجى إدخال اسم لكل مرفق قبل الرفع');
+        }
+        onProgress('جاري رفع: ' + it.label);
+        var formData = new FormData();
+        formData.append('file', it.file);
+        formData.append('attachment_id', it.id);
+        if (customerId) formData.append('customer_id', customerId);
+        var response = await fetch('/api/attachments/upload', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include'
+        });
+        var payload = await response.json();
+        if (!response.ok || !payload.success || !payload.url) {
+          throw new Error(payload.error || 'فشل رفع المرفق');
+        }
+        it.url = payload.url;
+        it.file = null;
+      }
+      syncHidden();
+      return items.filter(function (it) { return it.url; }).map(attachmentPayload);
+    };
+    render();
+    updateAddButton();
+  };
+})();
+`
 }
 
 function isMissingCustomerLocationIdColumnError(e: unknown): boolean {
@@ -124,6 +1091,12 @@ const CUSTOMER_PRODUCT_TYPE_OPTIONS = [
   'تمويل مؤسسات ( نقاط بيع)',
   'إعادة تمويل',
 ] as const
+
+function normalizeCustomerJobType(raw: unknown): 'civilian' | 'military' | 'retired' {
+  const v = String(raw ?? '').trim()
+  if (v === 'military' || v === 'retired') return v
+  return 'civilian'
+}
 
 function normalizeCustomerProductType(raw: unknown): string | null {
   const v = String(raw ?? '').trim()
@@ -352,6 +1325,11 @@ function escapeHtmlAttr(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
+}
+
+/** For href/src and other attributes (alias used in attachment list HTML). */
+function escapeAttr(value: unknown): string {
+  return escapeHtml(value)
 }
 
 function contractStatusBadge(status: string | null | undefined): string {
@@ -889,10 +1867,13 @@ async function bulkSyncUsersToHrEmployees(
   skipped: number
   errors: { userId: number; message: string }[]
 }> {
+  // Bank agents (role 5) are external to the tenant's HR. Previously they were
+  // excluded indirectly because their users.tenant_id was NULL; after migration
+  // 0079 backfilled that column, the intent is now explicit.
   let query = `
     SELECT id, tenant_id, role_id, full_name, username, email, phone, hr_section
     FROM users
-    WHERE role_id IN (3, 4, 5, 13, 14) AND tenant_id IS NOT NULL
+    WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id IS NOT NULL
   `
   const bindVals: number[] = []
   if (tenantFilter != null && typeof tenantFilter === 'number' && !Number.isNaN(tenantFilter)) {
@@ -1300,6 +2281,13 @@ app.use('/api/*', async (c, next) => {
     await next()
     return
   }
+  if (
+    (p === '/api/rates/import-csv' || p === '/api/rates/upload-excel') &&
+    method === 'POST'
+  ) {
+    await next()
+    return
+  }
   if (p === '/api/customer-reviews' && method === 'POST') {
     await next()
     return
@@ -1387,8 +2375,12 @@ app.use('/api/*', async (c, next) => {
     p === '/api/calculator/save-customer' ||
     p === '/api/calculator/submit-request' ||
     p === '/api/workflow/update-stage' ||
+    p === '/api/workflow/add-action' ||
+    p === '/api/workflow/add-note' ||
+    p === '/api/workflow/create-task' ||
     p === '/api/workflow/customer-update-stage' ||
     p === '/api/workflow/customer-add-action' ||
+    p === '/api/workflow/customer-add-note' ||
     p === '/api/workflow/customer-create-task'
   )) {
     await next()
@@ -1409,6 +2401,13 @@ app.use('/api/*', async (c, next) => {
   }
   // Contract documents reference party logos stored in R2 at this URL.
   if (method === 'GET' && p.startsWith('/api/attachments/view/')) {
+    await next()
+    return
+  }
+  // Company chat: tenant-scoped 1:1 chat. Per-conversation participant gate
+  // is enforced inside the handlers (ensureConversationAccess), so allow
+  // role 5 through this coarse outer middleware.
+  if (p.startsWith('/api/chat/')) {
     await next()
     return
   }
@@ -1547,25 +2546,14 @@ async function fetchObligationTypeNamesForTenant(
   }
 }
 
-function parseRoleId(roleId: unknown): number | null {
-  if (roleId == null || roleId === '') return null
-  const n = typeof roleId === 'number' ? roleId : parseInt(String(roleId), 10)
-  return Number.isNaN(n) ? null : n
+/** Customer summary page (/admin/dashboard) — super admin and company admin only. */
+function canAccessCustomerSummaryDashboard(roleId: unknown): boolean {
+  const rid = normalizeRoleId(roleId)
+  return rid === 1 || rid === 2
 }
 
-function normalizeRoleId(roleId: unknown): number | null {
-  const n = parseRoleId(roleId)
-  if (n === null) {
-    return null
-  }
-  const legacyMap: Record<number, number> = {
-    11: 1,
-    12: 2,
-    13: 3,
-    14: 4,
-    15: 5
-  }
-  return legacyMap[n] ?? n
+function getAdminAccessDeniedRedirect(roleId: unknown): string {
+  return canAccessCustomerSummaryDashboard(roleId) ? '/admin/dashboard' : '/admin/panel'
 }
 
 function jsonForInlineScript(value: unknown): string {
@@ -1584,10 +2572,12 @@ function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined
   if (normalizedRoleId === 3) return 'مشرف المبيعات'
   if (normalizedRoleId === 4) return 'موظف'
   if (normalizedRoleId === 5) return 'موظف التمويل'
+  if (normalizedRoleId === 6) return 'موظف مزدوج'
 
   // Legacy English keys from older seeds / custom role rows (when role_id is missing or non-standard)
   if (rn === 'supervisor') return 'مشرف المبيعات'
   if (rn === 'employee') return 'موظف'
+  if (rn === 'dual_agent') return 'موظف مزدوج'
   if (rn === 'company_admin') return 'حساب شركة'
   if (rn === 'super_admin') return 'مدير النظام'
   if (raw === 'موظف') return 'موظف'
@@ -1599,114 +2589,6 @@ function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined
 /** توزيع العملاء: مدير النظام (1) أو حساب شركة (2) فقط — لا يشمل مشرف المبيعات (3) أو الموظف (4) */
 function canManageCustomerAssignments(roleId: number | null): boolean {
   return roleId === 1 || roleId === 2
-}
-
-async function canUserAccessCustomer(
-  db: D1Database,
-  userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
-  customer: { id: number; tenant_id: number | null } | null
-): Promise<boolean> {
-  if (!userInfo.userId || !customer) return false
-  const rid = normalizeRoleId(userInfo.roleId)
-  if (!rid) return false
-  if (rid === 1) return true
-  if (userInfo.tenantId == null || customer.tenant_id == null || customer.tenant_id !== userInfo.tenantId) return false
-  if (rid === 4) {
-    const assignment = await db
-      .prepare('SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1')
-      .bind(customer.id, userInfo.userId)
-      .first<{ ok: number }>()
-    return Boolean(assignment?.ok)
-  }
-  if (rid === 5) {
-    // Agents see customers they created, directly assigned to, OR tied via a financing request.
-        try {
-      const row = await db
-        .prepare(
-          `SELECT 1 AS ok FROM customers c
-           WHERE c.id = ? AND c.tenant_id = ? AND (
-             c.created_by = ?
-             OR c.assigned_bank_agent_id = ?
-             OR EXISTS (
-               SELECT 1 FROM financing_requests fr
-               LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
-               WHERE fr.customer_id = c.id
-                 AND (
-                   fr.assigned_bank_agent_id = ?
-                   OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
-                 )
-             )
-           ) LIMIT 1`
-        )
-        .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId)
-        .first<{ ok: number }>()
-      return Boolean(row?.ok)
-    } catch (e: unknown) {
-      const msg = String((e as { message?: string })?.message || e || '')
-      if (/no such column:\s*c\.created_by|no such column:\s*created_by/i.test(msg)) {
-        const assignment = await db
-          .prepare(
-            `SELECT 1 AS ok FROM customers c
-             WHERE c.id = ? AND c.tenant_id = ? AND (
-               c.assigned_bank_agent_id = ?
-               OR EXISTS (
-                 SELECT 1 FROM financing_requests fr
-                 LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
-                 WHERE fr.customer_id = c.id
-                   AND (
-                     fr.assigned_bank_agent_id = ?
-                     OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
-                   )
-               )
-             ) LIMIT 1`
-          )
-          .bind(customer.id, userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
-          .first<{ ok: number }>()
-        return Boolean(assignment?.ok)
-      }
-      if (/no such column:\s*c\.assigned_bank_agent_id|no such column:\s*assigned_bank_agent_id/i.test(msg)) {
-        const assignment = await db
-          .prepare(
-            'SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? AND assigned_bank_agent_id = ? LIMIT 1'
-          )
-          .bind(customer.id, userInfo.userId)
-          .first<{ ok: number }>()
-        return Boolean(assignment?.ok)
-      }
-      throw e
-    }
-  }
-  return rid === 2 || rid === 3
-}
-
-/** Role 5: request row is "theirs" if they are assignee or recorded creator (matches list scope). */
-function bankAgentOwnsFinancingRequestRow(
-  userId: number,
-  row: { assigned_bank_agent_id?: unknown; created_by?: unknown }
-): boolean {
-  if (Number(row.assigned_bank_agent_id) === userId) return true
-  if (row.created_by != null && Number(row.created_by) === userId) return true
-  return false
-}
-
-/** Role 5: may view/edit/delete a financing request if assignee, creator, or customer is in their scope. */
-async function canRole5AccessFinancingRequest(
-  db: D1Database,
-  userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
-  row: {
-    customer_id?: number | null
-    customer_tenant_id?: number | null
-    assigned_bank_agent_id?: number | null
-    created_by?: number | null
-  }
-): Promise<boolean> {
-  if (!userInfo.userId) return false
-  const uid = Number(userInfo.userId)
-  if (bankAgentOwnsFinancingRequestRow(uid, row)) return true
-  const cid = row.customer_id != null ? Number(row.customer_id) : NaN
-  if (Number.isNaN(cid)) return false
-  const ctid = row.customer_tenant_id != null ? Number(row.customer_tenant_id) : null
-  return canUserAccessCustomer(db, userInfo, { id: cid, tenant_id: ctid })
 }
 
 // Get tenant_id for current user (for multi-tenancy filtering)
@@ -1832,12 +2714,12 @@ async function getUserInfo(
     const dbTenantId = (user as { tenant_id?: number | null }).tenant_id
     let tenantIdResolved: number | null = dbTenantId != null ? dbTenantId : tenantIdFromToken
 
-    // Bank agents (role 5) are often scoped by assigned_bank_id; banks belong to exactly one tenant.
+    // Bank-agent capable roles (5/6) may be scoped by assigned_bank_id; banks belong to exactly one tenant.
     // Without this, tenantId stays NULL when users.tenant_id was never filled and the JWT segment is null,
     // and every tenant-filtered API (including the whole contracts module) returns zero rows — not just "empty list".
     if (
       tenantIdResolved == null &&
-      normalizedRoleId === 5 &&
+      (normalizedRoleId === 5 || normalizedRoleId === 6) &&
       assignedBankId != null &&
       c.env?.DB
     ) {
@@ -1858,7 +2740,7 @@ async function getUserInfo(
       tenantId: tenantIdResolved,
       roleId: normalizedRoleId,
       tokenRoleId,
-      assignedBankId: normalizedRoleId === 5 ? assignedBankId : null
+      assignedBankId: normalizedRoleId === 5 || normalizedRoleId === 6 ? assignedBankId : null
     }
     console.log('✅ [getUserInfo] Returning user info:', result)
     return result
@@ -1883,7 +2765,7 @@ async function getUserInfo(
   }
 }
 
-/** Same tenant scope as GET /api/users for bank agents (role 5 / legacy 15). */
+/** Same tenant scope as GET /api/users for bank-agent capable assignees. Role 6 requires explicit bank scope. */
 async function isActiveBankAgentForTenant(
   db: D1Database,
   agentUserId: number,
@@ -1894,20 +2776,46 @@ async function isActiveBankAgentForTenant(
   const row = await db
     .prepare(
       `SELECT 1 AS ok FROM users u
-       WHERE u.id = ? AND u.is_active = 1 AND u.role_id IN (5, 15)
+       WHERE u.id = ? AND u.is_active = 1
          AND (
-           u.tenant_id = ?
-           OR EXISTS (
+           (u.role_id IN (5, 15) AND (
+             u.tenant_id = ?
+             OR EXISTS (
+               SELECT 1 FROM banks b
+               WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+             )
+           ))
+           OR (u.role_id = 6 AND EXISTS (
              SELECT 1 FROM banks b
              WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
-           )
+           ))
          )
        LIMIT 1`
     )
-    .bind(agentUserId, tid, tid)
+    .bind(agentUserId, tid, tid, tid)
     .first()
   return Boolean(row)
 }
+
+/** Users eligible for the موظف التمويل assignment dropdown (roles 5/6, tenant- or bank-scoped). */
+const BANK_AGENT_DROPDOWN_SQL = `
+  SELECT u.id, u.full_name, u.username, u.email
+  FROM users u
+  WHERE u.is_active = 1
+    AND (
+      (u.role_id IN (5, 15) AND (
+        u.tenant_id = ?
+        OR EXISTS (
+          SELECT 1 FROM banks b
+          WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+        )
+      ))
+      OR (u.role_id = 6 AND EXISTS (
+        SELECT 1 FROM banks b
+        WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+      ))
+    )
+  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
 
 async function validateBankAgentForFinancingRequest(
   db: D1Database,
@@ -2024,7 +2932,6 @@ async function loadCustomersForAdminForms(
     customersQuery += ' WHERE tenant_id = ?'
     customersParams.push(userInfo.tenantId)
   } else if (userInfo.roleId === 4) {
-    // Employee can browse only assigned customers in their company scope.
     if (!userInfo.tenantId || !userInfo.userId) {
       return { results: [] }
     }
@@ -2049,6 +2956,45 @@ async function loadCustomersForAdminForms(
         WHERE ca.customer_id = customers.id AND ca.employee_id = ?
       )`
       customersParams.push(userInfo.tenantId, userInfo.userId)
+    }
+  } else if (userInfo.roleId === 6) {
+    if (!userInfo.tenantId || !userInfo.userId) {
+      return { results: [] }
+    }
+    const role6ScopeSql = `(
+      EXISTS (
+        SELECT 1 FROM customer_assignments ca
+        WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+      )
+      OR customers.assigned_bank_agent_id = ?
+      OR EXISTS (
+        SELECT 1 FROM financing_requests fr0
+        WHERE fr0.customer_id = customers.id AND fr0.assigned_bank_agent_id = ?
+      )
+    )`
+    if (opts?.filterRole4ByFundingRequests) {
+      customersQuery += ` WHERE tenant_id = ? AND ${role6ScopeSql}
+      AND EXISTS (
+        SELECT 1 FROM financing_requests fr
+        WHERE fr.customer_id = customers.id AND fr.tenant_id = ?
+          AND COALESCE(fr.is_completed, 0) = 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM contracts co
+        WHERE co.customer_id = customers.id AND co.tenant_id = ?
+          AND COALESCE(co.is_archived, 0) = 0
+          AND co.status NOT IN ('مكتمل', 'مؤرشف')
+      )`
+      customersParams.push(
+        userInfo.tenantId,
+        userInfo.userId,
+        userInfo.userId,
+        userInfo.userId,
+        userInfo.tenantId,
+        userInfo.tenantId
+      )
+    } else {
+      customersQuery += ` WHERE tenant_id = ? AND ${role6ScopeSql}`
+      customersParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
     }
   } else if (normalizeRoleId(userInfo.roleId) === 5) {
     if (!userInfo.tenantId || !userInfo.userId) {
@@ -2171,6 +3117,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/hr',
     '/admin/contracts',
     '/admin/follow-ups',
+    '/admin/chat',
   ],
   '2': [
     '/admin/dashboard',
@@ -2192,9 +3139,9 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/',
     '/admin/company-settings',
     '/admin/company-settings/locations',
+    '/admin/chat',
   ],
   '3': [
-    '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
     '/admin/customers/archived',
@@ -2209,9 +3156,9 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/calculator',
     '/',
+    '/admin/chat',
   ],
   '4': [
-    '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
     '/admin/customers/archived',
@@ -2226,11 +3173,11 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/calculator',
     '/',
+    '/admin/chat',
   ],
   // Role 5: bank agent — keep in sync with /admin/* RBAC + full-admin-panel allowedLinks['5']. No marketing (/admin/follow-ups).
   '5': [
     '/admin/panel',
-    '/admin/dashboard',
     '/admin/customers',
     '/admin/customers/completed',
     '/admin/customers/archived',
@@ -2245,10 +3192,32 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/calculator',
     '/',
+    '/admin/chat',
+  ],
+  // Role 6: dual agent — union of role 4 (employee) + role 5 (bank agent) access.
+  '6': [
+    '/admin/panel',
+    '/admin/customers',
+    '/admin/customers/completed',
+    '/admin/customers/archived',
+    '/admin/requests',
+    '/admin/requests/completed',
+    '/admin/contact-affiliates',
+    '/admin/contracts',
+    '/admin/contracts/list',
+    '/admin/contracts/new',
+    '/admin/contracts/view',
+    '/admin/contracts/templates',
+    '/admin/my-tasks',
+    '/my-tasks',
+    '/admin/my-leaves',
+    '/calculator',
+    '/',
+    '/admin/chat',
   ],
 }
 
-function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number }): string {
+function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number; userId?: number | null }): string {
   if (!pathname.startsWith('/admin/')) return html
   if (pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) return html
   if (html.includes('id="global-persistent-sidebar"')) return html
@@ -2621,6 +3590,20 @@ ${isAdminPanelRail ? `
         customersCollapsible.classList.remove('gps-open');
       }
 
+      // Employees / dual agent (role 4 / 6): sidebar customer filters keep default "no request" scope.
+      if ((ROLE_ID === 4 || ROLE_ID === 6) && customersCollapsible) {
+        customersCollapsible.querySelectorAll('a[href*="/admin/customers"]').forEach(function (link) {
+          var href = link.getAttribute('href');
+          if (!href || href.indexOf('/admin/customers/completed') !== -1 || href.indexOf('/admin/customers/archived') !== -1) return;
+          try {
+            var u = new URL(href, window.location.origin);
+            if (u.pathname !== '/admin/customers') return;
+            u.searchParams.set('requestsFilter', '0');
+            link.setAttribute('href', u.pathname + '?' + u.searchParams.toString());
+          } catch (_) {}
+        });
+      }
+
       if (requestsMainLink && requestsCollapsible) {
         requestsMainLink.style.display = 'none';
         requestsCollapsible.style.display = 'block';
@@ -2831,7 +3814,10 @@ ${isAdminPanelRail ? `
 
       if (url.pathname === '/admin/customers' && (url.searchParams.has('ratingFilter') || url.searchParams.has('requestsFilter'))) {
         var rating = url.searchParams.get('ratingFilter') || 'all';
-        var requests = url.searchParams.get('requestsFilter') || 'all';
+        var requests = url.searchParams.get('requestsFilter');
+        if (requests === null || requests === '') {
+          requests = (ROLE_ID === 4 || ROLE_ID === 6) ? '0' : 'all';
+        }
         var customerSearchEl = document.getElementById('searchInput');
         var customerFieldEl = document.getElementById('filterField');
         var customerDateEl = document.getElementById('dateRangeFilter');
@@ -2990,8 +3976,9 @@ ${isAdminPanelRail ? `
 
   const bodyClose = '</body>'
   const bodyIdx = out.lastIndexOf(bodyClose)
-  if (bodyIdx !== -1) out = out.slice(0, bodyIdx) + sidebar + out.slice(bodyIdx)
-  else out = out + sidebar
+  const chatWidget = CHAT_UI_ENABLED && pathname !== '/admin/chat' ? renderChatWidget(opts?.userId ?? null, opts?.roleId ?? null) : ''
+  if (bodyIdx !== -1) out = out.slice(0, bodyIdx) + sidebar + chatWidget + out.slice(bodyIdx)
+  else out = out + sidebar + chatWidget
   return out
 }
 
@@ -3021,8 +4008,7 @@ app.use('/admin/*', async (c, next) => {
     (prefix) => pathname === prefix || pathname.startsWith(prefix + '/')
   )
   if (isSuperAdminOnly && !isSuperAdmin) {
-    // Redirect to dashboard (or you can render 403)
-    return c.redirect('/admin/dashboard')
+    return c.redirect(getAdminAccessDeniedRedirect(info.roleId))
   }
 
   const rid = normalizeRoleId(info.roleId)
@@ -3030,23 +4016,31 @@ app.use('/admin/*', async (c, next) => {
     (prefix) => pathname === prefix || pathname.startsWith(prefix + '/')
   )
   if (isCompanyAdminOnlyPath && rid !== 2) {
-    return c.redirect('/admin/dashboard')
+    return c.redirect(getAdminAccessDeniedRedirect(info.roleId))
+  }
+  if (
+    pathname === '/admin/dashboard' &&
+    !canAccessCustomerSummaryDashboard(info.roleId)
+  ) {
+    return c.redirect('/admin/panel')
+  }
+  if (isRequestsFollowupReportAdminPath(pathname) && !canAccessRequestsFollowupReport(rid)) {
+    return c.redirect(getAdminAccessDeniedRedirect(info.roleId))
   }
   if (rid === 5) {
     // Bank agent: same app surface as role 4.
     const ok =
       pathname === '/admin' ||
       pathname === '/admin/panel' ||
-      pathname === '/admin/dashboard' ||
       pathname.startsWith('/admin/customers') ||
       pathname.startsWith('/admin/requests') ||
-      pathname.startsWith('/admin/reports') ||
       pathname.startsWith('/admin/follow-ups') ||
       pathname === '/admin/my-tasks' ||
       pathname === '/my-tasks' ||
       pathname === '/admin/my-leaves' ||
       pathname.startsWith('/admin/contracts') ||
       pathname === '/admin/contact-affiliates' ||
+      pathname === '/admin/chat' ||
       pathname === '/calculator' ||
       pathname === '/'
     if (!ok) {
@@ -3084,7 +4078,7 @@ app.use('/admin/*', async (c, next) => {
             updated = stripSuperAdminLinksFromHtml(updated)
           }
           const effectiveSidebarRole = normalizeRoleId(info.roleId) ?? 4
-          updated = injectPersistentAdminSidebar(pathname, updated, { roleId: effectiveSidebarRole })
+          updated = injectPersistentAdminSidebar(pathname, updated, { roleId: effectiveSidebarRole, userId: info.userId })
           // Contracts module pages skip GPS injection but still need the role for client-side approval logic.
           if ((pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) && updated.includes('</head>')) {
             updated = updated.replace('</head>', `<script>window.USER_ROLE_ID=${effectiveSidebarRole};</script></head>`)
@@ -3473,7 +4467,7 @@ app.get('/api/my-tenant', async (c) => {
       return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
     }
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, whatsapp_greeting
       FROM tenants WHERE id = ? LIMIT 1
     `).bind(info.tenantId).first<{
       company_name: string
@@ -3488,6 +4482,7 @@ app.get('/api/my-tenant', async (c) => {
       contact_form_color: string | null
       contact_text_color: string | null
       contact_custom_fields: string | null
+      whatsapp_greeting: string | null
     }>()
     if (!row) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
@@ -3648,6 +4643,13 @@ app.patch('/api/my-tenant', async (c) => {
       }
       updates.address = addrNorm.value
     }
+    if ('whatsapp_greeting' in body) {
+      const greetingNorm = normalizeTenantWhatsappGreetingField(body.whatsapp_greeting)
+      if (!greetingNorm.ok) {
+        return c.json({ success: false, error: greetingNorm.error }, 400)
+      }
+      updates.whatsapp_greeting = greetingNorm.value
+    }
     if ('contact_bg_color' in body) {
       const raw = String(body.contact_bg_color ?? '').trim()
       if (raw === '') {
@@ -3712,11 +4714,34 @@ app.patch('/api/my-tenant', async (c) => {
       .run()
 
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, whatsapp_greeting
       FROM tenants WHERE id = ? LIMIT 1
     `).bind(info.tenantId).first()
 
     return c.json({ success: true, data: row, message: 'تم تحديث بيانات الشركة' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Any authenticated company user: read WhatsApp greeting template for their tenant (used by row WhatsApp buttons).
+app.get('/api/tenant/whatsapp-greeting', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: true, data: { whatsapp_greeting: '', company_name: '' } })
+    }
+    const settings = await fetchTenantWhatsappSettings(c.env.DB, info.tenantId)
+    return c.json({
+      success: true,
+      data: {
+        whatsapp_greeting: settings.greeting,
+        company_name: settings.companyName,
+      },
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -4316,7 +5341,12 @@ app.post('/api/auth/login', async (c) => {
       loginAssignedBankId != null && !Number.isNaN(Number(loginAssignedBankId))
         ? Number(loginAssignedBankId)
         : null
-    if (tenantForAuthToken == null && loginNormalizedRoleId === 5 && loginBankIdNum != null && c.env.DB) {
+    if (
+      tenantForAuthToken == null &&
+      (loginNormalizedRoleId === 5 || loginNormalizedRoleId === 6) &&
+      loginBankIdNum != null &&
+      c.env.DB
+    ) {
       try {
         const br = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
           .bind(loginBankIdNum)
@@ -4685,60 +5715,119 @@ app.post('/api/banks', async (c) => {
   try {
     const data = await c.req.json()
     const { bank_name, bank_code, logo_url, is_active, tenant_id } = data
+
+    if (!bank_name || !String(bank_name).trim()) {
+      return c.json({ success: false, error: 'اسم البنك مطلوب.' }, 400)
+    }
     
     // Get tenant_id from Authorization header if not provided
-    let finalTenantId = tenant_id
-    if (!finalTenantId) {
+    let finalTenantId: number | null = tenant_id ?? null
+    if (finalTenantId == null) {
       const authHeader = c.req.header('Authorization')
       const token = authHeader?.replace('Bearer ', '')
       if (token) {
         const decoded = atob(token)
         const parts = decoded.split(':')
-        finalTenantId = parts[1] !== 'null' ? parseInt(parts[1]) : null
+        finalTenantId = parts[1] !== 'null' ? parseInt(parts[1], 10) : null
       }
+    }
+
+    const duplicate = await findBankDuplicate(c.env.DB, {
+      tenantId: finalTenantId,
+      bankName: bank_name,
+      bankCode: bank_code,
+    })
+    if (duplicate) {
+      return c.json({ success: false, error: bankDuplicateMessage(duplicate) }, 409)
     }
     
     const result = await c.env.DB.prepare(`
       INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
       VALUES (?, ?, ?, ?, ?)
-    `).bind(bank_name, bank_code, logo_url, is_active, finalTenantId).run()
+    `).bind(
+      String(bank_name).trim(),
+      bank_code != null && String(bank_code).trim() !== '' ? String(bank_code).trim() : null,
+      logo_url || null,
+      is_active ?? 1,
+      finalTenantId
+    ).run()
     
     return c.json({ success: true, id: result.meta.last_row_id })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
+  } catch (error: unknown) {
+    const mapped = mapBankDbError(error)
+    if (mapped) {
+      return c.json({ success: false, error: mapped }, 409)
+    }
+    console.error('Add bank error:', error)
+    return c.json({ success: false, error: 'فشل إضافة البنك. حاول مرة أخرى لاحقاً.' }, 500)
   }
 })
 
 // Update bank (PUT method for API)
 app.put('/api/banks/:id', async (c) => {
   try {
-    const id = c.req.param('id')
+    const id = parseInt(c.req.param('id'), 10)
+    if (Number.isNaN(id)) {
+      return c.json({ success: false, error: 'معرّف البنك غير صالح.' }, 400)
+    }
     
     const data = await c.req.json()
     const { bank_name, bank_code, logo_url, is_active } = data
+
+    if (!bank_name || !String(bank_name).trim()) {
+      return c.json({ success: false, error: 'اسم البنك مطلوب.' }, 400)
+    }
     
     // Verify bank belongs to user's tenant
     const authHeader = c.req.header('Authorization')
     const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
+    let tenant_id: number | null = null
     if (token) {
       const decoded = atob(token)
       const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+      tenant_id = parts[1] !== 'null' ? parseInt(parts[1], 10) : null
+    }
+
+    const existing = await c.env.DB.prepare(
+      'SELECT id, tenant_id FROM banks WHERE id = ?'
+    ).bind(id).first<{ id: number; tenant_id: number | null }>()
+    if (!existing) {
+      return c.json({ success: false, error: 'البنك غير موجود.' }, 404)
+    }
+    if (tenant_id != null && existing.tenant_id !== tenant_id) {
+      return c.json({ success: false, error: 'غير مصرح بتعديل هذا البنك.' }, 403)
+    }
+
+    const scopeTenantId = tenant_id ?? existing.tenant_id
+    const duplicate = await findBankDuplicate(c.env.DB, {
+      tenantId: scopeTenantId,
+      bankName: bank_name,
+      bankCode: bank_code,
+      excludeId: id,
+    })
+    if (duplicate) {
+      return c.json({ success: false, error: bankDuplicateMessage(duplicate) }, 409)
     }
     
     // Add tenant_id check to WHERE clause for security
     let query = `UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?`
-    if (tenant_id) {
+    const trimmedName = String(bank_name).trim()
+    const trimmedCode = bank_code != null && String(bank_code).trim() !== '' ? String(bank_code).trim() : null
+    if (tenant_id != null) {
       query += ' AND tenant_id = ?'
-      await c.env.DB.prepare(query).bind(bank_name, bank_code, logo_url, is_active, id, tenant_id).run()
+      await c.env.DB.prepare(query).bind(trimmedName, trimmedCode, logo_url || null, is_active ?? 1, id, tenant_id).run()
     } else {
-      await c.env.DB.prepare(query).bind(bank_name, bank_code, logo_url, is_active, id).run()
+      await c.env.DB.prepare(query).bind(trimmedName, trimmedCode, logo_url || null, is_active ?? 1, id).run()
     }
     
     return c.json({ success: true })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
+  } catch (error: unknown) {
+    const mapped = mapBankDbError(error)
+    if (mapped) {
+      return c.json({ success: false, error: mapped }, 409)
+    }
+    console.error('Update bank error:', error)
+    return c.json({ success: false, error: 'فشل تحديث البنك. حاول مرة أخرى لاحقاً.' }, 500)
   }
 })
 
@@ -5118,34 +6207,9 @@ app.get('/api/rates/sample-csv', async (c) => {
       ]);
     }
     
-    // Build CSV: BOM + sep=, so Excel (Arabic/RTL locales often use semicolon as list separator) splits on comma; RLM for cell text
-    const RLM = '\u200F'; // Right-to-Left Mark for cell-level RTL
-    let csv = EXCEL_UTF8_CSV_PREFIX
-    
-    // Keep header in RTL order (rightmost column first) - will display correctly when Excel is set to RTL
-    const rtlHeader = header.map(h => RLM + h);
-    csv += rtlHeader.join(',') + '\r\n';
-    
-    sampleRows.forEach(row => {
-      // Keep row in RTL order to match header
-      // Escape values that contain commas or quotes, and add RLM for RTL
-      const escapedRow = row.map(cell => {
-        const str = String(cell || '');
-        const rtlStr = RLM + str;
-        if (rtlStr.includes(',') || rtlStr.includes('"') || rtlStr.includes('\n')) {
-          return '"' + rtlStr.replace(/"/g, '""') + '"';
-        }
-        return rtlStr;
-      });
-      csv += escapedRow.join(',') + '\r\n';
-    });
-    
-    return new Response(csv, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8;',
-        'Content-Disposition': 'attachment; filename="نموذج_نسب_التمويل.csv"'
-      }
-    });
+    const xml = buildSpreadsheetML([header, ...sampleRows], 'نسب التمويل')
+
+    return spreadsheetMLAttachmentResponse(xml, 'نموذج_نسب_التمويل.xls')
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -5210,160 +6274,225 @@ app.get('/api/rates/export-csv', async (c) => {
       'رقم تسلسلي'
     ];
     
-    // Build CSV: BOM + sep=, so Excel (Arabic/RTL locales often use semicolon as list separator) splits on comma; RLM for cell text
-    const RLM = '\u200F'; // Right-to-Left Mark for cell-level RTL
-    let csv = EXCEL_UTF8_CSV_PREFIX
-    
-    // Keep header in RTL order (rightmost column first) - will display correctly when Excel is set to RTL
-    const rtlHeader = header.map(h => RLM + h);
-    csv += rtlHeader.join(',') + '\r\n';
-    
-    rates.results.forEach((rate: any, index: number) => {
-      const row = [
-        rate.max_duration || '', // Max duration (rightmost)
-        rate.min_duration || '', // Min duration
-        rate.max_amount || '', // Max amount
-        rate.min_amount || '', // Min amount
-        rate.rate || '', // Rate
-        rate.financing_type_name || '', // Type
-        rate.bank_name || '', // Bank
-        (index + 1).toString() // SL number (leftmost in RTL)
-      ];
-      // Keep row in RTL order to match header
-      // Escape values that contain commas or quotes, and add RLM for RTL
-      const escapedRow = row.map(cell => {
-        const str = String(cell || '');
-        const rtlStr = RLM + str;
-        if (rtlStr.includes(',') || rtlStr.includes('"') || rtlStr.includes('\n')) {
-          return '"' + rtlStr.replace(/"/g, '""') + '"';
-        }
-        return rtlStr;
-      });
-      csv += escapedRow.join(',') + '\r\n';
-    });
-    
-    return new Response(csv, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8;',
-        'Content-Disposition': 'attachment; filename="نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv"'
-      }
-    });
+    const dataRows = rates.results.map((rate: any, index: number) => [
+      String(rate.max_duration ?? ''),
+      String(rate.min_duration ?? ''),
+      String(rate.max_amount ?? ''),
+      String(rate.min_amount ?? ''),
+      String(rate.rate ?? ''),
+      String(rate.financing_type_name ?? ''),
+      String(rate.bank_name ?? ''),
+      String(index + 1),
+    ])
+    const xml = buildSpreadsheetML([header, ...dataRows], 'نسب التمويل')
+
+    return spreadsheetMLAttachmentResponse(
+      xml,
+      `نسب_التمويل_${new Date().toISOString().split('T')[0]}.xls`
+    )
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
 })
 
-// Upload Excel/CSV file for rates
-app.post('/api/rates/upload-excel', async (c) => {
+async function importBankFinancingRatesRows(
+  db: D1Database,
+  rates: any[],
+  tenant_id: number
+): Promise<{ created: number; updated: number; errors: string[] }> {
+  let created = 0
+  let updated = 0
+  const errors: string[] = []
+
+  for (let i = 0; i < rates.length; i++) {
+    const rateData = rates[i] || {}
+    try {
+      const bank_id = Number(rateData.bank_id)
+      const financing_type_id = Number(rateData.financing_type_id)
+      const rate = rateData.rate
+
+      if (!bank_id || !financing_type_id || rate === undefined || rate === null || rate === '') {
+        errors.push(
+          `Row ${i + 1}: invalid row (bank=${rateData.bank_id}, type=${rateData.financing_type_id}, rate=${rate})`
+        )
+        continue
+      }
+
+      const existing = await db
+        .prepare(
+          `SELECT id FROM bank_financing_rates
+           WHERE bank_id = ? AND financing_type_id = ? AND tenant_id = ?
+           LIMIT 1`
+        )
+        .bind(bank_id, financing_type_id, tenant_id)
+        .first<{ id: number }>()
+
+      if (existing?.id) {
+        await db
+          .prepare(
+            `UPDATE bank_financing_rates
+             SET rate = ?,
+                 min_amount = ?,
+                 max_amount = ?,
+                 min_salary = ?,
+                 max_salary = ?,
+                 min_duration = ?,
+                 max_duration = ?,
+                 is_active = ?
+             WHERE id = ? AND tenant_id = ?`
+          )
+          .bind(
+            rate,
+            rateData.min_amount ?? null,
+            rateData.max_amount ?? null,
+            rateData.min_salary ?? null,
+            rateData.max_salary ?? null,
+            rateData.min_duration ?? null,
+            rateData.max_duration ?? null,
+            rateData.is_active !== undefined ? rateData.is_active : 1,
+            existing.id,
+            tenant_id
+          )
+          .run()
+        updated++
+      } else {
+        await db
+          .prepare(
+            `INSERT INTO bank_financing_rates
+             (bank_id, financing_type_id, rate, min_amount, max_amount, min_salary, max_salary, min_duration, max_duration, is_active, tenant_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(
+            bank_id,
+            financing_type_id,
+            rate,
+            rateData.min_amount ?? null,
+            rateData.max_amount ?? null,
+            rateData.min_salary ?? null,
+            rateData.max_salary ?? null,
+            rateData.min_duration ?? null,
+            rateData.max_duration ?? null,
+            rateData.is_active !== undefined ? rateData.is_active : 1,
+            tenant_id
+          )
+          .run()
+        created++
+      }
+    } catch (error: any) {
+      errors.push(`Row ${i + 1}: ${error?.message || String(error)}`)
+    }
+  }
+
+  return { created, updated, errors }
+}
+
+async function resolveRatesImportTenantId(
+  c: any,
+  userInfo: { roleId: number | null; tenantId: number | null },
+  body: { tenant_id?: unknown; rates?: { tenant_id?: unknown }[] } | null
+): Promise<number | null> {
+  let tenant_id: number | null =
+    userInfo.tenantId != null && !Number.isNaN(Number(userInfo.tenantId))
+      ? Number(userInfo.tenantId)
+      : null
+
+  if (!tenant_id && userInfo.roleId === 1) {
+    const fromBody = Number.parseInt(String(body?.tenant_id ?? ''), 10)
+    if (!Number.isNaN(fromBody) && fromBody > 0) tenant_id = fromBody
+    const fromFirstRow = Number.parseInt(String(body?.rates?.[0]?.tenant_id ?? ''), 10)
+    if (!tenant_id && !Number.isNaN(fromFirstRow) && fromFirstRow > 0) tenant_id = fromFirstRow
+    const fromQuery = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+    if (!tenant_id && !Number.isNaN(fromQuery) && fromQuery > 0) tenant_id = fromQuery
+  }
+
+  return tenant_id
+}
+
+// Import rates from CSV (parsed client-side and sent as JSON)
+app.post('/api/rates/import-csv', async (c) => {
   try {
-    const { rates } = await c.req.json()
-    
-    if (!rates || !Array.isArray(rates) || rates.length === 0) {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (userInfo.roleId === 3) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const body = (await c.req.json().catch(() => null)) as {
+      tenant_id?: unknown
+      rates?: unknown
+    } | null
+    const incoming = body?.rates
+    if (!Array.isArray(incoming) || incoming.length === 0) {
       return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
     }
 
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    const tenant_id = await resolveRatesImportTenantId(c, userInfo, body)
+    if (!tenant_id) {
+      return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
     }
 
-    let created = 0
-    let updated = 0
-    const errors: string[] = []
-
-    for (const rateData of rates) {
-      try {
-        // Validate required fields
-        if (!rateData.bank_id || !rateData.financing_type_id || rateData.rate === undefined) {
-          errors.push(`سطر غير صالح: البنك=${rateData.bank_id}, النوع=${rateData.financing_type_id}, النسبة=${rateData.rate}`)
-          continue
-        }
-
-        // Check if rate already exists (by bank_id, financing_type_id, and tenant_id)
-        let checkQuery = `
-          SELECT id FROM bank_financing_rates 
-          WHERE bank_id = ? AND financing_type_id = ?
-        `
-        const checkParams: any[] = [rateData.bank_id, rateData.financing_type_id]
-        
-        if (tenant_id !== null) {
-          checkQuery += ' AND tenant_id = ?'
-          checkParams.push(tenant_id)
-        }
-
-        const existing = await c.env.DB.prepare(checkQuery).bind(...checkParams).first()
-
-        if (existing) {
-          // Update existing rate
-          let updateQuery = `
-            UPDATE bank_financing_rates 
-            SET rate = ?, 
-                min_amount = ?, 
-                max_amount = ?, 
-                min_salary = ?, 
-                max_salary = ?,
-                min_duration = ?, 
-                max_duration = ?,
-                is_active = ?
-            WHERE id = ?
-          `
-          const updateParams: any[] = [
-            rateData.rate,
-            rateData.min_amount || null,
-            rateData.max_amount || null,
-            rateData.min_salary || null,
-            rateData.max_salary || null,
-            rateData.min_duration || null,
-            rateData.max_duration || null,
-            rateData.is_active !== undefined ? rateData.is_active : 1,
-            existing.id
-          ]
-
-          if (tenant_id !== null) {
-            updateQuery += ' AND tenant_id = ?'
-            updateParams.push(tenant_id)
-          }
-
-          await c.env.DB.prepare(updateQuery).bind(...updateParams).run()
-          updated++
-        } else {
-          // Insert new rate
-          const insertQuery = `
-            INSERT INTO bank_financing_rates 
-            (bank_id, financing_type_id, rate, min_amount, max_amount, min_salary, max_salary, min_duration, max_duration, is_active, tenant_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `
-          await c.env.DB.prepare(insertQuery).bind(
-            rateData.bank_id,
-            rateData.financing_type_id,
-            rateData.rate,
-            rateData.min_amount || null,
-            rateData.max_amount || null,
-            rateData.min_salary || null,
-            rateData.max_salary || null,
-            rateData.min_duration || null,
-            rateData.max_duration || null,
-            rateData.is_active !== undefined ? rateData.is_active : 1,
-            tenant_id
-          ).run()
-          created++
-        }
-      } catch (error: any) {
-        errors.push(`خطأ في معالجة السطر: ${error.message}`)
-        console.error('Error processing rate:', error)
-      }
-    }
+    const { created, updated, errors } = await importBankFinancingRatesRows(
+      c.env.DB,
+      incoming,
+      tenant_id
+    )
 
     return c.json({
       success: true,
       created,
       updated,
-      errors: errors.length > 0 ? errors : undefined,
+      errors: errors.length ? errors : undefined,
+      message: `تم إضافة ${created} سجل جديد وتحديث ${updated} سجل`
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Upload Excel/CSV file for rates (legacy alias → same handler as import-csv)
+app.post('/api/rates/upload-excel', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (userInfo.roleId === 3) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const body = (await c.req.json().catch(() => null)) as {
+      tenant_id?: unknown
+      rates?: unknown
+    } | null
+    const incoming = body?.rates
+    if (!Array.isArray(incoming) || incoming.length === 0) {
+      return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
+    }
+
+    const tenant_id = await resolveRatesImportTenantId(c, userInfo, body)
+    if (!tenant_id) {
+      return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+    }
+
+    const { created, updated, errors } = await importBankFinancingRatesRows(
+      c.env.DB,
+      incoming,
+      tenant_id
+    )
+
+    return c.json({
+      success: true,
+      created,
+      updated,
+      errors: errors.length ? errors : undefined,
       message: `تم إضافة ${created} سجل جديد وتحديث ${updated} سجل`
     })
   } catch (error: any) {
@@ -5684,7 +6813,7 @@ app.get('/api/users', async (c) => {
     // Superadmin (role_id = 1) can see all users
     // Other roles see only their tenant's users + bank agents whose bank belongs to the same tenant
     if (roleId !== 1 && tenantId) {
-      query += ` WHERE (u.tenant_id = ${tenantId} OR (u.role_id IN (5, 15) AND EXISTS (SELECT 1 FROM banks b WHERE b.id = u.assigned_bank_id AND b.tenant_id = ${tenantId})))`
+      query += ` WHERE (u.tenant_id = ${tenantId} OR (u.role_id IN (5, 15, 6) AND EXISTS (SELECT 1 FROM banks b WHERE b.id = u.assigned_bank_id AND b.tenant_id = ${tenantId})))`
     }
     
     query += `
@@ -5802,14 +6931,14 @@ app.post('/api/users', async (c) => {
     }
 
     let assigned_bank_id: number | null = null
-    if (requestedRoleId === 5) {
+    if (requestedRoleId === 5 || requestedRoleId === 6) {
       const canCreateBankAgent = isSuperAdminUser(userInfo) || userInfo.roleId === 2
       if (!canCreateBankAgent) {
-        return c.json({ success: false, error: 'غير مسموح بإنشاء موظف التمويل' }, 403)
+        return c.json({ success: false, error: 'غير مسموح بإنشاء موظف التمويل أو الموظف المزدوج' }, 403)
       }
       const tid = typeof tenant_id === 'number' ? tenant_id : parseInt(String(tenant_id || ''), 10)
       if (!tid || Number.isNaN(tid)) {
-        return c.json({ success: false, error: 'يجب اختيار الشركة لموظف التمويل' }, 400)
+        return c.json({ success: false, error: 'يجب اختيار الشركة لهذا الدور' }, 400)
       }
       assigned_bank_id = null
     }
@@ -5875,7 +7004,7 @@ app.post('/api/users', async (c) => {
     const newUserId = result.meta.last_row_id
 
     const needsHrRow =
-      (requestedRoleId === 3 || requestedRoleId === 4 || requestedRoleId === 5) &&
+      (requestedRoleId === 3 || requestedRoleId === 4 || requestedRoleId === 5 || requestedRoleId === 6) &&
       typeof tenant_id === 'number' &&
       !Number.isNaN(tenant_id)
 
@@ -5977,7 +7106,7 @@ app.get('/api/admin/company-banks', async (c) => {
   }
 })
 
-/** Users with role bank_agent (5) for this company. */
+/** Users with role bank_agent (5) or dual agent (6) for this company. */
 app.get('/api/admin/bank-agents', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -5992,16 +7121,7 @@ app.get('/api/admin/bank-agents', async (c) => {
     if (!isSuperAdminUser(userInfo) && userInfo.tenantId !== tid) {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
-    const { results } = await c.env.DB
-      .prepare(
-        `SELECT u.id, u.full_name, u.username, u.email
-         FROM users u
-         WHERE u.role_id = 5 AND u.is_active = 1
-           AND u.tenant_id = ?
-         ORDER BY u.full_name`
-      )
-      .bind(tid)
-      .all()
+    const { results } = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL).bind(tid, tid, tid).all()
     return c.json({ success: true, data: results || [] })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -6027,24 +7147,38 @@ app.put('/api/users/:id', async (c) => {
       return c.json({ success: false, error: 'Forbidden: cannot grant SaaS role' }, 403)
     }
 
-    const target = await c.env.DB.prepare(`SELECT id, tenant_id FROM users WHERE id = ?`).bind(id).first() as {
+    const target = await c.env.DB.prepare(`SELECT id, tenant_id, role_id, assigned_bank_id FROM users WHERE id = ?`).bind(id).first() as {
       id?: number
       tenant_id?: number | null
+      role_id?: number | null
+      assigned_bank_id?: number | null
     } | null
     if (!target) {
       return c.json({ success: false, error: 'User not found' }, 404)
     }
+    const roleChange = await validateStaffRoleChange(
+      c.env.DB,
+      Number(id),
+      target.role_id,
+      requestedRoleId
+    )
+    if (!roleChange.ok) {
+      return c.json({ success: false, error: roleChange.error }, 400)
+    }
     let assigned_bank_id: number | null = null
-    if (requestedRoleId === 5) {
+    if (requestedRoleId === 5 || requestedRoleId === 6) {
       const canSetBankAgent = isSuperAdminUser(requester) || requester.roleId === 2
       if (!canSetBankAgent) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
       const tid = target.tenant_id != null ? Number(target.tenant_id) : null
       if (!tid) {
-        return c.json({ success: false, error: 'Bank agent requires a company (tenant)' }, 400)
+        return c.json({ success: false, error: 'This role requires a company (tenant)' }, 400)
       }
-      assigned_bank_id = null
+      assigned_bank_id =
+        target.assigned_bank_id != null && !Number.isNaN(Number(target.assigned_bank_id))
+          ? Number(target.assigned_bank_id)
+          : null
     }
 
     await c.env.DB.prepare(`
@@ -6084,7 +7218,7 @@ app.get('/api/customers', async (c) => {
             SELECT CASE
               WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
                 THEN frx.assigned_bank_agent_id
-              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
                 THEN frx.created_by
               ELSE NULL
             END
@@ -6103,7 +7237,7 @@ app.get('/api/customers', async (c) => {
               SELECT CASE
                 WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
                   THEN frx.assigned_bank_agent_id
-                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
                   THEN frx.created_by
                 ELSE NULL
               END
@@ -6167,6 +7301,32 @@ app.get('/api/customers', async (c) => {
       } else {
         whereSql = ` WHERE 1 = 0`
       }
+    } else if (listRoleEffective === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        // Role 6 scope is context-determined by actual assignment data, not role alone:
+        // - Employee path: customer_assignments row with employee_id = userId
+        // - Bank-agent path: explicit assigned_bank_agent_id on customer or FR
+        // Deliberately excludes created_by + fr_creator.role_id fallback to prevent an
+        // employee-context FR creation from leaking bank-agent scope.
+        whereSql = ` WHERE c.tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`
+        whereParams.push(
+          userInfo.tenantId,
+          userInfo.userId, userInfo.userId,
+          userInfo.userId
+        )
+      } else {
+        whereSql = ` WHERE 1 = 0`
+      }
     } else {
       // Unknown role - no data
       whereSql = ` WHERE 1 = 0`
@@ -6222,6 +7382,24 @@ app.get('/api/customers', async (c) => {
         throw e
       }
     }
+    // Attach per-customer unread-alarm count for the current user (drives table glow dot).
+    if (userInfo.userId && results.length > 0) {
+      try {
+        const alarmRows = await c.env.DB
+          .prepare(`SELECT customer_id, COUNT(*) AS cnt FROM customer_alarms
+                    WHERE user_id = ? AND is_read = 0 AND customer_id IS NOT NULL
+                    GROUP BY customer_id`)
+          .bind(userInfo.userId)
+          .all<{ customer_id: number; cnt: number }>()
+        const countByCustomer: Record<string, number> = {}
+        for (const row of alarmRows.results || []) {
+          countByCustomer[String(row.customer_id)] = Number(row.cnt) || 0
+        }
+        for (const r of results) {
+          r.unread_alarm_count = countByCustomer[String(r.id)] || 0
+        }
+      } catch (_) { /* table may be missing in legacy DBs */ }
+    }
     return c.json({ success: true, data: results })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -6237,13 +7415,8 @@ app.get('/api/customers/sample-csv', async (c) => {
       ['', 'محمد أحمد', '512345678', 'user@example.com', '', '', '', '', '1234567890', ''],
       ['', 'سارة علي', '501234567', '', '', '', '', '', '', '']
     ]
-    const csv = EXCEL_UTF8_CSV_PREFIX + [header, ...rows].map((r) => r.join(',')).join('\r\n') + '\r\n'
-    return new Response(csv, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8;',
-        'Content-Disposition': 'attachment; filename="customers_sample.csv"'
-      }
-    })
+    const xml = buildSpreadsheetML([header, ...rows], 'العملاء')
+    return spreadsheetMLAttachmentResponse(xml, 'customers_sample.xls')
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -6415,13 +7588,15 @@ app.post('/api/customers', async (c) => {
     const date_of_birth = formData.get('date_of_birth') as string || null
     const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
-    const job_type = (formData.get('job_type') as string) || 'civilian'
+    const job_type = normalizeCustomerJobType(formData.get('job_type'))
     const job_title = formData.get('job_title') as string || null
     const military_rank = formData.get('military_rank') as string || null
     const work_start_date = formData.get('work_start_date') as string || null
     const city = formData.get('city') as string || null
     const product_type = normalizeCustomerProductType(formData.get('product_type'))
     const property_type = normalizeCustomerPropertyType(formData.get('property_type'))
+    const property_owner = (formData.get('property_owner') as string)?.trim() || null
+    const real_estate_office = (formData.get('real_estate_office') as string)?.trim() || null
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
@@ -6442,6 +7617,9 @@ app.post('/api/customers', async (c) => {
       }
     }
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
+    const customerAttachmentsFromForm = normalizeCustomerAttachmentsJson(
+      formData.get('attachments_json') as string | null
+    )
     const identity_attachment_url = (formData.get('identity_attachment_url') as string || '').trim() || null
     const signature_attachment_url = (formData.get('signature_attachment_url') as string || '').trim() || null
     const salary_profile_attachment_url = (formData.get('salary_profile_attachment_url') as string || '').trim() || null
@@ -6689,7 +7867,7 @@ app.post('/api/customers', async (c) => {
       date_of_birth,
       dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian',
       employer_name,
-      job_type === 'military' ? 'military' : 'civilian',
+      job_type,
       job_title,
       job_type === 'military' ? military_rank : null,
       work_start_date,
@@ -6898,6 +8076,14 @@ app.post('/api/customers', async (c) => {
       } catch (_) {
         /* column may not exist until migration 0072 is applied */
       }
+      try {
+        await c.env.DB.prepare(`UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?`).bind(property_owner, real_estate_office, createdCustomerId).run()
+      } catch (_) {
+        /* columns may not exist until migration 0075 is applied */
+      }
+      if (customerAttachmentsFromForm.length > 0) {
+        await saveCustomerAttachmentsJson(c.env.DB, createdCustomerId, customerAttachmentsFromForm)
+      }
     }
     const newId = result.meta?.last_row_id
     const obligationsJson = formData.get('obligations_json') as string | null
@@ -7050,6 +8236,13 @@ app.post('/api/customers/:id', async (c) => {
       return c.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير مصرح</title></head><body class="p-8"><h1>غير مصرح بتعديل هذا العميل</h1></body></html>', 403)
     }
     const formData = await c.req.formData()
+    if (String(formData.get('attachments_only') || '') === '1') {
+      const customerAttachmentsFromForm = normalizeCustomerAttachmentsJson(
+        formData.get('attachments_json') as string | null
+      )
+      await saveCustomerAttachmentsJson(c.env.DB, id, customerAttachmentsFromForm)
+      return c.json({ success: true })
+    }
     const full_name = formData.get('full_name') as string
     const rawPhone = formData.get('phone') as string
     const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
@@ -7096,19 +8289,24 @@ app.post('/api/customers/:id', async (c) => {
     const date_of_birth = formData.get('date_of_birth') as string || null
     const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
-    const job_type = (formData.get('job_type') as string) || 'civilian'
+    const job_type = normalizeCustomerJobType(formData.get('job_type'))
     const job_title = formData.get('job_title') as string || null
     const military_rank = formData.get('military_rank') as string || null
     const work_start_date = formData.get('work_start_date') as string || null
     const city = formData.get('city') as string || null
     const product_type = normalizeCustomerProductType(formData.get('product_type'))
     const property_type = normalizeCustomerPropertyType(formData.get('property_type'))
+    const property_owner = (formData.get('property_owner') as string)?.trim() || null
+    const real_estate_office = (formData.get('real_estate_office') as string)?.trim() || null
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
+    const customerAttachmentsFromForm = normalizeCustomerAttachmentsJson(
+      formData.get('attachments_json') as string | null
+    )
 
-    // Attachment URLs (new 8-doc model; keep legacy 4-doc inputs as fallback)
+    // Attachment URLs (legacy 8-doc model; dynamic attachments_json preferred)
     const identity_attachment_url =
       (formData.get('identity_attachment_url') as string | null)?.trim() ||
       (formData.get('id_attachment_url') as string | null)?.trim() ||
@@ -7178,7 +8376,7 @@ app.post('/api/customers/:id', async (c) => {
       date_of_birth,
       dob_calendar_type === 'hijri' ? 'hijri' : 'gregorian',
       employer_name,
-      job_type === 'military' ? 'military' : 'civilian',
+      job_type,
       job_title,
       job_type === 'military' ? military_rank : null,
       work_start_date,
@@ -7263,6 +8461,14 @@ app.post('/api/customers/:id', async (c) => {
       await c.env.DB.prepare(`UPDATE customers SET property_type = ? WHERE id = ?`).bind(property_type, id).run()
     } catch (_) {
       /* column may not exist until migration 0072 is applied */
+    }
+    try {
+      await c.env.DB.prepare(`UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?`).bind(property_owner, real_estate_office, id).run()
+    } catch (_) {
+      /* columns may not exist until migration 0075 is applied */
+    }
+    if (formData.get('attachments_json') != null) {
+      await saveCustomerAttachmentsJson(c.env.DB, id, customerAttachmentsFromForm)
     }
     // Role 2/1: reassign or clear the bank agent on a customer (single source of truth).
     const editorRole = normalizeRoleId(userInfo.roleId)
@@ -7529,6 +8735,15 @@ app.get('/api/financing-requests', async (c) => {
         c.full_name as customer_name,
         c.phone as customer_phone,
         c.national_id,
+        c.attachments_json,
+        c.identity_attachment_url,
+        c.signature_attachment_url,
+        c.salary_profile_attachment_url,
+        c.gosi_attachment_url,
+        c.tax_exemption_attachment_url,
+        c.additional_1_attachment_url,
+        c.additional_2_attachment_url,
+        c.additional_3_attachment_url,
         c.employer_name,
         c.job_title,
         b.bank_name as selected_bank_name,
@@ -7566,6 +8781,20 @@ app.get('/api/financing-requests', async (c) => {
       } else {
         query += ' WHERE 1 = 0'
       }
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE f.tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca2
+            WHERE ca2.customer_id = c.id AND ca2.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR f.assigned_bank_agent_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+      } else {
+        query += ' WHERE 1 = 0'
+      }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       // Bank agent: requests assigned to them or that they created (created_by), same tenant
       if (userInfo.tenantId && userInfo.userId) {
@@ -7587,7 +8816,26 @@ app.get('/api/financing-requests', async (c) => {
     const { results } = queryParams.length > 0
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all()
-    return c.json({ success: true, data: results })
+    const rows = (results || []) as any[]
+    // Attach per-customer unread-alarm count for the current user (drives table glow dot).
+    if (userInfo.userId && rows.length > 0) {
+      try {
+        const alarmRows = await c.env.DB
+          .prepare(`SELECT customer_id, COUNT(*) AS cnt FROM customer_alarms
+                    WHERE user_id = ? AND is_read = 0 AND customer_id IS NOT NULL
+                    GROUP BY customer_id`)
+          .bind(userInfo.userId)
+          .all<{ customer_id: number; cnt: number }>()
+        const countByCustomer: Record<string, number> = {}
+        for (const row of alarmRows.results || []) {
+          countByCustomer[String(row.customer_id)] = Number(row.cnt) || 0
+        }
+        for (const r of rows) {
+          r.unread_alarm_count = countByCustomer[String(r.customer_id)] || 0
+        }
+      } catch (_) { /* table may be missing in legacy DBs */ }
+    }
+    return c.json({ success: true, data: rows })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -7620,6 +8868,24 @@ app.get('/api/sidebar-filter-counts', async (c) => {
           WHERE ca.customer_id = c.id AND ca.employee_id = ?
         )`)
         customerParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        customerWhereParts.push('1 = 0')
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        customerWhereParts.push('c.tenant_id = ?')
+        customerWhereParts.push(`(
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`)
+        customerParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else {
         customerWhereParts.push('1 = 0')
       }
@@ -7725,6 +8991,24 @@ app.get('/api/sidebar-filter-counts', async (c) => {
       } else {
         archivedCustomerWhereParts.push('1 = 0')
       }
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        archivedCustomerWhereParts.push('c.tenant_id = ?')
+        archivedCustomerWhereParts.push(`(
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`)
+        archivedCustomerParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+      } else {
+        archivedCustomerWhereParts.push('1 = 0')
+      }
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
         archivedCustomerWhereParts.push('c.tenant_id = ?')
@@ -7770,6 +9054,21 @@ app.get('/api/sidebar-filter-counts', async (c) => {
           WHERE ca.customer_id = c.id AND ca.employee_id = ?
         )`)
         requestParams.push(userInfo.tenantId, userInfo.userId)
+      } else {
+        requestWhereParts.push('1 = 0')
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        requestWhereParts.push('c.tenant_id = ?')
+        requestWhereParts.push(`(
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR fr.assigned_bank_agent_id = ?
+        )`)
+        requestParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else {
         requestWhereParts.push('1 = 0')
       }
@@ -7931,18 +9230,30 @@ app.post('/api/requests', async (c) => {
         return c.json({ success: false, error: 'غير مصرح لهذه الشركة' }, 403)
       }
     }
-    // Employees can create requests only for customers assigned to them
-    if (userInfo.roleId === 4) {
-      if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer as { id: number; tenant_id: number | null }))) {
-        return c.json({ success: false, error: 'غير مصرح: العميل غير مخصص لك' }, 403)
-      }
-    }
-    // Bank agents (role 5): same as employees for existing scope, OR first touch on a new customer by assigning themselves on this request
     const effectiveBankAgent: number | null =
       formAssignedBankAgent ?? customer.assigned_bank_agent_id ?? null
 
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      const custRow = customer as { id: number; tenant_id: number | null }
+    const custRow = customer as { id: number; tenant_id: number | null }
+    const ridCreate = normalizeRoleId(userInfo.roleId)
+    if (ridCreate === 4 || ridCreate === 6) {
+      const hasAccess = await canUserAccessCustomer(c.env.DB, userInfo, custRow)
+      const selfAssign =
+        userInfo.userId != null &&
+        formAssignedBankAgent != null &&
+        Number(formAssignedBankAgent) === Number(userInfo.userId)
+      if (!hasAccess && !selfAssign) {
+        return c.json(
+          {
+            success: false,
+            error:
+              ridCreate === 6
+                ? 'غير مصرح: اختر عميلاً مخصصاً لك أو عيّن نفسك موظف تمويل على الطلب'
+                : 'غير مصرح: العميل غير مخصص لك',
+          },
+          403
+        )
+      }
+    } else if (ridCreate === 5) {
       const hasAccess = await canUserAccessCustomer(c.env.DB, userInfo, custRow)
       const selfAssign =
         userInfo.userId != null &&
@@ -8104,13 +9415,8 @@ app.get('/api/requests/sample-csv', async (c) => {
       ['محمد أحمد', '501234567', '', '', '', 'الراجحي', '50000', '60', 'pending', ''],
       ['سارة علي', '', '', '', '', '', '250000', '48', 'under_review', '']
     ]
-    const csv = EXCEL_UTF8_CSV_PREFIX + [header, ...rows].map((r) => r.join(',')).join('\r\n') + '\r\n'
-    return new Response(csv, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8;',
-        'Content-Disposition': 'attachment; filename="requests_sample.csv"'
-      }
-    })
+    const xml = buildSpreadsheetML([header, ...rows], 'الطلبات')
+    return spreadsheetMLAttachmentResponse(xml, 'requests_sample.xls')
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -8240,8 +9546,8 @@ app.post('/api/requests/import-csv', async (c) => {
             continue
           }
         }
-        // Employees can create requests only for customers assigned to them
-        if (userInfo.roleId === 4) {
+        const ridCsv = normalizeRoleId(userInfo.roleId)
+        if (ridCsv === 4 || ridCsv === 6) {
           if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) {
             errors.push(`Row ${i + 1}: customer not assigned`)
             continue
@@ -8253,7 +9559,6 @@ app.post('/api/requests/import-csv', async (c) => {
           continue
         }
 
-        const ridCsv = normalizeRoleId(userInfo.roleId)
         const assigned_bank_agent_csv =
           ridCsv === 5 && userInfo.userId != null ? userInfo.userId : null
 
@@ -8379,9 +9684,57 @@ app.post('/api/requests/import-csv', async (c) => {
 
 // ============= WORKFLOW APIs =============
 
+const PRE_WORKFLOW_STAGE_NAME = 'pre_workflow'
+
+function coerceWorkflowStageId(stageId: unknown): number | null {
+  const n = Number(stageId)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
+
+async function ensurePreWorkflowStage(db: any): Promise<number> {
+  await db.prepare(`
+    INSERT OR IGNORE INTO workflow_stages (stage_name, stage_name_ar, stage_order, stage_color, stage_icon, is_active)
+    VALUES (?, ?, 0, '#94A3B8', 'fa-hourglass-start', 1)
+  `).bind(PRE_WORKFLOW_STAGE_NAME, 'قبل سير العمل').run()
+
+  await db.prepare(`
+    UPDATE workflow_stages
+    SET stage_name_ar = ?, stage_order = 0, stage_color = '#94A3B8', stage_icon = 'fa-hourglass-start', is_active = 1
+    WHERE stage_name = ?
+  `).bind('قبل سير العمل', PRE_WORKFLOW_STAGE_NAME).run()
+
+  const row = await db.prepare(`
+    SELECT id FROM workflow_stages WHERE stage_name = ?
+  `).bind(PRE_WORKFLOW_STAGE_NAME).first() as { id?: number } | null
+
+  if (!row?.id) throw new Error('Unable to initialize pre-workflow stage')
+  return row.id
+}
+
+async function resolveRequestWorkflowStageId(db: any, requestId: unknown, stageId: unknown): Promise<number> {
+  const providedStageId = coerceWorkflowStageId(stageId)
+  if (providedStageId) return providedStageId
+
+  const request = await db.prepare(`
+    SELECT current_stage_id FROM financing_requests WHERE id = ?
+  `).bind(requestId).first() as { current_stage_id?: number | null } | null
+  return coerceWorkflowStageId(request?.current_stage_id) ?? await ensurePreWorkflowStage(db)
+}
+
+async function resolveCustomerWorkflowStageId(db: any, customerId: unknown, stageId: unknown): Promise<number> {
+  const providedStageId = coerceWorkflowStageId(stageId)
+  if (providedStageId) return providedStageId
+
+  const customer = await db.prepare(`
+    SELECT current_workflow_stage_id FROM customers WHERE id = ?
+  `).bind(customerId).first() as { current_workflow_stage_id?: number | null } | null
+  return coerceWorkflowStageId(customer?.current_workflow_stage_id) ?? await ensurePreWorkflowStage(db)
+}
+
 // Get all workflow stages
 app.get('/api/workflow/stages', async (c) => {
   try {
+    await ensurePreWorkflowStage(c.env.DB)
     const { results } = await c.env.DB.prepare(`
       SELECT * FROM workflow_stages 
       WHERE is_active = 1 
@@ -8397,8 +9750,13 @@ app.get('/api/workflow/stages', async (c) => {
 // Get workflow timeline for a specific request
 app.get('/api/workflow/timeline/:requestId', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const requestId = c.req.param('requestId')
-    
+    if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(requestId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
     // Get all stage transitions
     const { results: transitions } = await c.env.DB.prepare(`
       SELECT 
@@ -8492,6 +9850,9 @@ app.post('/api/workflow/update-stage', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
     const { requestId, newStageId, notes, userId } = await c.req.json()
+    if (!(await canUserAccessRequestWorkflow(c.env.DB, requester, Number(requestId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
 
     const stage = await c.env.DB.prepare(`
       SELECT stage_name FROM workflow_stages WHERE id = ?
@@ -8576,27 +9937,32 @@ app.post('/api/workflow/update-stage', async (c) => {
       `).bind(requestId, currentRequest.status, mappedStatus, userId || null, notes || '').run()
     }
 
-    // Notify the other party (role 4 ↔ role 5) about this stage update
+    // Notify the other party (role 4 ↔ role 5) about this stage update — assigned user only
     try {
-      const actorRole = normalizeRoleId(requester.roleId)
-      const targetRole = actorRole === 5 ? 4 : actorRole === 4 ? 5 : null
-      if (targetRole) {
-        const stageNameAr = (await c.env.DB.prepare(`SELECT stage_name_ar FROM workflow_stages WHERE id = ?`).bind(newStageId).first() as any)?.stage_name_ar || stage?.stage_name || ''
-        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
-        const actorName = actorRow?.full_name || ''
-        const actorTenant = actorRow?.tenant_id ?? null
-        const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
-        const customerId = reqRow?.customer_id ?? null
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
-        const linkUrl = `/admin/requests/${requestId}/workflow#request`
-        const { results: targets } = await c.env.DB.prepare(
-          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
-        ).bind(targetRole, actorTenant).all()
-        for (const t of targets as any[]) {
-          await c.env.DB.prepare(
-            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
-          ).bind(customerId, `تحديث مرحلة: ${stageNameAr}`, `قام ${actorName} بتحديث مرحلة الطلب #${requestId} إلى: ${stageNameAr}`, t.id, actorTenant, 'workflow', linkUrl).run()
+      const stageNameAr = (await c.env.DB.prepare(`SELECT stage_name_ar FROM workflow_stages WHERE id = ?`).bind(newStageId).first() as any)?.stage_name_ar || stage?.stage_name || ''
+      const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+      const actorName = actorRow?.full_name || ''
+      const actorTenant = actorRow?.tenant_id ?? null
+      const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
+      const customerId = reqRow?.customer_id ?? null
+      if (customerId) {
+        const targetUserIds = await resolveWorkflowCrossPartyNotifyTargetUserIds(
+          c.env.DB,
+          customerId,
+          requester.userId,
+          requester.roleId,
+          actorTenant,
+          Number(requestId)
+        )
+        if (targetUserIds.length) {
+          await insertWorkflowCrossPartyAlarms(c.env.DB, {
+            customerId,
+            tenantId: actorTenant,
+            targetUserIds,
+            customerName: `تحديث مرحلة: ${stageNameAr}`,
+            note: `قام ${actorName} بتحديث مرحلة الطلب #${requestId} إلى: ${stageNameAr}`,
+            linkUrl: `/admin/requests/${requestId}/workflow#request`
+          })
         }
       }
     } catch (_) {}
@@ -8607,7 +9973,7 @@ app.post('/api/workflow/update-stage', async (c) => {
   }
 })
 
-// Add action to a stage
+// Add action to a stage (not phase notes — see /api/workflow/add-note)
 app.post('/api/workflow/add-action', async (c) => {
   try {
     const requester = await getUserInfo(c)
@@ -8616,7 +9982,11 @@ app.post('/api/workflow/add-action', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
     const { requestId, stageId, actionType, actionData, performedBy, notes } = await c.req.json()
+    if (!(await canUserAccessRequestWorkflow(c.env.DB, requester, Number(requestId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     const actorId = performedBy || requester.userId
+    const effectiveStageId = await resolveRequestWorkflowStageId(c.env.DB, requestId, stageId)
 
     const recentDup = await c.env.DB.prepare(`
       SELECT id FROM workflow_stage_actions
@@ -8625,41 +9995,112 @@ app.post('/api/workflow/add-action', async (c) => {
         AND COALESCE(notes, '') = COALESCE(?, '')
         AND created_at >= datetime('now', '-20 seconds')
       LIMIT 1
-    `).bind(requestId, stageId, actionType, actorId, notes ?? '').first()
+    `).bind(requestId, effectiveStageId, actionType, actorId, notes ?? '').first()
     if (recentDup) return c.json({ success: true })
 
     await c.env.DB.prepare(`
       INSERT INTO workflow_stage_actions
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(requestId, stageId, actionType, actionData, actorId, notes).run()
+    `).bind(requestId, effectiveStageId, actionType, actionData ?? null, actorId, notes ?? null).run()
 
-    // Notify the other party about this action
+    // Notify the other party about this action — assigned user only
     try {
-      const actorRole = normalizeRoleId(requester.roleId)
-      const targetRole = actorRole === 4 ? 5 : actorRole === 5 ? 4 : null
-      if (targetRole) {
-        const actionLabel = ({ call: 'اتصال هاتفي', email: 'بريد إلكتروني', meeting: 'اجتماع', document: 'مستند', approval: 'موافقة', rejection: 'رفض', followup: 'متابعة', other: 'أخرى' } as Record<string,string>)[actionType] || actionType
-        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
-        const actorName = actorRow?.full_name || ''
-        const actorTenant = actorRow?.tenant_id ?? null
-        const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
-        const customerId = reqRow?.customer_id ?? null
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
-        const linkUrl = `/admin/requests/${requestId}/workflow#request`
-        const { results: targets } = await c.env.DB.prepare(
-          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
-        ).bind(targetRole, actorTenant).all()
-        for (const t of targets as any[]) {
-          await c.env.DB.prepare(
-            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
-          ).bind(customerId, `إجراء: ${actionLabel}`, `قام ${actorName} بإضافة إجراء "${actionLabel}" على الطلب #${requestId}${notes ? ' — ' + notes : ''}`, t.id, actorTenant, 'workflow', linkUrl).run()
+      const actionLabel = ({ call: 'اتصال هاتفي', email: 'بريد إلكتروني', meeting: 'اجتماع', document: 'مستند', approval: 'موافقة', rejection: 'رفض', followup: 'متابعة', other: 'أخرى' } as Record<string,string>)[actionType] || actionType
+      const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+      const actorName = actorRow?.full_name || ''
+      const actorTenant = actorRow?.tenant_id ?? null
+      const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
+      const customerId = reqRow?.customer_id ?? null
+      if (customerId) {
+        const targetUserIds = await resolveWorkflowCrossPartyNotifyTargetUserIds(
+          c.env.DB,
+          customerId,
+          requester.userId,
+          requester.roleId,
+          actorTenant,
+          Number(requestId)
+        )
+        if (targetUserIds.length) {
+          await insertWorkflowCrossPartyAlarms(c.env.DB, {
+            customerId,
+            tenantId: actorTenant,
+            targetUserIds,
+            customerName: `إجراء: ${actionLabel}`,
+            note: `قام ${actorName} بإضافة إجراء "${actionLabel}" على الطلب #${requestId}${notes ? ' — ' + notes : ''}`,
+            linkUrl: `/admin/requests/${requestId}/workflow#request`
+          })
         }
       }
     } catch (_) {}
 
     return c.json({ success: true, message: 'تم إضافة الإجراء بنجاح' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Add a phase note to a request stage (separate from actions)
+app.post('/api/workflow/add-note', async (c) => {
+  try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAddWorkflowNote(requester.roleId)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    const { requestId, stageId, noteText, performedBy } = await c.req.json()
+    const text = String(noteText || '').trim()
+    if (!text) return c.json({ success: false, error: 'Note text is required' }, 400)
+    if (!(await canUserAccessRequestWorkflow(c.env.DB, requester, Number(requestId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    await ensureWorkflowPhaseNotesTables(c.env.DB)
+    const actorId = performedBy || requester.userId
+    const effectiveStageId = await resolveRequestWorkflowStageId(c.env.DB, requestId, stageId)
+
+    const recentDup = await c.env.DB.prepare(`
+      SELECT id FROM workflow_stage_notes
+      WHERE request_id = ? AND stage_id = ? AND performed_by = ?
+        AND note_text = ?
+        AND created_at >= datetime('now', '-20 seconds')
+      LIMIT 1
+    `).bind(requestId, effectiveStageId, actorId, text).first()
+    if (recentDup) return c.json({ success: true })
+
+    await c.env.DB.prepare(`
+      INSERT INTO workflow_stage_notes (request_id, stage_id, note_text, performed_by)
+      VALUES (?, ?, ?, ?)
+    `).bind(requestId, effectiveStageId, text, actorId).run()
+
+    try {
+      const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+      const actorName = actorRow?.full_name || ''
+      const actorTenant = actorRow?.tenant_id ?? null
+      const reqRow = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(requestId).first() as any
+      const customerId = reqRow?.customer_id ?? null
+      if (customerId) {
+        const targetUserIds = await resolveWorkflowCrossPartyNotifyTargetUserIds(
+          c.env.DB,
+          customerId,
+          requester.userId,
+          requester.roleId,
+          actorTenant,
+          Number(requestId)
+        )
+        if (targetUserIds.length) {
+          await insertWorkflowCrossPartyAlarms(c.env.DB, {
+            customerId,
+            tenantId: actorTenant,
+            targetUserIds,
+            customerName: 'ملاحظة على سير العمل',
+            note: `قام ${actorName} بإضافة ملاحظة على الطلب #${requestId} — ${text}`,
+            linkUrl: `/admin/requests/${requestId}/workflow#request`
+          })
+        }
+      }
+    } catch (_) {}
+
+    return c.json({ success: true, message: 'تم إضافة الملاحظة بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -9508,45 +10949,12 @@ app.put('/api/financing-requests/:id', async (c) => {
       }
     }
 
-    if (normRid === 5) {
-      const scopeRow = await c.env.DB.prepare(`
-        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, fr.tenant_id, c.tenant_id AS customer_tenant_id
-        FROM financing_requests fr
-        LEFT JOIN customers c ON fr.customer_id = c.id
-        WHERE fr.id = ?
-      `)
-        .bind(id)
-        .first() as {
-          id?: number
-          customer_id?: number | null
-          assigned_bank_agent_id?: number | null
-          created_by?: number | null
-          tenant_id?: number | null
-          customer_tenant_id?: number | null
-        } | null
-      if (!scopeRow?.id) {
-        return c.json({ success: false, error: 'Forbidden' }, 403)
-      }
-      const tid = userInfo.tenantId
-      if (!tid) {
-        return c.json({ success: false, error: 'Forbidden' }, 403)
-      }
-      const rowTenant = scopeRow.tenant_id != null ? Number(scopeRow.tenant_id) : Number(scopeRow.customer_tenant_id)
-      if (Number(tid) !== rowTenant) {
-        return c.json({ success: false, error: 'Forbidden' }, 403)
-      }
-      if (
-        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
-          customer_id: scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null,
-          customer_tenant_id: scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null,
-          assigned_bank_agent_id: scopeRow.assigned_bank_agent_id,
-          created_by: scopeRow.created_by,
-        }))
-      ) {
+    if (normRid === 4 || normRid === 5) {
+      if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
     }
-    
+
     const body = await c.req.json() as Record<string, unknown>
     const {
       requested_amount,
@@ -9612,20 +11020,26 @@ app.put('/api/financing-requests/:id', async (c) => {
       }
     }
 
-    // Build update query with tenant_id check
-    let updateFields: string[] = [
-      'requested_amount = ?',
-      'duration_months = ?',
-      'salary_at_request = ?',
-      'monthly_obligations = ?'
-    ]
+    // Build update query — only fields explicitly sent in the body (supports attachments-only saves)
+    const updateFields: string[] = []
+    const params: any[] = []
 
-    const params: any[] = [
-      requested_amount,
-      duration_months,
-      salary_at_request || 0,
-      monthly_obligations || 0
-    ]
+    if (body.requested_amount !== undefined) {
+      updateFields.push('requested_amount = ?')
+      params.push(Number(body.requested_amount))
+    }
+    if (body.duration_months !== undefined) {
+      updateFields.push('duration_months = ?')
+      params.push(parseInt(String(body.duration_months), 10))
+    }
+    if (body.salary_at_request !== undefined) {
+      updateFields.push('salary_at_request = ?')
+      params.push(Number(body.salary_at_request) || 0)
+    }
+    if (body.monthly_obligations !== undefined) {
+      updateFields.push('monthly_obligations = ?')
+      params.push(Number(body.monthly_obligations) || 0)
+    }
 
     // Optionally update editable fields when they are present in the body
     if (financing_type_id !== undefined) {
@@ -9662,22 +11076,24 @@ app.put('/api/financing-requests/:id', async (c) => {
     if (additional_2_attachment_url) { updateFields.push('additional_2_attachment_url = ?'); params.push(additional_2_attachment_url) }
     if (additional_3_attachment_url) { updateFields.push('additional_3_attachment_url = ?'); params.push(additional_3_attachment_url) }
     
-    params.push(id)
-    
-    let updateQuery = `
+    if (updateFields.length > 0) {
+      params.push(id)
+
+      let updateQuery = `
       UPDATE financing_requests 
       SET ${updateFields.join(', ')}
       WHERE id = ?
     `
-    
-    // Add tenant_id filter if not SuperAdmin. Bank agents (5) already scoped above;
-    // rows may use customer tenant only (fr.tenant_id NULL) — JWT tenant would block the update.
-    if (tenantId !== null && normRid !== 5) {
-      updateQuery += ' AND tenant_id = ?'
-      params.push(tenantId)
+
+      // Add tenant_id filter if not SuperAdmin. Bank agents (5) already scoped above;
+      // rows may use customer tenant only (fr.tenant_id NULL) — JWT tenant would block the update.
+      if (tenantId !== null && normRid !== 5) {
+        updateQuery += ' AND tenant_id = ?'
+        params.push(tenantId)
+      }
+
+      await c.env.DB.prepare(updateQuery).bind(...params).run()
     }
-    
-    await c.env.DB.prepare(updateQuery).bind(...params).run()
 
     if (assigned_bank_agent_id !== undefined && rowMeta?.customer_id != null) {
       const persisted = await setCustomerAssignedBankAgent(
@@ -9694,21 +11110,28 @@ app.put('/api/financing-requests/:id', async (c) => {
       }
     }
 
-    // Keep customer and all related requests in sync with request edit screen.
     const customerIdRow = await c.env.DB.prepare(`
       SELECT customer_id FROM financing_requests WHERE id = ?
     `).bind(id).first() as { customer_id?: number | null } | null
     const customerId = customerIdRow?.customer_id
-    await syncAttachmentsForCustomer(c.env.DB, customerId, {
-      identity_attachment_url,
-      signature_attachment_url,
-      salary_profile_attachment_url,
-      gosi_attachment_url,
-      tax_exemption_attachment_url,
-      additional_1_attachment_url,
-      additional_2_attachment_url,
-      additional_3_attachment_url
-    })
+    if (body.attachments_json !== undefined && customerId != null) {
+      await saveCustomerAttachmentsJson(
+        c.env.DB,
+        customerId,
+        normalizeCustomerAttachmentsJson(body.attachments_json)
+      )
+    } else {
+      await syncAttachmentsForCustomer(c.env.DB, customerId, {
+        identity_attachment_url,
+        signature_attachment_url,
+        salary_profile_attachment_url,
+        gosi_attachment_url,
+        tax_exemption_attachment_url,
+        additional_1_attachment_url,
+        additional_2_attachment_url,
+        additional_3_attachment_url
+      })
+    }
     
     return c.json({ success: true })
   } catch (error: any) {
@@ -9726,6 +11149,12 @@ app.put('/api/financing-requests/:id/status', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
     const id = c.req.param('id')
+    const normRid = normalizeRoleId(requester.roleId)
+    if (normRid === 4) {
+      if (!(await canUserAccessRequestWorkflow(c.env.DB, requester, Number(id)))) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+    }
     const { status, notes } = await c.req.json()
     
     // Get old status
@@ -9815,8 +11244,10 @@ app.post('/api/attachments/upload', async (c) => {
     const formData = await c.req.formData()
     const fileEntry = formData.get('file')
     const requestId = String(formData.get('request_id') || '').trim()
+    const customerIdRaw = String(formData.get('customer_id') || '').trim()
+    const attachmentIdRaw = String(formData.get('attachment_id') || '').trim()
     const rawAttachmentType = String(formData.get('attachmentType') || formData.get('attachment_type') || '').trim()
-    const allowedAttachmentTypes = new Set([
+    const allowedLegacyAttachmentTypes = new Set([
       'identity',
       'signature',
       'salary_profile',
@@ -9827,9 +11258,14 @@ app.post('/api/attachments/upload', async (c) => {
       'additional_3'
     ])
     const attachmentType = rawAttachmentType.toLowerCase()
-    
-    if (!allowedAttachmentTypes.has(attachmentType)) {
+    const isDynamicUpload = Boolean(attachmentIdRaw)
+    const safeAttachmentId = attachmentIdRaw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64)
+
+    if (!isDynamicUpload && !allowedLegacyAttachmentTypes.has(attachmentType)) {
       return c.json({ success: false, error: 'Invalid attachment type' }, 400)
+    }
+    if (isDynamicUpload && !safeAttachmentId) {
+      return c.json({ success: false, error: 'Invalid attachment id' }, 400)
     }
 
     if (!fileEntry || !(fileEntry instanceof File)) {
@@ -9837,10 +11273,11 @@ app.post('/api/attachments/upload', async (c) => {
     }
 
     const file = fileEntry
-    const maxAttachmentSizeBytes = 2 * 1024 * 1024 // 2MB
-
-    if (file.size > maxAttachmentSizeBytes) {
-      return c.json({ success: false, error: 'File too large. Max size is 2MB' }, 400)
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      return c.json(
+        { success: false, error: `File too large. Max size is ${MAX_ATTACHMENT_SIZE_MB}MB` },
+        400
+      )
     }
 
     // Generate unique filename
@@ -9848,9 +11285,16 @@ app.post('/api/attachments/upload', async (c) => {
     const random = Math.random().toString(36).substring(7)
     const rawExtension = file.name.split('.').pop() || 'bin'
     const fileExtension = rawExtension.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'bin'
-    const filename = requestId 
-      ? `${requestId}/${attachmentType}_${timestamp}.${fileExtension}`
-      : `temp/${attachmentType}_${timestamp}_${random}.${fileExtension}`
+    let filename: string
+    if (isDynamicUpload) {
+      const customerId = customerIdRaw.replace(/[^0-9]/g, '')
+      const prefix = customerId ? `customers/${customerId}` : 'temp'
+      filename = `${prefix}/${safeAttachmentId}_${timestamp}.${fileExtension}`
+    } else if (requestId) {
+      filename = `${requestId}/${attachmentType}_${timestamp}.${fileExtension}`
+    } else {
+      filename = `temp/${attachmentType}_${timestamp}_${random}.${fileExtension}`
+    }
     
     // Upload to R2
     const arrayBuffer = await file.arrayBuffer()
@@ -9862,8 +11306,8 @@ app.post('/api/attachments/upload', async (c) => {
     
     const publicUrl = `/api/attachments/view/${filename}`
     
-    // Update database only if requestId is provided
-    if (requestId) {
+    // Legacy financing-request uploads still update fixed columns when requestId is provided.
+    if (requestId && !isDynamicUpload) {
       if (!c.env?.DB) {
         return c.json({ success: false, error: 'Database not configured' }, 500)
       }
@@ -9879,15 +11323,11 @@ app.post('/api/attachments/upload', async (c) => {
         additional_3: 'additional_3_attachment_url'
       }
       const columnName = attachmentColumns[attachmentType]
-      console.log('📎 Updating attachment:', { requestId, attachmentType, columnName, publicUrl })
-      
-      const result = await c.env.DB.prepare(`
+      await c.env.DB.prepare(`
         UPDATE financing_requests 
         SET ${columnName} = ? 
         WHERE id = ?
       `).bind(publicUrl, requestId).run()
-      
-      console.log('✅ Update result:', result)
       const requestRow = await c.env.DB.prepare(`
         SELECT customer_id FROM financing_requests WHERE id = ?
       `).bind(requestId).first() as { customer_id?: number | null } | null
@@ -9952,16 +11392,25 @@ app.delete('/api/attachments/delete/:path{.+}', async (c) => {
     // Delete from R2
     await c.env.ATTACHMENTS.delete(path)
     
-    // Update database to remove the URL
-    // Extract request_id and attachment type from path
-    // Path format: {request_id}/{type}_{timestamp}.{ext}
+  const publicViewPrefix = '/api/attachments/view/'
+  const fullUrl = publicViewPrefix + path
+
     const pathParts = path.split('/')
-    if (pathParts.length === 2) {
+    if (pathParts.length === 3 && pathParts[0] === 'customers' && c.env?.DB) {
+      const customerId = pathParts[1]
+      const customerRow = await c.env.DB.prepare(`SELECT attachments_json FROM customers WHERE id = ?`)
+        .bind(customerId)
+        .first() as { attachments_json?: string | null } | null
+      if (customerRow) {
+        const items = getCustomerAttachmentsFromRow(customerRow as Record<string, unknown>).filter(
+          (item) => item.url !== fullUrl
+        )
+        await saveCustomerAttachmentsJson(c.env.DB, customerId, items)
+      }
+    } else if (pathParts.length === 2 && c.env?.DB) {
       const requestId = pathParts[0]
       const filename = pathParts[1]
-      
-      // Determine attachment type from filename
-      let columnName = null
+      let columnName: string | null = null
       if (filename.startsWith('identity_')) columnName = 'identity_attachment_url'
       else if (filename.startsWith('signature_')) columnName = 'signature_attachment_url'
       else if (filename.startsWith('salary_profile_')) columnName = 'salary_profile_attachment_url'
@@ -9970,8 +11419,6 @@ app.delete('/api/attachments/delete/:path{.+}', async (c) => {
       else if (filename.startsWith('additional_1_')) columnName = 'additional_1_attachment_url'
       else if (filename.startsWith('additional_2_')) columnName = 'additional_2_attachment_url'
       else if (filename.startsWith('additional_3_')) columnName = 'additional_3_attachment_url'
-      
-      // Update database if we identified the column
       if (columnName) {
         await c.env.DB.prepare(`
           UPDATE financing_requests 
@@ -10128,13 +11575,13 @@ app.put('/api/customers/:id/unarchive', async (c) => {
   }
 })
 
-// Mark a financing request (and its customer) as completed — role 5 only
+// Mark a financing request (and its customer) as completed — company admin or bank agent (5 / 6)
 app.put('/api/requests/:id/complete', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const _rid = normalizeRoleId(userInfo.roleId)
-    if (_rid !== 5 && _rid !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (_rid !== 5 && _rid !== 6 && _rid !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const id = c.req.param('id')
 
@@ -10570,7 +12017,7 @@ app.get('/api/dashboard/stats', async (c) => {
         subscriptions_query += ' AND tenant_id = ?'
         users_query += ' AND tenant_id = ?'
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 4 || userInfo.roleId === 6) {
       // Role 4: Employee - sees company customers/requests
       if (userInfo.tenantId) {
         customers_query += ' WHERE tenant_id = ?'
@@ -10675,41 +12122,8 @@ app.delete('/api/financing-requests/:id', async (c) => {
     if (normRid === 3) {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
-    if (normRid === 5) {
-      const scopeRow = await c.env.DB.prepare(`
-        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, fr.tenant_id, c.tenant_id AS customer_tenant_id
-        FROM financing_requests fr
-        LEFT JOIN customers c ON fr.customer_id = c.id
-        WHERE fr.id = ?
-      `)
-        .bind(id)
-        .first() as {
-          id?: number
-          customer_id?: number | null
-          assigned_bank_agent_id?: number | null
-          created_by?: number | null
-          tenant_id?: number | null
-          customer_tenant_id?: number | null
-        } | null
-      if (!scopeRow?.id) {
-        return c.json({ success: false, error: 'Forbidden' }, 403)
-      }
-      const tid = userInfo.tenantId
-      if (!tid) {
-        return c.json({ success: false, error: 'Forbidden' }, 403)
-      }
-      const rowTenant = scopeRow.tenant_id != null ? Number(scopeRow.tenant_id) : Number(scopeRow.customer_tenant_id)
-      if (Number(tid) !== rowTenant) {
-        return c.json({ success: false, error: 'Forbidden' }, 403)
-      }
-      if (
-        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
-          customer_id: scopeRow.customer_id != null ? Number(scopeRow.customer_id) : null,
-          customer_tenant_id: scopeRow.customer_tenant_id != null ? Number(scopeRow.customer_tenant_id) : null,
-          assigned_bank_agent_id: scopeRow.assigned_bank_agent_id,
-          created_by: scopeRow.created_by,
-        }))
-      ) {
+    if (normRid === 4 || normRid === 5) {
+      if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
         return c.json({ success: false, error: 'Forbidden' }, 403)
       }
     }
@@ -11285,7 +12699,7 @@ app.get('/api/reports/statistics', async (c) => {
   }
 })
 
-// Requests Follow-up Report API (Manager only)
+// Requests Follow-up Report API (roles 1–3 only)
 app.get('/api/reports/requests-followup', async (c) => {
   try {
     // Get user info using getUserInfo (supports both Cookie and Authorization header)
@@ -11295,7 +12709,10 @@ app.get('/api/reports/requests-followup', async (c) => {
     if (!userInfo.userId || !userInfo.roleId) {
       return c.json({ success: false, error: 'غير مصرح بالوصول' }, 401)
     }
-    
+    if (!canAccessRequestsFollowupReport(userInfo.roleId)) {
+      return c.json({ success: false, error: 'غير مصرح بالوصول' }, 403)
+    }
+
     const listRoleEffective = normalizeRoleId(userInfo.roleId)
     const queryTenantId = c.req.query('tenant_id')
     const requestedTenantId = queryTenantId ? parseInt(queryTenantId, 10) : null
@@ -11305,7 +12722,7 @@ app.get('/api/reports/requests-followup', async (c) => {
       tenant_id = null
     }
     // Company roles: never trust tenant_id from query — always JWT tenant (prevents cross-company leak)
-    if (listRoleEffective === 2 || listRoleEffective === 3 || listRoleEffective === 4 || listRoleEffective === 5) {
+    if (listRoleEffective === 2 || listRoleEffective === 3) {
       if (
         requestedTenantId != null &&
         userInfo.tenantId != null &&
@@ -11380,58 +12797,17 @@ app.get('/api/reports/requests-followup', async (c) => {
       } else {
         query += ' WHERE 1 = 0'
       }
-    } else if (listRoleEffective === 4) {
-      // Role 4: only existing financing_requests for customers they are assigned to (same scope as /admin/requests)
-      if (userInfo.tenantId && userInfo.userId) {
-        query += ` WHERE ${companyTenantSql} = ? AND ${frTenantAlignedSql} AND EXISTS (
-          SELECT 1 FROM customer_assignments ca_scope
-          WHERE ca_scope.customer_id = fr.customer_id AND ca_scope.employee_id = ?
-        )`
-        queryParams.push(userInfo.tenantId, userInfo.userId)
-      } else {
-        query += ' WHERE 1 = 0'
-      }
-    } else if (listRoleEffective === 5) {
-      // Role 5: only financing_requests assigned on the request row (not whole customer)
-      if (userInfo.tenantId && userInfo.userId) {
-        query += ` WHERE ${companyTenantSql} = ? AND ${frTenantAlignedSql} AND (
-          fr.assigned_bank_agent_id = ?
-          OR fr.created_by = ?
-        )`
-        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
-      } else {
-        query += ' WHERE 1 = 0'
-      }
     } else {
       query += ' WHERE 1 = 0'
     }
 
     query += ' ORDER BY fr.created_at DESC'
 
-    const runFollowupQuery = async (sql: string, params: unknown[]) => {
-      const row = params.length > 0
-        ? await c.env.DB.prepare(sql).bind(...params).all()
-        : await c.env.DB.prepare(sql).all()
-      return Array.isArray(row?.results) ? row.results : []
-    }
-
-    let results: unknown[] = []
-    try {
-      results = await runFollowupQuery(query, queryParams)
-    } catch (dbErr: unknown) {
-      const msg = String((dbErr as { message?: string })?.message || dbErr || '')
-      const missingAgentCol = /no such column:\s*fr\.assigned_bank_agent_id|no such column:\s*assigned_bank_agent_id/i.test(msg)
-      if (listRoleEffective === 5 && missingAgentCol && userInfo.tenantId && userInfo.userId) {
-        const fallbackQuery = query.replace(
-          /WHERE c\.tenant_id = \? AND \(fr\.tenant_id IS NULL OR fr\.tenant_id = c\.tenant_id\) AND \(\s*fr\.assigned_bank_agent_id = \?\s*OR fr\.created_by = \?\s*\)/,
-          'WHERE c.tenant_id = ? AND (fr.tenant_id IS NULL OR fr.tenant_id = c.tenant_id) AND fr.created_by = ?'
-        )
-        const fallbackParams = [userInfo.tenantId, userInfo.userId]
-        results = await runFollowupQuery(fallbackQuery, fallbackParams)
-      } else {
-        throw dbErr
-      }
-    }
+    const row =
+      queryParams.length > 0
+        ? await c.env.DB.prepare(query).bind(...queryParams).all()
+        : await c.env.DB.prepare(query).all()
+    const results = Array.isArray(row?.results) ? row.results : []
 
     return c.json({ success: true, data: results })
   } catch (error: any) {
@@ -11947,9 +13323,15 @@ app.get('/admin/panel', async (c) => {
   }
 })
 
-// Requests Follow-up Report Page (Manager only)
+// Requests Follow-up Report Page (roles 1–3 only)
 app.get('/admin/reports/requests-followup', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.redirect('/login')
+    if (!canAccessRequestsFollowupReport(userInfo.roleId)) {
+      return c.redirect(getAdminAccessDeniedRedirect(userInfo.roleId))
+    }
+
     // Get tenant_id from query
     const tenantId = c.req.query('tenant_id')
     
@@ -12090,6 +13472,17 @@ app.get('/admin/reports/requests-followup', async (c) => {
             </div>
               </div>
             </div>
+            <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                <select id="followupPageSize" onchange="setFollowupPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="15">15</option></select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="followupPrevBtn" onclick="setFollowupPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                <span id="followupPageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                <button id="followupNextBtn" onclick="setFollowupPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+              </div>
+            </div>
             
             <!-- Empty State -->
             <div id="emptyState" class="hidden text-center py-12">
@@ -12101,6 +13494,81 @@ app.get('/admin/reports/requests-followup', async (c) => {
         
         <script>
           let reportData = [];
+          const followupPaging = { page: 1, pageSize: 15, lastSig: '' }
+          function getPageSizeOptions(total) {
+            const base = [15, 30, 50, 100]
+            const totalNum = Number(total) || 0
+            const options = [base[0]]
+            for (let i = 1; i < base.length; i++) {
+              const size = base[i]
+              const prev = base[i - 1]
+              if (totalNum >= size) {
+                options.push(size)
+                continue
+              }
+              if (totalNum > prev) options.push(size)
+              break
+            }
+            return options
+          }
+          function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
+
+          function renderFollowupPaginationUI(total) {
+            const pageSizeSelect = document.getElementById('followupPageSize')
+            const prevBtn = document.getElementById('followupPrevBtn')
+            const nextBtn = document.getElementById('followupNextBtn')
+            const info = document.getElementById('followupPageInfo')
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return
+
+            const options = getPageSizeOptions(total)
+            if (options.indexOf(followupPaging.pageSize) === -1) followupPaging.pageSize = 15
+            pageSizeSelect.innerHTML = options
+              .map((n) => '<option value="' + n + '" ' + (n === followupPaging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+              .join('')
+
+            const totalPages = Math.max(1, Math.ceil(total / followupPaging.pageSize))
+            followupPaging.page = clampPage(followupPaging.page, totalPages)
+            const start = total === 0 ? 0 : (followupPaging.page - 1) * followupPaging.pageSize + 1
+            const end = Math.min(total, followupPaging.page * followupPaging.pageSize)
+            info.textContent = total === 0 ? '0 / 0' : (start + '-' + end + ' من ' + total)
+            prevBtn.disabled = followupPaging.page <= 1
+            nextBtn.disabled = followupPaging.page >= totalPages
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled)
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled)
+          }
+
+          window.setFollowupPageSize = function(value) {
+            const parsed = Number(value)
+            followupPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
+            followupPaging.page = 1
+            applyFollowupPagination()
+          }
+          window.setFollowupPage = function(directionOrPage) {
+            if (directionOrPage === 'prev') followupPaging.page -= 1
+            else if (directionOrPage === 'next') followupPaging.page += 1
+            else {
+              const parsed = Number(directionOrPage)
+              if (Number.isFinite(parsed)) followupPaging.page = parsed
+            }
+            applyFollowupPagination()
+          }
+
+          function applyFollowupPagination() {
+            const tbody = document.getElementById('reportTable')
+            if (!tbody) return
+            const rows = Array.from(tbody.getElementsByTagName('tr'))
+            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
+            renderFollowupPaginationUI(visibleRows.length)
+            const totalPages = Math.max(1, Math.ceil(visibleRows.length / followupPaging.pageSize))
+            followupPaging.page = clampPage(followupPaging.page, totalPages)
+            const startIdx = (followupPaging.page - 1) * followupPaging.pageSize
+            const endIdx = startIdx + followupPaging.pageSize
+            visibleRows.forEach((row, idx) => {
+              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
+            })
+            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
+            refreshFollowupEdgeScroll()
+          }
           
           async function loadReport() {
             try {
@@ -12112,9 +13580,8 @@ app.get('/admin/reports/requests-followup', async (c) => {
               const roleId = user && user.role_id != null ? Number(user.role_id) : null;
               const userTenantId = user && user.tenant_id != null ? String(user.tenant_id) : '';
               const urlTenantId = urlParams.get('tenant_id') || '';
-              // Company roles (2–5): always use session tenant, never URL alone (prevents cross-company leak)
-              const isCompanyRole = roleId === 2 || roleId === 3 || roleId === 4 || roleId === 5
-                || roleId === 12 || roleId === 13 || roleId === 14 || roleId === 15;
+              // Company roles (2–3): always use session tenant, never URL alone (prevents cross-company leak)
+              const isCompanyRole = roleId === 2 || roleId === 3 || roleId === 12 || roleId === 13;
               const tenantId = isCompanyRole ? userTenantId : (urlTenantId || userTenantId);
               
               if (!tenantId) {
@@ -12165,11 +13632,15 @@ app.get('/admin/reports/requests-followup', async (c) => {
             }
             
             if (rows.length === 0) {
+              document.getElementById('tableWrapper')?.classList.add('hidden');
               emptyState?.classList.remove('hidden');
               return;
             }
             
+            emptyState?.classList.add('hidden');
             document.getElementById('tableWrapper')?.classList.remove('hidden');
+            followupPaging.page = 1;
+            followupPaging.lastSig = '';
             
             tbody.innerHTML = rows.map((row, index) => {
               const statusColors = {
@@ -12327,7 +13798,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
                 </tr>
               \`;
             }).join('');
-            requestAnimationFrame(() => refreshFollowupEdgeScroll());
+            applyFollowupPagination();
           }
 
           function refreshFollowupEdgeScroll() {
@@ -12339,6 +13810,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
             }
           }
           
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           function exportToExcel() {
             if (reportData.length === 0) {
               alert('لا توجد بيانات لتصديرها');
@@ -12346,7 +13818,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
             }
             
             // Create CSV content (sep=, so Excel RTL/Arabic locales split columns on comma)
-            let csv = '\\uFEFFsep=,\\r\\n' + 'رقم,اسم العميل,رقم الهاتف,الموظف المخصص,تاريخ تقديم الطلب,المدة المنقضية (أيام),المبلغ المطلوب,حالة الطلب\\n';
+            let csv = ${HTML_CSV_PREFIX} + 'رقم\\tاسم العميل\\tرقم الهاتف\\tالموظف المخصص\\tتاريخ تقديم الطلب\\tالمدة المنقضية (أيام)\\tالمبلغ المطلوب\\tحالة الطلب\\r\\n';
             
             reportData.forEach((row, index) => {
               const statusNames = {
@@ -12358,44 +13830,36 @@ app.get('/admin/reports/requests-followup', async (c) => {
               
               const createdDate = new Date(row.created_at).toLocaleDateString('ar-SA');
               
-              csv += \`\${index + 1},\`;
-              csv += \`"\${row.customer_name || '-'}",\`;
-              csv += \`"\${row.customer_phone || '-'}",\`;
-              csv += \`"\${row.employee_name || 'غير مخصص'}",\`;
-              csv += \`"\${createdDate}",\`;
-              csv += \`\${row.days_elapsed || 0},\`;
-              csv += \`\${row.requested_amount || 0},\`;
-              csv += \`"\${statusNames[row.status] || row.status}"\\n\`;
+              csv += \`\${index + 1}\\t\`;
+              csv += \`"\${row.customer_name || '-'}"\\t\`;
+              csv += \`"\${row.customer_phone || '-'}"\\t\`;
+              csv += \`"\${row.employee_name || 'غير مخصص'}"\\t\`;
+              csv += \`"\${createdDate}"\\t\`;
+              csv += \`\${row.days_elapsed || 0}\\t\`;
+              csv += \`\${row.requested_amount || 0}\\t\`;
+              csv += \`"\${statusNames[row.status] || row.status}"\\r\\n\`;
             });
             
-            // Create download link
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            
-            link.setAttribute('href', url);
-            link.setAttribute('download', 'تقرير_متابعة_الطلبات_' + new Date().toISOString().split('T')[0] + '.csv');
-            link.style.visibility = 'hidden';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            downloadUtf16Csv(csv, 'تقرير_متابعة_الطلبات_' + new Date().toISOString().split('T')[0] + '.csv');
           }
           
           function searchFollowupTable() {
-            const searchValue = document.getElementById('searchFollowup').value.toLowerCase();
+            const searchValue = (document.getElementById('searchFollowup').value || '').toLowerCase().trim();
             const tbody = document.getElementById('reportTable');
+            if (!tbody) return;
             const rows = tbody.querySelectorAll('tr');
-            
+            const sig = searchValue;
+            if (sig !== followupPaging.lastSig) { followupPaging.lastSig = sig; followupPaging.page = 1; }
+
             rows.forEach(row => {
               const text = row.textContent.toLowerCase();
-              if (text.includes(searchValue)) {
-                row.style.display = '';
+              if (searchValue === '' || text.includes(searchValue)) {
+                row.classList.remove('filter-hidden');
               } else {
-                row.style.display = 'none';
+                row.classList.add('filter-hidden');
               }
             });
-            refreshFollowupEdgeScroll();
+            applyFollowupPagination();
           }
 
           window.edgeScrollStep = function(scrollElId, visualDirection) {
@@ -13356,6 +14820,10 @@ app.get('/admin/dashboard', async (c) => {
   try {
     // Get user info for role-based filtering
     const userInfo = await getUserInfo(c)
+
+    if (!canAccessCustomerSummaryDashboard(userInfo.roleId)) {
+      return c.redirect('/admin/panel')
+    }
     
     // Build WHERE clauses based on role
     let customersWhere = '';
@@ -13376,7 +14844,7 @@ app.get('/admin/dashboard', async (c) => {
         requestsJoinWhere = `AND c.tenant_id = ${userInfo.tenantId}`;
         queryParams.push(userInfo.tenantId);
       }
-    } else if (userInfo.roleId === 4) {
+    } else if (userInfo.roleId === 4 || userInfo.roleId === 6) {
       // Role 4: Employee - sees company customers/requests
       if (userInfo.tenantId) {
         customersWhere = `WHERE tenant_id = ${userInfo.tenantId}`;
@@ -13891,6 +15359,21 @@ app.get('/admin/customers/completed', async (c) => {
         )`
         queryParams.push(userInfo.tenantId, userInfo.userId)
       } else query += ' AND 1 = 0'
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+          )
+          OR customers.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+      } else query += ' AND 1 = 0'
     } else query += ' AND 1 = 0'
     query += ' ORDER BY customers.completed_at DESC'
 
@@ -14011,6 +15494,21 @@ app.get('/admin/customers/archived', async (c) => {
           WHERE ca.customer_id = customers.id AND ca.employee_id = ?
         )`
         queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+          )
+          OR assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+          )
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
       } else query += ' AND 1 = 0'
     } else if (normalizeRoleId(userInfo.roleId) === 5) {
       if (userInfo.tenantId && userInfo.userId) {
@@ -14198,16 +15696,16 @@ app.get('/admin/customers/add', async (c) => {
   let locationOptionsHtml = ''
   if (resolvedTenantIdForLocations) {
     const locRes = await c.env.DB.prepare(
-      `SELECT id, name, slug FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
+      `SELECT id, name FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
     )
       .bind(resolvedTenantIdForLocations)
-      .all<{ id: number; name: string; slug: string }>()
-    const locRows = (locRes.results || []) as Array<{ id: number; name: string; slug: string }>
+      .all<{ id: number; name: string }>()
+    const locRows = (locRes.results || []) as Array<{ id: number; name: string }>
     const defaultNewCustomerLocationId = locRows[0]?.id
     locationOptionsHtml = locRows
       .map(
         (r) =>
-          `<option value="${r.id}"${r.id === defaultNewCustomerLocationId ? ' selected' : ''}>${escapeHtml(r.name)} — ${escapeHtml(r.slug)}</option>`
+          `<option value="${r.id}"${r.id === defaultNewCustomerLocationId ? ' selected' : ''}>${escapeHtml(r.name)}</option>`
       )
       .join('')
   }
@@ -14216,18 +15714,9 @@ app.get('/admin/customers/add', async (c) => {
   let bankAgentSectionHtml = ''
   const normRoleForAddPage = normalizeRoleId(userInfo.roleId)
   if ((normRoleForAddPage === 2 || normRoleForAddPage === 1) && resolvedTenantIdForLocations) {
-    const agentsRes = await c.env.DB.prepare(
-      `SELECT u.id, u.full_name, u.username FROM users u
-       WHERE u.role_id IN (5, 15) AND u.is_active = 1
-         AND (
-           u.tenant_id = ?
-           OR EXISTS (
-             SELECT 1 FROM banks b
-             WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
-           )
-         )
-       ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
-    ).bind(resolvedTenantIdForLocations, resolvedTenantIdForLocations).all<{ id: number; full_name: string | null; username: string }>()
+    const agentsRes = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL)
+      .bind(resolvedTenantIdForLocations, resolvedTenantIdForLocations, resolvedTenantIdForLocations)
+      .all<{ id: number; full_name: string | null; username: string }>()
     const agents = (agentsRes.results || []) as Array<{ id: number; full_name: string | null; username: string }>
     if (agents.length > 0) {
       bankAgentSectionHtml = `
@@ -14262,6 +15751,7 @@ app.get('/admin/customers/add', async (c) => {
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
+      <style>${CUSTOMER_ATTACHMENTS_MODAL_STYLES}</style>
     </head>
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
@@ -14406,210 +15896,83 @@ app.get('/admin/customers/add', async (c) => {
                   <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                     <input type="date" id="date_of_birth_gregorian"
                            class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                    <input type="text" id="date_of_birth_hijri" style="display:none"
-                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-                           placeholder="اختر التاريخ الهجري" autocomplete="off">
+                    <div id="dob_hijri_wrap" style="display:none" class="flex-1 min-w-0 flex gap-1 items-center px-1 py-1">
+                      <select id="dob_hijri_day" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="يوم">
+                        <option value="">يوم</option>
+                        ${Array.from({length:30},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+                      </select>
+                      <select id="dob_hijri_month" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="الشهر">
+                        <option value="">الشهر</option><option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option>
+                      </select>
+                      <select id="dob_hijri_year" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="السنة">
+                        <option value="">السنة</option>
+                        ${Array.from({length:161},(_,i)=>`<option value="${1300+i}">${1300+i}</option>`).join('')}
+                      </select>
+                    </div>
                   </div>
-                  <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
+                  <div class="flex rounded-lg border border-gray-300 bg-gray-50">
                     <button type="button" id="dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
                     <button type="button" id="dob_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
                   </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-1"><span id="dob_calendar_label">ميلادي</span></p>
                 <script>
                   document.addEventListener('DOMContentLoaded', function () {
                     var g = document.getElementById('date_of_birth_gregorian');
-                    var h = document.getElementById('date_of_birth_hijri');
                     var hidden = document.getElementById('date_of_birth');
                     var type = document.getElementById('dob_calendar_type');
-                    var lbl = document.getElementById('dob_calendar_label');
                     var btnG = document.getElementById('dob_toggle_gregorian');
                     var btnH = document.getElementById('dob_toggle_hijri');
-                    var isDobSyncing = false;
-                    var hijriDobPicker = null;
-
-                    if (!g || !h || !hidden || !type || !lbl || !btnG || !btnH) return;
-
-                    function normalizeArabicDigits(value) {
-                      if (!value) return '';
-                      var arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-                      var easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
-                      return String(value).replace(/[٠-٩۰-۹]/g, function(char) {
-                        var arabicIndex = arabicDigits.indexOf(char);
-                        if (arabicIndex >= 0) return String(arabicIndex);
-                        var easternArabicIndex = easternArabicDigits.indexOf(char);
-                        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
-                      });
+                    var hijriWrap = document.getElementById('dob_hijri_wrap');
+                    var hijriDay = document.getElementById('dob_hijri_day');
+                    var hijriMonth = document.getElementById('dob_hijri_month');
+                    var hijriYear = document.getElementById('dob_hijri_year');
+                    var isSyncing = false;
+                    if (!g || !hidden || !type || !btnG || !btnH || !hijriWrap || !hijriDay || !hijriMonth || !hijriYear) return;
+                    function extractHP(d) {
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+                      var y = Number((parts.find(function(p) { return p.type === 'year'; }) || {}).value);
+                      var m = Number((parts.find(function(p) { return p.type === 'month'; }) || {}).value);
+                      var dy = Number((parts.find(function(p) { return p.type === 'day'; }) || {}).value);
+                      if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(dy)) return null;
+                      return { year: y, month: m, day: dy };
                     }
-
-                    function formatHijriDateFromGregorian(dateValue) {
-                      if (!dateValue) return '';
-                      try {
-                        var parts = String(dateValue).split('-').map(Number);
-                        var year = parts[0], month = parts[1], day = parts[2];
-                        if (!year || !month || !day) return '';
-                        var gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
-                        if (Number.isNaN(gregorianDate.getTime())) return '';
-                        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit'
-                        });
-                      } catch (_) {
-                        return '';
-                      }
-                    }
-
-                    function parseHijriInput(value) {
-                      var normalized = normalizeArabicDigits(value).replace(/\u200f/g, '').replace(/\u200e/g, '').trim();
-                      if (!normalized) return null;
-                      var parts = normalized.split(/[^\d]+/).filter(Boolean);
-                      if (parts.length !== 3) return null;
-
-                      var year, month, day;
-                      if (parts[0].length === 4) {
-                        year = Number(parts[0]);
-                        month = Number(parts[1]);
-                        day = Number(parts[2]);
-                      } else if (parts[2].length === 4) {
-                        day = Number(parts[0]);
-                        month = Number(parts[1]);
-                        year = Number(parts[2]);
-                      } else {
-                        return null;
-                      }
-
-                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-                      if (year < 1200 || year > 1700) return null;
-                      if (month < 1 || month > 12) return null;
-                      if (day < 1 || day > 30) return null;
-                      return { year: year, month: month, day: day };
-                    }
-
-                    function extractHijriPartsFromDate(dateObject) {
-                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit'
-                      }).formatToParts(dateObject);
-                      var year = Number((parts.find(function(part) { return part.type === 'year'; }) || {}).value);
-                      var month = Number((parts.find(function(part) { return part.type === 'month'; }) || {}).value);
-                      var day = Number((parts.find(function(part) { return part.type === 'day'; }) || {}).value);
-                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-                      return { year: year, month: month, day: day };
-                    }
-
-                    function formatGregorianValue(dateObject) {
-                      var year = dateObject.getFullYear();
-                      var month = String(dateObject.getMonth() + 1).padStart(2, '0');
-                      var day = String(dateObject.getDate()).padStart(2, '0');
-                      return year + '-' + month + '-' + day;
-                    }
-
-                    function findGregorianFromHijri(hijriParts) {
-                      var approxGregorianYear = hijriParts.year + 579;
-                      var start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
-                      var end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
-                      for (var cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
-                        var currentHijriParts = extractHijriPartsFromDate(cursor);
-                        if (!currentHijriParts) continue;
-                        if (
-                          currentHijriParts.year === hijriParts.year &&
-                          currentHijriParts.month === hijriParts.month &&
-                          currentHijriParts.day === hijriParts.day
-                        ) {
-                          return formatGregorianValue(cursor);
-                        }
-                      }
+                    function gregStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+                    function findGreg(hp) {
+                      var start = new Date(hp.year + 577, 0, 1, 12, 0, 0), end = new Date(hp.year + 582, 11, 31, 12, 0, 0);
+                      for (var c = new Date(start); c <= end; c.setDate(c.getDate() + 1)) { var cur = extractHP(c); if (cur && cur.year === hp.year && cur.month === hp.month && cur.day === hp.day) return gregStr(c); }
                       return '';
                     }
-
+                    function setDD(gv) {
+                      if (!gv) { hijriDay.value = ''; hijriMonth.value = ''; hijriYear.value = ''; return; }
+                      var pts = String(gv).split('-').map(Number), d = new Date(pts[0], pts[1]-1, pts[2], 12, 0, 0);
+                      if (isNaN(d.getTime())) return;
+                      var hp = extractHP(d); if (!hp) return;
+                      hijriYear.value = String(hp.year); hijriMonth.value = String(hp.month); hijriDay.value = String(hp.day);
+                    }
                     function syncFromGregorian() {
-                      if (isDobSyncing) return;
-                      isDobSyncing = true;
-                      h.value = formatHijriDateFromGregorian(g.value);
-                      hidden.value = g.value || '';
-                      type.value = 'gregorian';
-                      if (hijriDobPicker && g.value) {
-                        hijriDobPicker.setDate(g.value, false, 'Y-m-d');
-                      }
-                      isDobSyncing = false;
+                      if (isSyncing) return; isSyncing = true; hidden.value = g.value || ''; type.value = 'gregorian'; setDD(g.value); isSyncing = false;
                     }
-
                     function syncFromHijri() {
-                      if (isDobSyncing) return;
-                      var parsedHijri = parseHijriInput(h.value);
-                      if (!parsedHijri) return;
-                      var gregorianValue = findGregorianFromHijri(parsedHijri);
-                      if (!gregorianValue) return;
-                      isDobSyncing = true;
-                      g.value = gregorianValue;
-                      hidden.value = gregorianValue;
-                      type.value = 'hijri';
-                      if (hijriDobPicker) {
-                        hijriDobPicker.setDate(gregorianValue, false, 'Y-m-d');
-                      }
-                      h.value = formatHijriDateFromGregorian(gregorianValue);
-                      isDobSyncing = false;
+                      if (isSyncing) return;
+                      var y = Number(hijriYear.value), m = Number(hijriMonth.value), d = Number(hijriDay.value);
+                      if (!y || !m || !d) return;
+                      var gv = findGreg({ year: y, month: m, day: d }); if (!gv) return;
+                      isSyncing = true; g.value = gv; hidden.value = gv; type.value = 'hijri'; isSyncing = false;
                     }
-
-                    function initHijriDobPicker() {
-                      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon || !window.luxon.DateTime) {
-                        return;
-                      }
-                      hijriDobPicker = flatpickr(h, {
-                        locale: 'ar',
-                        disableMobile: true,
-                        dateFormat: 'Y-m-d',
-                        allowInput: true,
-                        plugins: [
-                          hijriCalendarPlugin(window.luxon.DateTime, {
-                            showHijriDates: true,
-                            showHijriToggle: false
-                          })
-                        ],
-                        onOpen: [function(_, __, instance) {
-                          if (g.value) instance.setDate(g.value, false, 'Y-m-d');
-                        }],
-                        onChange: [function(selectedDates) {
-                          if (!selectedDates || !selectedDates.length || isDobSyncing) return;
-                          var gregorianValue = formatGregorianValue(selectedDates[0]);
-                          isDobSyncing = true;
-                          g.value = gregorianValue;
-                          hidden.value = gregorianValue;
-                          h.value = formatHijriDateFromGregorian(gregorianValue);
-                          isDobSyncing = false;
-                        }]
-                      });
-                    }
-
                     function setGregorian() {
-                      g.style.display = '';
-                      h.style.display = 'none';
-                      type.value = 'gregorian';
-                      lbl.textContent = 'ميلادي';
-                      hidden.value = g.value || '';
+                      g.style.display = ''; hijriWrap.style.display = 'none'; type.value = 'gregorian'; hidden.value = g.value || '';
                       btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';
                       btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
                     }
                     function setHijri() {
-                      g.style.display = 'none';
-                      h.style.display = '';
-                      type.value = 'hijri';
-                      lbl.textContent = 'هجري';
-                      if (g.value) h.value = formatHijriDateFromGregorian(g.value);
-                      hidden.value = g.value || '';
+                      g.style.display = 'none'; hijriWrap.style.display = ''; type.value = 'hijri'; setDD(g.value); hidden.value = g.value || '';
                       btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
                       btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
                     }
-                    btnG.onclick = setGregorian;
-                    btnH.onclick = setHijri;
-                    g.onchange = syncFromGregorian;
-                    g.oninput = syncFromGregorian;
-                    h.onblur = syncFromHijri;
-                    initHijriDobPicker();
-                    syncFromGregorian();
-                    setGregorian();
+                    btnG.onclick = setGregorian; btnH.onclick = setHijri;
+                    g.onchange = syncFromGregorian; g.oninput = syncFromGregorian;
+                    hijriDay.onchange = syncFromHijri; hijriMonth.onchange = syncFromHijri; hijriYear.onchange = syncFromHijri;
+                    syncFromGregorian(); setGregorian();
                   });
                 </script>
               </div>
@@ -14634,6 +15997,7 @@ app.get('/admin/customers/add', async (c) => {
                 <select name="job_type" id="job_type" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                   <option value="civilian">مدني</option>
                   <option value="military">عسكري</option>
+                  <option value="retired">متقاعد</option>
                 </select>
               </div>
               <div>
@@ -14655,6 +16019,7 @@ app.get('/admin/customers/add', async (c) => {
                     <option value="">-- اختر الرتبة --</option>
                     <option value="جندي">جندي</option>
                     <option value="عريف">عريف</option>
+                    <option value="وكيل رقيب">وكيل رقيب</option>
                     <option value="رقيب">رقيب</option>
                     <option value="رقيب أول">رقيب أول</option>
                     <option value="رئيس رقباء">رئيس رقباء</option>
@@ -14672,7 +16037,6 @@ app.get('/admin/customers/add', async (c) => {
                 </div>
               </div>
             </div>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -14683,211 +16047,84 @@ app.get('/admin/customers/add', async (c) => {
                 <input type="hidden" name="work_start_date" id="work_start_date">
                 <div class="flex gap-2 items-center flex-wrap">
                   <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
-                    <input type="date" id="work_start_date_gregorian"
-                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                    <input type="text" id="work_start_date_hijri" style="display:none"
-                           class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-                           placeholder="اختر التاريخ الهجري" autocomplete="off">
+                    <input type="date" id="work_start_date_gregorian" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <div id="work_start_hijri_wrap" style="display:none" class="flex-1 min-w-0 flex gap-1 items-center px-1 py-1">
+                      <select id="work_start_hijri_day" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="يوم">
+                        <option value="">يوم</option>
+                        ${Array.from({length:30},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+                      </select>
+                      <select id="work_start_hijri_month" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="الشهر">
+                        <option value="">الشهر</option><option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option>
+                      </select>
+                      <select id="work_start_hijri_year" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="السنة">
+                        <option value="">السنة</option>
+                        ${Array.from({length:161},(_,i)=>`<option value="${1300+i}">${1300+i}</option>`).join('')}
+                      </select>
+                    </div>
                   </div>
-                  <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group" aria-label="نوع التقويم">
+                  <div class="flex rounded-lg border border-gray-300 bg-gray-50">
                     <button type="button" id="work_start_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
                     <button type="button" id="work_start_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
                   </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-1"><span id="work_start_calendar_label">ميلادي</span></p>
                 <script>
                   document.addEventListener('DOMContentLoaded', function () {
                     var g = document.getElementById('work_start_date_gregorian');
-                    var h = document.getElementById('work_start_date_hijri');
                     var hidden = document.getElementById('work_start_date');
                     var type = document.getElementById('work_start_calendar_type');
-                    var lbl = document.getElementById('work_start_calendar_label');
                     var btnG = document.getElementById('work_start_toggle_gregorian');
                     var btnH = document.getElementById('work_start_toggle_hijri');
-                    var isWorkStartSyncing = false;
-                    var hijriWorkStartPicker = null;
-                    if (!g || !h || !hidden || !type || !lbl || !btnG || !btnH) return;
-
-                    function normalizeArabicDigits(value) {
-                      if (!value) return '';
-                      var arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-                      var easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
-                      return String(value).replace(/[٠-٩۰-۹]/g, function(char) {
-                        var arabicIndex = arabicDigits.indexOf(char);
-                        if (arabicIndex >= 0) return String(arabicIndex);
-                        var easternArabicIndex = easternArabicDigits.indexOf(char);
-                        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
-                      });
+                    var hijriWrap = document.getElementById('work_start_hijri_wrap');
+                    var hijriDay = document.getElementById('work_start_hijri_day');
+                    var hijriMonth = document.getElementById('work_start_hijri_month');
+                    var hijriYear = document.getElementById('work_start_hijri_year');
+                    var isSyncing = false;
+                    if (!g || !hidden || !type || !btnG || !btnH || !hijriWrap || !hijriDay || !hijriMonth || !hijriYear) return;
+                    function extractHP(d) {
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+                      var y = Number((parts.find(function(p) { return p.type === 'year'; }) || {}).value);
+                      var m = Number((parts.find(function(p) { return p.type === 'month'; }) || {}).value);
+                      var dy = Number((parts.find(function(p) { return p.type === 'day'; }) || {}).value);
+                      if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(dy)) return null;
+                      return { year: y, month: m, day: dy };
                     }
-
-                    function formatHijriDateFromGregorian(dateValue) {
-                      if (!dateValue) return '';
-                      try {
-                        var parts = String(dateValue).split('-').map(Number);
-                        var year = parts[0], month = parts[1], day = parts[2];
-                        if (!year || !month || !day) return '';
-                        var gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
-                        if (Number.isNaN(gregorianDate.getTime())) return '';
-                        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit'
-                        });
-                      } catch (_) {
-                        return '';
-                      }
-                    }
-
-                    function parseHijriInput(value) {
-                      var normalized = normalizeArabicDigits(value).replace(/\u200f/g, '').replace(/\u200e/g, '').trim();
-                      if (!normalized) return null;
-                      var parts = normalized.split(/[^\d]+/).filter(Boolean);
-                      if (parts.length !== 3) return null;
-
-                      var year, month, day;
-                      if (parts[0].length === 4) {
-                        year = Number(parts[0]);
-                        month = Number(parts[1]);
-                        day = Number(parts[2]);
-                      } else if (parts[2].length === 4) {
-                        day = Number(parts[0]);
-                        month = Number(parts[1]);
-                        year = Number(parts[2]);
-                      } else {
-                        return null;
-                      }
-
-                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-                      if (year < 1200 || year > 1700) return null;
-                      if (month < 1 || month > 12) return null;
-                      if (day < 1 || day > 30) return null;
-                      return { year: year, month: month, day: day };
-                    }
-
-                    function extractHijriPartsFromDate(dateObject) {
-                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit'
-                      }).formatToParts(dateObject);
-                      var year = Number((parts.find(function(part) { return part.type === 'year'; }) || {}).value);
-                      var month = Number((parts.find(function(part) { return part.type === 'month'; }) || {}).value);
-                      var day = Number((parts.find(function(part) { return part.type === 'day'; }) || {}).value);
-                      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-                      return { year: year, month: month, day: day };
-                    }
-
-                    function formatGregorianValue(dateObject) {
-                      var year = dateObject.getFullYear();
-                      var month = String(dateObject.getMonth() + 1).padStart(2, '0');
-                      var day = String(dateObject.getDate()).padStart(2, '0');
-                      return year + '-' + month + '-' + day;
-                    }
-
-                    function findGregorianFromHijri(hijriParts) {
-                      var approxGregorianYear = hijriParts.year + 579;
-                      var start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
-                      var end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
-                      for (var cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
-                        var currentHijriParts = extractHijriPartsFromDate(cursor);
-                        if (!currentHijriParts) continue;
-                        if (
-                          currentHijriParts.year === hijriParts.year &&
-                          currentHijriParts.month === hijriParts.month &&
-                          currentHijriParts.day === hijriParts.day
-                        ) {
-                          return formatGregorianValue(cursor);
-                        }
-                      }
+                    function gregStr(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+                    function findGreg(hp) {
+                      var start = new Date(hp.year + 577, 0, 1, 12, 0, 0), end = new Date(hp.year + 582, 11, 31, 12, 0, 0);
+                      for (var c = new Date(start); c <= end; c.setDate(c.getDate() + 1)) { var cur = extractHP(c); if (cur && cur.year === hp.year && cur.month === hp.month && cur.day === hp.day) return gregStr(c); }
                       return '';
                     }
-
+                    function setDD(gv) {
+                      if (!gv) { hijriDay.value = ''; hijriMonth.value = ''; hijriYear.value = ''; return; }
+                      var pts = String(gv).split('-').map(Number), d = new Date(pts[0], pts[1]-1, pts[2], 12, 0, 0);
+                      if (isNaN(d.getTime())) return;
+                      var hp = extractHP(d); if (!hp) return;
+                      hijriYear.value = String(hp.year); hijriMonth.value = String(hp.month); hijriDay.value = String(hp.day);
+                    }
                     function syncFromGregorian() {
-                      if (isWorkStartSyncing) return;
-                      isWorkStartSyncing = true;
-                      h.value = formatHijriDateFromGregorian(g.value);
-                      hidden.value = g.value || '';
-                      type.value = 'gregorian';
-                      if (hijriWorkStartPicker && g.value) {
-                        hijriWorkStartPicker.setDate(g.value, false, 'Y-m-d');
-                      }
-                      isWorkStartSyncing = false;
+                      if (isSyncing) return; isSyncing = true; hidden.value = g.value || ''; type.value = 'gregorian'; setDD(g.value); isSyncing = false;
                     }
-
                     function syncFromHijri() {
-                      if (isWorkStartSyncing) return;
-                      var parsedHijri = parseHijriInput(h.value);
-                      if (!parsedHijri) return;
-                      var gregorianValue = findGregorianFromHijri(parsedHijri);
-                      if (!gregorianValue) return;
-                      isWorkStartSyncing = true;
-                      g.value = gregorianValue;
-                      hidden.value = gregorianValue;
-                      type.value = 'hijri';
-                      if (hijriWorkStartPicker) {
-                        hijriWorkStartPicker.setDate(gregorianValue, false, 'Y-m-d');
-                      }
-                      h.value = formatHijriDateFromGregorian(gregorianValue);
-                      isWorkStartSyncing = false;
+                      if (isSyncing) return;
+                      var y = Number(hijriYear.value), m = Number(hijriMonth.value), d = Number(hijriDay.value);
+                      if (!y || !m || !d) return;
+                      var gv = findGreg({ year: y, month: m, day: d }); if (!gv) return;
+                      isSyncing = true; g.value = gv; hidden.value = gv; type.value = 'hijri'; isSyncing = false;
                     }
-
-                    function initHijriWorkStartPicker() {
-                      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon || !window.luxon.DateTime) {
-                        return;
-                      }
-                      hijriWorkStartPicker = flatpickr(h, {
-                        locale: 'ar',
-                        disableMobile: true,
-                        dateFormat: 'Y-m-d',
-                        allowInput: true,
-                        plugins: [
-                          hijriCalendarPlugin(window.luxon.DateTime, {
-                            showHijriDates: true,
-                            showHijriToggle: false
-                          })
-                        ],
-                        onOpen: [function(_, __, instance) {
-                          if (g.value) instance.setDate(g.value, false, 'Y-m-d');
-                        }],
-                        onChange: [function(selectedDates) {
-                          if (!selectedDates || !selectedDates.length || isWorkStartSyncing) return;
-                          var gregorianValue = formatGregorianValue(selectedDates[0]);
-                          isWorkStartSyncing = true;
-                          g.value = gregorianValue;
-                          hidden.value = gregorianValue;
-                          h.value = formatHijriDateFromGregorian(gregorianValue);
-                          isWorkStartSyncing = false;
-                        }]
-                      });
-                    }
-
                     function setGregorian() {
-                      g.style.display = '';
-                      h.style.display = 'none';
-                      type.value = 'gregorian';
-                      lbl.textContent = 'ميلادي';
-                      hidden.value = g.value || '';
+                      g.style.display = ''; hijriWrap.style.display = 'none'; type.value = 'gregorian'; hidden.value = g.value || '';
                       btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';
                       btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';
                     }
                     function setHijri() {
-                      g.style.display = 'none';
-                      h.style.display = '';
-                      type.value = 'hijri';
-                      lbl.textContent = 'هجري';
-                      if (g.value) h.value = formatHijriDateFromGregorian(g.value);
-                      hidden.value = g.value || '';
+                      g.style.display = 'none'; hijriWrap.style.display = ''; type.value = 'hijri'; setDD(g.value); hidden.value = g.value || '';
                       btnG.className = 'px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';
                       btnH.className = 'px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';
                     }
-                    btnG.onclick = setGregorian;
-                    btnH.onclick = setHijri;
-                    g.onchange = syncFromGregorian;
-                    g.oninput = syncFromGregorian;
-                    h.onblur = syncFromHijri;
-                    initHijriWorkStartPicker();
-                    syncFromGregorian();
-                    setGregorian();
+                    btnG.onclick = setGregorian; btnH.onclick = setHijri;
+                    g.onchange = syncFromGregorian; g.oninput = syncFromGregorian;
+                    hijriDay.onchange = syncFromHijri; hijriMonth.onchange = syncFromHijri; hijriYear.onchange = syncFromHijri;
+                    syncFromGregorian(); setGregorian();
                   });
                 </script>
               </div>
@@ -14938,6 +16175,24 @@ app.get('/admin/customers/add', async (c) => {
                   'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                 )}
               </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-user-shield text-emerald-600 ml-1"></i>
+                  رقم مالك العقار
+                </label>
+                <input type="text" name="property_owner"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       placeholder="اسم مالك العقار">
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-building text-cyan-600 ml-1"></i>
+                  رقم المكتب العقاري
+                </label>
+                <input type="text" name="real_estate_office"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       placeholder="اسم المكتب العقاري">
+              </div>
             </div>
 
             <div>
@@ -14962,17 +16217,7 @@ app.get('/admin/customers/add', async (c) => {
                   إدارة المرفقات
                 </button>
               </div>
-              <p class="text-sm text-gray-500 mt-2">يتم رفع المرفقات من خلال نافذة منبثقة داخل النموذج.</p>
-
-              <!-- hidden URLs (submitted with form) -->
-              <input type="hidden" name="identity_attachment_url" id="customer_identity_attachment_url">
-              <input type="hidden" name="signature_attachment_url" id="customer_signature_attachment_url">
-              <input type="hidden" name="salary_profile_attachment_url" id="customer_salary_profile_attachment_url">
-              <input type="hidden" name="gosi_attachment_url" id="customer_gosi_attachment_url">
-              <input type="hidden" name="tax_exemption_attachment_url" id="customer_tax_exemption_attachment_url">
-              <input type="hidden" name="additional_1_attachment_url" id="customer_additional_1_attachment_url">
-              <input type="hidden" name="additional_2_attachment_url" id="customer_additional_2_attachment_url">
-              <input type="hidden" name="additional_3_attachment_url" id="customer_additional_3_attachment_url">
+              <p class="text-sm text-gray-500 mt-2">أضف المرفقات مع تسمية كل ملف حسب ما تريد.</p>
             </div>
 
             <!-- Attachments Modal -->
@@ -14981,73 +16226,23 @@ app.get('/admin/customers/add', async (c) => {
                 <div class="flex items-center justify-between mb-4">
                   <h3 class="text-xl font-bold text-gray-800">
                     <i class="fas fa-paperclip ml-2 text-blue-600"></i>
-                    رفع المرفقات (اختياري)
+                    المرفقات (اختياري)
                   </h3>
                   <button type="button" id="closeCustomerAttachmentsModal" class="text-gray-500 hover:text-gray-800">
                     <i class="fas fa-times text-xl"></i>
                   </button>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-id-card ml-1"></i> ملف الهوية</label>
-                    <input type="file" id="customer_identity_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_identity_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-signature ml-1"></i> ملف السمة</label>
-                    <input type="file" id="customer_signature_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_signature_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب</label>
-                    <input type="file" id="customer_salary_profile_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_salary_profile_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية</label>
-                    <input type="file" id="customer_gosi_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_gosi_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-certificate ml-1"></i> شهادة الإعفاء الضريبي</label>
-                    <input type="file" id="customer_tax_exemption_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_tax_exemption_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 1</label>
-                    <input type="file" id="customer_additional_1_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_additional_1_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 2</label>
-                    <input type="file" id="customer_additional_2_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_additional_2_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"><i class="fas fa-file-alt ml-1"></i> مستند إضافي 3</label>
-                    <input type="file" id="customer_additional_3_attachment" accept="image/*,application/pdf"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="customer_additional_3_attachment_preview" class="mt-2"></div>
-                  </div>
-                </div>
+                                <input type="hidden" name="attachments_json" id="customer_attachments_json" value="[]">
+                <div id="customer_attachments_list" class="space-y-3"></div>
+                <button type="button" id="customer_add_attachment_btn"
+                        class="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center gap-1">
+                  <i class="fas fa-plus ml-1"></i>
+                  إضافة مرفق
+                </button>
+                <p class="text-xs text-gray-500 mt-2">JPG, PNG أو PDF (حد أقصى ${MAX_ATTACHMENT_SIZE_MB}MB لكل ملف)</p>
 
-                <div class="flex justify-end gap-3 mt-6">
+<div class="flex justify-end gap-3 mt-6">
                   <button type="button" id="doneCustomerAttachmentsModal"
                           class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
                     تم
@@ -15093,7 +16288,7 @@ app.get('/admin/customers/add', async (c) => {
                       <th class="py-2 px-2">نوع الالتزام</th>
                       <th class="py-2 px-2">إجمالي المبلغ</th>
                       <th class="py-2 px-2">القسط الشهري</th>
-                      <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                      <th class="py-2 px-2">ملاحظة</th>
                       <th class="py-2 px-2 w-16"></th>
                     </tr>
                   </thead>
@@ -15127,65 +16322,20 @@ app.get('/admin/customers/add', async (c) => {
           const form = document.getElementById('add-customer-form');
           if (!form) return;
           // Attachments modal controls (upload inputs live inside the modal; URLs are hidden fields in the main form)
-          (function initCustomerAttachmentsModal() {
-            var modal = document.getElementById('customerAttachmentsModal');
-            var openBtn = document.getElementById('openCustomerAttachmentsModal');
-            var closeBtn = document.getElementById('closeCustomerAttachmentsModal');
-            var doneBtn = document.getElementById('doneCustomerAttachmentsModal');
-            if (!modal || !openBtn) return;
-            function open() { modal.classList.remove('hidden'); }
-            function close() { modal.classList.add('hidden'); }
-            openBtn.addEventListener('click', open);
-            if (closeBtn) closeBtn.addEventListener('click', close);
-            if (doneBtn) doneBtn.addEventListener('click', close);
-            modal.addEventListener('click', function (e) {
-              if (e && e.target === modal) close();
-            });
-            document.addEventListener('keydown', function (e) {
-              if (e && e.key === 'Escape') close();
-            });
-          })();
+          ${getCustomerAttachmentsModalInitScript({
+            modalId: 'customerAttachmentsModal',
+            openBtnId: 'openCustomerAttachmentsModal',
+            closeBtnId: 'closeCustomerAttachmentsModal',
+            doneBtnId: 'doneCustomerAttachmentsModal',
+          })}
+          ${getDynamicCustomerAttachmentsScript()}
+          initDynamicCustomerAttachments({
+            hiddenInputId: 'customer_attachments_json',
+            listContainerId: 'customer_attachments_list',
+            addButtonId: 'customer_add_attachment_btn',
+            initialAttachments: []
+          });
           var messageEl = document.getElementById('customer-create-message');
-          var attachmentFiles = {
-            identity: null,
-            signature: null,
-            salary_profile: null,
-            gosi: null,
-            tax_exemption: null,
-            additional_1: null,
-            additional_2: null,
-            additional_3: null
-          };
-          var attachmentInputs = {
-            identity: document.getElementById('customer_identity_attachment'),
-            signature: document.getElementById('customer_signature_attachment'),
-            salary_profile: document.getElementById('customer_salary_profile_attachment'),
-            gosi: document.getElementById('customer_gosi_attachment'),
-            tax_exemption: document.getElementById('customer_tax_exemption_attachment'),
-            additional_1: document.getElementById('customer_additional_1_attachment'),
-            additional_2: document.getElementById('customer_additional_2_attachment'),
-            additional_3: document.getElementById('customer_additional_3_attachment')
-          };
-          var attachmentPreviewIds = {
-            identity: 'customer_identity_attachment_preview',
-            signature: 'customer_signature_attachment_preview',
-            salary_profile: 'customer_salary_profile_attachment_preview',
-            gosi: 'customer_gosi_attachment_preview',
-            tax_exemption: 'customer_tax_exemption_attachment_preview',
-            additional_1: 'customer_additional_1_attachment_preview',
-            additional_2: 'customer_additional_2_attachment_preview',
-            additional_3: 'customer_additional_3_attachment_preview'
-          };
-          var attachmentHiddenIds = {
-            identity: 'customer_identity_attachment_url',
-            signature: 'customer_signature_attachment_url',
-            salary_profile: 'customer_salary_profile_attachment_url',
-            gosi: 'customer_gosi_attachment_url',
-            tax_exemption: 'customer_tax_exemption_attachment_url',
-            additional_1: 'customer_additional_1_attachment_url',
-            additional_2: 'customer_additional_2_attachment_url',
-            additional_3: 'customer_additional_3_attachment_url'
-          };
 
           function escapeHtmlMsg(s) {
             return String(s == null ? '' : s)
@@ -15281,49 +16431,6 @@ app.get('/admin/customers/add', async (c) => {
             setMessage('error', msg);
           }
 
-          function handleAttachmentSelect(type) {
-            var input = attachmentInputs[type];
-            var preview = document.getElementById(attachmentPreviewIds[type]);
-            if (!input || !preview) return;
-            var file = input.files && input.files[0] ? input.files[0] : null;
-            if (!file) {
-              attachmentFiles[type] = null;
-              preview.innerHTML = '';
-              return;
-            }
-            if (file.size > 2 * 1024 * 1024) {
-              input.value = '';
-              attachmentFiles[type] = null;
-              preview.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>';
-              return;
-            }
-            attachmentFiles[type] = file;
-            preview.innerHTML = '<div class="text-sm text-green-600"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' +
-              file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</div>';
-          }
-
-          Object.keys(attachmentInputs).forEach(function(type) {
-            var input = attachmentInputs[type];
-            if (!input) return;
-            input.addEventListener('change', function() { handleAttachmentSelect(type); });
-          });
-
-          async function uploadAttachment(file, attachmentType) {
-            var uploadData = new FormData();
-            uploadData.append('file', file);
-            uploadData.append('attachmentType', attachmentType);
-            const response = await fetch('/api/attachments/upload', {
-              method: 'POST',
-              body: uploadData,
-              credentials: 'include'
-            });
-            const payload = await response.json();
-            if (!response.ok || !payload.success || !payload.url) {
-              throw new Error(payload.error || 'فشل رفع المرفق');
-            }
-            return payload.url;
-          }
-
           (function jobTypeToggle() {
             var jobType = document.getElementById('job_type');
             var civilianWrap = document.getElementById('job_title_civilian_wrap');
@@ -15370,45 +16477,17 @@ app.get('/admin/customers/add', async (c) => {
             addRow();
           })();
 
-          (function obligationsTable() {
-            var tbody = document.getElementById('add-obligations-tbody');
-            var addBtn = document.getElementById('add-obligation-row');
-            var hidden = document.getElementById('obligations_json');
-            if (!tbody || !addBtn || !hidden) return;
-            var obligationTypeNames = ${JSON.stringify(obligationTypeNames)};
-            function esc(s) {
-              return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-            }
-            function buildObligTypeSelect(selectedValue) {
-              var sel = selectedValue == null ? '' : String(selectedValue);
-              var opts = '<option value="">— اختر نوع الالتزام —</option>';
-              for (var i = 0; i < obligationTypeNames.length; i++) {
-                var name = obligationTypeNames[i];
-                opts += '<option value="' + esc(name) + '"' + (sel === name ? ' selected' : '') + '>' + esc(name) + '</option>';
-              }
-              if (sel && obligationTypeNames.indexOf(sel) === -1) {
-                opts += '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>';
-              }
-              return '<select class="oblig-type w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>';
-            }
-            function addRow(data) {
-              data = data || {};
-              var tr = document.createElement('tr');
-              tr.className = 'border-b border-gray-200';
-              tr.innerHTML = '<td class="py-1 px-2">' + buildObligTypeSelect(data.obligation_type || '') + '</td>' +
-                '<td class="py-1 px-2"><input type="number" class="oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
-                '<td class="py-1 px-2"><input type="number" class="oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0" placeholder="0"></td>' +
-                '<td class="py-1 px-2"><input type="date" class="oblig-due w-full px-2 py-1.5 border rounded" placeholder=""></td>' +
-                '<td class="py-1 px-2"><button type="button" class="oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-              if (data.total_amount != null) tr.querySelector('.oblig-total').value = data.total_amount;
-              if (data.monthly_installment != null) tr.querySelector('.oblig-monthly').value = data.monthly_installment;
-              if (data.due_date) tr.querySelector('.oblig-due').value = data.due_date;
-              tr.querySelector('.oblig-remove').onclick = function() { tr.remove(); };
-              tbody.appendChild(tr);
-            }
-            addBtn.onclick = function() { addRow(); };
-            addRow();
-          })();
+          ${getCustomerObligationsTableInitScript({
+            tbodyId: 'add-obligations-tbody',
+            addBtnId: 'add-obligation-row',
+            typeSelectClass: 'oblig-type',
+            typeCustomInputClass: 'oblig-type-custom',
+            totalClass: 'oblig-total',
+            monthlyClass: 'oblig-monthly',
+            dueClass: 'oblig-due',
+            removeClass: 'oblig-remove',
+            obligationTypeNamesJson: JSON.stringify(obligationTypeNames),
+          })}
 
           form.addEventListener('submit', async function (event) {
             event.preventDefault();
@@ -15440,11 +16519,15 @@ app.get('/admin/customers/add', async (c) => {
                 var typeEl = tr.querySelector('.oblig-type');
                 var totalEl = tr.querySelector('.oblig-total');
                 var monthlyEl = tr.querySelector('.oblig-monthly');
-                var dueEl = tr.querySelector('.oblig-due');
                 if (!typeEl || !totalEl || !monthlyEl) return;
                 var total = parseFloat(totalEl.value) || 0;
                 var monthly = parseFloat(monthlyEl.value) || 0;
-                arr.push({ obligation_type: typeEl.value || '', total_amount: total, monthly_installment: monthly, due_date: dueEl ? (dueEl.value || null) : null });
+                arr.push({
+                  obligation_type: window.collectObligationTypeFromRow(tr, 'oblig-type', 'oblig-type-custom'),
+                  total_amount: total,
+                  monthly_installment: monthly,
+                  due_date: (function () { var el = tr.querySelector('.oblig-due'); return el ? String(el.value || '').trim() || null : null; })()
+                });
               });
               obligationsJsonEl.value = JSON.stringify(arr);
             }
@@ -15463,25 +16546,10 @@ app.get('/admin/customers/add', async (c) => {
             if (submitBtn) submitBtn.disabled = true;
 
             try {
-              var uploadOrder = [
-                { key: 'identity', label: 'ملف الهوية' },
-                { key: 'signature', label: 'ملف السمة' },
-                { key: 'salary_profile', label: 'ملف تعريف الراتب' },
-                { key: 'gosi', label: 'ملف التأمينات الاجتماعية' },
-                { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
-                { key: 'additional_1', label: 'مستند إضافي 1' },
-                { key: 'additional_2', label: 'مستند إضافي 2' },
-                { key: 'additional_3', label: 'مستند إضافي 3' }
-              ];
-              for (var i = 0; i < uploadOrder.length; i++) {
-                var item = uploadOrder[i];
-                var file = attachmentFiles[item.key];
-                var hiddenInput = document.getElementById(attachmentHiddenIds[item.key]);
-                if (!hiddenInput) continue;
-                hiddenInput.value = '';
-                if (!file) continue;
-                setMessage('loading', 'جاري رفع ' + item.label + '...');
-                hiddenInput.value = await uploadAttachment(file, item.key);
+              if (typeof window.uploadDynamicCustomerAttachments === 'function') {
+                await window.uploadDynamicCustomerAttachments({
+                  onProgress: function (msg) { setMessage('loading', msg); }
+                });
               }
             } catch (uploadError) {
               console.error('[CustomerCreate] Attachment upload failed:', uploadError);
@@ -15588,7 +16656,7 @@ app.get('/admin/customer-assignment', async (c) => {
   const employees = await c.env.DB.prepare(`
     SELECT id, username, full_name, email
     FROM users 
-    WHERE role_id IN (3, 4, 13, 14) AND tenant_id = ?
+    WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id = ?
     ORDER BY full_name
   `).bind(tenantId).all();
 
@@ -15615,7 +16683,7 @@ app.get('/admin/customer-assignment', async (c) => {
     FROM users u
     LEFT JOIN customer_assignments ca ON u.id = ca.employee_id
     LEFT JOIN customers c ON ca.customer_id = c.id AND c.tenant_id = ?
-    WHERE u.role_id IN (3, 4, 13, 14) AND u.tenant_id = ?
+    WHERE u.role_id IN (3, 4, 6, 13, 14) AND u.tenant_id = ?
     GROUP BY u.id
     ORDER BY customer_count DESC
   `).bind(tenantId, tenantId).all();
@@ -15914,9 +16982,11 @@ app.get('/admin/customer-assignment', async (c) => {
                         }
                       </td>
                       <td class="px-4 py-3">
-                        <select class="assignment-select px-3 py-1 border border-gray-300 rounded text-sm" 
+                        <select class="assignment-select px-3 py-1 border border-gray-300 rounded text-sm"
                                 data-customer-id="${customer.id}"
-                                onchange="assignCustomer(${customer.id}, this.value)">
+                                data-current-employee-id="${customer.employee_id || ''}"
+                                data-current-employee-name="${escapeHtmlAttr(String(customer.assigned_employee_name || ''))}"
+                                onchange="assignCustomer(${customer.id}, this)">
                           <option value="">اختر موظف...</option>
                           ${employees.results.map((emp: any) => `
                             <option value="${emp.id}" ${customer.employee_id == emp.id ? 'selected' : ''}>
@@ -15930,6 +17000,22 @@ app.get('/admin/customer-assignment', async (c) => {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assignment Change Confirmation Modal -->
+      <div id="assignConfirmModal" style="display:none;" class="fixed inset-0 z-[999] flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/50" onclick="cancelAssignConfirm()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4" dir="rtl">
+          <h3 class="text-lg font-bold text-gray-800 mb-3">
+            <i class="fas fa-user-check text-amber-500 ml-2"></i>
+            تغيير الموظف المخصص
+          </h3>
+          <p class="text-gray-600 mb-5 leading-relaxed" id="assignConfirmMsg"></p>
+          <div class="flex gap-3">
+            <button onclick="confirmAssign()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">تأكيد التغيير</button>
+            <button onclick="cancelAssignConfirm()" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</button>
           </div>
         </div>
       </div>
@@ -16108,33 +17194,68 @@ app.get('/admin/customer-assignment', async (c) => {
           }
         }
 
+        // Confirmation modal helpers
+        let _assignConfirmCallback = null;
+        let _assignConfirmRevert = null;
+        function showAssignConfirmModal(oldName, newName, onConfirm, onCancel) {
+          const modal = document.getElementById('assignConfirmModal');
+          const msg = document.getElementById('assignConfirmMsg');
+          if (!modal || !msg) { onConfirm(); return; }
+          msg.innerHTML = 'سيتم تغيير الموظف المخصص من <strong>' + oldName + '</strong> إلى <strong>' + (newName || 'غير مخصص') + '</strong>';
+          _assignConfirmCallback = onConfirm;
+          _assignConfirmRevert = onCancel || null;
+          modal.style.display = 'flex';
+        }
+        function confirmAssign() {
+          const modal = document.getElementById('assignConfirmModal');
+          if (modal) modal.style.display = 'none';
+          const cb = _assignConfirmCallback;
+          _assignConfirmCallback = null; _assignConfirmRevert = null;
+          if (cb) cb();
+        }
+        function cancelAssignConfirm() {
+          const modal = document.getElementById('assignConfirmModal');
+          if (modal) modal.style.display = 'none';
+          const rv = _assignConfirmRevert;
+          _assignConfirmCallback = null; _assignConfirmRevert = null;
+          if (rv) rv();
+        }
+
         // Assign single customer
-        async function assignCustomer(customerId, employeeId) {
-          if (!employeeId) {
-            if (!confirm('هل تريد إلغاء تخصيص هذا العميل؟')) return;
-          }
-          
-          try {
-            const response = await fetch('/api/customer-assignment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                customer_id: customerId, 
-                employee_id: employeeId || null,
-                notes: ''
-              })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-              alert('تم التخصيص بنجاح!');
-              location.reload();
-            } else {
-              alert('حدث خطأ: ' + (data.error || 'خطأ غير معروف'));
+        async function assignCustomer(customerId, selectEl) {
+          const employeeId = selectEl.value;
+          const prevEmployeeId = selectEl.dataset.currentEmployeeId || '';
+          const prevEmployeeName = selectEl.dataset.currentEmployeeName || '';
+
+          async function doAssign() {
+            try {
+              const response = await fetch('/api/customer-assignment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_id: customerId, employee_id: employeeId || null, notes: '' })
+              });
+              const data = await response.json();
+              if (data.success) {
+                alert('تم التخصيص بنجاح!');
+                location.reload();
+              } else {
+                alert('حدث خطأ: ' + (data.error || 'خطأ غير معروف'));
+                selectEl.value = prevEmployeeId;
+              }
+            } catch (error) {
+              alert('حدث خطأ: ' + error.message);
+              selectEl.value = prevEmployeeId;
             }
-          } catch (error) {
-            alert('حدث خطأ: ' + error.message);
           }
+
+          if (prevEmployeeId) {
+            const newOpt = selectEl.options[selectEl.selectedIndex];
+            const newName = employeeId ? (newOpt ? newOpt.text.trim() : '') : 'غير مخصص';
+            showAssignConfirmModal(prevEmployeeName, newName, doAssign, () => { selectEl.value = prevEmployeeId; });
+            return;
+          }
+
+          await doAssign();
         }
 
         // Auto-assign unassigned customers (fair round-robin among role-4 staff; cursor independent of manual assignments)
@@ -16308,7 +17429,7 @@ app.post('/api/customer-assignment', async (c) => {
       .bind(employee_id)
       .first()
     if (!employee) return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
-    const empRole = normalizeRoleId(employee.role_id); if (empRole !== 3 && empRole !== 4) return c.json({ success: false, error: 'المستخدم المحدد ليس موظفًا' }, 400)
+    const empRole = normalizeRoleId(employee.role_id); if (empRole !== 3 && empRole !== 4 && empRole !== 6) return c.json({ success: false, error: 'المستخدم المحدد ليس موظفًا' }, 400)
     if (!isSuperAdmin && employee.tenant_id !== tenantId) return c.json({ success: false, error: 'غير مصرح' }, 403)
 
     const customer = await c.env.DB.prepare(`SELECT id, tenant_id FROM customers WHERE id = ?`)
@@ -16793,6 +17914,7 @@ app.get('/admin/rates', async (c) => {
         <title>النسب والأسعار ${tenantInfo ? '- ' + tenantInfo.company_name : ''}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
         <style>
           /* Custom Scrollbar - Enhanced */
           .overflow-x-auto {
@@ -17157,7 +18279,7 @@ app.get('/admin/rates', async (c) => {
                 const downloadUrl = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = downloadUrl;
-                link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
+                link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.xls';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -17174,6 +18296,87 @@ app.get('/admin/rates', async (c) => {
           let excelData = null;
           let banksMap = {};
           let typesMap = {};
+
+          function normalizeCsvCell(v) {
+            return String(v || '')
+              .replace(/^\uFEFF/, '')
+              .replace(/\u200F/g, '')
+              .trim();
+          }
+
+          function decodeXmlEntities(s) {
+            return String(s || '')
+              .replace(/&quot;/g, '"')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&amp;/g, '&');
+          }
+
+          function parseSpreadsheetML(xml) {
+            const rows = [];
+            const rowRe = /<Row[^>]*>([\\s\\S]*?)<\\/Row>/gi;
+            let rowMatch;
+            while ((rowMatch = rowRe.exec(xml))) {
+              const cells = [];
+              const dataRe = /<Data[^>]*>([\\s\\S]*?)<\\/Data>/gi;
+              let dataMatch;
+              while ((dataMatch = dataRe.exec(rowMatch[1]))) {
+                cells.push(decodeXmlEntities(dataMatch[1].trim()));
+              }
+              if (cells.some((c) => String(c || '').trim() !== '')) rows.push(cells);
+            }
+            return rows;
+          }
+
+          function parseDelimitedText(text, delimiter) {
+            const rows = [];
+            let row = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+              const ch = text[i];
+              const next = text[i + 1];
+              if (ch === '"') {
+                if (inQuotes && next === '"') { cur += '"'; i++; continue; }
+                inQuotes = !inQuotes;
+                continue;
+              }
+              if (!inQuotes && ch === delimiter) { row.push(cur); cur = ''; continue; }
+              if (!inQuotes && (ch === '\\n' || ch === '\\r')) {
+                if (ch === '\\r' && next === '\\n') i++;
+                row.push(cur); cur = '';
+                if (row.some((c) => String(c || '').trim() !== '')) rows.push(row);
+                row = [];
+                continue;
+              }
+              cur += ch;
+            }
+            row.push(cur);
+            if (row.some((c) => String(c || '').trim() !== '')) rows.push(row);
+            return rows;
+          }
+
+          function parseCsvText(text) {
+            const s = String(text || '')
+              .replace(/^\uFEFF/, '')
+              .replace(/^sep=(?:,|;|\\t)\\s*[\\r\\n]+/i, '');
+            const firstLine = s.split(/\\r?\\n/).find((l) => l.trim()) || '';
+            const delim = (firstLine.split('\\t').length > firstLine.split(',').length) ? '\\t' : ',';
+            return parseDelimitedText(s, delim);
+          }
+
+          function decodeDelimitedArrayBuffer(buf) {
+            const bytes = new Uint8Array(buf);
+            let text = '';
+            if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+              text = new TextDecoder('utf-16le').decode(bytes.subarray(2));
+            } else if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+              text = new TextDecoder('utf-8').decode(bytes.subarray(3));
+            } else {
+              text = new TextDecoder('utf-8').decode(bytes);
+            }
+            return parseCsvText(text);
+          }
 
           // Load banks and types for mapping
           async function loadMappings() {
@@ -17254,42 +18457,31 @@ app.get('/admin/rates', async (c) => {
                 let jsonData;
                 
                 if (file.name.match(/\\.csv$/i)) {
-                  // Handle CSV file — strip BOM + sep= line exported for Excel (Arabic locale list separator)
-                  let text = String(e.target.result || '').replace(/^\uFEFF/, '');
-                  let lines = text.split(/\\r?\\n/).filter(function (line) { return line.trim(); });
-                  if (lines.length > 0 && /^sep=(?:,|;|\\t)\\s*$/.test(lines[0].trim())) {
-                    lines = lines.slice(1);
+                  jsonData = decodeDelimitedArrayBuffer(e.target.result);
+                } else if (file.name.match(/\\.xls$/i) && !file.name.match(/\\.xlsx$/i)) {
+                  const raw = e.target.result;
+                  const text = typeof raw === 'string'
+                    ? raw
+                    : new TextDecoder('utf-8').decode(new Uint8Array(raw));
+                  if (text.indexOf('schemas-microsoft-com:office:spreadsheet') !== -1) {
+                    jsonData = parseSpreadsheetML(text);
+                  } else {
+                    const workbook = XLSX.read(new Uint8Array(raw), { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                   }
-                  if (lines.length < 2) {
-                    alert('الملف فارغ أو لا يحتوي على بيانات');
-                    clearFile();
-                    return;
-                  }
-                  jsonData = lines.map(line => {
-                    // Handle CSV parsing with quotes
-                    const result = [];
-                    let current = '';
-                    let inQuotes = false;
-                    for (let i = 0; i < line.length; i++) {
-                      const char = line[i];
-                      if (char === '"') {
-                        inQuotes = !inQuotes;
-                      } else if (char === ',' && !inQuotes) {
-                        result.push(current.trim());
-                        current = '';
-                      } else {
-                        current += char;
-                      }
-                    }
-                    result.push(current.trim());
-                    return result;
-                  });
                 } else {
-                  // Handle Excel file
                   const data = new Uint8Array(e.target.result);
                   const workbook = XLSX.read(data, { type: 'array' });
                   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                   jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                }
+
+                if (jsonData.length > 0) {
+                  jsonData[0] = jsonData[0].map(normalizeCsvCell);
+                  for (let ri = 1; ri < jsonData.length; ri++) {
+                    jsonData[ri] = jsonData[ri].map(normalizeCsvCell);
+                  }
                 }
                 
                 if (jsonData.length < 2) {
@@ -17307,8 +18499,7 @@ app.get('/admin/rates', async (c) => {
               }
             };
             
-            // Read file based on type
-            if (file.name.match(/\\.csv$/i)) {
+            if (file.name.match(/\\.xls$/i) && !file.name.match(/\\.xlsx$/i)) {
               reader.readAsText(file, 'UTF-8');
             } else {
               reader.readAsArrayBuffer(file);
@@ -17377,11 +18568,12 @@ app.get('/admin/rates', async (c) => {
               // Column 5: Type (mandatory)
               // Column 6: Bank (mandatory)
               // Column 7: SL number (ignore) - leftmost in RTL
+              const normalizedHeader = headerRow.map((h) => normalizeCsvCell(h).toLowerCase());
+
               const findColumnIndex = (names) => {
                 for (const name of names) {
-                  const index = headerRow.findIndex(h => 
-                    h && h.toString().toLowerCase().includes(name.toLowerCase())
-                  );
+                  const needle = name.toLowerCase();
+                  const index = normalizedHeader.findIndex((h) => h && h.includes(needle));
                   if (index !== -1) return index;
                 }
                 return -1;
@@ -17411,7 +18603,7 @@ app.get('/admin/rates', async (c) => {
 
                 // Map bank name to ID (only match by name, not code or ID)
                 let bankId = null;
-                const bankValue = String(row[bankCol]).trim();
+                const bankValue = normalizeCsvCell(row[bankCol]);
                 // Only use name matching, ignore numeric values (codes/IDs)
                 bankId = banksMap[bankValue.toLowerCase()];
                 
@@ -17427,7 +18619,7 @@ app.get('/admin/rates', async (c) => {
 
                 // Map type name to ID
                 let typeId = null;
-                const typeValue = String(row[typeCol]).trim();
+                const typeValue = normalizeCsvCell(row[typeCol]);
                 typeId = typesMap[typeValue.toLowerCase()];
                 
                 if (!typeId) {
@@ -17473,14 +18665,18 @@ app.get('/admin/rates', async (c) => {
 
               progressText.textContent = 'جاري رفع البيانات...';
 
-              // Upload to server
-              const response = await fetch('/api/rates/upload-excel', {
+              const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+              const importHeaders = { 'Content-Type': 'application/json' };
+              if (lsToken) importHeaders['Authorization'] = 'Bearer ' + lsToken;
+
+              const response = await fetch('/api/rates/import-csv', {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || localStorage.getItem('token'))
-                },
-                body: JSON.stringify({ rates: ratesToUpload })
+                credentials: 'same-origin',
+                headers: importHeaders,
+                body: JSON.stringify({
+                  tenant_id: tenantId ? parseInt(tenantId, 10) : null,
+                  rates: ratesToUpload
+                })
               });
 
               const result = await response.json();
@@ -17608,6 +18804,8 @@ app.get('/admin/customers', async (c) => {
       roleId: userInfo.roleId
     });
     
+    const customersRoleEffective = normalizeRoleId(userInfo.roleId)
+
     // Redirect to login if not authenticated
     if (!userInfo.userId || !userInfo.roleId) {
       return c.html(`
@@ -17646,6 +18844,18 @@ app.get('/admin/customers', async (c) => {
         </html>
       `);
     }
+
+    // Role 4 / 6 (employee column): default to customers without financing requests unless explicitly overridden in the URL.
+    if ((customersRoleEffective === 4 || customersRoleEffective === 6) && c.req.query('requestsFilter') === undefined) {
+      const params = new URLSearchParams()
+      const rating = c.req.query('ratingFilter')
+      if (rating != null && String(rating).trim() !== '') {
+        params.set('ratingFilter', String(rating))
+      }
+      params.set('requestsFilter', '0')
+      const qs = params.toString()
+      return c.redirect('/admin/customers' + (qs ? '?' + qs : ''))
+    }
     
     // Ensure is_completed column exists (safe no-op if already present)
     try { await c.env.DB.prepare(`ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`).run() } catch (_) {}
@@ -17653,6 +18863,7 @@ app.get('/admin/customers', async (c) => {
     // Build query based on role — always exclude archived and completed customers
     let query = `
       SELECT customers.*, u.full_name AS assigned_employee_name,
+        ca.employee_id AS assigned_employee_id,
         tl.name AS enrollment_location_name,
         COALESCE(
           (
@@ -17679,7 +18890,7 @@ app.get('/admin/customers', async (c) => {
             SELECT CASE
               WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
                 THEN frx.assigned_bank_agent_id
-              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
                 THEN frx.created_by
               ELSE NULL
             END
@@ -17698,7 +18909,7 @@ app.get('/admin/customers', async (c) => {
               SELECT CASE
                 WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
                   THEN frx.assigned_bank_agent_id
-                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15)
+                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
                   THEN frx.created_by
                 ELSE NULL
               END
@@ -17713,7 +18924,7 @@ app.get('/admin/customers', async (c) => {
         ) AS assigned_bank_agent_name
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
-      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 14)
+      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 6, 14)
       LEFT JOIN tenant_locations tl ON customers.location_id = tl.id
       WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)
         AND (customers.is_completed IS NULL OR customers.is_completed = 0)`;
@@ -17736,6 +18947,25 @@ app.get('/admin/customers', async (c) => {
           WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?
         )`;
         queryParams.push(userInfo.tenantId, userInfo.userId);
+      } else {
+        query += ' AND 1 = 0';
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca2
+            WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?
+          )
+          OR customers.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1
+            FROM financing_requests fr
+            WHERE fr.customer_id = customers.id
+              AND fr.assigned_bank_agent_id = ?
+          )
+        )`;
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId);
       } else {
         query += ' AND 1 = 0';
       }
@@ -17796,6 +19026,29 @@ app.get('/admin/customers', async (c) => {
       }
     }
 
+    // === CUSTOMER ALARM GLOW (table dot) — attach per-customer unread count for THIS user ===
+    // Drives the red glowing dot rendered next to each customer's name in the table below.
+    // The row template at line ~18978 emits data-unread-alarms="${customer.unread_alarm_count || 0}"
+    // and the inline script before </body> (~line 20208) paints the dot from that value.
+    // Per-user isolation: filtered by user_id so alarms NEVER leak to the wrong user.
+    if (userInfo.userId && customers.results.length > 0) {
+      try {
+        const alarmRows = await c.env.DB
+          .prepare(`SELECT customer_id, COUNT(*) AS cnt FROM customer_alarms
+                    WHERE user_id = ? AND is_read = 0 AND customer_id IS NOT NULL
+                    GROUP BY customer_id`)
+          .bind(userInfo.userId)
+          .all<{ customer_id: number; cnt: number }>()
+        const countByCustomer: Record<string, number> = {}
+        for (const row of alarmRows.results || []) {
+          countByCustomer[String(row.customer_id)] = Number(row.cnt) || 0
+        }
+        for (const r of customers.results) {
+          r.unread_alarm_count = countByCustomer[String(r.id)] || 0
+        }
+      } catch (_) { /* table may be missing in legacy DBs */ }
+    }
+
     // Fetch customer IDs that have at least one financing request, plus their latest request ID
     let reqQuery = 'SELECT customer_id, MAX(id) AS latest_request_id FROM financing_requests WHERE 1=1';
     const reqParams: any[] = [];
@@ -17852,11 +19105,22 @@ app.get('/admin/customers', async (c) => {
     // Determine if user can edit/delete (not for Role 3 - Supervisor)
     const canEdit = userInfo.roleId !== 3;
     const canReviewCustomers = true
+    const showWorkflowNoteShortcut = canAddWorkflowNote(userInfo.roleId)
 
     // Customer auto-assign is now automatic on calculator intake,
     // so we remove the button from the customers list page UI.
     const showCustomerAutoAssignButton = false
-    const defaultRequestsFilterValue = userInfo.roleId === 4 ? '0' : 'all'
+    const defaultRequestsFilterValue = (customersRoleEffective === 4 || customersRoleEffective === 6) ? '0' : 'all'
+
+    const role2InlineAssign = canInlineAssignCustomers(userInfo.roleId)
+    let role2Employees: any[] = []
+    if (role2InlineAssign && userInfo.tenantId) {
+      const empRes = await c.env.DB.prepare(
+        `SELECT id, full_name, username FROM users WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id = ? ORDER BY full_name`
+      ).bind(userInfo.tenantId).all()
+      role2Employees = empRes.results as any[]
+    }
+    const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
     return c.html(`
       <!DOCTYPE html>
@@ -17899,6 +19163,7 @@ app.get('/admin/customers', async (c) => {
           .alarm-unread-dot { display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:50%; animation:pulse-glow 1.5s infinite; position:absolute; top:-3px; left:-3px; }
           .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
           .modal-backdrop.hidden { display:none; }
+          ${LIST_ATTACHMENTS_MODAL_STYLES}
           #notifPanel { position:fixed; top:0; left:0; bottom:0; width:400px; max-width:95vw; background:#fff; box-shadow:4px 0 30px rgba(0,0,0,.15); z-index:1100; display:flex; flex-direction:column; transform:translateX(-100%); transition:transform .3s ease; }
           #notifPanel.open { transform:translateX(0); }
           #notifPanelOverlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:1099; display:none; }
@@ -18108,7 +19373,7 @@ app.get('/admin/customers', async (c) => {
                           : enrollmentSourceLabel
                   const enrollmentSourceDataEsc = String(enrollmentSourceSearch || '').replace(/"/g, '&quot;')
                   return `
-                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-source="${enrollmentSourceDataEsc}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-bank-agent="${bankAgentDataEsc}" data-created-at="${customer.created_at || ''}" data-has-request="${hasFr ? '1' : '0'}" data-rating="0">
+                  <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-unread-alarms="${Number(customer.unread_alarm_count) || 0}" data-customer-name="${(customer.full_name || '').replace(/"/g, '&quot;')}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-source="${enrollmentSourceDataEsc}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-bank-agent="${bankAgentDataEsc}" data-created-at="${customer.created_at || ''}" data-has-request="${hasFr ? '1' : '0'}" data-rating="0" data-attachments="${customerAttachmentsDataAttr(customer as Record<string, unknown>)}">
                     <td class="px-3 py-3 whitespace-nowrap text-right align-middle">
                       <button type="button"
                               data-actions-target="actions-customer-${customer.id}"
@@ -18130,6 +19395,11 @@ app.get('/admin/customers', async (c) => {
                         <a href="/admin/customers/${customer.id}/workflow#customer" class="actions-dropdown-item" style="color:#4338ca;">
                           <i class="fas fa-clock"></i> الجدول الزمني
                         </a>
+                        ${showWorkflowNoteShortcut ? `
+                        <a href="/admin/customers/${customer.id}/workflow#customer-add-note" class="actions-dropdown-item" style="color:#d97706;">
+                          <i class="fas fa-sticky-note"></i> إضافة ملاحظة
+                        </a>
+                        ` : ''}
                         <a href="/admin/customers/${customer.id}" class="actions-dropdown-item" style="color:#1d4ed8;">
                           <i class="fas fa-eye"></i> عرض
                         </a>
@@ -18137,6 +19407,14 @@ app.get('/admin/customers', async (c) => {
                           <i class="fas fa-file-invoice"></i> طلب تمويل جديد
                         </button>
                         ${canEdit ? `
+                        <button type="button"
+                                onclick="openListAttachmentsFromRow(this, null)"
+                                data-customer-id="${customer.id}"
+                                data-customer-name="${escapeHtmlAttr(String(customer.full_name || ''))}"
+                                data-attachments="${customerAttachmentsDataAttr(customer as Record<string, unknown>)}"
+                                class="actions-dropdown-item" style="color:#0369a1;">
+                          <i class="fas fa-paperclip"></i> المرفقات
+                        </button>
                         <div class="actions-dropdown-divider"></div>
                         <a href="/admin/customers/${customer.id}/edit" class="actions-dropdown-item" style="color:#a16207;">
                           <i class="fas fa-edit"></i> تعديل
@@ -18145,13 +19423,13 @@ app.get('/admin/customers', async (c) => {
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${customer.full_name || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="inline-flex items-center gap-2"><span class="customer-alarm-slot" data-customer-id="${customer.id}"></span><span>${customer.full_name || '-'}</span></span></td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="inline-flex items-center gap-2">
                         <span dir="ltr">${customerPhoneInputValue(customer.phone) || '-'}</span>
                         <button
                           type="button"
-                          onclick="openCustomerWhatsApp('${String(customer.whatsapp_phone || customer.whatsapp_phone_number || '').replace(/'/g, "\\'")}', '${String(customer.phone || '').replace(/'/g, "\\'")}')"
+                          onclick="openCustomerWhatsApp('${String(customer.whatsapp_phone || customer.whatsapp_phone_number || '').replace(/'/g, "\\'")}', '${String(customer.phone || '').replace(/'/g, "\\'")}', '${String(customer.full_name || '').replace(/'/g, "\\'")}')"
                           class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
                           title="فتح واتساب"
                         >
@@ -18175,9 +19453,14 @@ app.get('/admin/customers', async (c) => {
                       ${customer.enrollment_location_name ? escapeHtml(String(customer.enrollment_location_name)) : '<span class="text-gray-400">—</span>'}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      ${customer.assigned_employee_name
-                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${customer.assigned_employee_name}</span></span>`
-                        : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>`
+                      ${role2InlineAssign
+                        ? `<select class="role2-assign-select text-xs border border-gray-300 rounded px-2 py-1" style="max-width:160px;" data-customer-id="${customer.id}" data-current-employee-id="${customer.assigned_employee_id != null ? customer.assigned_employee_id : ''}" data-current-employee-name="${escapeHtmlAttr(String(customer.assigned_employee_name || ''))}" onchange="inlineAssignCustomer(${customer.id}, this)">
+                             <option value="">— غير مخصص —</option>
+                             ${role2Employees.map((emp: any) => `<option value="${emp.id}" ${customer.assigned_employee_id != null && Number(customer.assigned_employee_id) === Number(emp.id) ? 'selected' : ''}>${escapeHtml(String(emp.full_name || emp.username || ''))}</option>`).join('')}
+                           </select>`
+                        : customer.assigned_employee_name
+                          ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${customer.assigned_employee_name}</span></span>`
+                          : `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">غير مخصص</span>`
                       }
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(customer.created_at).toLocaleDateString('ar-SA')}</td>
@@ -18322,10 +19605,21 @@ app.get('/admin/customers', async (c) => {
               <button onclick="closeNotifPanel()" class="text-white hover:text-orange-100 text-2xl leading-none">&times;</button>
             </div>
           </div>
+          <div class="px-4 py-2 border-b bg-gray-50 flex items-center gap-2 flex-shrink-0">
+            <label class="text-xs text-gray-500 font-medium whitespace-nowrap">تصفية:</label>
+            <select id="notifFilter" onchange="loadAlarms()" class="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-orange-300 text-right">
+              <option value="all">الكل</option>
+              <option value="scheduled">التنبيهات المجدولة</option>
+              <option value="workflow">تنبيهات سير العمل</option>
+              <option value="reminder">تذكيرات التقييم</option>
+            </select>
+          </div>
           <div id="notifList" class="flex-1 overflow-y-auto p-4 space-y-3">
             <div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>
           </div>
         </div>
+
+        ${renderListAttachmentsModalHtml()}
 
         <!-- Toast -->
         <div id="toastMsg" class="fixed bottom-6 right-6 z-[2000] hidden">
@@ -18357,6 +19651,8 @@ app.get('/admin/customers', async (c) => {
 
         <script>
           ${actionsDropdownScript}
+          ${getDynamicCustomerAttachmentsScript()}
+          ${getListAttachmentsModalScript()}
 
           const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
           const DEFAULT_REQUESTS_FILTER = ${JSON.stringify(defaultRequestsFilterValue)};
@@ -18590,27 +19886,70 @@ app.get('/admin/customers', async (c) => {
             try {
               const resp = await fetch('/api/customer-alarms');
               const data = await resp.json();
-              if (!data.success || !data.data.length) {
+              if (!data.success) {
+                list.innerHTML = '<div class="text-center text-red-400 py-10"><i class="fas fa-exclamation-circle text-3xl mb-2"></i><p class="text-sm">فشل تحميل التنبيهات</p></div>';
+                return;
+              }
+              const filter = document.getElementById('notifFilter')?.value || 'all';
+              let alarms = data.data || [];
+              if (filter === 'scheduled') alarms = alarms.filter(a => !a.alarm_type || (a.alarm_type !== 'workflow' && a.alarm_type !== 'reminder'));
+              else if (filter === 'workflow') alarms = alarms.filter(a => a.alarm_type === 'workflow');
+              else if (filter === 'reminder') alarms = alarms.filter(a => a.alarm_type === 'reminder');
+              if (!alarms.length) {
                 list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
                 return;
               }
-              list.innerHTML = data.data.map(a => {
+              list.innerHTML = alarms.map(a => {
                 const isUnread = !a.is_read;
-                const dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
-                const timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                const isWorkflow = a.alarm_type === 'workflow';
+                const isReminder = a.alarm_type === 'reminder';
+                let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
+                if (!dateStr && a.created_at) {
+                  try {
+                    const d = new Date(a.created_at);
+                    dateStr = d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric', calendar: 'gregory' });
+                  } catch(e) {}
+                }
+                let timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                if (!timeStr && a.created_at) {
+                  try {
+                    timeStr = ' — ' + new Date(a.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
+                  } catch(e) {}
+                }
                 const cid = a.customer_id;
-                const customerHref = (cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#';
-                return \`<div id="alarm-\${a.id}" class="rounded-xl border \${isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'} shadow-sm transition-all flex items-stretch overflow-hidden">
-                  <a href="\${customerHref}" title="بيانات العميل"
+                const customerHref = isWorkflow ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
+                const borderClass = isWorkflow
+                  ? (isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white')
+                  : isReminder
+                    ? (isUnread ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white')
+                    : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
+                const sideBgClass = isWorkflow
+                  ? (isUnread ? 'bg-blue-50/80' : 'bg-gray-50/80')
+                  : isReminder
+                    ? (isUnread ? 'bg-green-50/80' : 'bg-gray-50/80')
+                    : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
+                const dotColor = isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
+                const icon = isWorkflow
+                  ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>'
+                  : isReminder
+                    ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'
+                    : '';
+                const clockColor = isWorkflow ? 'text-blue-400' : isReminder ? 'text-green-400' : 'text-orange-400';
+                const nameColor = isWorkflow ? 'text-blue-800' : isReminder ? 'text-green-800' : 'text-gray-800';
+                const noteColor = isWorkflow ? 'text-blue-700' : isReminder ? 'text-green-700' : 'text-gray-600';
+                const linkTitle = isWorkflow ? 'سير العمل' : 'بيانات العميل';
+                return \`<div id="alarm-\${a.id}" class="rounded-xl border \${borderClass} shadow-sm transition-all flex items-stretch overflow-hidden">
+                  <a href="\${customerHref}" title="\${linkTitle}"
                      class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded-s-xl">
                     <div class="flex items-center gap-2 mb-1">
-                      \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
-                      <p class="font-bold text-gray-800 text-sm truncate">\${a.customer_name}</p>
+                      \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full ' + dotColor + ' flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
+                      \${icon}
+                      <p class="font-bold \${nameColor} text-sm truncate">\${a.customer_name}</p>
                     </div>
-                    \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-calendar-alt text-orange-400 ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
-                    \${a.note ? \`<p class="text-sm text-gray-600 mt-1 line-clamp-3">\${a.note}</p>\` : ''}
+                    \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock \${clockColor} ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
+                    \${a.note ? \`<p class="text-sm \${noteColor} mt-1 line-clamp-4 whitespace-pre-line">\${a.note}</p>\` : ''}
                   </a>
-                  <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80'}">
+                  <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${sideBgClass}">
                     \${isUnread ? \`<button type="button" onclick="markAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
                     <button type="button" onclick="deleteAlarm(\${a.id})" title="حذف" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center transition-colors"><i class="fas fa-trash text-xs"></i></button>
                   </div>
@@ -18625,9 +19964,9 @@ app.get('/admin/customers', async (c) => {
             await fetch('/api/customer-alarms/' + id + '/read', { method: 'PUT' });
             const el = document.getElementById('alarm-' + id);
             if (el) {
-              el.classList.remove('border-orange-300','bg-orange-50');
+              el.classList.remove('border-orange-300','bg-orange-50','border-blue-300','bg-blue-50','border-green-300','bg-green-50');
               el.classList.add('border-gray-200','bg-white');
-              const dot = el.querySelector('.rounded-full.bg-red-500');
+              const dot = el.querySelector('.bg-red-500,.bg-blue-500,.bg-green-500');
               if (dot) dot.remove();
               const readBtn = el.querySelector('button[onclick^="markAlarmRead"]');
               if (readBtn) readBtn.remove();
@@ -18689,14 +20028,19 @@ app.get('/admin/customers', async (c) => {
             return '';
           }
 
-          function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+          ${buildWaGreetingClientScript(waSettings.greeting, waSettings.companyName)}
+
+          function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
             const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
             if (!normalizedPhone) {
               alert('لا يوجد رقم واتساب صالح لهذا العميل');
               return;
             }
 
-            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+            let url = 'https://wa.me/' + normalizedPhone;
+            const msg = applyWaGreetingTemplate(customerName || '');
+            if (msg) url += '?text=' + encodeURIComponent(msg);
+            window.open(url, '_blank', 'noopener,noreferrer');
           }
 
           // Pagination + edge-scroll (Customers list page)
@@ -19026,7 +20370,7 @@ app.get('/admin/customers', async (c) => {
                 if (presetRequestsFilter && allowedReq.indexOf(presetRequestsFilter) !== -1) {
                   requestsFilterEl.value = presetRequestsFilter;
                 } else {
-                  requestsFilterEl.value = 'all';
+                  requestsFilterEl.value = DEFAULT_REQUESTS_FILTER;
                 }
               }
             } else if (presetRequestsFilter && requestsFilterEl && allowedReq.indexOf(presetRequestsFilter) !== -1) {
@@ -19061,17 +20405,14 @@ app.get('/admin/customers', async (c) => {
             if (wrap && menu && !wrap.contains(e.target)) menu.classList.add('hidden');
           });
 
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           function exportToCSV() {
             const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'الرقم الوطني', 'تاريخ التسجيل'];
             const rows = ${customersCsvRowsJson};
             const data = [header, ...rows];
-            let csv = '\\uFEFFsep=,\\r\\n';
-            data.forEach(row => { csv += row.join(',') + '\\n'; });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'العملاء_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            let csv = ${HTML_CSV_PREFIX};
+            data.forEach(row => { csv += row.join('\\t') + '\\r\\n'; });
+            downloadUtf16Csv(csv, 'العملاء_' + new Date().toISOString().split('T')[0] + '.csv');
           }
 
           window.downloadCustomersSampleCSV = function() {
@@ -19182,6 +20523,70 @@ app.get('/admin/customers', async (c) => {
             }
           }
 
+          ${role2InlineAssign ? `
+          let _assignConfirmCallback = null;
+          let _assignConfirmRevert = null;
+          function showAssignConfirmModal(oldName, newName, onConfirm, onCancel) {
+            const modal = document.getElementById('assignConfirmModal');
+            const msg = document.getElementById('assignConfirmMsg');
+            if (!modal || !msg) { onConfirm(); return; }
+            msg.innerHTML = 'سيتم تغيير الموظف المخصص من <strong>' + oldName + '</strong> إلى <strong>' + (newName || 'غير مخصص') + '</strong>';
+            _assignConfirmCallback = onConfirm;
+            _assignConfirmRevert = onCancel || null;
+            modal.style.display = 'flex';
+          }
+          function confirmAssign() {
+            const modal = document.getElementById('assignConfirmModal');
+            if (modal) modal.style.display = 'none';
+            const cb = _assignConfirmCallback;
+            _assignConfirmCallback = null; _assignConfirmRevert = null;
+            if (cb) cb();
+          }
+          function cancelAssignConfirm() {
+            const modal = document.getElementById('assignConfirmModal');
+            if (modal) modal.style.display = 'none';
+            const rv = _assignConfirmRevert;
+            _assignConfirmCallback = null; _assignConfirmRevert = null;
+            if (rv) rv();
+          }
+
+          async function inlineAssignCustomer(customerId, selectEl) {
+            const employeeId = selectEl.value;
+            const prevEmployeeId = selectEl.dataset.currentEmployeeId || '';
+            const prevEmployeeName = selectEl.dataset.currentEmployeeName || '';
+
+            async function doAssign() {
+              try {
+                const resp = await fetch('/api/customer-assignment', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ customer_id: customerId, employee_id: employeeId || null, notes: '' })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'خطأ');
+                selectEl.dataset.currentEmployeeId = employeeId;
+                const empName = employeeId ? (selectEl.options[selectEl.selectedIndex] && selectEl.options[selectEl.selectedIndex].text || '') : '';
+                selectEl.dataset.currentEmployeeName = empName;
+                const row = selectEl.closest('tr');
+                if (row) row.setAttribute('data-assigned', empName);
+                hydrateCustomersRoleFilters();
+              } catch (err) {
+                alert('خطأ في التخصيص: ' + ((err && err.message) || String(err)));
+                selectEl.value = prevEmployeeId;
+              }
+            }
+
+            if (prevEmployeeId) {
+              const newOpt = selectEl.options[selectEl.selectedIndex];
+              const newName = employeeId ? (newOpt ? newOpt.text.trim() : '') : 'غير مخصص';
+              showAssignConfirmModal(prevEmployeeName, newName, doAssign, () => { selectEl.value = prevEmployeeId; });
+              return;
+            }
+
+            await doAssign();
+          }
+          ` : ''}
+
           refreshUnreadDot();
           // Initialize table paging + page-size dropdown on first load
           filterTable();
@@ -19189,6 +20594,188 @@ app.get('/admin/customers', async (c) => {
           loadCustomerRatings();
           applyPresetFiltersFromUrl();
         </script>
+        ${role2InlineAssign ? `
+        <div id="assignConfirmModal" style="display:none;" class="fixed inset-0 z-[999] flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" onclick="cancelAssignConfirm()"></div>
+          <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4" dir="rtl">
+            <h3 class="text-lg font-bold text-gray-800 mb-3">
+              <i class="fas fa-user-check text-amber-500 ml-2"></i>
+              تغيير الموظف المخصص
+            </h3>
+            <p class="text-gray-600 mb-5 leading-relaxed" id="assignConfirmMsg"></p>
+            <div class="flex gap-3">
+              <button onclick="confirmAssign()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">تأكيد التغيير</button>
+              <button onclick="cancelAssignConfirm()" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</button>
+            </div>
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- ===== CUSTOMER ALARM GLOW — popup modal + painter script (live on /admin/customers) ===== -->
+        <style>
+          @keyframes customerAlarmPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.65); }
+            70%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+          }
+          .customer-alarm-dot {
+            display: inline-block;
+            width: 0.7rem;
+            height: 0.7rem;
+            border-radius: 9999px;
+            background: #ef4444;
+            cursor: pointer;
+            animation: customerAlarmPulse 1.5s infinite;
+            flex-shrink: 0;
+            border: 0;
+            padding: 0;
+          }
+          .customer-alarm-dot:hover { transform: scale(1.25); }
+        </style>
+        <div id="customerAlarmsPopup" style="display:none;" class="fixed inset-0 z-[10000] items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" onclick="closeCustomerAlarmsPopup()"></div>
+          <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto" dir="rtl">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-gray-800">
+                <i class="fas fa-bell text-red-500 ml-2"></i>
+                <span id="customerAlarmsPopupTitle">تنبيهات العميل</span>
+              </h3>
+              <button onclick="closeCustomerAlarmsPopup()" class="text-gray-500 hover:text-gray-700 p-2"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="customerAlarmsPopupBody" class="space-y-3"></div>
+          </div>
+        </div>
+        <script>
+          (function(){
+            // Map of customer_id -> array of unread alarm objects, hydrated from /api/customer-alarms
+            window.customerAlarmsByCustomer = window.customerAlarmsByCustomer || {};
+
+            function buildDot(customerId, count) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'customer-alarm-dot';
+              b.title = count + ' تنبيه غير مقروء';
+              b.setAttribute('data-customer-id', String(customerId));
+              b.onclick = function(ev){ ev.stopPropagation(); openCustomerAlarmsPopup(customerId); };
+              return b;
+            }
+
+            window.paintCustomerAlarmDots = function(root) {
+              var scope = root || document;
+              var slots = scope.querySelectorAll('.customer-alarm-slot[data-customer-id]');
+              var painted = 0;
+              slots.forEach(function(slot){
+                var cid = slot.getAttribute('data-customer-id');
+                if (!cid || cid === 'null' || cid === 'undefined') { slot.innerHTML=''; return; }
+                var count = 0;
+                var tr = slot.closest('tr');
+                if (tr) {
+                  var raw = tr.getAttribute('data-unread-alarms');
+                  if (raw != null && raw !== '') count = Number(raw) || 0;
+                }
+                if (!count) {
+                  var list = window.customerAlarmsByCustomer[String(cid)];
+                  if (list && list.length) count = list.length;
+                }
+                slot.innerHTML = '';
+                if (count > 0) { slot.appendChild(buildDot(cid, count)); painted++; }
+              });
+              try { console.log('[alarm-glow] painted', painted, '/', slots.length, 'slots'); } catch(_) {}
+              return painted;
+            };
+
+            window.refreshCustomerAlarmsMap = function() {
+              return fetch('/api/customer-alarms', { credentials: 'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                  var map = {};
+                  if (data && data.success && Array.isArray(data.data)) {
+                    for (var i=0;i<data.data.length;i++){
+                      var a = data.data[i];
+                      if (a.is_read) continue;
+                      var cid = a.customer_id;
+                      if (cid == null || cid === '') continue;
+                      var k = String(cid);
+                      if (!map[k]) map[k] = [];
+                      map[k].push(a);
+                    }
+                  }
+                  window.customerAlarmsByCustomer = map;
+                  window.paintCustomerAlarmDots();
+                  return map;
+                })
+                .catch(function(e){ console.warn('[alarm-glow] refresh failed', e); return window.customerAlarmsByCustomer || {}; });
+            };
+
+            window.openCustomerAlarmsPopup = function(customerId) {
+              var tr = document.querySelector('tr[data-customer-id="'+customerId+'"]');
+              var name = tr ? (tr.getAttribute('data-customer-name') || tr.getAttribute('data-customer') || '') : '';
+              document.getElementById('customerAlarmsPopupTitle').textContent = 'تنبيهات العميل' + (name ? ' — '+name : '');
+              var body = document.getElementById('customerAlarmsPopupBody');
+              body.innerHTML = '<div class="text-gray-500 text-sm">جاري التحميل…</div>';
+              document.getElementById('customerAlarmsPopup').style.display = 'flex';
+              fetch('/api/customer-alarms', { credentials:'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                  var rows = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+                  var mine = rows.filter(function(a){ return !a.is_read && String(a.customer_id) === String(customerId); });
+                  if (!mine.length) { body.innerHTML = '<div class="text-gray-500 text-sm">لا توجد تنبيهات غير مقروءة.</div>'; return; }
+                  body.innerHTML = mine.map(function(a){
+                    var note = (a.note || a.message || '').toString().replace(/[<>&]/g, function(ch){ return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[ch]; });
+                    var when = a.created_at || '';
+                    var isWorkflow = a.alarm_type === 'workflow';
+                    var href = isWorkflow
+                      ? (a.link_url || '#')
+                      : ((a.customer_id != null && a.customer_id !== '') ? '/admin/customers/' + String(a.customer_id) : '#');
+                    var linkTitle = isWorkflow ? 'سير العمل' : 'بيانات العميل';
+                    return '<div class="border border-red-100 bg-red-50 rounded-lg p-3" data-alarm-id="'+a.id+'">'
+                      + '<div class="text-xs text-gray-500 mb-1">'+when+'</div>'
+                      + '<a href="'+href+'" title="'+linkTitle+'" class="block text-sm text-gray-800 whitespace-pre-line no-underline hover:bg-red-100/60 rounded p-1 -m-1 cursor-pointer">'+note+'</a>'
+                      + '<div class="flex gap-2 mt-2">'
+                      + '<button onclick="markCustomerAlarmRead('+a.id+', this)" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded">تمييز كمقروء</button>'
+                      + '</div>'
+                      + '</div>';
+                  }).join('');
+                });
+            };
+
+            window.closeCustomerAlarmsPopup = function() {
+              document.getElementById('customerAlarmsPopup').style.display = 'none';
+            };
+
+            window.markCustomerAlarmRead = function(alarmId, btn) {
+              if (btn) { btn.disabled = true; btn.textContent = '...'; }
+              fetch('/api/customer-alarms/'+alarmId+'/read', { method:'PUT', credentials:'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(){
+                  // Remove the entry from popup
+                  var card = btn ? btn.closest('[data-alarm-id]') : null;
+                  if (card) card.remove();
+                  // Decrement data-unread-alarms on the matching <tr> and repaint
+                  var popupTitle = document.getElementById('customerAlarmsPopupTitle').textContent || '';
+                  // Find which customer this alarm belongs to by walking the map
+                  var map = window.customerAlarmsByCustomer || {};
+                  Object.keys(map).forEach(function(cid){
+                    map[cid] = (map[cid]||[]).filter(function(a){ return Number(a.id) !== Number(alarmId); });
+                    var tr = document.querySelector('tr[data-customer-id="'+cid+'"]');
+                    if (tr) {
+                      var cur = Number(tr.getAttribute('data-unread-alarms')) || 0;
+                      tr.setAttribute('data-unread-alarms', String(Math.max(0, cur - 0))); // placeholder; real refresh below
+                    }
+                  });
+                  window.refreshCustomerAlarmsMap();
+                });
+            };
+
+            function init() {
+              window.paintCustomerAlarmDots();          // paint immediately from inline data-unread-alarms
+              window.refreshCustomerAlarmsMap();        // then hydrate client-side map and repaint
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+            else init();
+          })();
+        </script>
+        <!-- ===== END CUSTOMER ALARM GLOW ===== -->
       </body>
       </html>
     `)
@@ -19953,6 +21540,18 @@ app.get('/admin/requests/completed', async (c) => {
         )`
         queryParams.push(userInfo.tenantId, userInfo.userId)
       } else query += ' AND 1 = 0'
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND c.tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR fr.assigned_bank_agent_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+      } else query += ' AND 1 = 0'
     } else query += ' AND 1 = 0'
     query += ' ORDER BY fr.completed_at DESC'
 
@@ -19964,6 +21563,7 @@ app.get('/admin/requests/completed', async (c) => {
       pending: 'قيد الانتظار', under_review: 'قيد المراجعة', approved: 'مقبول',
       rejected: 'مرفوض', processing: 'قيد المعالجة', completed: 'مكتمل', cancelled: 'ملغي'
     }
+    const waSettingsCompleted = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
     return c.html(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -20021,6 +21621,7 @@ app.get('/admin/requests/completed', async (c) => {
           <tbody class="bg-white divide-y divide-gray-100" id="tableBody">
             ${(requests.results as any[]).map((r: any) => {
               const phoneEsc = String(r.customer_phone || '').replace(/'/g, "\\'")
+              const nameEsc = String(r.customer_name || '').replace(/'/g, "\\'")
               return `
               <tr class="hover:bg-gray-50" data-name="${r.customer_name || ''}" data-phone="${(customerPhoneInputValue(r.customer_phone) || '').replace(/"/g, '&quot;')}" data-bank="${r.bank_name || ''}">
                 <td class="px-4 py-3 whitespace-nowrap font-bold text-gray-500">${r.id}</td>
@@ -20030,7 +21631,7 @@ app.get('/admin/requests/completed', async (c) => {
                     <span dir="ltr">${customerPhoneInputValue(r.customer_phone) || '—'}</span>
                     <button
                       type="button"
-                      onclick="openCustomerWhatsApp('${phoneEsc}')"
+                      onclick="openCustomerWhatsApp('${phoneEsc}', '', '${nameEsc}')"
                       class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
                       title="فتح واتساب"
                     >
@@ -20076,13 +21677,17 @@ app.get('/admin/requests/completed', async (c) => {
       if (/^5\\d{8}$/.test(digits)) return '966' + digits;
       return '';
     }
-    function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+    ${buildWaGreetingClientScript(waSettingsCompleted.greeting, waSettingsCompleted.companyName)}
+    function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
       const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
       if (!normalizedPhone) {
         alert('لا يوجد رقم واتساب صالح لهذا العميل');
         return;
       }
-      window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+      let url = 'https://wa.me/' + normalizedPhone;
+      const msg = applyWaGreetingTemplate(customerName || '');
+      if (msg) url += '?text=' + encodeURIComponent(msg);
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
     function filterTable() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -20137,30 +21742,18 @@ app.get('/admin/requests/:id/edit', async (c) => {
       return c.html('<h1>الطلب غير موجود</h1>')
     }
 
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      const tid = userInfo.tenantId
-      if (!tid) {
-        return c.redirect('/admin/requests')
-      }
-      if (Number((request as any).customer_tenant_id) !== Number(tid)) {
-        return c.redirect('/admin/requests')
-      }
-      if (
-        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
-          customer_id: Number((request as any).customer_id),
-          customer_tenant_id:
-            (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null,
-          assigned_bank_agent_id: (request as any).assigned_bank_agent_id,
-          created_by: (request as any).created_by,
-        }))
-      ) {
-        return c.redirect('/admin/requests')
+    const editorRid = normalizeRoleId(userInfo.roleId)
+    if (editorRid === 4 || editorRid === 5) {
+      if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
+        return c.html('<h1>غير مصرح بتعديل هذا الطلب</h1>', 403)
       }
     }
 
+    let requestAttachmentsForEdit: CustomerAttachmentItem[] = []
     try {
       const customerAttachments = await c.env.DB.prepare(`
         SELECT
+          attachments_json,
           identity_attachment_url,
           signature_attachment_url,
           salary_profile_attachment_url,
@@ -20171,29 +21764,39 @@ app.get('/admin/requests/:id/edit', async (c) => {
           additional_3_attachment_url
         FROM customers
         WHERE id = ?
-      `).bind((request as any).customer_id).first() as {
-        identity_attachment_url?: string | null
-        signature_attachment_url?: string | null
-        salary_profile_attachment_url?: string | null
-        gosi_attachment_url?: string | null
-        tax_exemption_attachment_url?: string | null
-        additional_1_attachment_url?: string | null
-        additional_2_attachment_url?: string | null
-        additional_3_attachment_url?: string | null
-      } | null
+      `).bind((request as any).customer_id).first() as Record<string, unknown> | null
       if (customerAttachments) {
-        ;(request as any).identity_attachment_url = customerAttachments.identity_attachment_url || (request as any).identity_attachment_url || null
-        ;(request as any).signature_attachment_url = customerAttachments.signature_attachment_url || (request as any).signature_attachment_url || null
-        ;(request as any).salary_profile_attachment_url = customerAttachments.salary_profile_attachment_url || (request as any).salary_profile_attachment_url || null
-        ;(request as any).gosi_attachment_url = customerAttachments.gosi_attachment_url || (request as any).gosi_attachment_url || null
-        ;(request as any).tax_exemption_attachment_url = customerAttachments.tax_exemption_attachment_url || (request as any).tax_exemption_attachment_url || null
-        ;(request as any).additional_1_attachment_url = customerAttachments.additional_1_attachment_url || (request as any).additional_1_attachment_url || null
-        ;(request as any).additional_2_attachment_url = customerAttachments.additional_2_attachment_url || (request as any).additional_2_attachment_url || null
-        ;(request as any).additional_3_attachment_url = customerAttachments.additional_3_attachment_url || (request as any).additional_3_attachment_url || null
+        requestAttachmentsForEdit = getCustomerAttachmentsFromRow(customerAttachments)
       }
     } catch (attachmentLoadError) {
-      if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
+      if (
+        !isMissingCustomerAttachmentsColumnError(attachmentLoadError) &&
+        !isMissingCustomerAttachmentsJsonColumnError(attachmentLoadError)
+      ) {
+        throw attachmentLoadError
+      }
+      try {
+        const customerAttachmentsLegacy = await c.env.DB.prepare(`
+          SELECT
+            identity_attachment_url,
+            signature_attachment_url,
+            salary_profile_attachment_url,
+            gosi_attachment_url,
+            tax_exemption_attachment_url,
+            additional_1_attachment_url,
+            additional_2_attachment_url,
+            additional_3_attachment_url
+          FROM customers
+          WHERE id = ?
+        `).bind((request as any).customer_id).first() as Record<string, unknown> | null
+        if (customerAttachmentsLegacy) {
+          requestAttachmentsForEdit = getCustomerAttachmentsFromRow(customerAttachmentsLegacy)
+        }
+      } catch (legacyErr) {
+        if (!isMissingCustomerAttachmentsColumnError(legacyErr)) throw legacyErr
+      }
     }
+    const requestAttachmentsJsonForEdit = JSON.stringify(requestAttachmentsForEdit).replace(/</g, '\\u003c')
     
     // Determine tenant scope for downstream lookups (banks/employees/bank agents)
     const viewerRoleNorm = normalizeRoleId(userInfo.roleId)
@@ -20239,7 +21842,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
         employees = await c.env.DB.prepare(
           `SELECT id, full_name, username, email
            FROM users
-           WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
+           WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
            ORDER BY full_name`
         ).bind(scopeTenantId).all() as any
       } catch (empErr) {
@@ -20261,16 +21864,11 @@ app.get('/admin/requests/:id/edit', async (c) => {
       console.error('Error loading current assignment for edit request page:', assignErr)
     }
 
-    // Bank agents (role 5) for the currently selected bank's tenant
+    // Bank agents (roles 5 / 6) for the request's company tenant
     let bankAgents: { results: any[] } = { results: [] }
     if (scopeTenantId != null) {
       try {
-        bankAgents = await c.env.DB.prepare(
-          `SELECT id, full_name, username, email
-           FROM users
-           WHERE tenant_id = ? AND is_active = 1 AND role_id = 5
-           ORDER BY full_name`
-        ).bind(scopeTenantId).all() as any
+        bankAgents = (await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL).bind(scopeTenantId, scopeTenantId, scopeTenantId).all()) as any
       } catch (agentErr) {
         console.error('Error loading bank agents for edit request page:', agentErr)
         bankAgents = { results: [] }
@@ -20518,44 +22116,19 @@ app.get('/admin/requests/:id/edit', async (c) => {
                   المرفقات
                 </h2>
                 
-                <!-- Current Attachments (only show uploaded; hide if none) -->
-                ${(() => {
-                  const docs = [
-                    { label: 'ملف الهوية', icon: 'fa-id-card', url: request.identity_attachment_url },
-                    { label: 'ملف السمة', icon: 'fa-signature', url: request.signature_attachment_url },
-                    { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: request.salary_profile_attachment_url },
-                    { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: request.gosi_attachment_url },
-                    { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: request.tax_exemption_attachment_url },
-                    { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: request.additional_1_attachment_url },
-                    { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: request.additional_2_attachment_url },
-                    { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: request.additional_3_attachment_url }
-                  ].filter(d => d.url);
-                  if (docs.length === 0) return '';
-                  return `
+                ${requestAttachmentsForEdit.length > 0 ? `
                     <div class="mb-6 bg-gray-50 p-4 rounded-lg">
                       <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        ${docs.map(d => `
-                          <div class="border-r pr-4">
-                            <p class="text-sm text-gray-600 mb-2"><i class="fas ${d.icon} ml-1"></i> ${d.label}:</p>
-                            <a href="${d.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                              <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                            </a>
-                          </div>
-                        `).join('')}
-                      </div>
+                      ${renderCustomerAttachmentsListHtml(requestAttachmentsForEdit)}
                     </div>
-                  `
-                })()}
-                
-                <!-- Upload New Attachments (modal popup) -->
+                  ` : ''}
                 <div class="space-y-2">
                   <button type="button" id="openRequestAttachmentsModal"
                           class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold transition inline-flex items-center gap-2">
                     <i class="fas fa-paperclip"></i>
                     إدارة المرفقات
                   </button>
-                  <p class="text-sm text-gray-500">يتم رفع المرفقات من خلال نافذة منبثقة داخل النموذج.</p>
+                  <p class="text-sm text-gray-500">أضف المرفقات مع تسمية كل ملف حسب ما تريد.</p>
                 </div>
 
                 <div id="requestAttachmentsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
@@ -20570,137 +22143,16 @@ app.get('/admin/requests/:id/edit', async (c) => {
                       </button>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- 1. Identity -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-id-card ml-1"></i> ملف الهوية
-                      </label>
-                      <input 
-                        type="file"
-                        id="identity_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('identity_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="identity_attachment_preview" class="mt-2"></div>
-                    </div>
-                    
-                    <!-- 2. Signature -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-signature ml-1"></i> ملف السمة
-                      </label>
-                      <input 
-                        type="file"
-                        id="signature_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('signature_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="signature_attachment_preview" class="mt-2"></div>
-                    </div>
-                    
-                    <!-- 3. Salary Profile -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب
-                      </label>
-                      <input 
-                        type="file"
-                        id="salary_profile_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('salary_profile_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="salary_profile_attachment_preview" class="mt-2"></div>
-                    </div>
-                    
-                    <!-- 4. GOSI -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية
-                      </label>
-                      <input 
-                        type="file"
-                        id="gosi_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('gosi_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="gosi_attachment_preview" class="mt-2"></div>
-                    </div>
+                                        <input type="hidden" id="request_attachments_json" value="[]">
+                    <div id="request_attachments_list" class="space-y-3"></div>
+                    <button type="button" id="request_add_attachment_btn"
+                            class="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center gap-1">
+                      <i class="fas fa-plus ml-1"></i>
+                      إضافة مرفق
+                    </button>
+                    <p class="text-xs text-gray-500 mt-2">JPG, PNG أو PDF (حد أقصى ${MAX_ATTACHMENT_SIZE_MB}MB لكل ملف)</p>
 
-                    <!-- 5. Tax exemption -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-certificate ml-1"></i> شهادة الإعفاء الضريبي
-                      </label>
-                      <input
-                        type="file"
-                        id="tax_exemption_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('tax_exemption_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="tax_exemption_attachment_preview" class="mt-2"></div>
-                    </div>
-
-                    <!-- 6. Additional 1 -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 1
-                      </label>
-                      <input
-                        type="file"
-                        id="additional_1_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('additional_1_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="additional_1_attachment_preview" class="mt-2"></div>
-                    </div>
-
-                    <!-- 7. Additional 2 -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 2
-                      </label>
-                      <input
-                        type="file"
-                        id="additional_2_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('additional_2_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="additional_2_attachment_preview" class="mt-2"></div>
-                    </div>
-
-                    <!-- 8. Additional 3 -->
-                    <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-file-alt ml-1"></i> مستند إضافي 3
-                      </label>
-                      <input
-                        type="file"
-                        id="additional_3_attachment"
-                        accept="image/*,application/pdf"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        onchange="handleFileSelect('additional_3_attachment')"
-                      >
-                      <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                      <div id="additional_3_attachment_preview" class="mt-2"></div>
-                    </div>
-                    </div>
-
-                    <div class="flex justify-end gap-3 mt-6">
+<div class="flex justify-end gap-3 mt-6">
                       <button type="button" id="doneRequestAttachmentsModal"
                               class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
                         تم
@@ -20734,8 +22186,14 @@ app.get('/admin/requests/:id/edit', async (c) => {
         </div>
         
         <script type="application/json" id="editRequestPageCtx">${editRequestCtxJson}</script>
+        <script type="application/json" id="editRequestAttachmentsJSON">${requestAttachmentsJsonForEdit}</script>
         <script>
           var editRequestPageCtx = { viewerRoleId: null, viewerTenantId: null, canManageAssignment: false, customerId: null, currentAssignedEmployeeId: null, currentAssignedBankAgentId: null, currentSelectedBankId: null };
+          var requestAttachmentsInitialJson = [];
+          try {
+            var __attEl = document.getElementById('editRequestAttachmentsJSON');
+            if (__attEl && __attEl.textContent) requestAttachmentsInitialJson = JSON.parse(__attEl.textContent) || [];
+          } catch (e) { requestAttachmentsInitialJson = []; }
           try {
             var __ctxEl = document.getElementById('editRequestPageCtx');
             if (__ctxEl && __ctxEl.textContent) {
@@ -20799,64 +22257,15 @@ app.get('/admin/requests/:id/edit', async (c) => {
               if (e && e.key === 'Escape') close();
             });
           })();
-          const attachmentFiles = {
-            identity_attachment: null,
-            signature_attachment: null,
-            salary_profile_attachment: null,
-            gosi_attachment: null,
-            tax_exemption_attachment: null,
-            additional_1_attachment: null,
-            additional_2_attachment: null,
-            additional_3_attachment: null
-          }
-          
-          function handleFileSelect(fieldName) {
-            const fileInput = document.getElementById(fieldName)
-            const file = fileInput.files[0]
-            const previewDiv = document.getElementById(fieldName + '_preview')
-            
-            if (!file) {
-              previewDiv.innerHTML = ''
-              attachmentFiles[fieldName] = null
-              return
-            }
-            
-            // Check file size (2MB max)
-            if (file.size > 2 * 1024 * 1024) {
-              previewDiv.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>'
-              fileInput.value = ''
-              attachmentFiles[fieldName] = null
-              return
-            }
-            
-            attachmentFiles[fieldName] = file
-            previewDiv.innerHTML = \`
-              <div class="text-sm text-green-600">
-                <i class="fas fa-check-circle ml-1"></i>
-                تم اختيار: \${file.name} (\${(file.size / 1024).toFixed(1)} KB)
-              </div>
-            \`
-          }
-          
-          async function uploadAttachment(file, attachmentType) {
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('attachmentType', attachmentType)
-            
-            try {
-              const response = await axios.post('/api/attachments/upload', formData, {
-                headers: {
-                  'Content-Type': 'multipart/form-data'
-                }
-              })
-              
-              return response.data.url
-            } catch (error) {
-              console.error('Upload error:', error)
-              throw error
-            }
-          }
-          
+          ${getDynamicCustomerAttachmentsScript()}
+          initDynamicCustomerAttachments({
+            hiddenInputId: 'request_attachments_json',
+            listContainerId: 'request_attachments_list',
+            addButtonId: 'request_add_attachment_btn',
+            customerId: editRequestPageCtx.customerId,
+            initialAttachments: requestAttachmentsInitialJson
+          });
+
           async function handleSubmit(event) {
             event.preventDefault()
             
@@ -20901,87 +22310,18 @@ app.get('/admin/requests/:id/edit', async (c) => {
             }
             
             try {
-              // Upload attachments if selected
-              if (attachmentFiles.identity_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع ملف الهوية...
-                  </div>
-                \`
-                data.identity_attachment_url = await uploadAttachment(attachmentFiles.identity_attachment, 'identity')
-              }
-              
-              if (attachmentFiles.signature_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع ملف السمة...
-                  </div>
-                \`
-                data.signature_attachment_url = await uploadAttachment(attachmentFiles.signature_attachment, 'signature')
-              }
-              
-              if (attachmentFiles.salary_profile_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع ملف تعريف الراتب...
-                  </div>
-                \`
-                data.salary_profile_attachment_url = await uploadAttachment(attachmentFiles.salary_profile_attachment, 'salary_profile')
-              }
-              
-              if (attachmentFiles.gosi_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع ملف التأمينات الاجتماعية...
-                  </div>
-                \`
-                data.gosi_attachment_url = await uploadAttachment(attachmentFiles.gosi_attachment, 'gosi')
+              if (typeof window.uploadDynamicCustomerAttachments === 'function') {
+                var uploadedAttachments = await window.uploadDynamicCustomerAttachments({
+                  onProgress: function (msg) {
+                    document.getElementById('message').innerHTML = '<div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded"><i class="fas fa-spinner fa-spin ml-2"></i>' + msg + '</div>';
+                  }
+                });
+                data.attachments_json = JSON.stringify(uploadedAttachments || []);
+              } else {
+                var attHidden = document.getElementById('request_attachments_json');
+                data.attachments_json = attHidden ? (attHidden.value || '[]') : '[]';
               }
 
-              if (attachmentFiles.tax_exemption_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع شهادة الإعفاء الضريبي...
-                  </div>
-                \`
-                data.tax_exemption_attachment_url = await uploadAttachment(attachmentFiles.tax_exemption_attachment, 'tax_exemption')
-              }
-
-              if (attachmentFiles.additional_1_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع مستند إضافي 1...
-                  </div>
-                \`
-                data.additional_1_attachment_url = await uploadAttachment(attachmentFiles.additional_1_attachment, 'additional_1')
-              }
-
-              if (attachmentFiles.additional_2_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع مستند إضافي 2...
-                  </div>
-                \`
-                data.additional_2_attachment_url = await uploadAttachment(attachmentFiles.additional_2_attachment, 'additional_2')
-              }
-
-              if (attachmentFiles.additional_3_attachment) {
-                document.getElementById('message').innerHTML = \`
-                  <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-                    <i class="fas fa-spinner fa-spin ml-2"></i>
-                    جاري رفع مستند إضافي 3...
-                  </div>
-                \`
-                data.additional_3_attachment_url = await uploadAttachment(attachmentFiles.additional_3_attachment, 'additional_3')
-              }
-              
               // Update financing request
               document.getElementById('message').innerHTML = \`
                 <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
@@ -21072,6 +22412,7 @@ app.get('/admin/requests', async (c) => {
         emp.id AS assigned_employee_id,
         c.full_name as customer_name,
         c.phone as customer_phone,
+        c.attachments_json,
         c.assigned_to as customer_assigned_to,
         tl.name as enrollment_location_name,
         b.bank_name as bank_name,
@@ -21101,7 +22442,7 @@ app.get('/admin/requests', async (c) => {
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN tenant_locations tl ON tl.id = COALESCE(fr.location_id, c.location_id)
       LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
-      LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 14)
+      LEFT JOIN users emp ON emp.id = ca.employee_id AND emp.role_id IN (4, 6, 14)
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
       LEFT JOIN users bagent ON bagent.id = c.assigned_bank_agent_id
@@ -21127,6 +22468,20 @@ app.get('/admin/requests', async (c) => {
           WHERE ca.customer_id = c.id AND ca.employee_id = ?
         )`;
         queryParams.push(userInfo.tenantId, userInfo.userId);
+      } else {
+        query += ' WHERE 1 = 0';
+      }
+    } else if (normalizeRoleId(userInfo.roleId) === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` WHERE c.tenant_id = ? AND (
+          EXISTS (
+            SELECT 1 FROM customer_assignments ca
+            WHERE ca.customer_id = c.id AND ca.employee_id = ?
+          )
+          OR c.assigned_bank_agent_id = ?
+          OR fr.assigned_bank_agent_id = ?
+        )`;
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId);
       } else {
         query += ' WHERE 1 = 0';
       }
@@ -21156,6 +22511,27 @@ app.get('/admin/requests', async (c) => {
       ? await c.env.DB.prepare(query).bind(...queryParams).all()
       : await c.env.DB.prepare(query).all();
 
+    // === CUSTOMER ALARM GLOW (requests table) — attach per-customer unread count for THIS user ===
+    // The row template below emits data-unread-alarms="${req.unread_alarm_count || 0}" and the inline
+    // script before </body> paints the dot. Per-user isolation: filtered by user_id.
+    if (userInfo.userId && (requests.results as any[]).length > 0) {
+      try {
+        const alarmRows = await c.env.DB
+          .prepare(`SELECT customer_id, COUNT(*) AS cnt FROM customer_alarms
+                    WHERE user_id = ? AND is_read = 0 AND customer_id IS NOT NULL
+                    GROUP BY customer_id`)
+          .bind(userInfo.userId)
+          .all<{ customer_id: number; cnt: number }>()
+        const countByCustomer: Record<string, number> = {}
+        for (const row of alarmRows.results || []) {
+          countByCustomer[String(row.customer_id)] = Number(row.cnt) || 0
+        }
+        for (const r of requests.results as any[]) {
+          r.unread_alarm_count = countByCustomer[String(r.customer_id)] || 0
+        }
+      } catch (_) { /* table may be missing in legacy DBs */ }
+    }
+
     const workflowStagesRaw = await c.env.DB.prepare(`
       SELECT stage_name_ar
       FROM workflow_stages
@@ -21182,8 +22558,19 @@ app.get('/admin/requests', async (c) => {
     // Role 3 (مشرف مبيعات): no edit/delete on existing rows; role 5 same access as role 4
     const ridNorm = normalizeRoleId(userInfo.roleId)
     const canEdit = ridNorm !== 3
-    const canCreateFundingRequest = [1, 2, 3, 4, 5].includes(Number(ridNorm));
-    const isBankAgent = false; // role 5 gets same buttons as role 4
+    const canCreateFundingRequest = canCreateFinancingRequest(ridNorm);
+    const canViewRequestsFollowupReport = canAccessRequestsFollowupReport(ridNorm);
+    const showWorkflowNoteShortcut = canAddWorkflowNote(userInfo.roleId)
+
+    const role2InlineAssignReq = canInlineAssignCustomers(userInfo.roleId)
+    let role2EmployeesReq: any[] = []
+    if (role2InlineAssignReq && userInfo.tenantId) {
+      const empRes = await c.env.DB.prepare(
+        `SELECT id, full_name, username FROM users WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id = ? ORDER BY full_name`
+      ).bind(userInfo.tenantId).all()
+      role2EmployeesReq = empRes.results as any[]
+    }
+    const waSettingsReq = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
     const requestsCsvRowsJson = JSON.stringify(
       requests.results.map((req: any) => {
@@ -21296,6 +22683,7 @@ app.get('/admin/requests', async (c) => {
           }
 
           ${actionsDropdownCSS}
+          ${LIST_ATTACHMENTS_MODAL_STYLES}
 
           ${getMobileResponsiveCSS()}
         </style>
@@ -21366,7 +22754,7 @@ app.get('/admin/requests', async (c) => {
                   </div>
                 </div>
                 ${canCreateFundingRequest ? `<input type="file" id="requestsCsvInput" accept=".csv" class="hidden" onchange="handleRequestsCSVFile(event)">` : ''}
-                ${!isBankAgent ? `
+                ${canViewRequestsFollowupReport ? `
                 <a href="/admin/reports/requests-followup" 
                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all inline-block text-center">
                   <i class="fas fa-chart-line ml-2"></i>
@@ -21492,7 +22880,11 @@ app.get('/admin/requests', async (c) => {
                   const bankAgentRowSearch = (agentName + ' ' + (agentId != null && !Number.isNaN(agentId) ? '#' + agentId : '')).trim()
                   
                   return `
-                  <tr class="hover:bg-gray-50" 
+                  <tr class="hover:bg-gray-50"
+                      data-customer-id="${req.customer_id}"
+                      data-unread-alarms="${Number(req.unread_alarm_count) || 0}"
+                      data-customer-name="${(req.customer_name || '').replace(/"/g, '&quot;')}"
+                      data-attachments="${customerAttachmentsDataAttr(req as Record<string, unknown>)}"
                       data-customer="${req.customer_name || ''}" 
                       data-phone="${(customerPhoneInputValue(req.customer_phone) || '').replace(/"/g, '&quot;')}"
                       data-employee="${employeeName.replace(/"/g, '&quot;')}"
@@ -21509,6 +22901,11 @@ app.get('/admin/requests', async (c) => {
                         <a href="/admin/requests/${req.id}/workflow#request" class="actions-dropdown-item" style="color:#4338ca;">
                           <i class="fas fa-clock"></i> الجدول الزمني
                         </a>
+                        ${showWorkflowNoteShortcut ? `
+                        <a href="/admin/requests/${req.id}/workflow#request-add-note" class="actions-dropdown-item" style="color:#d97706;">
+                          <i class="fas fa-sticky-note"></i> إضافة ملاحظة
+                        </a>
+                        ` : ''}
                         <a href="/admin/requests/${req.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
                           <i class="fas fa-file-alt"></i> تقرير
                         </a>
@@ -21516,6 +22913,14 @@ app.get('/admin/requests', async (c) => {
                           <i class="fas fa-eye"></i> عرض
                         </a>
                         ${canEdit ? `
+                        <button type="button"
+                                onclick="openListAttachmentsFromRow(this, ${req.id})"
+                                data-customer-id="${req.customer_id}"
+                                data-customer-name="${escapeHtmlAttr(String(req.customer_name || ''))}"
+                                data-attachments="${customerAttachmentsDataAttr(req as Record<string, unknown>)}"
+                                class="actions-dropdown-item" style="color:#0369a1;">
+                          <i class="fas fa-paperclip"></i> المرفقات
+                        </button>
                         <div class="actions-dropdown-divider"></div>
                         <a href="/admin/requests/${req.id}/edit" class="actions-dropdown-item" style="color:#a16207;">
                           <i class="fas fa-edit"></i> تعديل
@@ -21526,13 +22931,13 @@ app.get('/admin/requests', async (c) => {
                         ` : ''}
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="truncate-cell">${req.customer_name || 'عميل #' + req.customer_id}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="inline-flex items-center gap-2"><span class="customer-alarm-slot" data-customer-id="${req.customer_id}"></span><span class="truncate-cell">${req.customer_name || 'عميل #' + req.customer_id}</span></span></td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="inline-flex items-center gap-2">
                         <span dir="ltr">${customerPhoneInputValue(req.customer_phone) || '—'}</span>
                         <button
                           type="button"
-                          onclick="openCustomerWhatsApp('${String(req.customer_phone || '').replace(/'/g, "\\'")}')"
+                          onclick="openCustomerWhatsApp('${String(req.customer_phone || '').replace(/'/g, "\\'")}', '', '${String(req.customer_name || '').replace(/'/g, "\\'")}')"
                           class="inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-8 h-8 rounded-md transition-colors"
                           title="فتح واتساب"
                         >
@@ -21542,9 +22947,14 @@ app.get('/admin/requests', async (c) => {
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${req.enrollment_location_name ? escapeHtml(String(req.enrollment_location_name)) : '<span class="text-gray-400">—</span>'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
-                      ${employeeName
-                        ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${employeeName}</span></span>`
-                        : `<span class="text-gray-300 text-sm">—</span>`
+                      ${role2InlineAssignReq
+                        ? `<select class="role2-assign-select text-xs border border-gray-300 rounded px-2 py-1" style="max-width:160px;" data-customer-id="${req.customer_id}" data-current-employee-id="${req.assigned_employee_id != null ? req.assigned_employee_id : ''}" data-current-employee-name="${escapeHtmlAttr(String(req.assigned_employee_name || ''))}" onchange="inlineAssignCustomer(${req.customer_id}, this)">
+                             <option value="">— غير مخصص —</option>
+                             ${role2EmployeesReq.map((emp: any) => `<option value="${emp.id}" ${req.assigned_employee_id != null && Number(req.assigned_employee_id) === Number(emp.id) ? 'selected' : ''}>${escapeHtml(String(emp.full_name || emp.username || ''))}</option>`).join('')}
+                           </select>`
+                        : employeeName
+                          ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${employeeName}</span></span>`
+                          : `<span class="text-gray-300 text-sm">—</span>`
                       }
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
@@ -21586,8 +22996,30 @@ app.get('/admin/requests', async (c) => {
             </div>
           </div>
         </div>
+
+        ${renderListAttachmentsModalHtml()}
+        <div id="toastMsg" class="fixed bottom-6 right-6 z-[2000] hidden">
+          <div class="bg-gray-800 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-2">
+            <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
+            <span id="toastText"></span>
+          </div>
+        </div>
         
         <script>
+          ${actionsDropdownScript}
+          ${getDynamicCustomerAttachmentsScript()}
+          ${getListAttachmentsModalScript()}
+          function showToast(msg, type) {
+            var t = document.getElementById('toastMsg');
+            if (!t) return;
+            var icon = document.getElementById('toastIcon');
+            if (icon) icon.className = 'fas ' + (type === 'success' ? 'fa-check-circle text-green-400' : type === 'warning' ? 'fa-exclamation-triangle text-yellow-400' : 'fa-times-circle text-red-400');
+            var text = document.getElementById('toastText');
+            if (text) text.textContent = msg;
+            t.classList.remove('hidden');
+            setTimeout(function () { t.classList.add('hidden'); }, 3000);
+          }
+
           const REQUEST_STATUS_OPTIONS = ${requestStatusFiltersJson};
 
           function normalizePhoneDigits(phoneValue) {
@@ -21608,13 +23040,18 @@ app.get('/admin/requests', async (c) => {
             return '';
           }
 
-          function openCustomerWhatsApp(primaryPhone, fallbackPhone) {
+          ${buildWaGreetingClientScript(waSettingsReq.greeting, waSettingsReq.companyName)}
+
+          function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
             const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
             if (!normalizedPhone) {
               alert('لا يوجد رقم واتساب صالح لهذا العميل');
               return;
             }
-            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+            let url = 'https://wa.me/' + normalizedPhone;
+            const msg = applyWaGreetingTemplate(customerName || '');
+            if (msg) url += '?text=' + encodeURIComponent(msg);
+            window.open(url, '_blank', 'noopener,noreferrer');
           }
           window.openCustomerWhatsApp = openCustomerWhatsApp;
           // Pagination + edge-scroll (Requests list page)
@@ -21828,7 +23265,6 @@ app.get('/admin/requests', async (c) => {
             setupEdgeScrollOnce('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
             updateEdgeScrollControls('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
           }
-          ${actionsDropdownScript}
 
           // البحث والفلترة
           function toggleRequestsFilters() {
@@ -22021,21 +23457,18 @@ app.get('/admin/requests', async (c) => {
           })
 
           // Expose handlers for inline onclick early, in case any init below throws
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           window.exportToCSV = function exportToCSV() {
             const header = ['العميل', 'الهاتف', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'البنك', 'المبلغ المطلوب', 'المدة (شهور)', 'الحالة', 'التاريخ'];
             const rows = ${requestsCsvRowsJson};
             const data = [header, ...rows];
             
-            let csv = '\\uFEFFsep=,\\r\\n';
+            let csv = ${HTML_CSV_PREFIX};
             data.forEach(row => {
-              csv += row.join(',') + '\\n';
+              csv += row.join('\\t') + '\\r\\n';
             });
             
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'طلبات_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'طلبات_التمويل_' + new Date().toISOString().split('T')[0] + '.csv');
           }
 
           window.downloadRequestsSampleCSV = function() {
@@ -22176,7 +23609,236 @@ app.get('/admin/requests', async (c) => {
               if (el) el.value = ''
             }
           }
+
+          ${role2InlineAssignReq ? `
+          let _assignConfirmCallback = null;
+          let _assignConfirmRevert = null;
+          function showAssignConfirmModal(oldName, newName, onConfirm, onCancel) {
+            const modal = document.getElementById('assignConfirmModal');
+            const msg = document.getElementById('assignConfirmMsg');
+            if (!modal || !msg) { onConfirm(); return; }
+            msg.innerHTML = 'سيتم تغيير الموظف المخصص من <strong>' + oldName + '</strong> إلى <strong>' + (newName || 'غير مخصص') + '</strong>';
+            _assignConfirmCallback = onConfirm;
+            _assignConfirmRevert = onCancel || null;
+            modal.style.display = 'flex';
+          }
+          function confirmAssign() {
+            const modal = document.getElementById('assignConfirmModal');
+            if (modal) modal.style.display = 'none';
+            const cb = _assignConfirmCallback;
+            _assignConfirmCallback = null; _assignConfirmRevert = null;
+            if (cb) cb();
+          }
+          function cancelAssignConfirm() {
+            const modal = document.getElementById('assignConfirmModal');
+            if (modal) modal.style.display = 'none';
+            const rv = _assignConfirmRevert;
+            _assignConfirmCallback = null; _assignConfirmRevert = null;
+            if (rv) rv();
+          }
+
+          async function inlineAssignCustomer(customerId, selectEl) {
+            const employeeId = selectEl.value;
+            const prevEmployeeId = selectEl.dataset.currentEmployeeId || '';
+            const prevEmployeeName = selectEl.dataset.currentEmployeeName || '';
+
+            async function doAssign() {
+              try {
+                const resp = await fetch('/api/customer-assignment', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ customer_id: customerId, employee_id: employeeId || null, notes: '' })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'خطأ');
+                const empName = employeeId ? (selectEl.options[selectEl.selectedIndex] && selectEl.options[selectEl.selectedIndex].text || '') : '';
+                document.querySelectorAll('#tableBody tr[data-customer-id="' + customerId + '"]').forEach(function(row) {
+                  row.setAttribute('data-employee', empName);
+                  row.querySelectorAll('.role2-assign-select').forEach(function(sel) {
+                    sel.value = employeeId;
+                    sel.dataset.currentEmployeeId = employeeId;
+                    sel.dataset.currentEmployeeName = empName;
+                  });
+                });
+                hydrateRequestsRoleFilters();
+              } catch (err) {
+                alert('خطأ في التخصيص: ' + ((err && err.message) || String(err)));
+                selectEl.value = prevEmployeeId;
+              }
+            }
+
+            if (prevEmployeeId) {
+              const newOpt = selectEl.options[selectEl.selectedIndex];
+              const newName = employeeId ? (newOpt ? newOpt.text.trim() : '') : 'غير مخصص';
+              showAssignConfirmModal(prevEmployeeName, newName, doAssign, () => { selectEl.value = prevEmployeeId; });
+              return;
+            }
+
+            await doAssign();
+          }
+          ` : ''}
         </script>
+        ${role2InlineAssignReq ? `
+        <div id="assignConfirmModal" style="display:none;" class="fixed inset-0 z-[999] flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" onclick="cancelAssignConfirm()"></div>
+          <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4" dir="rtl">
+            <h3 class="text-lg font-bold text-gray-800 mb-3">
+              <i class="fas fa-user-check text-amber-500 ml-2"></i>
+              تغيير الموظف المخصص
+            </h3>
+            <p class="text-gray-600 mb-5 leading-relaxed" id="assignConfirmMsg"></p>
+            <div class="flex gap-3">
+              <button onclick="confirmAssign()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">تأكيد التغيير</button>
+              <button onclick="cancelAssignConfirm()" class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</button>
+            </div>
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- ===== CUSTOMER ALARM GLOW — popup modal + painter script (live on /admin/requests) ===== -->
+        <style>
+          @keyframes customerAlarmPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.65); }
+            70%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+          }
+          .customer-alarm-dot {
+            display: inline-block;
+            width: 0.7rem;
+            height: 0.7rem;
+            border-radius: 9999px;
+            background: #ef4444;
+            cursor: pointer;
+            animation: customerAlarmPulse 1.5s infinite;
+            flex-shrink: 0;
+            border: 0;
+            padding: 0;
+          }
+          .customer-alarm-dot:hover { transform: scale(1.25); }
+        </style>
+        <div id="customerAlarmsPopup" style="display:none;" class="fixed inset-0 z-[10000] items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" onclick="closeCustomerAlarmsPopup()"></div>
+          <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto" dir="rtl">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-gray-800">
+                <i class="fas fa-bell text-red-500 ml-2"></i>
+                <span id="customerAlarmsPopupTitle">تنبيهات العميل</span>
+              </h3>
+              <button onclick="closeCustomerAlarmsPopup()" class="text-gray-500 hover:text-gray-700 p-2"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="customerAlarmsPopupBody" class="space-y-3"></div>
+          </div>
+        </div>
+        <script>
+          (function(){
+            window.customerAlarmsByCustomer = window.customerAlarmsByCustomer || {};
+            function buildDot(customerId, count) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'customer-alarm-dot';
+              b.title = count + ' تنبيه غير مقروء';
+              b.setAttribute('data-customer-id', String(customerId));
+              b.onclick = function(ev){ ev.stopPropagation(); openCustomerAlarmsPopup(customerId); };
+              return b;
+            }
+            window.paintCustomerAlarmDots = function(root) {
+              var scope = root || document;
+              var slots = scope.querySelectorAll('.customer-alarm-slot[data-customer-id]');
+              var painted = 0;
+              slots.forEach(function(slot){
+                var cid = slot.getAttribute('data-customer-id');
+                if (!cid || cid === 'null' || cid === 'undefined') { slot.innerHTML=''; return; }
+                var count = 0;
+                var tr = slot.closest('tr');
+                if (tr) {
+                  var raw = tr.getAttribute('data-unread-alarms');
+                  if (raw != null && raw !== '') count = Number(raw) || 0;
+                }
+                if (!count) {
+                  var list = window.customerAlarmsByCustomer[String(cid)];
+                  if (list && list.length) count = list.length;
+                }
+                slot.innerHTML = '';
+                if (count > 0) { slot.appendChild(buildDot(cid, count)); painted++; }
+              });
+              try { console.log('[alarm-glow] painted', painted, '/', slots.length, 'slots'); } catch(_) {}
+              return painted;
+            };
+            window.refreshCustomerAlarmsMap = function() {
+              return fetch('/api/customer-alarms', { credentials: 'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                  var map = {};
+                  if (data && data.success && Array.isArray(data.data)) {
+                    for (var i=0;i<data.data.length;i++){
+                      var a = data.data[i];
+                      if (a.is_read) continue;
+                      var cid = a.customer_id;
+                      if (cid == null || cid === '') continue;
+                      var k = String(cid);
+                      if (!map[k]) map[k] = [];
+                      map[k].push(a);
+                    }
+                  }
+                  window.customerAlarmsByCustomer = map;
+                  window.paintCustomerAlarmDots();
+                  return map;
+                })
+                .catch(function(e){ console.warn('[alarm-glow] refresh failed', e); return window.customerAlarmsByCustomer || {}; });
+            };
+            window.openCustomerAlarmsPopup = function(customerId) {
+              var tr = document.querySelector('tr[data-customer-id="'+customerId+'"]');
+              var name = tr ? (tr.getAttribute('data-customer-name') || tr.getAttribute('data-customer') || '') : '';
+              document.getElementById('customerAlarmsPopupTitle').textContent = 'تنبيهات العميل' + (name ? ' — '+name : '');
+              var body = document.getElementById('customerAlarmsPopupBody');
+              body.innerHTML = '<div class="text-gray-500 text-sm">جاري التحميل…</div>';
+              document.getElementById('customerAlarmsPopup').style.display = 'flex';
+              fetch('/api/customer-alarms', { credentials:'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                  var rows = (data && data.success && Array.isArray(data.data)) ? data.data : [];
+                  var mine = rows.filter(function(a){ return !a.is_read && String(a.customer_id) === String(customerId); });
+                  if (!mine.length) { body.innerHTML = '<div class="text-gray-500 text-sm">لا توجد تنبيهات غير مقروءة.</div>'; return; }
+                  body.innerHTML = mine.map(function(a){
+                    var note = (a.note || a.message || '').toString().replace(/[<>&]/g, function(ch){ return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[ch]; });
+                    var when = a.created_at || '';
+                    var isWorkflow = a.alarm_type === 'workflow';
+                    var href = isWorkflow
+                      ? (a.link_url || '#')
+                      : ((a.customer_id != null && a.customer_id !== '') ? '/admin/customers/' + String(a.customer_id) : '#');
+                    var linkTitle = isWorkflow ? 'سير العمل' : 'بيانات العميل';
+                    return '<div class="border border-red-100 bg-red-50 rounded-lg p-3" data-alarm-id="'+a.id+'">'
+                      + '<div class="text-xs text-gray-500 mb-1">'+when+'</div>'
+                      + '<a href="'+href+'" title="'+linkTitle+'" class="block text-sm text-gray-800 whitespace-pre-line no-underline hover:bg-red-100/60 rounded p-1 -m-1 cursor-pointer">'+note+'</a>'
+                      + '<div class="flex gap-2 mt-2">'
+                      + '<button onclick="markCustomerAlarmRead('+a.id+', this)" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded">تمييز كمقروء</button>'
+                      + '</div>'
+                      + '</div>';
+                  }).join('');
+                });
+            };
+            window.closeCustomerAlarmsPopup = function() {
+              document.getElementById('customerAlarmsPopup').style.display = 'none';
+            };
+            window.markCustomerAlarmRead = function(alarmId, btn) {
+              if (btn) { btn.disabled = true; btn.textContent = '...'; }
+              fetch('/api/customer-alarms/'+alarmId+'/read', { method:'PUT', credentials:'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(){
+                  var card = btn ? btn.closest('[data-alarm-id]') : null;
+                  if (card) card.remove();
+                  window.refreshCustomerAlarmsMap();
+                });
+            };
+            function init() {
+              window.paintCustomerAlarmDots();
+              window.refreshCustomerAlarmsMap();
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+            else init();
+          })();
+        </script>
+        <!-- ===== END CUSTOMER ALARM GLOW ===== -->
       </body>
       </html>
     `)
@@ -22196,36 +23858,10 @@ app.get('/admin/requests/:id/delete', async (c) => {
     }
     const id = c.req.param('id')
 
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      const row = await c.env.DB.prepare(`
-        SELECT fr.id, fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, fr.tenant_id, c.tenant_id AS customer_tenant_id
-        FROM financing_requests fr
-        LEFT JOIN customers c ON fr.customer_id = c.id
-        WHERE fr.id = ?
-      `)
-        .bind(id)
-        .first() as {
-          id?: number
-          customer_id?: number | null
-          assigned_bank_agent_id?: number | null
-          created_by?: number | null
-          tenant_id?: number | null
-          customer_tenant_id?: number | null
-        } | null
-      if (!row?.id) return c.redirect('/admin/requests')
-      const tid = userInfo.tenantId
-      if (!tid) return c.redirect('/admin/requests')
-      const rowTenant = row.tenant_id != null ? Number(row.tenant_id) : Number(row.customer_tenant_id)
-      if (Number(tid) !== rowTenant) return c.redirect('/admin/requests')
-      if (
-        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
-          customer_id: row.customer_id != null ? Number(row.customer_id) : null,
-          customer_tenant_id: row.customer_tenant_id != null ? Number(row.customer_tenant_id) : null,
-          assigned_bank_agent_id: row.assigned_bank_agent_id,
-          created_by: row.created_by,
-        }))
-      ) {
-        return c.redirect('/admin/requests')
+    const deleterRid = normalizeRoleId(userInfo.roleId)
+    if (deleterRid === 4 || deleterRid === 5) {
+      if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
+        return c.html('<h1>غير مصرح بحذف هذا الطلب</h1>', 403)
       }
     }
 
@@ -22841,65 +24477,20 @@ app.get('/admin/requests/:id', async (c) => {
       return c.html('<h1>الطلب غير موجود</h1>')
     }
 
-    if (normalizeRoleId(userInfo.roleId) === 5) {
-      const tid = userInfo.tenantId
-      if (!tid || !userInfo.userId) {
-        return c.redirect('/admin/requests')
-      }
-      if (Number((request as any).customer_tenant_id) !== Number(tid)) {
-        return c.redirect('/admin/requests')
-      }
-      if (
-        !(await canRole5AccessFinancingRequest(c.env.DB, userInfo, {
-          customer_id: Number((request as any).customer_id),
-          customer_tenant_id:
-            (request as any).customer_tenant_id != null ? Number((request as any).customer_tenant_id) : null,
-          assigned_bank_agent_id: (request as any).assigned_bank_agent_id,
-          created_by: (request as any).created_by,
-        }))
-      ) {
-        return c.redirect('/admin/requests')
+    const viewerRid = normalizeRoleId(userInfo.roleId)
+    if (viewerRid === 4 || viewerRid === 5) {
+      if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
+        return c.html('<h1>غير مصرح بعرض هذا الطلب</h1>', 403)
       }
     }
 
-    const isBankAgentViewer = normalizeRoleId(userInfo.roleId) === 5
+    const isBankAgentViewer = viewerRid === 5 || viewerRid === 6
 
-    try {
-      const customerAttachments = await c.env.DB.prepare(`
-        SELECT
-          identity_attachment_url,
-          signature_attachment_url,
-          salary_profile_attachment_url,
-          gosi_attachment_url,
-          tax_exemption_attachment_url,
-          additional_1_attachment_url,
-          additional_2_attachment_url,
-          additional_3_attachment_url
-        FROM customers
-        WHERE id = ?
-      `).bind((request as any).customer_id).first() as {
-        identity_attachment_url?: string | null
-        signature_attachment_url?: string | null
-        salary_profile_attachment_url?: string | null
-        gosi_attachment_url?: string | null
-        tax_exemption_attachment_url?: string | null
-        additional_1_attachment_url?: string | null
-        additional_2_attachment_url?: string | null
-        additional_3_attachment_url?: string | null
-      } | null
-      if (customerAttachments) {
-        ;(request as any).identity_attachment_url = (request as any).identity_attachment_url || customerAttachments.identity_attachment_url || null
-        ;(request as any).signature_attachment_url = (request as any).signature_attachment_url || customerAttachments.signature_attachment_url || null
-        ;(request as any).salary_profile_attachment_url = (request as any).salary_profile_attachment_url || customerAttachments.salary_profile_attachment_url || null
-        ;(request as any).gosi_attachment_url = (request as any).gosi_attachment_url || customerAttachments.gosi_attachment_url || null
-        ;(request as any).tax_exemption_attachment_url = (request as any).tax_exemption_attachment_url || customerAttachments.tax_exemption_attachment_url || null
-        ;(request as any).additional_1_attachment_url = (request as any).additional_1_attachment_url || customerAttachments.additional_1_attachment_url || null
-        ;(request as any).additional_2_attachment_url = (request as any).additional_2_attachment_url || customerAttachments.additional_2_attachment_url || null
-        ;(request as any).additional_3_attachment_url = (request as any).additional_3_attachment_url || customerAttachments.additional_3_attachment_url || null
-      }
-    } catch (attachmentLoadError) {
-      if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
-    }
+    await mergeCustomerAttachmentsIntoTarget(
+      c.env.DB,
+      request as Record<string, unknown>,
+      (request as any).customer_id
+    )
     
     return c.html(`
       <!DOCTYPE html>
@@ -23025,16 +24616,7 @@ app.get('/admin/requests/:id', async (c) => {
               المرفقات
             </h2>
             ${(() => {
-              const docs = [
-                { key: 'identity', label: 'ملف الهوية', icon: 'fa-id-card', url: (request as any).identity_attachment_url },
-                { key: 'signature', label: 'ملف السمة', icon: 'fa-signature', url: (request as any).signature_attachment_url },
-                { key: 'salary_profile', label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: (request as any).salary_profile_attachment_url },
-                { key: 'gosi', label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: (request as any).gosi_attachment_url },
-                { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: (request as any).tax_exemption_attachment_url },
-                { key: 'additional_1', label: 'مستند إضافي 1', icon: 'fa-file-alt', url: (request as any).additional_1_attachment_url },
-                { key: 'additional_2', label: 'مستند إضافي 2', icon: 'fa-file-alt', url: (request as any).additional_2_attachment_url },
-                { key: 'additional_3', label: 'مستند إضافي 3', icon: 'fa-file-alt', url: (request as any).additional_3_attachment_url }
-              ].filter(d => d.url);
+              const docs = getCustomerAttachmentsFromRow(request as Record<string, unknown>);
               if (docs.length === 0) {
                 return `<div class="text-center mt-2 text-gray-500">
                   <i class="fas fa-inbox text-4xl mb-2"></i>
@@ -23046,8 +24628,8 @@ app.get('/admin/requests/:id', async (c) => {
                   <div class="border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition">
                     <div class="flex items-center justify-between mb-3">
                       <div class="flex items-center">
-                        <i class="fas ${d.icon} text-2xl text-blue-600 ml-3"></i>
-                        <span class="font-bold text-gray-800">${d.label}</span>
+                        <i class="fas fa-file-alt text-2xl text-blue-600 ml-3"></i>
+                        <span class="font-bold text-gray-800">${escapeHtml(d.label)}</span>
                       </div>
                       <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">متوفر</span>
                     </div>
@@ -23060,7 +24642,7 @@ app.get('/admin/requests/:id', async (c) => {
                          class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded transition text-center text-sm">
                         <i class="fas fa-download"></i> تنزيل
                       </a>
-                      <button onclick="deleteAttachment('${d.url}', '${d.key}')"
+                      <button onclick="deleteAttachment('${d.url}', '${d.id}')"
                          class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition text-center text-sm">
                         <i class="fas fa-trash"></i> حذف
                       </button>
@@ -23241,22 +24823,25 @@ app.get('/admin/customers/:id/edit', async (c) => {
       }
     } catch (_) {}
 
+    const editCustomerAttachments = getCustomerAttachmentsFromRow(customer as Record<string, unknown>)
+    const editCustomerAttachmentsJson = JSON.stringify(editCustomerAttachments).replace(/</g, '\\u003c')
+
     const customerTenantIdEdit =
       (customer as any).tenant_id != null ? Number((customer as any).tenant_id) : null
     let editCustomerLocationSectionHtml = ''
     if (customerTenantIdEdit && customerTenantIdEdit > 0) {
       const locRes = await c.env.DB.prepare(
-        `SELECT id, name, slug FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
+        `SELECT id, name FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
       )
         .bind(customerTenantIdEdit)
-        .all<{ id: number; name: string; slug: string }>()
-      const locRows = (locRes.results || []) as Array<{ id: number; name: string; slug: string }>
+        .all<{ id: number; name: string }>()
+      const locRows = (locRes.results || []) as Array<{ id: number; name: string }>
       const currentLocId =
         (customer as any).location_id != null ? Number((customer as any).location_id) : NaN
       const optionsHtml = locRows
         .map((r) => {
           const sel = Number.isFinite(currentLocId) && r.id === currentLocId ? ' selected' : ''
-          return `<option value="${r.id}"${sel}>${escapeHtml(r.name)} — ${escapeHtml(r.slug)}</option>`
+          return `<option value="${r.id}"${sel}>${escapeHtml(r.name)}</option>`
         })
         .join('')
       if (optionsHtml) {
@@ -23294,18 +24879,9 @@ app.get('/admin/customers/:id/edit', async (c) => {
     if (normalizeRoleId(userInfo.roleId) === 2) {
       const custTenantId = (customer as any).tenant_id != null ? Number((customer as any).tenant_id) : null
       if (custTenantId) {
-        const agentsRes = await c.env.DB.prepare(
-          `SELECT u.id, u.full_name, u.username FROM users u
-           WHERE u.role_id IN (5, 15) AND u.is_active = 1
-             AND (
-               u.tenant_id = ?
-               OR EXISTS (
-                 SELECT 1 FROM banks b
-                 WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
-               )
-             )
-           ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
-        ).bind(custTenantId, custTenantId).all<{ id: number; full_name: string | null; username: string }>()
+        const agentsRes = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL)
+          .bind(custTenantId, custTenantId, custTenantId)
+          .all<{ id: number; full_name: string | null; username: string }>()
         let agents = (agentsRes.results || []) as Array<{
           id: number
           full_name: string | null
@@ -23418,6 +24994,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
         <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
+        <style>${CUSTOMER_ATTACHMENTS_MODAL_STYLES}</style>
       </head>
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
@@ -23468,8 +25045,20 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <input type="hidden" name="date_of_birth" id="edit_date_of_birth">
                   <div class="flex gap-2 items-center flex-wrap">
                     <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
-                      <input type="date" id="edit_date_of_birth_gregorian" value="${(customer as any).birthdate && (customer as any).dob_calendar_type !== 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                      <input type="text" id="edit_date_of_birth_hijri" style="display:none" placeholder="اختر التاريخ الهجري" autocomplete="off" value="${(customer as any).birthdate && (customer as any).dob_calendar_type === 'hijri' ? (customer as any).birthdate : ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <input type="date" id="edit_date_of_birth_gregorian" value="${(customer as any).birthdate || ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <div id="edit_dob_hijri_wrap" style="display:none" class="flex-1 min-w-0 flex gap-1 items-center px-1 py-1">
+                        <select id="edit_dob_hijri_day" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="يوم">
+                          <option value="">يوم</option>
+                          ${Array.from({length:30},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+                        </select>
+                        <select id="edit_dob_hijri_month" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="الشهر">
+                          <option value="">الشهر</option><option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option>
+                        </select>
+                        <select id="edit_dob_hijri_year" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="السنة">
+                          <option value="">السنة</option>
+                          ${Array.from({length:161},(_,i)=>`<option value="${1300+i}">${1300+i}</option>`).join('')}
+                        </select>
+                      </div>
                     </div>
                     <div class="flex rounded-lg border border-gray-300 bg-gray-50">
                       <button type="button" id="edit_dob_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg ${(customer as any).dob_calendar_type === 'hijri' ? 'text-gray-600 hover:bg-gray-100' : 'bg-blue-600 text-white'}" title="ميلادي">م</button>
@@ -23486,8 +25075,9 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">نوع الوظيفة</label>
                   <select name="job_type" id="edit_job_type" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="civilian" ${((customer as any).job_type || 'civilian') !== 'military' ? 'selected' : ''}>مدني</option>
+                    <option value="civilian" ${((customer as any).job_type || 'civilian') === 'civilian' ? 'selected' : ''}>مدني</option>
                     <option value="military" ${(customer as any).job_type === 'military' ? 'selected' : ''}>عسكري</option>
+                    <option value="retired" ${(customer as any).job_type === 'retired' ? 'selected' : ''}>متقاعد</option>
                   </select>
                 </div>
                 <div>
@@ -23501,6 +25091,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                       <option value="">-- اختر الرتبة --</option>
                       <option value="جندي">جندي</option>
                       <option value="عريف">عريف</option>
+                      <option value="وكيل رقيب">وكيل رقيب</option>
                       <option value="رقيب">رقيب</option>
                       <option value="رقيب أول">رقيب أول</option>
                       <option value="رئيس رقباء">رئيس رقباء</option>
@@ -23510,7 +25101,6 @@ app.get('/admin/customers/:id/edit', async (c) => {
                       <option value="رائد">رائد</option>
                       <option value="مقدم">مقدم</option>
                       <option value="عقيد">عقيد</option>
-                      <option value="عميد">عميد</option>
                       <option value="لواء">لواء</option>
                       <option value="فريق">فريق</option>
                       <option value="فريق أول">فريق أول</option>
@@ -23525,7 +25115,19 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <div class="flex gap-2 items-center flex-wrap">
                     <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
                       <input type="date" id="edit_work_start_date_gregorian" value="${(customer as any).work_start_date || ''}" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
-                      <input type="text" id="edit_work_start_date_hijri" style="display:none" placeholder="اختر التاريخ الهجري" autocomplete="off" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <div id="edit_work_start_hijri_wrap" style="display:none" class="flex-1 min-w-0 flex gap-1 items-center px-1 py-1">
+                        <select id="edit_work_start_hijri_day" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="يوم">
+                          <option value="">يوم</option>
+                          ${Array.from({length:30},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+                        </select>
+                        <select id="edit_work_start_hijri_month" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="الشهر">
+                          <option value="">الشهر</option><option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option>
+                        </select>
+                        <select id="edit_work_start_hijri_year" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="السنة">
+                          <option value="">السنة</option>
+                          ${Array.from({length:161},(_,i)=>`<option value="${1300+i}">${1300+i}</option>`).join('')}
+                        </select>
+                      </div>
                     </div>
                     <div class="flex rounded-lg border border-gray-300 bg-gray-50" role="group">
                       <button type="button" id="edit_work_start_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
@@ -23559,6 +25161,14 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     'w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
                   )}
                 </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">رقم مالك العقار</label>
+                  <input type="text" name="property_owner" value="${escapeHtml(String((customer as any).property_owner || ''))}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">رقم المكتب العقاري</label>
+                  <input type="text" name="real_estate_office" value="${escapeHtml(String((customer as any).real_estate_office || ''))}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -23567,115 +25177,16 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 </label>
                 <textarea name="notes" rows="2" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="أي ملاحظات إضافية (اختياري)">${((customer as any).notes || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
               </div>
-              <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <h2 class="text-xl font-bold text-gray-700 mb-4">
-                  <i class="fas fa-paperclip ml-2"></i>
-                  المرفقات
-                </h2>
-                ${(() => {
-                  const docs = [
-                    { label: 'ملف الهوية', icon: 'fa-id-card', url: (customer as any).identity_attachment_url },
-                    { label: 'ملف السمة', icon: 'fa-signature', url: (customer as any).signature_attachment_url },
-                    { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: (customer as any).salary_profile_attachment_url },
-                    { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: (customer as any).gosi_attachment_url },
-                    { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: (customer as any).tax_exemption_attachment_url },
-                    { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: (customer as any).additional_1_attachment_url },
-                    { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: (customer as any).additional_2_attachment_url },
-                    { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: (customer as any).additional_3_attachment_url }
-                  ].filter(d => d.url);
-                  if (docs.length === 0) return '';
-                  return `
-                    <div class="mb-6 bg-white p-4 rounded-lg">
-                      <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        ${docs.map(d => `
-                          <div class="border-r pr-4">
-                            <p class="text-sm text-gray-600 mb-2"><i class="fas ${d.icon} ml-1"></i> ${d.label}:</p>
-                            <a href="${d.url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
-                              <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
-                            </a>
-                          </div>
-                        `).join('')}
-                      </div>
-                    </div>
-                  `
-                })()}
-                <h3 class="font-bold text-gray-700 mb-3">رفع مرفقات جديدة (اختياري):</h3>
-                <input type="hidden" name="identity_attachment_url" id="edit_customer_identity_attachment_url" value="${(((customer as any).identity_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="signature_attachment_url" id="edit_customer_signature_attachment_url" value="${(((customer as any).signature_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="salary_profile_attachment_url" id="edit_customer_salary_profile_attachment_url" value="${(((customer as any).salary_profile_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="gosi_attachment_url" id="edit_customer_gosi_attachment_url" value="${(((customer as any).gosi_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="tax_exemption_attachment_url" id="edit_customer_tax_exemption_attachment_url" value="${(((customer as any).tax_exemption_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="additional_1_attachment_url" id="edit_customer_additional_1_attachment_url" value="${(((customer as any).additional_1_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="additional_2_attachment_url" id="edit_customer_additional_2_attachment_url" value="${(((customer as any).additional_2_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <input type="hidden" name="additional_3_attachment_url" id="edit_customer_additional_3_attachment_url" value="${(((customer as any).additional_3_attachment_url || '') as string).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-id-card ml-1"></i> ملف الهوية
-                    </label>
-                    <input type="file" id="edit_customer_identity_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_identity_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-signature ml-1"></i> ملف السمة
-                    </label>
-                    <input type="file" id="edit_customer_signature_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_signature_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-money-check ml-1"></i> ملف تعريف الراتب
-                    </label>
-                    <input type="file" id="edit_customer_salary_profile_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_salary_profile_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-shield-alt ml-1"></i> ملف التأمينات الاجتماعية
-                    </label>
-                    <input type="file" id="edit_customer_gosi_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_gosi_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-certificate ml-1"></i> شهادة الإعفاء الضريبي
-                    </label>
-                    <input type="file" id="edit_customer_tax_exemption_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_tax_exemption_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 1
-                    </label>
-                    <input type="file" id="edit_customer_additional_1_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_additional_1_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 2
-                    </label>
-                    <input type="file" id="edit_customer_additional_2_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_additional_2_attachment_preview" class="mt-2"></div>
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      <i class="fas fa-file-alt ml-1"></i> مستند إضافي 3
-                    </label>
-                    <input type="file" id="edit_customer_additional_3_attachment" accept="image/*,application/pdf" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG أو PDF (حد أقصى 2MB)</p>
-                    <div id="edit_customer_additional_3_attachment_preview" class="mt-2"></div>
-                  </div>
-                </div>
-              </div>
+              ${renderCustomerAttachmentsModalSectionHtml({
+                modalId: 'editCustomerAttachmentsModal',
+                openBtnId: 'openEditCustomerAttachmentsModal',
+                closeBtnId: 'closeEditCustomerAttachmentsModal',
+                doneBtnId: 'doneEditCustomerAttachmentsModal',
+                hiddenInputId: 'edit_customer_attachments_json',
+                listContainerId: 'edit_customer_attachments_list',
+                addButtonId: 'edit_customer_add_attachment_btn',
+                existingAttachments: editCustomerAttachments,
+              })}
               <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
                 <h3 class="text-sm font-bold text-gray-700 mb-3">
                   <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
@@ -23712,7 +25223,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                         <th class="py-2 px-2">نوع الالتزام</th>
                         <th class="py-2 px-2">إجمالي المبلغ</th>
                         <th class="py-2 px-2">القسط الشهري</th>
-                        <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                        <th class="py-2 px-2">ملاحظة</th>
                         <th class="py-2 px-2 w-16"></th>
                       </tr>
                     </thead>
@@ -23737,137 +25248,68 @@ app.get('/admin/customers/:id/edit', async (c) => {
               </div>
               <div id="customer-edit-message" class="mt-2"></div>
             </form>
+            <script type="application/json" id="editCustomerAttachmentsJSON">${editCustomerAttachmentsJson}</script>
             <script>
               (function(){
                 var cust = ${JSON.stringify({ birthdate: (customer as any).birthdate, dob_calendar_type: (customer as any).dob_calendar_type, job_type: (customer as any).job_type, military_rank: (customer as any).military_rank })};
                 var editForm = document.getElementById('edit-customer-form');
                 var editMessageEl = document.getElementById('customer-edit-message');
-                var editAttachmentFiles = {
-                  identity: null,
-                  signature: null,
-                  salary_profile: null,
-                  gosi: null,
-                  tax_exemption: null,
-                  additional_1: null,
-                  additional_2: null,
-                  additional_3: null
-                };
-                var editAttachmentInputs = {
-                  identity: document.getElementById('edit_customer_identity_attachment'),
-                  signature: document.getElementById('edit_customer_signature_attachment'),
-                  salary_profile: document.getElementById('edit_customer_salary_profile_attachment'),
-                  gosi: document.getElementById('edit_customer_gosi_attachment'),
-                  tax_exemption: document.getElementById('edit_customer_tax_exemption_attachment'),
-                  additional_1: document.getElementById('edit_customer_additional_1_attachment'),
-                  additional_2: document.getElementById('edit_customer_additional_2_attachment'),
-                  additional_3: document.getElementById('edit_customer_additional_3_attachment')
-                };
-                var editAttachmentPreviewIds = {
-                  identity: 'edit_customer_identity_attachment_preview',
-                  signature: 'edit_customer_signature_attachment_preview',
-                  salary_profile: 'edit_customer_salary_profile_attachment_preview',
-                  gosi: 'edit_customer_gosi_attachment_preview',
-                  tax_exemption: 'edit_customer_tax_exemption_attachment_preview',
-                  additional_1: 'edit_customer_additional_1_attachment_preview',
-                  additional_2: 'edit_customer_additional_2_attachment_preview',
-                  additional_3: 'edit_customer_additional_3_attachment_preview'
-                };
-                var editAttachmentHiddenIds = {
-                  identity: 'edit_customer_identity_attachment_url',
-                  signature: 'edit_customer_signature_attachment_url',
-                  salary_profile: 'edit_customer_salary_profile_attachment_url',
-                  gosi: 'edit_customer_gosi_attachment_url',
-                  tax_exemption: 'edit_customer_tax_exemption_attachment_url',
-                  additional_1: 'edit_customer_additional_1_attachment_url',
-                  additional_2: 'edit_customer_additional_2_attachment_url',
-                  additional_3: 'edit_customer_additional_3_attachment_url'
-                };
                 function setEditMessage(type, text) {
                   if (!editMessageEl) return;
-                  var className = type === 'error'
-                    ? 'bg-red-100 border-red-300 text-red-700'
-                    : (type === 'success' ? 'bg-green-100 border-green-300 text-green-700' : 'bg-blue-100 border-blue-300 text-blue-700');
-                  editMessageEl.innerHTML = '<div class="border px-4 py-3 rounded ' + className + '">' +
-                    '<i class="fas ' + (type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin')) + ' ml-2"></i>' +
-                    text +
-                    '</div>';
+                  var icon = type === 'error' ? 'fa-exclamation-circle' : (type === 'success' ? 'fa-check-circle' : 'fa-spinner fa-spin');
+                  var tone = type === 'error' ? 'text-red-600' : (type === 'success' ? 'text-green-600' : 'text-blue-600');
+                  editMessageEl.innerHTML = '<p class="' + tone + ' font-medium"><i class="fas ' + icon + ' ml-1"></i>' + String(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</p>';
                 }
-                function handleEditAttachmentSelect(type) {
-                  var input = editAttachmentInputs[type];
-                  var preview = document.getElementById(editAttachmentPreviewIds[type]);
-                  if (!input || !preview) return;
-                  var file = input.files && input.files[0] ? input.files[0] : null;
-                  if (!file) {
-                    editAttachmentFiles[type] = null;
-                    preview.innerHTML = '';
-                    return;
-                  }
-                  if (file.size > 2 * 1024 * 1024) {
-                    input.value = '';
-                    editAttachmentFiles[type] = null;
-                    preview.innerHTML = '<span class="text-red-500 text-sm">الملف كبير جداً. الحد الأقصى 2MB</span>';
-                    return;
-                  }
-                  editAttachmentFiles[type] = file;
-                  preview.innerHTML = '<div class="text-sm text-green-600"><i class="fas fa-check-circle ml-1"></i>تم اختيار: ' +
-                    file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)</div>';
-                }
-                Object.keys(editAttachmentInputs).forEach(function(type) {
-                  var input = editAttachmentInputs[type];
-                  if (!input) return;
-                  input.addEventListener('change', function() { handleEditAttachmentSelect(type); });
+                var editCustomerAttachmentsInitialJson = [];
+                try {
+                  var __editAttEl = document.getElementById('editCustomerAttachmentsJSON');
+                  if (__editAttEl && __editAttEl.textContent) editCustomerAttachmentsInitialJson = JSON.parse(__editAttEl.textContent) || [];
+                } catch (e) { editCustomerAttachmentsInitialJson = []; }
+                ${getDynamicCustomerAttachmentsScript()}
+                ${getCustomerAttachmentsModalInitScript({
+                  modalId: 'editCustomerAttachmentsModal',
+                  openBtnId: 'openEditCustomerAttachmentsModal',
+                  closeBtnId: 'closeEditCustomerAttachmentsModal',
+                  doneBtnId: 'doneEditCustomerAttachmentsModal',
+                })}
+                initDynamicCustomerAttachments({
+                  hiddenInputId: 'edit_customer_attachments_json',
+                  listContainerId: 'edit_customer_attachments_list',
+                  addButtonId: 'edit_customer_add_attachment_btn',
+                  customerId: ${id},
+                  initialAttachments: editCustomerAttachmentsInitialJson
                 });
-                async function uploadEditAttachment(file, attachmentType) {
-                  var uploadData = new FormData();
-                  uploadData.append('file', file);
-                  uploadData.append('attachmentType', attachmentType);
-                  var response = await fetch('/api/attachments/upload', {
-                    method: 'POST',
-                    body: uploadData,
-                    credentials: 'include'
-                  });
-                  var payload = await response.json();
-                  if (!response.ok || !payload.success || !payload.url) {
-                    throw new Error(payload.error || 'فشل رفع المرفق');
-                  }
-                  return payload.url;
-                }
-                var g=document.getElementById('edit_date_of_birth_gregorian'),h=document.getElementById('edit_date_of_birth_hijri'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri');
-                if(g&&h&&hidden&&type&&btnG&&btnH){
-                  var isDobSyncing=false,hijriDobPicker=null;
-                  function editNormalizeArabicDigits(value){if(!value)return'';var a='٠١٢٣٤٥٦٧٨٩',e='۰۱۲۳۴۵۶۷۸۹';return String(value).replace(/[٠-٩۰-۹]/g,function(c){var ai=a.indexOf(c);if(ai>=0)return String(ai);var ei=e.indexOf(c);return ei>=0?String(ei):c;});}
-                  function editFormatHijriFromGregorian(dateValue){if(!dateValue)return'';try{var parts=String(dateValue).split('-').map(Number),year=parts[0],month=parts[1],day=parts[2];if(!year||!month||!day)return'';var d=new Date(year,month-1,day,12,0,0);if(Number.isNaN(d.getTime()))return'';return d.toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'});}catch(_){return'';}}
-                  function editParseHijriInput(value){var normalized=editNormalizeArabicDigits(value).replace(/‏/g,'').replace(/‎/g,'').trim();if(!normalized)return null;var parts=normalized.split(/[^\d]+/).filter(Boolean);if(parts.length!==3)return null;var year,month,day;if(parts[0].length===4){year=Number(parts[0]);month=Number(parts[1]);day=Number(parts[2]);}else if(parts[2].length===4){day=Number(parts[0]);month=Number(parts[1]);year=Number(parts[2]);}else{return null;}if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;if(year<1200||year>1700)return null;if(month<1||month>12)return null;if(day<1||day>30)return null;return{year:year,month:month,day:day};}
-                  function editExtractHijriParts(dateObject){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(dateObject);var year=Number((parts.find(function(p){return p.type==='year';})||{}).value),month=Number((parts.find(function(p){return p.type==='month';})||{}).value),day=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;return{year:year,month:month,day:day};}
-                  function editFormatGregorianValue(dateObject){var year=dateObject.getFullYear(),month=String(dateObject.getMonth()+1).padStart(2,'0'),day=String(dateObject.getDate()).padStart(2,'0');return year+'-'+month+'-'+day;}
-                  function editFindGregorianFromHijri(hijriParts){var approxGregorianYear=hijriParts.year+579,start=new Date(approxGregorianYear-2,0,1,12,0,0),end=new Date(approxGregorianYear+2,11,31,12,0,0);for(var cursor=new Date(start);cursor<=end;cursor.setDate(cursor.getDate()+1)){var cur=editExtractHijriParts(cursor);if(!cur)continue;if(cur.year===hijriParts.year&&cur.month===hijriParts.month&&cur.day===hijriParts.day)return editFormatGregorianValue(cursor);}return'';}
-                  function editSyncFromGregorian(){if(isDobSyncing)return;isDobSyncing=true;h.value=editFormatHijriFromGregorian(g.value);hidden.value=g.value||'';type.value='gregorian';if(hijriDobPicker&&g.value)hijriDobPicker.setDate(g.value,false,'Y-m-d');isDobSyncing=false;}
-                  function editSyncFromHijri(){if(isDobSyncing)return;var parsedHijri=editParseHijriInput(h.value);if(!parsedHijri)return;var gregorianValue=editFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isDobSyncing=true;g.value=gregorianValue;hidden.value=gregorianValue;type.value='hijri';if(hijriDobPicker)hijriDobPicker.setDate(gregorianValue,false,'Y-m-d');h.value=editFormatHijriFromGregorian(gregorianValue);isDobSyncing=false;}
-                  function editInitHijriDobPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriDobPicker=flatpickr(h,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(g.value)instance.setDate(g.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isDobSyncing)return;var gregorianValue=editFormatGregorianValue(selectedDates[0]);isDobSyncing=true;g.value=gregorianValue;hidden.value=gregorianValue;h.value=editFormatHijriFromGregorian(gregorianValue);isDobSyncing=false;}]});}
-                  function setGregorian(){g.style.display='';h.style.display='none';type.value='gregorian';hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
-                  function setHijri(){g.style.display='none';h.style.display='';type.value='hijri';if(g.value)h.value=editFormatHijriFromGregorian(g.value);hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
+
+                var g=document.getElementById('edit_date_of_birth_gregorian'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri'),hijriWrap=document.getElementById('edit_dob_hijri_wrap'),hijriDay=document.getElementById('edit_dob_hijri_day'),hijriMonth=document.getElementById('edit_dob_hijri_month'),hijriYear=document.getElementById('edit_dob_hijri_year');
+                if(g&&hidden&&type&&btnG&&btnH&&hijriWrap&&hijriDay&&hijriMonth&&hijriYear){
+                  var isDobSyncing=false;
+                  function editExtractHP(d){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((parts.find(function(p){return p.type==='year';})||{}).value),m=Number((parts.find(function(p){return p.type==='month';})||{}).value),dy=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                  function editGregStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+                  function editFindGreg(hp){var start=new Date(hp.year+577,0,1,12,0,0),end=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(start);c<=end;c.setDate(c.getDate()+1)){var cur=editExtractHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return editGregStr(c);}return'';}
+                  function editSetDD(gv){if(!gv){hijriDay.value='';hijriMonth.value='';hijriYear.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=editExtractHP(d);if(!hp)return;hijriYear.value=String(hp.year);hijriMonth.value=String(hp.month);hijriDay.value=String(hp.day);}
+                  function editSyncFromGreg(){if(isDobSyncing)return;isDobSyncing=true;hidden.value=g.value||'';type.value='gregorian';editSetDD(g.value);isDobSyncing=false;}
+                  function editSyncFromHijri(){if(isDobSyncing)return;var y=Number(hijriYear.value),m=Number(hijriMonth.value),d=Number(hijriDay.value);if(!y||!m||!d)return;var gv=editFindGreg({year:y,month:m,day:d});if(!gv)return;isDobSyncing=true;g.value=gv;hidden.value=gv;type.value='hijri';isDobSyncing=false;}
+                  function setGregorian(){g.style.display='';hijriWrap.style.display='none';type.value='gregorian';hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
+                  function setHijri(){g.style.display='none';hijriWrap.style.display='';type.value='hijri';editSetDD(g.value);hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
                   btnG.onclick=setGregorian;btnH.onclick=setHijri;
-                  g.onchange=editSyncFromGregorian;g.oninput=editSyncFromGregorian;h.onblur=editSyncFromHijri;
-                  if(cust.dob_calendar_type==='hijri'&&h.value){editSyncFromHijri();}
-                  editInitHijriDobPicker();
+                  g.onchange=editSyncFromGreg;g.oninput=editSyncFromGreg;
+                  hijriDay.onchange=editSyncFromHijri;hijriMonth.onchange=editSyncFromHijri;hijriYear.onchange=editSyncFromHijri;
                   if(cust.dob_calendar_type==='hijri'){setHijri();}else{setGregorian();}
                 }
-                var wsG=document.getElementById('edit_work_start_date_gregorian'),wsH=document.getElementById('edit_work_start_date_hijri'),wsHidden=document.getElementById('edit_work_start_date'),wsBtnG=document.getElementById('edit_work_start_toggle_gregorian'),wsBtnH=document.getElementById('edit_work_start_toggle_hijri');
-                if(wsG&&wsH&&wsHidden&&wsBtnG&&wsBtnH){
-                  var isWSSyncing=false,hijriWSPicker=null;
-                  function wsFormatHijriFromGregorian(dateValue){if(!dateValue)return'';try{var parts=String(dateValue).split('-').map(Number),year=parts[0],month=parts[1],day=parts[2];if(!year||!month||!day)return'';var d=new Date(year,month-1,day,12,0,0);if(Number.isNaN(d.getTime()))return'';return d.toLocaleDateString('ar-SA-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'});}catch(_){return'';}}
-                  function wsParseHijriInput(value){var a='٠١٢٣٤٥٦٧٨٩',e='۰۱۲۳۴۵۶۷۸۹';var normalized=String(value||'').replace(/[٠-٩۰-۹]/g,function(c){var ai=a.indexOf(c);if(ai>=0)return String(ai);var ei=e.indexOf(c);return ei>=0?String(ei):c;}).replace(/‏/g,'').replace(/‎/g,'').trim();if(!normalized)return null;var parts=normalized.split(/[^\d]+/).filter(Boolean);if(parts.length!==3)return null;var year,month,day;if(parts[0].length===4){year=Number(parts[0]);month=Number(parts[1]);day=Number(parts[2]);}else if(parts[2].length===4){day=Number(parts[0]);month=Number(parts[1]);year=Number(parts[2]);}else{return null;}if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;if(year<1200||year>1700)return null;if(month<1||month>12)return null;if(day<1||day>30)return null;return{year:year,month:month,day:day};}
-                  function wsExtractHijriParts(dateObject){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(dateObject);var year=Number((parts.find(function(p){return p.type==='year';})||{}).value),month=Number((parts.find(function(p){return p.type==='month';})||{}).value),day=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(year)||!Number.isFinite(month)||!Number.isFinite(day))return null;return{year:year,month:month,day:day};}
-                  function wsFormatGregorianValue(dateObject){var year=dateObject.getFullYear(),month=String(dateObject.getMonth()+1).padStart(2,'0'),day=String(dateObject.getDate()).padStart(2,'0');return year+'-'+month+'-'+day;}
-                  function wsFindGregorianFromHijri(hijriParts){var approxGregorianYear=hijriParts.year+579,start=new Date(approxGregorianYear-2,0,1,12,0,0),end=new Date(approxGregorianYear+2,11,31,12,0,0);for(var cursor=new Date(start);cursor<=end;cursor.setDate(cursor.getDate()+1)){var cur=wsExtractHijriParts(cursor);if(!cur)continue;if(cur.year===hijriParts.year&&cur.month===hijriParts.month&&cur.day===hijriParts.day)return wsFormatGregorianValue(cursor);}return'';}
-                  function wsSyncFromGregorian(){if(isWSSyncing)return;isWSSyncing=true;wsH.value=wsFormatHijriFromGregorian(wsG.value);wsHidden.value=wsG.value||'';if(hijriWSPicker&&wsG.value)hijriWSPicker.setDate(wsG.value,false,'Y-m-d');isWSSyncing=false;}
-                  function wsSyncFromHijri(){if(isWSSyncing)return;var parsedHijri=wsParseHijriInput(wsH.value);if(!parsedHijri)return;var gregorianValue=wsFindGregorianFromHijri(parsedHijri);if(!gregorianValue)return;isWSSyncing=true;wsG.value=gregorianValue;wsHidden.value=gregorianValue;if(hijriWSPicker)hijriWSPicker.setDate(gregorianValue,false,'Y-m-d');wsH.value=wsFormatHijriFromGregorian(gregorianValue);isWSSyncing=false;}
-                  function wsInitHijriPicker(){if(typeof flatpickr!=='function'||typeof hijriCalendarPlugin!=='function'||!window.luxon||!window.luxon.DateTime)return;hijriWSPicker=flatpickr(wsH,{locale:'ar',disableMobile:true,dateFormat:'Y-m-d',allowInput:true,plugins:[hijriCalendarPlugin(window.luxon.DateTime,{showHijriDates:true,showHijriToggle:false})],onOpen:[function(_,__,instance){if(wsG.value)instance.setDate(wsG.value,false,'Y-m-d');}],onChange:[function(selectedDates){if(!selectedDates||!selectedDates.length||isWSSyncing)return;var gregorianValue=wsFormatGregorianValue(selectedDates[0]);isWSSyncing=true;wsG.value=gregorianValue;wsHidden.value=gregorianValue;wsH.value=wsFormatHijriFromGregorian(gregorianValue);isWSSyncing=false;}]});}
-                  function wsSetGregorian(){wsG.style.display='';wsH.style.display='none';wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
-                  function wsSetHijri(){wsG.style.display='none';wsH.style.display='';if(wsG.value)wsH.value=wsFormatHijriFromGregorian(wsG.value);wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
+                var wsG=document.getElementById('edit_work_start_date_gregorian'),wsHidden=document.getElementById('edit_work_start_date'),wsBtnG=document.getElementById('edit_work_start_toggle_gregorian'),wsBtnH=document.getElementById('edit_work_start_toggle_hijri'),wsHijriWrap=document.getElementById('edit_work_start_hijri_wrap'),wsHijriDay=document.getElementById('edit_work_start_hijri_day'),wsHijriMonth=document.getElementById('edit_work_start_hijri_month'),wsHijriYear=document.getElementById('edit_work_start_hijri_year');
+                if(wsG&&wsHidden&&wsBtnG&&wsBtnH&&wsHijriWrap&&wsHijriDay&&wsHijriMonth&&wsHijriYear){
+                  var isWSSyncing=false;
+                  function wsExtractHP(d){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((parts.find(function(p){return p.type==='year';})||{}).value),m=Number((parts.find(function(p){return p.type==='month';})||{}).value),dy=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                  function wsGregStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+                  function wsFindGreg(hp){var start=new Date(hp.year+577,0,1,12,0,0),end=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(start);c<=end;c.setDate(c.getDate()+1)){var cur=wsExtractHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return wsGregStr(c);}return'';}
+                  function wsSetDD(gv){if(!gv){wsHijriDay.value='';wsHijriMonth.value='';wsHijriYear.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=wsExtractHP(d);if(!hp)return;wsHijriYear.value=String(hp.year);wsHijriMonth.value=String(hp.month);wsHijriDay.value=String(hp.day);}
+                  function wsSyncFromGreg(){if(isWSSyncing)return;isWSSyncing=true;wsHidden.value=wsG.value||'';wsSetDD(wsG.value);isWSSyncing=false;}
+                  function wsSyncFromHijri(){if(isWSSyncing)return;var y=Number(wsHijriYear.value),m=Number(wsHijriMonth.value),d=Number(wsHijriDay.value);if(!y||!m||!d)return;var gv=wsFindGreg({year:y,month:m,day:d});if(!gv)return;isWSSyncing=true;wsG.value=gv;wsHidden.value=gv;isWSSyncing=false;}
+                  function wsSetGregorian(){wsG.style.display='';wsHijriWrap.style.display='none';wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
+                  function wsSetHijri(){wsG.style.display='none';wsHijriWrap.style.display='';wsSetDD(wsG.value);wsHidden.value=wsG.value||'';wsBtnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';wsBtnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
                   wsBtnG.onclick=wsSetGregorian;wsBtnH.onclick=wsSetHijri;
-                  wsG.onchange=wsSyncFromGregorian;wsG.oninput=wsSyncFromGregorian;wsH.onblur=wsSyncFromHijri;
-                  wsInitHijriPicker();
+                  wsG.onchange=wsSyncFromGreg;wsG.oninput=wsSyncFromGreg;
+                  wsHijriDay.onchange=wsSyncFromHijri;wsHijriMonth.onchange=wsSyncFromHijri;wsHijriYear.onchange=wsSyncFromHijri;
                   wsSetGregorian();
                 }
                 var jobTypeEl=document.getElementById('edit_job_type'),civilianWrap=document.getElementById('edit_job_title_civilian_wrap'),militaryWrap=document.getElementById('edit_military_rank_wrap'),jobTitleInput=document.getElementById('edit_job_title_input'),militarySelect=document.getElementById('edit_military_rank_select');
@@ -23876,7 +25318,6 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   jobTypeEl.addEventListener('change',updateEditJobType);
                   if(militarySelect&&cust.military_rank) militarySelect.value=cust.military_rank;
                   updateEditJobType();
-                  document.getElementById('edit-customer-form').addEventListener('submit',function(){ if(jobTypeEl.value==='military'&&militarySelect&&jobTitleInput){ jobTitleInput.value=militarySelect.value||''; jobTitleInput.disabled=false; } });
                 }
                 var editSolutionsInitial = ${JSON.stringify(editSolutionsInitial)};
                 var editSolTbody = document.getElementById('edit-solutions-tbody');
@@ -23906,84 +25347,66 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   if(editSolutionsInitial.length === 0) addEditSolRow();
                   editSolAddBtn.onclick = function(){ addEditSolRow(); };
                 }
-                var editObligationsInitial = ${JSON.stringify(obligations)};
                 var editTbody = document.getElementById('edit-obligations-tbody');
-                var editAddBtn = document.getElementById('edit-add-obligation-row');
                 var editHidden = document.getElementById('edit_obligations_json');
-                if(editTbody&&editAddBtn&&editHidden){
-                  var editObligationTypeNames=${JSON.stringify(obligationTypeNames)};
-                  function editEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
-                  function buildEditObligSelect(selectedValue){
-                    var sel=selectedValue==null?'':String(selectedValue);
-                    var opts='<option value="">— اختر نوع الالتزام —</option>';
-                    for(var i=0;i<editObligationTypeNames.length;i++){
-                      var name=editObligationTypeNames[i];
-                      opts+='<option value="'+editEsc(name)+'"'+(sel===name?' selected':'')+'>'+editEsc(name)+'</option>';
-                    }
-                    if(sel&&editObligationTypeNames.indexOf(sel)===-1){
-                      opts+='<option value="'+editEsc(sel)+'" selected>'+editEsc(sel)+'</option>';
-                    }
-                    return '<select class="edit-oblig-type w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">'+opts+'</select>';
-                  }
-                  function addEditRow(data){
-                    data=data||{};
-                    var tr=document.createElement('tr');
-                    tr.className='border-b border-gray-200';
-                    tr.innerHTML='<td class="py-1 px-2">'+buildEditObligSelect(data.obligation_type||'')+'</td><td class="py-1 px-2"><input type="number" class="edit-oblig-total w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="number" class="edit-oblig-monthly w-full px-2 py-1.5 border rounded" step="0.01" min="0"></td><td class="py-1 px-2"><input type="date" class="edit-oblig-due w-full px-2 py-1.5 border rounded"></td><td class="py-1 px-2"><button type="button" class="edit-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
-                    if(data.total_amount!=null) tr.querySelector('.edit-oblig-total').value=data.total_amount;
-                    if(data.monthly_installment!=null) tr.querySelector('.edit-oblig-monthly').value=data.monthly_installment;
-                    if(data.due_date) tr.querySelector('.edit-oblig-due').value=data.due_date;
-                    tr.querySelector('.edit-oblig-remove').onclick=function(){ tr.remove(); };
-                    editTbody.appendChild(tr);
-                  }
-                  editObligationsInitial.forEach(function(o){ addEditRow(o); });
-                  if(editObligationsInitial.length===0) addEditRow();
-                  editAddBtn.onclick=function(){ addEditRow(); };
-                  editForm.addEventListener('submit',async function(event){
+                ${getCustomerObligationsTableInitScript({
+                  tbodyId: 'edit-obligations-tbody',
+                  addBtnId: 'edit-add-obligation-row',
+                  typeSelectClass: 'edit-oblig-type',
+                  typeCustomInputClass: 'edit-oblig-type-custom',
+                  totalClass: 'edit-oblig-total',
+                  monthlyClass: 'edit-oblig-monthly',
+                  dueClass: 'edit-oblig-due',
+                  removeClass: 'edit-oblig-remove',
+                  obligationTypeNamesJson: JSON.stringify(obligationTypeNames),
+                  initialRowsJson: JSON.stringify(obligations),
+                })}
+                if (editForm) {
+                  editForm.addEventListener('submit', async function (event) {
                     event.preventDefault();
-                    var rows=editTbody.querySelectorAll('tr');
-                    var arr=[];
-                    rows.forEach(function(tr){
-                      var typeEl=tr.querySelector('.edit-oblig-type');
-                      var totalEl=tr.querySelector('.edit-oblig-total');
-                      var monthlyEl=tr.querySelector('.edit-oblig-monthly');
-                      var dueEl=tr.querySelector('.edit-oblig-due');
-                      if(!typeEl||!totalEl||!monthlyEl) return;
-                      arr.push({ obligation_type: typeEl.value||'', total_amount: parseFloat(totalEl.value)||0, monthly_installment: parseFloat(monthlyEl.value)||0, due_date: dueEl&&dueEl.value?dueEl.value:null });
-                    });
-                    editHidden.value=JSON.stringify(arr);
-                    var esh=document.getElementById('edit_solutions_json');
-                    if(esh&&editSolTbody){
-                      var srows=editSolTbody.querySelectorAll('tr');
-                      var sarr=[];
-                      srows.forEach(function(tr){
-                        var ne=tr.querySelector('.edit-sol-note');
-                        if(!ne) return;
-                        sarr.push({ note: (ne.value||'').trim() });
+                    var jobTypeEl = document.getElementById('edit_job_type');
+                    var jobTitleInput = document.getElementById('edit_job_title_input');
+                    var militarySelect = document.getElementById('edit_military_rank_select');
+                    if (jobTypeEl && jobTypeEl.value === 'military' && militarySelect && jobTitleInput) {
+                      jobTitleInput.value = militarySelect.value || '';
+                      jobTitleInput.disabled = false;
+                    }
+                    if (editTbody && editHidden) {
+                      var rows = editTbody.querySelectorAll('tr');
+                      var arr = [];
+                      rows.forEach(function (tr) {
+                        var totalEl = tr.querySelector('.edit-oblig-total');
+                        var monthlyEl = tr.querySelector('.edit-oblig-monthly');
+                        if (!totalEl || !monthlyEl) return;
+                        arr.push({
+                          obligation_type: window.collectObligationTypeFromRow(tr, 'edit-oblig-type', 'edit-oblig-type-custom'),
+                          total_amount: parseFloat(totalEl.value) || 0,
+                          monthly_installment: parseFloat(monthlyEl.value) || 0,
+                          due_date: (function () { var el = tr.querySelector('.edit-oblig-due'); return el ? String(el.value || '').trim() || null : null; })()
+                        });
                       });
-                      esh.value=JSON.stringify(sarr);
+                      editHidden.value = JSON.stringify(arr);
+                    }
+                    var esh = document.getElementById('edit_solutions_json');
+                    if (esh && editSolTbody) {
+                      var srows = editSolTbody.querySelectorAll('tr');
+                      var sarr = [];
+                      srows.forEach(function (tr) {
+                        var ne = tr.querySelector('.edit-sol-note');
+                        if (!ne) return;
+                        sarr.push({ note: (ne.value || '').trim() });
+                      });
+                      esh.value = JSON.stringify(sarr);
                     }
                     var submitBtn = editForm.querySelector('button[type="submit"]');
                     if (submitBtn) submitBtn.disabled = true;
+                    setEditMessage('loading', 'جاري حفظ التعديلات...');
                     try {
-                      var uploadOrder = [
-                        { key: 'identity', label: 'ملف الهوية' },
-                        { key: 'signature', label: 'ملف السمة' },
-                        { key: 'salary_profile', label: 'ملف تعريف الراتب' },
-                        { key: 'gosi', label: 'ملف التأمينات الاجتماعية' },
-                        { key: 'tax_exemption', label: 'شهادة الإعفاء الضريبي' },
-                        { key: 'additional_1', label: 'مستند إضافي 1' },
-                        { key: 'additional_2', label: 'مستند إضافي 2' },
-                        { key: 'additional_3', label: 'مستند إضافي 3' }
-                      ];
-                      for (var i = 0; i < uploadOrder.length; i++) {
-                        var item = uploadOrder[i];
-                        var file = editAttachmentFiles[item.key];
-                        if (!file) continue;
-                        var hiddenInput = document.getElementById(editAttachmentHiddenIds[item.key]);
-                        if (!hiddenInput) continue;
-                        setEditMessage('loading', 'جاري رفع ' + item.label + '...');
-                        hiddenInput.value = await uploadEditAttachment(file, item.key);
+                      if (typeof window.uploadDynamicCustomerAttachments === 'function') {
+                        await window.uploadDynamicCustomerAttachments({
+                          customerId: String(${id}),
+                          onProgress: function (msg) { setEditMessage('loading', msg); }
+                        });
                       }
                       editForm.submit();
                     } catch (uploadError) {
@@ -24000,15 +25423,29 @@ app.get('/admin/customers/:id/edit', async (c) => {
       </body>
       </html>
     `)
-  } catch (error) {
-    return c.html('<h1>خطأ في تحميل البيانات</h1>')
+  } catch (error: unknown) {
+    console.error('[CustomerEdit] Page load failed:', error)
+    const msg = error instanceof Error ? error.message : String(error)
+    return c.html(`<h1>خطأ في تحميل البيانات</h1><p class="text-red-600" dir="ltr">${escapeHtml(msg)}</p>`)
   }
 })
 
 // حذف عميل
 app.get('/admin/customers/:id/delete', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
     const id = c.req.param('id')
+    const customer = await c.env.DB
+      .prepare('SELECT id, tenant_id FROM customers WHERE id = ?')
+      .bind(id)
+      .first<{ id: number; tenant_id: number | null }>()
+    if (!customer) {
+      return c.html('<h1>العميل غير موجود</h1>')
+    }
+    if (!(await canUserAccessCustomer(c.env.DB, userInfo, customer))) {
+      return c.html('<h1>غير مصرح بحذف هذا العميل</h1>', 403)
+    }
     await c.env.DB.prepare('DELETE FROM customers WHERE id = ?').bind(id).run()
     return c.redirect('/admin/customers')
   } catch (error) {
@@ -24241,16 +25678,7 @@ app.get('/admin/customers/:id/report', async (c) => {
               المرفقات
             </h2>
             ${(() => {
-              const docs = [
-                { label: 'ملف الهوية', icon: 'fa-id-card', url: cust.identity_attachment_url },
-                { label: 'ملف السمة', icon: 'fa-signature', url: cust.signature_attachment_url },
-                { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: cust.salary_profile_attachment_url },
-                { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: cust.gosi_attachment_url },
-                { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: cust.tax_exemption_attachment_url },
-                { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: cust.additional_1_attachment_url },
-                { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: cust.additional_2_attachment_url },
-                { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: cust.additional_3_attachment_url }
-              ].filter(d => d.url);
+              const docs = getCustomerAttachmentsFromRow(cust as Record<string, unknown>);
               if (docs.length === 0) {
                 return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
                   لا توجد مرفقات مرفوعة لهذا العميل
@@ -24259,7 +25687,7 @@ app.get('/admin/customers/:id/report', async (c) => {
               return `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 ${docs.map(d => `
                   <a href="${d.url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
-                    <span class="font-bold text-blue-800"><i class="fas ${d.icon} ml-2"></i>${d.label}</span>
+                    <span class="font-bold text-blue-800"><i class="fas fa-file-alt ml-2"></i>${escapeHtml(d.label)}</span>
                     <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
                   </a>
                 `).join('')}
@@ -24331,6 +25759,26 @@ app.get('/admin/customers/:id/report', async (c) => {
                 <div>
                   <p class="text-sm text-gray-500">نوع المنتج</p>
                   <p class="text-xl font-bold text-sky-600">${cust.property_type || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-emerald-100 p-3 rounded-lg">
+                  <i class="fas fa-user-shield text-emerald-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">رقم مالك العقار</p>
+                  <p class="text-xl font-bold text-emerald-600">${cust.property_owner || 'غير محدد'}</p>
+                </div>
+              </div>
+              
+              <div class="flex items-start space-x-3 space-x-reverse">
+                <div class="bg-cyan-100 p-3 rounded-lg">
+                  <i class="fas fa-building text-cyan-600 text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">رقم المكتب العقاري</p>
+                  <p class="text-xl font-bold text-cyan-600">${cust.real_estate_office || 'غير محدد'}</p>
                 </div>
               </div>
             </div>
@@ -24491,18 +25939,8 @@ app.get('/admin/customers/:id/workflow', async (c) => {
     if (!customer) {
       return c.html('<h1>العميل غير موجود</h1>')
     }
-    const hasAccess = await canUserAccessCustomer(c.env.DB, userInfo, customer as { id: number; tenant_id: number | null })
-    if (!hasAccess) {
-      // Allow cross-party workflow access: role 4/5 notified about this customer's workflow
-      const rid = normalizeRoleId(userInfo.roleId)
-      if ((rid === 4 || rid === 5) && customer.tenant_id != null && customer.tenant_id === userInfo.tenantId) {
-        const notif = await c.env.DB.prepare(
-          `SELECT 1 as ok FROM customer_alarms WHERE customer_id = ? AND user_id = ? AND alarm_type = 'workflow' LIMIT 1`
-        ).bind(customer.id, userInfo.userId).first<{ ok: number }>()
-        if (!notif?.ok) return c.html('<h1>غير مصرح بعرض سير عمل هذا العميل</h1>', 403)
-      } else {
-        return c.html('<h1>غير مصرح بعرض سير عمل هذا العميل</h1>', 403)
-      }
+    if (!(await canUserAccessCustomerWorkflow(c.env.DB, userInfo, Number(id)))) {
+      return c.html('<h1>غير مصرح بعرض سير عمل هذا العميل</h1>', 403)
     }
 
     const { results: stages } = await c.env.DB.prepare(`
@@ -24535,6 +25973,14 @@ app.get('/admin/customers/:id/workflow', async (c) => {
       ORDER BY cwa.created_at DESC
     `).bind(id).all()
 
+    const { results: custNotes } = await c.env.DB.prepare(`
+      SELECT cwn.*, u.full_name as performed_by_name, u.role_id as performed_by_role_id
+      FROM customer_workflow_notes cwn
+      LEFT JOIN users u ON cwn.performed_by = u.id
+      WHERE cwn.customer_id = ?
+      ORDER BY cwn.created_at DESC
+    `).bind(id).all()
+
     const { results: custTasks } = await c.env.DB.prepare(`
       SELECT cwt.*, u.full_name as assigned_to_name
       FROM customer_workflow_tasks cwt
@@ -24554,7 +26000,7 @@ app.get('/admin/customers/:id/workflow', async (c) => {
     `).bind(id).first() as any
 
     let requestId: number | null = null
-    let requestTimeline: { transitions: any[]; actions: any[]; tasks: any[] } | undefined
+    let requestTimeline: { transitions: any[]; actions: any[]; notes: any[]; tasks: any[] } | undefined
 
     if (latestRequest?.id) {
       requestId = latestRequest.id
@@ -24582,6 +26028,14 @@ app.get('/admin/customers/:id/workflow', async (c) => {
         ORDER BY wsa.created_at DESC
       `).bind(requestId).all()
 
+      const { results: reqNotes } = await c.env.DB.prepare(`
+        SELECT wsn.*, u.full_name AS performed_by_name, u.role_id AS performed_by_role_id
+        FROM workflow_stage_notes wsn
+        LEFT JOIN users u ON wsn.performed_by = u.id
+        WHERE wsn.request_id = ?
+        ORDER BY wsn.created_at DESC
+      `).bind(requestId).all()
+
       const { results: reqTasks } = await c.env.DB.prepare(`
         SELECT wst.*, u.full_name as assigned_to_name
         FROM workflow_stage_tasks wst
@@ -24590,18 +26044,19 @@ app.get('/admin/customers/:id/workflow', async (c) => {
         ORDER BY wst.created_at DESC
       `).bind(requestId).all()
 
-      requestTimeline = { transitions: reqTransitions, actions: reqActions, tasks: reqTasks }
+      requestTimeline = { transitions: reqTransitions, actions: reqActions, notes: reqNotes, tasks: reqTasks }
     }
 
     const html = generateCustomerWorkflowPage({
       customerId: parseInt(id, 10),
       customer,
       stages,
-      customerTimeline: { transitions: custTransitions, actions: custActions, tasks: custTasks },
+      customerTimeline: { transitions: custTransitions, actions: custActions, notes: custNotes, tasks: custTasks },
       requestId,
       request: latestRequest ?? null,
       requestTimeline,
       roleId: userInfo.roleId,
+      userId: userInfo.userId,
       activeTab: 'customer',
     })
 
@@ -24615,8 +26070,14 @@ app.get('/admin/customers/:id/workflow', async (c) => {
 // تقرير طلب التمويل الكامل
 app.get('/admin/requests/:id/report', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+
     const id = c.req.param('id')
-    
+    if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
+      return c.html('<h1>غير مصرح بعرض تقرير هذا الطلب</h1>', 403)
+    }
+
     // جلب بيانات طلب التمويل مع بيانات العميل والبنك
     const request = await c.env.DB.prepare(`
       SELECT 
@@ -24643,42 +26104,7 @@ app.get('/admin/requests/:id/report', async (c) => {
     
     const req = request as any
 
-    try {
-      const customerAttachments = await c.env.DB.prepare(`
-        SELECT
-          identity_attachment_url,
-          signature_attachment_url,
-          salary_profile_attachment_url,
-          gosi_attachment_url,
-          tax_exemption_attachment_url,
-          additional_1_attachment_url,
-          additional_2_attachment_url,
-          additional_3_attachment_url
-        FROM customers
-        WHERE id = ?
-      `).bind(req.customer_id).first() as {
-        identity_attachment_url?: string | null
-        signature_attachment_url?: string | null
-        salary_profile_attachment_url?: string | null
-        gosi_attachment_url?: string | null
-        tax_exemption_attachment_url?: string | null
-        additional_1_attachment_url?: string | null
-        additional_2_attachment_url?: string | null
-        additional_3_attachment_url?: string | null
-      } | null
-      if (customerAttachments) {
-        req.identity_attachment_url = req.identity_attachment_url || customerAttachments.identity_attachment_url || null
-        req.signature_attachment_url = req.signature_attachment_url || customerAttachments.signature_attachment_url || null
-        req.salary_profile_attachment_url = req.salary_profile_attachment_url || customerAttachments.salary_profile_attachment_url || null
-        req.gosi_attachment_url = req.gosi_attachment_url || customerAttachments.gosi_attachment_url || null
-        req.tax_exemption_attachment_url = req.tax_exemption_attachment_url || customerAttachments.tax_exemption_attachment_url || null
-        req.additional_1_attachment_url = req.additional_1_attachment_url || customerAttachments.additional_1_attachment_url || null
-        req.additional_2_attachment_url = req.additional_2_attachment_url || customerAttachments.additional_2_attachment_url || null
-        req.additional_3_attachment_url = req.additional_3_attachment_url || customerAttachments.additional_3_attachment_url || null
-      }
-    } catch (attachmentLoadError) {
-      if (!isMissingCustomerAttachmentsColumnError(attachmentLoadError)) throw attachmentLoadError
-    }
+    await mergeCustomerAttachmentsIntoTarget(c.env.DB, req, req.customer_id)
     
     // تنسيق التواريخ
     const formatDate = (date: string) => {
@@ -24925,16 +26351,7 @@ app.get('/admin/requests/:id/report', async (c) => {
               المرفقات
             </h2>
             ${(() => {
-              const docs = [
-                { label: 'ملف الهوية', icon: 'fa-id-card', url: req.identity_attachment_url },
-                { label: 'ملف السمة', icon: 'fa-signature', url: req.signature_attachment_url },
-                { label: 'ملف تعريف الراتب', icon: 'fa-money-check', url: req.salary_profile_attachment_url },
-                { label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', url: req.gosi_attachment_url },
-                { label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', url: req.tax_exemption_attachment_url },
-                { label: 'مستند إضافي 1', icon: 'fa-file-alt', url: req.additional_1_attachment_url },
-                { label: 'مستند إضافي 2', icon: 'fa-file-alt', url: req.additional_2_attachment_url },
-                { label: 'مستند إضافي 3', icon: 'fa-file-alt', url: req.additional_3_attachment_url }
-              ].filter(d => d.url);
+              const docs = getCustomerAttachmentsFromRow(req as Record<string, unknown>);
               if (docs.length === 0) {
                 return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-gray-600 text-center">
                   لا توجد مرفقات مرفوعة لهذا الطلب/العميل
@@ -24943,7 +26360,7 @@ app.get('/admin/requests/:id/report', async (c) => {
               return `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 ${docs.map(d => `
                   <a href="${d.url}" target="_blank" class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
-                    <span class="font-bold text-blue-800"><i class="fas ${d.icon} ml-2"></i>${d.label}</span>
+                    <span class="font-bold text-blue-800"><i class="fas fa-file-alt ml-2"></i>${escapeHtml(d.label)}</span>
                     <span class="text-blue-700 text-sm"><i class="fas fa-external-link-alt ml-1"></i>فتح</span>
                   </a>
                 `).join('')}
@@ -25011,6 +26428,25 @@ app.get('/admin/requests/:id/report', async (c) => {
 
 // ── Customer Workflow APIs ─────────────────────────────────────────────────
 
+async function ensureWorkflowPhaseNotesTables(db: any) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS workflow_stage_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id INTEGER NOT NULL,
+    stage_id INTEGER NOT NULL,
+    note_text TEXT NOT NULL,
+    performed_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run()
+  await db.prepare(`CREATE TABLE IF NOT EXISTS customer_workflow_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    stage_id INTEGER NOT NULL,
+    note_text TEXT NOT NULL,
+    performed_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run()
+}
+
 // Ensure customer workflow tables exist (idempotent)
 async function ensureCustomerWorkflowTables(db: any) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS customer_workflow_transitions (
@@ -25047,6 +26483,8 @@ async function ensureCustomerWorkflowTables(db: any) {
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`).run()
   try { await db.prepare(`ALTER TABLE customers ADD COLUMN current_workflow_stage_id INTEGER`).run() } catch (_) {}
+  await ensureWorkflowPhaseNotesTables(db)
+  await ensurePreWorkflowStage(db)
 }
 
 app.post('/api/workflow/customer-update-stage', async (c) => {
@@ -25055,6 +26493,9 @@ app.post('/api/workflow/customer-update-stage', async (c) => {
     if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     if (normalizeRoleId(requester.roleId) === 4) return c.json({ success: false, error: 'Forbidden' }, 403)
     const { customerId, newStageId, notes, userId } = await c.req.json()
+    if (!(await canUserAccessCustomerWorkflow(c.env.DB, requester, Number(customerId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     await ensureCustomerWorkflowTables(c.env.DB)
     const currentCustomer = await c.env.DB.prepare(`SELECT current_workflow_stage_id FROM customers WHERE id = ?`).bind(customerId).first() as any
 
@@ -25072,27 +26513,29 @@ app.post('/api/workflow/customer-update-stage', async (c) => {
     await c.env.DB.prepare(`INSERT INTO customer_workflow_transitions (customer_id, from_stage_id, to_stage_id, transitioned_by, notes) VALUES (?, ?, ?, ?, ?)`)
       .bind(customerId, currentCustomer?.current_workflow_stage_id ?? null, newStageId, userId || requester.userId, notes || null).run()
 
-    // Notify the other party about this stage update
+    // Notify the other party about this stage update — assigned user only
     try {
-      const actorRole = normalizeRoleId(requester.roleId)
-      const targetRole = actorRole === 5 ? 4 : actorRole === 4 ? 5 : null
-      if (targetRole) {
-        const stageRow = await c.env.DB.prepare(`SELECT stage_name_ar FROM workflow_stages WHERE id = ?`).bind(newStageId).first() as any
-        const stageNameAr = stageRow?.stage_name_ar || ''
-        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
-        const actorName = actorRow?.full_name || ''
-        const actorTenant = actorRow?.tenant_id ?? null
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
-        const linkUrl = `/admin/customers/${customerId}/workflow#customer`
-        const { results: targets } = await c.env.DB.prepare(
-          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
-        ).bind(targetRole, actorTenant).all()
-        for (const t of targets as any[]) {
-          await c.env.DB.prepare(
-            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
-          ).bind(customerId, `تحديث مرحلة: ${stageNameAr}`, `قام ${actorName} بتحديث مرحلة العميل #${customerId} إلى: ${stageNameAr}`, t.id, actorTenant, 'workflow', linkUrl).run()
-        }
+      const stageRow = await c.env.DB.prepare(`SELECT stage_name_ar FROM workflow_stages WHERE id = ?`).bind(newStageId).first() as any
+      const stageNameAr = stageRow?.stage_name_ar || ''
+      const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+      const actorName = actorRow?.full_name || ''
+      const actorTenant = actorRow?.tenant_id ?? null
+      const targetUserIds = await resolveWorkflowCrossPartyNotifyTargetUserIds(
+        c.env.DB,
+        customerId,
+        requester.userId,
+        requester.roleId,
+        actorTenant
+      )
+      if (targetUserIds.length) {
+        await insertWorkflowCrossPartyAlarms(c.env.DB, {
+          customerId,
+          tenantId: actorTenant,
+          targetUserIds,
+          customerName: `تحديث مرحلة: ${stageNameAr}`,
+          note: `قام ${actorName} بتحديث مرحلة العميل #${customerId} إلى: ${stageNameAr}`,
+          linkUrl: `/admin/customers/${customerId}/workflow#customer`
+        })
       }
     } catch (_) {}
 
@@ -25108,8 +26551,12 @@ app.post('/api/workflow/customer-add-action', async (c) => {
     if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     if (normalizeRoleId(requester.roleId) === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
     const { customerId, stageId, actionType, notes, performedBy } = await c.req.json()
+    if (!(await canUserAccessCustomerWorkflow(c.env.DB, requester, Number(customerId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
     await ensureCustomerWorkflowTables(c.env.DB)
     const actorId = performedBy || requester.userId
+    const effectiveStageId = await resolveCustomerWorkflowStageId(c.env.DB, customerId, stageId)
 
     const recentDup = await c.env.DB.prepare(`
       SELECT id FROM customer_workflow_actions
@@ -25118,36 +26565,99 @@ app.post('/api/workflow/customer-add-action', async (c) => {
         AND COALESCE(notes, '') = COALESCE(?, '')
         AND created_at >= datetime('now', '-20 seconds')
       LIMIT 1
-    `).bind(customerId, stageId, actionType, actorId, notes ?? '').first()
+    `).bind(customerId, effectiveStageId, actionType, actorId, notes ?? '').first()
     if (recentDup) return c.json({ success: true })
 
     await c.env.DB.prepare(`INSERT INTO customer_workflow_actions (customer_id, stage_id, action_type, performed_by, notes) VALUES (?, ?, ?, ?, ?)`)
-      .bind(customerId, stageId, actionType, actorId, notes || null).run()
+      .bind(customerId, effectiveStageId, actionType, actorId, notes || null).run()
 
-    // Notify the other party about this action
+    // Notify the other party about this action — assigned user only
     try {
-      const actorRole = normalizeRoleId(requester.roleId)
-      const targetRole = actorRole === 4 ? 5 : actorRole === 5 ? 4 : null
-      if (targetRole) {
-        const actionLabel = ({ call: 'اتصال هاتفي', email: 'بريد إلكتروني', meeting: 'اجتماع', document: 'مستند', approval: 'موافقة', rejection: 'رفض', followup: 'متابعة', other: 'أخرى' } as Record<string,string>)[actionType] || actionType
-        const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
-        const actorName = actorRow?.full_name || ''
-        const actorTenant = actorRow?.tenant_id ?? null
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
-        await c.env.DB.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
-        const linkUrl = `/admin/customers/${customerId}/workflow#customer`
-        const { results: targets } = await c.env.DB.prepare(
-          `SELECT id FROM users WHERE role_id = ? AND tenant_id = ? AND is_active = 1`
-        ).bind(targetRole, actorTenant).all()
-        for (const t of targets as any[]) {
-          await c.env.DB.prepare(
-            `INSERT INTO customer_alarms (customer_id, customer_name, note, user_id, tenant_id, alarm_type, link_url) VALUES (?, ?, ?, ?, ?, ?, ?)`
-          ).bind(customerId, `إجراء: ${actionLabel}`, `قام ${actorName} بإضافة إجراء "${actionLabel}" على العميل #${customerId}${notes ? ' — ' + notes : ''}`, t.id, actorTenant, 'workflow', linkUrl).run()
-        }
+      const actionLabel = ({ call: 'اتصال هاتفي', email: 'بريد إلكتروني', meeting: 'اجتماع', document: 'مستند', approval: 'موافقة', rejection: 'رفض', followup: 'متابعة', other: 'أخرى' } as Record<string,string>)[actionType] || actionType
+      const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+      const actorName = actorRow?.full_name || ''
+      const actorTenant = actorRow?.tenant_id ?? null
+      const targetUserIds = await resolveWorkflowCrossPartyNotifyTargetUserIds(
+        c.env.DB,
+        customerId,
+        requester.userId,
+        requester.roleId,
+        actorTenant
+      )
+      if (targetUserIds.length) {
+        await insertWorkflowCrossPartyAlarms(c.env.DB, {
+          customerId,
+          tenantId: actorTenant,
+          targetUserIds,
+          customerName: `إجراء: ${actionLabel}`,
+          note: `قام ${actorName} بإضافة إجراء "${actionLabel}" على العميل #${customerId}${notes ? ' — ' + notes : ''}`,
+          linkUrl: `/admin/customers/${customerId}/workflow#customer`
+        })
       }
     } catch (_) {}
 
     return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Add a phase note to a customer stage (separate from actions)
+app.post('/api/workflow/customer-add-note', async (c) => {
+  try {
+    const requester = await getUserInfo(c)
+    if (!requester.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAddWorkflowNote(requester.roleId)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    const { customerId, stageId, noteText, performedBy } = await c.req.json()
+    const text = String(noteText || '').trim()
+    if (!text) return c.json({ success: false, error: 'Note text is required' }, 400)
+    if (!(await canUserAccessCustomerWorkflow(c.env.DB, requester, Number(customerId)))) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    await ensureCustomerWorkflowTables(c.env.DB)
+    const actorId = performedBy || requester.userId
+    const effectiveStageId = await resolveCustomerWorkflowStageId(c.env.DB, customerId, stageId)
+
+    const recentDup = await c.env.DB.prepare(`
+      SELECT id FROM customer_workflow_notes
+      WHERE customer_id = ? AND stage_id = ? AND performed_by = ?
+        AND note_text = ?
+        AND created_at >= datetime('now', '-20 seconds')
+      LIMIT 1
+    `).bind(customerId, effectiveStageId, actorId, text).first()
+    if (recentDup) return c.json({ success: true })
+
+    await c.env.DB.prepare(`
+      INSERT INTO customer_workflow_notes (customer_id, stage_id, note_text, performed_by)
+      VALUES (?, ?, ?, ?)
+    `).bind(customerId, effectiveStageId, text, actorId).run()
+
+    try {
+      const actorRow = await c.env.DB.prepare(`SELECT full_name, tenant_id FROM users WHERE id = ?`).bind(requester.userId).first() as any
+      const actorName = actorRow?.full_name || ''
+      const actorTenant = actorRow?.tenant_id ?? null
+      const targetUserIds = await resolveWorkflowCrossPartyNotifyTargetUserIds(
+        c.env.DB,
+        customerId,
+        requester.userId,
+        requester.roleId,
+        actorTenant
+      )
+      if (targetUserIds.length) {
+        await insertWorkflowCrossPartyAlarms(c.env.DB, {
+          customerId,
+          tenantId: actorTenant,
+          targetUserIds,
+          customerName: 'ملاحظة على سير العمل',
+          note: `قام ${actorName} بإضافة ملاحظة على العميل #${customerId} — ${text}`,
+          linkUrl: `/admin/customers/${customerId}/workflow#customer`
+        })
+      }
+    } catch (_) {}
+
+    return c.json({ success: true, message: 'تم إضافة الملاحظة بنجاح' })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -25168,7 +26678,14 @@ app.post('/api/workflow/customer-create-task', async (c) => {
 // التقرير الزمني (Timeline) لطلب التمويل — tabbed: customer workflow + request workflow
 app.get('/admin/requests/:id/workflow', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
+
     const id = c.req.param('id')
+    if (!(await canUserAccessRequestWorkflow(c.env.DB, userInfo, Number(id)))) {
+      return c.html('<h1>غير مصرح بعرض سير عمل هذا الطلب</h1>', 403)
+    }
+
     await ensureCustomerWorkflowTables(c.env.DB)
 
     // Get request data with current stage and customer id
@@ -25218,12 +26735,22 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       ORDER BY wst.created_at ASC
     `).bind(id).all()
 
+    await ensureWorkflowPhaseNotesTables(c.env.DB)
+
     const { results: actions } = await c.env.DB.prepare(`
       SELECT wsa.*, u.full_name AS performed_by_name, u.role_id AS performed_by_role_id
       FROM workflow_stage_actions wsa
       LEFT JOIN users u ON wsa.performed_by = u.id
       WHERE wsa.request_id = ?
       ORDER BY wsa.created_at DESC
+    `).bind(id).all()
+
+    const { results: notes } = await c.env.DB.prepare(`
+      SELECT wsn.*, u.full_name AS performed_by_name, u.role_id AS performed_by_role_id
+      FROM workflow_stage_notes wsn
+      LEFT JOIN users u ON wsn.performed_by = u.id
+      WHERE wsn.request_id = ?
+      ORDER BY wsn.created_at DESC
     `).bind(id).all()
 
     const { results: tasks } = await c.env.DB.prepare(`
@@ -25259,6 +26786,14 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       ORDER BY cwa.created_at DESC
     `).bind(customerId).all()
 
+    const { results: custNotes } = await c.env.DB.prepare(`
+      SELECT cwn.*, u.full_name as performed_by_name, u.role_id as performed_by_role_id
+      FROM customer_workflow_notes cwn
+      LEFT JOIN users u ON cwn.performed_by = u.id
+      WHERE cwn.customer_id = ?
+      ORDER BY cwn.created_at DESC
+    `).bind(customerId).all()
+
     const { results: custTasks } = await c.env.DB.prepare(`
       SELECT cwt.*, u.full_name as assigned_to_name
       FROM customer_workflow_tasks cwt
@@ -25267,14 +26802,14 @@ app.get('/admin/requests/:id/workflow', async (c) => {
       ORDER BY cwt.created_at DESC
     `).bind(customerId).all()
 
-    const userInfo = await getUserInfo(c)
     const html = generateWorkflowTimelinePage(
       parseInt(id),
       request,
       stages,
-      { transitions, actions, tasks },
-      { transitions: custTransitions, actions: custActions, tasks: custTasks },
+      { transitions, actions, notes, tasks },
+      { transitions: custTransitions, actions: custActions, notes: custNotes, tasks: custTasks },
       userInfo.roleId,
+      userInfo.userId,
       'request'
     )
 
@@ -25649,22 +27184,19 @@ app.get('/admin/banks', async (c) => {
             filterTable()
           }
           
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           function exportToCSV() {
             const data = [
               ['#', 'اسم البنك', 'الوصف', 'الحالة'],
               ${banks.results.map((bank: any) => `['${bank.id}', '${bank.bank_name}', '${bank.description || ''}', '${bank.is_active ? 'نشط' : 'غير نشط'}']`).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFFsep=,\\r\\n';
+            let csv = ${HTML_CSV_PREFIX};
             data.forEach(row => {
-              csv += row.join(',') + '\\n';
+              csv += row.join('\\t') + '\\r\\n';
             });
             
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'البنوك_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'البنوك_' + new Date().toISOString().split('T')[0] + '.csv');
           }
         </script>
       </body>
@@ -25675,581 +27207,6 @@ app.get('/admin/banks', async (c) => {
   }
 })
 
-// ==================== صفحة نسب التمويل (Rates) ====================
-
-app.get('/admin/rates', async (c) => {
-  try {
-    const rates = await c.env.DB.prepare(`
-      SELECT fr.*, b.bank_name, ft.type_name
-      FROM bank_financing_rates fr
-      LEFT JOIN banks b ON fr.bank_id = b.id
-      LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
-      ORDER BY b.bank_name, ft.type_name
-    `).all()
-    
-    return c.html(`
-      <!DOCTYPE html>
-      <html lang="ar" dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>نسب التمويل</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-      </head>
-      <body class="bg-gray-50">
-        <div class="max-w-7xl mx-auto p-6">
-          <div class="mb-6">
-            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">← العودة للوحة الرئيسية</a>
-          </div>
-          
-          <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="flex justify-between items-center mb-4">
-              <h1 class="text-3xl font-bold text-gray-800">
-                <i class="fas fa-percentage text-orange-600 ml-2"></i>
-                نسب التمويل (<span id="totalCount">${rates.results.length}</span>)
-              </h1>
-              
-              <div class="flex gap-3">
-                <a href="/admin/rates/new" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-plus ml-2"></i>
-                  إضافة جديد
-                </a>
-                <button onclick="showUploadModal()" 
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-file-upload ml-2"></i>
-                  رفع Excel
-                </button>
-                <button onclick="exportToCSV()" 
-                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                  <i class="fas fa-file-export ml-2"></i>
-                  تصدير Excel
-                </button>
-              </div>
-            </div>
-            
-            <!-- شريط البحث والفلترة -->
-            <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="relative">
-                  <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
-                  <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="بحث في جميع الحقول..." 
-                    class="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    onkeyup="filterTable()"
-                  >
-                </div>
-                
-                <div>
-                  <select 
-                    id="filterField" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    onchange="filterTable()"
-                  >
-                    <option value="all">البحث في: الكل</option>
-                    <option value="bank">البنك فقط</option>
-                    <option value="type">نوع التمويل فقط</option>
-                  </select>
-                </div>
-                
-                <button 
-                  onclick="resetFilters()" 
-                  class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
-                >
-                  <i class="fas fa-redo ml-2"></i>
-                  إعادة تعيين
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <table class="w-full" id="dataTable">
-              <thead class="bg-gray-100">
-                <tr>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">#</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">البنك</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نوع التمويل</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نسبة الفائدة</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحد الأدنى</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحد الأقصى</th>
-                  <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200" id="tableBody">
-                ${rates.results.map((rate: any) => `
-                  <tr class="hover:bg-gray-50" data-bank="${rate.bank_name || ''}" data-type="${rate.type_name || ''}">
-                    <td class="px-6 py-4 text-sm text-gray-900">${rate.id}</td>
-                    <td class="px-6 py-4">
-                      <div class="flex items-center">
-                        <i class="fas fa-university text-yellow-600 ml-2"></i>
-                        <span class="text-sm font-bold text-gray-900">${rate.bank_name || 'غير محدد'}</span>
-                      </div>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-600">${rate.type_name || 'غير محدد'}</td>
-                    <td class="px-6 py-4">
-                      <span class="text-lg font-bold text-orange-600">${rate.rate || 0}%</span>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-600">${rate.min_amount ? rate.min_amount.toLocaleString() : '0'} ريال</td>
-                    <td class="px-6 py-4 text-sm text-gray-600">${rate.max_amount ? rate.max_amount.toLocaleString() : '0'} ريال</td>
-                    <td class="px-6 py-4">
-                      <div class="flex gap-2 justify-end">
-                        <a href="/admin/rates/${rate.id}" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs transition-all">
-                          <i class="fas fa-eye"></i> عرض
-                        </a>
-                        <a href="/admin/rates/${rate.id}/edit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-xs transition-all">
-                          <i class="fas fa-edit"></i> تعديل
-                        </a>
-                        <a href="/admin/rates/${rate.id}/delete" onclick="return confirm('هل أنت متأكد من الحذف؟')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-xs transition-all">
-                          <i class="fas fa-trash"></i> حذف
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Excel Upload Modal -->
-        <div id="uploadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-6">
-              <h2 class="text-2xl font-bold text-gray-800">
-                <i class="fas fa-file-excel text-green-600 ml-2"></i>
-                رفع ملف Excel/CSV
-              </h2>
-              <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600">
-                <i class="fas fa-times text-2xl"></i>
-              </button>
-            </div>
-
-            <div class="mb-6">
-              <div class="bg-blue-50 border-r-4 border-blue-500 p-4 rounded mb-4">
-                <p class="text-sm text-blue-800">
-                  <i class="fas fa-info-circle ml-2"></i>
-                  <strong>تعليمات:</strong> يجب أن يحتوي ملف Excel/CSV على الأعمدة التالية (8 أعمدة):
-                </p>
-                <ul class="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
-                  <li><strong>رقم تسلسلي</strong> - سيتم تجاهله عند الرفع (يتم توليده تلقائياً)</li>
-                  <li><strong>البنك</strong> * (اسم البنك - مطلوب)</li>
-                  <li><strong>نوع التمويل</strong> * (اسم نوع التمويل - مطلوب)</li>
-                  <li><strong>النسبة %</strong> * (مطلوب)</li>
-                  <li>الحد الأدنى للمبلغ (ريال) (اختياري)</li>
-                  <li>الحد الأقصى للمبلغ (ريال) (اختياري)</li>
-                  <li>الحد الأدنى للمدة (شهر) (اختياري)</li>
-                  <li>الحد الأقصى للمدة (شهر) (اختياري)</li>
-                </ul>
-              </div>
-
-              <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
-                <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" 
-                       class="hidden" onchange="handleFileSelect(event)">
-                <label for="excelFileInput" class="cursor-pointer">
-                  <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-4"></i>
-                  <p class="text-gray-700 font-bold mb-2">انقر لاختيار ملف Excel أو CSV</p>
-                  <p class="text-sm text-gray-500">أو اسحب الملف هنا</p>
-                </label>
-              </div>
-
-              <div id="fileInfo" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-3">
-                    <i class="fas fa-file-excel text-green-600 text-xl"></i>
-                    <div>
-                      <p class="font-bold text-green-800" id="fileName">اسم الملف</p>
-                      <p class="text-sm text-green-600" id="fileSize">حجم الملف</p>
-                    </div>
-                  </div>
-                  <button onclick="clearFile()" class="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded">
-                    <i class="fas fa-times text-lg"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div id="previewSection" class="hidden mb-6" dir="rtl">
-              <h3 class="text-lg font-bold mb-3">معاينة البيانات:</h3>
-              <div class="overflow-x-auto max-h-64 border border-gray-200 rounded-lg">
-                <table id="previewTable" class="w-full text-sm" dir="rtl">
-                  <thead class="bg-gray-100 sticky top-0">
-                    <tr id="previewHeader"></tr>
-                  </thead>
-                  <tbody id="previewBody" class="divide-y divide-gray-200"></tbody>
-                </table>
-              </div>
-            </div>
-
-            <div id="uploadProgress" class="hidden mb-4">
-              <div class="bg-gray-200 rounded-full h-2.5">
-                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: 0%"></div>
-              </div>
-              <p id="progressText" class="text-sm text-gray-600 mt-2 text-center"></p>
-            </div>
-
-            <div id="uploadResults" class="hidden mb-4"></div>
-
-            <div class="flex gap-3">
-              <button onclick="closeUploadModal()" 
-                      class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                <i class="fas fa-times ml-2"></i>
-                إلغاء
-              </button>
-              <button onclick="uploadExcel()" id="uploadBtn"
-                      class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                <i class="fas fa-upload ml-2"></i>
-                رفع البيانات
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <script>
-          // البحث والفلترة
-          function filterTable() {
-            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
-            const filterField = document.getElementById('filterField').value
-            const tableBody = document.getElementById('tableBody')
-            const rows = tableBody.getElementsByTagName('tr')
-            let visibleCount = 0
-            
-            for (let i = 0; i < rows.length; i++) {
-              const row = rows[i]
-              const bank = row.getAttribute('data-bank') || ''
-              const type = row.getAttribute('data-type') || ''
-              
-              let shouldShow = false
-              
-              if (searchInput === '') {
-                shouldShow = true
-              } else {
-                switch(filterField) {
-                  case 'bank':
-                    shouldShow = bank.toLowerCase().includes(searchInput)
-                    break
-                  case 'type':
-                    shouldShow = type.toLowerCase().includes(searchInput)
-                    break
-                  default: // 'all'
-                    shouldShow = bank.toLowerCase().includes(searchInput) || 
-                                type.toLowerCase().includes(searchInput)
-                }
-              }
-              
-              row.style.display = shouldShow ? '' : 'none'
-              if (shouldShow) visibleCount++
-            }
-            
-            document.getElementById('totalCount').textContent = visibleCount
-          }
-          
-          function resetFilters() {
-            document.getElementById('searchInput').value = ''
-            document.getElementById('filterField').value = 'all'
-            filterTable()
-          }
-          
-          function exportToCSV() {
-            const data = [
-              ['#', 'البنك', 'نوع التمويل', 'نسبة الفائدة', 'الحد الأدنى', 'الحد الأقصى'],
-              ${rates.results.map((rate: any) => `['${rate.id}', '${rate.bank_name || 'غير محدد'}', '${rate.type_name || 'غير محدد'}', '${rate.rate || 0}%', '${rate.min_amount || 0}', '${rate.max_amount || 0}']`).join(',\n              ')}
-            ];
-            
-            let csv = '\\uFEFFsep=,\\r\\n';
-            data.forEach(row => {
-              csv += row.join(',') + '\\n';
-            });
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'نسب_التمويل_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
-          }
-
-          let excelData = null;
-          let banksMap = {};
-          let typesMap = {};
-
-          // Load banks and types for mapping
-          async function loadMappings() {
-            try {
-              const [banksRes, typesRes] = await Promise.all([
-                fetch('/api/banks').then(r => r.json()),
-                fetch('/api/financing-types').then(r => r.json())
-              ]);
-              
-              banksMap = {};
-              (banksRes.data || []).forEach(bank => {
-                banksMap[bank.bank_name?.toLowerCase()] = bank.id;
-                banksMap[bank.id] = bank.id;
-              });
-              
-              typesMap = {};
-              (typesRes.data || []).forEach(type => {
-                typesMap[type.type_name?.toLowerCase()] = type.id;
-                typesMap[type.id] = type.id;
-              });
-            } catch (error) {
-              console.error('Error loading mappings:', error);
-            }
-          }
-
-          function showUploadModal() {
-            document.getElementById('uploadModal').classList.remove('hidden');
-            loadMappings();
-          }
-
-          function closeUploadModal() {
-            document.getElementById('uploadModal').classList.add('hidden');
-            clearFile();
-            document.getElementById('uploadResults').classList.add('hidden');
-            document.getElementById('uploadProgress').classList.add('hidden');
-            document.getElementById('previewSection').classList.add('hidden');
-          }
-
-          function clearFile() {
-            document.getElementById('excelFileInput').value = '';
-            document.getElementById('fileInfo').classList.add('hidden');
-            excelData = null;
-          }
-
-          function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            if (!file.name.match(/\\.(xlsx|xls)$/i)) {
-              alert('الرجاء اختيار ملف Excel صالح (.xlsx أو .xls)');
-              return;
-            }
-
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = '(' + (file.size / 1024).toFixed(2) + ' KB)';
-            document.getElementById('fileInfo').classList.remove('hidden');
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-              try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                
-                if (jsonData.length < 2) {
-                  alert('الملف فارغ أو لا يحتوي على بيانات');
-                  return;
-                }
-
-                excelData = jsonData;
-                displayPreview(jsonData);
-              } catch (error) {
-                console.error('Error reading file:', error);
-                alert('حدث خطأ في قراءة الملف. الرجاء التأكد من صحة الملف.');
-              }
-            };
-            reader.readAsArrayBuffer(file);
-          }
-
-          function displayPreview(data) {
-            const headerRow = data[0];
-            const previewRows = data.slice(1, Math.min(6, data.length));
-
-            // Reverse header row for RTL display (rightmost column first)
-            const reversedHeader = [...headerRow].reverse();
-            const headerHtml = reversedHeader.map(h => '<th class="px-4 py-2 text-right bg-gray-100" dir="rtl">' + (h || '') + '</th>').join('');
-            document.getElementById('previewHeader').innerHTML = headerHtml;
-
-            const bodyHtml = previewRows.map(row => {
-              // Reverse row data to match reversed header
-              const reversedRow = [...row].reverse();
-              return '<tr>' + reversedRow.map((cell) => {
-                return '<td class="px-4 py-2 text-right" dir="rtl">' + (cell || '') + '</td>';
-              }).join('') + '</tr>';
-            }).join('');
-            document.getElementById('previewBody').innerHTML = bodyHtml;
-
-            document.getElementById('previewSection').classList.remove('hidden');
-          }
-
-          async function uploadExcel() {
-            if (!excelData || excelData.length < 2) {
-              alert('الرجاء اختيار ملف Excel أو CSV صالح');
-              return;
-            }
-            
-            // Check if file is selected
-            const fileInput = document.getElementById('excelFileInput');
-            if (!fileInput.files || fileInput.files.length === 0) {
-              alert('الرجاء اختيار ملف أولاً');
-              return;
-            }
-
-            const uploadBtn = document.getElementById('uploadBtn');
-            const progressDiv = document.getElementById('uploadProgress');
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-            const resultsDiv = document.getElementById('uploadResults');
-
-            uploadBtn.disabled = true;
-            progressDiv.classList.remove('hidden');
-            resultsDiv.classList.add('hidden');
-
-            try {
-              // Parse Excel data
-              const headerRow = excelData[0];
-              const dataRows = excelData.slice(1);
-
-              // Find column indices
-              const findColumnIndex = (names) => {
-                for (const name of names) {
-                  const index = headerRow.findIndex(h => 
-                    h && h.toString().toLowerCase().includes(name.toLowerCase())
-                  );
-                  if (index !== -1) return index;
-                }
-                return -1;
-              };
-
-              const bankCol = findColumnIndex(['البنك', 'bank', 'bank_id', 'bank_name']);
-              const typeCol = findColumnIndex(['نوع التمويل', 'type', 'financing_type', 'financing_type_id', 'type_name']);
-              const rateCol = findColumnIndex(['نسبة', 'rate', 'interest', 'فائدة']);
-              const minAmountCol = findColumnIndex(['الحد الأدنى', 'min_amount', 'minimum']);
-              const maxAmountCol = findColumnIndex(['الحد الأقصى', 'max_amount', 'maximum']);
-              const minSalaryCol = findColumnIndex(['الحد الأدنى للراتب', 'min_salary', 'minimum salary']);
-              const maxSalaryCol = findColumnIndex(['الحد الأقصى للراتب', 'max_salary', 'maximum salary']);
-              const minDurationCol = findColumnIndex(['الحد الأدنى للمدة', 'min_duration', 'minimum duration']);
-              const maxDurationCol = findColumnIndex(['الحد الأقصى للمدة', 'max_duration', 'maximum duration']);
-
-              if (bankCol === -1 || typeCol === -1 || rateCol === -1) {
-                alert('الملف لا يحتوي على الأعمدة المطلوبة: البنك، نوع التمويل، نسبة الفائدة');
-                uploadBtn.disabled = false;
-                return;
-              }
-
-              // Prepare data for upload
-              const ratesToUpload = [];
-              let processed = 0;
-
-              for (const row of dataRows) {
-                if (!row[bankCol] || !row[typeCol] || !row[rateCol]) continue;
-
-                // Map bank name to ID
-                let bankId = null;
-                const bankValue = String(row[bankCol]).trim();
-                if (!isNaN(bankValue)) {
-                  bankId = parseInt(bankValue);
-                } else {
-                  bankId = banksMap[bankValue.toLowerCase()];
-                }
-
-                // Map type name to ID
-                let typeId = null;
-                const typeValue = String(row[typeCol]).trim();
-                if (!isNaN(typeValue)) {
-                  typeId = parseInt(typeValue);
-                } else {
-                  typeId = typesMap[typeValue.toLowerCase()];
-                }
-
-                if (!bankId || !typeId) {
-                  console.warn('Skipping row - bank or type not found:', row);
-                  continue;
-                }
-
-                const rate = parseFloat(String(row[rateCol]).replace('%', '').trim());
-                if (isNaN(rate)) continue;
-
-                ratesToUpload.push({
-                  bank_id: bankId,
-                  financing_type_id: typeId,
-                  rate: rate,
-                  min_amount: minAmountCol !== -1 && row[minAmountCol] ? parseFloat(String(row[minAmountCol]).replace(/,/g, '')) : null,
-                  max_amount: maxAmountCol !== -1 && row[maxAmountCol] ? parseFloat(String(row[maxAmountCol]).replace(/,/g, '')) : null,
-                  min_salary: minSalaryCol !== -1 && row[minSalaryCol] ? parseFloat(String(row[minSalaryCol]).replace(/,/g, '')) : null,
-                  max_salary: maxSalaryCol !== -1 && row[maxSalaryCol] ? parseFloat(String(row[maxSalaryCol]).replace(/,/g, '')) : null,
-                  min_duration: minDurationCol !== -1 && row[minDurationCol] ? parseInt(String(row[minDurationCol])) : null,
-                  max_duration: maxDurationCol !== -1 && row[maxDurationCol] ? parseInt(String(row[maxDurationCol])) : null,
-                  is_active: 1
-                });
-
-                processed++;
-                progressBar.style.width = ((processed / dataRows.length) * 100) + '%';
-                progressText.textContent = 'جاري المعالجة: ' + processed + ' من ' + dataRows.length;
-              }
-
-              if (ratesToUpload.length === 0) {
-                alert('لم يتم العثور على بيانات صالحة للرفع');
-                uploadBtn.disabled = false;
-                return;
-              }
-
-              progressText.textContent = 'جاري رفع البيانات...';
-
-              // Upload to server
-              const response = await fetch('/api/rates/upload-excel', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ rates: ratesToUpload })
-              });
-
-              const result = await response.json();
-
-              if (result.success) {
-                progressBar.style.width = '100%';
-                progressText.textContent = 'تم الرفع بنجاح!';
-                
-                resultsDiv.innerHTML = 
-                  '<div class="bg-green-50 border-r-4 border-green-500 p-4 rounded">' +
-                    '<div class="flex items-center">' +
-                      '<i class="fas fa-check-circle text-green-600 text-2xl ml-3"></i>' +
-                      '<div>' +
-                        '<p class="font-bold text-green-800">تم رفع البيانات بنجاح!</p>' +
-                        '<p class="text-sm text-green-700 mt-1">' +
-                          'تم إضافة/تحديث ' + (result.created || 0) + ' سجل جديد و ' + (result.updated || 0) + ' سجل محدث' +
-                        '</p>' +
-                      '</div>' +
-                    '</div>' +
-                  '</div>';
-                resultsDiv.classList.remove('hidden');
-
-                setTimeout(() => {
-                  window.location.reload();
-                }, 2000);
-              } else {
-                throw new Error(result.error || 'حدث خطأ في رفع البيانات');
-              }
-            } catch (error) {
-              console.error('Upload error:', error);
-              const errorMessage = error.message || 'حدث خطأ غير معروف';
-              resultsDiv.innerHTML = 
-                '<div class="bg-red-50 border-r-4 border-red-500 p-4 rounded">' +
-                  '<div class="flex items-center">' +
-                    '<i class="fas fa-exclamation-circle text-red-600 text-2xl ml-3"></i>' +
-                    '<div>' +
-                      '<p class="font-bold text-red-800">حدث خطأ</p>' +
-                      '<p class="text-sm text-red-700 mt-1">' + errorMessage + '</p>' +
-                    '</div>' +
-                  '</div>' +
-                '</div>';
-              resultsDiv.classList.remove('hidden');
-            } finally {
-              uploadBtn.disabled = false;
-            }
-          }
-        </script>
-      </body>
-      </html>
-    `)
-  } catch (error) {
-    return c.html('<h1>خطأ في تحميل البيانات</h1>')
-  }
-})
 
 // ==================== صفحة عرض نسبة تمويل واحدة ====================
 app.get('/admin/rates/new', async (c) => {
@@ -26706,6 +27663,7 @@ app.get('/admin/subscriptions', async (c) => {
             filterTable()
           }
           
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           function exportToCSV() {
             const data = [
               ['#', 'اسم الشركة', 'الباقة', 'تاريخ البداية', 'تاريخ الانتهاء', 'الحالة', 'الحسابات المستخدمة'],
@@ -26715,16 +27673,12 @@ app.get('/admin/subscriptions', async (c) => {
               }).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFFsep=,\\r\\n';
+            let csv = ${HTML_CSV_PREFIX};
             data.forEach(row => {
-              csv += row.join(',') + '\\n';
+              csv += row.join('\\t') + '\\r\\n';
             });
             
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'الاشتراكات_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'الاشتراكات_' + new Date().toISOString().split('T')[0] + '.csv');
           }
         </script>
       </body>
@@ -27180,22 +28134,19 @@ app.get('/admin/packages', async (c) => {
             filterPackages()
           }
           
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           function exportToCSV() {
             const data = [
               ['#', 'اسم الباقة', 'الوصف', 'السعر', 'المدة (شهور)', 'الحسابات', 'المستخدمين', 'الحالة'],
               ${packages.results.map((pkg: any) => `['${pkg.id}', '${pkg.package_name}', '${pkg.description || ''}', '${pkg.price}', '${pkg.duration_months}', '${pkg.max_calculations}', '${pkg.max_users}', '${pkg.is_active ? 'نشط' : 'غير نشط'}']`).join(',\n              ')}
             ];
             
-            let csv = '\\uFEFFsep=,\\r\\n';
+            let csv = ${HTML_CSV_PREFIX};
             data.forEach(row => {
-              csv += row.join(',') + '\\n';
+              csv += row.join('\\t') + '\\r\\n';
             });
             
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'الباقات_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'الباقات_' + new Date().toISOString().split('T')[0] + '.csv');
           }
         </script>
       </body>
@@ -27797,6 +28748,7 @@ app.get('/admin/users', async (c) => {
             renderUsers(allUsers);
           }
 
+          ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
           function exportToCSV() {
             const data = [
               ['#', 'اسم المستخدم', 'الاسم الكامل', 'البريد الإلكتروني', 'الدور', 'الشركة', 'الحالة']
@@ -27814,16 +28766,12 @@ app.get('/admin/users', async (c) => {
               ]);
             });
             
-            let csv = '\\uFEFFsep=,\\r\\n';
+            let csv = ${HTML_CSV_PREFIX};
             data.forEach(row => {
-              csv += row.join(',') + '\\n';
+              csv += row.join('\\t') + '\\r\\n';
             });
             
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'المستخدمين_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'المستخدمين_' + new Date().toISOString().split('T')[0] + '.csv');
           }
           
           window.edgeScrollStep = function(scrollElId, visualDirection) {
@@ -28303,7 +29251,7 @@ app.get('/admin/users/:id/edit', async (c) => {
                   </select>
                 </div>
 
-                <div id="customerLimitSection" style="display:${[4,14].includes(normalizeRoleId(user.role_id)) ? 'block' : 'none'};">
+                <div id="customerLimitSection" style="display:${[4,14].includes(normalizeRoleId(user.role_id) ?? 0) ? 'block' : 'none'};">
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     الحد الأقصى للعملاء (التوزيع التلقائي)
                   </label>
@@ -28377,7 +29325,7 @@ app.post('/admin/users/:id', async (c) => {
     }
 
     // Load target user to enforce scope
-    const targetUser = await c.env.DB.prepare(`SELECT id, tenant_id, role_id FROM users WHERE id = ?`).bind(id).first()
+    const targetUser = await c.env.DB.prepare(`SELECT id, tenant_id, role_id, assigned_bank_id FROM users WHERE id = ?`).bind(id).first()
     if (!targetUser) {
       return c.html('<h1>المستخدم غير موجود</h1>', 404 as any)
     }
@@ -28398,6 +29346,16 @@ app.post('/admin/users/:id', async (c) => {
       }
     }
 
+    const roleChange = await validateStaffRoleChange(
+      c.env.DB,
+      Number(id),
+      (targetUser as any).role_id,
+      requestedRoleId
+    )
+    if (!roleChange.ok) {
+      return c.html(`<h1>غير مسموح</h1><p>${roleChange.errorAr}</p>`, 400 as any)
+    }
+
     const finalTenantId = requesterIsSuperAdmin ? tenant_id : requester.tenantId
     const tidNum =
       finalTenantId != null && String(finalTenantId).trim() !== ''
@@ -28405,7 +29363,7 @@ app.post('/admin/users/:id', async (c) => {
         : NaN
 
     let assigned_bank_id: number | null = null
-    if (requestedRoleId === 5) {
+    if (requestedRoleId === 5 || requestedRoleId === 6) {
       const canSetBankAgent = requesterIsSuperAdmin || requester.roleId === 2
       if (!canSetBankAgent) {
         return c.html('<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>', 403 as any)
@@ -28413,7 +29371,11 @@ app.post('/admin/users/:id', async (c) => {
       if (!tidNum || Number.isNaN(tidNum)) {
         return c.html('<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>', 400 as any)
       }
-      assigned_bank_id = null
+      const existingAssignedBankId = (targetUser as any).assigned_bank_id
+      assigned_bank_id =
+        existingAssignedBankId != null && !Number.isNaN(Number(existingAssignedBankId))
+          ? Number(existingAssignedBankId)
+          : null
     }
     
     // Build UPDATE query
@@ -30173,6 +31135,15 @@ app.get('/api/hr/reports/:type', async (c) => {
 // CONTRACTS MODULE (brokerage contracts — reference UI + D1 API)
 // ===============================================
 registerContractsModuleApi(app, getUserInfo)
+registerChatModuleApi(app, getUserInfo as any)
+
+// Full chat page (/admin/chat). Hidden while CHAT_UI_ENABLED is false.
+app.get('/admin/chat', async (c) => {
+  if (!CHAT_UI_ENABLED) return c.redirect('/admin/dashboard')
+  const info = await getUserInfo(c)
+  if (!info.userId) return c.redirect('/login')
+  return c.html(chatPage({ userId: info.userId, tenantId: info.tenantId, roleId: info.roleId }))
+})
 
 async function ensureContractsModuleAccess(
   c: any,
@@ -30182,6 +31153,11 @@ async function ensureContractsModuleAccess(
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
   if (userInfo.roleId === 4) {
+    if (opts.allowRole4) return null
+    return c.redirect('/admin/contracts/list')
+  }
+  // Role 6 (dual agent) has same page access as role 4 (employee column) for contracts
+  if (userInfo.roleId === 6) {
     if (opts.allowRole4) return null
     return c.redirect('/admin/contracts/list')
   }
@@ -30224,7 +31200,7 @@ app.get('/admin/contracts/new', async (c) => {
   if (userInfo.roleId === 3 && c.req.query('edit')) {
     return c.redirect('/admin/contracts/list')
   }
-  if ((userInfo.roleId === 2 || userInfo.roleId === 3 || userInfo.roleId === 4 || userInfo.roleId === 5) && !userInfo.tenantId) {
+  if ((userInfo.roleId === 2 || userInfo.roleId === 3 || userInfo.roleId === 4 || userInfo.roleId === 5 || userInfo.roleId === 6) && !userInfo.tenantId) {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
   }
   const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true, filterRole4ByFundingRequests: true })
@@ -30275,7 +31251,7 @@ app.get('/admin/contracts/new', async (c) => {
     if (frTenantId) {
       let frSql: string
       let frBinds: (number | string)[]
-      if (userInfo.roleId === 4 && userInfo.userId) {
+      if ((userInfo.roleId === 4 || userInfo.roleId === 6) && userInfo.userId) {
         frSql = `SELECT fr.id, fr.customer_id, fr.requested_amount,
                         ft.type_name, b.bank_name
                  FROM financing_requests fr
@@ -31806,7 +32782,7 @@ app.get('/api/follow-ups/:id/staff', async (c) => {
     const { results } = await c.env.DB.prepare(`
       SELECT id, full_name FROM users
       WHERE tenant_id = ? AND is_active = 1
-        AND role_id IN (4, 5, 14, 15)
+        AND role_id IN (4, 5, 6, 14, 15)
       ORDER BY full_name
     `).bind(followup.tenant_id).all()
 
@@ -31902,7 +32878,7 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
       }
       const staffUser = await c.env.DB.prepare(`
         SELECT id FROM users
-        WHERE id = ? AND tenant_id = ? AND role_id IN (4, 5, 14, 15)
+        WHERE id = ? AND tenant_id = ? AND role_id IN (4, 5, 6, 14, 15)
         LIMIT 1
       `).bind(uid, followup.tenant_id).first()
       if (!staffUser?.id) return c.json({ success: false, error: 'الموظف غير موجود في هذه الشركة' }, 400)
@@ -32051,7 +33027,7 @@ app.get('/api/my-followup-tasks', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const filter = String(c.req.query('status') ?? '').trim().toLowerCase()
@@ -32111,7 +33087,7 @@ app.patch('/api/my-followup-tasks/:id', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const taskId = parseInt(c.req.param('id'), 10)
@@ -32197,7 +33173,7 @@ app.get('/api/my-followup-tasks/:id/notes', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const taskId = parseInt(c.req.param('id'), 10)
@@ -32231,13 +33207,13 @@ app.get('/api/my-tenant-followup-staff', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const { results } = await c.env.DB.prepare(`
       SELECT id, full_name FROM users
       WHERE tenant_id = ? AND is_active = 1 AND id != ?
-        AND role_id IN (4, 5, 14, 15)
+        AND role_id IN (4, 5, 6, 14, 15)
       ORDER BY full_name
     `).bind(userInfo.tenantId, userInfo.userId).all()
 
@@ -32252,7 +33228,7 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const taskId = parseInt(c.req.param('taskId'), 10)
@@ -32272,7 +33248,7 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
     const target = await c.env.DB.prepare(`
       SELECT id FROM users
       WHERE id = ? AND tenant_id = ? AND is_active = 1
-        AND role_id IN (4, 5, 14, 15)
+        AND role_id IN (4, 5, 6, 14, 15)
       LIMIT 1
     `).bind(toUserId, userInfo.tenantId).first<{ id: number }>()
     if (!target?.id) return c.json({ success: false, error: 'الموظف غير موجود في شركتك' }, 400)
@@ -32342,7 +33318,7 @@ app.get('/api/my-followup-task-passes/incoming', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const { results } = await c.env.DB.prepare(`
@@ -32372,7 +33348,7 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const passId = parseInt(c.req.param('id'), 10)
@@ -34747,6 +35723,178 @@ app.get('/:slug', async (c) => {
   return c.html(buildPublicContactPageHtml(tenant, null))
 })
 
-export default app
+// ─── Customer Rating Reminder System ─────────────────────────────────────────
+// Runs daily via Cloudflare cron (see wrangler.toml [triggers]).
+// For each customer with a rating (excluding عميل موقوف = 1), inserts a
+// customer_alarm for the assigned user when the interval since the last
+// auto-reminder has elapsed.
+
+const REMINDER_NOTE_PREFIX = '[تذكير-تلقائي-تقييم]'
+
+const RATING_REMINDER_INTERVALS: Record<number, number> = {
+  5: 3, // عميل ممتاز
+  4: 5, // عميل جيد
+  3: 7, // عميل مقبول
+  2: 9, // عميل سيئ
+}
+
+const RATING_REMINDER_LABELS: Record<number, string> = {
+  5: 'عميل ممتاز',
+  4: 'عميل جيد',
+  3: 'عميل مقبول',
+  2: 'عميل سيئ',
+}
+
+async function processCustomerReminders(db: D1Database): Promise<{ created: number; skipped: number }> {
+  // Ensure the columns exist (same lazy-migrate pattern as insertWorkflowCrossPartyAlarms).
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+
+  // Two separate assignment paths — role 4 via customer_assignments, role 5 via
+  // customers.assigned_bank_agent_id — combined with UNION ALL so both assigned
+  // users each get their own alarm independently.
+  // cr.created_at is the rating date; the reminder cycle is anchored to it.
+  const { results: customers } = await db.prepare(`
+    SELECT
+      c.id        AS customer_id,
+      c.full_name AS customer_name,
+      ca.employee_id AS user_id,
+      c.tenant_id,
+      cr.rating,
+      cr.created_at AS rating_date
+    FROM customers c
+    INNER JOIN customer_assignments ca ON ca.customer_id = c.id
+    INNER JOIN users u ON u.id = ca.employee_id AND u.role_id = 4 AND u.is_active = 1
+    INNER JOIN customer_reviews cr ON cr.customer_id = c.id
+    WHERE cr.id = (
+      SELECT id FROM customer_reviews
+      WHERE customer_id = c.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    )
+    AND cr.rating BETWEEN 2 AND 5
+    AND c.tenant_id IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+      c.id        AS customer_id,
+      c.full_name AS customer_name,
+      c.assigned_bank_agent_id AS user_id,
+      c.tenant_id,
+      cr.rating,
+      cr.created_at AS rating_date
+    FROM customers c
+    INNER JOIN users u ON u.id = c.assigned_bank_agent_id AND u.role_id IN (5, 6) AND u.is_active = 1
+    INNER JOIN customer_reviews cr ON cr.customer_id = c.id
+    WHERE cr.id = (
+      SELECT id FROM customer_reviews
+      WHERE customer_id = c.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    )
+    AND cr.rating BETWEEN 2 AND 5
+    AND c.assigned_bank_agent_id IS NOT NULL
+    AND c.tenant_id IS NOT NULL
+  `).all()
+
+  let created = 0
+  let skipped = 0
+
+  const todayMidnight = new Date(today)
+  todayMidnight.setHours(0, 0, 0, 0)
+
+  for (const row of customers as any[]) {
+    const interval = RATING_REMINDER_INTERVALS[row.rating as number]
+    if (!interval) { skipped++; continue }
+
+    // Anchor the cycle to the rating date, not to the last reminder.
+    // Cycle N fires at: rating_date + N * interval days.
+    const ratingDate = new Date(String(row.rating_date))
+    ratingDate.setHours(0, 0, 0, 0)
+    const daysSinceRating = Math.floor(
+      (todayMidnight.getTime() - ratingDate.getTime()) / 86_400_000
+    )
+
+    // Too early — first reminder not due yet.
+    if (daysSinceRating < interval) { skipped++; continue }
+
+    // Which cycle are we in? When did this cycle start?
+    const cycleNumber = Math.floor(daysSinceRating / interval)
+    const cycleStart = new Date(ratingDate)
+    cycleStart.setDate(cycleStart.getDate() + cycleNumber * interval)
+    const cycleStartStr = cycleStart.toISOString().split('T')[0]
+
+    // Don't send another alarm if one was already created within this cycle window.
+    const existing = await db.prepare(`
+      SELECT id FROM customer_alarms
+      WHERE customer_id = ?
+        AND user_id = ?
+        AND note LIKE ?
+        AND alarm_date_gregorian >= ?
+      LIMIT 1
+    `).bind(row.customer_id, row.user_id, `${REMINDER_NOTE_PREFIX}%`, cycleStartStr).first()
+
+    if (existing) { skipped++; continue }
+
+    const label = RATING_REMINDER_LABELS[row.rating as number]
+    const note = `${REMINDER_NOTE_PREFIX} راجع العميل: ${row.customer_name} - التقييم: ${label} (كل ${interval} أيام)`
+
+    await db.prepare(`
+      INSERT INTO customer_alarms
+        (customer_id, customer_name, alarm_date_gregorian, note, user_id, tenant_id, alarm_type, is_read)
+      VALUES (?, ?, ?, ?, ?, ?, 'reminder', 0)
+    `).bind(
+      row.customer_id,
+      row.customer_name,
+      todayStr,
+      note,
+      row.user_id,
+      row.tenant_id,
+    ).run()
+
+    created++
+  }
+
+  return { created, skipped }
+}
+
+// Manual trigger endpoint (admin only) for testing without waiting for the cron.
+app.post('/api/customer-reminders/trigger', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+
+    // Only role 1 (super admin) or role 2 (tenant admin) may trigger this.
+    const user = await c.env.DB.prepare(
+      `SELECT role FROM users WHERE id = ?`
+    ).bind(userInfo.userId).first<{ role: number }>()
+    if (!user || (user.role !== 1 && user.role !== 2)) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const result = await processCustomerReminders(c.env.DB)
+    return c.json({ success: true, ...result })
+  } catch (error: any) {
+    console.error('Error triggering customer reminders:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+export { ChatConversationRoom, UserNotificationRoom }
+
+export default {
+  fetch: app.fetch.bind(app),
+  async scheduled(_event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      processCustomerReminders(env.DB).then(({ created, skipped }) => {
+        console.log(`[customer-reminders] created=${created} skipped=${skipped}`)
+      })
+    )
+  },
+}
 
 

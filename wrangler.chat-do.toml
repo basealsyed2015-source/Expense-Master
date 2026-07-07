@@ -1,0 +1,32 @@
+# Deploy once (or after ChatConversationRoom changes):
+#   npx wrangler deploy -c wrangler.chat-do.toml
+# Pages binds to this script via script_name in wrangler.jsonc.
+
+name = "tamweel-chat-do"
+main = "src/chat-do-worker.ts"
+compatibility_date = "2024-12-14"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "CHAT_ROOMS"
+class_name = "ChatConversationRoom"
+
+[[durable_objects.bindings]]
+name = "USER_NOTIFICATIONS"
+class_name = "UserNotificationRoom"
+
+[[durable_objects.bindings]]
+name = "BROADCAST_ROOMS"
+class_name = "BroadcastRoom"
+
+[[migrations]]
+tag = "v1-chat"
+new_sqlite_classes = ["ChatConversationRoom"]
+
+[[migrations]]
+tag = "v2-user-notify"
+new_sqlite_classes = ["UserNotificationRoom"]
+
+[[migrations]]
+tag = "v3-broadcasts"
+new_sqlite_classes = ["BroadcastRoom"]

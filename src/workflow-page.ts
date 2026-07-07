@@ -2,6 +2,8 @@
 // Workflow Timeline Page - صفحة مراحل سير العمل - v2
 // ============================================
 
+import { canAddWorkflowNote } from './notification-access'
+
 const ACTION_TYPE_LABELS: Record<string, string> = {
   call: 'اتصال هاتفي',
   email: 'بريد إلكتروني',
@@ -13,8 +15,69 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   other: 'أخرى',
 }
 
+const PRE_WORKFLOW_STAGE_NAME = 'pre_workflow'
+const PRE_WORKFLOW_STAGE_LABEL = 'قبل سير العمل'
+
 function getActionTypeLabel(actionType?: string) {
   return ACTION_TYPE_LABELS[actionType || ''] || actionType || 'إجراء'
+}
+
+function sortNotesChronologically(notes: any[]): any[] {
+  return [...notes].sort((a, b) => {
+    const ta = parseStoredDateTime(a.created_at)?.getTime() ?? 0
+    const tb = parseStoredDateTime(b.created_at)?.getTime() ?? 0
+    return ta - tb
+  })
+}
+
+function renderPhaseNoteRow(note: any): string {
+  const noteText = String(note.note_text || '').trim()
+  const performer = String(note.performed_by_name || '').trim() || '—'
+  const when = formatKsaDateTime(note.created_at)
+  return `
+    <div class="phase-note-item">
+      <div class="phase-note-meta">
+        <span class="phase-note-author"><i class="fas fa-user ml-1"></i>${escapeHtml(performer)}</span>
+        <span class="phase-note-time"><i class="fas fa-clock ml-1"></i>${escapeHtml(when)}</span>
+      </div>
+      <div class="phase-note-text">${escapeHtml(noteText || '—')}</div>
+    </div>
+  `
+}
+
+function renderPhaseNotesBlock(
+  stageNotes: any[],
+  isCurrentPhase: boolean,
+  collapseId: string
+): string {
+  if (stageNotes.length === 0) return ''
+  const expanded = isCurrentPhase
+  const sorted = sortNotesChronologically(stageNotes)
+  return `
+    <div class="stage-subsection phase-notes-block">
+      <button type="button" class="phase-notes-toggle${expanded ? ' expanded' : ''}" data-notes-target="${escapeHtml(collapseId)}" aria-expanded="${expanded ? 'true' : 'false'}">
+        <span class="phase-notes-toggle-label"><i class="fas fa-sticky-note ml-1 text-amber-600"></i>ملاحظات <span class="phase-notes-count">(${sorted.length})</span></span>
+        <i class="fas fa-chevron-down phase-notes-chevron"></i>
+      </button>
+      <div id="${escapeHtml(collapseId)}" class="phase-notes-list${expanded ? '' : ' collapsed'}">
+        ${sorted.map(renderPhaseNoteRow).join('')}
+      </div>
+    </div>
+  `
+}
+
+/** Inline script helper: surface API failures instead of a generic network message. */
+function workflowFetchErrorAlertScript(): string {
+  return `
+    async function wfAlertFetchFailure(resp, fallback) {
+      let msg = fallback || 'فشلت العملية';
+      try {
+        const d = await resp.json();
+        if (d && d.error) msg = String(d.error);
+      } catch (_) {}
+      alert(msg);
+    }
+`
 }
 
 function escapeHtml(text: unknown): string {
@@ -95,6 +158,7 @@ function itemBelongsToTransition(
 ): boolean {
   const itemStageId = item[stageIdKey] ?? item.stage_id
   if (itemStageId !== transition.to_stage_id) return false
+  if (transition.is_pre_workflow) return true
   const itemTime = parseStoredDateTime(item.created_at)?.getTime()
   const transTime = parseStoredDateTime(transition.created_at)?.getTime()
   if (itemTime == null || transTime == null) {
@@ -104,6 +168,50 @@ function itemBelongsToTransition(
   const nextTime = nextTrans ? parseStoredDateTime(nextTrans.created_at)?.getTime() : null
   const upperBound = nextTime ?? Number.POSITIVE_INFINITY
   return itemTime >= transTime && itemTime < upperBound
+}
+
+function getEarliestItemCreatedAt(items: any[]): string | null {
+  let earliest: { value: string; time: number } | null = null
+  for (const item of items) {
+    const value = item?.created_at
+    const time = parseStoredDateTime(value)?.getTime()
+    if (time == null) continue
+    if (!earliest || time < earliest.time) earliest = { value, time }
+  }
+  return earliest?.value ?? null
+}
+
+function buildTimelineTransitions(
+  transitions: any[],
+  actions: any[],
+  notes: any[],
+  tasks: any[],
+  stages: any[],
+  stageIdKey: 'customer_stage_id' | 'stage_id'
+): any[] {
+  const preWorkflowStage = stages.find((stage: any) => stage.stage_name === PRE_WORKFLOW_STAGE_NAME)
+  if (!preWorkflowStage?.id) return transitions
+
+  const preWorkflowStageId = preWorkflowStage.id
+  const preWorkflowItems = [...actions, ...notes, ...tasks].filter((item: any) => {
+    const itemStageId = item[stageIdKey] ?? item.stage_id
+    return itemStageId === preWorkflowStageId
+  })
+  if (preWorkflowItems.length === 0) return transitions
+
+  return [
+    {
+      id: 'pre-workflow',
+      to_stage_id: preWorkflowStageId,
+      to_stage_name: preWorkflowStage.stage_name_ar || PRE_WORKFLOW_STAGE_LABEL,
+      to_stage_name_ar: preWorkflowStage.stage_name_ar || PRE_WORKFLOW_STAGE_LABEL,
+      to_stage_color: preWorkflowStage.stage_color || '#94A3B8',
+      to_stage_icon: preWorkflowStage.stage_icon || 'fa-hourglass-start',
+      created_at: getEarliestItemCreatedAt(preWorkflowItems),
+      is_pre_workflow: true,
+    },
+    ...transitions,
+  ]
 }
 
 const sharedStyles = `
@@ -186,6 +294,56 @@ const sharedStyles = `
     transition: background 0.15s, border-color 0.15s;
   }
   .action-chip-btn:hover { background: #dcfce7; border-color: #4ade80; }
+  .phase-notes-block { margin-top: 0.35rem; }
+  .phase-notes-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 0.5rem;
+    padding: 0.2rem 0.35rem;
+    margin-bottom: 0.2rem;
+    border: none;
+    background: transparent;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #4b5563;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: background 0.15s;
+  }
+  .phase-notes-toggle:hover { background: #fffbeb; }
+  .phase-notes-toggle-label { display: inline-flex; align-items: center; gap: 0.2rem; }
+  .phase-notes-count { font-weight: 600; color: #92400e; }
+  .phase-notes-chevron { font-size: 0.55rem; color: #b45309; transition: transform 0.2s; }
+  .phase-notes-toggle.expanded .phase-notes-chevron { transform: rotate(180deg); }
+  .phase-notes-list { display: flex; flex-direction: column; gap: 0.35rem; }
+  .phase-notes-list.collapsed { display: none; }
+  .phase-note-item {
+    padding: 0.4rem 0.5rem;
+    border-radius: 0.35rem;
+    border: 1px dashed #fcd34d;
+    background: #fffbeb;
+    border-right: 3px solid #f59e0b;
+  }
+  .phase-note-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.75rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.65rem;
+    color: #78716c;
+  }
+  .phase-note-author { font-weight: 600; color: #92400e; }
+  .phase-note-time { color: #6b7280; }
+  .phase-note-text {
+    font-size: 0.75rem;
+    color: #1f2937;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
   .action-detail-body { font-size: 0.875rem; color: #374151; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
   .task-item {
     background: #F9FAFB;
@@ -217,7 +375,23 @@ const sharedStyles = `
   .wf-tab-btn.active { background: white; color: #1d4ed8; border-color: #e5e7eb; border-bottom-color: white; }
   .wf-tab-panel { display: none; }
   .wf-tab-panel.active { display: block; }
-  @media print { .no-print { display: none !important; } }
+  @media print { .no-print { display: none !important; }     }
+`
+
+const workflowNotesToggleScript = `
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.phase-notes-toggle');
+      if (!btn) return;
+      e.preventDefault();
+      const id = btn.getAttribute('data-notes-target');
+      if (!id) return;
+      const panel = document.getElementById(id);
+      if (!panel) return;
+      panel.classList.toggle('collapsed');
+      const open = !panel.classList.contains('collapsed');
+      btn.classList.toggle('expanded', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
 `
 
 /** Tab from URL hash on refresh; otherwise server default for this route (request vs customer module). */
@@ -232,7 +406,14 @@ function getWorkflowTabPersistenceScript(defaultTab: 'customer' | 'request'): st
     }
     function wfGetHashTab() {
       const hash = (location.hash || '').replace(/^#/, '');
-      if (hash === 'request' || hash === 'customer') return hash;
+      if (hash === 'request' || hash === 'request-add-note') return 'request';
+      if (hash === 'customer' || hash === 'customer-add-note') return 'customer';
+      return null;
+    }
+    function wfPendingAddNoteTab() {
+      const hash = (location.hash || '').replace(/^#/, '');
+      if (hash === 'customer-add-note') return 'customer';
+      if (hash === 'request-add-note') return 'request';
       return null;
     }
     function wfPersistTab(tab) {
@@ -252,9 +433,18 @@ function getWorkflowTabPersistenceScript(defaultTab: 'customer' | 'request'): st
       wfPersistTab(tab);
     }
     (function wfRestoreTabOnLoad() {
+      const pendingNote = wfPendingAddNoteTab();
       const tab = wfGetHashTab() || wfRouteDefaultTab();
       wfApplyTab(tab);
       wfPersistTab(tab);
+      if (pendingNote) {
+        const open = function () {
+          if (pendingNote === 'customer' && typeof addCustomerNote === 'function') addCustomerNote();
+          else if (pendingNote === 'request' && typeof addRequestNote === 'function') addRequestNote();
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', open);
+        else setTimeout(open, 0);
+      }
     })();
 `
 }
@@ -290,6 +480,7 @@ const workflowModalSubmitGuardScript = `
 function renderTimelineSection(
   transitions: any[],
   actions: any[],
+  notes: any[],
   tasks: any[],
   stages: any[],
   context: { stageId: number | null; canUpdateStage: boolean; canAddAction: boolean },
@@ -297,20 +488,26 @@ function renderTimelineSection(
   id: number,
   stageIdKey: 'customer_stage_id' | 'stage_id' = 'stage_id'
 ): string {
+  const timelineTransitions = buildTimelineTransitions(transitions, actions, notes, tasks, stages, stageIdKey)
+  const realIndexOffset = timelineTransitions[0]?.is_pre_workflow ? 1 : 0
+
   return `
     <div class="timeline-container">
       <div class="timeline-line"></div>
-      ${transitions.length === 0 ? `
+      ${timelineTransitions.length === 0 ? `
         <div class="text-center py-6 text-gray-500">
           <i class="fas fa-inbox fa-2x mb-2 text-gray-300"></i>
           <p class="text-sm">لم يتم تسجيل أي مراحل بعد</p>
         </div>
       ` : ''}
-      ${transitions.map((transition: any, index: number) => {
-        const isLast = index === transitions.length - 1
-        const duration = index > 0 ? calculateDuration(transitions[index - 1].created_at, transition.created_at) : null
-        const stageActions = actions.filter((a: any) => itemBelongsToTransition(a, transition, transitions, index, stageIdKey))
-        const stageTasks = tasks.filter((t: any) => itemBelongsToTransition(t, transition, transitions, index, stageIdKey))
+      ${timelineTransitions.map((transition: any, index: number) => {
+        const isLast = index === timelineTransitions.length - 1
+        const isPreWorkflow = !!transition.is_pre_workflow
+        const phaseNumber = isPreWorkflow ? 0 : index + 1 - realIndexOffset
+        const duration = !isPreWorkflow && index > realIndexOffset ? calculateDuration(timelineTransitions[index - 1].created_at, transition.created_at) : null
+        const stageActions = actions.filter((a: any) => itemBelongsToTransition(a, transition, timelineTransitions, index, stageIdKey))
+        const stageNotes = notes.filter((n: any) => itemBelongsToTransition(n, transition, timelineTransitions, index, stageIdKey))
+        const stageTasks = tasks.filter((t: any) => itemBelongsToTransition(t, transition, timelineTransitions, index, stageIdKey))
         return `
           <div class="timeline-item">
             <div class="timeline-dot ${isLast ? 'current' : ''}" style="background-color: ${transition.to_stage_color || '#3B82F6'}">
@@ -318,7 +515,7 @@ function renderTimelineSection(
             </div>
             <div class="stage-card" style="border-right-color: ${transition.to_stage_color || '#3B82F6'}">
               <div class="stage-card-header">
-                <h3 class="stage-card-title">${index + 1}. ${transition.to_stage_name || transition.to_stage_name_ar || ''}</h3>
+                <h3 class="stage-card-title">${phaseNumber}. ${transition.to_stage_name || transition.to_stage_name_ar || ''}</h3>
                 <span class="stage-card-meta">
                   <i class="fas fa-clock ml-1"></i>
                   ${formatKsaDateTime(transition.created_at)}
@@ -340,6 +537,7 @@ function renderTimelineSection(
                   </div>
                 </div>
               ` : ''}
+              ${renderPhaseNotesBlock(stageNotes, isLast, `wf-notes-${mode}-${id}-t${index}`)}
               ${stageTasks.length > 0 ? `
                 <div class="stage-subsection">
                   <div class="stage-subsection-title"><i class="fas fa-list-check ml-1"></i>مهام</div>
@@ -367,28 +565,32 @@ export function generateCustomerWorkflowPage(opts: {
   customerId: number
   customer: any
   stages: any[]
-  customerTimeline: { transitions: any[]; actions: any[]; tasks: any[] }
+  customerTimeline: { transitions: any[]; actions: any[]; notes: any[]; tasks: any[] }
   requestId?: number | null
   request?: any
-  requestTimeline?: { transitions: any[]; actions: any[]; tasks: any[] }
+  requestTimeline?: { transitions: any[]; actions: any[]; notes: any[]; tasks: any[] }
   roleId?: number | null
+  userId?: number | null
   activeTab?: 'customer' | 'request'
 }) {
-  const { customerId, customer, stages, customerTimeline, requestId, request, requestTimeline, roleId } = opts
+  const { customerId, customer, stages, customerTimeline, requestId, request, requestTimeline, roleId, userId } = opts
   const activeTab = opts.activeTab ?? 'customer'
 
   const normalizedRoleId = normalizeRoleId(roleId)
   const canUpdateStage = normalizedRoleId !== 4
   const canAddAction = normalizedRoleId !== 5
+  const canAddNote = canAddWorkflowNote(roleId)
 
   const hasRequest = !!requestId && !!request
 
   const customerTransitions = customerTimeline.transitions ?? []
   const customerActions = customerTimeline.actions ?? []
+  const customerNotes = customerTimeline.notes ?? []
   const customerTasks = customerTimeline.tasks ?? []
 
   const requestTransitions = requestTimeline?.transitions ?? []
   const requestActions = requestTimeline?.actions ?? []
+  const requestNotes = requestTimeline?.notes ?? []
   const requestTasks = requestTimeline?.tasks ?? []
 
   const currentCustomerStageId = customer?.current_workflow_stage_id ?? null
@@ -458,11 +660,17 @@ export function generateCustomerWorkflowPage(opts: {
             ${currentCustomerStageId ? `المرحلة الحالية: <strong>${stages.find(s => s.id === currentCustomerStageId)?.stage_name_ar || '—'}</strong>` : 'لا توجد مرحلة محددة'}
           </div>
         </div>
-        ${renderTimelineSection(customerTransitions, customerActions, customerTasks, stages, { stageId: currentCustomerStageId, canUpdateStage, canAddAction }, 'customer', customerId)}
+        ${renderTimelineSection(customerTransitions, customerActions, customerNotes, customerTasks, stages, { stageId: currentCustomerStageId, canUpdateStage, canAddAction }, 'customer', customerId)}
       </div>
 
       <!-- Action buttons - customer -->
       <div class="mt-4 flex gap-3 no-print">
+        ${canAddNote ? `
+        <button onclick="addCustomerNote()" class="flex-1 bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition-colors">
+          <i class="fas fa-sticky-note ml-2"></i>
+          إضافة ملاحظة
+        </button>
+        ` : ''}
         ${canUpdateStage ? `
         <button onclick="updateCustomerStage()" class="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
           <i class="fas fa-arrow-left ml-2"></i>
@@ -526,11 +734,17 @@ export function generateCustomerWorkflowPage(opts: {
           <i class="fas fa-timeline ml-2 text-blue-600"></i>
           المسار الزمني للطلب
         </h2>
-        ${renderTimelineSection(requestTransitions, requestActions, requestTasks, stages, { stageId: currentRequestStageId, canUpdateStage, canAddAction }, 'request', requestId!)}
+        ${renderTimelineSection(requestTransitions, requestActions, requestNotes, requestTasks, stages, { stageId: currentRequestStageId, canUpdateStage, canAddAction }, 'request', requestId!)}
       </div>
 
       <!-- Action buttons - request -->
       <div class="mt-4 flex gap-3 no-print">
+        ${canAddNote ? `
+        <button onclick="addRequestNote()" class="flex-1 bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition-colors">
+          <i class="fas fa-sticky-note ml-2"></i>
+          إضافة ملاحظة
+        </button>
+        ` : ''}
         ${canUpdateStage ? `
         <button onclick="updateRequestStage()" class="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
           <i class="fas fa-arrow-left ml-2"></i>
@@ -547,7 +761,7 @@ export function generateCustomerWorkflowPage(opts: {
           <i class="fas fa-tasks ml-2"></i>
           إنشاء مهمة
         </button>
-        ${(roleId === 5 || roleId === 2) ? `
+        ${(roleId === 5 || roleId === 2 || (roleId === 6 && request?.assigned_bank_agent_id != null && request.assigned_bank_agent_id === userId)) ? `
         <button onclick="completeRequest()" id="completeBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-lg transition-colors font-bold">
           <i class="fas fa-check-double ml-2"></i>
           إتمام الإفراغ
@@ -567,9 +781,12 @@ export function generateCustomerWorkflowPage(opts: {
     const currentRequestStageId = ${currentRequestStageId ?? 'null'};
     const canUpdateStage = ${canUpdateStage};
     const canAddAction = ${canAddAction};
+    const canAddNote = ${canAddNote};
 
     ${getWorkflowTabPersistenceScript(activeTab)}
     ${workflowModalSubmitGuardScript}
+    ${workflowFetchErrorAlertScript()}
+    ${workflowNotesToggleScript}
 
     function closeModal() {
       const modal = document.body.querySelector('.wf-modal');
@@ -614,12 +831,87 @@ export function generateCustomerWorkflowPage(opts: {
     });
 
     function stageSelectHtml(currentId) {
-      return stages.map(s => '<option value="' + s.id + '"' + (s.id === currentId ? ' selected' : '') + '>' + s.stage_name_ar + '</option>').join('');
+      return stages
+        .filter(s => s.stage_name !== 'pre_workflow')
+        .map(s => '<option value="' + s.id + '"' + (s.id === currentId ? ' selected' : '') + '>' + s.stage_name_ar + '</option>')
+        .join('');
     }
 
     function actionTypeSelectHtml() {
       return ['call:اتصال هاتفي','email:بريد إلكتروني','meeting:اجتماع','document:مستند','approval:موافقة','rejection:رفض','followup:متابعة','other:أخرى']
         .map(x => { const [v,l] = x.split(':'); return '<option value="' + v + '">' + l + '</option>'; }).join('');
+    }
+
+    function addCustomerNote() {
+      if (!canAddNote) return;
+      const modal = document.createElement('div');
+      modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">' +
+        '<h3 class="text-xl font-bold mb-4"><i class="fas fa-sticky-note text-amber-500 ml-2"></i>إضافة ملاحظة للعميل</h3>' +
+        '<div class="mb-3"><label class="block text-sm font-medium mb-1">نص الملاحظة</label>' +
+        '<textarea id="custPhaseNoteText" placeholder="اكتب ملاحظتك على المرحلة الحالية..." class="w-full border rounded-lg p-2" rows="5"></textarea></div>' +
+        '<div class="flex gap-2">' +
+        '<button type="button" onclick="confirmAddCustomerNote(this)" class="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed">إضافة</button>' +
+        '<button onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400">إلغاء</button>' +
+        '</div></div>';
+      document.body.appendChild(modal);
+    }
+
+    async function confirmAddCustomerNote(btn) {
+      if (!canAddNote) return;
+      const text = (document.getElementById('custPhaseNoteText')?.value || '').trim();
+      if (!text) { alert('الرجاء إدخال نص الملاحظة'); return; }
+      if (!wfLockModalSubmit(btn, 'جاري الإضافة...')) return;
+      try {
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const resp = await fetch('/api/workflow/customer-add-note', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerId: currentCustomerId, stageId: currentCustomerStageId, noteText: text, performedBy: userData.id })
+        });
+        if (resp.ok) { closeModal(); location.reload(); }
+        else { await wfAlertFetchFailure(resp, 'فشل إضافة الملاحظة'); wfUnlockModalSubmit(); }
+      } catch (err) {
+        console.error('add customer note failed', err);
+        alert('تعذر الاتصال بالخادم — تأكد أن npm run dev يعمل');
+        wfUnlockModalSubmit();
+      }
+    }
+
+    function addRequestNote() {
+      if (!canAddNote) return;
+      const modal = document.createElement('div');
+      modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">' +
+        '<h3 class="text-xl font-bold mb-4"><i class="fas fa-sticky-note text-amber-500 ml-2"></i>إضافة ملاحظة للطلب</h3>' +
+        '<div class="mb-3"><label class="block text-sm font-medium mb-1">نص الملاحظة</label>' +
+        '<textarea id="reqPhaseNoteText" placeholder="اكتب ملاحظتك على المرحلة الحالية..." class="w-full border rounded-lg p-2" rows="5"></textarea></div>' +
+        '<div class="flex gap-2">' +
+        '<button type="button" onclick="confirmAddRequestNote(this)" class="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed">إضافة</button>' +
+        '<button onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400">إلغاء</button>' +
+        '</div></div>';
+      document.body.appendChild(modal);
+    }
+
+    async function confirmAddRequestNote(btn) {
+      if (!canAddNote) return;
+      const text = (document.getElementById('reqPhaseNoteText')?.value || '').trim();
+      if (!text) { alert('الرجاء إدخال نص الملاحظة'); return; }
+      if (!wfLockModalSubmit(btn, 'جاري الإضافة...')) return;
+      try {
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const resp = await fetch('/api/workflow/add-note', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: currentRequestId, stageId: currentRequestStageId, noteText: text, performedBy: userData.id })
+        });
+        if (resp.ok) { closeModal(); location.reload(); }
+        else { await wfAlertFetchFailure(resp, 'فشل إضافة الملاحظة'); wfUnlockModalSubmit(); }
+      } catch (err) {
+        console.error('add request note failed', err);
+        alert('تعذر الاتصال بالخادم — تأكد أن npm run dev يعمل');
+        wfUnlockModalSubmit();
+      }
     }
 
     // ── Customer workflow actions ──────────────────────────────────────────
@@ -659,7 +951,6 @@ export function generateCustomerWorkflowPage(opts: {
 
     function addCustomerAction() {
       if (!canAddAction) return;
-      if (!currentCustomerStageId) { alert('الرجاء تحديث المرحلة أولاً قبل إضافة إجراءات'); return; }
       const modal = document.createElement('div');
       modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
       modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">' +
@@ -758,7 +1049,6 @@ export function generateCustomerWorkflowPage(opts: {
 
     function addRequestAction() {
       if (!canAddAction) return;
-      if (!currentRequestStageId) { alert('الرجاء تحديث المرحلة أولاً قبل إضافة إجراءات'); return; }
       const modal = document.createElement('div');
       modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
       modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">' +
@@ -870,16 +1160,18 @@ export function generateWorkflowTimelinePage(
   requestId: number,
   request: any,
   stages: any[],
-  requestTimeline: { transitions: any[]; actions: any[]; tasks: any[] },
-  customerTimeline: { transitions: any[]; actions: any[]; tasks: any[] },
+  requestTimeline: { transitions: any[]; actions: any[]; notes: any[]; tasks: any[] },
+  customerTimeline: { transitions: any[]; actions: any[]; notes: any[]; tasks: any[] },
   roleId?: number | null,
+  userId?: number | null,
   activeTab: 'customer' | 'request' = 'request'
 ) {
-  const { transitions: reqTransitions = [], actions: reqActions = [], tasks: reqTasks = [] } = requestTimeline
-  const { transitions: custTransitions = [], actions: custActions = [], tasks: custTasks = [] } = customerTimeline
+  const { transitions: reqTransitions = [], actions: reqActions = [], notes: reqNotes = [], tasks: reqTasks = [] } = requestTimeline
+  const { transitions: custTransitions = [], actions: custActions = [], notes: custNotes = [], tasks: custTasks = [] } = customerTimeline
   const normalizedRoleId = normalizeRoleId(roleId)
   const canUpdateStage = normalizedRoleId !== 4
   const canAddAction = normalizedRoleId !== 5
+  const canAddNote = canAddWorkflowNote(roleId)
   const currentRequestStageId = request.current_stage_id ?? null
   const currentCustomerStageId = request.current_workflow_stage_id ?? null
   const customerId = request.customer_id ?? null
@@ -909,7 +1201,7 @@ export function generateWorkflowTimelinePage(
           <p class="text-blue-100">الطلب رقم: ${requestId} | العميل: ${escapeHtml(request.customer_name)}</p>
         </div>
         <div class="flex gap-2">
-          ${(normalizedRoleId === 5 || normalizedRoleId === 2) ? `
+          ${(normalizedRoleId === 5 || normalizedRoleId === 2 || (normalizedRoleId === 6 && request?.assigned_bank_agent_id != null && request.assigned_bank_agent_id === userId)) ? `
           <button onclick="completeRequest()" id="completeBtn"
             class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition-colors font-bold">
             <i class="fas fa-check-double ml-2"></i>
@@ -984,9 +1276,10 @@ export function generateWorkflowTimelinePage(
           <i class="fas fa-timeline ml-2 text-blue-600"></i>
           المسار الزمني للطلب
         </h2>
-        ${renderTimelineSection(reqTransitions, reqActions, reqTasks, stages, { stageId: currentRequestStageId, canUpdateStage, canAddAction }, 'request', requestId)}
+        ${renderTimelineSection(reqTransitions, reqActions, reqNotes, reqTasks, stages, { stageId: currentRequestStageId, canUpdateStage, canAddAction }, 'request', requestId)}
       </div>
       <div class="mt-4 flex gap-3 no-print">
+        ${canAddNote ? `<button onclick="addRequestNote()" class="flex-1 bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition-colors"><i class="fas fa-sticky-note ml-2"></i>إضافة ملاحظة</button>` : ''}
         ${canUpdateStage ? `<button onclick="updateRequestStage()" class="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"><i class="fas fa-arrow-left ml-2"></i>تحديث المرحلة</button>` : ''}
         ${canAddAction ? `<button onclick="addRequestAction()" class="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"><i class="fas fa-plus ml-2"></i>إضافة إجراء</button>` : ''}
         <button onclick="createRequestTask()" class="flex-1 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"><i class="fas fa-tasks ml-2"></i>إنشاء مهمة</button>
@@ -1000,9 +1293,10 @@ export function generateWorkflowTimelinePage(
           <i class="fas fa-timeline ml-2 text-purple-600"></i>
           المسار الزمني للعميل
         </h2>
-        ${renderTimelineSection(custTransitions, custActions, custTasks, stages, { stageId: currentCustomerStageId, canUpdateStage, canAddAction }, 'customer', customerId ?? 0)}
+        ${renderTimelineSection(custTransitions, custActions, custNotes, custTasks, stages, { stageId: currentCustomerStageId, canUpdateStage, canAddAction }, 'customer', customerId ?? 0)}
       </div>
       <div class="mt-4 flex gap-3 no-print">
+        ${canAddNote ? `<button onclick="addCustomerNote()" class="flex-1 bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition-colors"><i class="fas fa-sticky-note ml-2"></i>إضافة ملاحظة</button>` : ''}
         ${canUpdateStage ? `<button onclick="updateCustomerStage()" class="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"><i class="fas fa-arrow-left ml-2"></i>تحديث المرحلة</button>` : ''}
         ${canAddAction ? `<button onclick="addCustomerAction()" class="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"><i class="fas fa-plus ml-2"></i>إضافة إجراء</button>` : ''}
         <button onclick="createCustomerTask()" class="flex-1 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"><i class="fas fa-tasks ml-2"></i>إنشاء مهمة</button>
@@ -1019,9 +1313,12 @@ export function generateWorkflowTimelinePage(
     const currentCustomerStageId = ${currentCustomerStageId ?? 'null'};
     const canUpdateStage = ${canUpdateStage};
     const canAddAction = ${canAddAction};
+    const canAddNote = ${canAddNote};
 
     ${getWorkflowTabPersistenceScript(activeTab)}
     ${workflowModalSubmitGuardScript}
+    ${workflowFetchErrorAlertScript()}
+    ${workflowNotesToggleScript}
 
     function closeModal() {
       const modal = document.body.querySelector('.wf-modal');
@@ -1064,12 +1361,71 @@ export function generateWorkflowTimelinePage(
     });
 
     function stageSelectHtml(currentId) {
-      return stages.map(s => '<option value="' + s.id + '"' + (s.id === currentId ? ' selected' : '') + '>' + s.stage_name_ar + '</option>').join('');
+      return stages
+        .filter(s => s.stage_name !== 'pre_workflow')
+        .map(s => '<option value="' + s.id + '"' + (s.id === currentId ? ' selected' : '') + '>' + s.stage_name_ar + '</option>')
+        .join('');
     }
 
     function actionTypeSelectHtml() {
       return 'call:اتصال هاتفي,email:بريد إلكتروني,meeting:اجتماع,document:مستند,approval:موافقة,rejection:رفض,followup:متابعة,other:أخرى'
         .split(',').map(x => { const [v,l] = x.split(':'); return '<option value="' + v + '">' + l + '</option>'; }).join('');
+    }
+
+    function addCustomerNote() {
+      if (!canAddNote) return;
+      const modal = document.createElement('div');
+      modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4"><h3 class="text-xl font-bold mb-4"><i class="fas fa-sticky-note text-amber-500 ml-2"></i>إضافة ملاحظة للعميل</h3><div class="mb-3"><label class="block text-sm font-medium mb-1">نص الملاحظة</label><textarea id="custPhaseNoteText" placeholder="اكتب ملاحظتك على المرحلة الحالية..." class="w-full border rounded-lg p-2" rows="5"></textarea></div><div class="flex gap-2"><button type="button" onclick="confirmAddCustomerNote(this)" class="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed">إضافة</button><button onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400">إلغاء</button></div></div>';
+      document.body.appendChild(modal);
+    }
+
+    async function confirmAddCustomerNote(btn) {
+      if (!canAddNote) return;
+      const text = (document.getElementById('custPhaseNoteText')?.value || '').trim();
+      if (!text) { alert('الرجاء إدخال نص الملاحظة'); return; }
+      if (!wfLockModalSubmit(btn, 'جاري الإضافة...')) return;
+      try {
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const resp = await fetch('/api/workflow/customer-add-note', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerId: currentCustomerId, stageId: currentCustomerStageId, noteText: text, performedBy: userData.id })
+        });
+        if (resp.ok) { closeModal(); location.reload(); }
+        else { await wfAlertFetchFailure(resp, 'فشل إضافة الملاحظة'); wfUnlockModalSubmit(); }
+      } catch (err) {
+        console.error('add customer note failed', err);
+        alert('تعذر الاتصال بالخادم — تأكد أن npm run dev يعمل');
+        wfUnlockModalSubmit();
+      }
+    }
+
+    function addRequestNote() {
+      if (!canAddNote) return;
+      const modal = document.createElement('div');
+      modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4"><h3 class="text-xl font-bold mb-4"><i class="fas fa-sticky-note text-amber-500 ml-2"></i>إضافة ملاحظة للطلب</h3><div class="mb-3"><label class="block text-sm font-medium mb-1">نص الملاحظة</label><textarea id="reqPhaseNoteText" placeholder="اكتب ملاحظتك على المرحلة الحالية..." class="w-full border rounded-lg p-2" rows="5"></textarea></div><div class="flex gap-2"><button type="button" onclick="confirmAddRequestNote(this)" class="flex-1 bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed">إضافة</button><button onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400">إلغاء</button></div></div>';
+      document.body.appendChild(modal);
+    }
+
+    async function confirmAddRequestNote(btn) {
+      if (!canAddNote) return;
+      const text = (document.getElementById('reqPhaseNoteText')?.value || '').trim();
+      if (!text) { alert('الرجاء إدخال نص الملاحظة'); return; }
+      if (!wfLockModalSubmit(btn, 'جاري الإضافة...')) return;
+      try {
+        const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+        const resp = await fetch('/api/workflow/add-note', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: currentRequestId, stageId: currentRequestStageId, noteText: text, performedBy: userData.id })
+        });
+        if (resp.ok) { closeModal(); location.reload(); }
+        else { await wfAlertFetchFailure(resp, 'فشل إضافة الملاحظة'); wfUnlockModalSubmit(); }
+      } catch (err) {
+        console.error('add request note failed', err);
+        alert('تعذر الاتصال بالخادم — تأكد أن npm run dev يعمل');
+        wfUnlockModalSubmit();
+      }
     }
 
     function taskModalHtml(confirmFn) {
@@ -1111,7 +1467,6 @@ export function generateWorkflowTimelinePage(
 
     function addRequestAction() {
       if (!canAddAction) return;
-      if (!currentRequestStageId) { alert('الرجاء تحديث المرحلة أولاً قبل إضافة إجراءات'); return; }
       const modal = document.createElement('div');
       modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
       modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4"><h3 class="text-xl font-bold mb-4">إضافة إجراء للطلب</h3><div class="mb-3"><label class="block text-sm font-medium mb-1">نوع الإجراء</label><select id="reqActionType" class="w-full border rounded-lg p-2">' + actionTypeSelectHtml() + '</select></div><div class="mb-3"><label class="block text-sm font-medium mb-1">ملاحظات الإجراء</label><textarea id="reqActionNotes" class="w-full border rounded-lg p-2" rows="4"></textarea></div><div class="flex gap-2"><button type="button" onclick="confirmAddRequestAction(this)" class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed">إضافة</button><button onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400">إلغاء</button></div></div>';
@@ -1182,7 +1537,6 @@ export function generateWorkflowTimelinePage(
 
     function addCustomerAction() {
       if (!canAddAction) return;
-      if (!currentCustomerStageId) { alert('الرجاء تحديث مرحلة العميل أولاً قبل إضافة إجراءات'); return; }
       const modal = document.createElement('div');
       modal.className = 'wf-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
       modal.innerHTML = '<div class="bg-white rounded-xl p-6 max-w-md w-full mx-4"><h3 class="text-xl font-bold mb-4">إضافة إجراء للعميل</h3><div class="mb-3"><label class="block text-sm font-medium mb-1">نوع الإجراء</label><select id="custActionType" class="w-full border rounded-lg p-2">' + actionTypeSelectHtml() + '</select></div><div class="mb-3"><label class="block text-sm font-medium mb-1">ملاحظات الإجراء</label><textarea id="custActionNotes" class="w-full border rounded-lg p-2" rows="4"></textarea></div><div class="flex gap-2"><button type="button" onclick="confirmAddCustomerAction(this)" class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed">إضافة</button><button onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400">إلغاء</button></div></div>';

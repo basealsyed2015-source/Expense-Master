@@ -1,3 +1,5 @@
+import { HTML_CSV_PREFIX, HTML_CSV_UTF16_DOWNLOAD_SCRIPT } from './csv-export'
+
 export const banksReportPage = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -288,19 +290,16 @@ export const banksReportPage = `
             return parseFloat(amount).toLocaleString('ar-SA') + ' ريال';
         }
 
+        ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
         function exportToExcel() {
-            let csv = '\\uFEFFsep=,\\r\\n'; // BOM + Excel comma hint for Arabic/RTL list-separator locales
-            csv += 'اسم البنك,إجمالي الطلبات,طلبات مقبولة,طلبات مرفوضة,طلبات قيد المعالجة,معدل القبول,متوسط مبلغ التمويل\\n';
+            let csv = ${HTML_CSV_PREFIX};
+            csv += 'اسم البنك\\tإجمالي الطلبات\\tطلبات مقبولة\\tطلبات مرفوضة\\tطلبات قيد المعالجة\\tمعدل القبول\\tمتوسط مبلغ التمويل\\r\\n';
 
             banksData.forEach(bank => {
-                csv += \`"\${bank.bank_name}",\${bank.total_requests},\${bank.approved_requests},\${bank.rejected_requests},\${bank.pending_requests},\${bank.approval_rate}%,\${bank.average_amount}\\n\`;
+                csv += \`"\${bank.bank_name}"\\t\${bank.total_requests}\\t\${bank.approved_requests}\\t\${bank.rejected_requests}\\t\${bank.pending_requests}\\t\${bank.approval_rate}%\\t\${bank.average_amount}\\r\\n\`;
             });
 
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'تقرير_البنوك_' + new Date().toISOString().split('T')[0] + '.csv';
-            link.click();
+            downloadUtf16Csv(csv, 'تقرير_البنوك_' + new Date().toISOString().split('T')[0] + '.csv');
         }
 
         // Load report on page load

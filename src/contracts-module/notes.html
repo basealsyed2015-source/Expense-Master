@@ -1714,8 +1714,11 @@ function doExportCSV() {
       n.amount,n.issue_date,n.due_date,n.payment_place,n.status,n.notes||'']
       .map(function(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }).join(',');
   });
-  var csv  = '\uFEFFsep=,\r\n' + hd.join(',') + '\n' + rows.join('\n');
-  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var csv  = 'sep=,\r\n' + hd.join(',') + '\r\n' + rows.join('\r\n');
+  var n = csv.length, bytes = new Uint8Array(2 + n * 2);
+  bytes[0] = 255; bytes[1] = 254;
+  for (var i = 0; i < n; i++) { var c = csv.charCodeAt(i), o = 2 + i * 2; bytes[o] = c & 255; bytes[o + 1] = (c >> 8) & 255; }
+  var blob = new Blob([bytes],{type:'text/csv;charset=utf-16le'});
   var url  = URL.createObjectURL(blob);
   var a    = document.createElement('a');
   a.href = url; a.download = 'سندات_' + new Date().toLocaleDateString('en') + '.csv';

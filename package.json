@@ -4,12 +4,18 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "vite",
+    "dev": "node scripts/sync-d1-persist.mjs && vite",
+    "db:sync-persist": "node scripts/sync-d1-persist.mjs",
+    "db:import-utf8": "node scripts/import-d1-utf8.mjs",
+    "db:clone-remote": "node scripts/clone-remote-d1.mjs",
     "build": "vite build",
     "build:contracts-pages": "node scripts/build-contracts-ts-pages.mjs",
     "preview": "wrangler pages dev dist",
+    "db:docker": "docker compose -f docker-compose.local.yml run --rm db",
+    "db:docker:reset": "docker compose -f docker-compose.local.yml run --rm -e FORCE_DB_RESET=1 db",
+    "deploy:chat-do": "wrangler deploy -c wrangler.chat-do.toml",
     "deploy": "npm run build && wrangler pages deploy dist --project-name tamweel-calc-prod --branch=\"ZAT  _developer\" --commit-dirty=true",
-    "test": "echo 'Tests coming soon...'"
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -25,6 +31,8 @@
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^11.10.0",
     "@hono/vite-build": "^1.8.0",
     "@hono/vite-dev-server": "^0.23.0",
     "nodemon": "^3.0.2",

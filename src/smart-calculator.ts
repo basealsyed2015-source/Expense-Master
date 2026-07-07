@@ -348,7 +348,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="identityAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'identityPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                             <div id="identityPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
                         
                         <!-- 2. ملف السمة -->
@@ -360,7 +360,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="signatureAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'signaturePreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
                             <div id="signaturePreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
                         
                         <!-- 3. ملف تعريف الراتب -->
@@ -372,7 +372,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="salaryProfileAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'salaryProfilePreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
                             <div id="salaryProfilePreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
                         
                         <!-- 4. ملف التأمينات الاجتماعية -->
@@ -384,7 +384,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="gosiAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'gosiPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
                             <div id="gosiPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
 
                         <!-- 5. شهادة الإعفاء الضريبي -->
@@ -396,7 +396,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="taxExemptionAttachment" accept="image/*,.pdf" onchange="previewFile(this, 'taxExemptionPreview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                             <div id="taxExemptionPreview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
 
                         <!-- 6. مستند إضافي 1 -->
@@ -408,7 +408,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="additional1Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional1Preview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
                             <div id="additional1Preview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
 
                         <!-- 7. مستند إضافي 2 -->
@@ -420,7 +420,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="additional2Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional2Preview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100">
                             <div id="additional2Preview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
 
                         <!-- 8. مستند إضافي 3 -->
@@ -432,7 +432,7 @@ export const smartCalculator = `<!DOCTYPE html>
                             <input type="file" id="additional3Attachment" accept="image/*,.pdf" onchange="previewFile(this, 'additional3Preview')"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 file:ml-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
                             <div id="additional3Preview" class="mt-2"></div>
-                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 2 ميغابايت)</p>
+                            <p class="text-xs text-gray-500 mt-1">صيغة الملف: صورة أو PDF (حد أقصى: 20 ميغابايت)</p>
                         </div>
                     </div>
                     
@@ -795,10 +795,10 @@ export const smartCalculator = `<!DOCTYPE html>
                 return;
             }
             
-            // Validate file size (2MB max)
-            const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+            // Validate file size (20MB max)
+            const maxSize = 20 * 1024 * 1024;
             if (file.size > maxSize) {
-                alert('حجم الملف كبير جداً! الحد الأقصى: 2 ميغابايت');
+                alert('حجم الملف كبير جداً! الحد الأقصى: 20 ميغابايت');
                 input.value = '';
                 preview.innerHTML = '';
                 return;

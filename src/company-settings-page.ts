@@ -68,6 +68,19 @@ export const companySettingsPage = `<!DOCTYPE html>
         <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">اختياري. صيغة سعودية (يبدأ بـ 5). يُستخدم في صفحة التواصل ورابط واتساب.</p>
       </div>
       <div>
+        <label class="block text-sm font-bold text-gray-700 mb-2" for="whatsapp_greeting" dir="rtl">
+          <i class="fab fa-whatsapp text-green-600 ml-1"></i>
+          رسالة ترحيب واتساب
+        </label>
+        <textarea id="whatsapp_greeting" maxlength="2000" rows="4"
+          placeholder="مثال: السلام عليكم، معكم فريقنا. كيف نقدر نخدمك؟"
+          class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-y min-h-[6rem] text-right"
+          dir="rtl" lang="ar"></textarea>
+        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
+          اختياري. تُفتح هذه الرسالة جاهزة في واتساب عند الضغط على زر واتساب في جداول العملاء والطلبات.
+        </p>
+      </div>
+      <div>
         <label class="block text-sm font-bold text-gray-700 mb-2" for="city" dir="rtl">
           <i class="fas fa-map-marker-alt text-teal-600 ml-1"></i>
           المدينة
@@ -183,6 +196,8 @@ export const companySettingsPage = `<!DOCTYPE html>
         document.getElementById('company_name').value = d.company_name || '';
         document.getElementById('contact_email').value = d.contact_email || '';
         document.getElementById('contact_phone').value = d.contact_phone || '';
+        var waGreetingEl = document.getElementById('whatsapp_greeting');
+        if (waGreetingEl) waGreetingEl.value = d.whatsapp_greeting || '';
         var cityEl = document.getElementById('city');
         if (cityEl) cityEl.value = d.city || '';
         var addrEl = document.getElementById('address');
@@ -246,6 +261,7 @@ export const companySettingsPage = `<!DOCTYPE html>
         company_name: document.getElementById('company_name').value.trim(),
         contact_email: document.getElementById('contact_email').value.trim() || null,
         contact_phone: phoneRaw === '' ? null : phoneRaw,
+        whatsapp_greeting: (document.getElementById('whatsapp_greeting') && document.getElementById('whatsapp_greeting').value.trim()) || null,
         city: cityVal === '' ? null : cityVal,
         address: addrVal === '' ? null : addrVal
       };

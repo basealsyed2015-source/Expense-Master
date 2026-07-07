@@ -1,3 +1,12 @@
+// =============================================================================
+// ⚠️  THIS IS NOT THE LIVE CUSTOMERS/REQUESTS TABLE PAGE
+// =============================================================================
+//   This file is a legacy SPA (/admin/full route) with its own client-rendered
+//   tables (tbody#customersTable, tbody#requestsTable). The pages users actually
+//   hit at /admin/customers and /admin/requests live in src/index.tsx — they are
+//   server-rendered with tbody#tableBody. If a feature must show up on those
+//   real pages, edit src/index.tsx, NOT this file.
+// =============================================================================
 export const fullAdminPanel = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -1380,6 +1389,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <select name="job_type" id="modal_job_type" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                 <option value="civilian">مدني</option>
                                 <option value="military">عسكري</option>
+                                <option value="retired">متقاعد</option>
                             </select>
                         </div>
                         <div>
@@ -1393,6 +1403,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <option value="">-- اختر الرتبة --</option>
                                     <option value="جندي">جندي</option>
                                     <option value="عريف">عريف</option>
+                                    <option value="وكيل رقيب">وكيل رقيب</option>
                                     <option value="رقيب">رقيب</option>
                                     <option value="رقيب أول">رقيب أول</option>
                                     <option value="رئيس رقباء">رئيس رقباء</option>
@@ -1418,6 +1429,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <input type="text" name="city" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">رقم مالك العقار</label>
+                            <input type="text" name="property_owner" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">رقم المكتب العقاري</label>
+                            <input type="text" name="real_estate_office" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">الراتب الأساسي</label>
                             <input type="number" name="basic_salary" step="0.01" min="0" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
@@ -1438,7 +1457,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                             <th class="py-2 px-2">نوع الالتزام</th>
                                             <th class="py-2 px-2">إجمالي المبلغ</th>
                                             <th class="py-2 px-2">القسط الشهري</th>
-                                            <th class="py-2 px-2">تاريخ الاستحقاق</th>
+                                            <th class="py-2 px-2">ملاحظة</th>
                                             <th class="py-2 px-2 w-16"></th>
                                         </tr>
                                     </thead>
@@ -1971,7 +1990,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         roleId === 2 ? 'مدير الشركة' :
                         roleId === 3 ? 'مشرف المبيعات' :
                         roleId === 4 ? 'موظف' :
-                        roleId === 5 ? 'موظف التمويل' : '';
+                        roleId === 5 ? 'موظف التمويل' :
+                        roleId === 6 ? 'موظف مزدوج' : '';
                     const finalRoleLabel = roleName || roleLabelFromId || 'مستخدم';
 
                     console.log('👤 بيانات المستخدم المحملة:');
@@ -2140,7 +2160,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     ],
                     '3': [ // Supervisor (Read-only)
                         '/admin/panel',
-                        '/admin/dashboard',
                         '/admin/customers',
                         '/admin/customers/completed',
                         '/admin/customers/archived',
@@ -2156,7 +2175,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     ],
                     '4': [ // Employee
                         '/admin/panel',
-                        '/admin/dashboard',
                         '/admin/customers',
                         '/admin/customers/completed',
                         '/admin/customers/archived',
@@ -2171,11 +2189,28 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     ],
                     '5': [ // Bank agent (page access also enforced in index.tsx /admin/* RBAC; APIs scope actions). No marketing (/admin/follow-ups).
                         '/admin/panel',
-                        '/admin/dashboard',
                         '/admin/customers',
                         '/admin/customers/completed',
                         '/admin/customers/archived',
                         '/admin/requests',
+                        '/admin/contact-affiliates',
+                        '/admin/contracts',
+                        '/admin/contracts/list',
+                        '/admin/contracts/new',
+                        '/admin/contracts/templates',
+                        '/admin/my-tasks',
+                        '/my-tasks',
+                        '/admin/my-leaves',
+                        '/calculator',
+                        '/',
+                    ],
+                    '6': [ // Dual agent: union of role 4 + role 5
+                        '/admin/panel',
+                        '/admin/customers',
+                        '/admin/customers/completed',
+                        '/admin/customers/archived',
+                        '/admin/requests',
+                        '/admin/requests/completed',
                         '/admin/contact-affiliates',
                         '/admin/contracts',
                         '/admin/contracts/list',
@@ -2292,9 +2327,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 // إخفاء الكروت الإضافية للموظفين والمشرفين
                 const adminOnlyStats = document.querySelector('.admin-only-stats');
                 if (adminOnlyStats) {
-                    if (roleId === 4 || roleId === 3 || roleId === 5) {
+                    if (roleId === 4 || roleId === 3 || roleId === 5 || roleId === 6) {
                         adminOnlyStats.style.display = 'none';
-                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو موظف التمويل)');
+                        console.log('🚫 إخفاء الكروت الإضافية (موظف أو مشرف أو موظف التمويل أو موظف مزدوج)');
                     } else {
                         adminOnlyStats.style.display = 'grid';
                         console.log('✅ عرض الكروت الإضافية');
@@ -2303,9 +2338,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 
                 const dashboardCustomerSummarySection = document.getElementById('dashboardCustomerSummarySection');
                 if (dashboardCustomerSummarySection) {
-                    if (roleId === 3 || roleId === 4 || roleId === 5) {
+                    if (roleId === 3 || roleId === 4 || roleId === 5 || roleId === 6) {
                         dashboardCustomerSummarySection.style.display = 'none';
-                        console.log('🚫 إخفاء ملخص العملاء (مشرف / موظف / وكيل بنك)');
+                        console.log('🚫 إخفاء ملخص العملاء (مشرف / موظف / وكيل بنك / موظف مزدوج)');
                     } else {
                         dashboardCustomerSummarySection.style.display = '';
                         console.log('✅ عرض ملخص العملاء');
@@ -2638,15 +2673,38 @@ export const fullAdminPanel = `<!DOCTYPE html>
             return '';
         }
 
-        function openCustomerWhatsApp(whatsAppPhone, fallbackPhone) {
+        function openCustomerWhatsApp(whatsAppPhone, fallbackPhone, customerName) {
             const normalizedPhone = toSaudiWaNumber(whatsAppPhone) || toSaudiWaNumber(fallbackPhone);
             if (!normalizedPhone) {
                 alert('لا يوجد رقم واتساب صالح لهذا العميل');
                 return;
             }
 
-            window.open('https://wa.me/' + normalizedPhone, '_blank', 'noopener,noreferrer');
+            let url = 'https://wa.me/' + normalizedPhone;
+            const msg = applyWaGreetingTemplate(customerName || '');
+            if (msg) url += '?text=' + encodeURIComponent(msg);
+            window.open(url, '_blank', 'noopener,noreferrer');
         }
+
+        let waGreetingTemplate = '';
+        let waCompanyName = '';
+        function applyWaGreetingTemplate(customerName) {
+            if (!waGreetingTemplate) return '';
+            return String(waGreetingTemplate)
+                .replace(/\\{\\{customer_name\\}\\}/g, String(customerName || ''))
+                .replace(/\\{\\{company_name\\}\\}/g, waCompanyName || '');
+        }
+        async function loadWaGreetingSettings() {
+            try {
+                const res = await axios.get('/api/tenant/whatsapp-greeting');
+                if (res.data && res.data.success && res.data.data) {
+                    waGreetingTemplate = res.data.data.whatsapp_greeting || '';
+                    waCompanyName = res.data.data.company_name || '';
+                }
+            } catch (_) {}
+        }
+        loadWaGreetingSettings();
+        document.addEventListener('DOMContentLoaded', loadWaGreetingSettings);
 
         // Pagination helpers (Customers + Financing Requests)
         const customersPaging = { page: 1, pageSize: 15, lastSig: '' };
@@ -2964,14 +3022,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
             loadFinancingRequests();
         }
 
-        // Populate employee (role 4) and bank agent (role 5) dropdowns
+        // Populate employee (role 4/6) and bank agent (role 5/6) dropdowns
         async function loadRoleDropdowns() {
             try {
                 const response = await axios.get('/api/users');
                 if (!response.data.success) return;
                 const users = response.data.data;
-                const employees = users.filter((u) => u.role_id === 4);
-                const bankAgents = users.filter((u) => { const r = Number(u.role_id); return r === 5 || r === 15; });
+                const employees = users.filter((u) => { const r = Number(u.role_id); return r === 4 || r === 14 || r === 6; });
+                const bankAgents = users.filter((u) => { const r = Number(u.role_id); return r === 5 || r === 15 || r === 6; });
 
                 const empSelectors = ['filterCustomerEmployee', 'filterRequestEmployee'];
                 empSelectors.forEach((id) => {
@@ -3013,10 +3071,110 @@ export const fullAdminPanel = `<!DOCTYPE html>
             }
         }
 
+        // ===== Customer alarm glow dot — DOM-based injection =====
+        // Strategy: each customer/request row carries a placeholder
+        //   <span class="customer-alarm-slot" data-customer-id="X"></span>
+        // After any table render OR after fresh alarm data arrives, paintCustomerAlarmDots()
+        // walks every slot and fills (or empties) it based on the latest count.
+        //
+        // Count sources, in priority order:
+        //   1. data-unread-alarms on the parent <tr> (shipped from /api/customers,
+        //      /api/financing-requests as unread_alarm_count)
+        //   2. window.customerAlarmsByCustomer client-side map (fallback)
+        //
+        // Works for ALL three alarm types — backend returns every unread row regardless
+        // of alarm_type, and the counts are grouped by customer_id only.
+
+        window.customerAlarmsByCustomer = window.customerAlarmsByCustomer || {};
+
+        function buildAlarmDotHTML(customerId, count) {
+            return '<button type="button" onclick="event.stopPropagation(); openCustomerAlarmsPopup(' + customerId + ')" ' +
+                'title="' + count + ' تنبيه غير مقروء" ' +
+                'class="inline-flex items-center justify-center w-3 h-3 rounded-full bg-red-500 flex-shrink-0 cursor-pointer hover:scale-125 transition-transform" ' +
+                'style="animation:pulse-glow 1.5s infinite; box-shadow:0 0 0 2px rgba(239,68,68,0.4)"></button>';
+        }
+
+        function paintCustomerAlarmDots(root) {
+            const scope = root || document;
+            const slots = scope.querySelectorAll('.customer-alarm-slot[data-customer-id]');
+            if (!slots.length) return 0;
+            const map = window.customerAlarmsByCustomer || {};
+            let painted = 0;
+            slots.forEach(function(slot) {
+                const cid = slot.getAttribute('data-customer-id');
+                if (!cid || cid === 'null' || cid === 'undefined') { slot.innerHTML = ''; return; }
+                // Prefer per-row count from the <tr>
+                let count = 0;
+                const tr = slot.closest('tr');
+                if (tr) {
+                    const raw = tr.getAttribute('data-unread-alarms');
+                    if (raw != null && raw !== '') count = Number(raw) || 0;
+                }
+                if (!count) {
+                    const list = map[String(cid)] || map[cid];
+                    if (list && list.length) count = list.length;
+                }
+                if (count > 0) {
+                    slot.innerHTML = buildAlarmDotHTML(cid, count);
+                    painted++;
+                } else {
+                    slot.innerHTML = '';
+                }
+            });
+            try { console.log('[alarm-glow] painted', painted, '/', slots.length, 'slots'); } catch(_) {}
+            return painted;
+        }
+        window.paintCustomerAlarmDots = paintCustomerAlarmDots;
+
+        async function refreshCustomerAlarmsMap() {
+            try {
+                const resp = await fetch('/api/customer-alarms', { credentials: 'same-origin' });
+                const data = await resp.json();
+                const map = {};
+                if (data && data.success && Array.isArray(data.data)) {
+                    for (const a of data.data) {
+                        if (a.is_read) continue;
+                        const cid = a.customer_id;
+                        if (cid == null || cid === '') continue;
+                        const key = String(cid);
+                        if (!map[key]) map[key] = [];
+                        map[key].push(a);
+                    }
+                }
+                window.customerAlarmsByCustomer = map;
+                try { console.log('[alarm-glow] map updated:', Object.keys(map).length, 'customers, sample:', Object.keys(map).slice(0, 5)); } catch(_) {}
+                // Repaint any visible table immediately so the dot appears even if the
+                // table was rendered without the inline data-unread-alarms hint.
+                paintCustomerAlarmDots();
+                return map;
+            } catch (e) {
+                console.warn('[alarm-glow] refresh failed:', e);
+                return window.customerAlarmsByCustomer || {};
+            }
+        }
+        window.refreshCustomerAlarmsMap = refreshCustomerAlarmsMap;
+
+        // Backwards-compat: some older render paths may still call renderCustomerAlarmDot.
+        function renderCustomerAlarmDot(customerId, inlineCount) {
+            if (customerId == null || customerId === '') return '';
+            let count = typeof inlineCount === 'number' ? inlineCount : 0;
+            if (!count) {
+                const map = window.customerAlarmsByCustomer || {};
+                const list = map[String(customerId)] || map[customerId];
+                if (list && list.length) count = list.length;
+            }
+            if (!count) return '';
+            return buildAlarmDotHTML(customerId, count);
+        }
+        window.renderCustomerAlarmDot = renderCustomerAlarmDot;
+
         // Load Customers
         async function loadCustomers() {
             try {
-                const response = await axios.get('/api/customers');
+                const [response] = await Promise.all([
+                    axios.get('/api/customers'),
+                    refreshCustomerAlarmsMap()
+                ]);
                 if (response.data.success) {
                     let customers = response.data.data;
                     const tbody = document.getElementById('customersTable');
@@ -3083,7 +3241,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     const pageCustomers = customers.slice(startIdx, startIdx + customersPaging.pageSize);
                     
                     tbody.innerHTML = pageCustomers.map((customer, index) => \`
-                        <tr class="border-b hover:bg-gray-50">
+                        <tr class="border-b hover:bg-gray-50" data-customer-id="\${customer.id}" data-unread-alarms="\${Number(customer.unread_alarm_count) || 0}">
                             <td class="px-4 py-3">
                                 <div class="relative inline-block text-right">
                                     <button type="button" onclick="toggleActionsDropdown(this); return false;" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
@@ -3105,8 +3263,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <td class="px-4 py-3">\${startIdx + index + 1}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
+                                    <span class="customer-alarm-slot" data-customer-id="\${customer.id}"></span>
                                     <span class="font-medium truncate-cell">\${customer.full_name}</span>
-                                    <button onclick="viewCustomerFinancingDetails(\${customer.id})" 
+                                    <button onclick="viewCustomerFinancingDetails(\${customer.id})"
                                             class="text-indigo-600 hover:text-indigo-800 transition-colors" 
                                             title="عرض التفاصيل التمويلية الكاملة">
                                         <i class="fas fa-info-circle text-lg"></i>
@@ -3117,7 +3276,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                 <div class="flex items-center gap-2">
                                     <span dir="ltr">\${localSaudiPhone(customer.phone) || '-'}</span>
                                     <button
-                                        onclick="openCustomerWhatsApp('\${String(customer.whatsapp_phone || customer.whatsapp_phone_number || customer.phone || '').replace(/'/g, "\\\\'")}', '\${String(customer.phone || '').replace(/'/g, "\\\\'")}')"
+                                        onclick="openCustomerWhatsApp('\${String(customer.whatsapp_phone || customer.whatsapp_phone_number || customer.phone || '').replace(/'/g, "\\\\'")}', '\${String(customer.phone || '').replace(/'/g, "\\\\'")}', '\${String(customer.full_name || '').replace(/'/g, "\\\\'")}')"
                                         class="inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors"
                                         title="فتح واتساب">
                                         <i class="fab fa-whatsapp"></i>
@@ -3134,6 +3293,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         </tr>
                     \`).join('');
 
+                    try { paintCustomerAlarmDots(tbody); } catch (e) { console.warn('[alarm-glow] paint after customers render failed', e); }
                     setupEdgeScroll('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight');
                 } else {
                     renderPaginationUI('customers', 0, customersPaging);
@@ -3147,7 +3307,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
         // Load Financing Requests
         async function loadFinancingRequests() {
             try {
-                const response = await axios.get('/api/financing-requests');
+                const [response] = await Promise.all([
+                    axios.get('/api/financing-requests'),
+                    refreshCustomerAlarmsMap()
+                ]);
                 if (response.data.success) {
                     let requests = response.data.data;
                     const tbody = document.getElementById('requestsTable');
@@ -3224,7 +3387,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         };
                         
                         return \`
-                            <tr class="border-b hover:bg-gray-50">
+                            <tr class="border-b hover:bg-gray-50" data-customer-id="\${req.customer_id}" data-unread-alarms="\${Number(req.unread_alarm_count) || 0}">
                                 <td class="px-4 py-3">
                                     <div class="relative inline-block text-right">
                                         <button type="button" onclick="toggleActionsDropdown(this); return false;" class="actions-dropdown-btn inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors">
@@ -3245,7 +3408,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3">\${startIdx + index + 1}</td>
-                                <td class="px-4 py-3 font-medium"><span class="truncate-cell">\${req.customer_name}</span></td>
+                                <td class="px-4 py-3 font-medium"><div class="flex items-center gap-2"><span class="customer-alarm-slot" data-customer-id="\${req.customer_id}"></span><span class="truncate-cell">\${req.customer_name}</span></div></td>
                                 <td class="px-4 py-3">\${req.customer_phone}</td>
                                 <td class="px-4 py-3 text-sm">\${req.financing_type_name || '-'}</td>
                                 <td class="px-4 py-3 font-medium">\${req.requested_amount.toLocaleString('ar-SA')}</td>
@@ -3258,6 +3421,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         \`;
                     }).join('');
 
+                    try { paintCustomerAlarmDots(tbody); } catch (e) { console.warn('[alarm-glow] paint after requests render failed', e); }
                     setupEdgeScroll('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight');
                 } else {
                     renderPaginationUI('requests', 0, requestsPaging);
@@ -3837,26 +4001,56 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                         المرفقات
                                     </p>
                                     \${(() => {
-                                        const docs = [
-                                          { key: 'identity_attachment_url', label: 'ملف الهوية', icon: 'fa-id-card', bg: 'blue' },
-                                          { key: 'signature_attachment_url', label: 'ملف السمة', icon: 'fa-signature', bg: 'green' },
-                                          { key: 'salary_profile_attachment_url', label: 'ملف تعريف الراتب', icon: 'fa-money-check', bg: 'yellow' },
-                                          { key: 'gosi_attachment_url', label: 'ملف التأمينات الاجتماعية', icon: 'fa-shield-alt', bg: 'orange' },
-                                          { key: 'tax_exemption_attachment_url', label: 'شهادة الإعفاء الضريبي', icon: 'fa-certificate', bg: 'indigo' },
-                                          { key: 'additional_1_attachment_url', label: 'مستند إضافي 1', icon: 'fa-file-alt', bg: 'purple' },
-                                          { key: 'additional_2_attachment_url', label: 'مستند إضافي 2', icon: 'fa-file-alt', bg: 'purple' },
-                                          { key: 'additional_3_attachment_url', label: 'مستند إضافي 3', icon: 'fa-file-alt', bg: 'purple' }
+                                        const legacyFields = [
+                                          { key: 'identity_attachment_url', label: 'ملف الهوية' },
+                                          { key: 'signature_attachment_url', label: 'ملف السمة' },
+                                          { key: 'salary_profile_attachment_url', label: 'ملف تعريف الراتب' },
+                                          { key: 'gosi_attachment_url', label: 'ملف التأمينات الاجتماعية' },
+                                          { key: 'tax_exemption_attachment_url', label: 'شهادة الإعفاء الضريبي' },
+                                          { key: 'additional_1_attachment_url', label: 'مستند إضافي 1' },
+                                          { key: 'additional_2_attachment_url', label: 'مستند إضافي 2' },
+                                          { key: 'additional_3_attachment_url', label: 'مستند إضافي 3' }
                                         ];
-                                        const existing = docs
-                                          .map(d => ({ ...d, url: request[d.key] }))
-                                          .filter(d => d.url && d.url !== 'null');
-                                        if (existing.length === 0) return '';
-                                        return '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' + existing.map(d => \`
+                                        const normalizeAttUrl = (url) => {
+                                          const raw = String(url || '').trim();
+                                          if (!raw || raw === 'null') return null;
+                                          const prefix = '/api/attachments/view/';
+                                          if (raw.startsWith(prefix)) return raw;
+                                          const idx = raw.indexOf(prefix);
+                                          if (idx >= 0) return raw.slice(idx);
+                                          if (/^(customers\\/\\d+\\/|temp\\/|\\d+\\/)/.test(raw)) return prefix + raw.replace(/^\\/+/, '');
+                                          return null;
+                                        };
+                                        let docs = [];
+                                        try {
+                                          const raw = request.attachments_json;
+                                          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                                          if (Array.isArray(parsed)) {
+                                            parsed.forEach((entry) => {
+                                              if (!entry) return;
+                                              const label = String(entry.label || '').trim();
+                                              const url = String(entry.url || '').trim();
+                                              const normalized = normalizeAttUrl(url);
+                                              if (label && normalized) docs.push({ label, url: normalized });
+                                            });
+                                          }
+                                        } catch (e) {}
+                                        if (!docs.length) {
+                                          docs = legacyFields
+                                            .map((f) => {
+                                              const url = request[f.key];
+                                              const normalized = normalizeAttUrl(url);
+                                              return normalized ? { label: f.label, url: normalized } : null;
+                                            })
+                                            .filter(Boolean);
+                                        }
+                                        if (docs.length === 0) return '';
+                                        return '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' + docs.map((d) => \`
                                           <a href="\${d.url}" target="_blank"
-                                             class="flex items-center gap-2 p-3 bg-\${d.bg}-50 hover:bg-\${d.bg}-100 rounded-lg border border-\${d.bg}-200 transition-colors">
-                                              <i class="fas \${d.icon} text-\${d.bg}-600"></i>
-                                              <span class="text-sm text-\${d.bg}-800 font-medium">\${d.label}</span>
-                                              <i class="fas fa-download text-\${d.bg}-600 mr-auto"></i>
+                                             class="flex items-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors">
+                                              <i class="fas fa-file-alt text-blue-600"></i>
+                                              <span class="text-sm text-blue-800 font-medium">\${d.label}</span>
+                                              <i class="fas fa-download text-blue-600 mr-auto"></i>
                                           </a>
                                         \`).join('') + '</div>';
                                     })()}
@@ -4591,32 +4785,67 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     const addBtn = document.getElementById('modal_add_obligation_row');
                     const hidden = document.getElementById('modal_obligations_json');
                     if (!tbody || !addBtn || !hidden) return;
+                    const OBLIG_CUSTOM = '__custom__';
                     function escAttr(s) {
                         return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
                     }
-                    function buildModalObligSelect(selectedValue) {
-                        const sel = selectedValue == null ? '' : String(selectedValue);
-                        let opts = '<option value="">— اختر نوع الالتزام —</option>';
-                        modalObligationTypeNames.forEach(function (name) {
+                    function buildModalObligDropdownCell(selectedValue, optionNames, selectClass, customClass, emptyLabel, placeholder) {
+                        const sel = selectedValue == null ? '' : String(selectedValue).trim();
+                        const isKnown = sel && optionNames.indexOf(sel) >= 0;
+                        const isCustom = sel && !isKnown;
+                        let opts = '<option value="">' + emptyLabel + '</option>';
+                        optionNames.forEach(function (name) {
                             opts += '<option value="' + escAttr(name) + '"' + (sel === name ? ' selected' : '') + '>' + escAttr(name) + '</option>';
                         });
-                        if (sel && modalObligationTypeNames.indexOf(sel) === -1) {
-                            opts += '<option value="' + escAttr(sel) + '" selected>' + escAttr(sel) + '</option>';
+                        opts += '<option value="' + OBLIG_CUSTOM + '"' + (isCustom ? ' selected' : '') + '>أخرى (إدخال يدوي)</option>';
+                        const customHidden = isCustom ? '' : ' hidden';
+                        return '<div class="space-y-1">' +
+                            '<select class="' + selectClass + ' w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>' +
+                            '<input type="text" class="' + customClass + customHidden + ' w-full px-2 py-1 border border-gray-300 rounded-lg text-sm" placeholder="' + escAttr(placeholder) + '" maxlength="200" value="' + (isCustom ? escAttr(sel) : '') + '">' +
+                            '</div>';
+                    }
+                    function buildModalObligTypeCell(selectedValue) {
+                        return buildModalObligDropdownCell(selectedValue, modalObligationTypeNames, 'modal-oblig-type', 'modal-oblig-type-custom', '— اختر نوع الالتزام —', 'أدخل نوع الالتزام');
+                    }
+                    function wireModalObligDropdownRow(tr, selectClass, customClass) {
+                        const sel = tr.querySelector('.' + selectClass);
+                        const custom = tr.querySelector('.' + customClass);
+                        if (!sel || !custom) return;
+                        function sync() {
+                            if (sel.value === OBLIG_CUSTOM) custom.classList.remove('hidden');
+                            else custom.classList.add('hidden');
                         }
-                        return '<select class="modal-oblig-type w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">' + opts + '</select>';
+                        sel.addEventListener('change', sync);
+                        sync();
+                    }
+                    function wireModalObligRow(tr) {
+                        wireModalObligDropdownRow(tr, 'modal-oblig-type', 'modal-oblig-type-custom');
+                    }
+                    function collectModalObligDropdown(tr, selectClass, customClass) {
+                        const sel = tr.querySelector('.' + selectClass);
+                        if (!sel) return '';
+                        if (sel.value === OBLIG_CUSTOM) {
+                            const custom = tr.querySelector('.' + customClass);
+                            return custom ? String(custom.value || '').trim() : '';
+                        }
+                        return String(sel.value || '').trim();
+                    }
+                    function collectModalObligType(tr) {
+                        return collectModalObligDropdown(tr, 'modal-oblig-type', 'modal-oblig-type-custom');
                     }
                     function addRow(data) {
                         data = data || {};
                         const tr = document.createElement('tr');
                         tr.className = 'border-b border-gray-200';
-                        tr.innerHTML = '<td class="py-1 px-2">' + buildModalObligSelect(data.obligation_type || '') + '</td>' +
+                        tr.innerHTML = '<td class="py-1 px-2">' + buildModalObligTypeCell(data.obligation_type || '') + '</td>' +
                             '<td class="py-1 px-2"><input type="number" class="modal-oblig-total w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
                             '<td class="py-1 px-2"><input type="number" class="modal-oblig-monthly w-full px-2 py-1 border rounded" step="0.01" min="0" placeholder="0"></td>' +
-                            '<td class="py-1 px-2"><input type="date" class="modal-oblig-due w-full px-2 py-1 border rounded"></td>' +
+                            '<td class="py-1 px-2"><input type="text" class="modal-oblig-due w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" maxlength="200"></td>' +
                             '<td class="py-1 px-2"><button type="button" class="modal-oblig-remove text-red-600 hover:text-red-800" title="حذف"><i class="fas fa-trash"></i></button></td>';
                         if (data.total_amount != null) tr.querySelector('.modal-oblig-total').value = data.total_amount;
                         if (data.monthly_installment != null) tr.querySelector('.modal-oblig-monthly').value = data.monthly_installment;
                         if (data.due_date) tr.querySelector('.modal-oblig-due').value = data.due_date;
+                        wireModalObligRow(tr);
                         tr.querySelector('.modal-oblig-remove').onclick = () => tr.remove();
                         tbody.appendChild(tr);
                     }
@@ -4640,12 +4869,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         const rows = document.querySelectorAll('#modal_obligations_tbody tr');
                         const arr = [];
                         rows.forEach(tr => {
-                            const typeEl = tr.querySelector('.modal-oblig-type');
                             const totalEl = tr.querySelector('.modal-oblig-total');
                             const monthlyEl = tr.querySelector('.modal-oblig-monthly');
+                            if (!totalEl || !monthlyEl) return;
+                            const obligationType = collectModalObligType(tr);
                             const dueEl = tr.querySelector('.modal-oblig-due');
-                            if (!typeEl || !totalEl || !monthlyEl) return;
-                            arr.push({ obligation_type: typeEl.value || '', total_amount: parseFloat(totalEl.value) || 0, monthly_installment: parseFloat(monthlyEl.value) || 0, due_date: dueEl && dueEl.value ? dueEl.value : null });
+                            const dueDate = dueEl ? String(dueEl.value || '').trim() : '';
+                            arr.push({ obligation_type: obligationType, total_amount: parseFloat(totalEl.value) || 0, monthly_installment: parseFloat(monthlyEl.value) || 0, due_date: dueDate || null });
                         });
                         obligationsJsonEl.value = JSON.stringify(arr);
                     }
@@ -4679,10 +4909,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             alert('✅ تم إضافة البنك بنجاح');
                             closeModal('addBankModal');
                             loadBanks();
+                        } else {
+                            alert('❌ ' + (response.data.error || 'حدث خطأ أثناء الإضافة'));
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        alert('❌ حدث خطأ أثناء الإضافة');
+                        const msg = error.response?.data?.error || 'حدث خطأ أثناء الإضافة';
+                        alert('❌ ' + msg);
                     }
                 });
             }
@@ -5504,6 +5737,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 <button onclick="closeAlarmPanel()" class="text-white hover:text-orange-100 text-2xl leading-none">&times;</button>
             </div>
         </div>
+        <div class="px-4 py-2 border-b bg-gray-50 flex items-center gap-2 flex-shrink-0">
+            <label class="text-xs text-gray-500 font-medium whitespace-nowrap">تصفية:</label>
+            <select id="alarmPanelFilter" onchange="loadPanelAlarms()" class="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-orange-300 text-right">
+                <option value="all">الكل</option>
+                <option value="scheduled">التنبيهات المجدولة</option>
+                <option value="workflow">تنبيهات سير العمل</option>
+                <option value="reminder">تذكيرات التقييم</option>
+            </select>
+        </div>
         <div id="alarm-panel-list" class="flex-1 overflow-y-auto p-4 space-y-3">
             <div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>
         </div>
@@ -5526,34 +5768,66 @@ export const fullAdminPanel = `<!DOCTYPE html>
             try {
                 const resp = await fetch('/api/customer-alarms', { credentials: 'same-origin' });
                 const data = await resp.json();
-                if (!data.success || !data.data.length) {
+                if (!data.success) {
+                    list.innerHTML = '<div class="text-center text-red-400 py-10"><i class="fas fa-exclamation-circle text-3xl mb-2"></i><p class="text-sm">فشل تحميل التنبيهات</p></div>';
+                    return;
+                }
+                const filter = document.getElementById('alarmPanelFilter')?.value || 'all';
+                let alarms = data.data || [];
+                if (filter === 'scheduled') alarms = alarms.filter(function(a) { return !a.alarm_type || (a.alarm_type !== 'workflow' && a.alarm_type !== 'reminder'); });
+                else if (filter === 'workflow') alarms = alarms.filter(function(a) { return a.alarm_type === 'workflow'; });
+                else if (filter === 'reminder') alarms = alarms.filter(function(a) { return a.alarm_type === 'reminder'; });
+                if (!alarms.length) {
                     list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
                     return;
                 }
-                list.innerHTML = data.data.map(function(a) {
+                list.innerHTML = alarms.map(function(a) {
                     const isUnread = !a.is_read;
                     const isWorkflow = a.alarm_type === 'workflow';
-                    const dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
-                    const timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                    const isReminder = a.alarm_type === 'reminder';
+                    let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
+                    if (!dateStr && a.created_at) {
+                        try {
+                            const d = new Date(a.created_at);
+                            dateStr = d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric', calendar: 'gregory' });
+                        } catch(e) {}
+                    }
+                    let timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                    if (!timeStr && a.created_at) {
+                        try {
+                            timeStr = ' — ' + new Date(a.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
+                        } catch(e) {}
+                    }
                     const cid = a.customer_id;
                     const customerHref = isWorkflow ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
                     const borderClass = isWorkflow
                         ? (isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white')
-                        : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
+                        : isReminder
+                            ? (isUnread ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white')
+                            : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
                     const sideBgClass = isWorkflow
                         ? (isUnread ? 'bg-blue-50/80' : 'bg-gray-50/80')
-                        : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
-                    const dotColor = isWorkflow ? 'bg-blue-500' : 'bg-red-500';
-                    const icon = isWorkflow ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>' : '';
+                        : isReminder
+                            ? (isUnread ? 'bg-green-50/80' : 'bg-gray-50/80')
+                            : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
+                    const dotColor = isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
+                    const icon = isWorkflow
+                        ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>'
+                        : isReminder
+                            ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'
+                            : '';
+                    const clockColor = isWorkflow ? 'text-blue-400' : isReminder ? 'text-green-400' : 'text-orange-400';
+                    const nameColor = isWorkflow ? 'text-blue-800' : isReminder ? 'text-green-800' : 'text-gray-800';
+                    const noteColor = isWorkflow ? 'text-blue-700' : isReminder ? 'text-green-700' : 'text-gray-600';
                     return \`<div id="ap-alarm-\${a.id}" class="rounded-xl border \${borderClass} shadow-sm transition-all flex items-stretch overflow-hidden">
                         <a href="\${customerHref}" class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none rounded-s-xl">
                             <div class="flex items-center gap-2 mb-1">
                                 \${isUnread ? \`<span class="inline-block w-2.5 h-2.5 rounded-full \${dotColor} flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>\` : ''}
                                 \${icon}
-                                <p class="font-bold \${isWorkflow ? 'text-blue-800' : 'text-gray-800'} text-sm truncate">\${a.customer_name}</p>
+                                <p class="font-bold \${nameColor} text-sm truncate">\${a.customer_name}</p>
                             </div>
-                            \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-calendar-alt text-orange-400 ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
-                            \${a.note ? \`<p class="text-sm \${isWorkflow ? 'text-blue-700' : 'text-gray-600'} mt-1 line-clamp-3">\${a.note}</p>\` : ''}
+                            \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock \${clockColor} ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
+                            \${a.note ? \`<p class="text-sm \${noteColor} mt-1 line-clamp-4 whitespace-pre-line">\${a.note}</p>\` : ''}
                         </a>
                         <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${sideBgClass}">
                             \${isUnread ? \`<button type="button" onclick="markPanelAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
@@ -5570,16 +5844,17 @@ export const fullAdminPanel = `<!DOCTYPE html>
             await fetch('/api/customer-alarms/' + id + '/read', { method: 'PUT', credentials: 'same-origin' });
             const el = document.getElementById('ap-alarm-' + id);
             if (el) {
-                el.classList.remove('border-orange-300', 'bg-orange-50');
+                el.classList.remove('border-orange-300', 'bg-orange-50', 'border-blue-300', 'bg-blue-50', 'border-green-300', 'bg-green-50');
                 el.classList.add('border-gray-200', 'bg-white');
-                const dot = el.querySelector('.rounded-full.bg-red-500');
+                const dot = el.querySelector('.bg-red-500, .bg-blue-500, .bg-green-500');
                 if (dot) dot.remove();
                 const readBtn = el.querySelector('button[onclick^="markPanelAlarmRead"]');
                 if (readBtn) readBtn.remove();
                 const sideDiv = el.querySelector('.flex.flex-col');
-                if (sideDiv) { sideDiv.classList.remove('bg-orange-50\\/80'); sideDiv.classList.add('bg-gray-50\\/80'); }
+                if (sideDiv) { sideDiv.classList.remove('bg-orange-50\\/80', 'bg-blue-50\\/80', 'bg-green-50\\/80'); sideDiv.classList.add('bg-gray-50\\/80'); }
             }
             loadNotifCount();
+            try { if (typeof refreshVisibleCustomerTables === 'function') refreshVisibleCustomerTables(); } catch(_) {}
         }
 
         async function deletePanelAlarm(id) {
@@ -5597,8 +5872,128 @@ export const fullAdminPanel = `<!DOCTYPE html>
             await fetch('/api/customer-alarms/read-all', { method: 'PUT', credentials: 'same-origin' });
             await loadPanelAlarms();
             loadNotifCount();
+            try { if (typeof refreshVisibleCustomerTables === 'function') refreshVisibleCustomerTables(); } catch(_) {}
         }
+
+        // ===== Standalone per-customer alarm popup =====
+        // (refreshCustomerAlarmsMap + renderCustomerAlarmDot are defined earlier,
+        // in the same script block as loadCustomers, so they're available at table-render time.)
+
+        window.openCustomerAlarmsPopup = async function(customerId) {
+            await window.refreshCustomerAlarmsMap();
+            const list = (window.customerAlarmsByCustomer && window.customerAlarmsByCustomer[customerId]) || [];
+            const overlay = document.getElementById('customer-alarm-popup-overlay');
+            const body = document.getElementById('customer-alarm-popup-body');
+            const title = document.getElementById('customer-alarm-popup-title');
+            if (!overlay || !body) return;
+            if (!list.length) {
+                closeCustomerAlarmsPopup();
+                // Refresh visible table so the dot disappears
+                refreshVisibleCustomerTables();
+                return;
+            }
+            const customerName = list[0].customer_name || '';
+            if (title) title.textContent = customerName ? 'تنبيهات: ' + customerName : 'التنبيهات';
+            body.dataset.customerId = String(customerId);
+            body.innerHTML = list.map(function(a) {
+                const isWorkflow = a.alarm_type === 'workflow';
+                const isReminder = a.alarm_type === 'reminder';
+                let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
+                if (!dateStr && a.created_at) {
+                    try {
+                        const d = new Date(a.created_at);
+                        dateStr = d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric', calendar: 'gregory' });
+                    } catch(e) {}
+                }
+                let timeStr = a.alarm_time ? ' — ' + a.alarm_time : '';
+                if (!timeStr && a.created_at) {
+                    try {
+                        timeStr = ' — ' + new Date(a.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    } catch(e) {}
+                }
+                const borderClass = isWorkflow ? 'border-blue-300 bg-blue-50'
+                    : isReminder ? 'border-green-300 bg-green-50'
+                    : 'border-orange-300 bg-orange-50';
+                const dotColor = isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
+                const icon = isWorkflow ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>'
+                    : isReminder ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'
+                    : '<i class="fas fa-bell text-orange-400 text-xs ml-1"></i>';
+                const nameColor = isWorkflow ? 'text-blue-800' : isReminder ? 'text-green-800' : 'text-gray-800';
+                const noteColor = isWorkflow ? 'text-blue-700' : isReminder ? 'text-green-700' : 'text-gray-700';
+                return '<div id="cap-alarm-' + a.id + '" class="rounded-xl border ' + borderClass + ' shadow-sm p-4 text-right">' +
+                    '<div class="flex items-center gap-2 mb-2">' +
+                        '<span class="inline-block w-2.5 h-2.5 rounded-full ' + dotColor + ' flex-shrink-0" style="animation:pulse-glow 1.5s infinite"></span>' +
+                        icon +
+                        '<p class="font-bold ' + nameColor + ' text-sm flex-1 truncate">' + (a.customer_name || '') + '</p>' +
+                    '</div>' +
+                    (dateStr ? '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-clock text-orange-400 ml-1"></i>' + dateStr + timeStr + '</p>' : '') +
+                    (a.note ? '<p class="text-sm ' + noteColor + ' mb-3 whitespace-pre-line">' + a.note + '</p>' : '') +
+                    '<div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">' +
+                        '<button type="button" onclick="markCustomerAlarmReadFromPopup(' + a.id + ', ' + customerId + ')" class="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors">' +
+                            '<i class="fas fa-check"></i><span>تحديد كمقروء</span>' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            overlay.classList.add('open');
+            overlay.style.display = 'flex';
+        };
+
+        window.closeCustomerAlarmsPopup = function() {
+            const overlay = document.getElementById('customer-alarm-popup-overlay');
+            if (overlay) {
+                overlay.classList.remove('open');
+                overlay.style.display = 'none';
+            }
+        };
+
+        window.markCustomerAlarmReadFromPopup = async function(alarmId, customerId) {
+            await fetch('/api/customer-alarms/' + alarmId + '/read', { method: 'PUT', credentials: 'same-origin' });
+            const el = document.getElementById('cap-alarm-' + alarmId);
+            if (el) el.remove();
+            // Refresh global state
+            await window.refreshCustomerAlarmsMap();
+            const remaining = (window.customerAlarmsByCustomer && window.customerAlarmsByCustomer[customerId]) || [];
+            if (!remaining.length) {
+                closeCustomerAlarmsPopup();
+            }
+            // Update bell badge and visible tables (so dot vanishes when no unread remain)
+            loadNotifCount();
+            refreshVisibleCustomerTables();
+        };
+
+        window.refreshVisibleCustomerTables = function() {
+            try {
+                const custSec = document.getElementById('customers-section');
+                if (custSec && custSec.classList.contains('active') && typeof loadCustomers === 'function') {
+                    loadCustomers();
+                }
+                const reqSec = document.getElementById('requests-section');
+                if (reqSec && reqSec.classList.contains('active') && typeof loadFinancingRequests === 'function') {
+                    loadFinancingRequests();
+                }
+            } catch (e) { /* noop */ }
+        };
     </script>
+
+    <!-- Customer Alarm Standalone Popup -->
+    <div id="customer-alarm-popup-overlay"
+         onclick="if(event.target===this) closeCustomerAlarmsPopup()"
+         style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; padding:1rem;">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="bg-gradient-to-r from-orange-400 to-red-500 px-6 py-4 flex items-center justify-between flex-shrink-0">
+                <h2 id="customer-alarm-popup-title" class="text-white text-lg font-bold"><i class="fas fa-bell ml-2"></i> التنبيهات</h2>
+                <button type="button" onclick="closeCustomerAlarmsPopup()" class="text-white hover:text-orange-100 text-2xl leading-none" title="إغلاق">&times;</button>
+            </div>
+            <div id="customer-alarm-popup-body" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+            <div class="px-4 py-3 border-t bg-gray-50 flex items-center justify-end flex-shrink-0">
+                <button type="button" onclick="closeCustomerAlarmsPopup()" class="inline-flex items-center gap-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-semibold transition-colors">
+                    <i class="fas fa-times"></i><span>إغلاق</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
 `;

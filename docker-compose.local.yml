@@ -1,0 +1,33 @@
+# Local D1 database only — app runs on the host: npm run dev
+#
+#   npm run db:docker          # init / migrate local D1 (once, or after schema changes)
+#   npm run dev                # app on http://localhost:5173
+#
+# Add to .env (see .env.docker.example):
+#   WRANGLER_CONFIG_PATH=wrangler.docker.toml
+#   WRANGLER_PERSIST_PATH=.wrangler/docker-state
+#
+# Never uses --remote; production Cloudflare is not modified.
+
+name: tamweel-local
+
+services:
+  db:
+    # Debian/glibc — wrangler/workerd does not run on Alpine (musl)
+    image: node:20-bookworm-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+      - db_node_modules:/app/node_modules
+    environment:
+      WRANGLER_CONFIG_PATH: wrangler.docker.toml
+      WRANGLER_PERSIST_PATH: .wrangler/docker-state
+      D1_DATABASE_NAME: tamweel-docker-local
+    # Strip CRLF from shell scripts (Windows checkout) before running
+    entrypoint:
+      - sh
+      - -c
+      - sed -i 's/\r$$//' docker/db-entrypoint.sh docker/init-local-d1.sh 2>/dev/null || true; exec sh docker/db-entrypoint.sh
+
+volumes:
+  db_node_modules:
