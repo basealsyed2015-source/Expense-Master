@@ -3025,11 +3025,28 @@ export const fullAdminPanel = `<!DOCTYPE html>
         // Populate employee (role 4/6) and bank agent (role 5/6) dropdowns
         async function loadRoleDropdowns() {
             try {
-                const response = await axios.get('/api/users');
-                if (!response.data.success) return;
-                const users = response.data.data;
-                const employees = users.filter((u) => { const r = Number(u.role_id); return r === 4 || r === 14 || r === 6; });
-                const bankAgents = users.filter((u) => { const r = Number(u.role_id); return r === 5 || r === 15 || r === 6; });
+                const userData = JSON.parse(localStorage.getItem('userData') || localStorage.getItem('user') || 'null') || {};
+                const tenantId = parseInt(String(userData.tenant_id || userData.tenantId || ''), 10);
+                let employees = [];
+                let bankAgents = [];
+                if (tenantId > 0) {
+                    const [empRes, agentRes] = await Promise.all([
+                        axios.get('/api/admin/filter-employees?tenant_id=' + encodeURIComponent(String(tenantId))),
+                        axios.get('/api/admin/bank-agents?tenant_id=' + encodeURIComponent(String(tenantId))),
+                    ]);
+                    if (empRes.data?.success) employees = empRes.data.data || [];
+                    if (agentRes.data?.success) bankAgents = agentRes.data.data || [];
+                }
+                if (!employees.length && !bankAgents.length) {
+                    const response = await axios.get('/api/users');
+                    if (!response.data.success) return;
+                    const users = response.data.data;
+                    employees = users.filter((u) => { const r = Number(u.role_id); return r === 4 || r === 14 || r === 6; });
+                    bankAgents = users.filter((u) => { const r = Number(u.role_id); return r === 5 || r === 15 || r === 6; });
+                } else {
+                    employees = employees.filter((u) => { const r = Number(u.role_id); return r === 4 || r === 14 || r === 6; });
+                    bankAgents = bankAgents.filter((u) => { const r = Number(u.role_id); return r === 5 || r === 15 || r === 6; });
+                }
 
                 const empSelectors = ['filterCustomerEmployee', 'filterRequestEmployee'];
                 empSelectors.forEach((id) => {

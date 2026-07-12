@@ -66,6 +66,8 @@ import {
   resolveWorkflowCrossPartyNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
   validateStaffRoleChange,
+  isEmployeeAssignableRole,
+  isBankAgentAssignableRole,
 } from './notification-access'
 import {
   canAccessRequestsFollowupReport,
@@ -1445,6 +1447,43 @@ function normalizeTenantLogoUrl(raw: unknown): string | null {
   return null
 }
 
+function clampWatermarkOpacity(raw: unknown, fallback = 0.12): number {
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(0.25, Math.max(0.03, n))
+}
+
+/** Letterhead header/footer opacity: 10%–100%, default 100%. */
+function clampLetterheadOpacity(raw: unknown, fallback = 1): number {
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(1, Math.max(0.1, n))
+}
+
+function formatTenantDocumentBrandingFields(row: {
+  document_watermark_url?: string | null
+  document_watermark_enabled?: number | null
+  document_watermark_opacity?: number | null
+  document_header_url?: string | null
+  document_header_enabled?: number | null
+  document_header_opacity?: number | null
+  document_footer_url?: string | null
+  document_footer_enabled?: number | null
+  document_footer_opacity?: number | null
+}) {
+  return {
+    document_watermark_url: row.document_watermark_url ?? null,
+    document_watermark_enabled: Number(row.document_watermark_enabled) === 1,
+    document_watermark_opacity: clampWatermarkOpacity(row.document_watermark_opacity, 0.12),
+    document_header_url: row.document_header_url ?? null,
+    document_header_enabled: Number(row.document_header_enabled) === 1,
+    document_header_opacity: clampLetterheadOpacity(row.document_header_opacity, 1),
+    document_footer_url: row.document_footer_url ?? null,
+    document_footer_enabled: Number(row.document_footer_enabled) === 1,
+    document_footer_opacity: clampLetterheadOpacity(row.document_footer_opacity, 1),
+  }
+}
+
 type PublicContactTenantRow = {
   company_name: string
   slug: string
@@ -1473,6 +1512,93 @@ function pickFirstNonEmptyContactField(
     if (v != null && String(v).trim() !== '') return String(v).trim()
   }
   return null
+}
+
+type ContactPageDesignFields = {
+  contact_bg_color: string | null
+  contact_form_color: string | null
+  contact_text_color: string | null
+  contact_custom_fields: string | null
+}
+
+type AffiliateContactLinkRow = {
+  path_segment: string
+  label: string
+} & ContactPageDesignFields
+
+/** Apply an affiliate link's isolated contact-page design onto the tenant branding row. */
+function withAffiliateContactDesign(
+  tenant: PublicContactTenantRow,
+  affiliate: ContactPageDesignFields | null | undefined
+): PublicContactTenantRow {
+  if (!affiliate) return tenant
+  return {
+    ...tenant,
+    contact_bg_color: affiliate.contact_bg_color,
+    contact_form_color: affiliate.contact_form_color,
+    contact_text_color: affiliate.contact_text_color,
+    contact_custom_fields: affiliate.contact_custom_fields,
+  }
+}
+
+/**
+ * Parse contact page design fields from a PATCH/POST body.
+ * Only keys present on `body` are included in `updates`.
+ */
+function parseContactDesignBodyFields(
+  body: Record<string, unknown>
+): { ok: true; updates: Partial<ContactPageDesignFields> } | { ok: false; error: string } {
+  const updates: Partial<ContactPageDesignFields> = {}
+  if ('contact_bg_color' in body) {
+    const raw = String(body.contact_bg_color ?? '').trim()
+    if (raw === '') {
+      updates.contact_bg_color = null
+    } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
+      updates.contact_bg_color = raw
+    } else {
+      return { ok: false, error: 'لون الخلفية غير صالح، استخدم صيغة hex مثل #0f766e' }
+    }
+  }
+  if ('contact_form_color' in body) {
+    const raw = String(body.contact_form_color ?? '').trim()
+    if (raw === '') {
+      updates.contact_form_color = null
+    } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
+      updates.contact_form_color = raw
+    } else {
+      return { ok: false, error: 'لون النافذة غير صالح، استخدم صيغة hex مثل #ffffff' }
+    }
+  }
+  if ('contact_text_color' in body) {
+    const raw = String(body.contact_text_color ?? '').trim()
+    if (raw === '' || raw === 'black') {
+      updates.contact_text_color = raw === '' ? null : 'black'
+    } else if (raw === 'white') {
+      updates.contact_text_color = 'white'
+    } else {
+      return { ok: false, error: 'لون النص يجب أن يكون black أو white' }
+    }
+  }
+  if ('contact_custom_fields' in body) {
+    const raw = body.contact_custom_fields
+    if (raw == null || (Array.isArray(raw) && raw.length === 0)) {
+      updates.contact_custom_fields = null
+    } else if (Array.isArray(raw)) {
+      const items = (raw as any[])
+        .filter((f: any) => f && typeof f === 'object' && String(f.label ?? '').trim())
+        .slice(0, 3)
+        .map((f: any) => {
+          const type = ['text', 'number', 'select', 'checkbox'].includes(String(f.type || 'text'))
+            ? String(f.type)
+            : 'text'
+          return { label: String(f.label).trim().slice(0, 100), required: !!f.required, type }
+        })
+      updates.contact_custom_fields = items.length > 0 ? JSON.stringify(items) : null
+    } else {
+      return { ok: false, error: 'contact_custom_fields يجب أن يكون مصفوفة' }
+    }
+  }
+  return { ok: true, updates }
 }
 
 function mergePublicContactForLocation(
@@ -1509,6 +1635,10 @@ function mergePublicContactForLocation(
     secondary_color: tenant.secondary_color,
     public_city: loc.city,
     public_address: loc.address,
+    contact_bg_color: tenant.contact_bg_color ?? null,
+    contact_form_color: tenant.contact_form_color ?? null,
+    contact_text_color: tenant.contact_text_color ?? null,
+    contact_custom_fields: tenant.contact_custom_fields ?? null,
   }
 }
 
@@ -1562,7 +1692,7 @@ function buildPublicContactPageHtml(
   const logoAttr = logoNorm ? escapeHtmlAttr(logoNorm) : ''
 
   // Parse custom fields
-  type CustomField = { label: string; required: boolean }
+  type CustomField = { label: string; required: boolean; type?: string }
   let customFields: CustomField[] = []
   if (tenant.contact_custom_fields) {
     try {
@@ -1571,7 +1701,12 @@ function buildPublicContactPageHtml(
         customFields = parsed
           .filter((f: any) => f && typeof f === 'object' && String(f.label || '').trim())
           .slice(0, 3)
-          .map((f: any) => ({ label: String(f.label).trim(), required: !!f.required }))
+          .map((f: any) => {
+            const type = ['text', 'number', 'select', 'checkbox'].includes(String(f.type || 'text'))
+              ? String(f.type)
+              : 'text'
+            return { label: String(f.label).trim(), required: !!f.required, type }
+          })
       }
     } catch (_) {}
   }
@@ -1587,16 +1722,32 @@ function buildPublicContactPageHtml(
 
   const customFieldsHtml = customFields.length > 0
     ? `<div class="${customFieldsGridClass}">
-        ${customFields.map((f, i) => `
+        ${customFields.map((f, i) => {
+          const fieldType = f.type || 'text'
+          if (fieldType === 'checkbox') {
+            return `
+          <div class="flex items-end">
+            <label class="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+              <input id="custom_field_${i}" type="checkbox"
+                class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                ${f.required ? 'required' : ''} />
+              ${escapeHtml(f.label)}${f.required ? '<span class="text-red-500 mr-1">*</span>' : ''}
+            </label>
+          </div>`
+          }
+          const inputType = fieldType === 'number' ? 'number' : 'text'
+          const inputMode = fieldType === 'number' ? ' inputmode="numeric"' : ''
+          return `
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
               ${escapeHtml(f.label)}${f.required ? '<span class="text-red-500 mr-1">*</span>' : ''}
             </label>
-            <input id="custom_field_${i}" type="text"
+            <input id="custom_field_${i}" type="${inputType}"${inputMode}
               class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="${escapeHtmlAttr(f.label)}"
               ${f.required ? 'required' : ''} />
-          </div>`).join('')}
+          </div>`
+        }).join('')}
       </div>`
     : ''
 
@@ -1734,7 +1885,12 @@ function buildPublicContactPageHtml(
             payload.custom_fields = {};
             CUSTOM_FIELDS.forEach((f, i) => {
               const el = document.getElementById('custom_field_' + i);
-              if (el) payload.custom_fields[f.label] = el.value.trim();
+              if (!el) return;
+              if (f.type === 'checkbox') {
+                payload.custom_fields[f.label] = el.checked ? 'نعم' : 'لا';
+              } else {
+                payload.custom_fields[f.label] = el.value.trim();
+              }
             });
           }
 
@@ -2366,7 +2522,8 @@ app.use('/api/*', async (c, next) => {
     p === '/api/rates' ||
     p === '/api/financing-types' ||
     p === '/api/tenants' ||
-    p === '/api/admin/bank-agents'
+    p === '/api/admin/bank-agents' ||
+    p === '/api/admin/filter-employees'
   )) {
     await next()
     return
@@ -2396,6 +2553,11 @@ app.use('/api/*', async (c, next) => {
     return
   }
   if (p === '/api/contracts/party-logo-upload' && method === 'POST') {
+    await next()
+    return
+  }
+  // Document background watermark (read-only) for contract preview/print.
+  if (p === '/api/tenant/document-watermark' && method === 'GET') {
     await next()
     return
   }
@@ -2765,14 +2927,70 @@ async function getUserInfo(
   }
 }
 
-/** Same tenant scope as GET /api/users for bank-agent capable assignees. Role 6 requires explicit bank scope. */
+/** Bind params for BANK_AGENT_DROPDOWN_SQL / isActiveBankAgentForTenant (4× tenant id). */
+function bankAgentTenantBinds(tenantId: number): [number, number, number, number] {
+  const tid = Number(tenantId)
+  return [tid, tid, tid, tid]
+}
+
+/** Bind params for EMPLOYEE_FILTER_DROPDOWN_SQL (3× tenant id). */
+function employeeFilterTenantBinds(tenantId: number): [number, number, number] {
+  const tid = Number(tenantId)
+  return [tid, tid, tid]
+}
+
+/** Auto-assign employee column on new customer (role 4 / dual agent 6). */
+async function assignNewCustomerToEmployee(
+  db: D1Database,
+  customerId: number,
+  employeeId: number,
+  assignedBy: number,
+  notes = ''
+): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(customer_id) DO UPDATE SET
+           employee_id = excluded.employee_id,
+           assigned_by = excluded.assigned_by,
+           notes = excluded.notes`
+      )
+      .bind(customerId, employeeId, assignedBy, notes)
+      .run()
+  } catch (e: unknown) {
+    const msg = String((e as { message?: string })?.message || e || '')
+    if (!/ON CONFLICT|no such column/i.test(msg)) throw e
+    await db
+      .prepare(
+        `INSERT OR REPLACE INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+         VALUES (?, ?, ?, ?)`
+      )
+      .bind(customerId, employeeId, assignedBy, notes)
+      .run()
+  }
+  try {
+    await db
+      .prepare(
+        `INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+         VALUES (?, NULL, ?, ?, ?)`
+      )
+      .bind(customerId, employeeId, assignedBy, notes)
+      .run()
+  } catch (_) {
+    /* history table may be missing in legacy DBs */
+  }
+}
+
+/** Same tenant scope as GET /api/users for bank-agent capable assignees (roles 5/6). */
 async function isActiveBankAgentForTenant(
   db: D1Database,
   agentUserId: number,
   tenantId: number | null
 ): Promise<boolean> {
   if (tenantId == null || Number.isNaN(Number(tenantId))) return false
-  const tid = Number(tenantId)
+  const [tid, tid2, tid3, tid4] = bankAgentTenantBinds(Number(tenantId))
   const row = await db
     .prepare(
       `SELECT 1 AS ok FROM users u
@@ -2785,14 +3003,17 @@ async function isActiveBankAgentForTenant(
                WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
              )
            ))
-           OR (u.role_id = 6 AND EXISTS (
-             SELECT 1 FROM banks b
-             WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+           OR (u.role_id = 6 AND (
+             u.tenant_id = ?
+             OR EXISTS (
+               SELECT 1 FROM banks b
+               WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+             )
            ))
          )
        LIMIT 1`
     )
-    .bind(agentUserId, tid, tid, tid)
+    .bind(agentUserId, tid, tid2, tid3, tid4)
     .first()
   return Boolean(row)
 }
@@ -2810,9 +3031,29 @@ const BANK_AGENT_DROPDOWN_SQL = `
           WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
         )
       ))
-      OR (u.role_id = 6 AND EXISTS (
-        SELECT 1 FROM banks b
-        WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+      OR (u.role_id = 6 AND (
+        u.tenant_id = ?
+        OR EXISTS (
+          SELECT 1 FROM banks b
+          WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+        )
+      ))
+    )
+  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
+
+/** Employee-column staff for customer/request filter dropdowns (includes dual agent role 6). */
+const EMPLOYEE_FILTER_DROPDOWN_SQL = `
+  SELECT u.id, u.full_name, u.username
+  FROM users u
+  WHERE u.is_active = 1
+    AND (
+      (u.role_id IN (3, 4, 13, 14) AND u.tenant_id = ?)
+      OR (u.role_id = 6 AND (
+        u.tenant_id = ?
+        OR EXISTS (
+          SELECT 1 FROM banks b
+          WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+        )
       ))
     )
   ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`
@@ -3801,6 +4042,20 @@ ${isAdminPanelRail ? `
         .catch(function () {});
     }
 
+    function backToAdminList(event, listPath) {
+      try {
+        if (event) event.preventDefault();
+        var ref = document.referrer ? new URL(document.referrer) : null;
+        if (ref && ref.origin === window.location.origin && ref.pathname === listPath) {
+          window.history.back();
+          return false;
+        }
+      } catch (e) {}
+      window.location.href = listPath;
+      return false;
+    }
+    window.backToAdminList = backToAdminList;
+
     function applySidebarFilterLink(link) {
       if (!link) return false;
       var href = link.getAttribute('href');
@@ -3828,6 +4083,9 @@ ${isAdminPanelRail ? `
         if (customerDateEl) customerDateEl.value = 'all';
         if (ratingEl) ratingEl.value = rating;
         if (requestsEl) requestsEl.value = requests;
+        params.delete('search');
+        params.delete('filterField');
+        params.delete('dateRangeFilter');
         params.set('ratingFilter', rating);
         params.set('requestsFilter', requests);
         handled = true;
@@ -3841,7 +4099,15 @@ ${isAdminPanelRail ? `
         if (requestSearchEl) requestSearchEl.value = '';
         if (requestFieldEl) requestFieldEl.value = 'all';
         if (statusEl) statusEl.value = status;
-        params.set('requestStatusFilter', status);
+        params.delete('search');
+        params.delete('filterField');
+        if (status && status !== 'all') {
+          params.set('statusFilter', status);
+          params.set('requestStatusFilter', status);
+        } else {
+          params.delete('statusFilter');
+          params.delete('requestStatusFilter');
+        }
         handled = true;
       }
 
@@ -4467,27 +4733,22 @@ app.get('/api/my-tenant', async (c) => {
       return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
     }
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, whatsapp_greeting
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, whatsapp_greeting,
+             document_watermark_url, document_watermark_enabled, document_watermark_opacity,
+             document_header_url, document_header_enabled, document_header_opacity,
+             document_footer_url, document_footer_enabled, document_footer_opacity
       FROM tenants WHERE id = ? LIMIT 1
-    `).bind(info.tenantId).first<{
-      company_name: string
-      contact_email: string | null
-      contact_phone: string | null
-      city: string | null
-      address: string | null
-      logo_url: string | null
-      slug: string
-      public_uuid: string | null
-      contact_bg_color: string | null
-      contact_form_color: string | null
-      contact_text_color: string | null
-      contact_custom_fields: string | null
-      whatsapp_greeting: string | null
-    }>()
+    `).bind(info.tenantId).first<Record<string, any>>()
     if (!row) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
     }
-    return c.json({ success: true, data: row })
+    return c.json({
+      success: true,
+      data: {
+        ...row,
+        ...formatTenantDocumentBrandingFields(row)
+      }
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -4559,6 +4820,90 @@ app.post('/api/my-tenant/logo-upload', async (c) => {
     return c.json({ success: false, error: error.message }, 500)
   }
 })
+
+async function uploadTenantDocumentImage(
+  c: any,
+  opts: { keyPrefix: string; maxLabelAr: string }
+): Promise<Response> {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    if (normalizeRoleId(info.roleId) !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!info.tenantId) {
+      return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    }
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'تخزين الملفات غير مُهيأ' }, 500)
+    }
+
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ success: false, error: 'توقعنا نموذجاً متعدد الأجزاء (ملف)' }, 400)
+    }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ success: false, error: 'لم يتم اختيار ملف' }, 400)
+    }
+
+    const file = fileEntry
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return c.json({ success: false, error: `الحد الأقصى لحجم ${opts.maxLabelAr} 2 ميجابايت` }, 400)
+    }
+
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ success: false, error: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+
+    const tenantRow = await c.env.DB.prepare(`SELECT id FROM tenants WHERE id = ? LIMIT 1`)
+      .bind(info.tenantId)
+      .first<{ id: number }>()
+    if (!tenantRow) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'png').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'png'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'png'
+    const key = `tenants/${info.tenantId}/${opts.keyPrefix}_${timestamp}_${random}.${ext}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    await c.env.ATTACHMENTS.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      }
+    })
+
+    const publicUrl = `/api/attachments/view/${key}`
+    return c.json({ success: true, url: publicUrl, filename: key })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+}
+
+// Company admin (role 2): upload document background watermark image to R2
+app.post('/api/my-tenant/watermark-upload', (c) =>
+  uploadTenantDocumentImage(c, { keyPrefix: 'document_watermark', maxLabelAr: 'صورة العلامة المائية' })
+)
+
+// Company admin (role 2): upload document letterhead header image
+app.post('/api/my-tenant/header-upload', (c) =>
+  uploadTenantDocumentImage(c, { keyPrefix: 'document_header', maxLabelAr: 'صورة ترويسة الصفحة' })
+)
+
+// Company admin (role 2): upload document letterhead footer image
+app.post('/api/my-tenant/footer-upload', (c) =>
+  uploadTenantDocumentImage(c, { keyPrefix: 'document_footer', maxLabelAr: 'صورة تذييل الصفحة' })
+)
 
 // Company admin (role 2): update company name, contact email/phone, logo (own tenant)
 app.patch('/api/my-tenant', async (c) => {
@@ -4650,50 +4995,80 @@ app.patch('/api/my-tenant', async (c) => {
       }
       updates.whatsapp_greeting = greetingNorm.value
     }
-    if ('contact_bg_color' in body) {
-      const raw = String(body.contact_bg_color ?? '').trim()
-      if (raw === '') {
-        updates.contact_bg_color = null
-      } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
-        updates.contact_bg_color = raw
-      } else {
-        return c.json({ success: false, error: 'لون الخلفية غير صالح، استخدم صيغة hex مثل #0f766e' }, 400)
+    if ('document_watermark_url' in body) {
+      const raw = body.document_watermark_url
+      const trimmed = raw == null ? '' : String(raw).trim()
+      const wmNorm = trimmed === '' ? null : normalizeTenantLogoUrl(trimmed)
+      if (trimmed !== '' && !wmNorm) {
+        return c.json({
+          success: false,
+          error: 'رابط العلامة المائية غير صالح (استخدم https:// أو مساراً يبدأ بـ /)'
+        }, 400)
       }
+      updates.document_watermark_url = wmNorm
     }
-    if ('contact_form_color' in body) {
-      const raw = String(body.contact_form_color ?? '').trim()
-      if (raw === '') {
-        updates.contact_form_color = null
-      } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
-        updates.contact_form_color = raw
-      } else {
-        return c.json({ success: false, error: 'لون النافذة غير صالح، استخدم صيغة hex مثل #ffffff' }, 400)
+    if ('document_watermark_enabled' in body) {
+      const on = body.document_watermark_enabled === true || body.document_watermark_enabled === 1 || body.document_watermark_enabled === '1'
+      updates.document_watermark_enabled = on ? '1' : '0'
+    }
+    if ('document_watermark_opacity' in body) {
+      const n = Number(body.document_watermark_opacity)
+      if (!Number.isFinite(n)) {
+        return c.json({ success: false, error: 'شفافية العلامة المائية غير صالحة' }, 400)
       }
+      updates.document_watermark_opacity = String(clampWatermarkOpacity(n, 0.12))
     }
-    if ('contact_text_color' in body) {
-      const raw = String(body.contact_text_color ?? '').trim()
-      if (raw === '' || raw === 'black') {
-        updates.contact_text_color = raw === '' ? null : 'black'
-      } else if (raw === 'white') {
-        updates.contact_text_color = 'white'
-      } else {
-        return c.json({ success: false, error: 'لون النص يجب أن يكون black أو white' }, 400)
+    if ('document_header_url' in body) {
+      const raw = body.document_header_url
+      const trimmed = raw == null ? '' : String(raw).trim()
+      const norm = trimmed === '' ? null : normalizeTenantLogoUrl(trimmed)
+      if (trimmed !== '' && !norm) {
+        return c.json({
+          success: false,
+          error: 'رابط ترويسة الصفحة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)'
+        }, 400)
       }
+      updates.document_header_url = norm
     }
-    if ('contact_custom_fields' in body) {
-      const raw = body.contact_custom_fields
-      if (raw == null || (Array.isArray(raw) && raw.length === 0)) {
-        updates.contact_custom_fields = null
-      } else if (Array.isArray(raw)) {
-        const items = (raw as any[])
-          .filter((f: any) => f && typeof f === 'object' && String(f.label ?? '').trim())
-          .slice(0, 3)
-          .map((f: any) => ({ label: String(f.label).trim().slice(0, 100), required: !!f.required }))
-        updates.contact_custom_fields = items.length > 0 ? JSON.stringify(items) : null
-      } else {
-        return c.json({ success: false, error: 'contact_custom_fields يجب أن يكون مصفوفة' }, 400)
+    if ('document_header_enabled' in body) {
+      const on = body.document_header_enabled === true || body.document_header_enabled === 1 || body.document_header_enabled === '1'
+      updates.document_header_enabled = on ? '1' : '0'
+    }
+    if ('document_header_opacity' in body) {
+      const n = Number(body.document_header_opacity)
+      if (!Number.isFinite(n)) {
+        return c.json({ success: false, error: 'شفافية ترويسة الصفحة غير صالحة' }, 400)
       }
+      updates.document_header_opacity = String(clampLetterheadOpacity(n, 1))
     }
+    if ('document_footer_url' in body) {
+      const raw = body.document_footer_url
+      const trimmed = raw == null ? '' : String(raw).trim()
+      const norm = trimmed === '' ? null : normalizeTenantLogoUrl(trimmed)
+      if (trimmed !== '' && !norm) {
+        return c.json({
+          success: false,
+          error: 'رابط تذييل الصفحة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)'
+        }, 400)
+      }
+      updates.document_footer_url = norm
+    }
+    if ('document_footer_enabled' in body) {
+      const on = body.document_footer_enabled === true || body.document_footer_enabled === 1 || body.document_footer_enabled === '1'
+      updates.document_footer_enabled = on ? '1' : '0'
+    }
+    if ('document_footer_opacity' in body) {
+      const n = Number(body.document_footer_opacity)
+      if (!Number.isFinite(n)) {
+        return c.json({ success: false, error: 'شفافية تذييل الصفحة غير صالحة' }, 400)
+      }
+      updates.document_footer_opacity = String(clampLetterheadOpacity(n, 1))
+    }
+    const designParsed = parseContactDesignBodyFields(body as Record<string, unknown>)
+    if (!designParsed.ok) {
+      return c.json({ success: false, error: designParsed.error }, 400)
+    }
+    Object.assign(updates, designParsed.updates)
 
     const keys = Object.keys(updates)
     if (keys.length === 0) {
@@ -4714,11 +5089,23 @@ app.patch('/api/my-tenant', async (c) => {
       .run()
 
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, whatsapp_greeting
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, whatsapp_greeting,
+             document_watermark_url, document_watermark_enabled, document_watermark_opacity,
+             document_header_url, document_header_enabled, document_header_opacity,
+             document_footer_url, document_footer_enabled, document_footer_opacity
       FROM tenants WHERE id = ? LIMIT 1
-    `).bind(info.tenantId).first()
+    `).bind(info.tenantId).first<Record<string, any>>()
 
-    return c.json({ success: true, data: row, message: 'تم تحديث بيانات الشركة' })
+    return c.json({
+      success: true,
+      data: row
+        ? {
+            ...row,
+            ...formatTenantDocumentBrandingFields(row)
+          }
+        : row,
+      message: 'تم تحديث بيانات الشركة'
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -4741,6 +5128,74 @@ app.get('/api/tenant/whatsapp-greeting', async (c) => {
         whatsapp_greeting: settings.greeting,
         company_name: settings.companyName,
       },
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Any authenticated company user: document branding (watermark + letterhead) for contract preview/print.
+app.get('/api/tenant/document-watermark', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) {
+      return c.json({ success: false, error: 'غير مصرح' }, 401)
+    }
+    let tenantId = info.tenantId
+    if (!tenantId && isSuperAdminUser(info)) {
+      const q = c.req.query('tenant_id')
+      if (q && /^\d+$/.test(String(q))) tenantId = parseInt(String(q), 10)
+    }
+    const empty = {
+      enabled: false,
+      url: null as string | null,
+      opacity: 0.12,
+      header: { enabled: false, url: null as string | null, opacity: 1 },
+      footer: { enabled: false, url: null as string | null, opacity: 1 }
+    }
+    if (!tenantId) {
+      return c.json({ success: true, data: empty })
+    }
+    const row = await c.env.DB.prepare(`
+      SELECT document_watermark_url, document_watermark_enabled, document_watermark_opacity, logo_url,
+             document_header_url, document_header_enabled, document_header_opacity,
+             document_footer_url, document_footer_enabled, document_footer_opacity
+      FROM tenants WHERE id = ? LIMIT 1
+    `).bind(tenantId).first<{
+      document_watermark_url: string | null
+      document_watermark_enabled: number | null
+      document_watermark_opacity: number | null
+      logo_url: string | null
+      document_header_url: string | null
+      document_header_enabled: number | null
+      document_header_opacity: number | null
+      document_footer_url: string | null
+      document_footer_enabled: number | null
+      document_footer_opacity: number | null
+    }>()
+    const wmUrl = row?.document_watermark_url ? normalizeTenantLogoUrl(row.document_watermark_url) : null
+    const logoUrl = row?.logo_url ? normalizeTenantLogoUrl(row.logo_url) : null
+    const url = wmUrl || logoUrl
+    const enabled = Number(row?.document_watermark_enabled) === 1 && !!url
+    const headerUrl = row?.document_header_url ? normalizeTenantLogoUrl(row.document_header_url) : null
+    const footerUrl = row?.document_footer_url ? normalizeTenantLogoUrl(row.document_footer_url) : null
+    return c.json({
+      success: true,
+      data: {
+        enabled,
+        url: enabled ? url : null,
+        opacity: clampWatermarkOpacity(row?.document_watermark_opacity, 0.12),
+        header: {
+          enabled: Number(row?.document_header_enabled) === 1 && !!headerUrl,
+          url: Number(row?.document_header_enabled) === 1 && headerUrl ? headerUrl : null,
+          opacity: clampLetterheadOpacity(row?.document_header_opacity, 1)
+        },
+        footer: {
+          enabled: Number(row?.document_footer_enabled) === 1 && !!footerUrl,
+          url: Number(row?.document_footer_enabled) === 1 && footerUrl ? footerUrl : null,
+          opacity: clampLetterheadOpacity(row?.document_footer_opacity, 1)
+        }
+      }
     })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -7118,10 +7573,35 @@ app.get('/api/admin/bank-agents', async (c) => {
     if (!tid || Number.isNaN(tid)) {
       return c.json({ success: false, error: 'tenant_id required' }, 400)
     }
-    if (!isSuperAdminUser(userInfo) && userInfo.tenantId !== tid) {
+    if (!isSuperAdminUser(userInfo) && Number(userInfo.tenantId) !== tid) {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
-    const { results } = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL).bind(tid, tid, tid).all()
+    const { results } = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL).bind(...bankAgentTenantBinds(tid)).all()
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+/** Employee-column filter dropdown (roles 3/4/6/13/14), tenant- or bank-scoped for role 6. */
+app.get('/api/admin/filter-employees', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+    const tidRaw = c.req.query('tenant_id')
+    const tid = tidRaw != null && String(tidRaw).trim() !== '' ? parseInt(String(tidRaw), 10) : NaN
+    if (!tid || Number.isNaN(tid)) {
+      return c.json({ success: false, error: 'tenant_id required' }, 400)
+    }
+    if (!isSuperAdminUser(userInfo) && Number(userInfo.tenantId) !== tid) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    const { results } = await c.env.DB
+      .prepare(EMPLOYEE_FILTER_DROPDOWN_SQL)
+      .bind(...employeeFilterTenantBinds(tid))
+      .all()
     return c.json({ success: true, data: results || [] })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -7642,8 +8122,24 @@ app.post('/api/customers', async (c) => {
       }
     }
 
-    // Final fallback: first active tenant to satisfy NOT NULL tenant_id constraints.
-    if (!tenant_id) {
+    const creatorRoleForTenant = normalizeRoleId(userInfo.roleId)
+    if (
+      !tenant_id &&
+      creatorRoleForTenant != null &&
+      creatorRoleForTenant !== 1
+    ) {
+      const noTenantMsg = 'يجب ربط حسابك بشركة قبل إضافة عملاء.'
+      if (inlineCustomerForm) {
+        return c.json({ ok: false, code: 'NO_TENANT', message: noTenantMsg }, 400)
+      }
+      return c.html(
+        `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">شركة غير محددة</h1><p class="text-red-800 mt-2">${noTenantMsg}</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,
+        400
+      )
+    }
+
+    // Super-admin only: fallback to first active tenant when form tenant not provided.
+    if (!tenant_id && creatorRoleForTenant === 1) {
       const defaultTenant = await c.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
       `).first<{ id: number }>()
@@ -8030,14 +8526,15 @@ app.post('/api/customers', async (c) => {
       }
     }
 
-    // Track creator + (for bank agents) assign self in one UPDATE so scopes stay aligned.
+    // Track creator + (for bank agents / eligible dual agents) self-assign as موظف التمويل.
     const createdCustomerId = Number(result?.meta?.last_row_id || 0)
     const normRoleAfterInsert = normalizeRoleId(userInfo.roleId)
     if (creatorUserId && createdCustomerId) {
       try {
         const uidNum = Number(creatorUserId)
-        const isBankAgentCreator = normRoleAfterInsert === 5 && uidNum > 0
-        if (isBankAgentCreator) {
+        const selfAssignBankAgent =
+          isBankAgentAssignableRole(normRoleAfterInsert) && uidNum > 0
+        if (selfAssignBankAgent) {
           try {
             await c.env.DB
               .prepare(
@@ -8104,25 +8601,21 @@ app.post('/api/customers', async (c) => {
         }
       } catch (_) {}
     }
-    // Employees (role 4): auto-assign the new customer to themselves (same rows as admin/customer-assignment)
-    if (
-      newId &&
-      normalizeRoleId(userInfo.roleId) === 4 &&
-      userInfo.userId &&
-      userInfo.tenantId != null &&
-      userInfo.tenantId === tenant_id
-    ) {
+    // Employees (role 4 / dual agent role 6): auto-assign the new customer to themselves.
+    // Role 6 list scope uses customer_assignments — created_by alone does not grant visibility.
+    const creatorRole = normalizeRoleId(userInfo.roleId)
+    const assignCustomerId = createdCustomerId || Number(newId || 0)
+    if (assignCustomerId > 0 && userInfo.userId && isEmployeeAssignableRole(creatorRole)) {
       try {
-        await c.env.DB.prepare(`
-          INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-          VALUES (?, ?, ?, ?)
-        `).bind(newId, userInfo.userId, userInfo.userId, '').run()
-        await c.env.DB.prepare(`
-          INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
-          VALUES (?, NULL, ?, ?, ?)
-        `).bind(newId, userInfo.userId, userInfo.userId, '').run()
+        await assignNewCustomerToEmployee(
+          c.env.DB,
+          assignCustomerId,
+          Number(userInfo.userId),
+          Number(userInfo.userId),
+          ''
+        )
       } catch (e) {
-        console.error('Auto-assign new customer to employee (role 4) failed:', e)
+        console.error('Auto-assign new customer to employee (role 4/6) failed:', e)
       }
     }
     // Role 2/1: optional bank agent from form (role 5 self-assign is handled with created_by above).
@@ -10662,9 +11155,16 @@ app.post('/api/calculator/save-customer', async (c) => {
       if (!existingAssignment?.ok) {
         const { results: staffRows } = await c.env.DB.prepare(`
           SELECT id, customer_limit FROM users
-          WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
+          WHERE role_id IN (4, 6) AND is_active = 1
+            AND (
+              tenant_id = ?
+              OR (role_id = 6 AND EXISTS (
+                SELECT 1 FROM banks b
+                WHERE b.id = users.assigned_bank_id AND b.tenant_id = ?
+              ))
+            )
           ORDER BY id ASC
-        `).bind(tenant_id).all<{ id: number; customer_limit: number | null }>()
+        `).bind(tenant_id, tenant_id).all<{ id: number; customer_limit: number | null }>()
 
         const staff = (staffRows || []) as { id: number; customer_limit: number | null }[]
         if (staff.length) {
@@ -15715,7 +16215,7 @@ app.get('/admin/customers/add', async (c) => {
   const normRoleForAddPage = normalizeRoleId(userInfo.roleId)
   if ((normRoleForAddPage === 2 || normRoleForAddPage === 1) && resolvedTenantIdForLocations) {
     const agentsRes = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL)
-      .bind(resolvedTenantIdForLocations, resolvedTenantIdForLocations, resolvedTenantIdForLocations)
+      .bind(...bankAgentTenantBinds(resolvedTenantIdForLocations))
       .all<{ id: number; full_name: string | null; username: string }>()
     const agents = (agentsRes.results || []) as Array<{ id: number; full_name: string | null; username: string }>
     if (agents.length > 0) {
@@ -15756,7 +16256,7 @@ app.get('/admin/customers/add', async (c) => {
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
         <div class="mb-6">
-          <a href="/admin/customers" class="text-blue-600 hover:text-blue-800">← العودة لقائمة العملاء</a>
+          <a href="/admin/customers" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/customers'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">← العودة لقائمة العملاء</a>
         </div>
         
         <div class="bg-white rounded-xl shadow-lg p-8">
@@ -19115,11 +19615,40 @@ app.get('/admin/customers', async (c) => {
     const role2InlineAssign = canInlineAssignCustomers(userInfo.roleId)
     let role2Employees: any[] = []
     if (role2InlineAssign && userInfo.tenantId) {
-      const empRes = await c.env.DB.prepare(
-        `SELECT id, full_name, username FROM users WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id = ? ORDER BY full_name`
-      ).bind(userInfo.tenantId).all()
+      const empRes = await c.env.DB
+        .prepare(EMPLOYEE_FILTER_DROPDOWN_SQL)
+        .bind(...employeeFilterTenantBinds(Number(userInfo.tenantId)))
+        .all()
       role2Employees = empRes.results as any[]
     }
+
+    let filterEmployees: Array<{ id: number; full_name: string | null; username: string }> = []
+    let filterBankAgents: Array<{ id: number; full_name: string | null; username: string }> = []
+    if (userInfo.tenantId) {
+      const filterTid = Number(userInfo.tenantId)
+      const empFilterRes = await c.env.DB
+        .prepare(EMPLOYEE_FILTER_DROPDOWN_SQL)
+        .bind(...employeeFilterTenantBinds(filterTid))
+        .all()
+      filterEmployees = (empFilterRes.results || []) as typeof filterEmployees
+      const agentFilterRes = await c.env.DB
+        .prepare(BANK_AGENT_DROPDOWN_SQL)
+        .bind(...bankAgentTenantBinds(filterTid))
+        .all()
+      filterBankAgents = (agentFilterRes.results || []) as typeof filterBankAgents
+    }
+    const filterEmployeeNamesJson = JSON.stringify(
+      filterEmployees
+        .map((u) => String(u.full_name || u.username || '').trim())
+        .filter(Boolean)
+    ).replace(/</g, '\\u003c')
+    const filterBankAgentLabelsJson = JSON.stringify(
+      filterBankAgents.map((u) => {
+        const name = String(u.full_name || u.username || '').trim()
+        return name ? `${name} #${u.id}` : `#${u.id}`
+      })
+    ).replace(/</g, '\\u003c')
+
     const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
     return c.html(`
@@ -19656,9 +20185,111 @@ app.get('/admin/customers', async (c) => {
 
           const customerIdsWithRequests = new Set(${JSON.stringify([...customerIdsWithRequests])});
           const DEFAULT_REQUESTS_FILTER = ${JSON.stringify(defaultRequestsFilterValue)};
+          const TENANT_EMPLOYEE_FILTER_NAMES = ${filterEmployeeNamesJson};
+          const TENANT_BANK_AGENT_FILTER_LABELS = ${filterBankAgentLabelsJson};
           const pageParams = new URLSearchParams(window.location.search);
           const presetRatingFilter = pageParams.get('ratingFilter');
           const presetRequestsFilter = pageParams.get('requestsFilter');
+
+          function setUrlParamOrDelete(params, key, value, emptyValue) {
+            if (value != null && String(value) !== '' && String(value) !== emptyValue) params.set(key, String(value));
+            else params.delete(key);
+          }
+
+          const CUSTOMERS_FILTERS_SESSION_KEY = 'adminCustomersListFilters';
+
+          function readCustomersFiltersFromDom() {
+            return {
+              search: (document.getElementById('searchInput') || { value: '' }).value.trim(),
+              filterField: (document.getElementById('filterField') || { value: 'all' }).value,
+              dateRangeFilter: (document.getElementById('dateRangeFilter') || { value: 'all' }).value,
+              requestsFilter: (document.getElementById('requestsFilter') || { value: DEFAULT_REQUESTS_FILTER }).value,
+              ratingFilter: (document.getElementById('ratingFilter') || { value: 'all' }).value,
+              employeeFilter: (document.getElementById('employeeFilter') || { value: 'all' }).value,
+              bankAgentFilter: (document.getElementById('bankAgentFilter') || { value: 'all' }).value
+            };
+          }
+
+          function saveCustomersFiltersToSession(filters) {
+            try {
+              sessionStorage.setItem(CUSTOMERS_FILTERS_SESSION_KEY, JSON.stringify(filters || readCustomersFiltersFromDom()));
+            } catch (e) {}
+          }
+
+          function loadCustomersFiltersFromSession() {
+            try {
+              const raw = sessionStorage.getItem(CUSTOMERS_FILTERS_SESSION_KEY);
+              if (!raw) return null;
+              const parsed = JSON.parse(raw);
+              return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch (e) {
+              return null;
+            }
+          }
+
+          function clearCustomersFiltersSession() {
+            try { sessionStorage.removeItem(CUSTOMERS_FILTERS_SESSION_KEY); } catch (e) {}
+          }
+
+          function urlHasExplicitCustomersFilters() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('search') || params.has('filterField') || params.has('dateRangeFilter')) return true;
+            if (params.has('employeeFilter') || params.has('bankAgentFilter')) return true;
+            if (params.has('ratingFilter')) return true;
+            // Role 4/6 always get requestsFilter=0 via redirect; that alone is not an explicit user filter.
+            if (params.has('requestsFilter')) {
+              const rf = params.get('requestsFilter');
+              if (rf !== DEFAULT_REQUESTS_FILTER) return true;
+              // requestsFilter present with other intentional keys already handled above
+            }
+            return false;
+          }
+
+          function applyCustomersFiltersObject(filters) {
+            if (!filters) return;
+            const searchEl = document.getElementById('searchInput');
+            const filterFieldEl = document.getElementById('filterField');
+            const dateRangeEl = document.getElementById('dateRangeFilter');
+            const ratingFilterEl = document.getElementById('ratingFilter');
+            const requestsFilterEl = document.getElementById('requestsFilter');
+            const empEl = document.getElementById('employeeFilter');
+            const agentEl = document.getElementById('bankAgentFilter');
+            const allowedRatings = ['all', '0', '1', '2', '3', '4', '5'];
+            const allowedReq = ['all', '0', '1'];
+            const allowedDateRanges = ['all', '30', '60', '90'];
+            const allowedFields = ['all', 'name', 'phone', 'email'];
+
+            if (searchEl && filters.search != null) searchEl.value = String(filters.search);
+            if (filterFieldEl && filters.filterField && allowedFields.indexOf(filters.filterField) !== -1) filterFieldEl.value = filters.filterField;
+            if (dateRangeEl && filters.dateRangeFilter && allowedDateRanges.indexOf(String(filters.dateRangeFilter)) !== -1) dateRangeEl.value = String(filters.dateRangeFilter);
+            if (ratingFilterEl && filters.ratingFilter && allowedRatings.indexOf(String(filters.ratingFilter)) !== -1) ratingFilterEl.value = String(filters.ratingFilter);
+            if (requestsFilterEl && filters.requestsFilter && allowedReq.indexOf(String(filters.requestsFilter)) !== -1) requestsFilterEl.value = String(filters.requestsFilter);
+            if (empEl && filters.employeeFilter) empEl.value = String(filters.employeeFilter);
+            if (agentEl && filters.bankAgentFilter) agentEl.value = String(filters.bankAgentFilter);
+          }
+
+          function setCustomersFiltersInUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const filters = readCustomersFiltersFromDom();
+
+            setUrlParamOrDelete(params, 'search', filters.search, '');
+            setUrlParamOrDelete(params, 'filterField', filters.filterField, 'all');
+            setUrlParamOrDelete(params, 'dateRangeFilter', filters.dateRangeFilter, 'all');
+            // Role 4/6 server redirect treats missing requestsFilter as "force 0"; keep explicit values in the URL.
+            if (DEFAULT_REQUESTS_FILTER === '0') params.set('requestsFilter', filters.requestsFilter || DEFAULT_REQUESTS_FILTER);
+            else setUrlParamOrDelete(params, 'requestsFilter', filters.requestsFilter, 'all');
+            setUrlParamOrDelete(params, 'ratingFilter', filters.ratingFilter, 'all');
+            setUrlParamOrDelete(params, 'employeeFilter', filters.employeeFilter, 'all');
+            setUrlParamOrDelete(params, 'bankAgentFilter', filters.bankAgentFilter, 'all');
+
+            const qs = params.toString();
+            const nextUrl = window.location.pathname + (qs ? ('?' + qs) : '');
+            if (nextUrl !== window.location.pathname + window.location.search) {
+              window.history.replaceState({}, '', nextUrl);
+            }
+            saveCustomersFiltersToSession(filters);
+            if (typeof applyGlobalSidebarPermissions === 'function') applyGlobalSidebarPermissions();
+          }
 
           function openNewRequest(customerId, customerName) {
             if (customerIdsWithRequests.has(customerId)) {
@@ -20289,8 +20920,8 @@ app.get('/admin/customers', async (c) => {
             const empEl = document.getElementById('employeeFilter');
             const agentEl = document.getElementById('bankAgentFilter');
             if (!empEl || !agentEl) return;
-            const empNames = new Set();
-            const agentNames = new Set();
+            const empNames = new Set(Array.isArray(TENANT_EMPLOYEE_FILTER_NAMES) ? TENANT_EMPLOYEE_FILTER_NAMES : []);
+            const agentNames = new Set(Array.isArray(TENANT_BANK_AGENT_FILTER_LABELS) ? TENANT_BANK_AGENT_FILTER_LABELS : []);
             document.querySelectorAll('#tableBody tr').forEach((row) => {
               const emp = (row.getAttribute('data-assigned') || '').trim();
               const agent = (row.getAttribute('data-bank-agent') || '').trim();
@@ -20354,31 +20985,37 @@ app.get('/admin/customers', async (c) => {
             }
             document.getElementById('totalCount').textContent = visibleCount;
             applyCustomersPagination();
+            setCustomersFiltersInUrl();
           }
 
           function applyPresetFiltersFromUrl() {
-            const ratingFilterEl = document.getElementById('ratingFilter');
-            const requestsFilterEl = document.getElementById('requestsFilter');
-            const allowedRatings = ['all', '0', '1', '2', '3', '4', '5'];
-            const allowedReq = ['all', '0', '1'];
-            let changed = false;
-
-            if (presetRatingFilter && ratingFilterEl && allowedRatings.indexOf(presetRatingFilter) !== -1) {
-              ratingFilterEl.value = presetRatingFilter;
-              changed = true;
-              if (requestsFilterEl) {
-                if (presetRequestsFilter && allowedReq.indexOf(presetRequestsFilter) !== -1) {
-                  requestsFilterEl.value = presetRequestsFilter;
-                } else {
-                  requestsFilterEl.value = DEFAULT_REQUESTS_FILTER;
-                }
+            // Return links go to bare /admin/customers (no query). Prefer session filters in that case.
+            if (!urlHasExplicitCustomersFilters()) {
+              const saved = loadCustomersFiltersFromSession();
+              if (saved) {
+                applyCustomersFiltersObject(saved);
+                return;
               }
-            } else if (presetRequestsFilter && requestsFilterEl && allowedReq.indexOf(presetRequestsFilter) !== -1) {
-              requestsFilterEl.value = presetRequestsFilter;
-              changed = true;
             }
 
-            if (changed) filterTable();
+            const params = new URLSearchParams(window.location.search);
+            applyCustomersFiltersObject({
+              search: params.get('search'),
+              filterField: params.get('filterField'),
+              dateRangeFilter: params.get('dateRangeFilter'),
+              ratingFilter: params.get('ratingFilter') || presetRatingFilter,
+              requestsFilter: params.get('requestsFilter') || presetRequestsFilter,
+              employeeFilter: params.get('employeeFilter'),
+              bankAgentFilter: params.get('bankAgentFilter')
+            });
+
+            // Preserve prior sidebar behavior when rating is present without requestsFilter
+            const requestsFilterEl = document.getElementById('requestsFilter');
+            const ratingFilter = params.get('ratingFilter') || presetRatingFilter;
+            const requestsFilter = params.get('requestsFilter') || presetRequestsFilter;
+            if (requestsFilterEl && ratingFilter && !requestsFilter) {
+              requestsFilterEl.value = DEFAULT_REQUESTS_FILTER;
+            }
           }
 
           function resetFilters() {
@@ -20391,6 +21028,7 @@ app.get('/admin/customers', async (c) => {
             const agentEl = document.getElementById('bankAgentFilter');
             if (empEl) empEl.value = 'all';
             if (agentEl) agentEl.value = 'all';
+            clearCustomersFiltersSession();
             filterTable();
           }
 
@@ -20588,11 +21226,11 @@ app.get('/admin/customers', async (c) => {
           ` : ''}
 
           refreshUnreadDot();
-          // Initialize table paging + page-size dropdown on first load
-          filterTable();
+          // Restore URL filters before first filter pass so Back from actions keeps the view
           hydrateCustomersRoleFilters();
-          loadCustomerRatings();
           applyPresetFiltersFromUrl();
+          filterTable();
+          loadCustomerRatings();
         </script>
         ${role2InlineAssign ? `
         <div id="assignConfirmModal" style="display:none;" class="fixed inset-0 z-[999] flex items-center justify-center">
@@ -21868,7 +22506,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
     let bankAgents: { results: any[] } = { results: [] }
     if (scopeTenantId != null) {
       try {
-        bankAgents = (await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL).bind(scopeTenantId, scopeTenantId, scopeTenantId).all()) as any
+        bankAgents = (await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL).bind(...bankAgentTenantBinds(scopeTenantId)).all()) as any
       } catch (agentErr) {
         console.error('Error loading bank agents for edit request page:', agentErr)
         bankAgents = { results: [] }
@@ -21917,7 +22555,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin/requests" class="text-blue-600 hover:text-blue-800">← العودة للطلبات</a>
+            <a href="/admin/requests" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/requests'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">← العودة للطلبات</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-8">
@@ -22173,6 +22811,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
                 </button>
                 <a 
                   href="/admin/requests"
+                  onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/requests'){history.back();return false;}}catch(e){}"
                   class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all text-center"
                 >
                   <i class="fas fa-times ml-2"></i>
@@ -22570,6 +23209,34 @@ app.get('/admin/requests', async (c) => {
       ).bind(userInfo.tenantId).all()
       role2EmployeesReq = empRes.results as any[]
     }
+
+    let requestsFilterEmployees: Array<{ id: number; full_name: string | null; username: string }> = []
+    let requestsFilterBankAgents: Array<{ id: number; full_name: string | null; username: string }> = []
+    if (userInfo.tenantId) {
+      const filterTid = Number(userInfo.tenantId)
+      const empFilterRes = await c.env.DB
+        .prepare(EMPLOYEE_FILTER_DROPDOWN_SQL)
+        .bind(...employeeFilterTenantBinds(filterTid))
+        .all()
+      requestsFilterEmployees = (empFilterRes.results || []) as typeof requestsFilterEmployees
+      const agentFilterRes = await c.env.DB
+        .prepare(BANK_AGENT_DROPDOWN_SQL)
+        .bind(...bankAgentTenantBinds(filterTid))
+        .all()
+      requestsFilterBankAgents = (agentFilterRes.results || []) as typeof requestsFilterBankAgents
+    }
+    const requestsFilterEmployeeNamesJson = JSON.stringify(
+      requestsFilterEmployees
+        .map((u) => String(u.full_name || u.username || '').trim())
+        .filter(Boolean)
+    ).replace(/</g, '\\u003c')
+    const requestsFilterBankAgentLabelsJson = JSON.stringify(
+      requestsFilterBankAgents.map((u) => {
+        const name = String(u.full_name || u.username || '').trim()
+        return name ? `${name} #${u.id}` : `#${u.id}`
+      })
+    ).replace(/</g, '\\u003c')
+
     const waSettingsReq = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
     const requestsCsvRowsJson = JSON.stringify(
@@ -23056,6 +23723,8 @@ app.get('/admin/requests', async (c) => {
           window.openCustomerWhatsApp = openCustomerWhatsApp;
           // Pagination + edge-scroll (Requests list page)
           const requestsPaging = { page: 1, pageSize: 15, lastSig: '' }
+          const TENANT_EMPLOYEE_FILTER_NAMES = ${requestsFilterEmployeeNamesJson};
+          const TENANT_BANK_AGENT_FILTER_LABELS = ${requestsFilterBankAgentLabelsJson};
           function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
           function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
 
@@ -23280,8 +23949,8 @@ app.get('/admin/requests', async (c) => {
             const empEl = document.getElementById('employeeFilter')
             const agentEl = document.getElementById('bankAgentFilter')
             if (!empEl || !agentEl) return
-            const empNames = new Set()
-            const agentNames = new Set()
+            const empNames = new Set(Array.isArray(TENANT_EMPLOYEE_FILTER_NAMES) ? TENANT_EMPLOYEE_FILTER_NAMES : [])
+            const agentNames = new Set(Array.isArray(TENANT_BANK_AGENT_FILTER_LABELS) ? TENANT_BANK_AGENT_FILTER_LABELS : [])
             document.querySelectorAll('#tableBody tr').forEach((row) => {
               const emp = (row.getAttribute('data-employee') || '').trim()
               const agent = (row.getAttribute('data-bank-agent') || '').trim()
@@ -23359,6 +24028,92 @@ app.get('/admin/requests', async (c) => {
 
             document.getElementById('totalCount').textContent = visibleCount
             applyRequestsPagination()
+            setRequestsFiltersInUrl()
+          }
+
+          function setUrlParamOrDelete(params, key, value, emptyValue) {
+            if (value != null && String(value) !== '' && String(value) !== emptyValue) params.set(key, String(value));
+            else params.delete(key);
+          }
+
+          const REQUESTS_FILTERS_SESSION_KEY = 'adminRequestsListFilters';
+
+          function readRequestsFiltersFromDom() {
+            return {
+              search: (document.getElementById('searchInput') || { value: '' }).value.trim(),
+              filterField: (document.getElementById('filterField') || { value: 'all' }).value,
+              statusFilter: (document.getElementById('statusFilter') || { value: 'all' }).value,
+              employeeFilter: (document.getElementById('employeeFilter') || { value: 'all' }).value,
+              bankAgentFilter: (document.getElementById('bankAgentFilter') || { value: 'all' }).value
+            };
+          }
+
+          function saveRequestsFiltersToSession(filters) {
+            try {
+              sessionStorage.setItem(REQUESTS_FILTERS_SESSION_KEY, JSON.stringify(filters || readRequestsFiltersFromDom()));
+            } catch (e) {}
+          }
+
+          function loadRequestsFiltersFromSession() {
+            try {
+              const raw = sessionStorage.getItem(REQUESTS_FILTERS_SESSION_KEY);
+              if (!raw) return null;
+              const parsed = JSON.parse(raw);
+              return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch (e) {
+              return null;
+            }
+          }
+
+          function clearRequestsFiltersSession() {
+            try { sessionStorage.removeItem(REQUESTS_FILTERS_SESSION_KEY); } catch (e) {}
+          }
+
+          function urlHasExplicitRequestsFilters() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('search') || params.has('filterField') || params.has('statusFilter')) return true;
+            if (params.has('employeeFilter') || params.has('bankAgentFilter')) return true;
+            const rsf = params.get('requestStatusFilter');
+            if (rsf && rsf !== 'all') return true;
+            return false;
+          }
+
+          function applyRequestsFiltersObject(filters) {
+            if (!filters) return;
+            const searchEl = document.getElementById('searchInput');
+            const filterFieldEl = document.getElementById('filterField');
+            const statusFilterEl = document.getElementById('statusFilter');
+            const empEl = document.getElementById('employeeFilter');
+            const agentEl = document.getElementById('bankAgentFilter');
+            const allowedFields = ['all', 'customer', 'phone', 'bank', 'status'];
+
+            if (searchEl && filters.search != null) searchEl.value = String(filters.search);
+            if (filterFieldEl && filters.filterField && allowedFields.indexOf(filters.filterField) !== -1) filterFieldEl.value = filters.filterField;
+            if (statusFilterEl && filters.statusFilter) statusFilterEl.value = String(filters.statusFilter);
+            if (empEl && filters.employeeFilter) empEl.value = String(filters.employeeFilter);
+            if (agentEl && filters.bankAgentFilter) agentEl.value = String(filters.bankAgentFilter);
+          }
+
+          function setRequestsFiltersInUrl() {
+            const params = new URLSearchParams(window.location.search)
+            const filters = readRequestsFiltersFromDom()
+
+            setUrlParamOrDelete(params, 'search', filters.search, '')
+            setUrlParamOrDelete(params, 'filterField', filters.filterField, 'all')
+            setUrlParamOrDelete(params, 'statusFilter', filters.statusFilter, 'all')
+            // Keep sidebar highlight param aligned with the status dropdown
+            if (filters.statusFilter && filters.statusFilter !== 'all') params.set('requestStatusFilter', filters.statusFilter)
+            else params.delete('requestStatusFilter')
+            setUrlParamOrDelete(params, 'employeeFilter', filters.employeeFilter, 'all')
+            setUrlParamOrDelete(params, 'bankAgentFilter', filters.bankAgentFilter, 'all')
+
+            const qs = params.toString()
+            const nextUrl = window.location.pathname + (qs ? ('?' + qs) : '')
+            if (nextUrl !== window.location.pathname + window.location.search) {
+              window.history.replaceState({}, '', nextUrl)
+            }
+            saveRequestsFiltersToSession(filters)
+            if (typeof applyGlobalSidebarPermissions === 'function') applyGlobalSidebarPermissions()
           }
 
           function hydrateStatusFilterOptions() {
@@ -23377,16 +24132,59 @@ app.get('/admin/requests', async (c) => {
           }
 
           function applyRequestStatusFilterFromUrl() {
+            if (!urlHasExplicitRequestsFilters()) {
+              const saved = loadRequestsFiltersFromSession()
+              if (saved) {
+                applyRequestsFiltersObject(saved)
+                return
+              }
+            }
+
             const params = new URLSearchParams(window.location.search)
+            const search = params.get('search')
+            const filterField = params.get('filterField')
+            const statusFilter = params.get('statusFilter')
             const requestStatusFilter = (params.get('requestStatusFilter') || '').trim()
-            if (!requestStatusFilter || requestStatusFilter === 'all') return
-            const searchInputEl = document.getElementById('searchInput')
-            const filterFieldEl = document.getElementById('filterField')
-            const statusFilterEl = document.getElementById('statusFilter')
-            if (!searchInputEl || !filterFieldEl || !statusFilterEl) return
-            searchInputEl.value = requestStatusFilter
-            filterFieldEl.value = 'status'
-            statusFilterEl.value = requestStatusFilter
+            const employeeFilter = params.get('employeeFilter')
+            const bankAgentFilter = params.get('bankAgentFilter')
+
+            if (statusFilter && statusFilter !== 'all') {
+              applyRequestsFiltersObject({
+                search,
+                filterField,
+                statusFilter,
+                employeeFilter,
+                bankAgentFilter
+              })
+            } else if (requestStatusFilter && requestStatusFilter !== 'all') {
+              // Legacy sidebar-only param
+              applyRequestsFiltersObject({
+                search: search !== null ? search : requestStatusFilter,
+                filterField: filterField || 'status',
+                statusFilter: requestStatusFilter,
+                employeeFilter,
+                bankAgentFilter
+              })
+            } else {
+              applyRequestsFiltersObject({
+                search,
+                filterField,
+                statusFilter,
+                employeeFilter,
+                bankAgentFilter
+              })
+            }
+          }
+
+          function resetFilters() {
+            document.getElementById('searchInput').value = ''
+            document.getElementById('filterField').value = 'all'
+            document.getElementById('statusFilter').value = 'all'
+            const empEl = document.getElementById('employeeFilter')
+            const agentEl = document.getElementById('bankAgentFilter')
+            if (empEl) empEl.value = 'all'
+            if (agentEl) agentEl.value = 'all'
+            clearRequestsFiltersSession()
             filterTable()
           }
 
@@ -23431,17 +24229,6 @@ app.get('/admin/requests', async (c) => {
                 return '<a href="' + makeHref(state) + '"><i class="fas ' + iconClass + '"></i>' + state + '</a>'
               })
             ].join('')
-          }
-          
-          function resetFilters() {
-            document.getElementById('searchInput').value = ''
-            document.getElementById('filterField').value = 'all'
-            document.getElementById('statusFilter').value = 'all'
-            const empEl = document.getElementById('employeeFilter')
-            const agentEl = document.getElementById('bankAgentFilter')
-            if (empEl) empEl.value = 'all'
-            if (agentEl) agentEl.value = 'all'
-            filterTable()
           }
 
           function toggleCsvDropdown() {
@@ -23976,7 +24763,7 @@ app.get('/admin/requests/new', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin/requests" class="text-blue-600 hover:text-blue-800">
+            <a href="/admin/requests" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/requests'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة طلبات التمويل
             </a>
@@ -24505,7 +25292,7 @@ app.get('/admin/requests/:id', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
           <div class="mb-6 flex justify-between items-center">
-            <a href="/admin/requests" class="text-blue-600 hover:text-blue-800">
+            <a href="/admin/requests" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/requests'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة الطلبات
             </a>
@@ -24717,7 +25504,7 @@ app.get('/admin/customers/:id', async (c) => {
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
           <div class="mb-6">
-            <a href="/admin/customers" class="text-blue-600 hover:text-blue-800">← العودة لقائمة العملاء</a>
+            <a href="/admin/customers" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/customers'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">← العودة لقائمة العملاء</a>
           </div>
           
           <div class="bg-white rounded-xl shadow-lg p-8">
@@ -24880,7 +25667,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
       const custTenantId = (customer as any).tenant_id != null ? Number((customer as any).tenant_id) : null
       if (custTenantId) {
         const agentsRes = await c.env.DB.prepare(BANK_AGENT_DROPDOWN_SQL)
-          .bind(custTenantId, custTenantId, custTenantId)
+          .bind(...bankAgentTenantBinds(custTenantId))
           .all<{ id: number; full_name: string | null; username: string }>()
         let agents = (agentsRes.results || []) as Array<{
           id: number
@@ -25580,7 +26367,7 @@ app.get('/admin/customers/:id/report', async (c) => {
         <div class="max-w-5xl mx-auto p-6">
           <!-- أزرار التحكم -->
           <div class="mb-6 no-print flex justify-between items-center">
-            <a href="/admin/customers" class="text-blue-600 hover:text-blue-800">
+            <a href="/admin/customers" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/customers'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة العملاء
             </a>
@@ -26155,7 +26942,7 @@ app.get('/admin/requests/:id/report', async (c) => {
         <div class="max-w-5xl mx-auto p-6">
           <!-- أزرار التحكم -->
           <div class="mb-6 no-print flex justify-between items-center flex-wrap gap-3">
-            <a href="/admin/requests" class="text-blue-600 hover:text-blue-800">
+            <a href="/admin/requests" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/requests'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">
               <i class="fas fa-arrow-right ml-2"></i>
               العودة لقائمة طلبات التمويل
             </a>
@@ -32418,13 +33205,21 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
     }
 
     const { results } = await c.env.DB.prepare(`
-      SELECT id, tenant_id, path_segment, label, created_at
+      SELECT id, tenant_id, path_segment, label, created_at,
+             contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
     `).bind(tenantId).all()
 
-    const tenantRow = await c.env.DB.prepare(`SELECT slug FROM tenants WHERE id = ? LIMIT 1`).bind(tenantId).first<{ slug: string }>()
+    const tenantRow = await c.env.DB.prepare(`
+      SELECT slug, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+      FROM tenants WHERE id = ? LIMIT 1
+    `)
+      .bind(tenantId)
+      .first<
+        { slug: string } & ContactPageDesignFields
+      >()
 
     const locRes = await c.env.DB.prepare(`
       SELECT id, name, slug FROM tenant_locations
@@ -32438,6 +33233,14 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
       success: true,
       data: results || [],
       tenant_slug: tenantRow?.slug ?? null,
+      tenant_design: tenantRow
+        ? {
+            contact_bg_color: tenantRow.contact_bg_color ?? null,
+            contact_form_color: tenantRow.contact_form_color ?? null,
+            contact_text_color: tenantRow.contact_text_color ?? null,
+            contact_custom_fields: tenantRow.contact_custom_fields ?? null,
+          }
+        : null,
       locations: locRes.results || [],
     })
   } catch (error: any) {
@@ -32489,10 +33292,31 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
       return c.json({ success: false, error: 'العنوان مطلوب (حتى 120 حرفاً)' }, 400)
     }
 
+    // Snapshot company path design so the new link starts identical, then stays isolated.
+    const companyDesign = await c.env.DB.prepare(`
+      SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+      FROM tenants WHERE id = ? LIMIT 1
+    `)
+      .bind(tenantId)
+      .first<ContactPageDesignFields>()
+
     await c.env.DB.prepare(`
-      INSERT INTO tenant_contact_affiliate_links (tenant_id, path_segment, label)
-      VALUES (?, ?, ?)
-    `).bind(tenantId, pathSegment, label).run()
+      INSERT INTO tenant_contact_affiliate_links (
+        tenant_id, path_segment, label,
+        contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+      .bind(
+        tenantId,
+        pathSegment,
+        label,
+        companyDesign?.contact_bg_color ?? null,
+        companyDesign?.contact_form_color ?? null,
+        companyDesign?.contact_text_color ?? null,
+        companyDesign?.contact_custom_fields ?? null
+      )
+      .run()
 
     return c.json({ success: true, message: 'تم إنشاء رابط الإحالة' })
   } catch (error: any) {
@@ -32500,6 +33324,80 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
     if (msg.includes('UNIQUE') || msg.toLowerCase().includes('unique')) {
       return c.json({ success: false, error: 'هذا المسار مستخدم بالفعل لهذه الشركة' }, 400)
     }
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.patch('/api/tenant-contact-affiliates/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) {
+      return c.json({ success: false, error: 'Invalid id' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `)
+      .bind(linkId)
+      .first<{ id: number; tenant_id: number }>()
+
+    if (!row) return c.json({ success: false, error: 'Not found' }, 404)
+
+    if (userInfo.roleId === 2) {
+      if (!userInfo.tenantId || row.tenant_id !== userInfo.tenantId) {
+        return c.json({ success: false, error: 'Forbidden' }, 403)
+      }
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
+    const updates: Record<string, string | null> = {}
+
+    if ('label' in body) {
+      const label = String(body.label ?? '').trim()
+      if (!label || label.length > 120) {
+        return c.json({ success: false, error: 'العنوان مطلوب (حتى 120 حرفاً)' }, 400)
+      }
+      updates.label = label
+    }
+
+    const designParsed = parseContactDesignBodyFields(body)
+    if (!designParsed.ok) {
+      return c.json({ success: false, error: designParsed.error }, 400)
+    }
+    Object.assign(updates, designParsed.updates)
+
+    if ('copy_from_company' in body && body.copy_from_company) {
+      const companyDesign = await c.env.DB.prepare(`
+        SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+        FROM tenants WHERE id = ? LIMIT 1
+      `)
+        .bind(row.tenant_id)
+        .first<ContactPageDesignFields>()
+      updates.contact_bg_color = companyDesign?.contact_bg_color ?? null
+      updates.contact_form_color = companyDesign?.contact_form_color ?? null
+      updates.contact_text_color = companyDesign?.contact_text_color ?? null
+      updates.contact_custom_fields = companyDesign?.contact_custom_fields ?? null
+    }
+
+    const keys = Object.keys(updates)
+    if (keys.length === 0) {
+      return c.json({ success: false, error: 'لا توجد حقول للتحديث' }, 400)
+    }
+
+    const setSql = keys.map((k) => `${k} = ?`).join(', ')
+    const values = keys.map((k) => updates[k]!)
+    await c.env.DB.prepare(`UPDATE tenant_contact_affiliate_links SET ${setSql} WHERE id = ?`)
+      .bind(...values, linkId)
+      .run()
+
+    return c.json({ success: true, message: 'تم حفظ تصميم الرابط' })
+  } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
 })
@@ -34161,6 +35059,19 @@ app.get('/admin/contact-affiliates', async (c) => {
 
   const isSuper = userInfo.roleId === 1
 
+  let previewCompanyName = 'اسم الشركة'
+  let previewLogoUrl = ''
+  if (!isSuper && userInfo.tenantId) {
+    const tenantRow = await c.env.DB.prepare(
+      'SELECT company_name, logo_url FROM tenants WHERE id = ? LIMIT 1'
+    )
+      .bind(userInfo.tenantId)
+      .first<{ company_name: string; logo_url: string | null }>()
+    if (tenantRow?.company_name) previewCompanyName = tenantRow.company_name
+    const logoNorm = normalizeTenantLogoUrl(tenantRow?.logo_url)
+    if (logoNorm) previewLogoUrl = logoNorm
+  }
+
   return c.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -34171,6 +35082,7 @@ app.get('/admin/contact-affiliates', async (c) => {
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'"></script>
     </head>
     <body class="bg-gray-50 min-h-screen">
       <div class="border-b border-slate-200/90 bg-slate-50/90">
@@ -34178,13 +35090,13 @@ app.get('/admin/contact-affiliates', async (c) => {
           <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
       </div>
-      <div class="max-w-4xl mx-auto p-6">
+      <div class="max-w-6xl mx-auto p-6">
         <div class="mb-6">
           <div>
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900">
               <i class="fas fa-link ml-2 text-amber-600"></i>روابط التواصل التسويقية
             </h1>
-            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل. مع الفروع، التنسيق الكامل: <span dir="ltr" class="font-mono text-xs bg-gray-100 px-1 rounded">/{شركة}/{فرع}/{مسار}</span></p>
+            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل. مع الفروع، التنسيق الكامل: <span dir="ltr" class="font-mono text-xs bg-gray-100 px-1 rounded">/{شركة}/{فرع}/{مسار}</span>. كل رابط يحفظ تصميمه الخاص (يبدأ بنفس تصميم رابط الشركة).</p>
           </div>
         </div>
 
@@ -34217,7 +35129,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           <p id="formMsg" class="text-sm mt-2"></p>
         </div>
 
-        <div id="listWrap" class="bg-white rounded-xl border overflow-hidden">
+        <div id="listWrap" class="bg-white rounded-xl border">
           <div class="px-4 py-3 border-b font-semibold text-gray-800">الروابط الحالية</div>
           <div id="listBody" class="p-4 text-sm text-gray-500">جاري التحميل...</div>
         </div>
@@ -34225,6 +35137,11 @@ app.get('/admin/contact-affiliates', async (c) => {
 
       <script>
         const IS_SUPERADMIN = ${isSuper ? 'true' : 'false'};
+        var AFFILIATE_ROWS = [];
+        var TENANT_DESIGN = null;
+        var TENANT_META = {};
+        var PREVIEW_COMPANY_NAME = ${JSON.stringify(previewCompanyName)};
+        var PREVIEW_LOGO_URL = ${JSON.stringify(previewLogoUrl)};
 
         function escapeHtml(v) {
           return String(v ?? '')
@@ -34257,11 +35174,475 @@ app.get('/admin/contact-affiliates', async (c) => {
           var sel = document.getElementById('superTenantSelect');
           var res = await axios.get('/api/tenants');
           var rows = Array.isArray(res.data && res.data.data) ? res.data.data : [];
+          TENANT_META = {};
+          rows.forEach(function (t) {
+            TENANT_META[String(t.id)] = {
+              company_name: t.company_name || t.slug || '',
+              logo_url: t.logo_url || ''
+            };
+          });
           sel.innerHTML = '<option value="">-- اختر شركة --</option>' +
             rows.map(function (t) {
               return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.company_name || t.slug) + '</option>';
             }).join('');
           sel.addEventListener('change', loadList);
+        }
+
+        var PRESETS = [
+          { name: 'افتراضي', bg: '#0f766e', form: '#ffffff', text: 'black' },
+          { name: 'ليلي', bg: '#0f172a', form: '#1e293b', text: 'white' },
+          { name: 'بنفسجي', bg: '#4f46e5', form: '#eef2ff', text: 'black' },
+          { name: 'ذهبي', bg: '#92400e', form: '#fffbeb', text: 'black' },
+          { name: 'وردي', bg: '#be185d', form: '#fff1f2', text: 'black' },
+          { name: 'رمادي', bg: '#374151', form: '#f9fafb', text: 'black' },
+          { name: 'سماوي', bg: '#0369a1', form: '#f0f9ff', text: 'black' },
+          { name: 'أخضر', bg: '#166534', form: '#f0fdf4', text: 'black' }
+        ];
+
+        function designPanelHtml(id) {
+          return (
+            '<div class="mt-4 pt-4 border-t border-amber-100">' +
+            '<div class="flex flex-col lg:flex-row gap-6">' +
+            '<div class="w-full lg:w-5/12 shrink-0 space-y-4">' +
+            '<div class="bg-gray-50 rounded-xl border border-gray-200 p-4">' +
+            '<div class="mb-5">' +
+            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">ثيمات جاهزة</p>' +
+            '<div class="flex flex-wrap gap-2" id="presetsStrip_' + id + '"></div>' +
+            '</div>' +
+            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون الخلفية</p>' +
+            '<div class="flex items-center gap-2 mb-4">' +
+            '<div class="relative h-9 w-9 shrink-0">' +
+            '<span id="affBg_' + id + '_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#0f766e;"></span>' +
+            '<input type="color" id="affBg_' + id + '" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />' +
+            '</div>' +
+            '<input type="text" id="affBg_' + id + '_text" maxlength="9" dir="ltr" placeholder="#0f766e" class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />' +
+            '<button type="button" id="affBg_' + id + '_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>' +
+            '</div>' +
+            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النافذة</p>' +
+            '<div class="flex items-center gap-2 mb-4">' +
+            '<div class="relative h-9 w-9 shrink-0">' +
+            '<span id="affForm_' + id + '_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#ffffff;"></span>' +
+            '<input type="color" id="affForm_' + id + '" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />' +
+            '</div>' +
+            '<input type="text" id="affForm_' + id + '_text" maxlength="9" dir="ltr" placeholder="#ffffff" class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />' +
+            '<button type="button" id="affForm_' + id + '_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>' +
+            '</div>' +
+            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النص</p>' +
+            '<div class="flex gap-2">' +
+            '<button type="button" data-aff-text-black="' + id + '" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white">أسود</button>' +
+            '<button type="button" data-aff-text-white="' + id + '" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700">أبيض</button>' +
+            '</div>' +
+            '</div>' +
+            '<div class="bg-gray-50 rounded-xl border border-gray-200 p-4">' +
+            '<p class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-list-ul text-amber-500 ml-1"></i>حقول إضافية <span class="text-xs font-normal text-gray-400">(حد أقصى 3)</span></p>' +
+            '<ul id="fieldsList_' + id + '" class="mb-1"></ul>' +
+            '<button type="button" id="addFieldBtn_' + id + '" class="inline-flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-800 font-medium mt-1"><i class="fas fa-plus-circle"></i> إضافة حقل</button>' +
+            '</div>' +
+            '<div class="flex flex-wrap items-center gap-2 pt-1">' +
+            '<button type="button" data-aff-save-design="' + id + '" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i class="fas fa-save"></i>حفظ التصميم</button>' +
+            '<button type="button" data-aff-copy-company="' + id + '" class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-2 rounded-lg text-sm"><i class="fas fa-copy"></i>نسخ من تصميم الشركة</button>' +
+            '<span data-aff-design-msg="' + id + '" class="text-sm"></span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="w-full lg:flex-1 min-w-0">' +
+            '<div class="flex flex-col items-center">' +
+            '<p class="text-xs text-gray-400 uppercase tracking-widest mb-3 font-bold">معاينة مباشرة</p>' +
+            '<div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">' +
+            '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>' +
+            '<div id="previewScreen_' + id + '" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>'
+          );
+        }
+
+        function setAffTextToggle(id, val) {
+          var blackBtn = document.querySelector('[data-aff-text-black="' + id + '"]');
+          var whiteBtn = document.querySelector('[data-aff-text-white="' + id + '"]');
+          if (!blackBtn || !whiteBtn) return;
+          var isWhite = val === 'white';
+          blackBtn.className = isWhite
+            ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700'
+            : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white';
+          whiteBtn.className = isWhite
+            ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
+            : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
+          blackBtn.setAttribute('data-selected', isWhite ? '0' : '1');
+          whiteBtn.setAttribute('data-selected', isWhite ? '1' : '0');
+        }
+
+        function getAffBg(id) {
+          var el = document.getElementById('affBg_' + id + '_text');
+          return el ? el.value.trim() : '';
+        }
+
+        function getAffForm(id) {
+          var el = document.getElementById('affForm_' + id + '_text');
+          return el ? el.value.trim() : '';
+        }
+
+        function getAffTextColor(id) {
+          var whiteBtn = document.querySelector('[data-aff-text-white="' + id + '"]');
+          return whiteBtn && whiteBtn.getAttribute('data-selected') === '1' ? 'white' : 'black';
+        }
+
+        function setColorControls(prefix, hex, fallback) {
+          var picker = document.getElementById(prefix);
+          var swatch = document.getElementById(prefix + '_swatch');
+          var text = document.getElementById(prefix + '_text');
+          var v = (hex || '').trim();
+          if (text) text.value = v;
+          var paint = /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
+          if (picker) picker.value = paint;
+          if (swatch) swatch.style.background = /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : fallback;
+        }
+
+        function getAffFields(id, opts) {
+          var includeEmpty = opts && opts.includeEmpty;
+          var list = document.getElementById('fieldsList_' + id);
+          if (!list) return [];
+          var items = list.querySelectorAll('[data-field-item]');
+          var result = [];
+          items.forEach(function (li) {
+            var label = li.querySelector('[data-field-label]');
+            var required = li.querySelector('[data-field-required]');
+            var type = li.querySelector('[data-field-type]');
+            var labelVal = label ? label.value.trim() : '';
+            if (labelVal || includeEmpty) {
+              result.push({
+                label: labelVal || 'اسم الحقل',
+                required: !!(required && required.checked),
+                type: (type && type.value) || 'text',
+                draft: !labelVal
+              });
+            }
+          });
+          return result;
+        }
+
+        function fieldItemHtml(field) {
+          var f = field || {};
+          var t = f.type || 'text';
+          return (
+            '<li data-field-item class="flex items-center gap-2 p-2.5 rounded-lg border border-gray-200 bg-white mb-2" style="touch-action:none;">' +
+            '<span data-field-handle class="flex items-center justify-center w-7 h-8 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 shrink-0 cursor-grab active:cursor-grabbing" title="سحب لإعادة الترتيب">' +
+            '<i class="fas fa-grip-vertical text-sm pointer-events-none"></i>' +
+            '</span>' +
+            '<select class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white" data-field-type>' +
+            '<option value="text"' + (t === 'text' ? ' selected' : '') + '>نص</option>' +
+            '<option value="number"' + (t === 'number' ? ' selected' : '') + '>رقم</option>' +
+            '<option value="select"' + (t === 'select' ? ' selected' : '') + '>قائمة</option>' +
+            '<option value="checkbox"' + (t === 'checkbox' ? ' selected' : '') + '>موافقة</option>' +
+            '</select>' +
+            '<input type="text" maxlength="100" placeholder="اسم الحقل" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-field-label value="' + escapeHtml(f.label || '') + '" />' +
+            '<label class="flex items-center gap-1 text-xs text-gray-500 shrink-0 select-none cursor-pointer">' +
+            '<input type="checkbox" class="rounded text-amber-500" data-field-required' + (f.required ? ' checked' : '') + ' /> مطلوب' +
+            '</label>' +
+            '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-field-remove><i class="fas fa-times"></i></button>' +
+            '</li>'
+          );
+        }
+
+        function updateAddFieldBtn(id) {
+          var list = document.getElementById('fieldsList_' + id);
+          var btn = document.getElementById('addFieldBtn_' + id);
+          if (!list || !btn) return;
+          var count = list.querySelectorAll('[data-field-item]').length;
+          btn.style.display = count >= 3 ? 'none' : '';
+        }
+
+        function initFieldsSortable(id) {
+          var list = document.getElementById('fieldsList_' + id);
+          if (!list) return;
+          if (list._sortableInstance && typeof list._sortableInstance.destroy === 'function') {
+            try { list._sortableInstance.destroy(); } catch (_) {}
+            list._sortableInstance = null;
+          }
+          if (typeof Sortable === 'undefined') {
+            console.warn('SortableJS failed to load — drag-and-drop unavailable');
+            return;
+          }
+          list._sortableInstance = Sortable.create(list, {
+            animation: 150,
+            handle: '[data-field-handle]',
+            draggable: '[data-field-item]',
+            ghostClass: 'opacity-40',
+            chosenClass: 'ring-2',
+            dragClass: 'opacity-80',
+            forceFallback: true,
+            fallbackOnBody: true,
+            fallbackTolerance: 3,
+            swapThreshold: 0.65,
+            onEnd: function () { updatePreview(id); }
+          });
+        }
+
+        function previewInputBar(inputBg, inputBorder, hint, hintColor) {
+          return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;padding:0 6px;">'
+            + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(hint || '') + '</span>'
+            + '</div>';
+        }
+
+        function updatePreview(id) {
+          var screen = document.getElementById('previewScreen_' + id);
+          if (!screen) return;
+
+          var bgRaw = getAffBg(id);
+          var formRaw = getAffForm(id);
+          var bgCss = /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
+          var formBg = /^#[0-9a-fA-F]{3,8}$/.test(formRaw) ? formRaw : '#ffffff';
+          var isWhiteText = getAffTextColor(id) === 'white';
+          var textClass = isWhiteText ? 'color:rgba(255,255,255,0.88)' : 'color:#111827';
+          var subTextStyle = isWhiteText ? 'color:rgba(255,255,255,0.6)' : 'color:#6b7280';
+          var hintColor = isWhiteText ? 'rgba(255,255,255,0.45)' : '#9ca3af';
+          var fields = getAffFields(id, { includeEmpty: true });
+          var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
+          var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
+          var company = escapeHtml(PREVIEW_COMPANY_NAME || 'اسم الشركة');
+          var logoUrl = (PREVIEW_LOGO_URL || '').trim();
+          var brandHtml = logoUrl
+            ? '<div style="display:flex;justify-content:center;margin-bottom:6px;"><img src="' + escapeHtml(logoUrl) + '" alt="" style="max-height:36px;max-width:120px;object-fit:contain;border-radius:6px;background:#fff;padding:3px;" /></div>'
+            : '<div style="width:32px;height:32px;border-radius:50%;background:#0f766e;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;">'
+              + '<i class="fas fa-comments" style="color:#fff;font-size:12px;"></i></div>';
+
+          var fieldsHtml = fields.map(function (f) {
+            if (f.type === 'checkbox') {
+              return '<div style="margin-bottom:6px;display:flex;align-items:center;gap:4px;">'
+                + '<div style="width:10px;height:10px;border-radius:2px;border:1px solid ' + inputBorder + ';background:' + inputBg + ';flex-shrink:0;"></div>'
+                + '<div style="font-size:8px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + escapeHtml(f.label) + (f.required ? ' *' : '') + '</div>'
+                + '</div>';
+            }
+            return '<div style="margin-bottom:6px;">'
+              + '<div style="font-size:8px;margin-bottom:3px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + escapeHtml(f.label) + (f.required ? ' *' : '') + '</div>'
+              + previewInputBar(inputBg, inputBorder, f.label, hintColor)
+              + '</div>';
+          }).join('');
+
+          screen.innerHTML =
+            '<div style="height:100%;overflow-y:auto;background:' + bgCss + ';padding:14px 10px;box-sizing:border-box;">'
+            + '<div style="background:' + formBg + ';border-radius:14px;padding:14px;width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.18);">'
+            + '<div style="text-align:center;margin-bottom:10px;">'
+            + brandHtml
+            + '<div style="font-size:10px;font-weight:700;' + textClass + '">' + company + '</div>'
+            + '<div style="font-size:7.5px;margin-top:2px;' + subTextStyle + '">أرسل بياناتك وسيتم التواصل معك</div>'
+            + '</div>'
+            + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">الاسم *</div>'
+            + previewInputBar(inputBg, inputBorder, 'اكتب اسمك', hintColor) + '</div>'
+            + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رقم الجوال *</div>'
+            + previewInputBar(inputBg, inputBorder, '5xxxxxxxx', hintColor) + '</div>'
+            + fieldsHtml
+            + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رسالتك *</div>'
+            + '<div style="background:' + inputBg + ';border-radius:5px;height:36px;border:1px solid ' + inputBorder + ';padding:4px 6px;"><span style="font-size:7px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+            + '<div style="background:#0f766e;border-radius:7px;height:24px;display:flex;align-items:center;justify-content:center;">'
+            + '<span style="color:#fff;font-size:9px;font-weight:700;">إرسال</span></div>'
+            + '</div>'
+            + '</div>';
+        }
+
+        function applyPreset(id, preset) {
+          setColorControls('affBg_' + id, preset.bg, '#0f766e');
+          setColorControls('affForm_' + id, preset.form, '#ffffff');
+          setAffTextToggle(id, preset.text || 'black');
+          updatePreview(id);
+        }
+
+        function parseDesignFields(raw) {
+          if (!raw) return [];
+          if (Array.isArray(raw)) return raw;
+          if (typeof raw === 'string') {
+            try {
+              var parsed = JSON.parse(raw);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch (_) {
+              return [];
+            }
+          }
+          return [];
+        }
+
+        function fillDesignPanel(id, design) {
+          var d = design || {};
+          setColorControls('affBg_' + id, d.contact_bg_color || '', '#0f766e');
+          setColorControls('affForm_' + id, d.contact_form_color || '', '#ffffff');
+          setAffTextToggle(id, d.contact_text_color || 'black');
+          var fields = parseDesignFields(d.contact_custom_fields);
+          var list = document.getElementById('fieldsList_' + id);
+          if (list) {
+            list.innerHTML = fields.slice(0, 3).map(function (f) {
+              return fieldItemHtml(f);
+            }).join('');
+          }
+          updateAddFieldBtn(id);
+        }
+
+        function collectDesignPayload(id) {
+          var bg = getAffBg(id);
+          var fc = getAffForm(id);
+          return {
+            contact_bg_color: bg === '' ? null : bg,
+            contact_form_color: fc === '' ? null : fc,
+            contact_text_color: getAffTextColor(id),
+            contact_custom_fields: getAffFields(id).map(function (f) {
+              return { label: f.label, required: f.required, type: f.type };
+            })
+          };
+        }
+
+        function wireColorPair(prefix, fallback, id) {
+          var picker = document.getElementById(prefix);
+          var swatch = document.getElementById(prefix + '_swatch');
+          var text = document.getElementById(prefix + '_text');
+          var clearBtn = document.getElementById(prefix + '_clear');
+          if (picker && text && swatch) {
+            picker.addEventListener('input', function () {
+              text.value = this.value;
+              swatch.style.background = this.value;
+              updatePreview(id);
+            });
+            text.addEventListener('input', function () {
+              var v = this.value.trim();
+              if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                picker.value = v;
+                swatch.style.background = v;
+              }
+              updatePreview(id);
+            });
+          }
+          if (clearBtn && text && picker && swatch) {
+            clearBtn.addEventListener('click', function () {
+              text.value = '';
+              picker.value = fallback;
+              swatch.style.background = fallback;
+              updatePreview(id);
+            });
+          }
+        }
+
+        function wireDesignPanel(id, row) {
+          var panel = document.querySelector('[data-aff-panel="' + id + '"]');
+          var blackBtn = document.querySelector('[data-aff-text-black="' + id + '"]');
+          var whiteBtn = document.querySelector('[data-aff-text-white="' + id + '"]');
+          var saveBtn = document.querySelector('[data-aff-save-design="' + id + '"]');
+          var copyBtn = document.querySelector('[data-aff-copy-company="' + id + '"]');
+          var msgEl = document.querySelector('[data-aff-design-msg="' + id + '"]');
+          var addBtn = document.getElementById('addFieldBtn_' + id);
+          var list = document.getElementById('fieldsList_' + id);
+          var presetsStrip = document.getElementById('presetsStrip_' + id);
+
+          wireColorPair('affBg_' + id, '#0f766e', id);
+          wireColorPair('affForm_' + id, '#ffffff', id);
+
+          if (presetsStrip) {
+            presetsStrip.innerHTML = PRESETS.map(function (p, i) {
+              return '<button type="button" title="' + escapeHtml(p.name) + '" data-preset-idx="' + i + '" style="background:' + p.bg + ';" class="h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-gray-200 cursor-pointer hover:scale-110 transition-transform"></button>';
+            }).join('');
+            presetsStrip.querySelectorAll('[data-preset-idx]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var idx = parseInt(btn.getAttribute('data-preset-idx'), 10);
+                if (PRESETS[idx]) applyPreset(id, PRESETS[idx]);
+              });
+            });
+          }
+
+          if (blackBtn) blackBtn.addEventListener('click', function () { setAffTextToggle(id, 'black'); updatePreview(id); });
+          if (whiteBtn) whiteBtn.addEventListener('click', function () { setAffTextToggle(id, 'white'); updatePreview(id); });
+
+          if (panel) {
+            panel.addEventListener('input', function () { updatePreview(id); });
+            panel.addEventListener('change', function () { updatePreview(id); });
+          }
+
+          if (list) {
+            list.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-field-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-field-item]');
+              if (li) li.remove();
+              updateAddFieldBtn(id);
+              updatePreview(id);
+            });
+          }
+
+          if (addBtn) {
+            addBtn.addEventListener('click', function () {
+              var l = document.getElementById('fieldsList_' + id);
+              if (!l) return;
+              if (l.querySelectorAll('[data-field-item]').length >= 3) return;
+              l.insertAdjacentHTML('beforeend', fieldItemHtml({ label: '', required: false, type: 'text' }));
+              updateAddFieldBtn(id);
+              updatePreview(id);
+            });
+          }
+
+          fillDesignPanel(id, row);
+          initFieldsSortable(id);
+          updatePreview(id);
+
+          if (saveBtn) {
+            saveBtn.addEventListener('click', async function () {
+              saveBtn.disabled = true;
+              if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-sm'; }
+              try {
+                var res = await axios.patch('/api/tenant-contact-affiliates/' + id, collectDesignPayload(id));
+                if (res.data && res.data.success) {
+                  if (msgEl) { msgEl.textContent = 'تم حفظ تصميم الرابط.'; msgEl.className = 'text-sm text-green-700'; }
+                  var idx = AFFILIATE_ROWS.findIndex(function (r) { return Number(r.id) === Number(id); });
+                  if (idx >= 0) {
+                    var payload = collectDesignPayload(id);
+                    AFFILIATE_ROWS[idx].contact_bg_color = payload.contact_bg_color;
+                    AFFILIATE_ROWS[idx].contact_form_color = payload.contact_form_color;
+                    AFFILIATE_ROWS[idx].contact_text_color = payload.contact_text_color;
+                    AFFILIATE_ROWS[idx].contact_custom_fields = payload.contact_custom_fields.length
+                      ? JSON.stringify(payload.contact_custom_fields)
+                      : null;
+                  }
+                } else {
+                  if (msgEl) {
+                    msgEl.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الحفظ.';
+                    msgEl.className = 'text-sm text-red-600';
+                  }
+                }
+              } catch (err) {
+                var em = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : 'فشل الحفظ.';
+                if (msgEl) { msgEl.textContent = em; msgEl.className = 'text-sm text-red-600'; }
+              } finally {
+                saveBtn.disabled = false;
+              }
+            });
+          }
+
+          if (copyBtn) {
+            copyBtn.addEventListener('click', async function () {
+              if (!confirm('نسخ تصميم رابط الشركة الحالي إلى هذا الرابط؟')) return;
+              copyBtn.disabled = true;
+              if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-sm'; }
+              try {
+                var res = await axios.patch('/api/tenant-contact-affiliates/' + id, { copy_from_company: true });
+                if (res.data && res.data.success) {
+                  await loadList();
+                  var panelAfter = document.querySelector('[data-aff-panel="' + id + '"]');
+                  if (panelAfter) panelAfter.classList.remove('hidden');
+                  var msgAfter = document.querySelector('[data-aff-design-msg="' + id + '"]');
+                  if (msgAfter) {
+                    msgAfter.textContent = 'تم نسخ تصميم الشركة.';
+                    msgAfter.className = 'text-sm text-green-700';
+                  }
+                } else {
+                  if (msgEl) {
+                    msgEl.textContent = (res.data && res.data.error) ? res.data.error : 'فشل النسخ.';
+                    msgEl.className = 'text-sm text-red-600';
+                  }
+                }
+              } catch (err) {
+                var em2 = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : 'فشل النسخ.';
+                if (msgEl) { msgEl.textContent = em2; msgEl.className = 'text-sm text-red-600'; }
+              } finally {
+                copyBtn.disabled = false;
+              }
+            });
+          }
         }
 
         async function loadList() {
@@ -34275,7 +35656,15 @@ app.get('/admin/contact-affiliates', async (c) => {
             var res = await axios.get(affiliatesApiUrl());
             if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
             var rows = Array.isArray(res.data.data) ? res.data.data : [];
+            AFFILIATE_ROWS = rows;
+            TENANT_DESIGN = res.data.tenant_design || null;
             var slug = res.data.tenant_slug || '';
+            if (IS_SUPERADMIN) {
+              var tid = currentTenantId();
+              var meta = tid ? TENANT_META[String(tid)] : null;
+              PREVIEW_COMPANY_NAME = (meta && meta.company_name) || slug || 'اسم الشركة';
+              PREVIEW_LOGO_URL = (meta && meta.logo_url) || '';
+            }
             var origin = window.location.origin;
             var locs = Array.isArray(res.data.locations) ? res.data.locations : [];
             var pick = document.getElementById('affiliateLocPick');
@@ -34300,29 +35689,50 @@ app.get('/admin/contact-affiliates', async (c) => {
               '<ul class="divide-y">' +
               rows
                 .map(function (r) {
+                  var id = Number(r.id);
                   var full = slug
                     ? locSlugForUrl
                       ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(locSlugForUrl) + '/' + encodeURIComponent(r.path_segment)
                       : origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment)
                     : '';
                   return (
-                    '<li class="py-3 flex flex-wrap items-center justify-between gap-2">' +
-                    '<div>' +
-                    '<div class="font-medium text-gray-900">' +
-                    escapeHtml(r.label) +
-                    '</div>' +
-                    '<div class="text-xs text-gray-500 mt-1" dir="ltr">' +
+                    '<li class="py-3" data-aff-row="' + id + '">' +
+                    '<div class="flex flex-wrap items-center justify-between gap-2">' +
+                    '<div class="min-w-0">' +
+                    '<div class="font-medium text-gray-900">' + escapeHtml(r.label) + '</div>' +
+                    '<div class="text-xs text-gray-500 mt-1 break-all" dir="ltr">' +
                     escapeHtml(full || '/' + slug + '/' + r.path_segment) +
                     '</div>' +
                     '</div>' +
-                    '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' +
-                    Number(r.id) +
-                    '">حذف</button>' +
+                    '<div class="flex items-center gap-3 shrink-0">' +
+                    '<button type="button" class="text-amber-700 text-sm hover:underline font-medium" data-aff-toggle="' + id + '">' +
+                    '<i class="fas fa-palette ml-1"></i>تخصيص الصفحة</button>' +
+                    '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' + id + '">حذف</button>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="hidden mt-3 rounded-2xl border border-amber-100 bg-amber-50/40 p-4" data-aff-panel="' + id + '">' +
+                    designPanelHtml(id) +
+                    '</div>' +
                     '</li>'
                   );
                 })
                 .join('') +
               '</ul>';
+
+            body.querySelectorAll('[data-aff-toggle]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-aff-toggle');
+                var panel = document.querySelector('[data-aff-panel="' + id + '"]');
+                if (!panel) return;
+                panel.classList.toggle('hidden');
+                if (!panel.classList.contains('hidden')) updatePreview(id);
+              });
+            });
+
+            rows.forEach(function (r) {
+              wireDesignPanel(Number(r.id), r);
+            });
+
             body.querySelectorAll('[data-del]').forEach(function (btn) {
               btn.addEventListener('click', async function () {
                 if (!confirm('حذف هذا الرابط؟')) return;
@@ -35624,13 +37034,13 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   }
 
   const affiliate = await c.env.DB.prepare(`
-    SELECT path_segment, label
+    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
   `)
     .bind(tenant.id, affiliatePath)
-    .first<{ path_segment: string; label: string }>()
+    .first<AffiliateContactLinkRow>()
 
   if (!affiliate) {
     return c.notFound()
@@ -35638,7 +37048,11 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
 
   const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
   const merged = mergePublicContactForLocation(tenant, location, primary)
-  return c.html(buildPublicContactPageHtml(merged, affiliate, { locationSlug: location.slug }))
+  return c.html(
+    buildPublicContactPageHtml(withAffiliateContactDesign(merged, affiliate), affiliate, {
+      locationSlug: location.slug,
+    })
+  )
 })
 
 // /{companySlug}/{locationOrLegacyAffiliate} — legacy affiliate links first, then branch slug
@@ -35663,16 +37077,16 @@ app.get('/:slug/:secondSegment', async (c) => {
   }
 
   const affiliate = await c.env.DB.prepare(`
-    SELECT path_segment, label
+    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
   `)
     .bind(tenant.id, second)
-    .first<{ path_segment: string; label: string }>()
+    .first<AffiliateContactLinkRow>()
 
   if (affiliate) {
-    return c.html(buildPublicContactPageHtml(tenant, affiliate))
+    return c.html(buildPublicContactPageHtml(withAffiliateContactDesign(tenant, affiliate), affiliate))
   }
 
   const location = await c.env.DB.prepare(`

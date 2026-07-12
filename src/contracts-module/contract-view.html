@@ -20,20 +20,130 @@
     .contract-actions-bar .btn { min-width: 120px; justify-content: center; }
     .status-change-wrap { margin-right: auto; display: flex; align-items: center; gap: 10px; }
 
-    /* ===== CONTRACT DOCUMENT — Word-style ===== */
-    .contract-doc {
+    /* ===== A4 PREVIEW STAGE (stacked sheets) ===== */
+    .contract-a4-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      padding: 24px 12px 32px;
+      background: #e8eaee;
+      border-radius: 10px;
+    }
+    /* Screen-only enlarge (~125%). Applied after pagination so page breaks stay correct. */
+    .contract-a4-stage.a4-preview-scaled {
+      zoom: 1.25;
+    }
+    @supports not (zoom: 1.25) {
+      .contract-a4-stage.a4-preview-scaled {
+        transform: scale(1.25);
+        transform-origin: top center;
+      }
+    }
+
+    /* ===== CONTRACT DOCUMENT — A4 sheet ===== */
+    .contract-doc,
+    .a4-sheet {
       background: #fff;
-      max-width: 820px;
+      width: 210mm;
+      max-width: 210mm;
+      min-height: 297mm;
       margin: 0 auto;
-      padding: 60px 70px;
+      padding: 18mm 16mm;
+      box-sizing: border-box;
       font-family: 'Tajawal', sans-serif;
       font-size: 14.5px;
       line-height: 2.1;
       color: #000;
-      box-shadow: 0 2px 20px rgba(0,0,0,0.10);
-      border: 1px solid #ddd;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.14);
+      border: 1px solid #cfd5de;
       position: relative;
       isolation: isolate;
+      display: flex;
+      flex-direction: column;
+    }
+    .a4-sheet.has-letterhead {
+      padding: 0;
+    }
+    .a4-sheet + .a4-sheet {
+      /* visual page gap already from stage gap */
+    }
+    .a4-sheet-inner {
+      position: relative;
+      z-index: 1;
+      flex: 1 1 auto;
+    }
+    .a4-sheet.has-letterhead .a4-sheet-inner {
+      padding: 10mm 16mm;
+    }
+    .a4-letterhead-header,
+    .a4-letterhead-footer {
+      position: relative;
+      z-index: 1;
+      flex: 0 0 auto;
+      width: 100%;
+      line-height: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .a4-letterhead-header img,
+    .a4-letterhead-footer img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+      object-position: center top;
+      opacity: var(--doc-letterhead-opacity, 1);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .a4-letterhead-footer img {
+      object-position: center bottom;
+    }
+    .a4-sheet-bg-watermark {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .a4-sheet-bg-watermark img {
+      max-width: 62%;
+      max-height: 62%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      opacity: var(--doc-wm-opacity, 0.12);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .a4-page-label {
+      position: absolute;
+      left: 10px;
+      bottom: 8px;
+      font-size: 10px;
+      color: #99a3b0;
+      font-family: 'Tajawal', sans-serif;
+      pointer-events: none;
+      z-index: 4;
+      user-select: none;
+    }
+    .doc-a4-line {
+      margin: 0 0 0.15em;
+      text-align: justify;
+      min-height: 1.2em;
+    }
+    @media (max-width: 920px) {
+      .contract-a4-stage {
+        overflow-x: auto;
+        align-items: flex-start;
+        padding-inline: 8px;
+      }
     }
 
     /* ===== HEADER ===== */
@@ -67,7 +177,7 @@
       max-height: 64px;
       padding: 4px;
       box-sizing: border-box;
-      background: #fff;
+      background: transparent;
       border: 1px solid #dde3ec;
       border-radius: 12px;
       overflow: hidden;
@@ -137,7 +247,7 @@
     }
     .doc-party-row:last-child { border-bottom: none; }
     .doc-party-label {
-      background: #f4f7fb;
+      background: transparent;
       padding: 10px 16px;
       font-weight: 700;
       font-size: 13px;
@@ -151,11 +261,12 @@
       font-size: 13.5px;
       flex: 1;
       line-height: 1.7;
+      background: transparent;
     }
 
     /* ===== PREAMBLE ===== */
     .doc-preamble {
-      background: #f9f9f9;
+      background: transparent;
       border-right: 4px solid #c8a84b;
       padding: 14px 16px;
       margin: 18px 0;
@@ -178,7 +289,7 @@
       padding: 12px 14px;
       border-radius: 6px;
       border: 1px solid #e8ecf0;
-      background: #fafbfc;
+      background: transparent;
     }
     .doc-article-title {
       font-size: 14px;
@@ -217,7 +328,7 @@
       border-radius: 8px;
       padding: 16px 20px;
       margin: 14px 0 4px;
-      background: #f0f4f8;
+      background: transparent;
       text-align: center;
     }
     .doc-note-box .note-label { font-size: 12px; color: #555; margin-bottom: 4px; }
@@ -282,27 +393,69 @@
       font-size: 12px; color: #777;
     }
 
+    .doc-footer,
+    .doc-signatures,
+    .doc-parties,
+    .doc-header,
+    .doc-article,
+    .doc-preamble,
+    .doc-note-box {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
     /* ===== PRINT ===== */
     @media print {
-      .sidebar, .topbar, .contract-actions-bar, .no-print { display: none !important; }
+      .sidebar, .topbar, .contract-actions-bar, .no-print, .a4-page-label { display: none !important; }
       .main-content { margin: 0 !important; }
       .page-content { padding: 0 !important; background: #fff; }
-      .contract-doc {
+      .contract-a4-stage {
+        display: block !important;
+        gap: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border-radius: 0 !important;
+        zoom: 1 !important;
+        transform: none !important;
+      }
+      .contract-doc,
+      .a4-sheet {
         box-shadow: none !important;
         border: none !important;
+        width: 100% !important;
         max-width: 100% !important;
-        padding: 20px 40px !important;
+        min-height: 0 !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        page-break-after: always;
+        break-after: page;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      .contract-doc-body {
+      .a4-sheet:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+      .contract-doc-body,
+      .a4-sheet-inner {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .a4-sheet-bg-watermark,
+      .a4-sheet-bg-watermark img,
+      .a4-letterhead-header,
+      .a4-letterhead-header img,
+      .a4-letterhead-footer,
+      .a4-letterhead-footer img {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
       .doc-sig-clear, .no-print { display: none !important; }
       body { background: #fff; }
       @page { size: A4; margin: 15mm; }
-      .contract-doc.is-draft::before {
+      .contract-doc.is-draft::before,
+      .a4-sheet.is-draft::before {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         background: rgba(255, 255, 255, 0.38) !important;
@@ -326,6 +479,10 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
+      /* Only the first sheet's watermark draws in print (fixed repeats every page) */
+      .a4-sheet:not(:first-child) .draft-watermark {
+        display: none !important;
+      }
       /* The HTML inner element is hidden; SVG bg image does the drawing */
       .draft-watermark__inner {
         display: none !important;
@@ -333,16 +490,19 @@
     }
 
     /* ===== Unapproved draft — document-relative diagonal ===== */
-    .contract-doc-body {
+    .contract-doc-body,
+    .a4-sheet-inner {
       position: relative;
-      z-index: 0;
+      z-index: 1; /* keep above .a4-sheet-bg-watermark (0); do not collapse to 0 */
     }
-    .contract-doc.is-draft::before {
+    .contract-doc.is-draft::before,
+    .a4-sheet.is-draft::before {
       content: '';
       position: absolute;
       inset: 0;
-      background: rgba(255, 255, 255, 0.45);
-      z-index: 1;
+      /* Keep light enough that the company logo watermark stays faintly visible */
+      background: rgba(255, 255, 255, 0.28);
+      z-index: 2;
       pointer-events: none;
       border-radius: inherit;
       -webkit-print-color-adjust: exact;
@@ -351,7 +511,7 @@
     .draft-watermark {
       position: absolute;
       inset: 0;
-      z-index: 2;
+      z-index: 3;
       pointer-events: none;
       overflow: visible;
       display: flex;
@@ -459,69 +619,354 @@
   <script>
     let currentContract = null;
     let currentTemplate = null;
+    /** @type {{ enabled: boolean, url: string|null, opacity: number }|null} */
+    let documentWatermark = null;
+    /** @type {{ enabled: boolean, url: string|null, opacity: number }|null} */
+    let documentHeader = null;
+    /** @type {{ enabled: boolean, url: string|null, opacity: number }|null} */
+    let documentFooter = null;
+    let letterheadHeaderHeightPx = 0;
+    let letterheadFooterHeightPx = 0;
 
     function isContractCompletedStatus(status) {
       const s = String(status ?? '').trim();
       return s === 'مكتمل' || s.toLowerCase() === 'completed';
     }
 
-    function fitDraftWatermark() {
-      const watermark = document.getElementById('draftWatermarkInner');
-      const inner = watermark && watermark.querySelector('.draft-watermark__inner');
-      const doc = document.getElementById('printArea');
-      if (!inner || !doc || watermark.hidden) return;
+    function preloadImage(url) {
+      return new Promise((resolve) => {
+        if (!url) { resolve(null); return; }
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    }
 
-      const W = doc.offsetWidth || 820;
-      const H = doc.offsetHeight || 1400;
-      const diag = Math.round(Math.sqrt(W * W + H * H));
-      // Negative = counter-clockwise: top-right → bottom-left (RTL diagonal)
-      const angleDeg = -(Math.atan2(H, W) * 180 / Math.PI);
-      const fontSize = Math.max(40, Math.round(W * 0.12));
+    function measureLetterheadHeight(img, sheetWidthPx) {
+      if (!img || !img.naturalWidth) return 0;
+      return Math.round((img.naturalHeight / img.naturalWidth) * sheetWidthPx);
+    }
 
-      // ── Screen: rotate + size the HTML element ──
-      inner.style.width = diag + 'px';
-      inner.style.transform = 'rotate(' + angleDeg.toFixed(1) + 'deg)';
-      inner.style.fontSize = fontSize + 'px';
+    async function loadDocumentWatermark() {
+      documentWatermark = null;
+      documentHeader = null;
+      documentFooter = null;
+      letterheadHeaderHeightPx = 0;
+      letterheadFooterHeightPx = 0;
+      try {
+        const params = new URLSearchParams();
+        const fromQuery = typeof contractTablesTenantQuerySuffix === 'function'
+          ? contractTablesTenantQuerySuffix()
+          : '';
+        if (fromQuery) {
+          const [k, v] = fromQuery.split('=');
+          if (k && v) params.set(k, decodeURIComponent(v));
+        }
+        const fromContract = currentContract && currentContract.tenant_id;
+        if (fromContract && !params.has('tenant_id')) {
+          params.set('tenant_id', String(fromContract));
+        }
+        const qs = params.toString();
+        const url = '/api/tenant/document-watermark' + (qs ? '?' + qs : '');
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!(json && json.success && json.data)) return;
+        const data = json.data;
+        if (data.enabled && data.url) {
+          const opacity = Number(data.opacity);
+          documentWatermark = {
+            enabled: true,
+            url: String(data.url),
+            opacity: Number.isFinite(opacity) ? Math.min(0.25, Math.max(0.03, opacity)) : 0.12
+          };
+        }
+        if (data.header && data.header.enabled && data.header.url) {
+          const opacity = Number(data.header.opacity);
+          documentHeader = {
+            enabled: true,
+            url: String(data.header.url),
+            opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.1, opacity)) : 1
+          };
+        }
+        if (data.footer && data.footer.enabled && data.footer.url) {
+          const opacity = Number(data.footer.opacity);
+          documentFooter = {
+            enabled: true,
+            url: String(data.footer.url),
+            opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.1, opacity)) : 1
+          };
+        }
 
-      // ── Print: bake rotation into an SVG background-image ──
-      // A4 page (595 × 842 pt). Keep the same angle.
-      const svgW = 595, svgH = 842;
-      const cx = (svgW / 2).toFixed(1);
-      const cy = (svgH / 2).toFixed(1);
-      const svgDiag = Math.round(Math.sqrt(svgW * svgW + svgH * svgH));
-      // font-size scaled to the same proportion as on screen
-      const svgFontSize = Math.round(svgW * 0.12);
-      const svgAngle = angleDeg.toFixed(1);
-      const svg =
-        '<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 ' + svgW + ' ' + svgH + '\'>' +
-        '<text x=\'' + cx + '\' y=\'' + cy + '\' text-anchor=\'middle\' dominant-baseline=\'middle\'' +
-        ' font-family=\'Tajawal,Arial,sans-serif\' font-weight=\'800\' font-size=\'' + svgFontSize + '\'' +
-        ' fill=\'rgb(40,40,40)\' fill-opacity=\'0.22\'' +
-        ' transform=\'rotate(' + svgAngle + ' ' + cx + ' ' + cy + ')\'>' +
-        '\u0645\u0633\u0648\u062f\u0629 \u063a\u064a\u0631 \u0645\u0639\u062a\u0645\u062f\u0629' +
-        '</text></svg>';
-      // Inject SVG into a @media print <style> tag so it ONLY applies during printing,
-      // never on screen (avoids any inline-style vs screen-CSS specificity fights).
-      let printStyle = document.getElementById('_wmPrintStyle');
-      if (!printStyle) {
-        printStyle = document.createElement('style');
-        printStyle.id = '_wmPrintStyle';
-        document.head.appendChild(printStyle);
+        // Preload letterhead images and measure heights at A4 width so pagination reserves space.
+        const probe = document.createElement('div');
+        probe.className = 'a4-sheet';
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
+        document.body.appendChild(probe);
+        const sheetWidth = probe.offsetWidth || Math.round(210 * 3.78);
+        probe.remove();
+
+        const [headerImg, footerImg] = await Promise.all([
+          documentHeader ? preloadImage(documentHeader.url) : Promise.resolve(null),
+          documentFooter ? preloadImage(documentFooter.url) : Promise.resolve(null)
+        ]);
+        letterheadHeaderHeightPx = measureLetterheadHeight(headerImg, sheetWidth);
+        letterheadFooterHeightPx = measureLetterheadHeight(footerImg, sheetWidth);
+      } catch (_) {
+        documentWatermark = null;
+        documentHeader = null;
+        documentFooter = null;
       }
-      printStyle.textContent =
-        '@media print{#draftWatermarkInner{background-image:url("data:image/svg+xml,' +
-        encodeURIComponent(svg) + '")!important;}}';
+    }
+
+    function appendBgWatermark(sheet) {
+      if (!documentWatermark || !documentWatermark.enabled || !documentWatermark.url) return;
+      sheet.style.setProperty('--doc-wm-opacity', String(documentWatermark.opacity));
+      const bg = document.createElement('div');
+      bg.className = 'a4-sheet-bg-watermark';
+      bg.setAttribute('aria-hidden', 'true');
+      const img = document.createElement('img');
+      img.src = documentWatermark.url;
+      img.alt = '';
+      img.draggable = false;
+      bg.appendChild(img);
+      sheet.insertBefore(bg, sheet.firstChild);
+    }
+
+    function appendLetterheadBand(sheet, kind) {
+      const cfg = kind === 'header' ? documentHeader : documentFooter;
+      if (!cfg || !cfg.enabled || !cfg.url) return null;
+      sheet.classList.add('has-letterhead');
+      const band = document.createElement('div');
+      band.className = kind === 'header' ? 'a4-letterhead-header' : 'a4-letterhead-footer';
+      band.style.setProperty('--doc-letterhead-opacity', String(cfg.opacity));
+      band.setAttribute('aria-hidden', 'true');
+      const img = document.createElement('img');
+      img.src = cfg.url;
+      img.alt = '';
+      img.draggable = false;
+      band.appendChild(img);
+      return band;
+    }
+
+    function fitDraftWatermark() {
+      const sheets = document.querySelectorAll('.a4-sheet, .contract-doc');
+      const targets = sheets.length
+        ? sheets
+        : [document.getElementById('printArea')].filter(Boolean);
+
+      let printSvgReady = false;
+      targets.forEach((doc) => {
+        const watermark = doc.querySelector('.draft-watermark');
+        const inner = watermark && watermark.querySelector('.draft-watermark__inner');
+        if (!inner || !doc || (watermark && watermark.hidden)) return;
+
+        const W = doc.offsetWidth || 794;
+        const H = Math.min(doc.offsetHeight || 1123, Math.round(297 * 3.78));
+        const diag = Math.round(Math.sqrt(W * W + H * H));
+        // Negative = counter-clockwise: top-right → bottom-left (RTL diagonal)
+        const angleDeg = -(Math.atan2(H, W) * 180 / Math.PI);
+        const fontSize = Math.max(40, Math.round(W * 0.12));
+
+        // ── Screen: rotate + size the HTML element ──
+        inner.style.width = diag + 'px';
+        inner.style.transform = 'rotate(' + angleDeg.toFixed(1) + 'deg)';
+        inner.style.fontSize = fontSize + 'px';
+
+        if (printSvgReady) return;
+        printSvgReady = true;
+
+        // ── Print: bake rotation into an SVG background-image ──
+        // A4 page (595 × 842 pt). Keep the same angle.
+        const svgW = 595, svgH = 842;
+        const cx = (svgW / 2).toFixed(1);
+        const cy = (svgH / 2).toFixed(1);
+        const svgFontSize = Math.round(svgW * 0.12);
+        const svgAngle = angleDeg.toFixed(1);
+        const svg =
+          '<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 ' + svgW + ' ' + svgH + '\'>' +
+          '<text x=\'' + cx + '\' y=\'' + cy + '\' text-anchor=\'middle\' dominant-baseline=\'middle\'' +
+          ' font-family=\'Tajawal,Arial,sans-serif\' font-weight=\'800\' font-size=\'' + svgFontSize + '\'' +
+          ' fill=\'rgb(40,40,40)\' fill-opacity=\'0.22\'' +
+          ' transform=\'rotate(' + svgAngle + ' ' + cx + ' ' + cy + ')\'>' +
+          '\u0645\u0633\u0648\u062f\u0629 \u063a\u064a\u0631 \u0645\u0639\u062a\u0645\u062f\u0629' +
+          '</text></svg>';
+        // Inject SVG into a @media print <style> tag so it ONLY applies during printing,
+        // never on screen (avoids any inline-style vs screen-CSS specificity fights).
+        let printStyle = document.getElementById('_wmPrintStyle');
+        if (!printStyle) {
+          printStyle = document.createElement('style');
+          printStyle.id = '_wmPrintStyle';
+          document.head.appendChild(printStyle);
+        }
+        printStyle.textContent =
+          '@media print{.a4-sheet:first-child .draft-watermark,#draftWatermarkInner{background-image:url("data:image/svg+xml,' +
+          encodeURIComponent(svg) + '")!important;}}';
+      });
     }
 
     function updateDraftWatermark() {
-      const watermark = document.getElementById('draftWatermarkInner');
-      const doc = document.getElementById('printArea');
-      if (!watermark || !doc) return;
+      const stage = document.getElementById('printArea');
+      if (!stage) return;
       const show = currentContract && !isContractCompletedStatus(currentContract.status);
-      watermark.hidden = !show;
-      watermark.setAttribute('aria-hidden', show ? 'false' : 'true');
-      doc.classList.toggle('is-draft', show);
+      stage.classList.toggle('is-draft', show);
+      stage.querySelectorAll('.a4-sheet, .contract-doc').forEach((sheet) => {
+        sheet.classList.toggle('is-draft', show);
+      });
+      stage.querySelectorAll('.draft-watermark').forEach((watermark) => {
+        watermark.hidden = !show;
+        watermark.setAttribute('aria-hidden', show ? 'false' : 'true');
+      });
       fitDraftWatermark();
+    }
+
+    /** Measure usable content height inside an A4 sheet (padding + letterhead excluded). */
+    function getA4ContentHeightPx() {
+      const probe = document.createElement('div');
+      probe.className = 'a4-sheet';
+      const hasLetterhead = !!(
+        (documentHeader && documentHeader.enabled && documentHeader.url) ||
+        (documentFooter && documentFooter.enabled && documentFooter.url)
+      );
+      if (hasLetterhead) probe.classList.add('has-letterhead');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;height:297mm;';
+      const inner = document.createElement('div');
+      inner.className = 'a4-sheet-inner';
+      inner.style.cssText = 'height:100%;';
+      probe.appendChild(inner);
+      document.body.appendChild(probe);
+      const cs = getComputedStyle(hasLetterhead ? inner : probe);
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      let h = Math.max(200, probe.clientHeight - padY);
+      if (hasLetterhead) {
+        h = Math.max(160, h - letterheadHeaderHeightPx - letterheadFooterHeightPx);
+      }
+      probe.remove();
+      return h;
+    }
+
+    /** Turn free-text document body (br-separated) into block lines for pagination. */
+    function expandDocumentBodyBlocks(bodyEl) {
+      const docBody = bodyEl.querySelector('.doc-document-body');
+      if (!docBody) return;
+      const parts = String(docBody.innerHTML || '').split(/<br\s*\/?>/i);
+      const wrap = document.createElement('div');
+      wrap.className = 'doc-document-body';
+      parts.forEach((part) => {
+        const line = document.createElement('p');
+        line.className = 'doc-a4-line';
+        line.innerHTML = part.trim() ? part : '&nbsp;';
+        wrap.appendChild(line);
+      });
+      docBody.replaceWith(wrap);
+      // Flatten so each line is a direct pagination candidate
+      const lines = Array.from(wrap.children);
+      lines.forEach((line) => bodyEl.insertBefore(line, wrap));
+      wrap.remove();
+    }
+
+    /** Unwrap .doc-articles so each article can break across pages independently. */
+    function flattenArticleGroups(bodyEl) {
+      bodyEl.querySelectorAll('.doc-articles').forEach((group) => {
+        while (group.firstChild) {
+          group.parentNode.insertBefore(group.firstChild, group);
+        }
+        group.remove();
+      });
+    }
+
+    function createA4Sheet(isDraft, pageIndex, pageCount) {
+      const sheet = document.createElement('div');
+      sheet.className = 'a4-sheet' + (isDraft ? ' is-draft' : '');
+      appendBgWatermark(sheet);
+      const headerBand = appendLetterheadBand(sheet, 'header');
+      if (headerBand) sheet.appendChild(headerBand);
+      const inner = document.createElement('div');
+      inner.className = 'a4-sheet-inner';
+      sheet.appendChild(inner);
+      const footerBand = appendLetterheadBand(sheet, 'footer');
+      if (footerBand) sheet.appendChild(footerBand);
+      if (isDraft) {
+        const wm = document.createElement('div');
+        wm.className = 'draft-watermark';
+        if (pageIndex === 0) wm.id = 'draftWatermarkInner';
+        wm.innerHTML = '<div class="draft-watermark__inner">مسودة غير معتمدة</div>';
+        sheet.appendChild(wm);
+      }
+      const label = document.createElement('div');
+      label.className = 'a4-page-label no-print';
+      label.textContent = pageCount > 1 ? (pageIndex + 1) + ' / ' + pageCount : '';
+      sheet.appendChild(label);
+      return { sheet, inner, label };
+    }
+
+    /**
+     * Split the rendered contract into stacked A4 sheets for on-screen preview.
+     * Print uses the same sheets with page-break-after.
+     */
+    function paginateContractToA4() {
+      const host = document.getElementById('contractDoc');
+      const source = document.getElementById('printArea');
+      if (!host || !source || source.classList.contains('contract-a4-stage')) return;
+
+      const bodyEl = source.querySelector('.contract-doc-body');
+      if (!bodyEl) return;
+
+      const isDraft = source.classList.contains('is-draft');
+      expandDocumentBodyBlocks(bodyEl);
+      flattenArticleGroups(bodyEl);
+
+      const blocks = Array.from(bodyEl.children);
+      if (!blocks.length) return;
+
+      const maxH = getA4ContentHeightPx();
+      const stage = document.createElement('div');
+      stage.className = 'contract-a4-stage' + (isDraft ? ' is-draft' : '');
+      stage.id = 'printArea';
+
+      // Attach stage before measuring so layout metrics are real
+      host.insertBefore(stage, source);
+
+      const pages = [];
+      let current = createA4Sheet(isDraft, 0, 1);
+      pages.push(current);
+      stage.appendChild(current.sheet);
+
+      blocks.forEach((block) => {
+        current.inner.appendChild(block);
+        if (current.inner.scrollHeight > maxH + 2 && current.inner.children.length > 1) {
+          current.inner.removeChild(block);
+          current = createA4Sheet(isDraft, pages.length, 1);
+          pages.push(current);
+          stage.appendChild(current.sheet);
+          current.inner.appendChild(block);
+        }
+      });
+
+      const pageCount = pages.length;
+      pages.forEach((p, i) => {
+        if (p.label) p.label.textContent = pageCount > 1 ? (i + 1) + ' / ' + pageCount : '';
+      });
+
+      source.remove();
+    }
+
+    function afterContractRendered() {
+      paginateContractToA4();
+      const stage = document.getElementById('printArea');
+      if (stage && stage.classList.contains('contract-a4-stage')) {
+        stage.classList.add('a4-preview-scaled');
+        // Firefox fallback (no zoom): reserve layout space for the visual scale
+        if (!('zoom' in document.documentElement.style)) {
+          stage.style.marginBottom = Math.round(stage.offsetHeight * 0.25) + 'px';
+        }
+      }
+      initSignaturePads();
+      configureApprovalActions();
+      updateDraftWatermark();
+      requestAnimationFrame(fitDraftWatermark);
+      if (getParam('print') === '1') setTimeout(printPage, 1200);
     }
 
     // ======= LOAD =======
@@ -548,11 +993,8 @@
           nl.style.display = 'inline-flex';
         }
         renderContractDoc(currentContract);
-        configureApprovalActions();
-        updateDraftWatermark();
-        // Re-fit after layout is painted so offsetHeight is accurate
-        requestAnimationFrame(fitDraftWatermark);
-        if (getParam('print') === '1') setTimeout(printPage, 1200);
+        await loadDocumentWatermark();
+        afterContractRendered();
       } catch (e) {
         document.getElementById('contractDoc').innerHTML =
           `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل العقد</p></div>`;
@@ -875,8 +1317,6 @@
 
       </div><!-- /contract-doc -->
       `;
-
-      initSignaturePads();
     }
 
     // ======= HELPERS =======

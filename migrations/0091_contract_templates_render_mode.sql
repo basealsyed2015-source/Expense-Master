@@ -1,20 +1,11 @@
--- Per-template rendering mode for the contracts module.
+-- contract_templates.render_mode: production already has this column and the
+-- tenant-2 document-mode UPDATE (applied manually before this migration was
+-- recorded). D1 SQLite does not support ADD COLUMN IF NOT EXISTS, so a plain
+-- ALTER fails with "duplicate column" on those databases.
+-- This migration is a recorded no-op so 0092 and later migrations can run.
 --
--- 'structured' (default) = existing hardcoded contract-view layout (unchanged behavior
---                          for all existing templates and their contracts).
--- 'document'             = render the printed/viewed contract directly from the template
---                          body_content with {{variable}} substitution. Used for full
---                          legal documents that embed their own company header + clauses.
---
--- Additive, nullable-with-default column: safe on existing data, changes no existing rows'
--- behavior. Only the two "service & solutions" templates seeded in 0090 opt in.
-
-ALTER TABLE contract_templates ADD COLUMN render_mode TEXT DEFAULT 'structured';
-
-UPDATE contract_templates
-SET render_mode = 'document'
-WHERE tenant_id = 2
-  AND template_name IN (
-    'عقد تقديم خدمات وحلول - مكتب حلول الموعد',
-    'عقد تقديم خدمات وحلول - شركة وصله'
-  );
+-- If your database is MISSING render_mode, run once (local or remote) before
+-- relying on document-mode contract templates:
+--   npx wrangler d1 execute tamweel-production-v2 --remote --command="ALTER TABLE contract_templates ADD COLUMN render_mode TEXT DEFAULT 'structured';"
+--   npx wrangler d1 execute tamweel-production-v2 --remote --command="UPDATE contract_templates SET render_mode = 'document' WHERE tenant_id = 2 AND template_name IN ('عقد تقديم خدمات وحلول - مكتب حلول الموعد', 'عقد تقديم خدمات وحلول - شركة وصله');"
+SELECT 1;
