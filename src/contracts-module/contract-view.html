@@ -19,6 +19,7 @@
     }
     .contract-actions-bar .btn { min-width: 120px; justify-content: center; }
     .status-change-wrap { margin-right: auto; display: flex; align-items: center; gap: 10px; }
+    .status-dropdown-wrap { display: flex; align-items: center; gap: 10px; }
 
     /* ===== A4 PREVIEW STAGE (stacked sheets) ===== */
     .contract-a4-stage {
@@ -47,13 +48,15 @@
       background: #fff;
       width: 210mm;
       max-width: 210mm;
+      height: 297mm;
       min-height: 297mm;
+      max-height: 297mm;
       margin: 0 auto;
       padding: 18mm 16mm;
       box-sizing: border-box;
       font-family: 'Tajawal', sans-serif;
-      font-size: 14.5px;
-      line-height: 2.1;
+      font-size: var(--doc-body-font-size, 12px);
+      line-height: 1.6;
       color: #000;
       box-shadow: 0 4px 24px rgba(0,0,0,0.14);
       border: 1px solid #cfd5de;
@@ -61,6 +64,7 @@
       isolation: isolate;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     .a4-sheet.has-letterhead {
       padding: 0;
@@ -72,9 +76,10 @@
       position: relative;
       z-index: 1;
       flex: 1 1 auto;
+      min-height: 0;
     }
     .a4-sheet.has-letterhead .a4-sheet-inner {
-      padding: 10mm 16mm;
+      padding: 6mm 16mm;
     }
     .a4-letterhead-header,
     .a4-letterhead-footer {
@@ -83,12 +88,18 @@
       flex: 0 0 auto;
       width: 100%;
       line-height: 0;
+      max-height: 80mm;
+      overflow: hidden;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+    }
+    .a4-letterhead-footer {
+      margin-top: auto; /* pin to bottom of the A4 sheet */
     }
     .a4-letterhead-header img,
     .a4-letterhead-footer img {
       width: 100%;
+      max-height: 80mm;
       height: auto;
       display: block;
       object-fit: contain;
@@ -134,9 +145,58 @@
       user-select: none;
     }
     .doc-a4-line {
-      margin: 0 0 0.15em;
+      margin: 0;
+      padding: 0;
       text-align: justify;
-      min-height: 1.2em;
+      min-height: 1em;
+    }
+    /* Kill default <p> margins from TinyMCE / browser so paragraphs sit tight */
+    .doc-document-body p,
+    .doc-document-body .doc-a4-line,
+    .contract-doc-body > .doc-a4-line {
+      margin-top: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    .tpl-sig-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 28px;
+      width: 100%;
+      margin: 18px 0 8px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .tpl-sig-col {
+      flex: 1 1 0;
+      text-align: center;
+      min-width: 0;
+    }
+    .tpl-sig-col .tpl-sig-label {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .tpl-sig-col .tpl-sig-space {
+      height: 72px;
+      margin: 10px 0 6px;
+      border-bottom: 1px solid #bbb;
+    }
+    .tpl-page-break {
+      display: block;
+      height: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      page-break-before: always;
+      break-before: page;
+    }
+    .tpl-note-title {
+      text-align: center !important;
+      font-weight: 800 !important;
+      font-size: 1.25em;
+      margin: 12px 0 16px !important;
     }
     @media (max-width: 920px) {
       .contract-a4-stage {
@@ -212,6 +272,40 @@
     }
     .doc-contract-meta span { margin: 0 8px; }
 
+    /* Document mode: keep date / hijri / number as a slim bar, not a big header block */
+    .doc-header.doc-header--meta-only {
+      text-align: center;
+      margin-bottom: 10px;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .doc-header.doc-header--meta-only .doc-logo-row {
+      margin-bottom: 4px;
+    }
+    .doc-header.doc-header--meta-only .doc-logo-img-wrap {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      max-width: 40px;
+      max-height: 40px;
+      padding: 2px;
+      border-radius: 8px;
+    }
+    .doc-header.doc-header--meta-only .doc-contract-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 4px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #555;
+    }
+    .doc-header.doc-header--meta-only .doc-contract-meta span {
+      margin: 0;
+      white-space: nowrap;
+    }
+
     /* ===== BISMILLAH ===== */
     .doc-bismillah {
       text-align: center;
@@ -260,7 +354,7 @@
       padding: 10px 16px;
       font-size: 13.5px;
       flex: 1;
-      line-height: 1.7;
+      line-height: 1.6;
       background: transparent;
     }
 
@@ -308,7 +402,7 @@
     }
     .doc-article-body {
       font-size: 13.5px;
-      line-height: 2;
+      line-height: 1.6;
       padding-right: 34px;
     }
     .doc-article-body .highlight-amount {
@@ -404,56 +498,122 @@
       page-break-inside: avoid;
     }
 
-    /* ===== PRINT ===== */
+    /* ===== PRINT — match on-screen A4 sheets 1:1 ===== */
     @media print {
-      .sidebar, .topbar, .contract-actions-bar, .no-print, .a4-page-label { display: none !important; }
-      .main-content { margin: 0 !important; }
-      .page-content { padding: 0 !important; background: #fff; }
+      .sidebar,
+      .topbar,
+      .contract-actions-bar,
+      .contracts-page-back,
+      .back-link,
+      .no-print,
+      .a4-page-label { display: none !important; }
+
+      html, body {
+        background: #fff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+      }
+      .main-content {
+        margin: 0 !important;
+        width: 210mm !important;
+        max-width: 210mm !important;
+      }
+      .page-content {
+        padding: 0 !important;
+        background: #fff !important;
+        margin: 0 !important;
+      }
+      #contractDoc {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
       .contract-a4-stage {
         display: block !important;
         gap: 0 !important;
         padding: 0 !important;
+        margin: 0 !important;
         background: transparent !important;
         border-radius: 0 !important;
         zoom: 1 !important;
         transform: none !important;
       }
+
+      /* One sheet = one physical A4 page, edge-to-edge (no browser page margin) */
+      @page {
+        size: A4 portrait;
+        margin: 0;
+      }
+
       .contract-doc,
       .a4-sheet {
         box-shadow: none !important;
         border: none !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        min-height: 0 !important;
-        height: auto !important;
+        width: 210mm !important;
+        max-width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
         margin: 0 !important;
-        padding: 0 !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
         page-break-after: always;
         break-after: page;
+        page-break-inside: avoid;
+        break-inside: avoid;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+      .a4-sheet:not(.has-letterhead) {
+        padding: 18mm 16mm !important;
+      }
+      .a4-sheet.has-letterhead {
+        padding: 0 !important;
       }
       .a4-sheet:last-child {
         page-break-after: auto;
         break-after: auto;
       }
-      .contract-doc-body,
+
       .a4-sheet-inner {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      .a4-sheet-bg-watermark,
-      .a4-sheet-bg-watermark img,
+      .a4-sheet.has-letterhead .a4-sheet-inner {
+        padding: 6mm 16mm !important;
+      }
       .a4-letterhead-header,
+      .a4-letterhead-footer {
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        max-height: 80mm !important;
+        overflow: hidden !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .a4-letterhead-footer {
+        margin-top: auto !important;
+      }
       .a4-letterhead-header img,
-      .a4-letterhead-footer,
       .a4-letterhead-footer img {
+        width: 100% !important;
+        max-height: 80mm !important;
+        height: auto !important;
+        display: block !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .a4-sheet-bg-watermark,
+      .a4-sheet-bg-watermark img {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
       .doc-sig-clear, .no-print { display: none !important; }
-      body { background: #fff; }
-      @page { size: A4; margin: 15mm; }
       .contract-doc.is-draft::before,
       .a4-sheet.is-draft::before {
         -webkit-print-color-adjust: exact !important;
@@ -591,16 +751,18 @@
           <i class="fas fa-money-check-alt"></i> عرض سند الأمر
         </a>
         <div class="status-change-wrap">
-          <label style="font-size:13px;color:var(--text-muted);">تغيير الحالة:</label>
-          <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
-            <option value="نشط">نشط</option>
-            <option value="بانتظار التمويل">بانتظار التمويل</option>
-            <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
-            <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
-            <option value="مكتمل">مكتمل ✓</option>
-            <option value="مؤرشف">مؤرشف</option>
-            <option value="ملغي">ملغي</option>
-          </select>
+          <div id="statusDropdownWrap" class="status-dropdown-wrap" hidden>
+            <label style="font-size:13px;color:var(--text-muted);">تغيير الحالة:</label>
+            <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
+              <option value="نشط">نشط</option>
+              <option value="بانتظار التمويل">بانتظار التمويل</option>
+              <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
+              <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
+              <option value="مكتمل">مكتمل ✓</option>
+              <option value="مؤرشف">مؤرشف</option>
+              <option value="ملغي">ملغي</option>
+            </select>
+          </div>
           <button class="btn btn-warning btn-sm" onclick="archiveContract()">
             <i class="fas fa-archive"></i> أرشفة
           </button>
@@ -643,9 +805,12 @@
       });
     }
 
-    function measureLetterheadHeight(img, sheetWidthPx) {
+    function measureLetterheadHeight(img, sheetWidthPx, pageHeightPx) {
       if (!img || !img.naturalWidth) return 0;
-      return Math.round((img.naturalHeight / img.naturalWidth) * sheetWidthPx);
+      const raw = Math.round((img.naturalHeight / img.naturalWidth) * sheetWidthPx);
+      // Cap each band so body text still has most of the page
+      const maxBand = Math.max(40, Math.round(pageHeightPx * 0.28));
+      return Math.min(raw, maxBand);
     }
 
     async function loadDocumentWatermark() {
@@ -679,7 +844,7 @@
           documentWatermark = {
             enabled: true,
             url: String(data.url),
-            opacity: Number.isFinite(opacity) ? Math.min(0.25, Math.max(0.03, opacity)) : 0.12
+            opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.03, opacity)) : 0.12
           };
         }
         if (data.header && data.header.enabled && data.header.url) {
@@ -702,17 +867,18 @@
         // Preload letterhead images and measure heights at A4 width so pagination reserves space.
         const probe = document.createElement('div');
         probe.className = 'a4-sheet';
-        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;height:297mm;';
         document.body.appendChild(probe);
         const sheetWidth = probe.offsetWidth || Math.round(210 * 3.78);
+        const pageHeight = probe.clientHeight || Math.round(297 * 3.78);
         probe.remove();
 
         const [headerImg, footerImg] = await Promise.all([
           documentHeader ? preloadImage(documentHeader.url) : Promise.resolve(null),
           documentFooter ? preloadImage(documentFooter.url) : Promise.resolve(null)
         ]);
-        letterheadHeaderHeightPx = measureLetterheadHeight(headerImg, sheetWidth);
-        letterheadFooterHeightPx = measureLetterheadHeight(footerImg, sheetWidth);
+        letterheadHeaderHeightPx = measureLetterheadHeight(headerImg, sheetWidth, pageHeight);
+        letterheadFooterHeightPx = measureLetterheadHeight(footerImg, sheetWidth, pageHeight);
       } catch (_) {
         documentWatermark = null;
         documentHeader = null;
@@ -821,46 +987,187 @@
       fitDraftWatermark();
     }
 
-    /** Measure usable content height inside an A4 sheet (padding + letterhead excluded). */
+    /** Usable body height: real A4 probe with letterhead so packing matches the layout. */
     function getA4ContentHeightPx() {
-      const probe = document.createElement('div');
-      probe.className = 'a4-sheet';
-      const hasLetterhead = !!(
-        (documentHeader && documentHeader.enabled && documentHeader.url) ||
-        (documentFooter && documentFooter.enabled && documentFooter.url)
-      );
-      if (hasLetterhead) probe.classList.add('has-letterhead');
-      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;height:297mm;';
-      const inner = document.createElement('div');
-      inner.className = 'a4-sheet-inner';
-      inner.style.cssText = 'height:100%;';
-      probe.appendChild(inner);
-      document.body.appendChild(probe);
-      const cs = getComputedStyle(hasLetterhead ? inner : probe);
+      const holder = document.createElement('div');
+      holder.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
+      const built = createA4Sheet(false, 0, 1);
+      built.sheet.style.height = '297mm';
+      built.sheet.style.minHeight = '297mm';
+      built.sheet.style.margin = '0';
+      holder.appendChild(built.sheet);
+      document.body.appendChild(holder);
+      void built.sheet.offsetHeight;
+
+      const pageH = built.sheet.clientHeight || Math.round(297 * 3.78);
+      const headerEl = built.sheet.querySelector('.a4-letterhead-header');
+      const footerEl = built.sheet.querySelector('.a4-letterhead-footer');
+      const headerH = headerEl ? headerEl.offsetHeight : 0;
+      const footerH = footerEl ? footerEl.offsetHeight : 0;
+      const cs = getComputedStyle(built.inner);
       const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      let h = Math.max(200, probe.clientHeight - padY);
-      if (hasLetterhead) {
-        h = Math.max(160, h - letterheadHeaderHeightPx - letterheadFooterHeightPx);
-      }
-      probe.remove();
+      // Body may use the space between header and footer (padding excluded from content budget
+      // because measureInnerContentHeight returns children-only height).
+      const available = pageH - headerH - footerH - padY;
+      holder.remove();
+      return Math.max(240, available);
+    }
+
+    /**
+     * Height of packed blocks only (no flex stretch, no padding).
+     */
+    function measureInnerContentHeight(inner) {
+      if (!inner) return 0;
+      const prev = {
+        flex: inner.style.flex,
+        height: inner.style.height,
+        minHeight: inner.style.minHeight,
+        overflow: inner.style.overflow
+      };
+      inner.style.flex = '0 0 auto';
+      inner.style.height = 'auto';
+      inner.style.minHeight = '0';
+      inner.style.overflow = 'visible';
+      const cs = getComputedStyle(inner);
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const h = Math.max(0, inner.scrollHeight - padY);
+      inner.style.flex = prev.flex;
+      inner.style.height = prev.height;
+      inner.style.minHeight = prev.minHeight;
+      inner.style.overflow = prev.overflow;
       return h;
     }
 
-    /** Turn free-text document body (br-separated) into block lines for pagination. */
+    /** Turn free-text / rich document body into block lines for pagination.
+     *  Rich HTML must still split on <br> — TinyMCE often stores the whole body
+     *  as one <p> with <br>s; without that split the header sits alone on page 1.
+     *  When splitting/unwrapping, inherit font-size/styles from parents (incl. .tpl-doc-font)
+     *  so chosen document sizes survive pagination onto each .doc-a4-line. */
     function expandDocumentBodyBlocks(bodyEl) {
       const docBody = bodyEl.querySelector('.doc-document-body');
       if (!docBody) return;
-      const parts = String(docBody.innerHTML || '').split(/<br\s*\/?>/i);
+
       const wrap = document.createElement('div');
       wrap.className = 'doc-document-body';
-      parts.forEach((part) => {
+      if (docBody.getAttribute('data-rich') === '1') wrap.setAttribute('data-rich', '1');
+      const baseStyle = docBody.getAttribute('style');
+      if (baseStyle) wrap.setAttribute('style', baseStyle);
+      const rootInherit = baseStyle || '';
+
+      function mergeStyles(...parts) {
+        return parts
+          .map((s) => String(s || '').trim().replace(/;+\s*$/, ''))
+          .filter(Boolean)
+          .join('; ');
+      }
+
+      /** If html is a single outer <span style="…">…</span>, unwrap and return its style. */
+      function unwrapStyledSpan(html) {
+        const m = String(html || '').match(/^\s*<span\b([^>]*)>([\s\S]*)<\/span>\s*$/i);
+        if (!m) return null;
+        const styleMatch = m[1].match(/\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+        const style = styleMatch ? (styleMatch[1] || styleMatch[2] || styleMatch[3] || '') : '';
+        if (!style) return null;
+        return { style, inner: m[2] };
+      }
+
+      function appendLineHtml(html, inheritStyle) {
         const line = document.createElement('p');
         line.className = 'doc-a4-line';
-        line.innerHTML = part.trim() ? part : '&nbsp;';
+        if (inheritStyle) line.setAttribute('style', inheritStyle);
+        const trimmed = String(html || '').trim();
+        line.innerHTML = trimmed ? html : '&nbsp;';
         wrap.appendChild(line);
-      });
+      }
+
+      function expandRichNode(node, parentStyle) {
+        const inherited = parentStyle || '';
+        if (node.nodeType === 3) {
+          if (String(node.textContent || '').trim()) {
+            appendLineHtml(escHtml(node.textContent), inherited);
+          }
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        const el = node;
+        const tag = el.tagName.toUpperCase();
+        const ownStyle = el.getAttribute('style') || '';
+        const nextInherit = mergeStyles(inherited, ownStyle);
+
+        // Keep atomic layout blocks (signatures / forced page breaks / note titles)
+        if (
+          el.classList.contains('tpl-sig-row') ||
+          el.classList.contains('tpl-page-break') ||
+          el.classList.contains('tpl-note-title') ||
+          /page-break-before\s*:\s*always/i.test(ownStyle)
+        ) {
+          const clone = el.cloneNode(true);
+          clone.classList.add('doc-a4-line');
+          if (inherited && !String(clone.getAttribute('style') || '').includes('font-size')) {
+            clone.setAttribute('style', mergeStyles(inherited, clone.getAttribute('style')));
+          }
+          wrap.appendChild(clone);
+          return;
+        }
+
+        // Unwrap block containers so each child can paginate independently —
+        // keep font-size from wrappers like .tpl-doc-font.
+        if ((tag === 'DIV' || tag === 'SECTION' || tag === 'ARTICLE') && el.children.length) {
+          const hasBlockChild = Array.from(el.children).some((c) =>
+            /^(P|DIV|H[1-6]|UL|OL|LI|TABLE|BLOCKQUOTE|SECTION|ARTICLE)$/i.test(c.tagName)
+          );
+          if (hasBlockChild) {
+            Array.from(el.childNodes).forEach((child) => expandRichNode(child, nextInherit));
+            return;
+          }
+        }
+
+        let html = el.innerHTML || '';
+        let inheritStyle = nextInherit;
+
+        // Split br-separated content (common after plain→TinyMCE conversion)
+        if (/<br\s*\/?>/i.test(html)) {
+          let guard = 0;
+          while (guard++ < 3) {
+            const unwrapped = unwrapStyledSpan(html);
+            if (!unwrapped) break;
+            inheritStyle = mergeStyles(inheritStyle, unwrapped.style);
+            html = unwrapped.inner;
+          }
+          html.split(/<br\s*\/?>/i).forEach((part) => appendLineHtml(part, inheritStyle));
+          return;
+        }
+
+        // Keep lists/tables/headings as single units
+        if (/^(UL|OL|TABLE|H[1-6]|BLOCKQUOTE)$/i.test(tag)) {
+          const clone = el.cloneNode(true);
+          clone.classList.add('doc-a4-line');
+          if (inherited && !String(clone.getAttribute('style') || '').includes('font-size')) {
+            clone.setAttribute('style', mergeStyles(inherited, clone.getAttribute('style')));
+          }
+          wrap.appendChild(clone);
+          return;
+        }
+
+        // Normal paragraph / inline wrapper → one line (preserves + inherits style)
+        const clone = el.cloneNode(true);
+        clone.classList.add('doc-a4-line');
+        if (inherited) {
+          clone.setAttribute('style', mergeStyles(inherited, clone.getAttribute('style')));
+        }
+        wrap.appendChild(clone);
+      }
+
+      if (docBody.getAttribute('data-rich') === '1') {
+        Array.from(docBody.childNodes).forEach((child) => expandRichNode(child, rootInherit));
+        if (!wrap.children.length) appendLineHtml('&nbsp;', rootInherit);
+      } else {
+        const parts = String(docBody.innerHTML || '').split(/<br\s*\/?>/i);
+        parts.forEach((part) => appendLineHtml(part, rootInherit));
+      }
+
       docBody.replaceWith(wrap);
-      // Flatten so each line is a direct pagination candidate
+      // Flatten so each line is a direct pagination candidate (siblings of .doc-header)
       const lines = Array.from(wrap.children);
       lines.forEach((line) => bodyEl.insertBefore(line, wrap));
       wrap.remove();
@@ -876,9 +1183,13 @@
       });
     }
 
-    function createA4Sheet(isDraft, pageIndex, pageCount) {
+    function createA4Sheet(isDraft, pageIndex, pageCount, docFont) {
       const sheet = document.createElement('div');
       sheet.className = 'a4-sheet' + (isDraft ? ' is-draft' : '');
+      if (docFont) {
+        sheet.style.setProperty('--doc-body-font-size', docFont);
+        sheet.style.fontSize = docFont;
+      }
       appendBgWatermark(sheet);
       const headerBand = appendLetterheadBand(sheet, 'header');
       if (headerBand) sheet.appendChild(headerBand);
@@ -913,6 +1224,10 @@
       const bodyEl = source.querySelector('.contract-doc-body');
       if (!bodyEl) return;
 
+      const docFont = (source.style.getPropertyValue('--doc-body-font-size') || '').trim()
+        || detectTemplateFontSize(source.querySelector('.doc-document-body')?.getAttribute('style') || '')
+        || '12px';
+
       const isDraft = source.classList.contains('is-draft');
       expandDocumentBodyBlocks(bodyEl);
       flattenArticleGroups(bodyEl);
@@ -924,20 +1239,35 @@
       const stage = document.createElement('div');
       stage.className = 'contract-a4-stage' + (isDraft ? ' is-draft' : '');
       stage.id = 'printArea';
+      stage.style.setProperty('--doc-body-font-size', docFont);
 
       // Attach stage before measuring so layout metrics are real
       host.insertBefore(stage, source);
 
       const pages = [];
-      let current = createA4Sheet(isDraft, 0, 1);
+      let current = createA4Sheet(isDraft, 0, 1, docFont);
       pages.push(current);
       stage.appendChild(current.sheet);
 
       blocks.forEach((block) => {
+        const forceBreak =
+          block.classList?.contains('tpl-page-break') ||
+          /page-break-before\s*:\s*always/i.test(block.getAttribute?.('style') || '');
+
+        if (forceBreak) {
+          // Always start سند لأمر (etc.) on a new sheet, regardless of remaining space / font size.
+          if (current.inner.children.length > 0) {
+            current = createA4Sheet(isDraft, pages.length, 1, docFont);
+            pages.push(current);
+            stage.appendChild(current.sheet);
+          }
+          return;
+        }
+
         current.inner.appendChild(block);
-        if (current.inner.scrollHeight > maxH + 2 && current.inner.children.length > 1) {
+        if (measureInnerContentHeight(current.inner) > maxH + 2 && current.inner.children.length > 1) {
           current.inner.removeChild(block);
-          current = createA4Sheet(isDraft, pages.length, 1);
+          current = createA4Sheet(isDraft, pages.length, 1, docFont);
           pages.push(current);
           stage.appendChild(current.sheet);
           current.inner.appendChild(block);
@@ -1006,6 +1336,27 @@
       return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    /** Legacy plain-text bodies vs TinyMCE/HTML bodies. Untouched DB rows stay plain. */
+    function isRichHtmlTemplate(body) {
+      return /<(?:p|div|span|strong|b|em|i|u|br|ul|ol|li|h[1-6]|table|tr|td|th|a)\b/i.test(String(body || ''));
+    }
+
+    function sanitizeTemplateHtml(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      tmp.querySelectorAll('script,iframe,object,embed,link,meta').forEach((el) => el.remove());
+      tmp.querySelectorAll('*').forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+          const n = attr.name;
+          const v = attr.value || '';
+          if (/^on/i.test(n) || ((n === 'href' || n === 'src') && /^\s*javascript:/i.test(v))) {
+            el.removeAttribute(n);
+          }
+        });
+      });
+      return tmp.innerHTML;
+    }
+
     function isDocumentModeTemplate(t) {
       return !!(t && t.render_mode === 'document' && String(t.body_content || '').trim());
     }
@@ -1039,42 +1390,51 @@
       };
     }
 
-    /** Substitute {{vars}} into the raw body, then escape and convert newlines. */
+    /**
+     * Substitute {{vars}} into the body.
+     * Plain-text (legacy): escape all + newlines → <br> (unchanged behavior).
+     * Rich HTML: escape only substituted values, then sanitize tags.
+     */
     function fillTemplateBody(body, map) {
-      const replaced = String(body || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, key) =>
-        Object.prototype.hasOwnProperty.call(map, key) ? String(map[key]) : m
-      );
+      const raw = String(body || '');
+      const rich = isRichHtmlTemplate(raw);
+      const replaced = raw.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, key) => {
+        if (!Object.prototype.hasOwnProperty.call(map, key)) return m;
+        return rich ? escHtml(map[key]) : String(map[key]);
+      });
+      if (rich) return sanitizeTemplateHtml(replaced);
       return escHtml(replaced).replace(/\r\n|\r|\n/g, '<br>');
+    }
+
+    function detectTemplateFontSize(body) {
+      const raw = String(body || '');
+      let m = raw.match(/class=["'][^"']*tpl-doc-font[^"']*["'][^>]*style=["'][^"']*font-size\s*:\s*([\d.]+px)/i)
+        || raw.match(/style=["'][^"']*font-size\s*:\s*([\d.]+px)[^"']*["'][^>]*class=["'][^"']*tpl-doc-font/i)
+        || raw.match(/font-size\s*:\s*([\d.]+px)/i);
+      return m ? m[1] : '12px';
     }
 
     function renderDocumentModeDoc(c, template) {
       const map = buildTemplateSubstitutions(c);
       const bodyHtml = fillTemplateBody(template.body_content, map);
-      const hijriDate = map.date_hijri || '—';
+      const rich = isRichHtmlTemplate(template.body_content);
+      const docFont = detectTemplateFontSize(template.body_content);
       const rawLogo = String(c.party_one_logo || '').trim();
       let logoSrc = '';
       if (rawLogo.startsWith('/api/attachments/view/')) logoSrc = rawLogo;
       else if (/^data:image\//i.test(rawLogo)) logoSrc = rawLogo;
+      // Document templates already print dates/number in the body — skip the redundant meta strip.
       const logoBlock = logoSrc
-        ? `<div class="doc-logo-row"><div class="doc-logo-img-wrap"><img src="${logoSrc}" alt="" /></div></div>`
+        ? `<div class="doc-header doc-header--meta-only"><div class="doc-logo-row"><div class="doc-logo-img-wrap"><img src="${logoSrc}" alt="" /></div></div></div>`
         : '';
-      const title = escHtml(template.template_name || c.template_name || 'عقد');
       const isDraft = !isContractCompletedStatus(c.status);
 
       document.getElementById('contractDoc').innerHTML = `
-      <div class="contract-doc${isDraft ? ' is-draft' : ''}" id="printArea">
+      <div class="contract-doc${isDraft ? ' is-draft' : ''}" id="printArea" style="--doc-body-font-size:${docFont}">
         <div class="contract-doc-body">
-          <div class="doc-header">
-            ${logoBlock}
-            <div class="doc-contract-title">${title}</div>
-            <div class="doc-contract-meta">
-              <span><i class="fas fa-calendar-alt" style="color:#c8a84b;"></i> ${c.date_gregorian || '—'} م</span>
-              <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> ${hijriDate} هـ</span>
-              <span><i class="fas fa-hashtag" style="color:#888;"></i> ${c.contract_number || '—'}</span>
-            </div>
-          </div>
+          ${logoBlock}
 
-          <div class="doc-document-body" style="font-size:14px;line-height:2.1;text-align:justify;white-space:normal;">${bodyHtml}</div>
+          <div class="doc-document-body"${rich ? ' data-rich="1"' : ''} style="font-size:${docFont};line-height:1.6;text-align:justify;white-space:normal;">${bodyHtml}</div>
         </div>
 
         <div id="draftWatermarkInner" class="draft-watermark"${isDraft ? '' : ' hidden aria-hidden="true"'}>
@@ -1391,6 +1751,16 @@
     }
 
     // ======= ACTIONS =======
+    function canUseStatusDropdown() {
+      return getContractsRoleId() === 2;
+    }
+
+    function configureStatusDropdownVisibility() {
+      const wrap = document.getElementById('statusDropdownWrap');
+      if (!wrap) return;
+      wrap.hidden = !canUseStatusDropdown();
+    }
+
     function isContractPendingApprovalForCurrentRole() {
       const roleId = getContractsRoleId();
       if (!currentContract) return false;
@@ -1404,13 +1774,15 @@
       if (!approveBtn || !currentContract) return;
       const roleId = getContractsRoleId();
       const statusSelect = document.getElementById('statusSelect');
+      configureStatusDropdownVisibility();
       approveBtn.style.display = isContractPendingApprovalForCurrentRole() ? 'inline-flex' : 'none';
 
-      if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
-        statusSelect.value = 'نشط';
+      if (roleId === 2 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+        if (statusSelect) statusSelect.value = 'نشط';
+        approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
+      } else if (roleId === 1 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
         approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
       } else if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
-        statusSelect.value = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
         approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد وإرسال للإدارة';
       }
     }
@@ -1443,6 +1815,7 @@
     }
 
     async function updateStatus() {
+      if (!canUseStatusDropdown()) return;
       if (isContractPendingApprovalForCurrentRole()) {
         configureApprovalActions();
         showToast('استخدم زر الاعتماد لإكمال خطوة الموافقة الحالية', 'warning');
@@ -1463,7 +1836,9 @@
       let newStatus = null;
       if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
         newStatus = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
-      } else if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+      } else if (roleId === 1 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+        newStatus = 'نشط';
+      } else if (roleId === 2 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
         const selected = document.getElementById('statusSelect').value;
         newStatus = ['نشط', 'بانتظار التمويل', 'مكتمل'].includes(selected) ? selected : 'نشط';
       }

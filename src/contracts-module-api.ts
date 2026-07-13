@@ -27,6 +27,19 @@ function normalizeVariablesList(v: unknown): string | null {
   return JSON.stringify(v)
 }
 
+/** Detect Chrome/Edge Translate corruption of Arabic contract template bodies. */
+function looksBrowserTranslatedTemplate(html: unknown): boolean {
+  const s = String(html ?? '')
+  if (/vertical-align\s*:\s*inherit/i.test(s) && /dir\s*=\s*["']?auto["']?/i.test(s)) return true
+  if (/\bWhereas\b/i.test(s) || /\bFirst Party\b/i.test(s) || /\bSecond Party\b/i.test(s)) return true
+  if (/\bArticle\s+(One|Two|Three|[1-9]|I{1,3})\b/i.test(s)) return true
+  if (/\b(hereinafter|pursuant|aforesaid|Witnesseth)\b/i.test(s)) return true
+  return false
+}
+
+const TRANSLATE_BLOCKED_MSG =
+  'يبدو أن المتصفح ترجم نص القالب إلى الإنجليزية. عطّل ترجمة الصفحة وأعد تحميل القالب قبل الحفظ.'
+
 /** Empty or whitespace-only national / debtor id → null for D1. */
 function optionalNationalId(value: unknown): string | null {
   if (value == null) return null
@@ -360,26 +373,39 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (tenantId == null) return c.json({ error: 'Missing tenant' }, 400)
 
     if (table === 'contract_templates') {
+      if (info.roleId === 4 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
       const template_name = String(body.template_name ?? '')
       if (!template_name.trim()) return c.json({ error: 'template_name required' }, 400)
-      const r = await c.env.DB.prepare(
-        `INSERT INTO contract_templates (
-          tenant_id, template_name, template_type, header_content, body_content, footer_content,
-          variables_list, is_active, court_city
-        ) VALUES (?,?,?,?,?,?,?,?,?)`
-      )
-        .bind(
-          tenantId,
-          template_name,
-          body.template_type ?? null,
-          body.header_content ?? null,
-          body.body_content ?? null,
-          body.footer_content ?? null,
-          normalizeVariablesList(body.variables_list),
-          body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
-          body.court_city ?? null
+      if (looksBrowserTranslatedTemplate(body.body_content)) {
+        return c.json({ error: 'browser_translate_blocked', detail: TRANSLATE_BLOCKED_MSG }, 400)
+      }
+      const renderMode = String(body.render_mode ?? 'structured') === 'document' ? 'document' : 'structured'
+      let r: { meta: { last_row_id: number | null } }
+      try {
+        r = await c.env.DB.prepare(
+          `INSERT INTO contract_templates (
+            tenant_id, template_name, template_type, header_content, body_content, footer_content,
+            variables_list, is_active, court_city, render_mode
+          ) VALUES (?,?,?,?,?,?,?,?,?,?)`
         )
-        .run()
+          .bind(
+            tenantId,
+            template_name,
+            body.template_type ?? null,
+            body.header_content ?? null,
+            body.body_content ?? null,
+            body.footer_content ?? null,
+            normalizeVariablesList(body.variables_list),
+            body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
+            body.court_city ?? null,
+            renderMode
+          )
+          .run()
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error('contract_templates insert failed', msg)
+        return c.json({ error: 'database_error', detail: msg }, 500)
+      }
       const id = r.meta.last_row_id as number
       const row = await c.env.DB.prepare('SELECT * FROM contract_templates WHERE id = ?').bind(id).first()
       return c.json({ ...row, id })
@@ -541,24 +567,39 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       if (!cRow || cRow.tenant_id !== tenantId) return c.json({ error: 'Invalid contract' }, 400)
       const note_number = String(body.note_number ?? '')
       if (!note_number.trim()) return c.json({ error: 'note_number required' }, 400)
-      const r = await c.env.DB.prepare(
-        `INSERT INTO promissory_notes (
+      let r
+      try {
+        r = await c.env.DB.prepare(
+          `INSERT INTO promissory_notes (
           tenant_id, note_number, contract_id, debtor_name, debtor_id, amount, due_date, issue_date, payment_place, status
         ) VALUES (?,?,?,?,?,?,?,?,?,?)`
-      )
-        .bind(
-          tenantId,
-          note_number,
-          contract_id,
-          body.debtor_name ?? null,
-          optionalNationalId(body.debtor_id),
-          body.amount != null ? Number(body.amount) : null,
-          body.due_date ?? null,
-          body.issue_date ?? null,
-          body.payment_place ?? null,
-          body.status ?? 'ساري'
         )
-        .run()
+          .bind(
+            tenantId,
+            note_number,
+            contract_id,
+            body.debtor_name ?? null,
+            optionalNationalId(body.debtor_id),
+            body.amount != null ? Number(body.amount) : null,
+            body.due_date ?? null,
+            body.issue_date ?? null,
+            body.payment_place ?? null,
+            body.status ?? 'ساري'
+          )
+          .run()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/UNIQUE|unique constraint/i.test(msg)) {
+          return c.json(
+            {
+              error: 'duplicate_note_number',
+              detail: `رقم سند الأمر (${note_number}) مستخدم مسبقاً. اختر رقماً آخر.`
+            },
+            409
+          )
+        }
+        return c.json({ error: 'database_error', detail: msg }, 500)
+      }
       const id = r.meta.last_row_id as number
       const row = await c.env.DB.prepare('SELECT * FROM promissory_notes WHERE id = ?').bind(id).first()
       return c.json({ ...row, id })
@@ -594,6 +635,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
 
     if (table === 'contract_templates') {
       if (info.roleId === 4 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
+      if (body.body_content !== undefined && looksBrowserTranslatedTemplate(body.body_content)) {
+        return c.json({ error: 'browser_translate_blocked', detail: TRANSLATE_BLOCKED_MSG }, 400)
+      }
       const fields: string[] = []
       const vals: unknown[] = []
       const touch = (col: string, key: string) => {
@@ -612,11 +656,21 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       touch('variables_list', 'variables_list')
       touch('is_active', 'is_active')
       touch('court_city', 'court_city')
+      if (method === 'PUT' || body.render_mode !== undefined) {
+        fields.push('render_mode = ?')
+        vals.push(String(body.render_mode ?? 'structured') === 'document' ? 'document' : 'structured')
+      }
       if (fields.length === 0) {
         const row = await c.env.DB.prepare('SELECT * FROM contract_templates WHERE id = ?').bind(id).first()
         return c.json(row)
       }
-      await c.env.DB.prepare(`UPDATE contract_templates SET ${fields.join(', ')} WHERE id = ?`).bind(...vals, id).run()
+      try {
+        await c.env.DB.prepare(`UPDATE contract_templates SET ${fields.join(', ')} WHERE id = ?`).bind(...vals, id).run()
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error('contract_templates update failed', msg)
+        return c.json({ error: 'database_error', detail: msg }, 500)
+      }
       const row = await c.env.DB.prepare('SELECT * FROM contract_templates WHERE id = ?').bind(id).first()
       return c.json(row)
     }

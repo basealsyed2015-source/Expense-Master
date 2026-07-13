@@ -83,20 +83,20 @@ const API = {
     return this.request(`${this.base}/${table}/${id}`);
   },
 
-  async create(table, data) {
+  async create(table, data, opts = {}) {
     return this.request(`${this.base}/${table}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    });
+    }, opts.timeoutMs ?? 15000);
   },
 
-  async update(table, id, data) {
+  async update(table, id, data, opts = {}) {
     return this.request(`${this.base}/${table}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    });
+    }, opts.timeoutMs ?? 15000);
   },
 
   async patch(table, id, data) {

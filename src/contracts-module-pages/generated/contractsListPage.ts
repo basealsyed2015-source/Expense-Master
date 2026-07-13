@@ -1012,7 +1012,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260401"></script>
+  <script src="/contracts-module/js/app.js?v=20260713"></script>
   <script>
     let allContracts = [];
     let filteredContracts = [];

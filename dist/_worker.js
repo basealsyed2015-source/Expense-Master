@@ -1,4 +1,4 @@
-var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw new Error("next() called multiple times");s=i;let l,d=!1,c;if(e[i]?(c=e[i][0][0],r.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{l=await c(r,()=>o(i+1))}catch(p){if(p instanceof Error&&t)r.error=p,l=await t(p,r),d=!0;else throw p}else r.finalized===!1&&a&&(l=await a(r));return l&&(r.finalized===!1||d)&&(r.res=l),r}},wn=Symbol(),_n=async(e,t=Object.create(null))=>{const{all:a=!1,dot:r=!1}=t,s=(e instanceof za?e.raw.headers:e.headers).get("Content-Type");return s?.startsWith("multipart/form-data")||s?.startsWith("application/x-www-form-urlencoded")?En(e,{all:a,dot:r}):{}};async function En(e,t){const a=await e.formData();return a?kn(a,t):{}}function kn(e,t){const a=Object.create(null);return e.forEach((r,n)=>{t.all||n.endsWith("[]")?In(a,n,r):a[n]=r}),t.dot&&Object.entries(a).forEach(([r,n])=>{r.includes(".")&&(Sn(a,r,n),delete a[r])}),a}var In=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Sn=(e,t,a)=>{let r=e;const n=t.split(".");n.forEach((s,o)=>{o===n.length-1?r[s]=a:((!r[s]||typeof r[s]!="object"||Array.isArray(r[s])||r[s]instanceof File)&&(r[s]=Object.create(null)),r=r[s])})},Pa=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Tn=e=>{const{groups:t,path:a}=Cn(e),r=Pa(a);return Rn(r,t)},Cn=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,r)=>{const n=`@${r}`;return t.push([n,a]),n}),{groups:t,path:e}},Rn=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[r]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(r)){e[n]=e[n].replace(r,t[a][1]);break}}return e},nt={},Ln=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const r=`${e}#${t}`;return nt[r]||(a[2]?nt[r]=t&&t[0]!==":"&&t[0]!=="*"?[r,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:nt[r]=[e,a[1],!0]),nt[r]}return null},Vt=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Dn=e=>Vt(e,decodeURI),$a=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let r=a;for(;r<t.length;r++){const n=t.charCodeAt(r);if(n===37){const s=t.indexOf("?",r),o=t.slice(a,s===-1?void 0:s);return Dn(o.includes("%25")?o.replace(/%25/g,"%2525"):o)}else if(n===63)break}return t.slice(a,r)},An=e=>{const t=$a(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},Be=(e,t,...a)=>(a.length&&(t=Be(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),Ha=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let r="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))r+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&r===""?a.push("/"):a.push(r);const s=n.replace("?","");r+="/"+s,a.push(r)}else r+="/"+n}),a.filter((n,s,o)=>o.indexOf(n)===s)},Ft=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?Vt(e,Wa):e):e,Ua=(e,t,a)=>{let r;if(!a&&t&&!/[%+]/.test(t)){let o=e.indexOf("?",8);if(o===-1)return;for(e.startsWith(t,o+1)||(o=e.indexOf(`&${t}`,o+1));o!==-1;){const i=e.charCodeAt(o+t.length+1);if(i===61){const l=o+t.length+2,d=e.indexOf("&",l);return Ft(e.slice(l,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";o=e.indexOf(`&${t}`,o+1)}if(r=/[%+]/.test(e),!r)return}const n={};r??=/[%+]/.test(e);let s=e.indexOf("?",8);for(;s!==-1;){const o=e.indexOf("&",s+1);let i=e.indexOf("=",s);i>o&&o!==-1&&(i=-1);let l=e.slice(s+1,i===-1?o===-1?void 0:o:i);if(r&&(l=Ft(l)),s=o,l==="")continue;let d;i===-1?d="":(d=e.slice(i+1,o===-1?void 0:o),r&&(d=Ft(d))),a?(n[l]&&Array.isArray(n[l])||(n[l]=[]),n[l].push(d)):n[l]??=d}return t?n[t]:n},Bn=Ua,Nn=(e,t)=>Ua(e,t,!0),Wa=decodeURIComponent,ba=e=>Vt(e,Wa),za=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#s()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?ba(a):a}#s(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const r=this.#n(this.#e[0][this.routeIndex][1][a]);r!==void 0&&(e[a]=/\%/.test(r)?ba(r):r)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return Bn(this.url,e)}queries(e){return Nn(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,r)=>{t[r]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await _n(this,e)}#r=e=>{const{bodyCache:t,raw:a}=this,r=t[e];if(r)return r;const n=Object.keys(t)[0];return n?t[n].then(s=>(n==="json"&&(s=JSON.stringify(s)),new Response(s)[e]())):t[e]=a[e]()};json(){return this.#r("text").then(e=>JSON.parse(e))}text(){return this.#r("text")}arrayBuffer(){return this.#r("arrayBuffer")}blob(){return this.#r("blob")}formData(){return this.#r("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[wn](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},jn={Stringify:1},Ga=async(e,t,a,r,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const s=e.callbacks;return s?.length?(n?n[0]+=e:n=[e],Promise.all(s.map(i=>i({phase:t,buffer:n,context:r}))).then(i=>Promise.all(i.filter(Boolean).map(l=>Ga(l,t,!1,r,n))).then(()=>n[0]))):Promise.resolve(e)},On="text/plain; charset=UTF-8",qt=(e,t)=>({"Content-Type":e,...t}),Mn=class{#t;#e;env={};#a;finalized=!1;error;#s;#n;#r;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new za(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#r||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#r&&e){e=new Response(e.body,e);for(const[t,a]of this.#r.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const r=this.#r.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of r)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#r=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#r=new Response(this.#r.body,this.#r));const r=this.#r?this.#r.headers:this.#i??=new Headers;t===void 0?r.delete(e):a?.append?r.append(e,t):r.set(e,t)};status=e=>{this.#s=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const r=this.#r?new Headers(this.#r.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const s=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[o,i]of s)o.toLowerCase()==="set-cookie"?r.append(o,i):r.set(o,i)}if(a)for(const[s,o]of Object.entries(a))if(typeof o=="string")r.set(s,o);else{r.delete(s);for(const i of o)r.append(s,i)}const n=typeof t=="number"?t:t?.status??this.#s;return new Response(e,{status:n,headers:r})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#s&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,qt(On,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,qt("application/json",a));html=(e,t,a)=>{const r=n=>this.#o(n,t,qt("text/html; charset=UTF-8",a));return typeof e=="object"?Ga(e,jn.Stringify,!1,{}).then(r):r(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},W="ALL",Fn="all",qn=["get","post","put","delete","options","patch"],Ya="Can not add a route since the matcher is already built.",Va=class extends Error{},Pn="__COMPOSED_HANDLER",$n=e=>e.text("404 Not Found",404),ha=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},Hn=class Ja{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...qn,Fn].forEach(s=>{this[s]=(o,...i)=>(typeof o=="string"?this.#t=o:this.#s(s,this.#t,o),i.forEach(l=>{this.#s(s,this.#t,l)}),this)}),this.on=(s,o,...i)=>{for(const l of[o].flat()){this.#t=l;for(const d of[s].flat())i.map(c=>{this.#s(d.toUpperCase(),this.#t,c)})}return this},this.use=(s,...o)=>(typeof s=="string"?this.#t=s:(this.#t="*",o.unshift(s)),o.forEach(i=>{this.#s(W,this.#t,i)}),this);const{strict:r,...n}=t;Object.assign(this,n),this.getPath=r??!0?t.getPath??$a:An}#e(){const t=new Ja({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=$n;errorHandler=ha;route(t,a){const r=this.basePath(t);return a.routes.map(n=>{let s;a.errorHandler===ha?s=n.handler:(s=async(o,i)=>(await fa([],a.errorHandler)(o,()=>n.handler(o,i))).res,s[Pn]=n.handler),r.#s(n.method,n.path,s)}),this}basePath(t){const a=this.#e();return a._basePath=Be(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,r){let n,s;r&&(typeof r=="function"?s=r:(s=r.optionHandler,r.replaceRequest===!1?n=l=>l:n=r.replaceRequest));const o=s?l=>{const d=s(l);return Array.isArray(d)?d:[d]}:l=>{let d;try{d=l.executionCtx}catch{}return[l.env,d]};n||=(()=>{const l=Be(this._basePath,t),d=l==="/"?0:l.length;return c=>{const p=new URL(c.url);return p.pathname=p.pathname.slice(d)||"/",new Request(p,c)}})();const i=async(l,d)=>{const c=await a(n(l.req.raw),...o(l));if(c)return c;await d()};return this.#s(W,Be(t,"*"),i),this}#s(t,a,r){t=t.toUpperCase(),a=Be(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:r};this.router.add(t,a,[r,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#r(t,a,r,n){if(n==="HEAD")return(async()=>new Response(null,await this.#r(t,a,r,"GET")))();const s=this.getPath(t,{env:r}),o=this.router.match(n,s),i=new Mn(t,{path:s,matchResult:o,env:r,executionCtx:a,notFoundHandler:this.#a});if(o[0].length===1){let d;try{d=o[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const l=fa(o[0],this.errorHandler,this.#a);return(async()=>{try{const d=await l(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#r(t,a[1],a[0],t.method);request=(t,a,r,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,r,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${Be("/",t)}`,a),r,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#r(t.request,t,void 0,t.request.method))})}},Xa=[];function Un(e,t){const a=this.buildAllMatchers(),r=((n,s)=>{const o=a[n]||a[W],i=o[2][s];if(i)return i;const l=s.match(o[0]);if(!l)return[[],Xa];const d=l.indexOf("",1);return[o[1][d],l]});return this.match=r,r(e,t)}var pt="[^/]+",Ge=".*",Ye="(?:|/.*)",Ne=Symbol(),Wn=new Set(".\\+*[^]$()");function zn(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===Ge||e===Ye?1:t===Ge||t===Ye?-1:e===pt?1:t===pt?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Gn=class Gt{#t;#e;#a=Object.create(null);insert(t,a,r,n,s){if(t.length===0){if(this.#t!==void 0)throw Ne;if(s)return;this.#t=a;return}const[o,...i]=t,l=o==="*"?i.length===0?["","",Ge]:["","",pt]:o==="/*"?["","",Ye]:o.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(l){const c=l[1];let p=l[2]||pt;if(c&&l[2]&&(p===".*"||(p=p.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(p))))throw Ne;if(d=this.#a[p],!d){if(Object.keys(this.#a).some(u=>u!==Ge&&u!==Ye))throw Ne;if(s)return;d=this.#a[p]=new Gt,c!==""&&(d.#e=n.varIndex++)}!s&&c!==""&&r.push([c,d.#e])}else if(d=this.#a[o],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==Ge&&c!==Ye))throw Ne;if(s)return;d=this.#a[o]=new Gt}d.insert(i,a,r,n,s)}buildRegExpStr(){const a=Object.keys(this.#a).sort(zn).map(r=>{const n=this.#a[r];return(typeof n.#e=="number"?`(${r})@${n.#e}`:Wn.has(r)?`\\${r}`:r)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Yn=class{#t={varIndex:0};#e=new Gn;insert(e,t,a){const r=[],n=[];for(let o=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,l=>{const d=`@\\${o}`;return n[o]=[d,l],o++,i=!0,d}),!i)break}const s=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let o=n.length-1;o>=0;o--){const[i]=n[o];for(let l=s.length-1;l>=0;l--)if(s[l].indexOf(i)!==-1){s[l]=s[l].replace(i,n[o][1]);break}}return this.#e.insert(s,t,r,this.#t,a),r}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],r=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,s,o)=>s!==void 0?(a[++t]=Number(s),"$()"):(o!==void 0&&(r[Number(o)]=++t),"")),[new RegExp(`^${e}`),a,r]}},Vn=[/^$/,[],Object.create(null)],Qa=Object.create(null);function Ka(e){return Qa[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Jn(){Qa=Object.create(null)}function Xn(e){const t=new Yn,a=[];if(e.length===0)return Vn;const r=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[p,u])=>d?1:p?-1:c.length-u.length),n=Object.create(null);for(let d=0,c=-1,p=r.length;d<p;d++){const[u,g,b]=r[d];u?n[g]=[b.map(([w])=>[w,Object.create(null)]),Xa]:c++;let f;try{f=t.insert(g,c,u)}catch(w){throw w===Ne?new Va(g):w}u||(a[c]=b.map(([w,h])=>{const y=Object.create(null);for(h-=1;h>=0;h--){const[S,_]=f[h];y[S]=_}return[w,y]}))}const[s,o,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let p=0,u=a[d].length;p<u;p++){const g=a[d][p]?.[1];if(!g)continue;const b=Object.keys(g);for(let f=0,w=b.length;f<w;f++)g[b[f]]=i[g[b[f]]]}const l=[];for(const d in o)l[d]=a[o[d]];return[s,l,n]}function De(e,t){if(e){for(const a of Object.keys(e).sort((r,n)=>n.length-r.length))if(Ka(a).test(t))return[...e[a]]}}var Qn=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[W]:Object.create(null)},this.#e={[W]:Object.create(null)}}add(e,t,a){const r=this.#t,n=this.#e;if(!r||!n)throw new Error(Ya);r[e]||[r,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[W]).forEach(l=>{i[e][l]=[...i[W][l]]})}),t==="/*"&&(t="*");const s=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=Ka(t);e===W?Object.keys(r).forEach(l=>{r[l][t]||=De(r[l],t)||De(r[W],t)||[]}):r[e][t]||=De(r[e],t)||De(r[W],t)||[],Object.keys(r).forEach(l=>{(e===W||e===l)&&Object.keys(r[l]).forEach(d=>{i.test(d)&&r[l][d].push([a,s])})}),Object.keys(n).forEach(l=>{(e===W||e===l)&&Object.keys(n[l]).forEach(d=>i.test(d)&&n[l][d].push([a,s]))});return}const o=Ha(t)||[t];for(let i=0,l=o.length;i<l;i++){const d=o[i];Object.keys(n).forEach(c=>{(e===W||e===c)&&(n[c][d]||=[...De(r[c],d)||De(r[W],d)||[]],n[c][d].push([a,s-l+i+1]))})}}match=Un;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Jn(),e}#a(e){const t=[];let a=e===W;return[this.#t,this.#e].forEach(r=>{const n=r[e]?Object.keys(r[e]).map(s=>[s,r[e][s]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==W&&t.push(...Object.keys(r[W]).map(s=>[s,r[W][s]]))}),a?Xn(t):null}},Kn=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ya);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,r=this.#e,n=a.length;let s=0,o;for(;s<n;s++){const i=a[s];try{for(let l=0,d=r.length;l<d;l++)i.add(...r[l]);o=i.match(e,t)}catch(l){if(l instanceof Va)continue;throw l}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(s===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,o}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},He=Object.create(null),Zn=class Za{#t;#e;#a;#s=0;#n=He;constructor(t,a,r){if(this.#e=r||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,r){this.#s=++this.#s;let n=this;const s=Tn(a),o=[];for(let i=0,l=s.length;i<l;i++){const d=s[i],c=s[i+1],p=Ln(d,c),u=Array.isArray(p)?p[0]:d;if(u in n.#e){n=n.#e[u],p&&o.push(p[1]);continue}n.#e[u]=new Za,p&&(n.#a.push(p),o.push(p[1])),n=n.#e[u]}return n.#t.push({[t]:{handler:r,possibleKeys:o.filter((i,l,d)=>d.indexOf(i)===l),score:this.#s}}),n}#r(t,a,r,n){const s=[];for(let o=0,i=t.#t.length;o<i;o++){const l=t.#t[o],d=l[a]||l[W],c={};if(d!==void 0&&(d.params=Object.create(null),s.push(d),r!==He||n&&n!==He))for(let p=0,u=d.possibleKeys.length;p<u;p++){const g=d.possibleKeys[p],b=c[d.score];d.params[g]=n?.[g]&&!b?n[g]:r[g]??n?.[g],c[d.score]=!0}}return s}search(t,a){const r=[];this.#n=He;let s=[this];const o=Pa(a),i=[];for(let l=0,d=o.length;l<d;l++){const c=o[l],p=l===d-1,u=[];for(let g=0,b=s.length;g<b;g++){const f=s[g],w=f.#e[c];w&&(w.#n=f.#n,p?(w.#e["*"]&&r.push(...this.#r(w.#e["*"],t,f.#n)),r.push(...this.#r(w,t,f.#n))):u.push(w));for(let h=0,y=f.#a.length;h<y;h++){const S=f.#a[h],_=f.#n===He?{}:{...f.#n};if(S==="*"){const L=f.#e["*"];L&&(r.push(...this.#r(L,t,f.#n)),L.#n=_,u.push(L));continue}const[k,T,v]=S;if(!c&&!(v instanceof RegExp))continue;const x=f.#e[k],I=o.slice(l).join("/");if(v instanceof RegExp){const L=v.exec(I);if(L){if(_[T]=L[0],r.push(...this.#r(x,t,f.#n,_)),Object.keys(x.#e).length){x.#n=_;const R=L[0].match(/\//)?.length??0;(i[R]||=[]).push(x)}continue}}(v===!0||v.test(c))&&(_[T]=c,p?(r.push(...this.#r(x,t,_,f.#n)),x.#e["*"]&&r.push(...this.#r(x.#e["*"],t,_,f.#n))):(x.#n=_,u.push(x)))}}s=u.concat(i.shift()??[])}return r.length>1&&r.sort((l,d)=>l.score-d.score),[r.map(({handler:l,params:d})=>[l,d])]}},es=class{name="TrieRouter";#t;constructor(){this.#t=new Zn}add(e,t,a){const r=Ha(t);if(r){for(let n=0,s=r.length;n<s;n++)this.#t.insert(e,r[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},er=class extends Hn{constructor(e={}){super(e),this.router=e.router??new Kn({routers:[new Qn,new es]})}},ts=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},r=(s=>typeof s=="string"?s==="*"?()=>s:o=>s===o?o:null:typeof s=="function"?s:o=>s.includes(o)?o:null)(a.origin),n=(s=>typeof s=="function"?s:Array.isArray(s)?()=>s:()=>[])(a.allowMethods);return async function(o,i){function l(c,p){o.res.headers.set(c,p)}const d=await r(o.req.header("origin")||"",o);if(d&&l("Access-Control-Allow-Origin",d),a.credentials&&l("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&l("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),o.req.method==="OPTIONS"){a.origin!=="*"&&l("Vary","Origin"),a.maxAge!=null&&l("Access-Control-Max-Age",a.maxAge.toString());const c=await n(o.req.header("origin")||"",o);c.length&&l("Access-Control-Allow-Methods",c.join(","));let p=a.allowHeaders;if(!p?.length){const u=o.req.header("Access-Control-Request-Headers");u&&(p=u.split(/\s*,\s*/))}return p?.length&&(l("Access-Control-Allow-Headers",p.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const as=`<!DOCTYPE html>
+var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw new Error("next() called multiple times");s=i;let l,d=!1,c;if(e[i]?(c=e[i][0][0],r.req.routeIndex=i):c=i===e.length&&n||void 0,c)try{l=await c(r,()=>o(i+1))}catch(p){if(p instanceof Error&&t)r.error=p,l=await t(p,r),d=!0;else throw p}else r.finalized===!1&&a&&(l=await a(r));return l&&(r.finalized===!1||d)&&(r.res=l),r}},En=Symbol(),kn=async(e,t=Object.create(null))=>{const{all:a=!1,dot:r=!1}=t,s=(e instanceof Va?e.raw.headers:e.headers).get("Content-Type");return s?.startsWith("multipart/form-data")||s?.startsWith("application/x-www-form-urlencoded")?In(e,{all:a,dot:r}):{}};async function In(e,t){const a=await e.formData();return a?Sn(a,t):{}}function Sn(e,t){const a=Object.create(null);return e.forEach((r,n)=>{t.all||n.endsWith("[]")?Tn(a,n,r):a[n]=r}),t.dot&&Object.entries(a).forEach(([r,n])=>{r.includes(".")&&(Cn(a,r,n),delete a[r])}),a}var Tn=(e,t,a)=>{e[t]!==void 0?Array.isArray(e[t])?e[t].push(a):e[t]=[e[t],a]:t.endsWith("[]")?e[t]=[a]:e[t]=a},Cn=(e,t,a)=>{let r=e;const n=t.split(".");n.forEach((s,o)=>{o===n.length-1?r[s]=a:((!r[s]||typeof r[s]!="object"||Array.isArray(r[s])||r[s]instanceof File)&&(r[s]=Object.create(null)),r=r[s])})},Ha=e=>{const t=e.split("/");return t[0]===""&&t.shift(),t},Rn=e=>{const{groups:t,path:a}=Ln(e),r=Ha(a);return Dn(r,t)},Ln=e=>{const t=[];return e=e.replace(/\{[^}]+\}/g,(a,r)=>{const n=`@${r}`;return t.push([n,a]),n}),{groups:t,path:e}},Dn=(e,t)=>{for(let a=t.length-1;a>=0;a--){const[r]=t[a];for(let n=e.length-1;n>=0;n--)if(e[n].includes(r)){e[n]=e[n].replace(r,t[a][1]);break}}return e},nt={},An=(e,t)=>{if(e==="*")return"*";const a=e.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const r=`${e}#${t}`;return nt[r]||(a[2]?nt[r]=t&&t[0]!==":"&&t[0]!=="*"?[r,a[1],new RegExp(`^${a[2]}(?=/${t})`)]:[e,a[1],new RegExp(`^${a[2]}$`)]:nt[r]=[e,a[1],!0]),nt[r]}return null},Yt=(e,t)=>{try{return t(e)}catch{return e.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return t(a)}catch{return a}})}},Bn=e=>Yt(e,decodeURI),Ua=e=>{const t=e.url,a=t.indexOf("/",t.indexOf(":")+4);let r=a;for(;r<t.length;r++){const n=t.charCodeAt(r);if(n===37){const s=t.indexOf("?",r),o=t.slice(a,s===-1?void 0:s);return Bn(o.includes("%25")?o.replace(/%25/g,"%2525"):o)}else if(n===63)break}return t.slice(a,r)},Nn=e=>{const t=Ua(e);return t.length>1&&t.at(-1)==="/"?t.slice(0,-1):t},Be=(e,t,...a)=>(a.length&&(t=Be(t,...a)),`${e?.[0]==="/"?"":"/"}${e}${t==="/"?"":`${e?.at(-1)==="/"?"":"/"}${t?.[0]==="/"?t.slice(1):t}`}`),za=e=>{if(e.charCodeAt(e.length-1)!==63||!e.includes(":"))return null;const t=e.split("/"),a=[];let r="";return t.forEach(n=>{if(n!==""&&!/\:/.test(n))r+="/"+n;else if(/\:/.test(n))if(/\?/.test(n)){a.length===0&&r===""?a.push("/"):a.push(r);const s=n.replace("?","");r+="/"+s,a.push(r)}else r+="/"+n}),a.filter((n,s,o)=>o.indexOf(n)===s)},Ft=e=>/[%+]/.test(e)?(e.indexOf("+")!==-1&&(e=e.replace(/\+/g," ")),e.indexOf("%")!==-1?Yt(e,Ga):e):e,Wa=(e,t,a)=>{let r;if(!a&&t&&!/[%+]/.test(t)){let o=e.indexOf("?",8);if(o===-1)return;for(e.startsWith(t,o+1)||(o=e.indexOf(`&${t}`,o+1));o!==-1;){const i=e.charCodeAt(o+t.length+1);if(i===61){const l=o+t.length+2,d=e.indexOf("&",l);return Ft(e.slice(l,d===-1?void 0:d))}else if(i==38||isNaN(i))return"";o=e.indexOf(`&${t}`,o+1)}if(r=/[%+]/.test(e),!r)return}const n={};r??=/[%+]/.test(e);let s=e.indexOf("?",8);for(;s!==-1;){const o=e.indexOf("&",s+1);let i=e.indexOf("=",s);i>o&&o!==-1&&(i=-1);let l=e.slice(s+1,i===-1?o===-1?void 0:o:i);if(r&&(l=Ft(l)),s=o,l==="")continue;let d;i===-1?d="":(d=e.slice(i+1,o===-1?void 0:o),r&&(d=Ft(d))),a?(n[l]&&Array.isArray(n[l])||(n[l]=[]),n[l].push(d)):n[l]??=d}return t?n[t]:n},jn=Wa,On=(e,t)=>Wa(e,t,!0),Ga=decodeURIComponent,ba=e=>Yt(e,Ga),Va=class{raw;#t;#e;routeIndex=0;path;bodyCache={};constructor(e,t="/",a=[[]]){this.raw=e,this.path=t,this.#e=a,this.#t={}}param(e){return e?this.#a(e):this.#s()}#a(e){const t=this.#e[0][this.routeIndex][1][e],a=this.#n(t);return a&&/\%/.test(a)?ba(a):a}#s(){const e={},t=Object.keys(this.#e[0][this.routeIndex][1]);for(const a of t){const r=this.#n(this.#e[0][this.routeIndex][1][a]);r!==void 0&&(e[a]=/\%/.test(r)?ba(r):r)}return e}#n(e){return this.#e[1]?this.#e[1][e]:e}query(e){return jn(this.url,e)}queries(e){return On(this.url,e)}header(e){if(e)return this.raw.headers.get(e)??void 0;const t={};return this.raw.headers.forEach((a,r)=>{t[r]=a}),t}async parseBody(e){return this.bodyCache.parsedBody??=await kn(this,e)}#r=e=>{const{bodyCache:t,raw:a}=this,r=t[e];if(r)return r;const n=Object.keys(t)[0];return n?t[n].then(s=>(n==="json"&&(s=JSON.stringify(s)),new Response(s)[e]())):t[e]=a[e]()};json(){return this.#r("text").then(e=>JSON.parse(e))}text(){return this.#r("text")}arrayBuffer(){return this.#r("arrayBuffer")}blob(){return this.#r("blob")}formData(){return this.#r("formData")}addValidatedData(e,t){this.#t[e]=t}valid(e){return this.#t[e]}get url(){return this.raw.url}get method(){return this.raw.method}get[En](){return this.#e}get matchedRoutes(){return this.#e[0].map(([[,e]])=>e)}get routePath(){return this.#e[0].map(([[,e]])=>e)[this.routeIndex].path}},Mn={Stringify:1},Ya=async(e,t,a,r,n)=>{typeof e=="object"&&!(e instanceof String)&&(e instanceof Promise||(e=e.toString()),e instanceof Promise&&(e=await e));const s=e.callbacks;return s?.length?(n?n[0]+=e:n=[e],Promise.all(s.map(i=>i({phase:t,buffer:n,context:r}))).then(i=>Promise.all(i.filter(Boolean).map(l=>Ya(l,t,!1,r,n))).then(()=>n[0]))):Promise.resolve(e)},Fn="text/plain; charset=UTF-8",qt=(e,t)=>({"Content-Type":e,...t}),qn=class{#t;#e;env={};#a;finalized=!1;error;#s;#n;#r;#c;#l;#d;#i;#p;#u;constructor(e,t){this.#t=e,t&&(this.#n=t.executionCtx,this.env=t.env,this.#d=t.notFoundHandler,this.#u=t.path,this.#p=t.matchResult)}get req(){return this.#e??=new Va(this.#t,this.#u,this.#p),this.#e}get event(){if(this.#n&&"respondWith"in this.#n)return this.#n;throw Error("This context has no FetchEvent")}get executionCtx(){if(this.#n)return this.#n;throw Error("This context has no ExecutionContext")}get res(){return this.#r||=new Response(null,{headers:this.#i??=new Headers})}set res(e){if(this.#r&&e){e=new Response(e.body,e);for(const[t,a]of this.#r.headers.entries())if(t!=="content-type")if(t==="set-cookie"){const r=this.#r.headers.getSetCookie();e.headers.delete("set-cookie");for(const n of r)e.headers.append("set-cookie",n)}else e.headers.set(t,a)}this.#r=e,this.finalized=!0}render=(...e)=>(this.#l??=t=>this.html(t),this.#l(...e));setLayout=e=>this.#c=e;getLayout=()=>this.#c;setRenderer=e=>{this.#l=e};header=(e,t,a)=>{this.finalized&&(this.#r=new Response(this.#r.body,this.#r));const r=this.#r?this.#r.headers:this.#i??=new Headers;t===void 0?r.delete(e):a?.append?r.append(e,t):r.set(e,t)};status=e=>{this.#s=e};set=(e,t)=>{this.#a??=new Map,this.#a.set(e,t)};get=e=>this.#a?this.#a.get(e):void 0;get var(){return this.#a?Object.fromEntries(this.#a):{}}#o(e,t,a){const r=this.#r?new Headers(this.#r.headers):this.#i??new Headers;if(typeof t=="object"&&"headers"in t){const s=t.headers instanceof Headers?t.headers:new Headers(t.headers);for(const[o,i]of s)o.toLowerCase()==="set-cookie"?r.append(o,i):r.set(o,i)}if(a)for(const[s,o]of Object.entries(a))if(typeof o=="string")r.set(s,o);else{r.delete(s);for(const i of o)r.append(s,i)}const n=typeof t=="number"?t:t?.status??this.#s;return new Response(e,{status:n,headers:r})}newResponse=(...e)=>this.#o(...e);body=(e,t,a)=>this.#o(e,t,a);text=(e,t,a)=>!this.#i&&!this.#s&&!t&&!a&&!this.finalized?new Response(e):this.#o(e,t,qt(Fn,a));json=(e,t,a)=>this.#o(JSON.stringify(e),t,qt("application/json",a));html=(e,t,a)=>{const r=n=>this.#o(n,t,qt("text/html; charset=UTF-8",a));return typeof e=="object"?Ya(e,Mn.Stringify,!1,{}).then(r):r(e)};redirect=(e,t)=>{const a=String(e);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,t??302)};notFound=()=>(this.#d??=()=>new Response,this.#d(this))},z="ALL",Pn="all",$n=["get","post","put","delete","options","patch"],Ja="Can not add a route since the matcher is already built.",Xa=class extends Error{},Hn="__COMPOSED_HANDLER",Un=e=>e.text("404 Not Found",404),ha=(e,t)=>{if("getResponse"in e){const a=e.getResponse();return t.newResponse(a.body,a)}return console.error(e),t.text("Internal Server Error",500)},zn=class Qa{get;post;put;delete;options;patch;all;on;use;router;getPath;_basePath="/";#t="/";routes=[];constructor(t={}){[...$n,Pn].forEach(s=>{this[s]=(o,...i)=>(typeof o=="string"?this.#t=o:this.#s(s,this.#t,o),i.forEach(l=>{this.#s(s,this.#t,l)}),this)}),this.on=(s,o,...i)=>{for(const l of[o].flat()){this.#t=l;for(const d of[s].flat())i.map(c=>{this.#s(d.toUpperCase(),this.#t,c)})}return this},this.use=(s,...o)=>(typeof s=="string"?this.#t=s:(this.#t="*",o.unshift(s)),o.forEach(i=>{this.#s(z,this.#t,i)}),this);const{strict:r,...n}=t;Object.assign(this,n),this.getPath=r??!0?t.getPath??Ua:Nn}#e(){const t=new Qa({router:this.router,getPath:this.getPath});return t.errorHandler=this.errorHandler,t.#a=this.#a,t.routes=this.routes,t}#a=Un;errorHandler=ha;route(t,a){const r=this.basePath(t);return a.routes.map(n=>{let s;a.errorHandler===ha?s=n.handler:(s=async(o,i)=>(await fa([],a.errorHandler)(o,()=>n.handler(o,i))).res,s[Hn]=n.handler),r.#s(n.method,n.path,s)}),this}basePath(t){const a=this.#e();return a._basePath=Be(this._basePath,t),a}onError=t=>(this.errorHandler=t,this);notFound=t=>(this.#a=t,this);mount(t,a,r){let n,s;r&&(typeof r=="function"?s=r:(s=r.optionHandler,r.replaceRequest===!1?n=l=>l:n=r.replaceRequest));const o=s?l=>{const d=s(l);return Array.isArray(d)?d:[d]}:l=>{let d;try{d=l.executionCtx}catch{}return[l.env,d]};n||=(()=>{const l=Be(this._basePath,t),d=l==="/"?0:l.length;return c=>{const p=new URL(c.url);return p.pathname=p.pathname.slice(d)||"/",new Request(p,c)}})();const i=async(l,d)=>{const c=await a(n(l.req.raw),...o(l));if(c)return c;await d()};return this.#s(z,Be(t,"*"),i),this}#s(t,a,r){t=t.toUpperCase(),a=Be(this._basePath,a);const n={basePath:this._basePath,path:a,method:t,handler:r};this.router.add(t,a,[r,n]),this.routes.push(n)}#n(t,a){if(t instanceof Error)return this.errorHandler(t,a);throw t}#r(t,a,r,n){if(n==="HEAD")return(async()=>new Response(null,await this.#r(t,a,r,"GET")))();const s=this.getPath(t,{env:r}),o=this.router.match(n,s),i=new qn(t,{path:s,matchResult:o,env:r,executionCtx:a,notFoundHandler:this.#a});if(o[0].length===1){let d;try{d=o[0][0][0][0](i,async()=>{i.res=await this.#a(i)})}catch(c){return this.#n(c,i)}return d instanceof Promise?d.then(c=>c||(i.finalized?i.res:this.#a(i))).catch(c=>this.#n(c,i)):d??this.#a(i)}const l=fa(o[0],this.errorHandler,this.#a);return(async()=>{try{const d=await l(i);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return this.#n(d,i)}})()}fetch=(t,...a)=>this.#r(t,a[1],a[0],t.method);request=(t,a,r,n)=>t instanceof Request?this.fetch(a?new Request(t,a):t,r,n):(t=t.toString(),this.fetch(new Request(/^https?:\/\//.test(t)?t:`http://localhost${Be("/",t)}`,a),r,n));fire=()=>{addEventListener("fetch",t=>{t.respondWith(this.#r(t.request,t,void 0,t.request.method))})}},Ka=[];function Wn(e,t){const a=this.buildAllMatchers(),r=((n,s)=>{const o=a[n]||a[z],i=o[2][s];if(i)return i;const l=s.match(o[0]);if(!l)return[[],Ka];const d=l.indexOf("",1);return[o[1][d],l]});return this.match=r,r(e,t)}var pt="[^/]+",Ge=".*",Ve="(?:|/.*)",Ne=Symbol(),Gn=new Set(".\\+*[^]$()");function Vn(e,t){return e.length===1?t.length===1?e<t?-1:1:-1:t.length===1||e===Ge||e===Ve?1:t===Ge||t===Ve?-1:e===pt?1:t===pt?-1:e.length===t.length?e<t?-1:1:t.length-e.length}var Yn=class Gt{#t;#e;#a=Object.create(null);insert(t,a,r,n,s){if(t.length===0){if(this.#t!==void 0)throw Ne;if(s)return;this.#t=a;return}const[o,...i]=t,l=o==="*"?i.length===0?["","",Ge]:["","",pt]:o==="/*"?["","",Ve]:o.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(l){const c=l[1];let p=l[2]||pt;if(c&&l[2]&&(p===".*"||(p=p.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(p))))throw Ne;if(d=this.#a[p],!d){if(Object.keys(this.#a).some(u=>u!==Ge&&u!==Ve))throw Ne;if(s)return;d=this.#a[p]=new Gt,c!==""&&(d.#e=n.varIndex++)}!s&&c!==""&&r.push([c,d.#e])}else if(d=this.#a[o],!d){if(Object.keys(this.#a).some(c=>c.length>1&&c!==Ge&&c!==Ve))throw Ne;if(s)return;d=this.#a[o]=new Gt}d.insert(i,a,r,n,s)}buildRegExpStr(){const a=Object.keys(this.#a).sort(Vn).map(r=>{const n=this.#a[r];return(typeof n.#e=="number"?`(${r})@${n.#e}`:Gn.has(r)?`\\${r}`:r)+n.buildRegExpStr()});return typeof this.#t=="number"&&a.unshift(`#${this.#t}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},Jn=class{#t={varIndex:0};#e=new Yn;insert(e,t,a){const r=[],n=[];for(let o=0;;){let i=!1;if(e=e.replace(/\{[^}]+\}/g,l=>{const d=`@\\${o}`;return n[o]=[d,l],o++,i=!0,d}),!i)break}const s=e.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let o=n.length-1;o>=0;o--){const[i]=n[o];for(let l=s.length-1;l>=0;l--)if(s[l].indexOf(i)!==-1){s[l]=s[l].replace(i,n[o][1]);break}}return this.#e.insert(s,t,r,this.#t,a),r}buildRegExp(){let e=this.#e.buildRegExpStr();if(e==="")return[/^$/,[],[]];let t=0;const a=[],r=[];return e=e.replace(/#(\d+)|@(\d+)|\.\*\$/g,(n,s,o)=>s!==void 0?(a[++t]=Number(s),"$()"):(o!==void 0&&(r[Number(o)]=++t),"")),[new RegExp(`^${e}`),a,r]}},Xn=[/^$/,[],Object.create(null)],Za=Object.create(null);function er(e){return Za[e]??=new RegExp(e==="*"?"":`^${e.replace(/\/\*$|([.\\+*[^\]$()])/g,(t,a)=>a?`\\${a}`:"(?:|/.*)")}$`)}function Qn(){Za=Object.create(null)}function Kn(e){const t=new Jn,a=[];if(e.length===0)return Xn;const r=e.map(d=>[!/\*|\/:/.test(d[0]),...d]).sort(([d,c],[p,u])=>d?1:p?-1:c.length-u.length),n=Object.create(null);for(let d=0,c=-1,p=r.length;d<p;d++){const[u,g,b]=r[d];u?n[g]=[b.map(([w])=>[w,Object.create(null)]),Ka]:c++;let f;try{f=t.insert(g,c,u)}catch(w){throw w===Ne?new Xa(g):w}u||(a[c]=b.map(([w,h])=>{const y=Object.create(null);for(h-=1;h>=0;h--){const[S,_]=f[h];y[S]=_}return[w,y]}))}const[s,o,i]=t.buildRegExp();for(let d=0,c=a.length;d<c;d++)for(let p=0,u=a[d].length;p<u;p++){const g=a[d][p]?.[1];if(!g)continue;const b=Object.keys(g);for(let f=0,w=b.length;f<w;f++)g[b[f]]=i[g[b[f]]]}const l=[];for(const d in o)l[d]=a[o[d]];return[s,l,n]}function De(e,t){if(e){for(const a of Object.keys(e).sort((r,n)=>n.length-r.length))if(er(a).test(t))return[...e[a]]}}var Zn=class{name="RegExpRouter";#t;#e;constructor(){this.#t={[z]:Object.create(null)},this.#e={[z]:Object.create(null)}}add(e,t,a){const r=this.#t,n=this.#e;if(!r||!n)throw new Error(Ja);r[e]||[r,n].forEach(i=>{i[e]=Object.create(null),Object.keys(i[z]).forEach(l=>{i[e][l]=[...i[z][l]]})}),t==="/*"&&(t="*");const s=(t.match(/\/:/g)||[]).length;if(/\*$/.test(t)){const i=er(t);e===z?Object.keys(r).forEach(l=>{r[l][t]||=De(r[l],t)||De(r[z],t)||[]}):r[e][t]||=De(r[e],t)||De(r[z],t)||[],Object.keys(r).forEach(l=>{(e===z||e===l)&&Object.keys(r[l]).forEach(d=>{i.test(d)&&r[l][d].push([a,s])})}),Object.keys(n).forEach(l=>{(e===z||e===l)&&Object.keys(n[l]).forEach(d=>i.test(d)&&n[l][d].push([a,s]))});return}const o=za(t)||[t];for(let i=0,l=o.length;i<l;i++){const d=o[i];Object.keys(n).forEach(c=>{(e===z||e===c)&&(n[c][d]||=[...De(r[c],d)||De(r[z],d)||[]],n[c][d].push([a,s-l+i+1]))})}}match=Wn;buildAllMatchers(){const e=Object.create(null);return Object.keys(this.#e).concat(Object.keys(this.#t)).forEach(t=>{e[t]||=this.#a(t)}),this.#t=this.#e=void 0,Qn(),e}#a(e){const t=[];let a=e===z;return[this.#t,this.#e].forEach(r=>{const n=r[e]?Object.keys(r[e]).map(s=>[s,r[e][s]]):[];n.length!==0?(a||=!0,t.push(...n)):e!==z&&t.push(...Object.keys(r[z]).map(s=>[s,r[z][s]]))}),a?Kn(t):null}},es=class{name="SmartRouter";#t=[];#e=[];constructor(e){this.#t=e.routers}add(e,t,a){if(!this.#e)throw new Error(Ja);this.#e.push([e,t,a])}match(e,t){if(!this.#e)throw new Error("Fatal error");const a=this.#t,r=this.#e,n=a.length;let s=0,o;for(;s<n;s++){const i=a[s];try{for(let l=0,d=r.length;l<d;l++)i.add(...r[l]);o=i.match(e,t)}catch(l){if(l instanceof Xa)continue;throw l}this.match=i.match.bind(i),this.#t=[i],this.#e=void 0;break}if(s===n)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,o}get activeRouter(){if(this.#e||this.#t.length!==1)throw new Error("No active router has been determined yet.");return this.#t[0]}},He=Object.create(null),ts=class tr{#t;#e;#a;#s=0;#n=He;constructor(t,a,r){if(this.#e=r||Object.create(null),this.#t=[],t&&a){const n=Object.create(null);n[t]={handler:a,possibleKeys:[],score:0},this.#t=[n]}this.#a=[]}insert(t,a,r){this.#s=++this.#s;let n=this;const s=Rn(a),o=[];for(let i=0,l=s.length;i<l;i++){const d=s[i],c=s[i+1],p=An(d,c),u=Array.isArray(p)?p[0]:d;if(u in n.#e){n=n.#e[u],p&&o.push(p[1]);continue}n.#e[u]=new tr,p&&(n.#a.push(p),o.push(p[1])),n=n.#e[u]}return n.#t.push({[t]:{handler:r,possibleKeys:o.filter((i,l,d)=>d.indexOf(i)===l),score:this.#s}}),n}#r(t,a,r,n){const s=[];for(let o=0,i=t.#t.length;o<i;o++){const l=t.#t[o],d=l[a]||l[z],c={};if(d!==void 0&&(d.params=Object.create(null),s.push(d),r!==He||n&&n!==He))for(let p=0,u=d.possibleKeys.length;p<u;p++){const g=d.possibleKeys[p],b=c[d.score];d.params[g]=n?.[g]&&!b?n[g]:r[g]??n?.[g],c[d.score]=!0}}return s}search(t,a){const r=[];this.#n=He;let s=[this];const o=Ha(a),i=[];for(let l=0,d=o.length;l<d;l++){const c=o[l],p=l===d-1,u=[];for(let g=0,b=s.length;g<b;g++){const f=s[g],w=f.#e[c];w&&(w.#n=f.#n,p?(w.#e["*"]&&r.push(...this.#r(w.#e["*"],t,f.#n)),r.push(...this.#r(w,t,f.#n))):u.push(w));for(let h=0,y=f.#a.length;h<y;h++){const S=f.#a[h],_=f.#n===He?{}:{...f.#n};if(S==="*"){const L=f.#e["*"];L&&(r.push(...this.#r(L,t,f.#n)),L.#n=_,u.push(L));continue}const[k,T,v]=S;if(!c&&!(v instanceof RegExp))continue;const x=f.#e[k],I=o.slice(l).join("/");if(v instanceof RegExp){const L=v.exec(I);if(L){if(_[T]=L[0],r.push(...this.#r(x,t,f.#n,_)),Object.keys(x.#e).length){x.#n=_;const R=L[0].match(/\//)?.length??0;(i[R]||=[]).push(x)}continue}}(v===!0||v.test(c))&&(_[T]=c,p?(r.push(...this.#r(x,t,_,f.#n)),x.#e["*"]&&r.push(...this.#r(x.#e["*"],t,_,f.#n))):(x.#n=_,u.push(x)))}}s=u.concat(i.shift()??[])}return r.length>1&&r.sort((l,d)=>l.score-d.score),[r.map(({handler:l,params:d})=>[l,d])]}},as=class{name="TrieRouter";#t;constructor(){this.#t=new ts}add(e,t,a){const r=za(t);if(r){for(let n=0,s=r.length;n<s;n++)this.#t.insert(e,r[n],a);return}this.#t.insert(e,t,a)}match(e,t){return this.#t.search(e,t)}},ar=class extends zn{constructor(e={}){super(e),this.router=e.router??new es({routers:[new Zn,new as]})}},rs=e=>{const a={...{origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[]},...e},r=(s=>typeof s=="string"?s==="*"?()=>s:o=>s===o?o:null:typeof s=="function"?s:o=>s.includes(o)?o:null)(a.origin),n=(s=>typeof s=="function"?s:Array.isArray(s)?()=>s:()=>[])(a.allowMethods);return async function(o,i){function l(c,p){o.res.headers.set(c,p)}const d=await r(o.req.header("origin")||"",o);if(d&&l("Access-Control-Allow-Origin",d),a.credentials&&l("Access-Control-Allow-Credentials","true"),a.exposeHeaders?.length&&l("Access-Control-Expose-Headers",a.exposeHeaders.join(",")),o.req.method==="OPTIONS"){a.origin!=="*"&&l("Vary","Origin"),a.maxAge!=null&&l("Access-Control-Max-Age",a.maxAge.toString());const c=await n(o.req.header("origin")||"",o);c.length&&l("Access-Control-Allow-Methods",c.join(","));let p=a.allowHeaders;if(!p?.length){const u=o.req.header("Access-Control-Request-Headers");u&&(p=u.split(/\s*,\s*/))}return p?.length&&(l("Access-Control-Allow-Headers",p.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await i(),a.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const ns=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -183,7 +183,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,rs=`<!DOCTYPE html>
+`,ss=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +412,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,tr=`<!DOCTYPE html>
+`,rr=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2149,7 +2149,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,ns=`<!DOCTYPE html>
+`,os=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2400,7 +2400,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,ss=`<!DOCTYPE html>
+`,is=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -2736,7 +2736,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,os=`<!DOCTYPE html>
+`,ls=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3035,7 +3035,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,is=`<!DOCTYPE html>
+`,ds=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -3524,7 +3524,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,ar=`<!DOCTYPE html>
+`,nr=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9530,7 +9530,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
 
 </body>
 </html>
-`,ls=`<!DOCTYPE html>
+`,cs=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9738,7 +9738,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,ds=`<!DOCTYPE html>
+`,ps=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -9806,7 +9806,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,rr=`<!DOCTYPE html>
+`,sr=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -10043,7 +10043,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,cs=["أبها","أبو عريش","أحد المسارحة","أحد رفيدة","أضم","أملج","الأسياح","الأفلاج","الأحساء","الاحساء","الباحة","البكيرية","البدائع","البدع","الجبيل","الجموم","الحائط","الحناكية","الخرج","الخرمة","الدائر","الدرب","الدرعية","الدمام","الدوادمي","الرس","الزلفي","السليل","الطائف","الطوال","الظهران","العلا","الغاط","القريات","القطيف","القنفذة","القويعية","الليث","المجاردة","المجمعة","المدينة المنورة","المذنب","المزاحمية","المهد","المويه","المخواة","النبهانية","النعيرية","النماص","الوجه","بارق","بالقرن","بدر","بريدة","بقعاء","بلجرشي","بقيق","بيش","بيشة","تبوك","تثليث","تربة","تيماء","جازان","جدة","حائل","حريملاء","حفر الباطن","حوطة بني تميم","خميس مشيط","خليص","خيبر","دومة الجندل","رابغ","رجال المع","رأس تنورة","رفحاء","رنية","رنيه","سكاكا","سراة عبيدة","شرورة","شقراء","صامطة","صبيا","ضباء","ضمد","طبرجل","طريف","ظهران الجنوب","عرعر","عفيف","عنيزة","قرية العليا","قلوه","مكة المكرمة","محايل","مدينة الملك عبدالله الاقتصادية","ميسان","نجران","وادي الدواسر","ينبع","بحرة","الخبر","الخفجي","العارضة","العرضيات","الكامل","الرياض","فرسان","ينبع النخل"];function ps(e){return[...new Set(e.map(t=>String(t).trim()).filter(Boolean))].sort((t,a)=>t.localeCompare(a,"ar"))}const nr=ps(cs),sr=new Set(nr);function us(e){return e==null||String(e).trim()===""?!0:sr.has(String(e).trim())}function st(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function wt(e){const t=(e??"").trim(),a=['<option value="">— اختر المدينة —</option>'];t&&!sr.has(t)&&a.push(`<option value="${st(t)}" selected>${st(t)}</option>`);for(const r of nr)a.push(`<option value="${st(r)}"${t===r?" selected":""}>${st(r)}</option>`);return a.join("")}const ms=`<!DOCTYPE html>
+`,us=["أبها","أبو عريش","أحد المسارحة","أحد رفيدة","أضم","أملج","الأسياح","الأفلاج","الأحساء","الاحساء","الباحة","البكيرية","البدائع","البدع","الجبيل","الجموم","الحائط","الحناكية","الخرج","الخرمة","الدائر","الدرب","الدرعية","الدمام","الدوادمي","الرس","الزلفي","السليل","الطائف","الطوال","الظهران","العلا","الغاط","القريات","القطيف","القنفذة","القويعية","الليث","المجاردة","المجمعة","المدينة المنورة","المذنب","المزاحمية","المهد","المويه","المخواة","النبهانية","النعيرية","النماص","الوجه","بارق","بالقرن","بدر","بريدة","بقعاء","بلجرشي","بقيق","بيش","بيشة","تبوك","تثليث","تربة","تيماء","جازان","جدة","حائل","حريملاء","حفر الباطن","حوطة بني تميم","خميس مشيط","خليص","خيبر","دومة الجندل","رابغ","رجال المع","رأس تنورة","رفحاء","رنية","رنيه","سكاكا","سراة عبيدة","شرورة","شقراء","صامطة","صبيا","ضباء","ضمد","طبرجل","طريف","ظهران الجنوب","عرعر","عفيف","عنيزة","قرية العليا","قلوه","مكة المكرمة","محايل","مدينة الملك عبدالله الاقتصادية","ميسان","نجران","وادي الدواسر","ينبع","بحرة","الخبر","الخفجي","العارضة","العرضيات","الكامل","الرياض","فرسان","ينبع النخل"];function ms(e){return[...new Set(e.map(t=>String(t).trim()).filter(Boolean))].sort((t,a)=>t.localeCompare(a,"ar"))}const or=ms(us),ir=new Set(or);function gs(e){return e==null||String(e).trim()===""?!0:ir.has(String(e).trim())}function st(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function wt(e){const t=(e??"").trim(),a=['<option value="">— اختر المدينة —</option>'];t&&!ir.has(t)&&a.push(`<option value="${st(t)}" selected>${st(t)}</option>`);for(const r of or)a.push(`<option value="${st(r)}"${t===r?" selected":""}>${st(r)}</option>`);return a.join("")}const fs=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -10077,7 +10077,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
 
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <p class="text-sm text-gray-600 mb-6 leading-relaxed" dir="rtl">
-      عدّل اسم الشركة وبيانات التواصل والموقع (المدينة والعنوان) وشعار الشركة وعلامة المستندات المائية.
+      عدّل اسم الشركة وبيانات التواصل والموقع (المدينة والعنوان) وشعار الشركة في صفحة التواصل وروابط الإحالة.
     </p>
 
     <div id="loadError" class="hidden mb-6 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-3" dir="rtl"></div>
@@ -10169,16 +10169,10 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
       </div>
 
       <div class="pt-4 border-t border-gray-100 space-y-4">
-        <div>
-          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
-            <i class="fas fa-stamp text-teal-600"></i>
-            علامة مائية للمستندات
-          </h2>
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
-            صورة خلفية خفيفة تظهر خلف نص العقود عند المعاينة والطباعة، دون حجب المحتوى (مختلفة عن علامة «مسودة غير معتمدة»).
-            عند التفعيل بدون صورة مخصصة يُستخدم شعار الشركة تلقائياً.
-          </p>
-        </div>
+        <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
+          <i class="fas fa-stamp text-teal-600"></i>
+          علامة مائية للمستندات
+        </h2>
         <label class="flex items-start gap-3 cursor-pointer select-none" dir="rtl">
           <input type="checkbox" id="document_watermark_enabled"
             class="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
@@ -10203,18 +10197,14 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
               إزالة الصورة
             </button>
           </div>
-          <p class="text-xs text-gray-500 mt-2 leading-relaxed" dir="rtl">PNG أو JPEG أو GIF أو WebP — بحد أقصى 2 ميجابايت. يُفضَّل شعار بخلفية شفافة.</p>
           <p id="watermark_file_hint" class="text-xs text-teal-700 mt-2 font-medium hidden leading-relaxed" dir="rtl"></p>
         </div>
         <div id="watermarkPreviewWrap" class="hidden">
-          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة العلامة المائية</span>
+          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة</span>
           <div class="mt-2 p-6 bg-white rounded-lg border border-gray-200 flex justify-center relative overflow-hidden min-h-[140px]">
             <div class="absolute inset-0 flex items-center justify-center pointer-events-none" id="watermarkPreviewBg">
               <img id="watermarkPreview" alt="" class="max-h-24 max-w-[200px] object-contain" style="opacity:0.08;" />
             </div>
-            <p class="relative z-[1] text-sm text-gray-700 text-center leading-relaxed px-4" dir="rtl">
-              مثال لنص العقد — العلامة المائية تظهر خلف النص بشفافية منخفضة.
-            </p>
           </div>
         </div>
         <div>
@@ -10222,22 +10212,16 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
             الشفافية
             <span id="opacity_value_label" class="text-teal-700 font-bold mr-1">12%</span>
           </label>
-          <input type="range" id="document_watermark_opacity" min="3" max="25" step="1" value="12"
+          <input type="range" id="document_watermark_opacity" min="3" max="100" step="1" value="12"
             class="w-full accent-teal-600" />
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">من 3٪ (أخف) إلى 25٪ (أوضح قليلاً). الافتراضي 12٪.</p>
         </div>
       </div>
 
       <div class="pt-4 border-t border-gray-100 space-y-4">
-        <div>
-          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
-            <i class="fas fa-heading text-teal-600"></i>
-            ترويسة الصفحة (Header)
-          </h2>
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
-            صورة ترويسة تظهر أعلى كل صفحة من العقد. النص يبدأ أسفلها ولا يتداخل معها.
-          </p>
-        </div>
+        <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
+          <i class="fas fa-heading text-teal-600"></i>
+          ترويسة الصفحة
+        </h2>
         <label class="flex items-start gap-3 cursor-pointer select-none" dir="rtl">
           <input type="checkbox" id="document_header_enabled"
             class="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
@@ -10256,7 +10240,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
           <p id="header_file_hint" class="text-xs text-teal-700 mt-2 font-medium hidden leading-relaxed" dir="rtl"></p>
         </div>
         <div id="headerPreviewWrap" class="hidden">
-          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة الترويسة</span>
+          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة</span>
           <div class="mt-2 p-3 bg-white rounded-lg border border-gray-200 flex justify-center overflow-hidden">
             <img id="headerPreview" alt="" class="w-full max-h-28 object-contain" style="opacity:1;" />
           </div>
@@ -10268,20 +10252,14 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
           </label>
           <input type="range" id="document_header_opacity" min="10" max="100" step="1" value="100"
             class="w-full accent-teal-600" />
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">الافتراضي 100٪ (معتم بالكامل).</p>
         </div>
       </div>
 
       <div class="pt-4 border-t border-gray-100 space-y-4">
-        <div>
-          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
-            <i class="fas fa-grip-lines text-teal-600"></i>
-            تذييل الصفحة (Footer)
-          </h2>
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
-            صورة تذييل تظهر أسفل كل صفحة من العقد. النص يتوقف فوقها ولا يتداخل معها.
-          </p>
-        </div>
+        <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
+          <i class="fas fa-grip-lines text-teal-600"></i>
+          تذييل الصفحة
+        </h2>
         <label class="flex items-start gap-3 cursor-pointer select-none" dir="rtl">
           <input type="checkbox" id="document_footer_enabled"
             class="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
@@ -10300,7 +10278,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
           <p id="footer_file_hint" class="text-xs text-teal-700 mt-2 font-medium hidden leading-relaxed" dir="rtl"></p>
         </div>
         <div id="footerPreviewWrap" class="hidden">
-          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة التذييل</span>
+          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة</span>
           <div class="mt-2 p-3 bg-white rounded-lg border border-gray-200 flex justify-center overflow-hidden">
             <img id="footerPreview" alt="" class="w-full max-h-28 object-contain" style="opacity:1;" />
           </div>
@@ -10312,7 +10290,6 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
           </label>
           <input type="range" id="document_footer_opacity" min="10" max="100" step="1" value="100"
             class="w-full accent-teal-600" />
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">الافتراضي 100٪ (معتم بالكامل).</p>
         </div>
       </div>
 
@@ -10383,7 +10360,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
       var el = document.getElementById('document_watermark_opacity');
       var pct = el ? parseInt(el.value, 10) : 12;
       if (!Number.isFinite(pct)) pct = 12;
-      return Math.min(0.25, Math.max(0.03, pct / 100));
+      return Math.min(1, Math.max(0.03, pct / 100));
     }
 
     function syncOpacityLabel() {
@@ -10392,7 +10369,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
       var img = document.getElementById('watermarkPreview');
       var pct = el ? parseInt(el.value, 10) : 12;
       if (label) label.textContent = pct + '%';
-      if (img) img.style.opacity = String(pct / 100);
+      if (img) img.style.opacity = String(Math.min(1, Math.max(0.03, pct / 100)));
     }
 
     function getLetterheadOpacityFraction(id) {
@@ -10572,7 +10549,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         if (wmEnabled) wmEnabled.checked = !!d.document_watermark_enabled;
         var opacityPct = Math.round((Number(d.document_watermark_opacity) || 0.12) * 100);
         if (opacityPct < 3) opacityPct = 3;
-        if (opacityPct > 25) opacityPct = 25;
+        if (opacityPct > 100) opacityPct = 100;
         var opacityEl = document.getElementById('document_watermark_opacity');
         if (opacityEl) opacityEl.value = String(opacityPct);
         syncOpacityLabel();
@@ -10947,12 +10924,12 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
             return String(waGreetingTemplate)
               .replace(/\\{\\{customer_name\\}\\}/g, String(customerName || ''))
               .replace(/\\{\\{company_name\\}\\}/g, waCompanyName || '');
-          }`}function gs(e){if(e==null)return{ok:!0,value:null};const t=String(e).trim();return t===""?{ok:!0,value:null}:t.length>ya?{ok:!1,error:`رسالة واتساب طويلة جداً (الحد الأقصى ${ya} حرفاً)`}:{ok:!0,value:t}}const or=wt();function Xt(){return`<div class="border-b border-slate-200/90 bg-slate-50/90">
+          }`}function bs(e){if(e==null)return{ok:!0,value:null};const t=String(e).trim();return t===""?{ok:!0,value:null}:t.length>ya?{ok:!1,error:`رسالة واتساب طويلة جداً (الحد الأقصى ${ya} حرفاً)`}:{ok:!0,value:t}}const lr=wt();function Xt(){return`<div class="border-b border-slate-200/90 bg-slate-50/90">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5 flex flex-wrap gap-3 items-center justify-between">
       <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">← العودة للوحة الرئيسية</a>
       <a href="/admin/company-settings" class="text-sm font-medium text-teal-700 hover:text-teal-900 hover:underline">إعدادات الشركة العامة</a>
     </div>
-  </div>`}const fs=`<!DOCTYPE html>
+  </div>`}const hs=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -11076,7 +11053,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
   <\/script>
 </body>
 </html>
-`,bs=`<!DOCTYPE html>
+`,ys=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -11115,7 +11092,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-600 mb-1 text-right">المدينة *</label>
-          <select id="add_city" required class="w-full px-3 py-2 border rounded-lg bg-white text-right" dir="rtl">${or}</select>
+          <select id="add_city" required class="w-full px-3 py-2 border rounded-lg bg-white text-right" dir="rtl">${lr}</select>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-600 mb-1 text-right">العنوان التفصيلي *</label>
@@ -11174,7 +11151,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
   <\/script>
 </body>
 </html>
-`;function hs(e){const t=/^\d+$/.test(e)?e:"0";return`<!DOCTYPE html>
+`;function xs(e){const t=/^\d+$/.test(e)?e:"0";return`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -11215,7 +11192,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-600 mb-1 text-right">المدينة *</label>
-          <select id="edit_city" required class="w-full px-3 py-2 border rounded-lg bg-white text-right" dir="rtl">${or}</select>
+          <select id="edit_city" required class="w-full px-3 py-2 border rounded-lg bg-white text-right" dir="rtl">${lr}</select>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-600 mb-1 text-right">العنوان *</label>
@@ -11335,7 +11312,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
   <\/script>
 </body>
 </html>
-`}const ir=208,lr=6,Qt=`
+`}const dr=208,cr=6,Qt=`
   .actions-dropdown-menu {
     position: fixed;
     top: 0;
@@ -11343,8 +11320,8 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     z-index: 10050;
     margin: 0;
     /* Top padding includes MENU_GAP_PX so the panel meets the trigger with no hit-test hole */
-    padding: calc(0.25rem + ${lr}px) 0 0.25rem 0;
-    width: ${ir}px;
+    padding: calc(0.25rem + ${cr}px) 0 0.25rem 0;
+    width: ${dr}px;
     max-width: calc(100vw - 16px);
     background: #fff;
     border: 1px solid rgba(229, 231, 235, 1);
@@ -11396,9 +11373,9 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     window.__actionsDropdownInit = true;
     console.log('[actions-dropdown] init');
 
-    var MENU_WIDTH = ${ir};
+    var MENU_WIDTH = ${dr};
     var PAD = 8;
-    var GAP = ${lr};
+    var GAP = ${cr};
 
     var openMenu = null;
     var openBtn = null;
@@ -11561,7 +11538,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     // Back-compat shim for legacy call sites.
     window.closeAllDropdowns = close;
   })();
-`,ys=`<!DOCTYPE html>
+`,vs=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -11860,7 +11837,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,dr=()=>`
+`,pr=()=>`
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
     .max-w-7xl, .max-w-6xl, .max-w-5xl {
@@ -11919,7 +11896,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,xs=`<!DOCTYPE html>
+`,ws=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -11970,7 +11947,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
             width: max-content;
         }
         
-        ${dr()}
+        ${pr()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -12109,7 +12086,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,vs=`<!DOCTYPE html>
+</html>`,_s=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12161,7 +12138,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
             width: max-content;
         }
         
-        ${dr()}
+        ${pr()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -12374,7 +12351,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,ws=`<!DOCTYPE html>
+</html>`,Es=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12501,7 +12478,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         document.addEventListener('DOMContentLoaded', loadReport);
     <\/script>
 </body>
-</html>`,_s=()=>`
+</html>`,ks=()=>`
   @media (max-width: 768px) {
     .max-w-7xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -12548,7 +12525,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
     .overflow-x-auto::-webkit-scrollbar-thumb { min-width: 60px !important; }
   }
-`,Es=`<!DOCTYPE html>
+`,Is=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -12599,7 +12576,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
             width: max-content;
         }
         
-        ${_s()}
+        ${ks()}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -13044,7 +13021,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
         document.addEventListener('DOMContentLoaded', loadData);
     <\/script>
 </body>
-</html>`,ks=`<!DOCTYPE html>
+</html>`,Ss=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -13408,7 +13385,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     <\/script>
 </body>
 </html>
-`,cr=()=>`
+`,ur=()=>`
   @media (max-width: 768px) {
     .max-w-3xl { padding-left: 1rem !important; padding-right: 1rem !important; }
     h1 { font-size: 1.5rem !important; }
@@ -13439,7 +13416,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
     button { font-size: 0.75rem !important; }
     .overflow-x-auto::-webkit-scrollbar { height: 16px !important; }
   }
-`;function Is(e,t,a){return`
+`;function Ts(e,t,a){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -13449,7 +13426,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
       <link rel="stylesheet" href="/tailwind.css">
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${cr()}
+        ${ur()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -13608,7 +13585,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
       <\/script>
     </body>
     </html>
-  `}function Ss(e,t,a,r){return`
+  `}function Cs(e,t,a,r){return`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -13618,7 +13595,7 @@ var fa=(e,t,a)=>(r,n)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
       <link rel="stylesheet" href="/tailwind.css">
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <style>
-        ${cr()}
+        ${ur()}
       </style>
     </head>
     <body class="bg-gray-50">
@@ -13782,7 +13759,7 @@ function downloadUtf16Csv(csvText, filename) {
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
 }
-`;function Ts(e){return String(e??"").replace(/\uFEFF/g,"").replace(/[\u200E\u200F]/g,"")}function xa(e){return Ts(e).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function Et(e,t="Sheet1"){const a=e.map(n=>"<Row>"+n.map(s=>`<Cell><Data ss:Type="String">${xa(s)}</Data></Cell>`).join("")+"</Row>").join("");return`<?xml version="1.0" encoding="UTF-8"?>\r
+`;function Rs(e){return String(e??"").replace(/\uFEFF/g,"").replace(/[\u200E\u200F]/g,"")}function xa(e){return Rs(e).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function Et(e,t="Sheet1"){const a=e.map(n=>"<Row>"+n.map(s=>`<Cell><Data ss:Type="String">${xa(s)}</Data></Cell>`).join("")+"</Row>").join("");return`<?xml version="1.0" encoding="UTF-8"?>\r
 <?mso-application progid="Excel.Sheet"?>\r
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\r
 <Worksheet ss:Name="${xa(t)}">\r
@@ -13790,7 +13767,7 @@ function downloadUtf16Csv(csvText, filename) {
 ${a}\r
 </Table>\r
 </Worksheet>\r
-</Workbook>`}function kt(e,t){const a=t.replace(/[^\x20-\x7E]/g,"_")||"export.xls";return new Response(e,{headers:{"Content-Type":"application/vnd.ms-excel; charset=utf-8","Content-Disposition":`attachment; filename="${a}"; filename*=UTF-8''${encodeURIComponent(t)}`}})}function Cs(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function C(e){const t=Cs(e);return t===null?null:{11:1,12:2,13:3,14:4,15:5}[t]??t}function Rs(e){const t=C(e);return t===4||t===6}function Ls(e){const t=C(e);return t===5||t===6}function Oe(e){const t=C(e);return t===2||t===4||t===5||t===6}function pr(e){return C(e)===2}function Ds(e){const t=C(e);return t===1||t===2||t===3||t===4||t===5||t===6}async function ur(e,t,a,r){const n=async()=>!!(await e.prepare(`SELECT 1 AS ok FROM customers c
+</Workbook>`}function kt(e,t){const a=t.replace(/[^\x20-\x7E]/g,"_")||"export.xls";return new Response(e,{headers:{"Content-Type":"application/vnd.ms-excel; charset=utf-8","Content-Disposition":`attachment; filename="${a}"; filename*=UTF-8''${encodeURIComponent(t)}`}})}function Ls(e){if(e==null||e==="")return null;const t=typeof e=="number"?e:parseInt(String(e),10);return Number.isNaN(t)?null:t}function C(e){const t=Ls(e);return t===null?null:{11:1,12:2,13:3,14:4,15:5}[t]??t}function Ds(e){const t=C(e);return t===4||t===6}function As(e){const t=C(e);return t===5||t===6}function Oe(e){const t=C(e);return t===2||t===4||t===5||t===6}function mr(e){return C(e)===2}function Bs(e){const t=C(e);return t===1||t===2||t===3||t===4||t===5||t===6}async function gr(e,t,a,r){const n=async()=>!!(await e.prepare(`SELECT 1 AS ok FROM customers c
          WHERE c.id = ? AND c.tenant_id = ? AND (
            NULLIF(c.created_by, 0) = ?
            OR NULLIF(c.assigned_bank_agent_id, 0) = ?
@@ -13824,7 +13801,7 @@ ${a}\r
            )
          ) LIMIT 1`).bind(a,r,t,t).first())?.ok}catch(n){const s=String(n?.message||n||"");if(/no such column:\s*c\.assigned_bank_agent_id|no such column:\s*assigned_bank_agent_id/i.test(s))return!!(await e.prepare(`SELECT 1 AS ok FROM financing_requests
            WHERE customer_id = ? AND NULLIF(assigned_bank_agent_id, 0) = ?
-           LIMIT 1`).bind(a,t).first())?.ok;throw n}}function As(e,t){const a=Number(t.assigned_bank_agent_id);return Number.isFinite(a)&&a>0&&a===e}async function va(e,t,a){if(!t.userId||t.tenantId==null)return!1;const r=Number(t.userId);if(As(r,a))return!0;const n=a.customer_id!=null?Number(a.customer_id):NaN;if(Number.isNaN(n))return!1;const s=a.customer_tenant_id!=null?Number(a.customer_tenant_id):Number(t.tenantId);return Zt(e,r,n,s)}async function Q(e,t,a){if(!t.userId||!a)return!1;const r=C(t.roleId);return r?r===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:r===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:r===5?ur(e,Number(t.userId),a.id,Number(t.tenantId)):r===6?(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok?!0:Zt(e,Number(t.userId),a.id,Number(t.tenantId)):r===2||r===3:!1}async function Bs(e,t,a,r,n){if(!t||r==null)return[];if(a===4){const l=await e.prepare(`SELECT u.id
+           LIMIT 1`).bind(a,t).first())?.ok;throw n}}function Ns(e,t){const a=Number(t.assigned_bank_agent_id);return Number.isFinite(a)&&a>0&&a===e}async function va(e,t,a){if(!t.userId||t.tenantId==null)return!1;const r=Number(t.userId);if(Ns(r,a))return!0;const n=a.customer_id!=null?Number(a.customer_id):NaN;if(Number.isNaN(n))return!1;const s=a.customer_tenant_id!=null?Number(a.customer_tenant_id):Number(t.tenantId);return Zt(e,r,n,s)}async function Q(e,t,a){if(!t.userId||!a)return!1;const r=C(t.roleId);return r?r===1?!0:t.tenantId==null||a.tenant_id==null||a.tenant_id!==t.tenantId?!1:r===4?!!(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok:r===5?gr(e,Number(t.userId),a.id,Number(t.tenantId)):r===6?(await e.prepare("SELECT 1 as ok FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1").bind(a.id,t.userId).first())?.ok?!0:Zt(e,Number(t.userId),a.id,Number(t.tenantId)):r===2||r===3:!1}async function js(e,t,a,r,n){if(!t||r==null)return[];if(a===4){const l=await e.prepare(`SELECT u.id
          FROM customer_assignments ca
          INNER JOIN users u ON u.id = ca.employee_id
          WHERE ca.customer_id = ?
@@ -13838,11 +13815,11 @@ ${a}\r
            ORDER BY created_at DESC
            LIMIT 1`).bind(t).first();s=o(l?.assigned_bank_agent_id)}catch(l){const d=String(l?.message||l||"");if(!/no such column:\s*assigned_bank_agent_id/i.test(d))throw l}if(!s)return[];const i=await e.prepare(`SELECT id FROM users
        WHERE id = ? AND tenant_id = ? AND is_active = 1 AND role_id IN (5, 15, 6)
-       LIMIT 1`).bind(s,r).first();return i?.id?[Number(i.id)]:[]}async function Me(e,t,a,r,n,s){const o=C(r),i=o===5||o===6?4:o===4?5:null;if(!i)return[];const l=await Bs(e,t,i,n,s);return a==null||a<=0?l:l.filter(d=>d!==a)}function Ns(e=new Date){const t=e.toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric",calendar:"gregory"});let a="";try{a=e.toLocaleDateString("ar-SA-u-ca-islamic",{year:"numeric",month:"long",day:"numeric"})}catch{a=""}const r=e.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit",hour12:!0}),n=a?`${t} — ${r} (${a} هـ)`:`${t} — ${r}`;return{gregorianDate:t,hijriDate:a,time:r,label:n}}function js(e){const t=String(e||"").match(/\/admin\/requests\/(\d+)\/workflow/);if(!t)return null;const a=parseInt(t[1],10);return Number.isFinite(a)?a:null}async function Os(e,t){if(t==null)return"";try{const a=await e.prepare("SELECT full_name FROM customers WHERE id = ? LIMIT 1").bind(t).first();return String(a?.full_name??"").trim()||`#${t}`}catch{return`#${t}`}}async function Fe(e,t){const{customerId:a,tenantId:r,targetUserIds:n,customerName:s,linkUrl:o}=t;if(!n.length)return;const i=t.actionAt??new Date,l=Ns(i),d=t.customerDisplayName&&t.customerDisplayName.trim()||await Os(e,a),c=d&&t.note.includes(d),p=!d||c?t.note:`العميل: ${d}
+       LIMIT 1`).bind(s,r).first();return i?.id?[Number(i.id)]:[]}async function Me(e,t,a,r,n,s){const o=C(r),i=o===5||o===6?4:o===4?5:null;if(!i)return[];const l=await js(e,t,i,n,s);return a==null||a<=0?l:l.filter(d=>d!==a)}function Os(e=new Date){const t=e.toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric",calendar:"gregory"});let a="";try{a=e.toLocaleDateString("ar-SA-u-ca-islamic",{year:"numeric",month:"long",day:"numeric"})}catch{a=""}const r=e.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit",hour12:!0}),n=a?`${t} — ${r} (${a} هـ)`:`${t} — ${r}`;return{gregorianDate:t,hijriDate:a,time:r,label:n}}function Ms(e){const t=String(e||"").match(/\/admin\/requests\/(\d+)\/workflow/);if(!t)return null;const a=parseInt(t[1],10);return Number.isFinite(a)?a:null}async function Fs(e,t){if(t==null)return"";try{const a=await e.prepare("SELECT full_name FROM customers WHERE id = ? LIMIT 1").bind(t).first();return String(a?.full_name??"").trim()||`#${t}`}catch{return`#${t}`}}async function Fe(e,t){const{customerId:a,tenantId:r,targetUserIds:n,customerName:s,linkUrl:o}=t;if(!n.length)return;const i=t.actionAt??new Date,l=Os(i),d=t.customerDisplayName&&t.customerDisplayName.trim()||await Fs(e,a),c=d&&t.note.includes(d),p=!d||c?t.note:`العميل: ${d}
 ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
-وقت الإجراء: ${l.label}`;await e.prepare("ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT").run().catch(()=>{}),await e.prepare("ALTER TABLE customer_alarms ADD COLUMN link_url TEXT").run().catch(()=>{}),await e.prepare("ALTER TABLE notifications ADD COLUMN tenant_id INTEGER").run().catch(()=>{});const g=js(o);for(const b of n)await e.prepare(`INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+وقت الإجراء: ${l.label}`;await e.prepare("ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT").run().catch(()=>{}),await e.prepare("ALTER TABLE customer_alarms ADD COLUMN link_url TEXT").run().catch(()=>{}),await e.prepare("ALTER TABLE notifications ADD COLUMN tenant_id INTEGER").run().catch(()=>{});const g=Ms(o);for(const b of n)await e.prepare(`INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(a,s,l.gregorianDate,l.hijriDate||null,l.time,u,b,r,"workflow",o).run(),await e.prepare(`INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_request_id, is_read)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`).bind(b,r,s,u,"warning","workflow_action",g).run()}async function Ms(e,t){const{customerId:a,tenantId:r,userId:n,roleId:s}=t,o=`NOT EXISTS (
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`).bind(b,r,s,u,"warning","workflow_action",g).run()}async function qs(e,t){const{customerId:a,tenantId:r,userId:n,roleId:s}=t,o=`NOT EXISTS (
     SELECT 1 FROM contracts co
     WHERE co.customer_id = customers.id AND co.tenant_id = ?
       AND COALESCE(co.is_archived, 0) = 0
@@ -13879,12 +13856,12 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
              AND ${o}`).bind(a,r,n,n,n,r,r).first():null;try{return await i("COALESCE(fr.is_completed, 0) = 0")!=null}catch(l){const d=String(l?.message||l||"");if(/no such column:\s*is_completed/i.test(d))return await i("1=1")!=null;throw l}}async function It(e,t,a){const r=await e.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();return r?Q(e,t,r):!1}async function ne(e,t,a){const r=await e.prepare(`SELECT fr.customer_id, fr.assigned_bank_agent_id, fr.created_by, c.tenant_id AS customer_tenant_id
        FROM financing_requests fr
        LEFT JOIN customers c ON fr.customer_id = c.id
-       WHERE fr.id = ?`).bind(a).first();if(!r)return!1;const n=C(t.roleId);if(n===1)return!0;const s={customer_id:r.customer_id!=null?Number(r.customer_id):null,customer_tenant_id:r.customer_tenant_id!=null?Number(r.customer_tenant_id):null,assigned_bank_agent_id:r.assigned_bank_agent_id,created_by:r.created_by};return n===5?va(e,t,s):n===6?await va(e,t,s)?!0:r.customer_id?Q(e,t,{id:Number(r.customer_id),tenant_id:r.customer_tenant_id!=null?Number(r.customer_tenant_id):null}):!1:r.customer_id?Q(e,t,{id:Number(r.customer_id),tenant_id:r.customer_tenant_id!=null?Number(r.customer_tenant_id):null}):!1}async function Fs(e,t){return!!(await e.prepare("SELECT 1 AS ok FROM customer_assignments WHERE employee_id = ? LIMIT 1").bind(t).first())?.ok}async function qs(e,t){return!!(await e.prepare(`SELECT 1 AS ok
+       WHERE fr.id = ?`).bind(a).first();if(!r)return!1;const n=C(t.roleId);if(n===1)return!0;const s={customer_id:r.customer_id!=null?Number(r.customer_id):null,customer_tenant_id:r.customer_tenant_id!=null?Number(r.customer_tenant_id):null,assigned_bank_agent_id:r.assigned_bank_agent_id,created_by:r.created_by};return n===5?va(e,t,s):n===6?await va(e,t,s)?!0:r.customer_id?Q(e,t,{id:Number(r.customer_id),tenant_id:r.customer_tenant_id!=null?Number(r.customer_tenant_id):null}):!1:r.customer_id?Q(e,t,{id:Number(r.customer_id),tenant_id:r.customer_tenant_id!=null?Number(r.customer_tenant_id):null}):!1}async function Ps(e,t){return!!(await e.prepare("SELECT 1 AS ok FROM customer_assignments WHERE employee_id = ? LIMIT 1").bind(t).first())?.ok}async function $s(e,t){return!!(await e.prepare(`SELECT 1 AS ok
        WHERE EXISTS (
          SELECT 1 FROM customers c WHERE NULLIF(c.assigned_bank_agent_id, 0) = ?
        ) OR EXISTS (
          SELECT 1 FROM financing_requests fr WHERE NULLIF(fr.assigned_bank_agent_id, 0) = ?
-       )`).bind(t,t).first())?.ok}async function Ps(e,t){return!!(await e.prepare(`SELECT 1 AS ok
+       )`).bind(t,t).first())?.ok}async function Hs(e,t){return!!(await e.prepare(`SELECT 1 AS ok
        FROM customer_assignments ca
        WHERE ca.employee_id = ?
          AND (
@@ -13899,25 +13876,25 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
                AND NULLIF(fr.assigned_bank_agent_id, 0) = ?
            )
          )
-       LIMIT 1`).bind(t,t,t).first())?.ok}async function mr(e,t,a,r){const n=C(a),s=C(r);return n===s?{ok:!0}:s==null?{ok:!1,error:"Invalid role",errorAr:"دور غير صحيح"}:s===6?{ok:!0}:n===6&&(s===4||s===5)?await Ps(e,t)?{ok:!1,error:"Cannot change a dual-role user back to role 4 or 5 while they are assigned as both employee and bank agent.",errorAr:"لا يمكن تحويل المستخدم المزدوج إلى دور 4 أو 5 بعد تعيينه كموظف وموظف تمويل لنفس العميل أو الطلب."}:{ok:!0}:n===4&&s===5&&await Fs(e,t)?{ok:!1,error:"Cannot change an employee to bank agent while they are assigned to customers.",errorAr:"لا يمكن تحويل الموظف إلى موظف تمويل بعد تعيينه على عملاء أو طلبات."}:n===5&&s===4&&await qs(e,t)?{ok:!1,error:"Cannot change a bank agent to employee while they are assigned to customers or financing requests.",errorAr:"لا يمكن تحويل موظف التمويل إلى موظف بعد تعيينه على عملاء أو طلبات."}:{ok:!0}}const $s={call:"اتصال هاتفي",email:"بريد إلكتروني",meeting:"اجتماع",document:"مستند",approval:"موافقة",rejection:"رفض",followup:"متابعة",other:"أخرى"},Hs="pre_workflow",wa="قبل سير العمل";function Us(e){return $s[e||""]||e||"إجراء"}function Ws(e){return[...e].sort((t,a)=>{const r=ie(t.created_at)?.getTime()??0,n=ie(a.created_at)?.getTime()??0;return r-n})}function zs(e){const t=String(e.note_text||"").trim(),a=String(e.performed_by_name||"").trim()||"—",r=hr(e.created_at);return`
+       LIMIT 1`).bind(t,t,t).first())?.ok}async function fr(e,t,a,r){const n=C(a),s=C(r);return n===s?{ok:!0}:s==null?{ok:!1,error:"Invalid role",errorAr:"دور غير صحيح"}:s===6?{ok:!0}:n===6&&(s===4||s===5)?await Hs(e,t)?{ok:!1,error:"Cannot change a dual-role user back to role 4 or 5 while they are assigned as both employee and bank agent.",errorAr:"لا يمكن تحويل المستخدم المزدوج إلى دور 4 أو 5 بعد تعيينه كموظف وموظف تمويل لنفس العميل أو الطلب."}:{ok:!0}:n===4&&s===5&&await Ps(e,t)?{ok:!1,error:"Cannot change an employee to bank agent while they are assigned to customers.",errorAr:"لا يمكن تحويل الموظف إلى موظف تمويل بعد تعيينه على عملاء أو طلبات."}:n===5&&s===4&&await $s(e,t)?{ok:!1,error:"Cannot change a bank agent to employee while they are assigned to customers or financing requests.",errorAr:"لا يمكن تحويل موظف التمويل إلى موظف بعد تعيينه على عملاء أو طلبات."}:{ok:!0}}const Us={call:"اتصال هاتفي",email:"بريد إلكتروني",meeting:"اجتماع",document:"مستند",approval:"موافقة",rejection:"رفض",followup:"متابعة",other:"أخرى"},zs="pre_workflow",wa="قبل سير العمل";function Ws(e){return Us[e||""]||e||"إجراء"}function Gs(e){return[...e].sort((t,a)=>{const r=ie(t.created_at)?.getTime()??0,n=ie(a.created_at)?.getTime()??0;return r-n})}function Vs(e){const t=String(e.note_text||"").trim(),a=String(e.performed_by_name||"").trim()||"—",r=xr(e.created_at);return`
     <div class="phase-note-item">
       <div class="phase-note-meta">
-        <span class="phase-note-author"><i class="fas fa-user ml-1"></i>${z(a)}</span>
-        <span class="phase-note-time"><i class="fas fa-clock ml-1"></i>${z(r)}</span>
+        <span class="phase-note-author"><i class="fas fa-user ml-1"></i>${W(a)}</span>
+        <span class="phase-note-time"><i class="fas fa-clock ml-1"></i>${W(r)}</span>
       </div>
-      <div class="phase-note-text">${z(t||"—")}</div>
+      <div class="phase-note-text">${W(t||"—")}</div>
     </div>
-  `}function Gs(e,t,a){if(e.length===0)return"";const r=t,n=Ws(e);return`
+  `}function Ys(e,t,a){if(e.length===0)return"";const r=t,n=Gs(e);return`
     <div class="stage-subsection phase-notes-block">
-      <button type="button" class="phase-notes-toggle${r?" expanded":""}" data-notes-target="${z(a)}" aria-expanded="${r?"true":"false"}">
+      <button type="button" class="phase-notes-toggle${r?" expanded":""}" data-notes-target="${W(a)}" aria-expanded="${r?"true":"false"}">
         <span class="phase-notes-toggle-label"><i class="fas fa-sticky-note ml-1 text-amber-600"></i>ملاحظات <span class="phase-notes-count">(${n.length})</span></span>
         <i class="fas fa-chevron-down phase-notes-chevron"></i>
       </button>
-      <div id="${z(a)}" class="phase-notes-list${r?"":" collapsed"}">
-        ${n.map(zs).join("")}
+      <div id="${W(a)}" class="phase-notes-list${r?"":" collapsed"}">
+        ${n.map(Vs).join("")}
       </div>
     </div>
-  `}function gr(){return`
+  `}function br(){return`
     async function wfAlertFetchFailure(resp, fallback) {
       let msg = fallback || 'فشلت العملية';
       try {
@@ -13926,7 +13903,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
       } catch (_) {}
       alert(msg);
     }
-`}function z(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function Ys(e){return z(JSON.stringify(e))}function fr(e){const t=typeof e=="number"?e:parseInt(String(e??""),10);return Number.isNaN(t)?null:{11:1,12:2,13:3,14:4,15:5}[t]??t}function ie(e){if(e==null||e==="")return null;const t=String(e).trim();if(!t)return null;if(/Z$|[+-]\d{2}:\d{2}$/.test(t))return new Date(t);const a=t.includes("T")?t:t.replace(" ","T"),r=new Date(a+"Z");return Number.isNaN(r.getTime())?null:r}const br="Asia/Riyadh";function hr(e){const t=ie(e);return t?t.toLocaleString("ar-SA",{timeZone:br,year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:!0}):"—"}function yr(e){const t=ie(e);return t?t.toLocaleDateString("ar-SA",{timeZone:br,year:"numeric",month:"short",day:"numeric"}):"—"}function Vs(e,t){const a=ie(e),r=ie(t);if(!a||!r)return"";const n=r.getTime()-a.getTime(),s=Math.floor(n/(1e3*60*60)),o=Math.floor(s/24);return o>0?`${o} يوم`:`${s} ساعة`}function Pt(e,t,a,r,n){if((e[n]??e.stage_id)!==t.to_stage_id)return!1;if(t.is_pre_workflow)return!0;const o=ie(e.created_at)?.getTime(),i=ie(t.created_at)?.getTime();if(o==null||i==null)return r===a.length-1;const l=a[r+1],c=(l?ie(l.created_at)?.getTime():null)??Number.POSITIVE_INFINITY;return o>=i&&o<c}function Js(e){let t=null;for(const a of e){const r=a?.created_at,n=ie(r)?.getTime();n!=null&&(!t||n<t.time)&&(t={value:r,time:n})}return t?.value??null}function Xs(e,t,a,r,n,s){const o=n.find(d=>d.stage_name===Hs);if(!o?.id)return e;const i=o.id,l=[...t,...a,...r].filter(d=>(d[s]??d.stage_id)===i);return l.length===0?e:[{id:"pre-workflow",to_stage_id:i,to_stage_name:o.stage_name_ar||wa,to_stage_name_ar:o.stage_name_ar||wa,to_stage_color:o.stage_color||"#94A3B8",to_stage_icon:o.stage_icon||"fa-hourglass-start",created_at:Js(l),is_pre_workflow:!0},...e]}const xr=`
+`}function W(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function Js(e){return W(JSON.stringify(e))}function hr(e){const t=typeof e=="number"?e:parseInt(String(e??""),10);return Number.isNaN(t)?null:{11:1,12:2,13:3,14:4,15:5}[t]??t}function ie(e){if(e==null||e==="")return null;const t=String(e).trim();if(!t)return null;if(/Z$|[+-]\d{2}:\d{2}$/.test(t))return new Date(t);const a=t.includes("T")?t:t.replace(" ","T"),r=new Date(a+"Z");return Number.isNaN(r.getTime())?null:r}const yr="Asia/Riyadh";function xr(e){const t=ie(e);return t?t.toLocaleString("ar-SA",{timeZone:yr,year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:!0}):"—"}function vr(e){const t=ie(e);return t?t.toLocaleDateString("ar-SA",{timeZone:yr,year:"numeric",month:"short",day:"numeric"}):"—"}function Xs(e,t){const a=ie(e),r=ie(t);if(!a||!r)return"";const n=r.getTime()-a.getTime(),s=Math.floor(n/(1e3*60*60)),o=Math.floor(s/24);return o>0?`${o} يوم`:`${s} ساعة`}function Pt(e,t,a,r,n){if((e[n]??e.stage_id)!==t.to_stage_id)return!1;if(t.is_pre_workflow)return!0;const o=ie(e.created_at)?.getTime(),i=ie(t.created_at)?.getTime();if(o==null||i==null)return r===a.length-1;const l=a[r+1],c=(l?ie(l.created_at)?.getTime():null)??Number.POSITIVE_INFINITY;return o>=i&&o<c}function Qs(e){let t=null;for(const a of e){const r=a?.created_at,n=ie(r)?.getTime();n!=null&&(!t||n<t.time)&&(t={value:r,time:n})}return t?.value??null}function Ks(e,t,a,r,n,s){const o=n.find(d=>d.stage_name===zs);if(!o?.id)return e;const i=o.id,l=[...t,...a,...r].filter(d=>(d[s]??d.stage_id)===i);return l.length===0?e:[{id:"pre-workflow",to_stage_id:i,to_stage_name:o.stage_name_ar||wa,to_stage_name_ar:o.stage_name_ar||wa,to_stage_color:o.stage_color||"#94A3B8",to_stage_icon:o.stage_icon||"fa-hourglass-start",created_at:Qs(l),is_pre_workflow:!0},...e]}const wr=`
   .timeline-container {
     position: relative;
     padding-right: 1.25rem;
@@ -14088,7 +14065,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   .wf-tab-panel { display: none; }
   .wf-tab-panel.active { display: block; }
   @media print { .no-print { display: none !important; }     }
-`,vr=`
+`,_r=`
     document.addEventListener('click', function(e) {
       const btn = e.target.closest('.phase-notes-toggle');
       if (!btn) return;
@@ -14102,7 +14079,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
       btn.classList.toggle('expanded', open);
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
-`;function wr(e){return`
+`;function Er(e){return`
     const wfServerDefault = '${e}';
     function wfRouteDefaultTab() {
       const p = location.pathname || '';
@@ -14152,7 +14129,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
         else setTimeout(open, 0);
       }
     })();
-`}const _r=`
+`}const kr=`
     let wfModalSubmitting = false;
     function wfLockModalSubmit(btn, busyLabel) {
       if (wfModalSubmitting) return false;
@@ -14178,7 +14155,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
         delete submitBtn.dataset.wfOrigHtml;
       }
     }
-`;function ut(e,t,a,r,n,s,o,i,l="stage_id"){const d=Xs(e,t,a,r,n,l),c=d[0]?.is_pre_workflow?1:0;return`
+`;function ut(e,t,a,r,n,s,o,i,l="stage_id"){const d=Ks(e,t,a,r,n,l),c=d[0]?.is_pre_workflow?1:0;return`
     <div class="timeline-container">
       <div class="timeline-line"></div>
       ${d.length===0?`
@@ -14187,7 +14164,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
           <p class="text-sm">لم يتم تسجيل أي مراحل بعد</p>
         </div>
       `:""}
-      ${d.map((p,u)=>{const g=u===d.length-1,b=!!p.is_pre_workflow,f=b?0:u+1-c,w=!b&&u>c?Vs(d[u-1].created_at,p.created_at):null,h=t.filter(_=>Pt(_,p,d,u,l)),y=a.filter(_=>Pt(_,p,d,u,l)),S=r.filter(_=>Pt(_,p,d,u,l));return`
+      ${d.map((p,u)=>{const g=u===d.length-1,b=!!p.is_pre_workflow,f=b?0:u+1-c,w=!b&&u>c?Xs(d[u-1].created_at,p.created_at):null,h=t.filter(_=>Pt(_,p,d,u,l)),y=a.filter(_=>Pt(_,p,d,u,l)),S=r.filter(_=>Pt(_,p,d,u,l));return`
           <div class="timeline-item">
             <div class="timeline-dot ${g?"current":""}" style="background-color: ${p.to_stage_color||"#3B82F6"}">
               <i class="fas ${p.to_stage_icon||"fa-circle"}"></i>
@@ -14197,27 +14174,27 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
                 <h3 class="stage-card-title">${f}. ${p.to_stage_name||p.to_stage_name_ar||""}</h3>
                 <span class="stage-card-meta">
                   <i class="fas fa-clock ml-1"></i>
-                  ${hr(p.created_at)}
+                  ${xr(p.created_at)}
                 </span>
                 ${p.transitioned_by_name?`<span class="stage-card-meta"><i class="fas fa-user ml-1"></i>${p.transitioned_by_name}</span>`:""}
                 ${w?`<span class="stage-duration-badge bg-blue-50 text-blue-700 font-medium"><i class="fas fa-hourglass-half ml-1"></i>${w}</span>`:""}
               </div>
-              ${p.notes?`<div class="stage-inline-note bg-yellow-50 border-yellow-400 text-gray-700 rounded"><i class="fas fa-sticky-note ml-1 text-yellow-600"></i>${z(p.notes)}</div>`:""}
+              ${p.notes?`<div class="stage-inline-note bg-yellow-50 border-yellow-400 text-gray-700 rounded"><i class="fas fa-sticky-note ml-1 text-yellow-600"></i>${W(p.notes)}</div>`:""}
               ${h.length>0?`
                 <div class="stage-subsection">
                   <div class="stage-subsection-title"><i class="fas fa-tasks ml-1"></i>إجراءات</div>
                   <div class="action-badges-row">
-                  ${h.map(_=>{const k=Us(_.action_type),T=String(_.notes||"").trim(),v=String(_.performed_by_name||"").trim();return`<button type="button" class="action-chip-btn" data-action-payload="${Ys({type:k,note:T,performer:v})}" title="عرض تفاصيل الإجراء"><i class="fas fa-circle-info text-[0.55rem] opacity-70"></i>${z(k)}</button>`}).join("")}
+                  ${h.map(_=>{const k=Ws(_.action_type),T=String(_.notes||"").trim(),v=String(_.performed_by_name||"").trim();return`<button type="button" class="action-chip-btn" data-action-payload="${Js({type:k,note:T,performer:v})}" title="عرض تفاصيل الإجراء"><i class="fas fa-circle-info text-[0.55rem] opacity-70"></i>${W(k)}</button>`}).join("")}
                   </div>
                 </div>
               `:""}
-              ${Gs(y,g,`wf-notes-${o}-${i}-t${u}`)}
+              ${Ys(y,g,`wf-notes-${o}-${i}-t${u}`)}
               ${S.length>0?`
                 <div class="stage-subsection">
                   <div class="stage-subsection-title"><i class="fas fa-list-check ml-1"></i>مهام</div>
                   ${S.map(_=>`
                     <div class="task-item ${_.status} flex justify-between items-center gap-2">
-                      <span class="text-gray-800 font-medium truncate">${z(_.task_title)}${_.assigned_to_name?` <span class="text-gray-500 font-normal">· ${z(_.assigned_to_name)}</span>`:""}</span>
+                      <span class="text-gray-800 font-medium truncate">${W(_.task_title)}${_.assigned_to_name?` <span class="text-gray-500 font-normal">· ${W(_.assigned_to_name)}</span>`:""}</span>
                       <span class="shrink-0 ${_.status==="completed"?"text-green-600":"text-yellow-600"}">
                         ${_.status==="completed"?'<i class="fas fa-check-circle"></i>':'<i class="fas fa-clock"></i>'}
                       </span>
@@ -14229,16 +14206,16 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
           </div>
         `}).join("")}
     </div>
-  `}function Qs(e){const{customerId:t,customer:a,stages:r,customerTimeline:n,requestId:s,request:o,requestTimeline:i,roleId:l,userId:d}=e,c=e.activeTab??"customer",p=fr(l),u=p!==4,g=p!==5,b=Oe(l),f=!!s&&!!o,w=n.transitions??[],h=n.actions??[],y=n.notes??[],S=n.tasks??[],_=i?.transitions??[],k=i?.actions??[],T=i?.notes??[],v=i?.tasks??[],x=a?.current_workflow_stage_id??null,I=o?.current_stage_id??null;return`
+  `}function Zs(e){const{customerId:t,customer:a,stages:r,customerTimeline:n,requestId:s,request:o,requestTimeline:i,roleId:l,userId:d}=e,c=e.activeTab??"customer",p=hr(l),u=p!==4,g=p!==5,b=Oe(l),f=!!s&&!!o,w=n.transitions??[],h=n.actions??[],y=n.notes??[],S=n.tasks??[],_=i?.transitions??[],k=i?.actions??[],T=i?.notes??[],v=i?.tasks??[],x=a?.current_workflow_stage_id??null,I=o?.current_stage_id??null;return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>سير العمل - ${z(a?.full_name||a?.name||t)}</title>
+  <title>سير العمل - ${W(a?.full_name||a?.name||t)}</title>
   <link rel="stylesheet" href="/tailwind.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>${xr}</style>
+  <style>${wr}</style>
 </head>
 <body class="bg-gray-50">
 
@@ -14251,7 +14228,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
             <i class="fas fa-route ml-2"></i>
             سير العمل
           </h1>
-          <p class="text-blue-100">العميل: ${z(a?.full_name||a?.name||String(t))}${f?` | الطلب رقم: ${s}`:""}</p>
+          <p class="text-blue-100">العميل: ${W(a?.full_name||a?.name||String(t))}${f?` | الطلب رقم: ${s}`:""}</p>
         </div>
         <div class="flex gap-2">
           <button onclick="window.print()" class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors">
@@ -14337,20 +14314,20 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
             <div class="text-gray-500 text-sm mb-1">المرحلة الحالية</div>
             <div class="text-lg font-bold" style="color: ${o.stage_color||"#3B82F6"}">
               <i class="fas ${o.stage_icon||"fa-circle"} ml-2"></i>
-              ${z(o.stage_name_ar||"غير محدد")}
+              ${W(o.stage_name_ar||"غير محدد")}
             </div>
           </div>
           <div>
             <div class="text-gray-500 text-sm mb-1">الحالة</div>
             <div class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
               ${o.status==="pending"?"bg-yellow-100 text-yellow-800":o.status==="approved"?"bg-green-100 text-green-800":o.status==="rejected"?"bg-red-100 text-red-800":"bg-gray-100 text-gray-800"}">
-              ${o.status==="pending"?"قيد الانتظار":o.status==="approved"?"موافق عليه":o.status==="rejected"?"مرفوض":z(o.status||"—")}
+              ${o.status==="pending"?"قيد الانتظار":o.status==="approved"?"موافق عليه":o.status==="rejected"?"مرفوض":W(o.status||"—")}
             </div>
           </div>
           <div>
             <div class="text-gray-500 text-sm mb-1">تاريخ الطلب</div>
             <div class="text-lg font-bold text-gray-700">
-              ${o.created_at?yr(o.created_at):"—"}
+              ${o.created_at?vr(o.created_at):"—"}
             </div>
           </div>
         </div>
@@ -14410,10 +14387,10 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     const canAddAction = ${g};
     const canAddNote = ${b};
 
-    ${wr(c)}
+    ${Er(c)}
+    ${kr}
+    ${br()}
     ${_r}
-    ${gr()}
-    ${vr}
 
     function closeModal() {
       const modal = document.body.querySelector('.wf-modal');
@@ -14778,16 +14755,16 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-  `}function Ks(e,t,a,r,n,s,o,i="request"){const{transitions:l=[],actions:d=[],notes:c=[],tasks:p=[]}=r,{transitions:u=[],actions:g=[],notes:b=[],tasks:f=[]}=n,w=fr(s),h=w!==4,y=w!==5,S=Oe(s),_=t.current_stage_id??null,k=t.current_workflow_stage_id??null,T=t.customer_id??null;return`
+  `}function eo(e,t,a,r,n,s,o,i="request"){const{transitions:l=[],actions:d=[],notes:c=[],tasks:p=[]}=r,{transitions:u=[],actions:g=[],notes:b=[],tasks:f=[]}=n,w=hr(s),h=w!==4,y=w!==5,S=Oe(s),_=t.current_stage_id??null,k=t.current_workflow_stage_id??null,T=t.customer_id??null;return`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>مراحل الطلب - ${z(t.customer_name)}</title>
+  <title>مراحل الطلب - ${W(t.customer_name)}</title>
   <link rel="stylesheet" href="/tailwind.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>${xr}</style>
+  <style>${wr}</style>
 </head>
 <body class="bg-gray-50">
 
@@ -14800,7 +14777,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
             <i class="fas fa-route ml-2"></i>
             مراحل سير عمل الطلب
           </h1>
-          <p class="text-blue-100">الطلب رقم: ${e} | العميل: ${z(t.customer_name)}</p>
+          <p class="text-blue-100">الطلب رقم: ${e} | العميل: ${W(t.customer_name)}</p>
         </div>
         <div class="flex gap-2">
           ${w===5||w===2||w===6&&t?.assigned_bank_agent_id!=null&&t.assigned_bank_agent_id===o?`
@@ -14836,20 +14813,20 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
           <div class="text-gray-500 text-sm mb-1">المرحلة الحالية (الطلب)</div>
           <div class="text-lg font-bold" style="color: ${t.stage_color||"#3B82F6"}">
             <i class="fas ${t.stage_icon||"fa-circle"} ml-2"></i>
-            ${z(t.stage_name_ar||"غير محدد")}
+            ${W(t.stage_name_ar||"غير محدد")}
           </div>
         </div>
         <div>
           <div class="text-gray-500 text-sm mb-1">الحالة</div>
           <div class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
             ${t.status==="pending"?"bg-yellow-100 text-yellow-800":t.status==="approved"?"bg-green-100 text-green-800":t.status==="rejected"?"bg-red-100 text-red-800":"bg-gray-100 text-gray-800"}">
-            ${t.status==="pending"?"قيد الانتظار":t.status==="approved"?"موافق عليه":t.status==="rejected"?"مرفوض":z(t.status)}
+            ${t.status==="pending"?"قيد الانتظار":t.status==="approved"?"موافق عليه":t.status==="rejected"?"مرفوض":W(t.status)}
           </div>
         </div>
         <div>
           <div class="text-gray-500 text-sm mb-1">تاريخ الطلب</div>
           <div class="text-lg font-bold text-gray-700">
-            ${yr(t.created_at)}
+            ${vr(t.created_at)}
           </div>
         </div>
       </div>
@@ -14911,10 +14888,10 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     const canAddAction = ${y};
     const canAddNote = ${S};
 
-    ${wr(i)}
+    ${Er(i)}
+    ${kr}
+    ${br()}
     ${_r}
-    ${gr()}
-    ${vr}
 
     function closeModal() {
       const modal = document.body.querySelector('.wf-modal');
@@ -15200,7 +15177,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
 
 </body>
 </html>
-  `}const _a="/admin/reports/requests-followup";function St(e){const t=C(e);return t===1||t===2||t===3}function Zs(e){return e===_a||e.startsWith(_a+"/")}function eo(e){return e??-1}async function Er(e,t){const a=eo(t.tenantId);if(t.bankName!=null&&String(t.bankName).trim()!==""&&await e.prepare(`
+  `}const _a="/admin/reports/requests-followup";function St(e){const t=C(e);return t===1||t===2||t===3}function to(e){return e===_a||e.startsWith(_a+"/")}function ao(e){return e??-1}async function Ir(e,t){const a=ao(t.tenantId);if(t.bankName!=null&&String(t.bankName).trim()!==""&&await e.prepare(`
       SELECT id FROM banks
       WHERE COALESCE(tenant_id, -1) = ?
         AND LOWER(TRIM(bank_name)) = LOWER(TRIM(?))
@@ -15212,7 +15189,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
         AND LOWER(TRIM(bank_code)) = LOWER(?)
         ${t.excludeId!=null?"AND id != ?":""}
       LIMIT 1
-    `).bind(a,r,...t.excludeId!=null?[t.excludeId]:[]).first()?"code":null}function mt(e){return e==="code"?"يوجد بنك بنفس الكود في شركتك. الرجاء اختيار كود آخر.":"يوجد بنك بنفس الاسم في شركتك. الرجاء اختيار اسم آخر."}function kr(e){const t=String(e?.message||"");return t.includes("UNIQUE constraint")?/bank_code|idx_banks_tenant_bank_code/i.test(t)?mt("code"):mt("name"):null}const to=`
+    `).bind(a,r,...t.excludeId!=null?[t.excludeId]:[]).first()?"code":null}function mt(e){return e==="code"?"يوجد بنك بنفس الكود في شركتك. الرجاء اختيار كود آخر.":"يوجد بنك بنفس الاسم في شركتك. الرجاء اختيار اسم آخر."}function Sr(e){const t=String(e?.message||"");return t.includes("UNIQUE constraint")?/bank_code|idx_banks_tenant_bank_code/i.test(t)?mt("code"):mt("name"):null}const ro=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -15519,7 +15496,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,ao=`
+`,no=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -15933,7 +15910,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,ro=`
+`,so=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16376,7 +16353,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,no=`
+`,oo=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16601,7 +16578,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,so=`
+`,io=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16840,7 +16817,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,oo=`<!DOCTYPE html>
+`,lo=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -17306,7 +17283,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
         alert('❌ ' + message);
     }
 <\/script>
-`,io=`<!DOCTYPE html>
+`,co=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -17664,7 +17641,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,lo=`<!DOCTYPE html>
+`,po=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -17848,7 +17825,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,co=`<!DOCTYPE html>
+`,uo=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -18057,7 +18034,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,po=`<!DOCTYPE html>
+`,mo=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -18388,7 +18365,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
     <\/script>
 </body>
 </html>
-`,uo=`
+`,go=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -18779,7 +18756,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-`,mo=`
+`,fo=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -19086,7 +19063,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-`,go=`
+`,bo=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -19338,7 +19315,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-`,fo=`
+`,ho=`
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -19601,7 +19578,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-`,bo=`
+`,yo=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -20095,7 +20072,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-`,ho=`
+`,xo=`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -20482,7 +20459,7 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
   <\/script>
 </body>
 </html>
-`,yo=`/* =============================================
+`,vo=`/* =============================================
    نظام إدارة العقود - شركة الموعد للمقاولات العامة
    ============================================= */
 
@@ -21357,7 +21334,7 @@ html.contracts-role-5-hide-new .topbar a.btn.btn-primary[href="/admin/contracts/
 html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   display: none !important;
 }
-`,xo=`<!DOCTYPE html>
+`,wo=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -21378,6 +21355,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
     .contract-actions-bar .btn { min-width: 120px; justify-content: center; }
     .status-change-wrap { margin-right: auto; display: flex; align-items: center; gap: 10px; }
+    .status-dropdown-wrap { display: flex; align-items: center; gap: 10px; }
 
     /* ===== A4 PREVIEW STAGE (stacked sheets) ===== */
     .contract-a4-stage {
@@ -21406,13 +21384,15 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       background: #fff;
       width: 210mm;
       max-width: 210mm;
+      height: 297mm;
       min-height: 297mm;
+      max-height: 297mm;
       margin: 0 auto;
       padding: 18mm 16mm;
       box-sizing: border-box;
       font-family: 'Tajawal', sans-serif;
-      font-size: 14.5px;
-      line-height: 2.1;
+      font-size: var(--doc-body-font-size, 12px);
+      line-height: 1.6;
       color: #000;
       box-shadow: 0 4px 24px rgba(0,0,0,0.14);
       border: 1px solid #cfd5de;
@@ -21420,6 +21400,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       isolation: isolate;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     .a4-sheet.has-letterhead {
       padding: 0;
@@ -21431,9 +21412,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       position: relative;
       z-index: 1;
       flex: 1 1 auto;
+      min-height: 0;
     }
     .a4-sheet.has-letterhead .a4-sheet-inner {
-      padding: 10mm 16mm;
+      padding: 6mm 16mm;
     }
     .a4-letterhead-header,
     .a4-letterhead-footer {
@@ -21442,12 +21424,18 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       flex: 0 0 auto;
       width: 100%;
       line-height: 0;
+      max-height: 80mm;
+      overflow: hidden;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+    }
+    .a4-letterhead-footer {
+      margin-top: auto; /* pin to bottom of the A4 sheet */
     }
     .a4-letterhead-header img,
     .a4-letterhead-footer img {
       width: 100%;
+      max-height: 80mm;
       height: auto;
       display: block;
       object-fit: contain;
@@ -21493,9 +21481,19 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       user-select: none;
     }
     .doc-a4-line {
-      margin: 0 0 0.15em;
+      margin: 0;
+      padding: 0;
       text-align: justify;
-      min-height: 1.2em;
+      min-height: 1em;
+    }
+    /* Kill default <p> margins from TinyMCE / browser so paragraphs sit tight */
+    .doc-document-body p,
+    .doc-document-body .doc-a4-line,
+    .contract-doc-body > .doc-a4-line {
+      margin-top: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
     }
     @media (max-width: 920px) {
       .contract-a4-stage {
@@ -21571,6 +21569,40 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
     .doc-contract-meta span { margin: 0 8px; }
 
+    /* Document mode: keep date / hijri / number as a slim bar, not a big header block */
+    .doc-header.doc-header--meta-only {
+      text-align: center;
+      margin-bottom: 10px;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .doc-header.doc-header--meta-only .doc-logo-row {
+      margin-bottom: 4px;
+    }
+    .doc-header.doc-header--meta-only .doc-logo-img-wrap {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      max-width: 40px;
+      max-height: 40px;
+      padding: 2px;
+      border-radius: 8px;
+    }
+    .doc-header.doc-header--meta-only .doc-contract-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 4px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #555;
+    }
+    .doc-header.doc-header--meta-only .doc-contract-meta span {
+      margin: 0;
+      white-space: nowrap;
+    }
+
     /* ===== BISMILLAH ===== */
     .doc-bismillah {
       text-align: center;
@@ -21619,7 +21651,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       padding: 10px 16px;
       font-size: 13.5px;
       flex: 1;
-      line-height: 1.7;
+      line-height: 1.6;
       background: transparent;
     }
 
@@ -21667,7 +21699,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
     .doc-article-body {
       font-size: 13.5px;
-      line-height: 2;
+      line-height: 1.6;
       padding-right: 34px;
     }
     .doc-article-body .highlight-amount {
@@ -21763,56 +21795,122 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       page-break-inside: avoid;
     }
 
-    /* ===== PRINT ===== */
+    /* ===== PRINT — match on-screen A4 sheets 1:1 ===== */
     @media print {
-      .sidebar, .topbar, .contract-actions-bar, .no-print, .a4-page-label { display: none !important; }
-      .main-content { margin: 0 !important; }
-      .page-content { padding: 0 !important; background: #fff; }
+      .sidebar,
+      .topbar,
+      .contract-actions-bar,
+      .contracts-page-back,
+      .back-link,
+      .no-print,
+      .a4-page-label { display: none !important; }
+
+      html, body {
+        background: #fff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+      }
+      .main-content {
+        margin: 0 !important;
+        width: 210mm !important;
+        max-width: 210mm !important;
+      }
+      .page-content {
+        padding: 0 !important;
+        background: #fff !important;
+        margin: 0 !important;
+      }
+      #contractDoc {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
       .contract-a4-stage {
         display: block !important;
         gap: 0 !important;
         padding: 0 !important;
+        margin: 0 !important;
         background: transparent !important;
         border-radius: 0 !important;
         zoom: 1 !important;
         transform: none !important;
       }
+
+      /* One sheet = one physical A4 page, edge-to-edge (no browser page margin) */
+      @page {
+        size: A4 portrait;
+        margin: 0;
+      }
+
       .contract-doc,
       .a4-sheet {
         box-shadow: none !important;
         border: none !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        min-height: 0 !important;
-        height: auto !important;
+        width: 210mm !important;
+        max-width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
         margin: 0 !important;
-        padding: 0 !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
         page-break-after: always;
         break-after: page;
+        page-break-inside: avoid;
+        break-inside: avoid;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+      .a4-sheet:not(.has-letterhead) {
+        padding: 18mm 16mm !important;
+      }
+      .a4-sheet.has-letterhead {
+        padding: 0 !important;
       }
       .a4-sheet:last-child {
         page-break-after: auto;
         break-after: auto;
       }
-      .contract-doc-body,
+
       .a4-sheet-inner {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
-      .a4-sheet-bg-watermark,
-      .a4-sheet-bg-watermark img,
+      .a4-sheet.has-letterhead .a4-sheet-inner {
+        padding: 6mm 16mm !important;
+      }
       .a4-letterhead-header,
+      .a4-letterhead-footer {
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        max-height: 80mm !important;
+        overflow: hidden !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .a4-letterhead-footer {
+        margin-top: auto !important;
+      }
       .a4-letterhead-header img,
-      .a4-letterhead-footer,
       .a4-letterhead-footer img {
+        width: 100% !important;
+        max-height: 80mm !important;
+        height: auto !important;
+        display: block !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .a4-sheet-bg-watermark,
+      .a4-sheet-bg-watermark img {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
       .doc-sig-clear, .no-print { display: none !important; }
-      body { background: #fff; }
-      @page { size: A4; margin: 15mm; }
       .contract-doc.is-draft::before,
       .a4-sheet.is-draft::before {
         -webkit-print-color-adjust: exact !important;
@@ -21950,16 +22048,18 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           <i class="fas fa-money-check-alt"></i> عرض سند الأمر
         </a>
         <div class="status-change-wrap">
-          <label style="font-size:13px;color:var(--text-muted);">تغيير الحالة:</label>
-          <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
-            <option value="نشط">نشط</option>
-            <option value="بانتظار التمويل">بانتظار التمويل</option>
-            <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
-            <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
-            <option value="مكتمل">مكتمل ✓</option>
-            <option value="مؤرشف">مؤرشف</option>
-            <option value="ملغي">ملغي</option>
-          </select>
+          <div id="statusDropdownWrap" class="status-dropdown-wrap" hidden>
+            <label style="font-size:13px;color:var(--text-muted);">تغيير الحالة:</label>
+            <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
+              <option value="نشط">نشط</option>
+              <option value="بانتظار التمويل">بانتظار التمويل</option>
+              <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
+              <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
+              <option value="مكتمل">مكتمل ✓</option>
+              <option value="مؤرشف">مؤرشف</option>
+              <option value="ملغي">ملغي</option>
+            </select>
+          </div>
           <button class="btn btn-warning btn-sm" onclick="archiveContract()">
             <i class="fas fa-archive"></i> أرشفة
           </button>
@@ -22002,9 +22102,12 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       });
     }
 
-    function measureLetterheadHeight(img, sheetWidthPx) {
+    function measureLetterheadHeight(img, sheetWidthPx, pageHeightPx) {
       if (!img || !img.naturalWidth) return 0;
-      return Math.round((img.naturalHeight / img.naturalWidth) * sheetWidthPx);
+      const raw = Math.round((img.naturalHeight / img.naturalWidth) * sheetWidthPx);
+      // Cap each band so body text still has most of the page
+      const maxBand = Math.max(40, Math.round(pageHeightPx * 0.28));
+      return Math.min(raw, maxBand);
     }
 
     async function loadDocumentWatermark() {
@@ -22038,7 +22141,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           documentWatermark = {
             enabled: true,
             url: String(data.url),
-            opacity: Number.isFinite(opacity) ? Math.min(0.25, Math.max(0.03, opacity)) : 0.12
+            opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.03, opacity)) : 0.12
           };
         }
         if (data.header && data.header.enabled && data.header.url) {
@@ -22061,17 +22164,18 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         // Preload letterhead images and measure heights at A4 width so pagination reserves space.
         const probe = document.createElement('div');
         probe.className = 'a4-sheet';
-        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;height:297mm;';
         document.body.appendChild(probe);
         const sheetWidth = probe.offsetWidth || Math.round(210 * 3.78);
+        const pageHeight = probe.clientHeight || Math.round(297 * 3.78);
         probe.remove();
 
         const [headerImg, footerImg] = await Promise.all([
           documentHeader ? preloadImage(documentHeader.url) : Promise.resolve(null),
           documentFooter ? preloadImage(documentFooter.url) : Promise.resolve(null)
         ]);
-        letterheadHeaderHeightPx = measureLetterheadHeight(headerImg, sheetWidth);
-        letterheadFooterHeightPx = measureLetterheadHeight(footerImg, sheetWidth);
+        letterheadHeaderHeightPx = measureLetterheadHeight(headerImg, sheetWidth, pageHeight);
+        letterheadFooterHeightPx = measureLetterheadHeight(footerImg, sheetWidth, pageHeight);
       } catch (_) {
         documentWatermark = null;
         documentHeader = null;
@@ -22180,46 +22284,171 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       fitDraftWatermark();
     }
 
-    /** Measure usable content height inside an A4 sheet (padding + letterhead excluded). */
+    /** Usable body height: real A4 probe with letterhead so packing matches the layout. */
     function getA4ContentHeightPx() {
-      const probe = document.createElement('div');
-      probe.className = 'a4-sheet';
-      const hasLetterhead = !!(
-        (documentHeader && documentHeader.enabled && documentHeader.url) ||
-        (documentFooter && documentFooter.enabled && documentFooter.url)
-      );
-      if (hasLetterhead) probe.classList.add('has-letterhead');
-      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;height:297mm;';
-      const inner = document.createElement('div');
-      inner.className = 'a4-sheet-inner';
-      inner.style.cssText = 'height:100%;';
-      probe.appendChild(inner);
-      document.body.appendChild(probe);
-      const cs = getComputedStyle(hasLetterhead ? inner : probe);
+      const holder = document.createElement('div');
+      holder.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
+      const built = createA4Sheet(false, 0, 1);
+      built.sheet.style.height = '297mm';
+      built.sheet.style.minHeight = '297mm';
+      built.sheet.style.margin = '0';
+      holder.appendChild(built.sheet);
+      document.body.appendChild(holder);
+      void built.sheet.offsetHeight;
+
+      const pageH = built.sheet.clientHeight || Math.round(297 * 3.78);
+      const headerEl = built.sheet.querySelector('.a4-letterhead-header');
+      const footerEl = built.sheet.querySelector('.a4-letterhead-footer');
+      const headerH = headerEl ? headerEl.offsetHeight : 0;
+      const footerH = footerEl ? footerEl.offsetHeight : 0;
+      const cs = getComputedStyle(built.inner);
       const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      let h = Math.max(200, probe.clientHeight - padY);
-      if (hasLetterhead) {
-        h = Math.max(160, h - letterheadHeaderHeightPx - letterheadFooterHeightPx);
-      }
-      probe.remove();
+      // Body may use the space between header and footer (padding excluded from content budget
+      // because measureInnerContentHeight returns children-only height).
+      const available = pageH - headerH - footerH - padY;
+      holder.remove();
+      return Math.max(240, available);
+    }
+
+    /**
+     * Height of packed blocks only (no flex stretch, no padding).
+     */
+    function measureInnerContentHeight(inner) {
+      if (!inner) return 0;
+      const prev = {
+        flex: inner.style.flex,
+        height: inner.style.height,
+        minHeight: inner.style.minHeight,
+        overflow: inner.style.overflow
+      };
+      inner.style.flex = '0 0 auto';
+      inner.style.height = 'auto';
+      inner.style.minHeight = '0';
+      inner.style.overflow = 'visible';
+      const cs = getComputedStyle(inner);
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const h = Math.max(0, inner.scrollHeight - padY);
+      inner.style.flex = prev.flex;
+      inner.style.height = prev.height;
+      inner.style.minHeight = prev.minHeight;
+      inner.style.overflow = prev.overflow;
       return h;
     }
 
-    /** Turn free-text document body (br-separated) into block lines for pagination. */
+    /** Turn free-text / rich document body into block lines for pagination.
+     *  Rich HTML must still split on <br> — TinyMCE often stores the whole body
+     *  as one <p> with <br>s; without that split the header sits alone on page 1.
+     *  When splitting/unwrapping, inherit font-size/styles from parents (incl. .tpl-doc-font)
+     *  so chosen document sizes survive pagination onto each .doc-a4-line. */
     function expandDocumentBodyBlocks(bodyEl) {
       const docBody = bodyEl.querySelector('.doc-document-body');
       if (!docBody) return;
-      const parts = String(docBody.innerHTML || '').split(/<br\\s*\\/?>/i);
+
       const wrap = document.createElement('div');
       wrap.className = 'doc-document-body';
-      parts.forEach((part) => {
+      if (docBody.getAttribute('data-rich') === '1') wrap.setAttribute('data-rich', '1');
+      const baseStyle = docBody.getAttribute('style');
+      if (baseStyle) wrap.setAttribute('style', baseStyle);
+      const rootInherit = baseStyle || '';
+
+      function mergeStyles(...parts) {
+        return parts
+          .map((s) => String(s || '').trim().replace(/;+\\s*$/, ''))
+          .filter(Boolean)
+          .join('; ');
+      }
+
+      /** If html is a single outer <span style="…">…</span>, unwrap and return its style. */
+      function unwrapStyledSpan(html) {
+        const m = String(html || '').match(/^\\s*<span\\b([^>]*)>([\\s\\S]*)<\\/span>\\s*$/i);
+        if (!m) return null;
+        const styleMatch = m[1].match(/\\bstyle\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))/i);
+        const style = styleMatch ? (styleMatch[1] || styleMatch[2] || styleMatch[3] || '') : '';
+        if (!style) return null;
+        return { style, inner: m[2] };
+      }
+
+      function appendLineHtml(html, inheritStyle) {
         const line = document.createElement('p');
         line.className = 'doc-a4-line';
-        line.innerHTML = part.trim() ? part : '&nbsp;';
+        if (inheritStyle) line.setAttribute('style', inheritStyle);
+        const trimmed = String(html || '').trim();
+        line.innerHTML = trimmed ? html : '&nbsp;';
         wrap.appendChild(line);
-      });
+      }
+
+      function expandRichNode(node, parentStyle) {
+        const inherited = parentStyle || '';
+        if (node.nodeType === 3) {
+          if (String(node.textContent || '').trim()) {
+            appendLineHtml(escHtml(node.textContent), inherited);
+          }
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        const el = node;
+        const tag = el.tagName.toUpperCase();
+        const ownStyle = el.getAttribute('style') || '';
+        const nextInherit = mergeStyles(inherited, ownStyle);
+
+        // Unwrap block containers so each child can paginate independently —
+        // keep font-size from wrappers like .tpl-doc-font.
+        if ((tag === 'DIV' || tag === 'SECTION' || tag === 'ARTICLE') && el.children.length) {
+          const hasBlockChild = Array.from(el.children).some((c) =>
+            /^(P|DIV|H[1-6]|UL|OL|LI|TABLE|BLOCKQUOTE|SECTION|ARTICLE)$/i.test(c.tagName)
+          );
+          if (hasBlockChild) {
+            Array.from(el.childNodes).forEach((child) => expandRichNode(child, nextInherit));
+            return;
+          }
+        }
+
+        let html = el.innerHTML || '';
+        let inheritStyle = nextInherit;
+
+        // Split br-separated content (common after plain→TinyMCE conversion)
+        if (/<br\\s*\\/?>/i.test(html)) {
+          let guard = 0;
+          while (guard++ < 3) {
+            const unwrapped = unwrapStyledSpan(html);
+            if (!unwrapped) break;
+            inheritStyle = mergeStyles(inheritStyle, unwrapped.style);
+            html = unwrapped.inner;
+          }
+          html.split(/<br\\s*\\/?>/i).forEach((part) => appendLineHtml(part, inheritStyle));
+          return;
+        }
+
+        // Keep lists/tables/headings as single units
+        if (/^(UL|OL|TABLE|H[1-6]|BLOCKQUOTE)$/i.test(tag)) {
+          const clone = el.cloneNode(true);
+          clone.classList.add('doc-a4-line');
+          if (inherited && !String(clone.getAttribute('style') || '').includes('font-size')) {
+            clone.setAttribute('style', mergeStyles(inherited, clone.getAttribute('style')));
+          }
+          wrap.appendChild(clone);
+          return;
+        }
+
+        // Normal paragraph / inline wrapper → one line (preserves + inherits style)
+        const clone = el.cloneNode(true);
+        clone.classList.add('doc-a4-line');
+        if (inherited) {
+          clone.setAttribute('style', mergeStyles(inherited, clone.getAttribute('style')));
+        }
+        wrap.appendChild(clone);
+      }
+
+      if (docBody.getAttribute('data-rich') === '1') {
+        Array.from(docBody.childNodes).forEach((child) => expandRichNode(child, rootInherit));
+        if (!wrap.children.length) appendLineHtml('&nbsp;', rootInherit);
+      } else {
+        const parts = String(docBody.innerHTML || '').split(/<br\\s*\\/?>/i);
+        parts.forEach((part) => appendLineHtml(part, rootInherit));
+      }
+
       docBody.replaceWith(wrap);
-      // Flatten so each line is a direct pagination candidate
+      // Flatten so each line is a direct pagination candidate (siblings of .doc-header)
       const lines = Array.from(wrap.children);
       lines.forEach((line) => bodyEl.insertBefore(line, wrap));
       wrap.remove();
@@ -22235,9 +22464,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       });
     }
 
-    function createA4Sheet(isDraft, pageIndex, pageCount) {
+    function createA4Sheet(isDraft, pageIndex, pageCount, docFont) {
       const sheet = document.createElement('div');
       sheet.className = 'a4-sheet' + (isDraft ? ' is-draft' : '');
+      if (docFont) {
+        sheet.style.setProperty('--doc-body-font-size', docFont);
+        sheet.style.fontSize = docFont;
+      }
       appendBgWatermark(sheet);
       const headerBand = appendLetterheadBand(sheet, 'header');
       if (headerBand) sheet.appendChild(headerBand);
@@ -22272,6 +22505,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const bodyEl = source.querySelector('.contract-doc-body');
       if (!bodyEl) return;
 
+      const docFont = (source.style.getPropertyValue('--doc-body-font-size') || '').trim()
+        || detectTemplateFontSize(source.querySelector('.doc-document-body')?.getAttribute('style') || '')
+        || '12px';
+
       const isDraft = source.classList.contains('is-draft');
       expandDocumentBodyBlocks(bodyEl);
       flattenArticleGroups(bodyEl);
@@ -22283,20 +22520,21 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const stage = document.createElement('div');
       stage.className = 'contract-a4-stage' + (isDraft ? ' is-draft' : '');
       stage.id = 'printArea';
+      stage.style.setProperty('--doc-body-font-size', docFont);
 
       // Attach stage before measuring so layout metrics are real
       host.insertBefore(stage, source);
 
       const pages = [];
-      let current = createA4Sheet(isDraft, 0, 1);
+      let current = createA4Sheet(isDraft, 0, 1, docFont);
       pages.push(current);
       stage.appendChild(current.sheet);
 
       blocks.forEach((block) => {
         current.inner.appendChild(block);
-        if (current.inner.scrollHeight > maxH + 2 && current.inner.children.length > 1) {
+        if (measureInnerContentHeight(current.inner) > maxH + 2 && current.inner.children.length > 1) {
           current.inner.removeChild(block);
-          current = createA4Sheet(isDraft, pages.length, 1);
+          current = createA4Sheet(isDraft, pages.length, 1, docFont);
           pages.push(current);
           stage.appendChild(current.sheet);
           current.inner.appendChild(block);
@@ -22365,6 +22603,27 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    /** Legacy plain-text bodies vs TinyMCE/HTML bodies. Untouched DB rows stay plain. */
+    function isRichHtmlTemplate(body) {
+      return /<(?:p|div|span|strong|b|em|i|u|br|ul|ol|li|h[1-6]|table|tr|td|th|a)\\b/i.test(String(body || ''));
+    }
+
+    function sanitizeTemplateHtml(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      tmp.querySelectorAll('script,iframe,object,embed,link,meta').forEach((el) => el.remove());
+      tmp.querySelectorAll('*').forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+          const n = attr.name;
+          const v = attr.value || '';
+          if (/^on/i.test(n) || ((n === 'href' || n === 'src') && /^\\s*javascript:/i.test(v))) {
+            el.removeAttribute(n);
+          }
+        });
+      });
+      return tmp.innerHTML;
+    }
+
     function isDocumentModeTemplate(t) {
       return !!(t && t.render_mode === 'document' && String(t.body_content || '').trim());
     }
@@ -22398,17 +22657,35 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       };
     }
 
-    /** Substitute {{vars}} into the raw body, then escape and convert newlines. */
+    /**
+     * Substitute {{vars}} into the body.
+     * Plain-text (legacy): escape all + newlines → <br> (unchanged behavior).
+     * Rich HTML: escape only substituted values, then sanitize tags.
+     */
     function fillTemplateBody(body, map) {
-      const replaced = String(body || '').replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (m, key) =>
-        Object.prototype.hasOwnProperty.call(map, key) ? String(map[key]) : m
-      );
+      const raw = String(body || '');
+      const rich = isRichHtmlTemplate(raw);
+      const replaced = raw.replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (m, key) => {
+        if (!Object.prototype.hasOwnProperty.call(map, key)) return m;
+        return rich ? escHtml(map[key]) : String(map[key]);
+      });
+      if (rich) return sanitizeTemplateHtml(replaced);
       return escHtml(replaced).replace(/\\r\\n|\\r|\\n/g, '<br>');
+    }
+
+    function detectTemplateFontSize(body) {
+      const raw = String(body || '');
+      let m = raw.match(/class=["'][^"']*tpl-doc-font[^"']*["'][^>]*style=["'][^"']*font-size\\s*:\\s*([\\d.]+px)/i)
+        || raw.match(/style=["'][^"']*font-size\\s*:\\s*([\\d.]+px)[^"']*["'][^>]*class=["'][^"']*tpl-doc-font/i)
+        || raw.match(/font-size\\s*:\\s*([\\d.]+px)/i);
+      return m ? m[1] : '12px';
     }
 
     function renderDocumentModeDoc(c, template) {
       const map = buildTemplateSubstitutions(c);
       const bodyHtml = fillTemplateBody(template.body_content, map);
+      const rich = isRichHtmlTemplate(template.body_content);
+      const docFont = detectTemplateFontSize(template.body_content);
       const hijriDate = map.date_hijri || '—';
       const rawLogo = String(c.party_one_logo || '').trim();
       let logoSrc = '';
@@ -22417,15 +22694,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const logoBlock = logoSrc
         ? \`<div class="doc-logo-row"><div class="doc-logo-img-wrap"><img src="\${logoSrc}" alt="" /></div></div>\`
         : '';
-      const title = escHtml(template.template_name || c.template_name || 'عقد');
       const isDraft = !isContractCompletedStatus(c.status);
 
       document.getElementById('contractDoc').innerHTML = \`
-      <div class="contract-doc\${isDraft ? ' is-draft' : ''}" id="printArea">
+      <div class="contract-doc\${isDraft ? ' is-draft' : ''}" id="printArea" style="--doc-body-font-size:\${docFont}">
         <div class="contract-doc-body">
-          <div class="doc-header">
+          <div class="doc-header doc-header--meta-only">
             \${logoBlock}
-            <div class="doc-contract-title">\${title}</div>
             <div class="doc-contract-meta">
               <span><i class="fas fa-calendar-alt" style="color:#c8a84b;"></i> \${c.date_gregorian || '—'} م</span>
               <span><i class="fas fa-calendar" style="color:#1a3c5e;"></i> \${hijriDate} هـ</span>
@@ -22433,7 +22708,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             </div>
           </div>
 
-          <div class="doc-document-body" style="font-size:14px;line-height:2.1;text-align:justify;white-space:normal;">\${bodyHtml}</div>
+          <div class="doc-document-body"\${rich ? ' data-rich="1"' : ''} style="font-size:\${docFont};line-height:1.6;text-align:justify;white-space:normal;">\${bodyHtml}</div>
         </div>
 
         <div id="draftWatermarkInner" class="draft-watermark"\${isDraft ? '' : ' hidden aria-hidden="true"'}>
@@ -22750,6 +23025,16 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
 
     // ======= ACTIONS =======
+    function canUseStatusDropdown() {
+      return getContractsRoleId() === 2;
+    }
+
+    function configureStatusDropdownVisibility() {
+      const wrap = document.getElementById('statusDropdownWrap');
+      if (!wrap) return;
+      wrap.hidden = !canUseStatusDropdown();
+    }
+
     function isContractPendingApprovalForCurrentRole() {
       const roleId = getContractsRoleId();
       if (!currentContract) return false;
@@ -22763,13 +23048,15 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       if (!approveBtn || !currentContract) return;
       const roleId = getContractsRoleId();
       const statusSelect = document.getElementById('statusSelect');
+      configureStatusDropdownVisibility();
       approveBtn.style.display = isContractPendingApprovalForCurrentRole() ? 'inline-flex' : 'none';
 
-      if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
-        statusSelect.value = 'نشط';
+      if (roleId === 2 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+        if (statusSelect) statusSelect.value = 'نشط';
+        approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
+      } else if (roleId === 1 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
         approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
       } else if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
-        statusSelect.value = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
         approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد وإرسال للإدارة';
       }
     }
@@ -22802,6 +23089,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
 
     async function updateStatus() {
+      if (!canUseStatusDropdown()) return;
       if (isContractPendingApprovalForCurrentRole()) {
         configureApprovalActions();
         showToast('استخدم زر الاعتماد لإكمال خطوة الموافقة الحالية', 'warning');
@@ -22822,7 +23110,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       let newStatus = null;
       if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
         newStatus = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
-      } else if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+      } else if (roleId === 1 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+        newStatus = 'نشط';
+      } else if (roleId === 2 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
         const selected = document.getElementById('statusSelect').value;
         newStatus = ['نشط', 'بانتظار التمويل', 'مكتمل'].includes(selected) ? selected : 'نشط';
       }
@@ -22856,7 +23146,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   <\/script>
 </body>
 </html>
-`,vo=`<!DOCTYPE html>
+`,_o=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -24768,7 +25058,7 @@ document.addEventListener('DOMContentLoaded', boot);
 <\/script>
 </body>
 </html>
-`,wo=`<!DOCTYPE html>
+`,Eo=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -24924,7 +25214,7 @@ document.addEventListener('DOMContentLoaded', boot);
   <\/script>
 </body>
 </html>
-`,_o=`<!DOCTYPE html>
+`,ko=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
@@ -26129,7 +26419,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <\/script>
 </body>
 </html>
-`,Eo=`<!DOCTYPE html>
+`,Io=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -27175,11 +27465,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
-  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
-  <script src="/contracts-module/js/dashboard.js?v=20260401"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260713"><\/script>
+  <script src="/contracts-module/js/dashboard.js?v=20260713"><\/script>
 </body>
 </html>
-`,ko=`<!DOCTYPE html>
+`,So=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -28189,7 +28479,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260713"><\/script>
   <script>
     let allContracts = [];
     let filteredContracts = [];
@@ -28354,7 +28644,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   <\/script>
 </body>
 </html>
-`,Io=`<!DOCTYPE html>
+`,To=`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <style id="contracts-module-styles">
@@ -29241,6 +29531,12 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   <title>عقد جديد | شركة الموعد للمقاولات العامة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
 </head>
 <body>
 
@@ -29422,20 +29718,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               </div>
               <div class="form-group">
                 <label class="form-label">التاريخ الهجري</label>
-                <div style="display:flex;gap:4px;">
-                  <select id="date_hijri_day" class="form-control" title="يوم" onchange="syncContractDateFromHijri()">
-                    <option value="">يوم</option>
-                    ${Array.from({length:30},(e,t)=>`<option value="${t+1}">${t+1}</option>`).join("")}
-                  </select>
-                  <select id="date_hijri_month" class="form-control" title="الشهر" onchange="syncContractDateFromHijri()">
-                    <option value="">الشهر</option>
-                    <option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option>
-                  </select>
-                  <select id="date_hijri_year" class="form-control" title="السنة" onchange="syncContractDateFromHijri()">
-                    <option value="">السنة</option>
-                    ${Array.from({length:161},(e,t)=>`<option value="${1300+t}">${1300+t}</option>`).join("")}
-                  </select>
-                </div>
+                <input type="text" class="form-control" id="date_hijri" placeholder="1447/06/04" autocomplete="off" onblur="syncContractDateFromHijri()" />
               </div>
               <div class="form-group">
                 <label class="form-label">المحكمة المختصة</label>
@@ -29512,7 +29795,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">رقم سند الأمر <span class="required">*</span></label>
-                <input type="text" class="form-control" id="note_order_number" placeholder="مثال: 3617" required />
+                <input type="text" class="form-control" id="note_order_number" placeholder="أدخل رقماً غير مستخدم" required />
                 <div class="invalid-feedback">يرجى إدخال رقم سند الأمر</div>
               </div>
               <div class="form-group">
@@ -29526,8 +29809,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             </div>
           </div>
 
-          <!-- Status -->
-          <div class="form-section">
+          <!-- Status (role 2 only — others use workflow buttons) -->
+          <div class="form-section" id="contractStatusSection" hidden>
             <div class="form-section-title"><i class="fas fa-info-circle"></i> حالة العقد</div>
             <div class="form-grid">
               <div class="form-group">
@@ -29572,7 +29855,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <!--CONTRACTS_FINANCING_REQUESTS_JSON-->
-  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260713"><\/script>
   <script>
     /** Rows from GET /api/contract-tables/templates (قوالب العقود) */
     let loadedTemplates = [];
@@ -29580,6 +29863,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     let selectedTemplate = null;
     let editingContractId = null;
     let isContractDateSyncing = false;
+    let contractHijriPicker = null;
 
     function isTemplateActive(t) {
       return t.is_active === true || t.is_active === 1 || t.is_active === '1';
@@ -29745,63 +30029,171 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       } catch(e) {}
     }
 
+    function normalizeArabicDigits(value) {
+      if (!value) return '';
+      const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+      const easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+      return String(value).replace(/[٠-٩۰-۹]/g, (char) => {
+        const arabicIndex = arabicDigits.indexOf(char);
+        if (arabicIndex >= 0) return String(arabicIndex);
+        const easternArabicIndex = easternArabicDigits.indexOf(char);
+        return easternArabicIndex >= 0 ? String(easternArabicIndex) : char;
+      });
+    }
+
+    function formatHijriDateFromGregorian(dateValue) {
+      if (!dateValue) return '';
+      try {
+        const [year, month, day] = String(dateValue).split('-').map(Number);
+        if (!year || !month || !day) return '';
+        const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
+        if (Number.isNaN(gregorianDate.getTime())) return '';
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function parseHijriInput(value) {
+      const normalized = normalizeArabicDigits(value)
+        .replace(/\\u200f/g, '')
+        .replace(/\\u200e/g, '')
+        .trim();
+      if (!normalized) return null;
+      const parts = normalized.split(/[^\\d]+/).filter(Boolean);
+      if (parts.length !== 3) return null;
+
+      let year;
+      let month;
+      let day;
+
+      if (parts[0].length === 4) {
+        year = Number(parts[0]);
+        month = Number(parts[1]);
+        day = Number(parts[2]);
+      } else if (parts[2].length === 4) {
+        day = Number(parts[0]);
+        month = Number(parts[1]);
+        year = Number(parts[2]);
+      } else {
+        return null;
+      }
+
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      if (year < 1200 || year > 1700) return null;
+      if (month < 1 || month > 12) return null;
+      if (day < 1 || day > 30) return null;
+      return { year, month, day };
+    }
+
     function extractHijriPartsFromDate(dateObject) {
       const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
-        year: 'numeric', month: '2-digit', day: '2-digit'
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
       }).formatToParts(dateObject);
-      const year = Number(parts.find((p) => p.type === 'year')?.value);
-      const month = Number(parts.find((p) => p.type === 'month')?.value);
-      const day = Number(parts.find((p) => p.type === 'day')?.value);
+      const year = Number(parts.find((part) => part.type === 'year')?.value);
+      const month = Number(parts.find((part) => part.type === 'month')?.value);
+      const day = Number(parts.find((part) => part.type === 'day')?.value);
       if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
       return { year, month, day };
     }
 
     function findGregorianFromHijri(hijriParts) {
-      const start = new Date(hijriParts.year + 577, 0, 1, 12, 0, 0);
-      const end = new Date(hijriParts.year + 582, 11, 31, 12, 0, 0);
-      for (let c = new Date(start); c <= end; c.setDate(c.getDate() + 1)) {
-        const hp = extractHijriPartsFromDate(c);
-        if (hp && hp.year === hijriParts.year && hp.month === hijriParts.month && hp.day === hijriParts.day) {
-          return c.getFullYear() + '-' + String(c.getMonth()+1).padStart(2,'0') + '-' + String(c.getDate()).padStart(2,'0');
+      const approxGregorianYear = hijriParts.year + 579;
+      const start = new Date(approxGregorianYear - 2, 0, 1, 12, 0, 0);
+      const end = new Date(approxGregorianYear + 2, 11, 31, 12, 0, 0);
+      for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+        const currentHijriParts = extractHijriPartsFromDate(cursor);
+        if (!currentHijriParts) continue;
+        if (
+          currentHijriParts.year === hijriParts.year &&
+          currentHijriParts.month === hijriParts.month &&
+          currentHijriParts.day === hijriParts.day
+        ) {
+          const year = cursor.getFullYear();
+          const month = String(cursor.getMonth() + 1).padStart(2, '0');
+          const day = String(cursor.getDate()).padStart(2, '0');
+          return year + '-' + month + '-' + day;
         }
       }
       return '';
     }
 
-    function setHijriDropdowns(gregorianValue) {
-      const dayEl = document.getElementById('date_hijri_day');
-      const monthEl = document.getElementById('date_hijri_month');
-      const yearEl = document.getElementById('date_hijri_year');
-      if (!dayEl || !monthEl || !yearEl) return;
-      if (!gregorianValue) { dayEl.value = ''; monthEl.value = ''; yearEl.value = ''; return; }
-      const pts = String(gregorianValue).split('-').map(Number);
-      const d = new Date(pts[0], pts[1]-1, pts[2], 12, 0, 0);
-      if (isNaN(d.getTime())) return;
-      const hp = extractHijriPartsFromDate(d);
-      if (!hp) return;
-      yearEl.value = String(hp.year); monthEl.value = String(hp.month); dayEl.value = String(hp.day);
-    }
-
     function syncContractDateFromGregorian() {
       if (isContractDateSyncing) return;
-      isContractDateSyncing = true;
       const gregorianInput = document.getElementById('date_gregorian');
-      if (gregorianInput) setHijriDropdowns(gregorianInput.value);
+      const hijriInput = document.getElementById('date_hijri');
+      if (!gregorianInput || !hijriInput) return;
+      isContractDateSyncing = true;
+      hijriInput.value = formatHijriDateFromGregorian(gregorianInput.value);
+      if (contractHijriPicker && gregorianInput.value) {
+        contractHijriPicker.setDate(gregorianInput.value, false, 'Y-m-d');
+      }
       isContractDateSyncing = false;
     }
 
     function syncContractDateFromHijri() {
       if (isContractDateSyncing) return;
-      const y = Number(document.getElementById('date_hijri_year')?.value);
-      const m = Number(document.getElementById('date_hijri_month')?.value);
-      const d = Number(document.getElementById('date_hijri_day')?.value);
-      if (!y || !m || !d) return;
-      const gv = findGregorianFromHijri({ year: y, month: m, day: d });
-      if (!gv) return;
-      isContractDateSyncing = true;
       const gregorianInput = document.getElementById('date_gregorian');
-      if (gregorianInput) { gregorianInput.value = gv; autoFillDay(); }
+      const hijriInput = document.getElementById('date_hijri');
+      if (!gregorianInput || !hijriInput) return;
+      const parsedHijri = parseHijriInput(hijriInput.value);
+      if (!parsedHijri) return;
+      const gregorianValue = findGregorianFromHijri(parsedHijri);
+      if (!gregorianValue) return;
+      isContractDateSyncing = true;
+      gregorianInput.value = gregorianValue;
+      autoFillDay();
+      hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+      if (contractHijriPicker) {
+        contractHijriPicker.setDate(gregorianValue, false, 'Y-m-d');
+      }
       isContractDateSyncing = false;
+    }
+
+    function initContractHijriDatePicker() {
+      const hijriInput = document.getElementById('date_hijri');
+      const gregorianInput = document.getElementById('date_gregorian');
+      if (!hijriInput || !gregorianInput) return;
+      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
+        return;
+      }
+
+      contractHijriPicker = flatpickr(hijriInput, {
+        locale: 'ar',
+        disableMobile: true,
+        dateFormat: 'Y-m-d',
+        allowInput: true,
+        plugins: [
+          hijriCalendarPlugin(window.luxon.DateTime, {
+            showHijriDates: true,
+            showHijriToggle: false
+          })
+        ],
+        onOpen: [(_, __, instance) => {
+          if (gregorianInput.value) {
+            instance.setDate(gregorianInput.value, false, 'Y-m-d');
+          }
+        }],
+        onChange: [(selectedDates) => {
+          if (!selectedDates.length || isContractDateSyncing) return;
+          const d = selectedDates[0];
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const gregorianValue = year + '-' + month + '-' + day;
+          isContractDateSyncing = true;
+          gregorianInput.value = gregorianValue;
+          autoFillDay();
+          hijriInput.value = formatHijriDateFromGregorian(gregorianValue);
+          isContractDateSyncing = false;
+        }]
+      });
     }
 
     function goStep1() {
@@ -29859,11 +30251,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function buildReview() {
       const data = getFormData();
-      const _rhy = document.getElementById('date_hijri_year')?.value;
-      const _rhm = document.getElementById('date_hijri_month')?.value;
-      const _rhd = document.getElementById('date_hijri_day')?.value;
-      const _hijriMonthNames = ['محرم','صفر','ربيع الأول','ربيع الثاني','جمادى الأولى','جمادى الثانية','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
-      const reviewHijriDate = (_rhy && _rhm && _rhd) ? (_rhd + ' ' + (_hijriMonthNames[Number(_rhm)-1]||_rhm) + ' ' + _rhy) : '—';
+      const reviewHijriDate = formatHijriDateFromGregorian(data.date_gregorian) || '—';
       document.getElementById('reviewContent').innerHTML = \`
         <div style="display:grid;gap:16px;">
           <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
@@ -30034,10 +30422,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     function getFormData() {
       const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
       const roleId = getContractsRoleId();
+      const statusEl = document.getElementById('status');
       const statusValue =
         (roleId === 4 || roleId === 6) && !editingContractId
           ? CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL
-          : document.getElementById('status').value;
+          : (statusEl?.value || 'بانتظار التمويل');
       return {
         contract_number: document.getElementById('contract_number').value,
         template_id: selectedTemplate?.template_id != null ? Number(selectedTemplate.template_id) : null,
@@ -30063,7 +30452,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         note_order_number: document.getElementById('note_order_number').value,
         note_due_date: document.getElementById('note_due_date').value,
         status: statusValue,
-        notes: document.getElementById('notes').value,
+        notes: document.getElementById('notes')?.value || '',
         is_archived: false,
         financing_request_id: (function() {
           const v = document.getElementById('financing_request_id')?.value;
@@ -30076,6 +30465,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const btn = event.target;
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+      let createdContractId = null;
       try {
         const data = getFormData();
         let contract;
@@ -30084,19 +30474,32 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           showToast('تم تحديث العقد بنجاح', 'success');
         } else {
           contract = await API.create('contracts', data);
+          createdContractId = contract?.id || null;
           // Create linked promissory note
           if (data.note_order_number) {
-            await API.create('promissory_notes', {
-              note_number: data.note_order_number,
-              contract_id: contract.id,
-              debtor_name: data.party_two_name,
-              debtor_id: data.party_two_id,
-              amount: data.commission_amount,
-              due_date: data.note_due_date || '',
-              issue_date: data.date_gregorian,
-              payment_place: 'الرياض',
-              status: 'ساري'
-            });
+            try {
+              await API.create('promissory_notes', {
+                note_number: data.note_order_number,
+                contract_id: contract.id,
+                debtor_name: data.party_two_name,
+                debtor_id: data.party_two_id,
+                amount: data.commission_amount,
+                due_date: data.note_due_date || '',
+                issue_date: data.date_gregorian,
+                payment_place: 'الرياض',
+                status: 'ساري'
+              });
+            } catch (noteErr) {
+              const noteMsg = noteErr instanceof Error ? noteErr.message : String(noteErr);
+              showToast(
+                noteMsg && noteMsg.length > 5
+                  ? \`تم حفظ العقد، لكن سند الأمر فشل: \${noteMsg}\`
+                  : 'تم حفظ العقد، لكن رقم سند الأمر مستخدم مسبقاً',
+                'warning'
+              );
+              setTimeout(() => { window.location.href = \`/admin/contracts/view?id=\${contract.id}\`; }, 1800);
+              return;
+            }
           }
           showToast(
             (getContractsRoleId() === 4 || getContractsRoleId() === 6)
@@ -30111,6 +30514,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         showToast(msg && msg.length > 5 ? msg : 'خطأ في حفظ العقد', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> حفظ العقد';
+        if (createdContractId) {
+          setTimeout(() => { window.location.href = \`/admin/contracts/view?id=\${createdContractId}\`; }, 1800);
+        }
       }
     }
 
@@ -30138,8 +30544,15 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    function configureContractStatusSectionVisibility() {
+      const section = document.getElementById('contractStatusSection');
+      if (!section) return;
+      section.hidden = getContractsRoleId() !== 2;
+    }
+
     // Auto-calc commission on amount change
       document.addEventListener('DOMContentLoaded', async () => {
+      configureContractStatusSectionVisibility();
       document.getElementById('party_one_logo_file')?.addEventListener('change', onPartyOneLogoFileChange);
       document.getElementById('party_one_logo_clear')?.addEventListener('click', () => {
         setPartyOneLogoPreview('');
@@ -30152,9 +30565,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         autoFillDay();
         syncContractDateFromGregorian();
       });
-      ['date_hijri_day','date_hijri_month','date_hijri_year'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', syncContractDateFromHijri);
-      });
+      document.getElementById('date_hijri')?.addEventListener('blur', syncContractDateFromHijri);
+      initContractHijriDatePicker();
 
       // Manual edits to any Party Two field after autofill → clear dropdown so customer_id becomes null
       ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach(fieldId => {
@@ -30183,6 +30595,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     async function loadContractForEdit(id) {
       try {
+        configureContractStatusSectionVisibility();
         const c = await API.getOne('contracts', id);
         selectedContractTypeKey = c.template_id != null ? Number(c.template_id) : null;
         selectedTemplate = {
@@ -30199,8 +30612,16 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         setTimeout(() => {
           document.getElementById('contract_number').value = c.contract_number || '';
           document.getElementById('date_gregorian').value = c.date_gregorian || '';
+          document.getElementById('date_hijri').value = c.date_hijri || '';
           autoFillDay();
-          syncContractDateFromGregorian();
+          if (!c.date_gregorian && c.date_hijri) {
+            syncContractDateFromHijri();
+          } else {
+            syncContractDateFromGregorian();
+          }
+          if (contractHijriPicker && c.date_gregorian) {
+            contractHijriPicker.setDate(c.date_gregorian, false, 'Y-m-d');
+          }
           const p1n = document.getElementById('party_one_name');
           const p1p = document.getElementById('party_one_phone');
           if (p1n) p1n.value = c.party_one_name || '';
@@ -30239,8 +30660,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   <\/script>
 </body>
 </html>
-`,So=`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+`,Co=`<!DOCTYPE html>
+<html lang="ar" dir="rtl" translate="no" class="notranslate">
 <head>
   <style id="contracts-module-styles">
 /* =============================================
@@ -31123,6 +31544,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Contract template text must never be rewritten by Chrome/Edge Translate -->
+  <meta name="google" content="notranslate" />
   <title>إدارة القوالب | شركة الموعد للمقاولات العامة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
@@ -31171,7 +31594,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       background: #fff;
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow: hidden;
+      overflow: visible;
     }
     .builder-toolbar {
       padding: 14px 20px;
@@ -31191,14 +31614,38 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
     .builder-toolbar button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
     .editor-area {
-      min-height: 300px;
+      min-height: 420px;
       padding: 20px;
       outline: none;
       font-family: 'Tajawal', sans-serif;
-      font-size: 14px;
-      line-height: 2;
+      font-size: 12px;
+      line-height: 1.6;
     }
+    .tox-tinymce { border-radius: 0 0 8px 8px !important; border: none !important; }
+    .builder-area .tox .tox-toolbar,
+    .builder-area .tox .tox-toolbar__primary { background: #fff; }
+    .tox.tox-tinymce-aux,
+    .tox-tinymce-aux {
+      z-index: 2147483646 !important;
+    }
+    .template-editor-panel {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+    .template-editor-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .template-editor-actions .spacer { flex: 1; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/tinymce@7.6.1/tinymce.min.js" referrerpolicy="origin"><\/script>
 </head>
 <body>
 
@@ -31230,108 +31677,147 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <header class="topbar">
-      <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
+      <div class="topbar-title"><h1 id="pageTopTitle"><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
       <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
-        <button type="button" class="btn btn-primary" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
+        <button type="button" class="btn btn-primary" id="newTemplateTopBtn" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
       </div>
     </header>
 
     <div class="page-content">
 
-      <div class="page-header">
-        <div class="page-header-title">
-          <h2>قوالب العقود</h2>
-          <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+      <!-- List view -->
+      <div id="templatesListView">
+        <div class="page-header">
+          <div class="page-header-title">
+            <h2>قوالب العقود</h2>
+            <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+          </div>
+        </div>
+        <div class="templates-grid" id="templatesGrid">
+          <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
         </div>
       </div>
 
-      <!-- Templates Grid -->
-      <div class="templates-grid" id="templatesGrid">
-        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+      <!-- Full-page editor -->
+      <div id="templateEditorView" style="display:none;">
+        <button type="button" class="back-link" onclick="closeTemplateEditor()" style="background:none;border:none;cursor:pointer;font-family:inherit;">
+          <i class="fas fa-arrow-right"></i> العودة للقوالب
+        </button>
+        <div class="page-header" style="margin-top:8px;">
+          <div class="page-header-title">
+            <h2 id="editorPageTitle">إضافة قالب جديد</h2>
+            <p>عدّل بيانات القالب ونص العقد، ثم احفظ أو عاين قبل الحفظ</p>
+          </div>
+        </div>
+
+        <div class="template-editor-panel notranslate" translate="no">
+          <form id="templateForm" class="notranslate" translate="no">
+            <input type="hidden" id="tpl_id" />
+            <div class="form-grid" style="margin-bottom:16px;">
+              <div class="form-group">
+                <label class="form-label">اسم القالب <span class="required">*</span></label>
+                <input type="text" class="form-control notranslate" id="tpl_name" translate="no" lang="ar" placeholder="مثال: عقد وساطة عقارية" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">نوع القالب</label>
+                <select class="form-control notranslate" id="tpl_type" translate="no" lang="ar">
+                  <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
+                  <option value="عقد إيجار">عقد إيجار</option>
+                  <option value="عقد بيع">عقد بيع</option>
+                  <option value="عقد مقاولات">عقد مقاولات</option>
+                  <option value="أخرى">أخرى</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">المحكمة المختصة</label>
+                <input type="text" class="form-control notranslate" id="tpl_court" translate="no" lang="ar" value="الرياض" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">الحالة</label>
+                <select class="form-control" id="tpl_active">
+                  <option value="true">مفعّل</option>
+                  <option value="false">معطّل</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">وضع العرض</label>
+                <select class="form-control" id="tpl_render_mode">
+                  <option value="structured">Structured — تخطيط ثابت</option>
+                  <option value="document">Document — نص القالب (خط / صفحات)</option>
+                </select>
+                <small class="text-muted" style="display:block;margin-top:6px;line-height:1.5;">
+                  Document يستخدم جسم القالب للطباعة والترقيم. Structured يستخدم التخطيط الثابت في صفحة العقد.
+                </small>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:16px;">
+              <label class="form-label">الترويسة</label>
+              <textarea class="form-control notranslate" id="tpl_header" translate="no" lang="ar" rows="2" placeholder="محتوى الترويسة الإضافي"></textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom:8px;">
+              <label class="form-label">جسم العقد <small class="text-muted">(استخدم {{variable}} للمتغيرات)</small></label>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <label class="form-label" style="margin:0;" for="tpl_doc_font_size">حجم خط المستند</label>
+                <select class="form-control notranslate" id="tpl_doc_font_size" translate="no" style="width:auto;min-width:110px;" onchange="onDocFontSizeChange(this.value)">
+                  <option value="5px">5px</option>
+                  <option value="6px">6px</option>
+                  <option value="7px">7px</option>
+                  <option value="8px">8px</option>
+                  <option value="9px">9px</option>
+                  <option value="10px">10px</option>
+                  <option value="11px">11px</option>
+                  <option value="12px" selected>12px</option>
+                  <option value="14px">14px</option>
+                  <option value="16px">16px</option>
+                  <option value="18px">18px</option>
+                  <option value="20px">20px</option>
+                  <option value="24px">24px</option>
+                  <option value="28px">28px</option>
+                  <option value="32px">32px</option>
+                </select>
+                <small class="text-muted">يُطبَّق على كامل نص العقد عند الحفظ والعرض</small>
+              </div>
+              <div class="builder-area notranslate" translate="no">
+                <div class="builder-toolbar">
+                  <button type="button" onclick="insertVar('{{date_gregorian}}')">📅 تاريخ ميلادي</button>
+                  <button type="button" onclick="insertVar('{{date_hijri}}')">🗓 تاريخ هجري</button>
+                  <button type="button" onclick="insertVar('{{party_two_name}}')">👤 اسم العميل</button>
+                  <button type="button" onclick="insertVar('{{party_two_id}}')">🪪 رقم الهوية</button>
+                  <button type="button" onclick="insertVar('{{party_two_phone}}')">📱 الجوال</button>
+                  <button type="button" onclick="insertVar('{{party_two_address}}')">📍 العنوان</button>
+                  <button type="button" onclick="insertVar('{{finance_type}}')">🏦 نوع التمويل</button>
+                  <button type="button" onclick="insertVar('{{finance_amount}}')">💰 مبلغ التمويل</button>
+                  <button type="button" onclick="insertVar('{{commission_amount}}')">💵 مبلغ السعي</button>
+                  <button type="button" onclick="insertVar('{{note_order_number}}')">📋 رقم السند</button>
+                  <button type="button" onclick="insertVar('{{bank_name}}')">🏛 اسم البنك</button>
+                  <button type="button" onclick="insertVar('{{property_description}}')">🏠 وصف العقار</button>
+                  <button type="button" onclick="insertVar('{{contract_number}}')">🔢 رقم العقد</button>
+                </div>
+                <textarea class="form-control editor-area notranslate" id="tpl_body" translate="no" lang="ar" rows="10" placeholder="اكتب بنود العقد هنا...&#10;استخدم المتغيرات من الأزرار أعلاه مثل {{party_two_name}}"></textarea>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top:16px;">
+              <label class="form-label">التذييل (الخاتمة)</label>
+              <input type="text" class="form-control notranslate" id="tpl_footer" translate="no" lang="ar" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
+            </div>
+          </form>
+
+          <div class="template-editor-actions">
+            <button type="button" class="btn btn-outline" onclick="previewEditorTemplate()"><i class="fas fa-eye"></i> معاينة</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost" onclick="closeTemplateEditor()">إلغاء</button>
+            <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save"></i> حفظ القالب</button>
+          </div>
+        </div>
       </div>
 
     </div>
   </main>
-
-  <!-- Modal: New/Edit Template -->
-  <div class="modal-overlay" id="templateModal" aria-hidden="true">
-    <div class="modal-box" style="max-width:820px;" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="modalTitle"><i class="fas fa-layer-group"></i> إضافة قالب جديد</h3>
-        <button class="modal-close" onclick="closeModal('templateModal')"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="modal-body">
-        <form id="templateForm">
-          <input type="hidden" id="tpl_id" />
-          <div class="form-grid" style="margin-bottom:16px;">
-            <div class="form-group">
-              <label class="form-label">اسم القالب <span class="required">*</span></label>
-              <input type="text" class="form-control" id="tpl_name" placeholder="مثال: عقد وساطة عقارية" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label">نوع القالب</label>
-              <select class="form-control" id="tpl_type">
-                <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
-                <option value="عقد إيجار">عقد إيجار</option>
-                <option value="عقد بيع">عقد بيع</option>
-                <option value="عقد مقاولات">عقد مقاولات</option>
-                <option value="أخرى">أخرى</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">المحكمة المختصة</label>
-              <input type="text" class="form-control" id="tpl_court" value="الرياض" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">الحالة</label>
-              <select class="form-control" id="tpl_active">
-                <option value="true">مفعّل</option>
-                <option value="false">معطّل</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-bottom:16px;">
-            <label class="form-label">الترويسة</label>
-            <textarea class="form-control" id="tpl_header" rows="2" placeholder="محتوى الترويسة الإضافي"></textarea>
-          </div>
-
-          <div class="form-group" style="margin-bottom:8px;">
-            <label class="form-label">جسم العقد <small class="text-muted">(استخدم {{variable}} للمتغيرات)</small></label>
-            <div class="builder-area">
-              <div class="builder-toolbar">
-                <button type="button" onclick="insertVar('{{date_gregorian}}')">📅 تاريخ ميلادي</button>
-                <button type="button" onclick="insertVar('{{date_hijri}}')">🗓 تاريخ هجري</button>
-                <button type="button" onclick="insertVar('{{party_two_name}}')">👤 اسم العميل</button>
-                <button type="button" onclick="insertVar('{{party_two_id}}')">🪪 رقم الهوية</button>
-                <button type="button" onclick="insertVar('{{party_two_phone}}')">📱 الجوال</button>
-                <button type="button" onclick="insertVar('{{party_two_address}}')">📍 العنوان</button>
-                <button type="button" onclick="insertVar('{{finance_type}}')">🏦 نوع التمويل</button>
-                <button type="button" onclick="insertVar('{{finance_amount}}')">💰 مبلغ التمويل</button>
-                <button type="button" onclick="insertVar('{{commission_amount}}')">💵 مبلغ السعي</button>
-                <button type="button" onclick="insertVar('{{note_order_number}}')">📋 رقم السند</button>
-                <button type="button" onclick="insertVar('{{bank_name}}')">🏛 اسم البنك</button>
-                <button type="button" onclick="insertVar('{{property_description}}')">🏠 وصف العقار</button>
-                <button type="button" onclick="insertVar('{{contract_number}}')">🔢 رقم العقد</button>
-              </div>
-              <textarea class="form-control editor-area" id="tpl_body" rows="10" placeholder="اكتب بنود العقد هنا...&#10;استخدم المتغيرات من الأزرار أعلاه مثل {{party_two_name}}"></textarea>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">التذييل (الخاتمة)</label>
-            <input type="text" class="form-control" id="tpl_footer" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save"></i> حفظ القالب</button>
-        <button type="button" class="btn btn-ghost" onclick="closeModal('templateModal')">إلغاء</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Modal: Preview Template -->
   <div class="modal-overlay" id="previewModal" aria-hidden="true">
@@ -31340,13 +31826,237 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         <h3><i class="fas fa-eye"></i> معاينة القالب</h3>
         <button class="modal-close" onclick="closeModal('previewModal')"><i class="fas fa-times"></i></button>
       </div>
-      <div class="modal-body" id="previewContent"></div>
+      <div class="modal-body notranslate" id="previewContent" translate="no" lang="ar"></div>
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260401"><\/script>
+  <script src="/contracts-module/js/app.js?v=20260713"><\/script>
   <script>
     let editingId = null;
+    let tplBodyEditorReady = null;
+
+    /** True when body was saved from a rich editor (vs legacy plain text). */
+    function isRichHtmlTemplate(body) {
+      return /<(?:p|div|span|strong|b|em|i|u|br|ul|ol|li|h[1-6]|table|tr|td|th|a)\\b/i.test(String(body || ''));
+    }
+
+    function normalizeDocFontSize(v, fallback) {
+      const fb = fallback || '12px';
+      const s = String(v == null ? '' : v).trim();
+      const m = s.match(/^(\\d+(?:\\.\\d+)?)\\s*px$/i);
+      if (m) return Math.round(parseFloat(m[1]) * 1000) / 1000 + 'px';
+      const n = parseFloat(s);
+      if (!isNaN(n) && n > 0) return Math.round(n * 1000) / 1000 + 'px';
+      return fb;
+    }
+
+    function extractDocFontSize(html) {
+      const raw = String(html || '');
+      let m = raw.match(/tpl-doc-font[^>]*>[\\s\\S]*?font-size\\s*:\\s*([\\d.]+px)/i)
+        || raw.match(/class=["'][^"']*tpl-doc-font[^"']*["'][^>]*style=["'][^"']*font-size\\s*:\\s*([\\d.]+px)/i)
+        || raw.match(/style=["'][^"']*font-size\\s*:\\s*([\\d.]+px)[^"']*["'][^>]*class=["'][^"']*tpl-doc-font/i);
+      if (m) return normalizeDocFontSize(m[1]);
+      m = raw.match(/font-size\\s*:\\s*([\\d.]+px)/i);
+      return m ? normalizeDocFontSize(m[1]) : '12px';
+    }
+
+    function setDocFontSizeSelect(sizePx) {
+      const sel = document.getElementById('tpl_doc_font_size');
+      if (!sel) return;
+      const size = normalizeDocFontSize(sizePx);
+      if (![...sel.options].some((o) => o.value === size)) {
+        const opt = document.createElement('option');
+        opt.value = size;
+        opt.textContent = size;
+        sel.appendChild(opt);
+      }
+      sel.value = size;
+    }
+
+    /** Persist document font size as an outer wrapper so print/view can keep it after pagination. */
+    function enforceDocFontSizeOnHtml(html, sizePx) {
+      const size = normalizeDocFontSize(sizePx);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      tmp.querySelectorAll('.tpl-doc-font').forEach((el) => {
+        const parent = el.parentNode;
+        if (!parent) return;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        el.remove();
+      });
+      const wrap = document.createElement('div');
+      wrap.className = 'tpl-doc-font';
+      wrap.setAttribute('style', 'font-size:' + size + ';line-height:1.6');
+      while (tmp.firstChild) wrap.appendChild(tmp.firstChild);
+      tmp.appendChild(wrap);
+      return tmp.innerHTML;
+    }
+
+    async function applyDocFontSizeToEditor(sizePx) {
+      const size = normalizeDocFontSize(sizePx);
+      setDocFontSizeSelect(size);
+      await ensureTplBodyEditor();
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (!ed) return;
+      const body = ed.getBody();
+      if (body) {
+        body.style.fontSize = size;
+        body.style.lineHeight = '1.6';
+      }
+      try {
+        ed.dom.setAttrib(ed.getBody(), 'data-doc-font-size', size);
+      } catch (_) { /* ignore */ }
+    }
+
+    async function onDocFontSizeChange(sizePx) {
+      await applyDocFontSizeToEditor(sizePx);
+    }
+
+    function escHtml(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Load legacy plain text into TinyMCE without changing stored format until save. */
+    function bodyToEditorHtml(body) {
+      const raw = String(body || '');
+      if (!raw.trim()) return '';
+      if (isRichHtmlTemplate(raw)) return raw;
+      return escHtml(raw).replace(/\\r\\n|\\r|\\n/g, '<br>');
+    }
+
+    function sanitizeTemplateHtml(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      tmp.querySelectorAll('script,iframe,object,embed,link,meta').forEach((el) => el.remove());
+      tmp.querySelectorAll('*').forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+          const n = attr.name;
+          const v = attr.value || '';
+          if (/^on/i.test(n) || ((n === 'href' || n === 'src') && /^\\s*javascript:/i.test(v))) {
+            el.removeAttribute(n);
+          }
+        });
+      });
+      return tmp.innerHTML;
+    }
+
+    /** Chrome Translate wraps text in dir=auto + vertical-align:inherit spans and often English legalese. */
+    function looksBrowserTranslated(html) {
+      const s = String(html || '');
+      if (/vertical-align\\s*:\\s*inherit/i.test(s) && /dir\\s*=\\s*["']?auto["']?/i.test(s)) return true;
+      if (/\\bWhereas\\b/i.test(s) || /\\bFirst Party\\b/i.test(s) || /\\bSecond Party\\b/i.test(s)) return true;
+      if (/\\bArticle\\s+(One|Two|Three|[1-9]|I{1,3})\\b/i.test(s)) return true;
+      if (/\\b(hereinafter|pursuant|aforesaid|Witnesseth)\\b/i.test(s)) return true;
+      return false;
+    }
+
+    function getTplBodyContent() {
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (ed) return ed.getContent({ format: 'html' }) || '';
+      return document.getElementById('tpl_body').value || '';
+    }
+
+    async function setTplBodyContent(body) {
+      await ensureTplBodyEditor();
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (ed) {
+        ed.setContent(bodyToEditorHtml(body));
+        try { ed.fire('ResizeEditor'); } catch (_) {}
+      } else {
+        document.getElementById('tpl_body').value = body || '';
+      }
+    }
+
+    function ensureTplBodyEditor() {
+      if (typeof tinymce === 'undefined') return Promise.resolve(null);
+      const existing = tinymce.get('tpl_body');
+      if (existing) return Promise.resolve(existing);
+      if (tplBodyEditorReady) return tplBodyEditorReady;
+      tplBodyEditorReady = new Promise((resolve) => {
+        tinymce.init({
+          selector: '#tpl_body',
+          license_key: 'gpl',
+          base_url: 'https://cdn.jsdelivr.net/npm/tinymce@7.6.1',
+          suffix: '.min',
+          directionality: 'rtl',
+          menubar: false,
+          branding: false,
+          promotion: false,
+          statusbar: false,
+          height: 480,
+          plugins: 'lists link',
+          toolbar: 'fontsize | bold italic underline | alignright aligncenter alignleft | bullist numlist | removeformat',
+          font_size_formats: '5px 6px 7px 8px 9px 10px 11px 12px 14px 16px 18px 20px 24px 28px 32px',
+          ui_mode: 'split',
+          // Stop Chrome/Edge Translate from rewriting Arabic contract text inside the iframe
+          body_class: 'notranslate',
+          content_style:
+            "body { font-family: 'Tajawal', sans-serif; font-size: 12px; line-height: 1.6; direction: rtl; } p { margin: 0; } .tpl-doc-font { line-height: 1.6; }",
+          setup(editor) {
+            function markNoTranslate() {
+              try {
+                const iframe = editor.iframeElement;
+                if (iframe) {
+                  iframe.setAttribute('translate', 'no');
+                  iframe.classList.add('notranslate');
+                }
+                const doc = editor.getDoc();
+                if (doc?.documentElement) {
+                  doc.documentElement.setAttribute('translate', 'no');
+                  doc.documentElement.setAttribute('lang', 'ar');
+                  doc.documentElement.setAttribute('dir', 'rtl');
+                  doc.documentElement.classList.add('notranslate');
+                }
+                const body = editor.getBody();
+                if (body) {
+                  body.setAttribute('translate', 'no');
+                  body.setAttribute('lang', 'ar');
+                  body.classList.add('notranslate');
+                }
+              } catch (_) { /* ignore */ }
+            }
+            editor.on('init', () => {
+              markNoTranslate();
+              const sel = document.getElementById('tpl_doc_font_size');
+              if (sel && sel.value) applyDocFontSizeToEditor(sel.value);
+              resolve(editor);
+            });
+            editor.on('LoadContent SetContent', markNoTranslate);
+            editor.on('ExecCommand', (e) => {
+              if (e.command === 'FontSize' && e.value) {
+                setDocFontSizeSelect(e.value);
+                try {
+                  editor.getBody().style.fontSize = normalizeDocFontSize(e.value);
+                  editor.getBody().style.lineHeight = '1.6';
+                } catch (_) { /* ignore */ }
+              }
+            });
+          }
+        }).catch(() => resolve(null));
+      });
+      return tplBodyEditorReady;
+    }
+
+    function showTemplateEditor(isEdit) {
+      document.getElementById('templatesListView').style.display = 'none';
+      document.getElementById('templateEditorView').style.display = 'block';
+      const topBtn = document.getElementById('newTemplateTopBtn');
+      if (topBtn) topBtn.style.display = 'none';
+      document.getElementById('pageTopTitle').innerHTML = isEdit
+        ? '<i class="fas fa-edit"></i> تعديل القالب'
+        : '<i class="fas fa-plus"></i> قالب جديد';
+      document.getElementById('editorPageTitle').textContent = isEdit ? 'تعديل القالب' : 'إضافة قالب جديد';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function closeTemplateEditor() {
+      document.getElementById('templateEditorView').style.display = 'none';
+      document.getElementById('templatesListView').style.display = 'block';
+      const topBtn = document.getElementById('newTemplateTopBtn');
+      if (topBtn) topBtn.style.display = '';
+      document.getElementById('pageTopTitle').innerHTML = '<i class="fas fa-layer-group"></i> إدارة القوالب';
+      editingId = null;
+    }
 
     function parseTemplateVars(t) {
       const raw = t.variables_list;
@@ -31380,7 +32090,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function buildTemplateCard(t) {
       const vars = parseTemplateVars(t);
-      const isActive = t.is_active === true || t.is_active === 'true';
+      const isActive = t.is_active === true || t.is_active === 'true' || t.is_active === 1;
+      const isDocument = t.render_mode === 'document';
       const roleId = getContractsRoleId();
       const canManageExistingTemplates = roleId !== 4;
       return \`
@@ -31391,10 +32102,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               <div class="template-card-name">\${t.template_name}</div>
               <div class="template-card-type">\${t.template_type || '—'}</div>
             </div>
-            <div style="margin-right:auto;">
+            <div style="margin-right:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
               \${isActive
                 ? '<span class="badge badge-active" style="font-size:11px;">مفعّل</span>'
                 : '<span class="badge badge-archived" style="font-size:11px;">معطّل</span>'}
+              <span class="badge" style="font-size:10px;background:\${isDocument ? 'rgba(200,168,75,0.2)' : 'rgba(255,255,255,0.15)'};color:#fff;">\${isDocument ? 'Document' : 'Structured'}</span>
             </div>
           </div>
           <div class="template-card-body">
@@ -31419,12 +32131,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function openNewTemplateModal() {
       editingId = null;
-      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus"></i> إضافة قالب جديد';
       document.getElementById('templateForm').reset();
       document.getElementById('tpl_footer').value = 'والله ولي التوفيق';
       document.getElementById('tpl_court').value = 'الرياض';
-      document.getElementById('tpl_body').value = getDefaultBody();
-      openModal('templateModal');
+      document.getElementById('tpl_render_mode').value = 'structured';
+      setDocFontSizeSelect('12px');
+      showTemplateEditor(false);
+      setTplBodyContent(getDefaultBody()).then(() => applyDocFontSizeToEditor('12px'));
     }
     globalThis.openNewTemplateModal = openNewTemplateModal;
 
@@ -31459,7 +32172,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     async function editTemplate(id) {
       editingId = id;
-      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل القالب';
       try {
         const t = await API.getOne('templates', id);
         document.getElementById('tpl_id').value = t.id;
@@ -31467,16 +32179,26 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         document.getElementById('tpl_type').value = t.template_type || 'عقد وساطة عقارية';
         document.getElementById('tpl_court').value = t.court_city || 'الرياض';
         document.getElementById('tpl_active').value = t.is_active ? 'true' : 'false';
+        document.getElementById('tpl_render_mode').value = t.render_mode === 'document' ? 'document' : 'structured';
         document.getElementById('tpl_header').value = t.header_content || '';
-        document.getElementById('tpl_body').value = t.body_content || '';
         document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
-        openModal('templateModal');
+        const docSize = extractDocFontSize(t.body_content || '');
+        setDocFontSizeSelect(docSize);
+        showTemplateEditor(true);
+        await setTplBodyContent(t.body_content || '');
+        await applyDocFontSizeToEditor(docSize);
       } catch (e) {
         showToast('خطأ في تحميل القالب', 'error');
       }
     }
 
     function insertVar(v) {
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (ed) {
+        ed.focus();
+        ed.insertContent(v);
+        return;
+      }
       const ta = document.getElementById('tpl_body');
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
@@ -31489,33 +32211,46 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const name = document.getElementById('tpl_name').value.trim();
       if (!name) { showToast('يرجى إدخال اسم القالب', 'warning'); return; }
 
-      const body = document.getElementById('tpl_body').value;
-      const vars = [...body.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);
-      const uniqueVars = [...new Set(vars)];
-
-      const data = {
-        template_name: name,
-        template_type: document.getElementById('tpl_type').value,
-        court_city: document.getElementById('tpl_court').value || 'الرياض',
-        is_active: document.getElementById('tpl_active').value === 'true',
-        header_content: document.getElementById('tpl_header').value,
-        body_content: body,
-        footer_content: document.getElementById('tpl_footer').value,
-        variables_list: uniqueVars
-      };
-
       try {
+        await ensureTplBodyEditor();
+        let body = getTplBodyContent();
+        if (typeof body !== 'string') body = String(body || '');
+        body = sanitizeTemplateHtml(body);
+        if (looksBrowserTranslated(body)) {
+          showToast('يبدو أن المتصفح ترجم نص القالب إلى الإنجليزية. عطّل الترجمة وأعد تحميل القالب قبل الحفظ.', 'error');
+          return;
+        }
+        const docSize = normalizeDocFontSize(document.getElementById('tpl_doc_font_size')?.value || '12px');
+        body = enforceDocFontSizeOnHtml(body, docSize);
+        const vars = [...body.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);
+        const uniqueVars = [...new Set(vars)];
+
+        const data = {
+          template_name: name,
+          template_type: document.getElementById('tpl_type').value,
+          court_city: document.getElementById('tpl_court').value || 'الرياض',
+          is_active: document.getElementById('tpl_active').value === 'true',
+          render_mode: document.getElementById('tpl_render_mode').value === 'document' ? 'document' : 'structured',
+          header_content: document.getElementById('tpl_header').value,
+          body_content: body,
+          footer_content: document.getElementById('tpl_footer').value,
+          variables_list: uniqueVars
+        };
+
+        const saveOpts = { timeoutMs: 60000 };
         if (editingId) {
-          await API.update('templates', editingId, data);
+          await API.update('templates', editingId, data, saveOpts);
           showToast('تم تحديث القالب بنجاح', 'success');
         } else {
-          await API.create('templates', data);
+          await API.create('templates', data, saveOpts);
           showToast('تم إضافة القالب بنجاح', 'success');
         }
-        closeModal('templateModal');
+        closeTemplateEditor();
         loadTemplates();
       } catch (e) {
-        showToast('خطأ في حفظ القالب', 'error');
+        console.error('saveTemplate failed', e);
+        const detail = (e && e.message) ? String(e.message).trim() : '';
+        showToast(detail ? \`خطأ في حفظ القالب: \${detail}\` : 'خطأ في حفظ القالب', 'error');
       }
     }
 
@@ -31530,51 +32265,78 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    const PREVIEW_SAMPLE = {
+      party_two_name: 'عقيل بن هريسان العنزي',
+      party_two_id: '1030460636',
+      party_two_phone: '0554456710',
+      party_two_address: 'حائل',
+      date_gregorian: '2025/11/25',
+      date_hijri: '1447/06/04',
+      finance_type: 'رهن عقاري',
+      finance_amount: '810,000 ريال',
+      commission_amount: '24,000 ريال',
+      note_order_number: '3617',
+      bank_name: 'بنك الراجحي',
+      contract_number: 'CNT-2025-001',
+      property_description: 'شقة سكنية',
+      property_location: 'الرياض - حي النرجس'
+    };
+
+    function showBodyPreview(rawBody) {
+      const raw = String(rawBody || '');
+      const filled = raw.replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (m, key) =>
+        Object.prototype.hasOwnProperty.call(PREVIEW_SAMPLE, key) ? String(PREVIEW_SAMPLE[key]) : m
+      );
+      const rich = isRichHtmlTemplate(raw);
+      const docFont = extractDocFontSize(raw);
+      const previewHtml = rich
+        ? sanitizeTemplateHtml(filled)
+        : escHtml(filled).replace(/\\r\\n|\\r|\\n/g, '<br>');
+
+      document.getElementById('previewContent').innerHTML = \`
+        <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:\${docFont};line-height:1.6;\${rich ? '' : 'white-space:pre-wrap;'}">\${previewHtml}</div>
+        <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
+          <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
+        </div>
+      \`;
+      openModal('previewModal');
+    }
+
     async function previewTemplate(id) {
       try {
         const t = await API.getOne('templates', id);
-        const preview = (t.body_content || '')
-          .replace(/\\{\\{party_two_name\\}\\}/g, 'عقيل بن هريسان العنزي')
-          .replace(/\\{\\{party_two_id\\}\\}/g, '1030460636')
-          .replace(/\\{\\{party_two_phone\\}\\}/g, '0554456710')
-          .replace(/\\{\\{party_two_address\\}\\}/g, 'حائل')
-          .replace(/\\{\\{date_gregorian\\}\\}/g, '2025/11/25')
-          .replace(/\\{\\{date_hijri\\}\\}/g, '1447/06/04')
-          .replace(/\\{\\{finance_type\\}\\}/g, 'رهن عقاري')
-          .replace(/\\{\\{finance_amount\\}\\}/g, '810,000 ريال')
-          .replace(/\\{\\{commission_amount\\}\\}/g, '24,000 ريال')
-          .replace(/\\{\\{note_order_number\\}\\}/g, '3617')
-          .replace(/\\{\\{bank_name\\}\\}/g, 'بنك الراجحي')
-          .replace(/\\{\\{contract_number\\}\\}/g, 'CNT-2025-001')
-          .replace(/\\{\\{property_description\\}\\}/g, 'شقة سكنية')
-          .replace(/\\{\\{property_location\\}\\}/g, 'الرياض - حي النرجس');
-
-        document.getElementById('previewContent').innerHTML = \`
-          <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:14px;line-height:2;white-space:pre-wrap;">\${preview}</div>
-          <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
-            <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
-          </div>
-        \`;
-        openModal('previewModal');
+        showBodyPreview(t.body_content || '');
       } catch (e) {
         showToast('خطأ في المعاينة', 'error');
       }
     }
 
-    document.addEventListener('DOMContentLoaded', loadTemplates);
+    /** Preview current editor content (including unsaved changes). */
+    async function previewEditorTemplate() {
+      try {
+        await ensureTplBodyEditor();
+        showBodyPreview(getTplBodyContent());
+      } catch (e) {
+        showToast('خطأ في المعاينة', 'error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTemplates();
+    });
   <\/script>
 </body>
 </html>
-`,Ea="?v=20260405";function To(e){const t=`
+`,Ea="?v=20260713";function Ro(e){const t=`
   <style id="contracts-module-styles">
-${yo}
+${vo}
   </style>
-`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function Co(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function Ir(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function Sr(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-5-hide-new">')}function Dt(e){let t=To(Co(e.replace(/\r\n/g,`
-`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${Ea}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${Ea}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const ka=Dt(xo),Ro=Dt(vo),Lo=Dt(wo);Dt(_o);const ot="بانتظار موافقة ممثل البنك",it="بانتظار موافقة الإدارة",Do=new Set(["نشط","بانتظار التمويل","مكتمل"]);function Ue(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function Ia(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function lt(e){if(e==null)return null;const t=String(e).trim();return t||null}function me(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Sa(e){return e.roleId===3}function Ao(e){return e.roleId===1||e.roleId===2}async function xe(e,t){const a=await t(e);return a.userId?{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function Ta(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(me(e)){const r=t?.tenant_id;if(typeof r=="number"&&r>0)return{tenantId:r,error:null};if(typeof r=="string"&&/^\d+$/.test(r))return{tenantId:parseInt(r,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const Bo=2e5;function Ca(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>Bo?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function Ra(e,t,a){const r=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:me(e)&&r&&/^\d+$/.test(r)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(r,10)]}:me(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}async function ve(e,t){if(t.tenantId!=null||me(t)||t.roleId!==5&&t.roleId!==6||t.userId==null||!e.env?.DB)return t;try{const a=await e.env.DB.prepare(`SELECT b.tenant_id AS tenant_id
+`;return e.includes('id="contracts-module-styles"')?e:e.replace("<head>",`<head>${t}`)}function Lo(e){return e.replace(/\s*<link rel="stylesheet" href="css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='css\/style\.css'\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href="\/contracts-module\/css\/style\.css"\s*\/?>/gi,"").replace(/\s*<link rel="stylesheet" href='\/contracts-module\/css\/style\.css'\s*\/?>/gi,"")}function Tr(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-3">')}function Cr(e){return e.replace('<html lang="ar" dir="rtl">','<html lang="ar" dir="rtl" class="contracts-role-5-hide-new">')}function Dt(e){let t=Ro(Lo(e.replace(/\r\n/g,`
+`)));return t=t.replace(/src="js\/app\.js"/g,`src="/contracts-module/js/app.js${Ea}"`),t=t.replace(/src="js\/dashboard\.js"/g,`src="/contracts-module/js/dashboard.js${Ea}"`),t=t.replace(/new-contract\.html\?template=/g,"/admin/contracts/new?template="),t=t.replace(/new-contract\.html\?edit=/g,"/admin/contracts/new?edit="),t=t.replace(/contract-view\.html\?id=/g,"/admin/contracts/view?id="),t=t.replace(/notes\.html\?/g,"/admin/contracts/notes?"),t=t.replace(/href="index\.html"/g,'href="/admin/contracts"'),t=t.replace(/href="contracts\.html"/g,'href="/admin/contracts/list"'),t=t.replace(/href="new-contract\.html"/g,'href="/admin/contracts/new"'),t=t.replace(/href="templates\.html"/g,'href="/admin/contracts/templates"'),t=t.replace(/href="notes\.html"/g,'href="/admin/contracts/notes"'),t=t.replace(/href="archive\.html"/g,'href="/admin/contracts/archive"'),t=t.replace(/href="settings\.html"/g,'href="/admin/contracts/settings"'),t=t.replace(/window\.location\.href = 'contracts\.html'/g,"window.location.href = '/admin/contracts/list'"),t=t.replace(/window\.location\.href = `contracts\.html`/g,"window.location.href = `/admin/contracts/list`"),t=t.replace(/`contracts\.html`/g,"`/admin/contracts/list`"),t=t.replace(/`new-contract\.html\?edit=/g,"`/admin/contracts/new?edit="),t=t.replace(/`notes\.html\?search=/g,"`/admin/contracts/notes?search="),t=t.replace(/`contract-view\.html\?id=/g,"`/admin/contracts/view?id="),t}const ka=Dt(wo),Do=Dt(_o),Ao=Dt(Eo);Dt(ko);const ot="بانتظار موافقة ممثل البنك",it="بانتظار موافقة الإدارة",Bo=new Set(["نشط","بانتظار التمويل","مكتمل"]);function Ue(e){return e==="templates"?"contract_templates":e==="contracts"||e==="promissory_notes"||e==="customers"?e:null}function Ia(e){return e==null?null:typeof e=="string"?e:(Array.isArray(e),JSON.stringify(e))}function Sa(e){const t=String(e??"");return!!(/vertical-align\s*:\s*inherit/i.test(t)&&/dir\s*=\s*["']?auto["']?/i.test(t)||/\bWhereas\b/i.test(t)||/\bFirst Party\b/i.test(t)||/\bSecond Party\b/i.test(t)||/\bArticle\s+(One|Two|Three|[1-9]|I{1,3})\b/i.test(t)||/\b(hereinafter|pursuant|aforesaid|Witnesseth)\b/i.test(t))}const Ta="يبدو أن المتصفح ترجم نص القالب إلى الإنجليزية. عطّل ترجمة الصفحة وأعد تحميل القالب قبل الحفظ.";function lt(e){if(e==null)return null;const t=String(e).trim();return t||null}function me(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}function Ca(e){return e.roleId===3}function No(e){return e.roleId===1||e.roleId===2}async function xe(e,t){const a=await t(e);return a.userId?{info:a,error:null}:{info:a,error:e.json({error:"Unauthorized"},401)}}function Ra(e,t,a){if(e.tenantId)return{tenantId:e.tenantId,error:null};if(me(e)){const r=t?.tenant_id;if(typeof r=="number"&&r>0)return{tenantId:r,error:null};if(typeof r=="string"&&/^\d+$/.test(r))return{tenantId:parseInt(r,10),error:null};const n=a.req.query("tenant_id");return n&&/^\d+$/.test(String(n))?{tenantId:parseInt(String(n),10),error:null}:{tenantId:null,error:new Response(JSON.stringify({error:"يجب تحديد tenant_id لحساب المدير العام"}),{status:400,headers:{"Content-Type":"application/json"}})}}return{tenantId:null,error:new Response(JSON.stringify({error:"لا يوجد شركة مرتبطة بالحساب"}),{status:403,headers:{"Content-Type":"application/json"}})}}const jo=2e5;function La(e){const t=e.party_one_logo;if(t==null||t==="")return{ok:!0,value:null};const a=typeof t=="string"?t.trim():String(t).trim();return a?a.startsWith("/api/attachments/view/")?a.includes("..")||a.length>2e3?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"رابط شعار الشركة غير صالح."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:a}:a.length>jo?{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_too_large",detail:"صورة الشعار كبيرة جداً (بيانات قديمة). يُفضّل رفع صورة جديدة من النموذج."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(a)?{ok:!0,value:a}:{ok:!1,response:new Response(JSON.stringify({error:"party_one_logo_invalid",detail:"صورة الشعار غير صالحة. ارفع الصورة من الحقل؛ يُخزَّن الملف في R2 مثل مرفقات طلبات التمويل."}),{status:400,headers:{"Content-Type":"application/json; charset=utf-8"}})}:{ok:!0,value:null}}function Da(e,t,a){const r=t.req.query("tenant_id");return e.tenantId?{sql:` AND ${a}.tenant_id = ? `,binds:[e.tenantId]}:me(e)&&r&&/^\d+$/.test(r)?{sql:` AND ${a}.tenant_id = ? `,binds:[parseInt(r,10)]}:me(e)?{sql:"",binds:[]}:{sql:" AND 1=0 ",binds:[]}}async function ve(e,t){if(t.tenantId!=null||me(t)||t.roleId!==5&&t.roleId!==6||t.userId==null||!e.env?.DB)return t;try{const a=await e.env.DB.prepare(`SELECT b.tenant_id AS tenant_id
        FROM users u
        INNER JOIN banks b ON b.id = u.assigned_bank_id
        WHERE u.id = ? AND b.tenant_id IS NOT NULL
-       LIMIT 1`).bind(t.userId).first();if(a?.tenant_id!=null)return{...t,tenantId:Number(a.tenant_id)}}catch{}return t}function No(e,t){e.get("/api/contract-tables/customer-list",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n);let i="SELECT id, full_name, phone, national_id, city FROM customers";const l=[];let d=o.tenantId??null;if(d==null&&me(o)){const c=r.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(d=parseInt(String(c),10)),d==null&&o.userId){const p=await r.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(o.userId).first();p?.tenant_id!=null&&(d=p.tenant_id)}}if(d!=null)i+=" WHERE tenant_id = ?",l.push(d);else return me(o)?r.json({data:[],debug:"no_tenant"}):r.json({data:[],debug:"no_tenant"});o.roleId===4&&o.userId?(i+=` AND EXISTS (
+       LIMIT 1`).bind(t.userId).first();if(a?.tenant_id!=null)return{...t,tenantId:Number(a.tenant_id)}}catch{}return t}function Oo(e,t){e.get("/api/contract-tables/customer-list",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n);let i="SELECT id, full_name, phone, national_id, city FROM customers";const l=[];let d=o.tenantId??null;if(d==null&&me(o)){const c=r.req.query("tenant_id");if(c&&/^\d+$/.test(String(c))&&(d=parseInt(String(c),10)),d==null&&o.userId){const p=await r.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(o.userId).first();p?.tenant_id!=null&&(d=p.tenant_id)}}if(d!=null)i+=" WHERE tenant_id = ?",l.push(d);else return me(o)?r.json({data:[],debug:"no_tenant"}):r.json({data:[],debug:"no_tenant"});o.roleId===4&&o.userId?(i+=` AND EXISTS (
         SELECT 1 FROM customer_assignments ca
         WHERE ca.customer_id = customers.id AND ca.employee_id = ?
       ) AND EXISTS (
@@ -31605,10 +32367,10 @@ ${yo}
         WHERE co.customer_id = customers.id AND co.tenant_id = ?
           AND COALESCE(co.is_archived, 0) = 0
           AND co.status NOT IN ('مكتمل', 'مؤرشف')
-      )`,l.push(o.userId,o.userId,o.userId,d,d)),o.roleId===5&&o.userId&&(i+=" AND created_by = ?",l.push(o.userId)),i+=" ORDER BY full_name ASC LIMIT 500";try{const{results:c}=await r.env.DB.prepare(i).bind(...l).all();return r.json({data:c||[]})}catch(c){const p=String(c?.message||c||""),u=/no such column:\s*created_by/i.test(p);if(o.roleId===5&&u){const g=i.replace(/\s+AND\s+created_by\s*=\s*\?\s*/i," "),b=l.slice(0,-1),{results:f}=await r.env.DB.prepare(g).bind(...b).all();return r.json({data:f||[]})}throw c}}),e.get("/api/contract-tables/:table",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=Math.min(parseInt(r.req.query("limit")||"200",10)||200,500),{sql:c,binds:p}=Ra(o,r,l);let u="",g=[];l==="contracts"&&o.roleId===4&&o.userId?(u=" AND created_by = ? ",g=[o.userId]):l==="contracts"&&o.roleId===5&&o.userId&&o.tenantId?(u=" AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) ",g=[o.userId,o.tenantId]):l==="contracts"&&o.roleId===6&&o.userId&&o.tenantId&&(u=" AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) ",g=[o.userId,o.userId,o.tenantId]);const{results:b}=await r.env.DB.prepare(`SELECT * FROM ${l} WHERE 1=1 ${c} ${u} ORDER BY id DESC LIMIT ?`).bind(...p,...g,d).all();return r.json({data:b||[]})}),e.get("/api/contract-tables/:table/:id",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=parseInt(r.req.param("id"),10);if(!d)return r.json({error:"Invalid id"},400);const{sql:c,binds:p}=Ra(o,r,l);let u="",g=[];l==="contracts"&&o.roleId===4&&o.userId?(u=" AND created_by = ? ",g=[o.userId]):l==="contracts"&&o.roleId===5&&o.userId&&o.tenantId?(u=" AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) ",g=[o.userId,o.tenantId]):l==="contracts"&&o.roleId===6&&o.userId&&o.tenantId&&(u=" AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) ",g=[o.userId,o.userId,o.tenantId]);const b=await r.env.DB.prepare(`SELECT * FROM ${l} WHERE id = ? ${c} ${u}`).bind(d,...p,...g).first();return b?r.json(b):r.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=await r.req.json().catch(()=>({})),{tenantId:c,error:p}=Ta(o,d,r);if(p)return p;if(c==null)return r.json({error:"Missing tenant"},400);if(l==="contract_templates"){const u=String(d.template_name??"");if(!u.trim())return r.json({error:"template_name required"},400);const b=(await r.env.DB.prepare(`INSERT INTO contract_templates (
-          tenant_id, template_name, template_type, header_content, body_content, footer_content,
-          variables_list, is_active, court_city
-        ) VALUES (?,?,?,?,?,?,?,?,?)`).bind(c,u,d.template_type??null,d.header_content??null,d.body_content??null,d.footer_content??null,Ia(d.variables_list),d.is_active!==void 0?d.is_active?1:0:1,d.court_city??null).run()).meta.last_row_id,f=await r.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(b).first();return r.json({...f,id:b})}if(l==="contracts"){if(o.roleId===5)return r.json({error:"Forbidden"},403);const u=Ca(d);if(!u.ok)return u.response;let g=!1;if((o.roleId===4||o.roleId===6)&&o.userId){const y=d.customer_id!=null?Number(d.customer_id):null;if(y){let S=!1;try{S=await Ms(r.env.DB,{customerId:y,tenantId:c,userId:o.userId,roleId:o.roleId})}catch(k){const T=k instanceof Error?k.message:String(k);return r.json({error:"database_error",detail:T},500)}if(!S)return r.json({error:"Forbidden"},403);let _=null;try{_=await r.env.DB.prepare(`SELECT id FROM financing_requests
+      )`,l.push(o.userId,o.userId,o.userId,d,d)),o.roleId===5&&o.userId&&(i+=" AND created_by = ?",l.push(o.userId)),i+=" ORDER BY full_name ASC LIMIT 500";try{const{results:c}=await r.env.DB.prepare(i).bind(...l).all();return r.json({data:c||[]})}catch(c){const p=String(c?.message||c||""),u=/no such column:\s*created_by/i.test(p);if(o.roleId===5&&u){const g=i.replace(/\s+AND\s+created_by\s*=\s*\?\s*/i," "),b=l.slice(0,-1),{results:f}=await r.env.DB.prepare(g).bind(...b).all();return r.json({data:f||[]})}throw c}}),e.get("/api/contract-tables/:table",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=Math.min(parseInt(r.req.query("limit")||"200",10)||200,500),{sql:c,binds:p}=Da(o,r,l);let u="",g=[];l==="contracts"&&o.roleId===4&&o.userId?(u=" AND created_by = ? ",g=[o.userId]):l==="contracts"&&o.roleId===5&&o.userId&&o.tenantId?(u=" AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) ",g=[o.userId,o.tenantId]):l==="contracts"&&o.roleId===6&&o.userId&&o.tenantId&&(u=" AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) ",g=[o.userId,o.userId,o.tenantId]);const{results:b}=await r.env.DB.prepare(`SELECT * FROM ${l} WHERE 1=1 ${c} ${u} ORDER BY id DESC LIMIT ?`).bind(...p,...g,d).all();return r.json({data:b||[]})}),e.get("/api/contract-tables/:table/:id",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=parseInt(r.req.param("id"),10);if(!d)return r.json({error:"Invalid id"},400);const{sql:c,binds:p}=Da(o,r,l);let u="",g=[];l==="contracts"&&o.roleId===4&&o.userId?(u=" AND created_by = ? ",g=[o.userId]):l==="contracts"&&o.roleId===5&&o.userId&&o.tenantId?(u=" AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) ",g=[o.userId,o.tenantId]):l==="contracts"&&o.roleId===6&&o.userId&&o.tenantId&&(u=" AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) ",g=[o.userId,o.userId,o.tenantId]);const b=await r.env.DB.prepare(`SELECT * FROM ${l} WHERE id = ? ${c} ${u}`).bind(d,...p,...g).first();return b?r.json(b):r.json({error:"Not found"},404)}),e.post("/api/contract-tables/:table",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=await r.req.json().catch(()=>({})),{tenantId:c,error:p}=Ra(o,d,r);if(p)return p;if(c==null)return r.json({error:"Missing tenant"},400);if(l==="contract_templates"){if(o.roleId===4||o.roleId===6)return r.json({error:"Forbidden"},403);const u=String(d.template_name??"");if(!u.trim())return r.json({error:"template_name required"},400);if(Sa(d.body_content))return r.json({error:"browser_translate_blocked",detail:Ta},400);const g=String(d.render_mode??"structured")==="document"?"document":"structured";let b;try{b=await r.env.DB.prepare(`INSERT INTO contract_templates (
+            tenant_id, template_name, template_type, header_content, body_content, footer_content,
+            variables_list, is_active, court_city, render_mode
+          ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(c,u,d.template_type??null,d.header_content??null,d.body_content??null,d.footer_content??null,Ia(d.variables_list),d.is_active!==void 0?d.is_active?1:0:1,d.court_city??null,g).run()}catch(h){const y=h instanceof Error?h.message:String(h);return console.error("contract_templates insert failed",y),r.json({error:"database_error",detail:y},500)}const f=b.meta.last_row_id,w=await r.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(f).first();return r.json({...w,id:f})}if(l==="contracts"){if(o.roleId===5)return r.json({error:"Forbidden"},403);const u=La(d);if(!u.ok)return u.response;let g=!1;if((o.roleId===4||o.roleId===6)&&o.userId){const y=d.customer_id!=null?Number(d.customer_id):null;if(y){let S=!1;try{S=await qs(r.env.DB,{customerId:y,tenantId:c,userId:o.userId,roleId:o.roleId})}catch(k){const T=k instanceof Error?k.message:String(k);return r.json({error:"database_error",detail:T},500)}if(!S)return r.json({error:"Forbidden"},403);let _=null;try{_=await r.env.DB.prepare(`SELECT id FROM financing_requests
                WHERE customer_id = ? AND tenant_id = ? AND COALESCE(is_completed, 0) = 0
                ORDER BY id DESC LIMIT 1`).bind(y,c).first()}catch(k){const T=String(k?.message||k||"");if(/no such column:\s*is_completed/i.test(T))_=await r.env.DB.prepare(`SELECT id FROM financing_requests
                  WHERE customer_id = ? AND tenant_id = ?
@@ -31618,13 +32380,13 @@ ${yo}
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived, financing_request_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(c,o.userId,d.contract_number??null,d.template_id!=null?Number(d.template_id):null,d.template_name??null,d.date_gregorian??null,d.day_name??null,d.party_one_name??null,d.party_one_phone??null,u.value,d.customer_id!=null?Number(d.customer_id):null,d.party_two_name??null,lt(d.party_two_id),d.party_two_phone??null,d.party_two_address??null,d.finance_type??null,d.finance_amount!=null?Number(d.finance_amount):null,d.commission_amount!=null?Number(d.commission_amount):null,d.commission_type??null,d.commission_rate!=null?Number(d.commission_rate):null,d.note_order_number??null,d.note_due_date??null,b,d.property_description??null,d.property_location??null,d.bank_name??null,d.notes??null,d.is_archived?1:0,d.financing_request_id!=null?Number(d.financing_request_id):null).run()}catch(y){const S=y instanceof Error?y.message:String(y);return/no such column/i.test(S)?r.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل آخر migrations للعقود على D1، خاصة 0035 و0060."},500):r.json({error:"database_error",detail:S},500)}const w=f.meta.last_row_id;if(o.roleId===6&&g&&o.userId)try{await r.env.DB.prepare("UPDATE contracts SET bank_agent_approved_by = ?, bank_agent_approved_at = CURRENT_TIMESTAMP WHERE id = ?").bind(o.userId,w).run()}catch{}const h=await r.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(w).first();return r.json({...h,id:w})}if(l==="promissory_notes"){const u=d.contract_id!=null?Number(d.contract_id):NaN;if(!u)return r.json({error:"contract_id required"},400);const g=await r.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!g||g.tenant_id!==c)return r.json({error:"Invalid contract"},400);const b=String(d.note_number??"");if(!b.trim())return r.json({error:"note_number required"},400);const w=(await r.env.DB.prepare(`INSERT INTO promissory_notes (
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(c,o.userId,d.contract_number??null,d.template_id!=null?Number(d.template_id):null,d.template_name??null,d.date_gregorian??null,d.day_name??null,d.party_one_name??null,d.party_one_phone??null,u.value,d.customer_id!=null?Number(d.customer_id):null,d.party_two_name??null,lt(d.party_two_id),d.party_two_phone??null,d.party_two_address??null,d.finance_type??null,d.finance_amount!=null?Number(d.finance_amount):null,d.commission_amount!=null?Number(d.commission_amount):null,d.commission_type??null,d.commission_rate!=null?Number(d.commission_rate):null,d.note_order_number??null,d.note_due_date??null,b,d.property_description??null,d.property_location??null,d.bank_name??null,d.notes??null,d.is_archived?1:0,d.financing_request_id!=null?Number(d.financing_request_id):null).run()}catch(y){const S=y instanceof Error?y.message:String(y);return/no such column/i.test(S)?r.json({error:"database_schema",detail:"العمود غير موجود في قاعدة البيانات. شغّل آخر migrations للعقود على D1، خاصة 0035 و0060."},500):r.json({error:"database_error",detail:S},500)}const w=f.meta.last_row_id;if(o.roleId===6&&g&&o.userId)try{await r.env.DB.prepare("UPDATE contracts SET bank_agent_approved_by = ?, bank_agent_approved_at = CURRENT_TIMESTAMP WHERE id = ?").bind(o.userId,w).run()}catch{}const h=await r.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(w).first();return r.json({...h,id:w})}if(l==="promissory_notes"){const u=d.contract_id!=null?Number(d.contract_id):NaN;if(!u)return r.json({error:"contract_id required"},400);const g=await r.env.DB.prepare("SELECT id, tenant_id FROM contracts WHERE id = ?").bind(u).first();if(!g||g.tenant_id!==c)return r.json({error:"Invalid contract"},400);const b=String(d.note_number??"");if(!b.trim())return r.json({error:"note_number required"},400);let f;try{f=await r.env.DB.prepare(`INSERT INTO promissory_notes (
           tenant_id, note_number, contract_id, debtor_name, debtor_id, amount, due_date, issue_date, payment_place, status
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(c,b,u,d.debtor_name??null,lt(d.debtor_id),d.amount!=null?Number(d.amount):null,d.due_date??null,d.issue_date??null,d.payment_place??null,d.status??"ساري").run()).meta.last_row_id,h=await r.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(w).first();return r.json({...h,id:w})}return r.json({error:"Unsupported"},400)});const a=async(r,n)=>{const{info:s,error:o}=await xe(r,t);if(o)return o;const i=await ve(r,s);if(Sa(i))return r.json({error:"Forbidden"},403);const l=r.req.param("table"),d=Ue(l);if(!d)return r.json({error:"Unknown table"},400);const c=parseInt(r.req.param("id"),10);if(!c)return r.json({error:"Invalid id"},400);const p=await r.req.json().catch(()=>({})),u=await r.env.DB.prepare(`SELECT * FROM ${d} WHERE id = ?`).bind(c).first();if(!u)return r.json({error:"Not found"},404);if(i.tenantId&&u.tenant_id!==i.tenantId)return r.json({error:"Forbidden"},403);if(!i.tenantId&&!me(i))return r.json({error:"Forbidden"},403);if(d==="contracts"&&(i.roleId===4||i.roleId===6)&&u.created_by!==i.userId&&i.roleId===4)return r.json({error:"Forbidden"},403);if(d==="contract_templates"){if(i.roleId===4||i.roleId===6)return r.json({error:"Forbidden"},403);const g=[],b=[],f=(h,y)=>{(n==="PUT"||p[y]!==void 0)&&(g.push(`${h} = ?`),y==="is_active"?b.push(p[y]?1:0):y==="variables_list"?b.push(Ia(p[y])):b.push(p[y]??null))};if(f("template_name","template_name"),f("template_type","template_type"),f("header_content","header_content"),f("body_content","body_content"),f("footer_content","footer_content"),f("variables_list","variables_list"),f("is_active","is_active"),f("court_city","court_city"),g.length===0){const h=await r.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(c).first();return r.json(h)}await r.env.DB.prepare(`UPDATE contract_templates SET ${g.join(", ")} WHERE id = ?`).bind(...b,c).run();const w=await r.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(c).first();return r.json(w)}if(d==="contracts"){if(p.party_one_logo!==void 0){const _=Ca(p);if(!_.ok)return _.response;p.party_one_logo=_.value}if((i.roleId===4||i.roleId===6)&&u.created_by===i.userId&&p.status!==void 0){const _=String(p.status??""),k=String(u.status??"");!(_==="مؤرشف"&&p.is_archived)&&_!==k&&delete p.status}const g=p.status!==void 0&&p.status!==u.status,b=[],f=[];if(g){const _=String(p.status??""),k=String(u.status??""),T=_==="مؤرشف"&&p.is_archived;if(i.roleId===4){if(!T)return r.json({error:"Forbidden"},403)}else if(i.roleId===6){const v=u.created_by===i.userId;if(!(T&&v))if(k===ot&&_===it){const x=u.customer_id;if(!x)return r.json({error:"Forbidden",detail:"العقد غير مرتبط بعميل"},403);if(!await r.env.DB.prepare(`SELECT id FROM financing_requests
+        ) VALUES (?,?,?,?,?,?,?,?,?,?)`).bind(c,b,u,d.debtor_name??null,lt(d.debtor_id),d.amount!=null?Number(d.amount):null,d.due_date??null,d.issue_date??null,d.payment_place??null,d.status??"ساري").run()}catch(y){const S=y instanceof Error?y.message:String(y);return/UNIQUE|unique constraint/i.test(S)?r.json({error:"duplicate_note_number",detail:`رقم سند الأمر (${b}) مستخدم مسبقاً. اختر رقماً آخر.`},409):r.json({error:"database_error",detail:S},500)}const w=f.meta.last_row_id,h=await r.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(w).first();return r.json({...h,id:w})}return r.json({error:"Unsupported"},400)});const a=async(r,n)=>{const{info:s,error:o}=await xe(r,t);if(o)return o;const i=await ve(r,s);if(Ca(i))return r.json({error:"Forbidden"},403);const l=r.req.param("table"),d=Ue(l);if(!d)return r.json({error:"Unknown table"},400);const c=parseInt(r.req.param("id"),10);if(!c)return r.json({error:"Invalid id"},400);const p=await r.req.json().catch(()=>({})),u=await r.env.DB.prepare(`SELECT * FROM ${d} WHERE id = ?`).bind(c).first();if(!u)return r.json({error:"Not found"},404);if(i.tenantId&&u.tenant_id!==i.tenantId)return r.json({error:"Forbidden"},403);if(!i.tenantId&&!me(i))return r.json({error:"Forbidden"},403);if(d==="contracts"&&(i.roleId===4||i.roleId===6)&&u.created_by!==i.userId&&i.roleId===4)return r.json({error:"Forbidden"},403);if(d==="contract_templates"){if(i.roleId===4||i.roleId===6)return r.json({error:"Forbidden"},403);if(p.body_content!==void 0&&Sa(p.body_content))return r.json({error:"browser_translate_blocked",detail:Ta},400);const g=[],b=[],f=(h,y)=>{(n==="PUT"||p[y]!==void 0)&&(g.push(`${h} = ?`),y==="is_active"?b.push(p[y]?1:0):y==="variables_list"?b.push(Ia(p[y])):b.push(p[y]??null))};if(f("template_name","template_name"),f("template_type","template_type"),f("header_content","header_content"),f("body_content","body_content"),f("footer_content","footer_content"),f("variables_list","variables_list"),f("is_active","is_active"),f("court_city","court_city"),(n==="PUT"||p.render_mode!==void 0)&&(g.push("render_mode = ?"),b.push(String(p.render_mode??"structured")==="document"?"document":"structured")),g.length===0){const h=await r.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(c).first();return r.json(h)}try{await r.env.DB.prepare(`UPDATE contract_templates SET ${g.join(", ")} WHERE id = ?`).bind(...b,c).run()}catch(h){const y=h instanceof Error?h.message:String(h);return console.error("contract_templates update failed",y),r.json({error:"database_error",detail:y},500)}const w=await r.env.DB.prepare("SELECT * FROM contract_templates WHERE id = ?").bind(c).first();return r.json(w)}if(d==="contracts"){if(p.party_one_logo!==void 0){const _=La(p);if(!_.ok)return _.response;p.party_one_logo=_.value}if((i.roleId===4||i.roleId===6)&&u.created_by===i.userId&&p.status!==void 0){const _=String(p.status??""),k=String(u.status??"");!(_==="مؤرشف"&&p.is_archived)&&_!==k&&delete p.status}const g=p.status!==void 0&&p.status!==u.status,b=[],f=[];if(g){const _=String(p.status??""),k=String(u.status??""),T=_==="مؤرشف"&&p.is_archived;if(i.roleId===4){if(!T)return r.json({error:"Forbidden"},403)}else if(i.roleId===6){const v=u.created_by===i.userId;if(!(T&&v))if(k===ot&&_===it){const x=u.customer_id;if(!x)return r.json({error:"Forbidden",detail:"العقد غير مرتبط بعميل"},403);if(!await r.env.DB.prepare(`SELECT id FROM financing_requests
                WHERE customer_id = ? AND assigned_bank_agent_id = ? AND tenant_id = ?
                LIMIT 1`).bind(x,i.userId,i.tenantId).first())return r.json({error:"Forbidden",detail:"غير مصرح لك باعتماد هذا العقد"},403);b.push("bank_agent_approved_by = ?","bank_agent_approved_at = CURRENT_TIMESTAMP"),f.push(i.userId)}else return r.json({error:"Forbidden"},403)}else if(k===ot){if(i.roleId!==5||_!==it)return r.json({error:"Forbidden"},403);const v=u.customer_id;if(!v)return r.json({error:"Forbidden",detail:"العقد غير مرتبط بعميل"},403);if(!await r.env.DB.prepare(`SELECT id FROM financing_requests
              WHERE customer_id = ? AND assigned_bank_agent_id = ? AND tenant_id = ?
-             LIMIT 1`).bind(v,i.userId,i.tenantId).first())return r.json({error:"Forbidden",detail:"غير مصرح لك باعتماد هذا العقد"},403);b.push("bank_agent_approved_by = ?","bank_agent_approved_at = CURRENT_TIMESTAMP"),f.push(i.userId)}else if(k===it){if(!Ao(i)||!Do.has(_))return r.json({error:"Forbidden"},403);b.push("admin_approved_by = ?","admin_approved_at = CURRENT_TIMESTAMP"),f.push(i.userId)}}const w=[],h=[],y=(_,k)=>{(n==="PUT"||p[k]!==void 0)&&(w.push(`${_} = ?`),k==="finance_amount"||k==="commission_amount"||k==="commission_rate"||k==="customer_id"||k==="template_id"?h.push(p[k]!=null?Number(p[k]):null):k==="is_archived"?h.push(p[k]?1:0):k==="party_two_id"?h.push(lt(p[k])):h.push(p[k]??null))};if(y("contract_number","contract_number"),y("template_id","template_id"),y("template_name","template_name"),y("date_gregorian","date_gregorian"),y("day_name","day_name"),y("party_one_name","party_one_name"),y("party_one_phone","party_one_phone"),y("party_one_logo","party_one_logo"),y("customer_id","customer_id"),y("party_two_name","party_two_name"),y("party_two_id","party_two_id"),y("party_two_phone","party_two_phone"),y("party_two_address","party_two_address"),y("finance_type","finance_type"),y("finance_amount","finance_amount"),y("commission_amount","commission_amount"),y("commission_type","commission_type"),y("commission_rate","commission_rate"),y("note_order_number","note_order_number"),y("note_due_date","note_due_date"),y("status","status"),y("property_description","property_description"),y("property_location","property_location"),y("bank_name","bank_name"),y("notes","notes"),y("is_archived","is_archived"),y("financing_request_id","financing_request_id"),w.push(...b),h.push(...f),w.length===0){const _=await r.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(c).first();return r.json(_)}try{await r.env.DB.prepare(`UPDATE contracts SET ${w.join(", ")} WHERE id = ?`).bind(...h,c).run()}catch(_){const k=_ instanceof Error?_.message:String(_);return/no such column/i.test(k)?r.json({error:"database_schema",detail:"العمود غير موجود. شغّل آخر migrations للعقود على D1، خاصة 0035 و0060."},500):r.json({error:"database_error",detail:k},500)}const S=await r.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(c).first();return r.json(S)}if(d==="promissory_notes"){const g=[],b=[],f=(h,y)=>{(n==="PUT"||p[y]!==void 0)&&(g.push(`${h} = ?`),y==="amount"||y==="contract_id"?b.push(p[y]!=null?Number(p[y]):null):y==="debtor_id"?b.push(lt(p[y])):b.push(p[y]??null))};if(f("note_number","note_number"),f("contract_id","contract_id"),f("debtor_name","debtor_name"),f("debtor_id","debtor_id"),f("amount","amount"),f("due_date","due_date"),f("issue_date","issue_date"),f("payment_place","payment_place"),f("status","status"),g.length===0){const h=await r.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(c).first();return r.json(h)}await r.env.DB.prepare(`UPDATE promissory_notes SET ${g.join(", ")} WHERE id = ?`).bind(...b,c).run();const w=await r.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(c).first();return r.json(w)}return r.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.env.ATTACHMENTS;if(!i)return r.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let l;try{l=await r.req.formData()}catch{return r.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const d=l.get("file");if(!d||!(d instanceof File))return r.json({error:"no_file",detail:"No file provided"},400);const c=d,p=2*1024*1024;if(c.size>p)return r.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(c.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return r.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const g=l.get("tenant_id"),b={};g!=null&&String(g).trim()!==""&&(b.tenant_id=g);const{tenantId:f,error:w}=Ta(o,b,r);if(w)return w;if(f==null)return r.json({error:"missing_tenant",detail:"Missing tenant"},400);const h=Date.now(),y=Math.random().toString(36).slice(2,9),S=(c.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",_=["jpg","jpeg","png","gif","webp"].includes(S)?S:"jpg",k=`contracts/${f}/party_logo_${h}_${y}.${_}`,T=await c.arrayBuffer();await i.put(k,T,{httpMetadata:{contentType:c.type||`image/${_==="jpg"?"jpeg":_}`}});const v=`/api/attachments/view/${k}`;return r.json({success:!0,url:v,filename:k})}),e.put("/api/contract-tables/:table/:id",r=>a(r,"PUT")),e.patch("/api/contract-tables/:table/:id",r=>a(r,"PATCH")),e.delete("/api/contract-tables/:table/:id",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n);if(Sa(o))return r.json({error:"Forbidden"},403);const i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=parseInt(r.req.param("id"),10);if(!d)return r.json({error:"Invalid id"},400);const c=await r.env.DB.prepare(`SELECT * FROM ${l} WHERE id = ?`).bind(d).first();return c?o.tenantId&&c.tenant_id!==o.tenantId?r.json({error:"Forbidden"},403):!o.tenantId&&!me(o)?r.json({error:"Forbidden"},403):l==="contract_templates"&&(o.roleId===4||o.roleId===6)?r.json({error:"Forbidden"},403):l==="contracts"&&(o.roleId===4||o.roleId===6)&&c.created_by!==o.userId?r.json({error:"Forbidden"},403):(await r.env.DB.prepare(`DELETE FROM ${l} WHERE id = ?`).bind(d).run(),new Response(null,{status:204})):r.json({error:"Not found"},404)})}const jo=`/* =============================================
+             LIMIT 1`).bind(v,i.userId,i.tenantId).first())return r.json({error:"Forbidden",detail:"غير مصرح لك باعتماد هذا العقد"},403);b.push("bank_agent_approved_by = ?","bank_agent_approved_at = CURRENT_TIMESTAMP"),f.push(i.userId)}else if(k===it){if(!No(i)||!Bo.has(_))return r.json({error:"Forbidden"},403);b.push("admin_approved_by = ?","admin_approved_at = CURRENT_TIMESTAMP"),f.push(i.userId)}}const w=[],h=[],y=(_,k)=>{(n==="PUT"||p[k]!==void 0)&&(w.push(`${_} = ?`),k==="finance_amount"||k==="commission_amount"||k==="commission_rate"||k==="customer_id"||k==="template_id"?h.push(p[k]!=null?Number(p[k]):null):k==="is_archived"?h.push(p[k]?1:0):k==="party_two_id"?h.push(lt(p[k])):h.push(p[k]??null))};if(y("contract_number","contract_number"),y("template_id","template_id"),y("template_name","template_name"),y("date_gregorian","date_gregorian"),y("day_name","day_name"),y("party_one_name","party_one_name"),y("party_one_phone","party_one_phone"),y("party_one_logo","party_one_logo"),y("customer_id","customer_id"),y("party_two_name","party_two_name"),y("party_two_id","party_two_id"),y("party_two_phone","party_two_phone"),y("party_two_address","party_two_address"),y("finance_type","finance_type"),y("finance_amount","finance_amount"),y("commission_amount","commission_amount"),y("commission_type","commission_type"),y("commission_rate","commission_rate"),y("note_order_number","note_order_number"),y("note_due_date","note_due_date"),y("status","status"),y("property_description","property_description"),y("property_location","property_location"),y("bank_name","bank_name"),y("notes","notes"),y("is_archived","is_archived"),y("financing_request_id","financing_request_id"),w.push(...b),h.push(...f),w.length===0){const _=await r.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(c).first();return r.json(_)}try{await r.env.DB.prepare(`UPDATE contracts SET ${w.join(", ")} WHERE id = ?`).bind(...h,c).run()}catch(_){const k=_ instanceof Error?_.message:String(_);return/no such column/i.test(k)?r.json({error:"database_schema",detail:"العمود غير موجود. شغّل آخر migrations للعقود على D1، خاصة 0035 و0060."},500):r.json({error:"database_error",detail:k},500)}const S=await r.env.DB.prepare("SELECT * FROM contracts WHERE id = ?").bind(c).first();return r.json(S)}if(d==="promissory_notes"){const g=[],b=[],f=(h,y)=>{(n==="PUT"||p[y]!==void 0)&&(g.push(`${h} = ?`),y==="amount"||y==="contract_id"?b.push(p[y]!=null?Number(p[y]):null):y==="debtor_id"?b.push(lt(p[y])):b.push(p[y]??null))};if(f("note_number","note_number"),f("contract_id","contract_id"),f("debtor_name","debtor_name"),f("debtor_id","debtor_id"),f("amount","amount"),f("due_date","due_date"),f("issue_date","issue_date"),f("payment_place","payment_place"),f("status","status"),g.length===0){const h=await r.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(c).first();return r.json(h)}await r.env.DB.prepare(`UPDATE promissory_notes SET ${g.join(", ")} WHERE id = ?`).bind(...b,c).run();const w=await r.env.DB.prepare("SELECT * FROM promissory_notes WHERE id = ?").bind(c).first();return r.json(w)}return r.json({error:"Unsupported"},400)};e.post("/api/contracts/party-logo-upload",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n),i=r.env.ATTACHMENTS;if(!i)return r.json({error:"storage_not_configured",detail:"Attachment storage (R2) not configured"},500);let l;try{l=await r.req.formData()}catch{return r.json({error:"invalid_form",detail:"Expected multipart/form-data"},400)}const d=l.get("file");if(!d||!(d instanceof File))return r.json({error:"no_file",detail:"No file provided"},400);const c=d,p=2*1024*1024;if(c.size>p)return r.json({error:"file_too_large",detail:"الحد الأقصى 2 ميجابايت"},400);const u=(c.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(u))return r.json({error:"invalid_type",detail:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);const g=l.get("tenant_id"),b={};g!=null&&String(g).trim()!==""&&(b.tenant_id=g);const{tenantId:f,error:w}=Ra(o,b,r);if(w)return w;if(f==null)return r.json({error:"missing_tenant",detail:"Missing tenant"},400);const h=Date.now(),y=Math.random().toString(36).slice(2,9),S=(c.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",_=["jpg","jpeg","png","gif","webp"].includes(S)?S:"jpg",k=`contracts/${f}/party_logo_${h}_${y}.${_}`,T=await c.arrayBuffer();await i.put(k,T,{httpMetadata:{contentType:c.type||`image/${_==="jpg"?"jpeg":_}`}});const v=`/api/attachments/view/${k}`;return r.json({success:!0,url:v,filename:k})}),e.put("/api/contract-tables/:table/:id",r=>a(r,"PUT")),e.patch("/api/contract-tables/:table/:id",r=>a(r,"PATCH")),e.delete("/api/contract-tables/:table/:id",async r=>{const{info:n,error:s}=await xe(r,t);if(s)return s;const o=await ve(r,n);if(Ca(o))return r.json({error:"Forbidden"},403);const i=r.req.param("table"),l=Ue(i);if(!l)return r.json({error:"Unknown table"},400);const d=parseInt(r.req.param("id"),10);if(!d)return r.json({error:"Invalid id"},400);const c=await r.env.DB.prepare(`SELECT * FROM ${l} WHERE id = ?`).bind(d).first();return c?o.tenantId&&c.tenant_id!==o.tenantId?r.json({error:"Forbidden"},403):!o.tenantId&&!me(o)?r.json({error:"Forbidden"},403):l==="contract_templates"&&(o.roleId===4||o.roleId===6)?r.json({error:"Forbidden"},403):l==="contracts"&&(o.roleId===4||o.roleId===6)&&c.created_by!==o.userId?r.json({error:"Forbidden"},403):(await r.env.DB.prepare(`DELETE FROM ${l} WHERE id = ?`).bind(d).run(),new Response(null,{status:204})):r.json({error:"Not found"},404)})}const Mo=`/* =============================================
    app.js - الوظائف المشتركة للنظام
    ============================================= */
 
@@ -31709,20 +32471,20 @@ const API = {
     return this.request(\`\${this.base}/\${table}/\${id}\`);
   },
 
-  async create(table, data) {
+  async create(table, data, opts = {}) {
     return this.request(\`\${this.base}/\${table}\`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    });
+    }, opts.timeoutMs ?? 15000);
   },
 
-  async update(table, id, data) {
+  async update(table, id, data, opts = {}) {
     return this.request(\`\${this.base}/\${table}/\${id}\`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
-    });
+    }, opts.timeoutMs ?? 15000);
   },
 
   async patch(table, id, data) {
@@ -32071,7 +32833,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setCurrentDate();
   applyRole3ContractsRestrictions();
 });
-`,Oo=`/* =============================================
+`,Fo=`/* =============================================
    dashboard.js - لوحة التحكم
    ============================================= */
 
@@ -32302,12 +33064,12 @@ function sendWA(phone, name, contractNum) {
 }
 
 document.addEventListener('DOMContentLoaded', loadDashboard);
-`;function Mo(e,t){e.get("/contracts-module/js/app.js",async a=>(await t(a)).userId?a.newResponse(jo,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)),e.get("/contracts-module/js/dashboard.js",async a=>(await t(a)).userId?a.newResponse(Oo,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401))}const Fo=2,qo=!1,Po=["image/","application/pdf","application/msword","application/vnd.openxmlformats-officedocument","text/plain"],$o=10*1024*1024;function La(e,t){return e<t?[e,t]:[t,e]}function Ho(e){return Po.some(t=>e.startsWith(t))}async function We(e,t,a,r){const n=await e.prepare(`SELECT id, tenant_id, participant_one_id, participant_two_id
+`;function qo(e,t){e.get("/contracts-module/js/app.js",async a=>(await t(a)).userId?a.newResponse(Mo,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401)),e.get("/contracts-module/js/dashboard.js",async a=>(await t(a)).userId?a.newResponse(Fo,200,{"Content-Type":"text/javascript; charset=utf-8","Cache-Control":"no-store, must-revalidate"}):a.newResponse("Unauthorized",401))}const Po=2,$o=!1,Ho=["image/","application/pdf","application/msword","application/vnd.openxmlformats-officedocument","text/plain"],Uo=10*1024*1024;function Aa(e,t){return e<t?[e,t]:[t,e]}function zo(e){return Ho.some(t=>e.startsWith(t))}async function ze(e,t,a,r){const n=await e.prepare(`SELECT id, tenant_id, participant_one_id, participant_two_id
        FROM chat_conversations WHERE id = ? LIMIT 1`).bind(t).first();return!n||n.tenant_id!==r||n.participant_one_id!==a&&n.participant_two_id!==a?null:n}async function $t(e,t,a,r,n){const s=await e.prepare(`SELECT id, tenant_id, participant_one_id, participant_two_id
-       FROM chat_conversations WHERE id = ? LIMIT 1`).bind(t).first();return!s||s.tenant_id!==r||s.participant_one_id!==a&&s.participant_two_id!==a?null:s}async function Uo(e,t){const a=new Map;if(!t.length)return a;try{const r=t.map(()=>"?").join(","),n=await e.prepare(`SELECT message_id, customer_id, display_name FROM chat_message_customer_tags
-         WHERE message_id IN (${r})`).bind(...t).all();for(const s of n.results||[]){const o=a.get(s.message_id)||[];o.push({customer_id:s.customer_id,display_name:s.display_name}),a.set(s.message_id,o)}}catch(r){console.error("[chat] loadTagsForMessages failed (migration 0083 applied?)",r)}return a}async function Wo(e,t,a){try{const n=(await e.prepare("SELECT last_read_broadcast_id FROM chat_broadcast_reads WHERE user_id = ?").bind(a).first())?.last_read_broadcast_id??0,s=await e.prepare("SELECT COUNT(*) AS n FROM chat_broadcasts WHERE tenant_id = ? AND id > ? AND deleted_at IS NULL").bind(t,n).first();return Number(s?.n||0)}catch(r){return console.error("[chat] getBroadcastUnreadCount failed (migration 0082 applied?)",r),0}}async function Tr(e,t,a){const r=C(t.roleId);return!r||!t.userId?!1:r===1?!0:a.tenant_id==null||a.tenant_id!==t.tenantId?!1:r===4?!!(await e.prepare(`SELECT 1 AS ok FROM customer_assignments
-         WHERE customer_id = ? AND employee_id = ? LIMIT 1`).bind(a.id,t.userId).first())?.ok:r===5?ur(e,t.userId,a.id,t.tenantId):r===2||r===3?!0:Q(e,{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId},a)}async function Cr(e,t,a){return a.length?Promise.all(a.map(async r=>{const n=await e.prepare("SELECT id, tenant_id FROM customers WHERE id = ? LIMIT 1").bind(r.customer_id).first(),s=n?await Tr(e,t,n):!1,o={display_name:r.display_name,can_link:s};return s&&(o.customer_id=r.customer_id),o})):[]}async function zo(e,t,a){const r=a.map(s=>Number(s.id)).filter(s=>Number.isFinite(s)),n=await Uo(e,r);return n.size===0?a.map(s=>({...s,tags:[]})):Promise.all(a.map(async s=>{const o=n.get(Number(s.id))||[],i=o.length?await Cr(e,t,o):[];return{...s,tags:i}}))}async function Ht(e,t,a,r){try{return(await e.prepare(t).bind(...r).all()).results||[]}catch(n){const s=String(n?.message||n||"");if(/(?:no such column|has no column named).*(is_forwarded|replied_to_message_id)/i.test(s))return console.warn("[chat] column missing — apply migrations 0084/0085"),(await e.prepare(a).bind(...r).all()).results||[];throw n}}async function Go(e,t){const a=new Map;if(!t.length)return a;try{const r=t.map(()=>"?").join(","),n=await e.prepare(`SELECT id, sender_id, body, attachment_json, deleted_at FROM chat_messages WHERE id IN (${r})`).bind(...t).all();for(const s of n.results||[])a.set(Number(s.id),s)}catch(r){console.error("[chat] loadReplyPreviews failed",r)}return a}async function Da(e,t,a){const r=a.filter(l=>!l.deleted_at),n=r.length?await zo(e,t,r):[],s=new Map(n.map(l=>[l.id,l])),o=a.filter(l=>!l.deleted_at&&l.replied_to_message_id).map(l=>Number(l.replied_to_message_id)).filter(l=>Number.isFinite(l)&&l>0),i=o.length?await Go(e,o):new Map;return a.map(l=>{if(l.deleted_at)return{id:l.id,sender_id:l.sender_id,body:null,attachment_json:null,created_at:l.created_at,deleted_at:l.deleted_at,tags:[]};const d=s.get(l.id)||{...l,tags:[]};if(l.replied_to_message_id){const c=i.get(Number(l.replied_to_message_id));d.reply_preview=c?{id:c.id,sender_id:c.sender_id,body:c.deleted_at?null:c.body,attachment_json:c.deleted_at?null:c.attachment_json,deleted_at:c.deleted_at||null}:null}return d})}async function Aa(e,t,a){const r=Array.from(new Set(a.map(i=>Number(i)).filter(i=>Number.isFinite(i)&&i>0)));if(!r.length)return[];const n=r.map(()=>"?").join(","),s=await e.prepare(`SELECT id, tenant_id, full_name FROM customers WHERE id IN (${n})`).bind(...r).all(),o=[];for(const i of s.results||[])await Tr(e,t,{id:i.id,tenant_id:i.tenant_id})&&o.push({id:i.id,full_name:i.full_name});return o}async function Ba(e,t,a){const r=[];for(const n of a){try{await e.prepare(`INSERT OR IGNORE INTO chat_message_customer_tags (message_id, customer_id, display_name)
-           VALUES (?, ?, ?)`).bind(t,n.id,n.full_name).run()}catch(s){console.error("[chat] insertMessageTags failed (migration 0083 applied?)",s)}r.push({customer_id:n.id,display_name:n.full_name})}return r}async function Ae(e,t,a){try{const r=e.CHAT_ROOMS.idFromName(`conv:${t}`);await e.CHAT_ROOMS.get(r).fetch("https://chat-room/broadcast",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(a)})}catch(r){console.error("[chat] broadcast failed",r)}}async function ze(e,t){try{const a=e.USER_NOTIFICATIONS.idFromName(`user:${t}`);await e.USER_NOTIFICATIONS.get(a).fetch("https://user-notify/push",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({type:"unread_update"})})}catch(a){console.error("[chat] user notify push failed",a)}}async function Na(e,t,a){try{const r=e.BROADCAST_ROOMS.idFromName(`broadcast:${t}`);await e.BROADCAST_ROOMS.get(r).fetch("https://broadcast-room/broadcast",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(a)})}catch(r){console.error("[chat] tenant broadcast failed",r)}}async function Yo(e,t,a){try{const r=await t.prepare("SELECT id FROM users WHERE tenant_id = ? AND (is_active IS NULL OR is_active = 1)").bind(a).all();await Promise.all((r.results||[]).map(n=>ze(e,n.id)))}catch(r){console.error("[chat] broadcast notify all failed",r)}}function Vo(e){const t=e.replace(/[\\%_]/g,a=>"\\"+a);return{like:`%${t}%`,prefix:`${t}%`}}async function Jo(e,t,a,r){const n=C(t.roleId),s=t.tenantId,o=t.userId,i=a.trim();if(!i&&n!==4&&n!==5&&n!==6)return[];const{like:l,prefix:d}=i?Vo(i):{like:"",prefix:""},c=i?"CASE WHEN c.full_name LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, c.full_name ASC":"c.full_name ASC",p=i?" AND (c.full_name LIKE ? ESCAPE '\\' OR c.phone LIKE ? ESCAPE '\\')":"",u=async(f,w)=>{const h=[...w];return i&&h.push(l,l),i&&h.push(d),h.push(r),((await e.prepare(`SELECT c.id, c.tenant_id, c.full_name, c.phone FROM customers c
+       FROM chat_conversations WHERE id = ? LIMIT 1`).bind(t).first();return!s||s.tenant_id!==r||s.participant_one_id!==a&&s.participant_two_id!==a?null:s}async function Wo(e,t){const a=new Map;if(!t.length)return a;try{const r=t.map(()=>"?").join(","),n=await e.prepare(`SELECT message_id, customer_id, display_name FROM chat_message_customer_tags
+         WHERE message_id IN (${r})`).bind(...t).all();for(const s of n.results||[]){const o=a.get(s.message_id)||[];o.push({customer_id:s.customer_id,display_name:s.display_name}),a.set(s.message_id,o)}}catch(r){console.error("[chat] loadTagsForMessages failed (migration 0083 applied?)",r)}return a}async function Go(e,t,a){try{const n=(await e.prepare("SELECT last_read_broadcast_id FROM chat_broadcast_reads WHERE user_id = ?").bind(a).first())?.last_read_broadcast_id??0,s=await e.prepare("SELECT COUNT(*) AS n FROM chat_broadcasts WHERE tenant_id = ? AND id > ? AND deleted_at IS NULL").bind(t,n).first();return Number(s?.n||0)}catch(r){return console.error("[chat] getBroadcastUnreadCount failed (migration 0082 applied?)",r),0}}async function Rr(e,t,a){const r=C(t.roleId);return!r||!t.userId?!1:r===1?!0:a.tenant_id==null||a.tenant_id!==t.tenantId?!1:r===4?!!(await e.prepare(`SELECT 1 AS ok FROM customer_assignments
+         WHERE customer_id = ? AND employee_id = ? LIMIT 1`).bind(a.id,t.userId).first())?.ok:r===5?gr(e,t.userId,a.id,t.tenantId):r===2||r===3?!0:Q(e,{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId},a)}async function Lr(e,t,a){return a.length?Promise.all(a.map(async r=>{const n=await e.prepare("SELECT id, tenant_id FROM customers WHERE id = ? LIMIT 1").bind(r.customer_id).first(),s=n?await Rr(e,t,n):!1,o={display_name:r.display_name,can_link:s};return s&&(o.customer_id=r.customer_id),o})):[]}async function Vo(e,t,a){const r=a.map(s=>Number(s.id)).filter(s=>Number.isFinite(s)),n=await Wo(e,r);return n.size===0?a.map(s=>({...s,tags:[]})):Promise.all(a.map(async s=>{const o=n.get(Number(s.id))||[],i=o.length?await Lr(e,t,o):[];return{...s,tags:i}}))}async function Ht(e,t,a,r){try{return(await e.prepare(t).bind(...r).all()).results||[]}catch(n){const s=String(n?.message||n||"");if(/(?:no such column|has no column named).*(is_forwarded|replied_to_message_id)/i.test(s))return console.warn("[chat] column missing — apply migrations 0084/0085"),(await e.prepare(a).bind(...r).all()).results||[];throw n}}async function Yo(e,t){const a=new Map;if(!t.length)return a;try{const r=t.map(()=>"?").join(","),n=await e.prepare(`SELECT id, sender_id, body, attachment_json, deleted_at FROM chat_messages WHERE id IN (${r})`).bind(...t).all();for(const s of n.results||[])a.set(Number(s.id),s)}catch(r){console.error("[chat] loadReplyPreviews failed",r)}return a}async function Ba(e,t,a){const r=a.filter(l=>!l.deleted_at),n=r.length?await Vo(e,t,r):[],s=new Map(n.map(l=>[l.id,l])),o=a.filter(l=>!l.deleted_at&&l.replied_to_message_id).map(l=>Number(l.replied_to_message_id)).filter(l=>Number.isFinite(l)&&l>0),i=o.length?await Yo(e,o):new Map;return a.map(l=>{if(l.deleted_at)return{id:l.id,sender_id:l.sender_id,body:null,attachment_json:null,created_at:l.created_at,deleted_at:l.deleted_at,tags:[]};const d=s.get(l.id)||{...l,tags:[]};if(l.replied_to_message_id){const c=i.get(Number(l.replied_to_message_id));d.reply_preview=c?{id:c.id,sender_id:c.sender_id,body:c.deleted_at?null:c.body,attachment_json:c.deleted_at?null:c.attachment_json,deleted_at:c.deleted_at||null}:null}return d})}async function Na(e,t,a){const r=Array.from(new Set(a.map(i=>Number(i)).filter(i=>Number.isFinite(i)&&i>0)));if(!r.length)return[];const n=r.map(()=>"?").join(","),s=await e.prepare(`SELECT id, tenant_id, full_name FROM customers WHERE id IN (${n})`).bind(...r).all(),o=[];for(const i of s.results||[])await Rr(e,t,{id:i.id,tenant_id:i.tenant_id})&&o.push({id:i.id,full_name:i.full_name});return o}async function ja(e,t,a){const r=[];for(const n of a){try{await e.prepare(`INSERT OR IGNORE INTO chat_message_customer_tags (message_id, customer_id, display_name)
+           VALUES (?, ?, ?)`).bind(t,n.id,n.full_name).run()}catch(s){console.error("[chat] insertMessageTags failed (migration 0083 applied?)",s)}r.push({customer_id:n.id,display_name:n.full_name})}return r}async function Ae(e,t,a){try{const r=e.CHAT_ROOMS.idFromName(`conv:${t}`);await e.CHAT_ROOMS.get(r).fetch("https://chat-room/broadcast",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(a)})}catch(r){console.error("[chat] broadcast failed",r)}}async function We(e,t){try{const a=e.USER_NOTIFICATIONS.idFromName(`user:${t}`);await e.USER_NOTIFICATIONS.get(a).fetch("https://user-notify/push",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({type:"unread_update"})})}catch(a){console.error("[chat] user notify push failed",a)}}async function Oa(e,t,a){try{const r=e.BROADCAST_ROOMS.idFromName(`broadcast:${t}`);await e.BROADCAST_ROOMS.get(r).fetch("https://broadcast-room/broadcast",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(a)})}catch(r){console.error("[chat] tenant broadcast failed",r)}}async function Jo(e,t,a){try{const r=await t.prepare("SELECT id FROM users WHERE tenant_id = ? AND (is_active IS NULL OR is_active = 1)").bind(a).all();await Promise.all((r.results||[]).map(n=>We(e,n.id)))}catch(r){console.error("[chat] broadcast notify all failed",r)}}function Xo(e){const t=e.replace(/[\\%_]/g,a=>"\\"+a);return{like:`%${t}%`,prefix:`${t}%`}}async function Qo(e,t,a,r){const n=C(t.roleId),s=t.tenantId,o=t.userId,i=a.trim();if(!i&&n!==4&&n!==5&&n!==6)return[];const{like:l,prefix:d}=i?Xo(i):{like:"",prefix:""},c=i?"CASE WHEN c.full_name LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, c.full_name ASC":"c.full_name ASC",p=i?" AND (c.full_name LIKE ? ESCAPE '\\' OR c.phone LIKE ? ESCAPE '\\')":"",u=async(f,w)=>{const h=[...w];return i&&h.push(l,l),i&&h.push(d),h.push(r),((await e.prepare(`SELECT c.id, c.tenant_id, c.full_name, c.phone FROM customers c
          WHERE ${f}${p}
          ORDER BY ${c}
          LIMIT ?`).bind(...h).all()).results||[]).map(S=>({id:S.id,full_name:S.full_name,phone:S.phone}))};if(n===4)return u(`c.tenant_id = ? AND EXISTS (
@@ -32373,7 +33135,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
        ORDER BY
          CASE WHEN full_name LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END,
          full_name ASC
-       LIMIT ?`).bind(s,l,l,d,r*3).all(),b=[];for(const f of g.results||[]){if(b.length>=r)break;await Q(e,{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId??null},{id:f.id,tenant_id:f.tenant_id})&&b.push({id:f.id,full_name:f.full_name,phone:f.phone})}return b}function Xo(e,t){e.get("/api/chat/customers/search",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=a.env.DB,s=String(a.req.query("q")||""),o=Math.min(Math.max(Number(a.req.query("limit")||15),1),25),i=await Jo(n,r,s,o);return a.json({success:!0,customers:i})}),e.get("/api/chat/users",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const s=await a.env.DB.prepare(`SELECT id, full_name AS name, email, role_id FROM users
+       LIMIT ?`).bind(s,l,l,d,r*3).all(),b=[];for(const f of g.results||[]){if(b.length>=r)break;await Q(e,{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId??null},{id:f.id,tenant_id:f.tenant_id})&&b.push({id:f.id,full_name:f.full_name,phone:f.phone})}return b}function Ko(e,t){e.get("/api/chat/customers/search",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=a.env.DB,s=String(a.req.query("q")||""),o=Math.min(Math.max(Number(a.req.query("limit")||15),1),25),i=await Qo(n,r,s,o);return a.json({success:!0,customers:i})}),e.get("/api/chat/users",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const s=await a.env.DB.prepare(`SELECT id, full_name AS name, email, role_id FROM users
          WHERE tenant_id = ? AND id != ? AND (is_active IS NULL OR is_active = 1)
          ORDER BY name ASC`).bind(r.tenantId,r.userId).all();return a.json({success:!0,users:s.results||[]})}),e.get("/api/chat/conversations",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=a.env.DB,s=r.userId,o=r.tenantId;try{const l=(await n.prepare(`SELECT c.id, c.participant_one_id, c.participant_two_id, c.last_message_at,
                 c.last_message_id,
@@ -32381,7 +33143,7 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
          FROM chat_conversations c
          WHERE c.tenant_id = ?
            AND (c.participant_one_id = ? OR c.participant_two_id = ?)
-         ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`).bind(s,o,s,s).all()).results||[],d=await Wo(n,o,s);if(l.length===0)return a.json({success:!0,conversations:[],broadcast_unread_count:d});const c=Array.from(new Set(l.map(T=>T.other_id))),p=c.map(()=>"?").join(","),u=await n.prepare(`SELECT id, full_name AS name, email, role_id FROM users WHERE id IN (${p})`).bind(...c).all(),g=new Map;(u.results||[]).forEach(T=>g.set(T.id,T));const b=l.map(T=>T.id),f=b.map(()=>"?").join(","),w=l.map(T=>T.last_message_id).filter(T=>T!=null&&Number(T)>0),[h,y]=await Promise.all([w.length?n.prepare(`SELECT id, sender_id, body, attachment_json, created_at, deleted_at
+         ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`).bind(s,o,s,s).all()).results||[],d=await Go(n,o,s);if(l.length===0)return a.json({success:!0,conversations:[],broadcast_unread_count:d});const c=Array.from(new Set(l.map(T=>T.other_id))),p=c.map(()=>"?").join(","),u=await n.prepare(`SELECT id, full_name AS name, email, role_id FROM users WHERE id IN (${p})`).bind(...c).all(),g=new Map;(u.results||[]).forEach(T=>g.set(T.id,T));const b=l.map(T=>T.id),f=b.map(()=>"?").join(","),w=l.map(T=>T.last_message_id).filter(T=>T!=null&&Number(T)>0),[h,y]=await Promise.all([w.length?n.prepare(`SELECT id, sender_id, body, attachment_json, created_at, deleted_at
                FROM chat_messages WHERE id IN (${w.map(()=>"?").join(",")})`).bind(...w).all():Promise.resolve({results:[]}),n.prepare(`SELECT cm.conversation_id, COUNT(*) AS n
            FROM chat_messages cm
            LEFT JOIN chat_message_reads cmr
@@ -32390,14 +33152,14 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
              AND cm.sender_id != ?
              AND cm.deleted_at IS NULL
              AND cm.id > COALESCE(cmr.last_read_message_id, 0)
-           GROUP BY cm.conversation_id`).bind(s,...b,s).all()]),S=new Map;for(const T of h.results||[])S.set(Number(T.id),T);const _=new Map;for(const T of y.results||[])_.set(Number(T.conversation_id),Number(T.n));const k=l.map(T=>{const v=T.last_message_id?S.get(Number(T.last_message_id)):null,x=v?v.deleted_at?{id:v.id,sender_id:v.sender_id,body:null,attachment_json:null,created_at:v.created_at,deleted_at:v.deleted_at}:v:null;return{id:T.id,other_user:g.get(T.other_id)||{id:T.other_id,name:"Unknown"},last_message:x,last_message_at:T.last_message_at,unread_count:_.get(T.id)||0}});return a.json({success:!0,conversations:k,broadcast_unread_count:d})}catch(i){return console.error("[chat] GET /api/chat/conversations error (migrations applied?)",i),a.json({success:!1,error:"db_error",conversations:[],broadcast_unread_count:0},500)}}),e.post("/api/chat/conversations/direct",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=Number(n?.user_id);if(!s||s===r.userId)return a.json({success:!1,error:"invalid user_id"},400);const o=a.env.DB,i=await o.prepare("SELECT id, tenant_id FROM users WHERE id = ? LIMIT 1").bind(s).first();if(!i||i.tenant_id!==r.tenantId)return a.json({success:!1,error:"user not in tenant"},404);const[l,d]=La(r.userId,s),c=await o.prepare(`SELECT id FROM chat_conversations
+           GROUP BY cm.conversation_id`).bind(s,...b,s).all()]),S=new Map;for(const T of h.results||[])S.set(Number(T.id),T);const _=new Map;for(const T of y.results||[])_.set(Number(T.conversation_id),Number(T.n));const k=l.map(T=>{const v=T.last_message_id?S.get(Number(T.last_message_id)):null,x=v?v.deleted_at?{id:v.id,sender_id:v.sender_id,body:null,attachment_json:null,created_at:v.created_at,deleted_at:v.deleted_at}:v:null;return{id:T.id,other_user:g.get(T.other_id)||{id:T.other_id,name:"Unknown"},last_message:x,last_message_at:T.last_message_at,unread_count:_.get(T.id)||0}});return a.json({success:!0,conversations:k,broadcast_unread_count:d})}catch(i){return console.error("[chat] GET /api/chat/conversations error (migrations applied?)",i),a.json({success:!1,error:"db_error",conversations:[],broadcast_unread_count:0},500)}}),e.post("/api/chat/conversations/direct",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=Number(n?.user_id);if(!s||s===r.userId)return a.json({success:!1,error:"invalid user_id"},400);const o=a.env.DB,i=await o.prepare("SELECT id, tenant_id FROM users WHERE id = ? LIMIT 1").bind(s).first();if(!i||i.tenant_id!==r.tenantId)return a.json({success:!1,error:"user not in tenant"},404);const[l,d]=Aa(r.userId,s),c=await o.prepare(`SELECT id FROM chat_conversations
          WHERE tenant_id = ? AND participant_one_id = ? AND participant_two_id = ?`).bind(r.tenantId,l,d).first();if(c)return a.json({success:!0,conversation_id:c.id});const p=await o.prepare(`INSERT INTO chat_conversations (tenant_id, participant_one_id, participant_two_id)
-         VALUES (?, ?, ?)`).bind(r.tenantId,l,d).run(),u=Number(p.meta?.last_row_id||0);return a.json({success:!0,conversation_id:u})}),e.get("/api/chat/conversations/:id/messages",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env;if(!await $t(s.DB,n,r.userId,r.tenantId,r.roleId??null))return a.json({success:!1,error:"not found"},404);const i=Math.min(Math.max(Number(a.req.query("limit")||50),1),200),l=Number(a.req.query("before")||0),d=Number(a.req.query("after")||0),c={userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null};if(d>0){const g=await Ht(s.DB,"SELECT id, sender_id, body, attachment_json, created_at, deleted_at, is_forwarded, replied_to_message_id FROM chat_messages WHERE conversation_id = ? AND id > ? ORDER BY id ASC LIMIT ?","SELECT id, sender_id, body, attachment_json, created_at, deleted_at FROM chat_messages WHERE conversation_id = ? AND id > ? ORDER BY id ASC LIMIT ?",[n,d,i]),b=await Da(s.DB,c,g);return a.json({success:!0,messages:b})}const p=l?await Ht(s.DB,"SELECT id, sender_id, body, attachment_json, created_at, deleted_at, is_forwarded, replied_to_message_id FROM chat_messages WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?","SELECT id, sender_id, body, attachment_json, created_at, deleted_at FROM chat_messages WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?",[n,l,i]):await Ht(s.DB,"SELECT id, sender_id, body, attachment_json, created_at, deleted_at, is_forwarded, replied_to_message_id FROM chat_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?","SELECT id, sender_id, body, attachment_json, created_at, deleted_at FROM chat_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",[n,i]),u=await Da(s.DB,c,p.reverse());return a.json({success:!0,messages:u})}),e.post("/api/chat/conversations/:id/messages",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env,o=await We(s.DB,n,r.userId,r.tenantId);if(!o)return a.json({success:!1,error:"not found"},404);const i=await a.req.json().catch(()=>({})),l=String(i?.body||"").trim();if(!l)return a.json({success:!1,error:"empty body"},400);if(l.length>8e3)return a.json({success:!1,error:"too long"},400);const d=Array.isArray(i?.customer_ids)?i.customer_ids:[],c=d.length?await Aa(s.DB,{userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null},d):[];let p=null;if(i?.replied_to_message_id){const k=Number(i.replied_to_message_id);Number.isFinite(k)&&k>0&&await s.DB.prepare("SELECT id FROM chat_messages WHERE id = ? AND conversation_id = ? AND deleted_at IS NULL LIMIT 1").bind(k,n).first()&&(p=k)}const u=new Date().toISOString();let g;try{g=await s.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, replied_to_message_id, created_at)
+         VALUES (?, ?, ?)`).bind(r.tenantId,l,d).run(),u=Number(p.meta?.last_row_id||0);return a.json({success:!0,conversation_id:u})}),e.get("/api/chat/conversations/:id/messages",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env;if(!await $t(s.DB,n,r.userId,r.tenantId,r.roleId??null))return a.json({success:!1,error:"not found"},404);const i=Math.min(Math.max(Number(a.req.query("limit")||50),1),200),l=Number(a.req.query("before")||0),d=Number(a.req.query("after")||0),c={userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null};if(d>0){const g=await Ht(s.DB,"SELECT id, sender_id, body, attachment_json, created_at, deleted_at, is_forwarded, replied_to_message_id FROM chat_messages WHERE conversation_id = ? AND id > ? ORDER BY id ASC LIMIT ?","SELECT id, sender_id, body, attachment_json, created_at, deleted_at FROM chat_messages WHERE conversation_id = ? AND id > ? ORDER BY id ASC LIMIT ?",[n,d,i]),b=await Ba(s.DB,c,g);return a.json({success:!0,messages:b})}const p=l?await Ht(s.DB,"SELECT id, sender_id, body, attachment_json, created_at, deleted_at, is_forwarded, replied_to_message_id FROM chat_messages WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?","SELECT id, sender_id, body, attachment_json, created_at, deleted_at FROM chat_messages WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?",[n,l,i]):await Ht(s.DB,"SELECT id, sender_id, body, attachment_json, created_at, deleted_at, is_forwarded, replied_to_message_id FROM chat_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?","SELECT id, sender_id, body, attachment_json, created_at, deleted_at FROM chat_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",[n,i]),u=await Ba(s.DB,c,p.reverse());return a.json({success:!0,messages:u})}),e.post("/api/chat/conversations/:id/messages",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env,o=await ze(s.DB,n,r.userId,r.tenantId);if(!o)return a.json({success:!1,error:"not found"},404);const i=await a.req.json().catch(()=>({})),l=String(i?.body||"").trim();if(!l)return a.json({success:!1,error:"empty body"},400);if(l.length>8e3)return a.json({success:!1,error:"too long"},400);const d=Array.isArray(i?.customer_ids)?i.customer_ids:[],c=d.length?await Na(s.DB,{userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null},d):[];let p=null;if(i?.replied_to_message_id){const k=Number(i.replied_to_message_id);Number.isFinite(k)&&k>0&&await s.DB.prepare("SELECT id FROM chat_messages WHERE id = ? AND conversation_id = ? AND deleted_at IS NULL LIMIT 1").bind(k,n).first()&&(p=k)}const u=new Date().toISOString();let g;try{g=await s.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, replied_to_message_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`).bind(n,r.tenantId,r.userId,l,p,u).run()}catch(k){const T=String(k?.message||k||"");if(/no such column.*replied_to_message_id|has no column named replied_to_message_id/i.test(T))g=await s.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, created_at)
-           VALUES (?, ?, ?, ?, ?)`).bind(n,r.tenantId,r.userId,l,u).run(),p=null;else throw k}const b=Number(g.meta?.last_row_id||0),f=await Ba(s.DB,b,c),w=await Cr(s.DB,{userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null},f);let h;if(p)try{const k=await s.DB.prepare("SELECT id, sender_id, body, attachment_json, deleted_at FROM chat_messages WHERE id = ? LIMIT 1").bind(p).first();k&&(h={id:k.id,sender_id:k.sender_id,body:k.deleted_at?null:k.body,attachment_json:k.deleted_at?null:k.attachment_json,deleted_at:k.deleted_at||null})}catch(k){console.error("[chat] reply_preview fetch failed",k)}await s.DB.prepare(`UPDATE chat_conversations
+           VALUES (?, ?, ?, ?, ?)`).bind(n,r.tenantId,r.userId,l,u).run(),p=null;else throw k}const b=Number(g.meta?.last_row_id||0),f=await ja(s.DB,b,c),w=await Lr(s.DB,{userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null},f);let h;if(p)try{const k=await s.DB.prepare("SELECT id, sender_id, body, attachment_json, deleted_at FROM chat_messages WHERE id = ? LIMIT 1").bind(p).first();k&&(h={id:k.id,sender_id:k.sender_id,body:k.deleted_at?null:k.body,attachment_json:k.deleted_at?null:k.attachment_json,deleted_at:k.deleted_at||null})}catch(k){console.error("[chat] reply_preview fetch failed",k)}await s.DB.prepare(`UPDATE chat_conversations
        SET last_message_id = ?, last_message_at = ?, updated_at = ?
-       WHERE id = ?`).bind(b,u,u,n).run();const y={id:b,conversation_id:n,sender_id:r.userId,body:l,attachment_json:null,created_at:u,tags:w};p&&(y.replied_to_message_id=p),h&&(y.reply_preview=h);const S=o.participant_one_id===r.userId?o.participant_two_id:o.participant_one_id,_={...y,tags:f};return a.executionCtx.waitUntil(Promise.all([Ae(s,n,{type:"message",message:_}),ze(s,S)])),a.json({success:!0,message:y})}),e.post("/api/chat/conversations/:id/attachments",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env,o=await We(s.DB,n,r.userId,r.tenantId);if(!o)return a.json({success:!1,error:"not found"},404);const i=await a.req.formData().catch(()=>null);if(!i)return a.json({success:!1,error:"invalid form"},400);const l=i.get("file");if(!l)return a.json({success:!1,error:"no file"},400);if(l.size>$o)return a.json({success:!1,error:"too large"},400);const d=l.type||"application/octet-stream";if(!Ho(d))return a.json({success:!1,error:"mime not allowed"},400);const c=new Date().toISOString(),p=await s.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, attachment_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`).bind(n,r.tenantId,r.userId,null,"{}",c).run(),u=Number(p.meta?.last_row_id||0),g=(l.name||"file").replace(/[^A-Za-z0-9._-]/g,"_").slice(0,120),b=`chat/${r.tenantId}/${n}/${u}/${g}`;await s.ATTACHMENTS.put(b,l.stream(),{httpMetadata:{contentType:d}});const f={key:b,name:g,mime:d,size:l.size};await s.DB.prepare("UPDATE chat_messages SET attachment_json = ? WHERE id = ?").bind(JSON.stringify(f),u).run(),await s.DB.prepare("UPDATE chat_conversations SET last_message_id = ?, last_message_at = ?, updated_at = ? WHERE id = ?").bind(u,c,c,n).run();const w={id:u,conversation_id:n,sender_id:r.userId,body:null,attachment_json:JSON.stringify(f),created_at:c},h=o.participant_one_id===r.userId?o.participant_two_id:o.participant_one_id;return a.executionCtx.waitUntil(Promise.all([Ae(s,n,{type:"message",message:w}),ze(s,h)])),a.json({success:!0,message:w})}),e.get("/api/chat/attachments/:conversationId/:messageId/:filename",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("conversationId")),s=Number(a.req.param("messageId")),o=a.env;if(!await $t(o.DB,n,r.userId,r.tenantId,r.roleId??null))return a.json({success:!1,error:"not found"},404);const l=await o.DB.prepare("SELECT attachment_json, deleted_at FROM chat_messages WHERE id = ? AND conversation_id = ?").bind(s,n).first();if(!l?.attachment_json)return a.json({success:!1,error:"no attachment"},404);if(l.deleted_at)return a.json({success:!1,error:"message deleted"},404);let d;try{d=JSON.parse(l.attachment_json)}catch{return a.json({success:!1,error:"bad metadata"},500)}const c=await o.ATTACHMENTS.get(d.key);if(!c)return a.json({success:!1,error:"gone"},404);const u=a.req.query("dl")==="1"?`attachment; filename="${d.name||"file"}"`:`inline; filename="${d.name||"file"}"`;return new Response(c.body,{headers:{"content-type":d.mime||"application/octet-stream","content-disposition":u}})}),e.post("/api/chat/conversations/:id/read",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env;if(!await We(s.DB,n,r.userId,r.tenantId))return a.json({success:!1,error:"not found"},404);const i=await a.req.json().catch(()=>({})),l=Math.max(0,Number(i?.last_read_message_id||0)),d=new Date().toISOString();return await s.DB.prepare(`INSERT INTO chat_message_reads (conversation_id, user_id, last_read_message_id, last_read_at)
+       WHERE id = ?`).bind(b,u,u,n).run();const y={id:b,conversation_id:n,sender_id:r.userId,body:l,attachment_json:null,created_at:u,tags:w};p&&(y.replied_to_message_id=p),h&&(y.reply_preview=h);const S=o.participant_one_id===r.userId?o.participant_two_id:o.participant_one_id,_={...y,tags:f};return a.executionCtx.waitUntil(Promise.all([Ae(s,n,{type:"message",message:_}),We(s,S)])),a.json({success:!0,message:y})}),e.post("/api/chat/conversations/:id/attachments",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env,o=await ze(s.DB,n,r.userId,r.tenantId);if(!o)return a.json({success:!1,error:"not found"},404);const i=await a.req.formData().catch(()=>null);if(!i)return a.json({success:!1,error:"invalid form"},400);const l=i.get("file");if(!l)return a.json({success:!1,error:"no file"},400);if(l.size>Uo)return a.json({success:!1,error:"too large"},400);const d=l.type||"application/octet-stream";if(!zo(d))return a.json({success:!1,error:"mime not allowed"},400);const c=new Date().toISOString(),p=await s.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, attachment_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`).bind(n,r.tenantId,r.userId,null,"{}",c).run(),u=Number(p.meta?.last_row_id||0),g=(l.name||"file").replace(/[^A-Za-z0-9._-]/g,"_").slice(0,120),b=`chat/${r.tenantId}/${n}/${u}/${g}`;await s.ATTACHMENTS.put(b,l.stream(),{httpMetadata:{contentType:d}});const f={key:b,name:g,mime:d,size:l.size};await s.DB.prepare("UPDATE chat_messages SET attachment_json = ? WHERE id = ?").bind(JSON.stringify(f),u).run(),await s.DB.prepare("UPDATE chat_conversations SET last_message_id = ?, last_message_at = ?, updated_at = ? WHERE id = ?").bind(u,c,c,n).run();const w={id:u,conversation_id:n,sender_id:r.userId,body:null,attachment_json:JSON.stringify(f),created_at:c},h=o.participant_one_id===r.userId?o.participant_two_id:o.participant_one_id;return a.executionCtx.waitUntil(Promise.all([Ae(s,n,{type:"message",message:w}),We(s,h)])),a.json({success:!0,message:w})}),e.get("/api/chat/attachments/:conversationId/:messageId/:filename",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("conversationId")),s=Number(a.req.param("messageId")),o=a.env;if(!await $t(o.DB,n,r.userId,r.tenantId,r.roleId??null))return a.json({success:!1,error:"not found"},404);const l=await o.DB.prepare("SELECT attachment_json, deleted_at FROM chat_messages WHERE id = ? AND conversation_id = ?").bind(s,n).first();if(!l?.attachment_json)return a.json({success:!1,error:"no attachment"},404);if(l.deleted_at)return a.json({success:!1,error:"message deleted"},404);let d;try{d=JSON.parse(l.attachment_json)}catch{return a.json({success:!1,error:"bad metadata"},500)}const c=await o.ATTACHMENTS.get(d.key);if(!c)return a.json({success:!1,error:"gone"},404);const u=a.req.query("dl")==="1"?`attachment; filename="${d.name||"file"}"`:`inline; filename="${d.name||"file"}"`;return new Response(c.body,{headers:{"content-type":d.mime||"application/octet-stream","content-disposition":u}})}),e.post("/api/chat/conversations/:id/read",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env;if(!await ze(s.DB,n,r.userId,r.tenantId))return a.json({success:!1,error:"not found"},404);const i=await a.req.json().catch(()=>({})),l=Math.max(0,Number(i?.last_read_message_id||0)),d=new Date().toISOString();return await s.DB.prepare(`INSERT INTO chat_message_reads (conversation_id, user_id, last_read_message_id, last_read_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(conversation_id, user_id) DO UPDATE SET
          last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id),
@@ -32410,23 +33172,23 @@ document.addEventListener('DOMContentLoaded', loadDashboard);
            ORDER BY b.id DESC LIMIT ?`).bind(r.tenantId,o,s).all():await n.DB.prepare(`SELECT b.id, b.sender_id, b.body, b.deleted_at, b.created_at, u.full_name AS sender_name
            FROM chat_broadcasts b LEFT JOIN users u ON u.id = b.sender_id
            WHERE b.tenant_id = ?
-           ORDER BY b.id DESC LIMIT ?`).bind(r.tenantId,s).all()).results||[]).reverse().map(c=>c.deleted_at?{id:c.id,sender_id:c.sender_id,body:null,deleted_at:c.deleted_at,created_at:c.created_at,sender_name:c.sender_name}:c);return a.json({success:!0,messages:d})}),e.post("/api/chat/broadcasts/messages",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);if(r.roleId!==Fo)return a.json({success:!1,error:"forbidden"},403);const n=await a.req.json().catch(()=>({})),s=String(n?.body||"").trim();if(!s)return a.json({success:!1,error:"empty body"},400);if(s.length>8e3)return a.json({success:!1,error:"too long"},400);const o=a.env,i=new Date().toISOString(),l=await o.DB.prepare("INSERT INTO chat_broadcasts (tenant_id, sender_id, body, created_at) VALUES (?, ?, ?, ?)").bind(r.tenantId,r.userId,s,i).run(),d=Number(l.meta?.last_row_id||0),c={id:d,tenant_id:r.tenantId,sender_id:r.userId,body:s,created_at:i};return await o.DB.prepare(`INSERT INTO chat_broadcast_reads (user_id, tenant_id, last_read_broadcast_id, last_read_at)
+           ORDER BY b.id DESC LIMIT ?`).bind(r.tenantId,s).all()).results||[]).reverse().map(c=>c.deleted_at?{id:c.id,sender_id:c.sender_id,body:null,deleted_at:c.deleted_at,created_at:c.created_at,sender_name:c.sender_name}:c);return a.json({success:!0,messages:d})}),e.post("/api/chat/broadcasts/messages",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);if(r.roleId!==Po)return a.json({success:!1,error:"forbidden"},403);const n=await a.req.json().catch(()=>({})),s=String(n?.body||"").trim();if(!s)return a.json({success:!1,error:"empty body"},400);if(s.length>8e3)return a.json({success:!1,error:"too long"},400);const o=a.env,i=new Date().toISOString(),l=await o.DB.prepare("INSERT INTO chat_broadcasts (tenant_id, sender_id, body, created_at) VALUES (?, ?, ?, ?)").bind(r.tenantId,r.userId,s,i).run(),d=Number(l.meta?.last_row_id||0),c={id:d,tenant_id:r.tenantId,sender_id:r.userId,body:s,created_at:i};return await o.DB.prepare(`INSERT INTO chat_broadcast_reads (user_id, tenant_id, last_read_broadcast_id, last_read_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          last_read_broadcast_id = MAX(last_read_broadcast_id, excluded.last_read_broadcast_id),
-         last_read_at = excluded.last_read_at`).bind(r.userId,r.tenantId,d,i).run(),a.executionCtx.waitUntil(Promise.all([Na(o,r.tenantId,{type:"broadcast",message:c}),Yo(o,o.DB,r.tenantId)])),a.json({success:!0,message:c})}),e.post("/api/chat/broadcasts/read",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=Math.max(0,Number(n?.last_read_broadcast_id||0)),o=new Date().toISOString();return await a.env.DB.prepare(`INSERT INTO chat_broadcast_reads (user_id, tenant_id, last_read_broadcast_id, last_read_at)
+         last_read_at = excluded.last_read_at`).bind(r.userId,r.tenantId,d,i).run(),a.executionCtx.waitUntil(Promise.all([Oa(o,r.tenantId,{type:"broadcast",message:c}),Jo(o,o.DB,r.tenantId)])),a.json({success:!0,message:c})}),e.post("/api/chat/broadcasts/read",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=Math.max(0,Number(n?.last_read_broadcast_id||0)),o=new Date().toISOString();return await a.env.DB.prepare(`INSERT INTO chat_broadcast_reads (user_id, tenant_id, last_read_broadcast_id, last_read_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          last_read_broadcast_id = MAX(last_read_broadcast_id, excluded.last_read_broadcast_id),
-         last_read_at = excluded.last_read_at`).bind(r.userId,r.tenantId,s,o).run(),a.json({success:!0})}),e.get("/api/chat/broadcasts/unread",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=a.env,o=(await n.DB.prepare("SELECT last_read_broadcast_id FROM chat_broadcast_reads WHERE user_id = ?").bind(r.userId).first())?.last_read_broadcast_id??0,i=await n.DB.prepare("SELECT COUNT(*) AS n FROM chat_broadcasts WHERE tenant_id = ? AND id > ? AND deleted_at IS NULL").bind(r.tenantId,o).first();return a.json({success:!0,unread_count:Number(i?.n||0)})}),e.get("/api/chat/broadcasts/ws",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return new Response("unauthorized",{status:401});if(a.req.header("Upgrade")!=="websocket")return new Response("expected websocket",{status:426});const s=a.env,o=s.BROADCAST_ROOMS.idFromName(`broadcast:${r.tenantId}`),i=s.BROADCAST_ROOMS.get(o),l=new URL(a.req.url);return l.pathname="/connect",l.searchParams.set("userId",String(r.userId)),i.fetch(l.toString(),a.req.raw)}),e.post("/api/chat/conversations/:id/messages/delete",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env;if(!await We(s.DB,n,r.userId,r.tenantId))return a.json({success:!1,error:"not found"},404);const i=await a.req.json().catch(()=>({})),l=Array.isArray(i?.message_ids)?i.message_ids.map(Number).filter(p=>Number.isFinite(p)&&p>0):[];if(!l.length)return a.json({success:!1,error:"no message_ids"},400);const d=new Date().toISOString(),c=[];for(const p of l){const u=await s.DB.prepare(`SELECT id, sender_id, attachment_json FROM chat_messages
+         last_read_at = excluded.last_read_at`).bind(r.userId,r.tenantId,s,o).run(),a.json({success:!0})}),e.get("/api/chat/broadcasts/unread",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=a.env,o=(await n.DB.prepare("SELECT last_read_broadcast_id FROM chat_broadcast_reads WHERE user_id = ?").bind(r.userId).first())?.last_read_broadcast_id??0,i=await n.DB.prepare("SELECT COUNT(*) AS n FROM chat_broadcasts WHERE tenant_id = ? AND id > ? AND deleted_at IS NULL").bind(r.tenantId,o).first();return a.json({success:!0,unread_count:Number(i?.n||0)})}),e.get("/api/chat/broadcasts/ws",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return new Response("unauthorized",{status:401});if(a.req.header("Upgrade")!=="websocket")return new Response("expected websocket",{status:426});const s=a.env,o=s.BROADCAST_ROOMS.idFromName(`broadcast:${r.tenantId}`),i=s.BROADCAST_ROOMS.get(o),l=new URL(a.req.url);return l.pathname="/connect",l.searchParams.set("userId",String(r.userId)),i.fetch(l.toString(),a.req.raw)}),e.post("/api/chat/conversations/:id/messages/delete",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=Number(a.req.param("id")),s=a.env;if(!await ze(s.DB,n,r.userId,r.tenantId))return a.json({success:!1,error:"not found"},404);const i=await a.req.json().catch(()=>({})),l=Array.isArray(i?.message_ids)?i.message_ids.map(Number).filter(p=>Number.isFinite(p)&&p>0):[];if(!l.length)return a.json({success:!1,error:"no message_ids"},400);const d=new Date().toISOString(),c=[];for(const p of l){const u=await s.DB.prepare(`SELECT id, sender_id, attachment_json FROM chat_messages
          WHERE id = ? AND conversation_id = ? AND deleted_at IS NULL`).bind(p,n).first();if(u&&u.sender_id===r.userId){if(u.attachment_json)try{const g=JSON.parse(u.attachment_json);g?.key&&await s.ATTACHMENTS.delete(g.key)}catch{}await s.DB.prepare("UPDATE chat_messages SET deleted_at = ?, body = NULL, attachment_json = NULL WHERE id = ?").bind(d,u.id).run(),c.push(u.id)}}return c.length&&a.executionCtx.waitUntil(Ae(s,n,{type:"message_deleted",message_ids:c,conversation_id:n})),a.json({success:!0,deleted_ids:c})}),e.post("/api/chat/broadcasts/messages/delete",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=Array.isArray(n?.message_ids)?n.message_ids.map(Number).filter(d=>Number.isFinite(d)&&d>0):[];if(!s.length)return a.json({success:!1,error:"no message_ids"},400);const o=a.env,i=new Date().toISOString(),l=[];for(const d of s){const c=await o.DB.prepare(`SELECT id, sender_id FROM chat_broadcasts
-         WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`).bind(d,r.tenantId).first();c&&c.sender_id===r.userId&&(await o.DB.prepare("UPDATE chat_broadcasts SET deleted_at = ?, body = '' WHERE id = ?").bind(i,c.id).run(),l.push(c.id))}return l.length&&a.executionCtx.waitUntil(Na(o,r.tenantId,{type:"broadcast_deleted",message_ids:l})),a.json({success:!0,deleted_ids:l})}),e.post("/api/chat/messages/forward",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=String(n?.source_type||"");if(s!=="direct"&&s!=="broadcast")return a.json({success:!1,error:"invalid source_type"},400);const o=Array.isArray(n?.message_ids)?n.message_ids.map(Number).filter(c=>Number.isFinite(c)&&c>0):[],i=Array.isArray(n?.recipient_user_ids)?n.recipient_user_ids.map(Number).filter(c=>Number.isFinite(c)&&c>0):[];if(!o.length)return a.json({success:!1,error:"no message_ids"},400);if(!i.length)return a.json({success:!1,error:"no recipient_user_ids"},400);const l=a.env,d=[];if(s==="direct"){const c=Number(n?.source_conversation_id);if(!c)return a.json({success:!1,error:"source_conversation_id required"},400);if(!await We(l.DB,c,r.userId,r.tenantId))return a.json({success:!1,error:"source conversation not found"},404);const u=o.map(()=>"?").join(","),g=await l.DB.prepare(`SELECT id, body, attachment_json, deleted_at FROM chat_messages
+         WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`).bind(d,r.tenantId).first();c&&c.sender_id===r.userId&&(await o.DB.prepare("UPDATE chat_broadcasts SET deleted_at = ?, body = '' WHERE id = ?").bind(i,c.id).run(),l.push(c.id))}return l.length&&a.executionCtx.waitUntil(Oa(o,r.tenantId,{type:"broadcast_deleted",message_ids:l})),a.json({success:!0,deleted_ids:l})}),e.post("/api/chat/messages/forward",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return a.json({success:!1,error:"unauthorized"},401);const n=await a.req.json().catch(()=>({})),s=String(n?.source_type||"");if(s!=="direct"&&s!=="broadcast")return a.json({success:!1,error:"invalid source_type"},400);const o=Array.isArray(n?.message_ids)?n.message_ids.map(Number).filter(c=>Number.isFinite(c)&&c>0):[],i=Array.isArray(n?.recipient_user_ids)?n.recipient_user_ids.map(Number).filter(c=>Number.isFinite(c)&&c>0):[];if(!o.length)return a.json({success:!1,error:"no message_ids"},400);if(!i.length)return a.json({success:!1,error:"no recipient_user_ids"},400);const l=a.env,d=[];if(s==="direct"){const c=Number(n?.source_conversation_id);if(!c)return a.json({success:!1,error:"source_conversation_id required"},400);if(!await ze(l.DB,c,r.userId,r.tenantId))return a.json({success:!1,error:"source conversation not found"},404);const u=o.map(()=>"?").join(","),g=await l.DB.prepare(`SELECT id, body, attachment_json, deleted_at FROM chat_messages
          WHERE id IN (${u}) AND conversation_id = ?`).bind(...o,c).all();for(const b of g.results||[]){if(b.deleted_at)return a.json({success:!1,error:`message ${b.id} is deleted`},400);d.push({id:b.id,body:b.body,attachment_json:b.attachment_json})}}else{const c=o.map(()=>"?").join(","),p=await l.DB.prepare(`SELECT id, body, deleted_at FROM chat_broadcasts
-         WHERE id IN (${c}) AND tenant_id = ?`).bind(...o,r.tenantId).all();for(const u of p.results||[]){if(u.deleted_at)return a.json({success:!1,error:`message ${u.id} is deleted`},400);d.push({id:u.id,body:u.body,attachment_json:null})}}if(!d.length)return a.json({success:!1,error:"no valid source messages"},400);for(const c of i){if(c===r.userId)continue;const p=await l.DB.prepare("SELECT id, tenant_id FROM users WHERE id = ? LIMIT 1").bind(c).first();if(!p||p.tenant_id!==r.tenantId)continue;const[u,g]=La(r.userId,c),b=await l.DB.prepare(`SELECT id FROM chat_conversations
+         WHERE id IN (${c}) AND tenant_id = ?`).bind(...o,r.tenantId).all();for(const u of p.results||[]){if(u.deleted_at)return a.json({success:!1,error:`message ${u.id} is deleted`},400);d.push({id:u.id,body:u.body,attachment_json:null})}}if(!d.length)return a.json({success:!1,error:"no valid source messages"},400);for(const c of i){if(c===r.userId)continue;const p=await l.DB.prepare("SELECT id, tenant_id FROM users WHERE id = ? LIMIT 1").bind(c).first();if(!p||p.tenant_id!==r.tenantId)continue;const[u,g]=Aa(r.userId,c),b=await l.DB.prepare(`SELECT id FROM chat_conversations
          WHERE tenant_id = ? AND participant_one_id = ? AND participant_two_id = ?`).bind(r.tenantId,u,g).first();let f;if(b)f=b.id;else{const w=await l.DB.prepare(`INSERT INTO chat_conversations (tenant_id, participant_one_id, participant_two_id)
            VALUES (?, ?, ?)`).bind(r.tenantId,u,g).run();f=Number(w.meta?.last_row_id||0)}for(const w of d){const h=new Date().toISOString();if(w.attachment_json){let y;try{y=JSON.parse(w.attachment_json)}catch{}if(y?.key){const S=await l.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, attachment_json, is_forwarded, created_at)
-               VALUES (?, ?, ?, NULL, '{}', 1, ?)`).bind(f,r.tenantId,r.userId,h).run(),_=Number(S.meta?.last_row_id||0),k=`chat/${r.tenantId}/${f}/${_}/${y.name||"file"}`;try{const x=await l.ATTACHMENTS.get(y.key);x&&await l.ATTACHMENTS.put(k,x.body,{httpMetadata:{contentType:y.mime}})}catch{}const T={key:k,name:y.name,mime:y.mime,size:y.size},v=JSON.stringify(T);await l.DB.prepare("UPDATE chat_messages SET attachment_json = ? WHERE id = ?").bind(v,_).run(),await l.DB.prepare("UPDATE chat_conversations SET last_message_id = ?, last_message_at = ?, updated_at = ? WHERE id = ?").bind(_,h,h,f).run(),a.executionCtx.waitUntil(Promise.all([Ae(l,f,{type:"message",message:{id:_,conversation_id:f,sender_id:r.userId,body:null,attachment_json:v,created_at:h}}),ze(l,c)]));continue}}if(w.body){const y=await l.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, is_forwarded, created_at)
-             VALUES (?, ?, ?, ?, 1, ?)`).bind(f,r.tenantId,r.userId,w.body,h).run(),S=Number(y.meta?.last_row_id||0),k=((await l.DB.prepare("SELECT customer_id FROM chat_message_customer_tags WHERE message_id = ?").bind(w.id).all()).results||[]).map(T=>T.customer_id);if(k.length){const T=await Aa(l.DB,{userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null},k);await Ba(l.DB,S,T)}await l.DB.prepare("UPDATE chat_conversations SET last_message_id = ?, last_message_at = ?, updated_at = ? WHERE id = ?").bind(S,h,h,f).run(),a.executionCtx.waitUntil(Promise.all([Ae(l,f,{type:"message",message:{id:S,conversation_id:f,sender_id:r.userId,body:w.body,attachment_json:null,created_at:h}}),ze(l,c)]))}}}return a.json({success:!0})}),e.get("/api/chat/admin/users/:userId/conversations",async a=>a.json({success:!1,error:"disabled"},403)),e.get("/api/chat/notify/ws",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return new Response("unauthorized",{status:401});if(a.req.header("Upgrade")!=="websocket")return new Response("expected websocket",{status:426});const s=a.env,o=s.USER_NOTIFICATIONS.idFromName(`user:${r.userId}`),i=s.USER_NOTIFICATIONS.get(o),l=new URL(a.req.url);return l.pathname="/connect",l.searchParams.set("userId",String(r.userId)),i.fetch(l.toString(),a.req.raw)}),e.get("/api/chat/ws/:conversationId",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return new Response("unauthorized",{status:401});const n=Number(a.req.param("conversationId")),s=a.env;if(!await $t(s.DB,n,r.userId,r.tenantId,r.roleId??null))return new Response("not found",{status:404});if(a.req.header("Upgrade")!=="websocket")return new Response("expected websocket",{status:426});const l=s.CHAT_ROOMS.idFromName(`conv:${n}`),d=s.CHAT_ROOMS.get(l),c=new URL(a.req.url);return c.pathname="/connect",c.searchParams.set("userId",String(r.userId)),d.fetch(c.toString(),a.req.raw)})}function Qo(e){const t=Number(e.userId);return`<!doctype html>
+               VALUES (?, ?, ?, NULL, '{}', 1, ?)`).bind(f,r.tenantId,r.userId,h).run(),_=Number(S.meta?.last_row_id||0),k=`chat/${r.tenantId}/${f}/${_}/${y.name||"file"}`;try{const x=await l.ATTACHMENTS.get(y.key);x&&await l.ATTACHMENTS.put(k,x.body,{httpMetadata:{contentType:y.mime}})}catch{}const T={key:k,name:y.name,mime:y.mime,size:y.size},v=JSON.stringify(T);await l.DB.prepare("UPDATE chat_messages SET attachment_json = ? WHERE id = ?").bind(v,_).run(),await l.DB.prepare("UPDATE chat_conversations SET last_message_id = ?, last_message_at = ?, updated_at = ? WHERE id = ?").bind(_,h,h,f).run(),a.executionCtx.waitUntil(Promise.all([Ae(l,f,{type:"message",message:{id:_,conversation_id:f,sender_id:r.userId,body:null,attachment_json:v,created_at:h}}),We(l,c)]));continue}}if(w.body){const y=await l.DB.prepare(`INSERT INTO chat_messages (conversation_id, tenant_id, sender_id, body, is_forwarded, created_at)
+             VALUES (?, ?, ?, ?, 1, ?)`).bind(f,r.tenantId,r.userId,w.body,h).run(),S=Number(y.meta?.last_row_id||0),k=((await l.DB.prepare("SELECT customer_id FROM chat_message_customer_tags WHERE message_id = ?").bind(w.id).all()).results||[]).map(T=>T.customer_id);if(k.length){const T=await Na(l.DB,{userId:r.userId,tenantId:r.tenantId,roleId:r.roleId??null},k);await ja(l.DB,S,T)}await l.DB.prepare("UPDATE chat_conversations SET last_message_id = ?, last_message_at = ?, updated_at = ? WHERE id = ?").bind(S,h,h,f).run(),a.executionCtx.waitUntil(Promise.all([Ae(l,f,{type:"message",message:{id:S,conversation_id:f,sender_id:r.userId,body:w.body,attachment_json:null,created_at:h}}),We(l,c)]))}}}return a.json({success:!0})}),e.get("/api/chat/admin/users/:userId/conversations",async a=>a.json({success:!1,error:"disabled"},403)),e.get("/api/chat/notify/ws",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return new Response("unauthorized",{status:401});if(a.req.header("Upgrade")!=="websocket")return new Response("expected websocket",{status:426});const s=a.env,o=s.USER_NOTIFICATIONS.idFromName(`user:${r.userId}`),i=s.USER_NOTIFICATIONS.get(o),l=new URL(a.req.url);return l.pathname="/connect",l.searchParams.set("userId",String(r.userId)),i.fetch(l.toString(),a.req.raw)}),e.get("/api/chat/ws/:conversationId",async a=>{const r=await t(a);if(!r.userId||!r.tenantId)return new Response("unauthorized",{status:401});const n=Number(a.req.param("conversationId")),s=a.env;if(!await $t(s.DB,n,r.userId,r.tenantId,r.roleId??null))return new Response("not found",{status:404});if(a.req.header("Upgrade")!=="websocket")return new Response("expected websocket",{status:426});const l=s.CHAT_ROOMS.idFromName(`conv:${n}`),d=s.CHAT_ROOMS.get(l),c=new URL(a.req.url);return c.pathname="/connect",c.searchParams.set("userId",String(r.userId)),d.fetch(c.toString(),a.req.raw)})}function Zo(e){const t=Number(e.userId);return`<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"/>
@@ -32672,7 +33434,7 @@ window.CC_USER_ID = ${t};
   $('cp-fwd-cancel-btn').addEventListener('click', () => forwardModal.classList.remove('open'));
 
   const PAGE_ROLE_ID = ${Number(e.roleId)||"null"};
-  const ADMIN_DRILLDOWN_ENABLED = ${qo};
+  const ADMIN_DRILLDOWN_ENABLED = ${$o};
   let currentConv = null;
   let currentBroadcasts = false;
   let ws = null;
@@ -33604,7 +34366,7 @@ window.CC_USER_ID = ${t};
 })();
 <\/script>
 </body>
-</html>`}function Ko(e=null,t=null){return`
+</html>`}function ei(e=null,t=null){return`
 <script>window.CC_USER_ID = ${e?Number(e):"null"};window.CC_ROLE_ID = ${t?Number(t):"null"};<\/script>
 <style>
   #cc-chat-launcher {
@@ -34800,17 +35562,17 @@ window.CC_USER_ID = ${t};
   scheduleConvRefresh();
 })();
 <\/script>
-`}const Zo="https://api.resend.com/emails";async function ei(e){const{apiKey:t,from:a,to:r,code:n}=e,s="رمز إعادة تعيين كلمة السر — Password reset code",o=["رمز التحقق لإعادة تعيين كلمة السر:",n,"","صلاحية الرمز 15 دقيقة. إذا لم تطلب هذا الطلب، تجاهل الرسالة.","","Your password reset verification code:",n,"","This code expires in 15 minutes. If you did not request a reset, ignore this email."].join(`
+`}const ti="https://api.resend.com/emails";async function ai(e){const{apiKey:t,from:a,to:r,code:n}=e,s="رمز إعادة تعيين كلمة السر — Password reset code",o=["رمز التحقق لإعادة تعيين كلمة السر:",n,"","صلاحية الرمز 15 دقيقة. إذا لم تطلب هذا الطلب، تجاهل الرسالة.","","Your password reset verification code:",n,"","This code expires in 15 minutes. If you did not request a reset, ignore this email."].join(`
 `),i=`
   <div dir="rtl" style="font-family:system-ui,sans-serif;max-width:480px;line-height:1.6">
     <p><strong>رمز التحقق</strong> لإعادة تعيين كلمة السر:</p>
-    <p style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${ja(n)}</p>
+    <p style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${Ma(n)}</p>
     <p style="color:#555">صلاحية الرمز <strong>15 دقيقة</strong>. إذا لم تطلب إعادة التعيين، تجاهل هذه الرسالة.</p>
     <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
     <p dir="ltr"><strong>Verification code</strong> for password reset:</p>
-    <p dir="ltr" style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${ja(n)}</p>
+    <p dir="ltr" style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${Ma(n)}</p>
     <p dir="ltr" style="color:#555">Valid for <strong>15 minutes</strong>. If you did not request this, ignore this email.</p>
-  </div>`,l=await fetch(Zo,{method:"POST",headers:{Authorization:`Bearer ${t}`,"Content-Type":"application/json"},body:JSON.stringify({from:a,to:[r],subject:s,text:o,html:i})}),d=await l.text();if(!l.ok){let c=d.slice(0,500);try{const p=JSON.parse(d);p.message?c=p.message:p.name&&(c=p.name)}catch{}return{ok:!1,error:c}}return{ok:!0}}function ja(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}const Rr='*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.\\!container{width:100%!important}.container{width:100%}@media (min-width:640px){.\\!container{max-width:640px!important}.container{max-width:640px}}@media (min-width:768px){.\\!container{max-width:768px!important}.container{max-width:768px}}@media (min-width:1024px){.\\!container{max-width:1024px!important}.container{max-width:1024px}}@media (min-width:1280px){.\\!container{max-width:1280px!important}.container{max-width:1280px}}@media (min-width:1536px){.\\!container{max-width:1536px!important}.container{max-width:1536px}}.pointer-events-none{pointer-events:none}.\\!visible{visibility:visible!important}.visible{visibility:visible}.collapse{visibility:collapse}.static{position:static}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0}.bottom-0{bottom:0}.bottom-6{bottom:1.5rem}.left-0{left:0}.left-1\\/2{left:50%}.left-3{left:.75rem}.left-4{left:1rem}.right-0{right:0}.right-3{right:.75rem}.right-6{right:1.5rem}.top-0{top:0}.top-1\\/2{top:50%}.top-3{top:.75rem}.top-3\\.5{top:.875rem}.top-4{top:1rem}.z-20{z-index:20}.z-40{z-index:40}.z-50{z-index:50}.z-\\[1200\\]{z-index:1200}.z-\\[2000\\]{z-index:2000}.col-span-2{grid-column:span 2/span 2}.col-span-full{grid-column:1/-1}.-mx-4{margin-left:-1rem;margin-right:-1rem}.mx-2{margin-left:.5rem;margin-right:.5rem}.mx-4{margin-left:1rem;margin-right:1rem}.mx-auto{margin-left:auto;margin-right:auto}.my-1{margin-top:.25rem;margin-bottom:.25rem}.my-2{margin-top:.5rem;margin-bottom:.5rem}.my-4{margin-top:1rem;margin-bottom:1rem}.my-6{margin-top:1.5rem;margin-bottom:1.5rem}.my-8{margin-top:2rem;margin-bottom:2rem}.-mt-2{margin-top:-.5rem}.mb-0{margin-bottom:0}.mb-1{margin-bottom:.25rem}.mb-1\\.5{margin-bottom:.375rem}.mb-12{margin-bottom:3rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mb-5{margin-bottom:1.25rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.ml-1{margin-left:.25rem}.ml-2{margin-left:.5rem}.ml-3{margin-left:.75rem}.ml-4{margin-left:1rem}.mr-1{margin-right:.25rem}.mr-2{margin-right:.5rem}.mr-3{margin-right:.75rem}.mr-4{margin-right:1rem}.mr-auto{margin-right:auto}.ms-auto{margin-inline-start:auto}.mt-0\\.5{margin-top:.125rem}.mt-1{margin-top:.25rem}.mt-1\\.5{margin-top:.375rem}.mt-12{margin-top:3rem}.mt-16{margin-top:4rem}.mt-2{margin-top:.5rem}.mt-20{margin-top:5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.line-clamp-3{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}.block{display:block}.inline-block{display:inline-block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.\\!table{display:table!important}.table{display:table}.grid{display:grid}.\\!hidden{display:none!important}.hidden{display:none}.h-1{height:.25rem}.h-10{height:2.5rem}.h-12{height:3rem}.h-16{height:4rem}.h-2{height:.5rem}.h-2\\.5{height:.625rem}.h-20{height:5rem}.h-3{height:.75rem}.h-4{height:1rem}.h-48{height:12rem}.h-5{height:1.25rem}.h-7{height:1.75rem}.h-8{height:2rem}.h-9{height:2.25rem}.h-full{height:100%}.h-screen{height:100vh}.max-h-24{max-height:6rem}.max-h-28{max-height:7rem}.max-h-64{max-height:16rem}.max-h-72{max-height:18rem}.max-h-96{max-height:24rem}.max-h-\\[90vh\\]{max-height:90vh}.max-h-\\[95vh\\]{max-height:95vh}.min-h-0{min-height:0}.min-h-16{min-height:4rem}.min-h-6{min-height:1.5rem}.min-h-\\[5rem\\]{min-height:5rem}.min-h-screen{min-height:100vh}.w-10{width:2.5rem}.w-12{width:3rem}.w-16{width:4rem}.w-2{width:.5rem}.w-2\\.5{width:.625rem}.w-20{width:5rem}.w-24{width:6rem}.w-3{width:.75rem}.w-36{width:9rem}.w-4{width:1rem}.w-48{width:12rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-7{width:1.75rem}.w-72{width:18rem}.w-8{width:2rem}.w-80{width:20rem}.w-full{width:100%}.w-max{width:-moz-max-content;width:max-content}.w-px{width:1px}.min-w-0{min-width:0}.min-w-\\[1\\.25rem\\]{min-width:1.25rem}.min-w-\\[10rem\\]{min-width:10rem}.min-w-\\[11rem\\]{min-width:11rem}.min-w-\\[14rem\\]{min-width:14rem}.min-w-\\[180px\\]{min-width:180px}.min-w-\\[8rem\\]{min-width:8rem}.min-w-full{min-width:100%}.min-w-max{min-width:-moz-max-content;min-width:max-content}.max-w-2xl{max-width:42rem}.max-w-3xl{max-width:48rem}.max-w-4xl{max-width:56rem}.max-w-5xl{max-width:64rem}.max-w-6xl{max-width:72rem}.max-w-7xl{max-width:80rem}.max-w-\\[220px\\]{max-width:220px}.max-w-\\[240px\\]{max-width:240px}.max-w-\\[min\\(100vw-12rem\\2c 28rem\\)\\]{max-width:min(100vw - 12rem,28rem)}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}.max-w-xs{max-width:20rem}.flex-1{flex:1 1 0%}.flex-shrink{flex-shrink:1}.flex-shrink-0,.shrink-0{flex-shrink:0}.border-collapse{border-collapse:collapse}.-translate-x-1\\/2{--tw-translate-x:-50%}.-translate-x-1\\/2,.-translate-y-1\\/2{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.-translate-y-1\\/2{--tw-translate-y:-50%}.translate-x-0{--tw-translate-x:0px}.translate-x-0,.translate-x-full{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.translate-x-full{--tw-translate-x:100%}.rotate-180{--tw-rotate:180deg}.rotate-180,.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-not-allowed{cursor:not-allowed}.cursor-pointer{cursor:pointer}.resize-none{resize:none}.resize-y{resize:vertical}.resize{resize:both}.list-inside{list-style-position:inside}.list-disc{list-style-type:disc}.appearance-none{-webkit-appearance:none;-moz-appearance:none;appearance:none}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-end{align-items:flex-end}.items-center{align-items:center}.items-stretch{align-items:stretch}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:.25rem}.gap-12{gap:3rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}.space-x-2>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.5rem*var(--tw-space-x-reverse));margin-left:calc(.5rem*(1 - var(--tw-space-x-reverse)))}.space-x-3>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.75rem*var(--tw-space-x-reverse));margin-left:calc(.75rem*(1 - var(--tw-space-x-reverse)))}.space-x-4>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(1rem*var(--tw-space-x-reverse));margin-left:calc(1rem*(1 - var(--tw-space-x-reverse)))}.space-y-0\\.5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.125rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.125rem*var(--tw-space-y-reverse))}.space-y-1>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.25rem*var(--tw-space-y-reverse))}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.5rem*var(--tw-space-y-reverse))}.space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.75rem*var(--tw-space-y-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem*var(--tw-space-y-reverse))}.space-y-5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem*var(--tw-space-y-reverse))}.space-y-6>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem*var(--tw-space-y-reverse))}.space-x-reverse>:not([hidden])~:not([hidden]){--tw-space-x-reverse:1}.divide-y>:not([hidden])~:not([hidden]){--tw-divide-y-reverse:0;border-top-width:calc(1px*(1 - var(--tw-divide-y-reverse)));border-bottom-width:calc(1px*var(--tw-divide-y-reverse))}.divide-gray-100>:not([hidden])~:not([hidden]){--tw-divide-opacity:1;border-color:rgb(243 244 246/var(--tw-divide-opacity,1))}.divide-gray-200>:not([hidden])~:not([hidden]){--tw-divide-opacity:1;border-color:rgb(229 231 235/var(--tw-divide-opacity,1))}.self-start{align-self:flex-start}.overflow-auto{overflow:auto}.overflow-hidden{overflow:hidden}.overflow-visible{overflow:visible}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis}.truncate,.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.break-words{overflow-wrap:break-word}.break-all{word-break:break-all}.rounded{border-radius:.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-md{border-radius:.375rem}.rounded-xl{border-radius:.75rem}.rounded-b-lg{border-bottom-right-radius:.5rem}.rounded-b-lg,.rounded-l-lg{border-bottom-left-radius:.5rem}.rounded-l-lg{border-top-left-radius:.5rem}.rounded-r-lg{border-top-right-radius:.5rem;border-bottom-right-radius:.5rem}.rounded-s-xl{border-start-start-radius:.75rem;border-end-start-radius:.75rem}.rounded-t-2xl{border-top-left-radius:1rem;border-top-right-radius:1rem}.rounded-t-lg{border-top-left-radius:.5rem;border-top-right-radius:.5rem}.rounded-t-xl{border-top-left-radius:.75rem;border-top-right-radius:.75rem}.rounded-bl-2xl{border-bottom-left-radius:1rem}.rounded-bl-xl{border-bottom-left-radius:.75rem}.rounded-tr-xl{border-top-right-radius:.75rem}.border{border-width:1px}.border-0{border-width:0}.border-2{border-width:2px}.border-4{border-width:4px}.border-b{border-bottom-width:1px}.border-b-2{border-bottom-width:2px}.border-b-4{border-bottom-width:4px}.border-l{border-left-width:1px}.border-l-4{border-left-width:4px}.border-r{border-right-width:1px}.border-r-4{border-right-width:4px}.border-s{border-inline-start-width:1px}.border-t{border-top-width:1px}.border-t-2{border-top-width:2px}.border-t-4{border-top-width:4px}.border-dashed{border-style:dashed}.border-amber-100{--tw-border-opacity:1;border-color:rgb(254 243 199/var(--tw-border-opacity,1))}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138/var(--tw-border-opacity,1))}.border-amber-500{--tw-border-opacity:1;border-color:rgb(245 158 11/var(--tw-border-opacity,1))}.border-blue-200{--tw-border-opacity:1;border-color:rgb(191 219 254/var(--tw-border-opacity,1))}.border-blue-300{--tw-border-opacity:1;border-color:rgb(147 197 253/var(--tw-border-opacity,1))}.border-blue-400{--tw-border-opacity:1;border-color:rgb(96 165 250/var(--tw-border-opacity,1))}.border-blue-500{--tw-border-opacity:1;border-color:rgb(59 130 246/var(--tw-border-opacity,1))}.border-blue-600{--tw-border-opacity:1;border-color:rgb(37 99 235/var(--tw-border-opacity,1))}.border-cyan-500{--tw-border-opacity:1;border-color:rgb(6 182 212/var(--tw-border-opacity,1))}.border-emerald-200{--tw-border-opacity:1;border-color:rgb(167 243 208/var(--tw-border-opacity,1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246/var(--tw-border-opacity,1))}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235/var(--tw-border-opacity,1))}.border-gray-200\\/80{border-color:rgba(229,231,235,.8)}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219/var(--tw-border-opacity,1))}.border-gray-500{--tw-border-opacity:1;border-color:rgb(107 114 128/var(--tw-border-opacity,1))}.border-green-100{--tw-border-opacity:1;border-color:rgb(220 252 231/var(--tw-border-opacity,1))}.border-green-200{--tw-border-opacity:1;border-color:rgb(187 247 208/var(--tw-border-opacity,1))}.border-green-300{--tw-border-opacity:1;border-color:rgb(134 239 172/var(--tw-border-opacity,1))}.border-green-400{--tw-border-opacity:1;border-color:rgb(74 222 128/var(--tw-border-opacity,1))}.border-green-500{--tw-border-opacity:1;border-color:rgb(34 197 94/var(--tw-border-opacity,1))}.border-green-600{--tw-border-opacity:1;border-color:rgb(22 163 74/var(--tw-border-opacity,1))}.border-indigo-200{--tw-border-opacity:1;border-color:rgb(199 210 254/var(--tw-border-opacity,1))}.border-indigo-500{--tw-border-opacity:1;border-color:rgb(99 102 241/var(--tw-border-opacity,1))}.border-indigo-600{--tw-border-opacity:1;border-color:rgb(79 70 229/var(--tw-border-opacity,1))}.border-lime-100{--tw-border-opacity:1;border-color:rgb(236 252 203/var(--tw-border-opacity,1))}.border-orange-100{--tw-border-opacity:1;border-color:rgb(255 237 213/var(--tw-border-opacity,1))}.border-orange-200{--tw-border-opacity:1;border-color:rgb(254 215 170/var(--tw-border-opacity,1))}.border-orange-300{--tw-border-opacity:1;border-color:rgb(253 186 116/var(--tw-border-opacity,1))}.border-pink-500{--tw-border-opacity:1;border-color:rgb(236 72 153/var(--tw-border-opacity,1))}.border-purple-200{--tw-border-opacity:1;border-color:rgb(233 213 255/var(--tw-border-opacity,1))}.border-purple-400{--tw-border-opacity:1;border-color:rgb(192 132 252/var(--tw-border-opacity,1))}.border-purple-500{--tw-border-opacity:1;border-color:rgb(168 85 247/var(--tw-border-opacity,1))}.border-purple-600{--tw-border-opacity:1;border-color:rgb(147 51 234/var(--tw-border-opacity,1))}.border-red-200{--tw-border-opacity:1;border-color:rgb(254 202 202/var(--tw-border-opacity,1))}.border-red-300{--tw-border-opacity:1;border-color:rgb(252 165 165/var(--tw-border-opacity,1))}.border-red-400{--tw-border-opacity:1;border-color:rgb(248 113 113/var(--tw-border-opacity,1))}.border-red-500{--tw-border-opacity:1;border-color:rgb(239 68 68/var(--tw-border-opacity,1))}.border-red-600{--tw-border-opacity:1;border-color:rgb(220 38 38/var(--tw-border-opacity,1))}.border-slate-200\\/90{border-color:rgba(226,232,240,.9)}.border-transparent{border-color:transparent}.border-violet-200{--tw-border-opacity:1;border-color:rgb(221 214 254/var(--tw-border-opacity,1))}.border-white{--tw-border-opacity:1;border-color:rgb(255 255 255/var(--tw-border-opacity,1))}.border-white\\/15{border-color:hsla(0,0%,100%,.15)}.border-white\\/20{border-color:hsla(0,0%,100%,.2)}.border-white\\/30{border-color:hsla(0,0%,100%,.3)}.border-white\\/40{border-color:hsla(0,0%,100%,.4)}.border-yellow-100{--tw-border-opacity:1;border-color:rgb(254 249 195/var(--tw-border-opacity,1))}.border-yellow-200{--tw-border-opacity:1;border-color:rgb(254 240 138/var(--tw-border-opacity,1))}.border-yellow-300{--tw-border-opacity:1;border-color:rgb(253 224 71/var(--tw-border-opacity,1))}.border-yellow-400{--tw-border-opacity:1;border-color:rgb(250 204 21/var(--tw-border-opacity,1))}.border-yellow-500{--tw-border-opacity:1;border-color:rgb(234 179 8/var(--tw-border-opacity,1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199/var(--tw-bg-opacity,1))}.bg-amber-50{--tw-bg-opacity:1;background-color:rgb(255 251 235/var(--tw-bg-opacity,1))}.bg-amber-50\\/90{background-color:rgba(255,251,235,.9)}.bg-amber-500{--tw-bg-opacity:1;background-color:rgb(245 158 11/var(--tw-bg-opacity,1))}.bg-amber-600{--tw-bg-opacity:1;background-color:rgb(217 119 6/var(--tw-bg-opacity,1))}.bg-black{--tw-bg-opacity:1;background-color:rgb(0 0 0/var(--tw-bg-opacity,1))}.bg-black\\/50{background-color:rgba(0,0,0,.5)}.bg-blue-100{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity,1))}.bg-blue-50{--tw-bg-opacity:1;background-color:rgb(239 246 255/var(--tw-bg-opacity,1))}.bg-blue-500{--tw-bg-opacity:1;background-color:rgb(59 130 246/var(--tw-bg-opacity,1))}.bg-blue-600{--tw-bg-opacity:1;background-color:rgb(37 99 235/var(--tw-bg-opacity,1))}.bg-cyan-500{--tw-bg-opacity:1;background-color:rgb(6 182 212/var(--tw-bg-opacity,1))}.bg-cyan-600{--tw-bg-opacity:1;background-color:rgb(8 145 178/var(--tw-bg-opacity,1))}.bg-emerald-100{--tw-bg-opacity:1;background-color:rgb(209 250 229/var(--tw-bg-opacity,1))}.bg-emerald-50{--tw-bg-opacity:1;background-color:rgb(236 253 245/var(--tw-bg-opacity,1))}.bg-emerald-600{--tw-bg-opacity:1;background-color:rgb(5 150 105/var(--tw-bg-opacity,1))}.bg-fuchsia-600{--tw-bg-opacity:1;background-color:rgb(192 38 211/var(--tw-bg-opacity,1))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity,1))}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235/var(--tw-bg-opacity,1))}.bg-gray-300{--tw-bg-opacity:1;background-color:rgb(209 213 219/var(--tw-bg-opacity,1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251/var(--tw-bg-opacity,1))}.bg-gray-50\\/80{background-color:rgba(249,250,251,.8)}.bg-gray-500{--tw-bg-opacity:1;background-color:rgb(107 114 128/var(--tw-bg-opacity,1))}.bg-gray-600{--tw-bg-opacity:1;background-color:rgb(75 85 99/var(--tw-bg-opacity,1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55/var(--tw-bg-opacity,1))}.bg-gray-900{--tw-bg-opacity:1;background-color:rgb(17 24 39/var(--tw-bg-opacity,1))}.bg-green-100{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity,1))}.bg-green-50{--tw-bg-opacity:1;background-color:rgb(240 253 244/var(--tw-bg-opacity,1))}.bg-green-500{--tw-bg-opacity:1;background-color:rgb(34 197 94/var(--tw-bg-opacity,1))}.bg-green-600{--tw-bg-opacity:1;background-color:rgb(22 163 74/var(--tw-bg-opacity,1))}.bg-indigo-100{--tw-bg-opacity:1;background-color:rgb(224 231 255/var(--tw-bg-opacity,1))}.bg-indigo-50{--tw-bg-opacity:1;background-color:rgb(238 242 255/var(--tw-bg-opacity,1))}.bg-indigo-500{--tw-bg-opacity:1;background-color:rgb(99 102 241/var(--tw-bg-opacity,1))}.bg-indigo-600{--tw-bg-opacity:1;background-color:rgb(79 70 229/var(--tw-bg-opacity,1))}.bg-lime-50{--tw-bg-opacity:1;background-color:rgb(247 254 231/var(--tw-bg-opacity,1))}.bg-lime-500{--tw-bg-opacity:1;background-color:rgb(132 204 22/var(--tw-bg-opacity,1))}.bg-orange-100{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity,1))}.bg-orange-50{--tw-bg-opacity:1;background-color:rgb(255 247 237/var(--tw-bg-opacity,1))}.bg-orange-50\\/80{background-color:rgba(255,247,237,.8)}.bg-orange-500{--tw-bg-opacity:1;background-color:rgb(249 115 22/var(--tw-bg-opacity,1))}.bg-orange-600{--tw-bg-opacity:1;background-color:rgb(234 88 12/var(--tw-bg-opacity,1))}.bg-pink-100{--tw-bg-opacity:1;background-color:rgb(252 231 243/var(--tw-bg-opacity,1))}.bg-pink-500{--tw-bg-opacity:1;background-color:rgb(236 72 153/var(--tw-bg-opacity,1))}.bg-pink-600{--tw-bg-opacity:1;background-color:rgb(219 39 119/var(--tw-bg-opacity,1))}.bg-purple-100{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity,1))}.bg-purple-50{--tw-bg-opacity:1;background-color:rgb(250 245 255/var(--tw-bg-opacity,1))}.bg-purple-500{--tw-bg-opacity:1;background-color:rgb(168 85 247/var(--tw-bg-opacity,1))}.bg-purple-600{--tw-bg-opacity:1;background-color:rgb(147 51 234/var(--tw-bg-opacity,1))}.bg-purple-800{--tw-bg-opacity:1;background-color:rgb(107 33 168/var(--tw-bg-opacity,1))}.bg-red-100{--tw-bg-opacity:1;background-color:rgb(254 226 226/var(--tw-bg-opacity,1))}.bg-red-50{--tw-bg-opacity:1;background-color:rgb(254 242 242/var(--tw-bg-opacity,1))}.bg-red-500{--tw-bg-opacity:1;background-color:rgb(239 68 68/var(--tw-bg-opacity,1))}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38/var(--tw-bg-opacity,1))}.bg-slate-50\\/80{background-color:rgba(248,250,252,.8)}.bg-slate-50\\/90{background-color:rgba(248,250,252,.9)}.bg-slate-700{--tw-bg-opacity:1;background-color:rgb(51 65 85/var(--tw-bg-opacity,1))}.bg-teal-100{--tw-bg-opacity:1;background-color:rgb(204 251 241/var(--tw-bg-opacity,1))}.bg-teal-500{--tw-bg-opacity:1;background-color:rgb(20 184 166/var(--tw-bg-opacity,1))}.bg-teal-600{--tw-bg-opacity:1;background-color:rgb(13 148 136/var(--tw-bg-opacity,1))}.bg-violet-50{--tw-bg-opacity:1;background-color:rgb(245 243 255/var(--tw-bg-opacity,1))}.bg-violet-600{--tw-bg-opacity:1;background-color:rgb(124 58 237/var(--tw-bg-opacity,1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.bg-white\\/10{background-color:hsla(0,0%,100%,.1)}.bg-white\\/15{background-color:hsla(0,0%,100%,.15)}.bg-white\\/20{background-color:hsla(0,0%,100%,.2)}.bg-white\\/60{background-color:hsla(0,0%,100%,.6)}.bg-white\\/80{background-color:hsla(0,0%,100%,.8)}.bg-white\\/90{background-color:hsla(0,0%,100%,.9)}.bg-white\\/95{background-color:hsla(0,0%,100%,.95)}.bg-yellow-100{--tw-bg-opacity:1;background-color:rgb(254 249 195/var(--tw-bg-opacity,1))}.bg-yellow-400{--tw-bg-opacity:1;background-color:rgb(250 204 21/var(--tw-bg-opacity,1))}.bg-yellow-50{--tw-bg-opacity:1;background-color:rgb(254 252 232/var(--tw-bg-opacity,1))}.bg-yellow-500{--tw-bg-opacity:1;background-color:rgb(234 179 8/var(--tw-bg-opacity,1))}.bg-yellow-600{--tw-bg-opacity:1;background-color:rgb(202 138 4/var(--tw-bg-opacity,1))}.bg-opacity-50{--tw-bg-opacity:0.5}.bg-gradient-to-b{background-image:linear-gradient(to bottom,var(--tw-gradient-stops))}.bg-gradient-to-br{background-image:linear-gradient(to bottom right,var(--tw-gradient-stops))}.bg-gradient-to-l{background-image:linear-gradient(to left,var(--tw-gradient-stops))}.bg-gradient-to-r{background-image:linear-gradient(to right,var(--tw-gradient-stops))}.from-amber-50{--tw-gradient-from:#fffbeb var(--tw-gradient-from-position);--tw-gradient-to:rgba(255,251,235,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-amber-500{--tw-gradient-from:#f59e0b var(--tw-gradient-from-position);--tw-gradient-to:rgba(245,158,11,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-amber-600{--tw-gradient-from:#d97706 var(--tw-gradient-from-position);--tw-gradient-to:rgba(217,119,6,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-50{--tw-gradient-from:#eff6ff var(--tw-gradient-from-position);--tw-gradient-to:rgba(239,246,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-500{--tw-gradient-from:#3b82f6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(59,130,246,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-600{--tw-gradient-from:#2563eb var(--tw-gradient-from-position);--tw-gradient-to:rgba(37,99,235,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-700{--tw-gradient-from:#1d4ed8 var(--tw-gradient-from-position);--tw-gradient-to:rgba(29,78,216,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-cyan-50{--tw-gradient-from:#ecfeff var(--tw-gradient-from-position);--tw-gradient-to:rgba(236,254,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-cyan-500{--tw-gradient-from:#06b6d4 var(--tw-gradient-from-position);--tw-gradient-to:rgba(6,182,212,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-emerald-500{--tw-gradient-from:#10b981 var(--tw-gradient-from-position);--tw-gradient-to:rgba(16,185,129,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-emerald-600{--tw-gradient-from:#059669 var(--tw-gradient-from-position);--tw-gradient-to:rgba(5,150,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-gray-50{--tw-gradient-from:#f9fafb var(--tw-gradient-from-position);--tw-gradient-to:rgba(249,250,251,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-gray-500{--tw-gradient-from:#6b7280 var(--tw-gradient-from-position);--tw-gradient-to:hsla(220,9%,46%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-green-50{--tw-gradient-from:#f0fdf4 var(--tw-gradient-from-position);--tw-gradient-to:rgba(240,253,244,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-green-500{--tw-gradient-from:#22c55e var(--tw-gradient-from-position);--tw-gradient-to:rgba(34,197,94,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-green-600{--tw-gradient-from:#16a34a var(--tw-gradient-from-position);--tw-gradient-to:rgba(22,163,74,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-indigo-500{--tw-gradient-from:#6366f1 var(--tw-gradient-from-position);--tw-gradient-to:rgba(99,102,241,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-indigo-600{--tw-gradient-from:#4f46e5 var(--tw-gradient-from-position);--tw-gradient-to:rgba(79,70,229,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-orange-400{--tw-gradient-from:#fb923c var(--tw-gradient-from-position);--tw-gradient-to:rgba(251,146,60,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-orange-500{--tw-gradient-from:#f97316 var(--tw-gradient-from-position);--tw-gradient-to:rgba(249,115,22,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-orange-600{--tw-gradient-from:#ea580c var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,88,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-pink-500{--tw-gradient-from:#ec4899 var(--tw-gradient-from-position);--tw-gradient-to:rgba(236,72,153,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-100{--tw-gradient-from:#f3e8ff var(--tw-gradient-from-position);--tw-gradient-to:rgba(243,232,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-50{--tw-gradient-from:#faf5ff var(--tw-gradient-from-position);--tw-gradient-to:rgba(250,245,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-500{--tw-gradient-from:#a855f7 var(--tw-gradient-from-position);--tw-gradient-to:rgba(168,85,247,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-600{--tw-gradient-from:#9333ea var(--tw-gradient-from-position);--tw-gradient-to:rgba(147,51,234,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-red-50{--tw-gradient-from:#fef2f2 var(--tw-gradient-from-position);--tw-gradient-to:hsla(0,86%,97%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-red-500{--tw-gradient-from:#ef4444 var(--tw-gradient-from-position);--tw-gradient-to:rgba(239,68,68,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-slate-600{--tw-gradient-from:#475569 var(--tw-gradient-from-position);--tw-gradient-to:rgba(71,85,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-teal-50{--tw-gradient-from:#f0fdfa var(--tw-gradient-from-position);--tw-gradient-to:rgba(240,253,250,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-teal-500{--tw-gradient-from:#14b8a6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(20,184,166,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-teal-600{--tw-gradient-from:#0d9488 var(--tw-gradient-from-position);--tw-gradient-to:rgba(13,148,136,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-violet-500{--tw-gradient-from:#8b5cf6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(139,92,246,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-violet-600{--tw-gradient-from:#7c3aed var(--tw-gradient-from-position);--tw-gradient-to:rgba(124,58,237,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-400{--tw-gradient-from:#facc15 var(--tw-gradient-from-position);--tw-gradient-to:rgba(250,204,21,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-50{--tw-gradient-from:#fefce8 var(--tw-gradient-from-position);--tw-gradient-to:hsla(55,92%,95%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-500{--tw-gradient-from:#eab308 var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,179,8,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-600{--tw-gradient-from:#ca8a04 var(--tw-gradient-from-position);--tw-gradient-to:rgba(202,138,4,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.via-blue-50{--tw-gradient-to:rgba(239,246,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#eff6ff var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-green-50{--tw-gradient-to:rgba(240,253,244,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#f0fdf4 var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-indigo-700{--tw-gradient-to:rgba(67,56,202,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#4338ca var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-orange-600{--tw-gradient-to:rgba(234,88,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#ea580c var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-purple-50{--tw-gradient-to:rgba(250,245,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#faf5ff var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-white{--tw-gradient-to:hsla(0,0%,100%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#fff var(--tw-gradient-via-position),var(--tw-gradient-to)}.to-amber-100{--tw-gradient-to:#fef3c7 var(--tw-gradient-to-position)}.to-amber-600{--tw-gradient-to:#d97706 var(--tw-gradient-to-position)}.to-amber-800{--tw-gradient-to:#92400e var(--tw-gradient-to-position)}.to-blue-100{--tw-gradient-to:#dbeafe var(--tw-gradient-to-position)}.to-blue-50{--tw-gradient-to:#eff6ff var(--tw-gradient-to-position)}.to-blue-600{--tw-gradient-to:#2563eb var(--tw-gradient-to-position)}.to-blue-700{--tw-gradient-to:#1d4ed8 var(--tw-gradient-to-position)}.to-blue-800{--tw-gradient-to:#1e40af var(--tw-gradient-to-position)}.to-blue-900{--tw-gradient-to:#1e3a8a var(--tw-gradient-to-position)}.to-cyan-100{--tw-gradient-to:#cffafe var(--tw-gradient-to-position)}.to-cyan-600{--tw-gradient-to:#0891b2 var(--tw-gradient-to-position)}.to-emerald-600{--tw-gradient-to:#059669 var(--tw-gradient-to-position)}.to-emerald-800{--tw-gradient-to:#065f46 var(--tw-gradient-to-position)}.to-gray-100{--tw-gradient-to:#f3f4f6 var(--tw-gradient-to-position)}.to-gray-600{--tw-gradient-to:#4b5563 var(--tw-gradient-to-position)}.to-gray-700{--tw-gradient-to:#374151 var(--tw-gradient-to-position)}.to-green-100{--tw-gradient-to:#dcfce7 var(--tw-gradient-to-position)}.to-green-500{--tw-gradient-to:#22c55e var(--tw-gradient-to-position)}.to-green-600{--tw-gradient-to:#16a34a var(--tw-gradient-to-position)}.to-green-700{--tw-gradient-to:#15803d var(--tw-gradient-to-position)}.to-indigo-100{--tw-gradient-to:#e0e7ff var(--tw-gradient-to-position)}.to-indigo-50{--tw-gradient-to:#eef2ff var(--tw-gradient-to-position)}.to-indigo-600{--tw-gradient-to:#4f46e5 var(--tw-gradient-to-position)}.to-indigo-800{--tw-gradient-to:#3730a3 var(--tw-gradient-to-position)}.to-orange-100{--tw-gradient-to:#ffedd5 var(--tw-gradient-to-position)}.to-orange-500{--tw-gradient-to:#f97316 var(--tw-gradient-to-position)}.to-orange-600{--tw-gradient-to:#ea580c var(--tw-gradient-to-position)}.to-pink-100{--tw-gradient-to:#fce7f3 var(--tw-gradient-to-position)}.to-pink-50{--tw-gradient-to:#fdf2f8 var(--tw-gradient-to-position)}.to-pink-500{--tw-gradient-to:#ec4899 var(--tw-gradient-to-position)}.to-pink-600{--tw-gradient-to:#db2777 var(--tw-gradient-to-position)}.to-purple-100{--tw-gradient-to:#f3e8ff var(--tw-gradient-to-position)}.to-purple-50{--tw-gradient-to:#faf5ff var(--tw-gradient-to-position)}.to-purple-600{--tw-gradient-to:#9333ea var(--tw-gradient-to-position)}.to-purple-700{--tw-gradient-to:#7e22ce var(--tw-gradient-to-position)}.to-red-500{--tw-gradient-to:#ef4444 var(--tw-gradient-to-position)}.to-red-600{--tw-gradient-to:#dc2626 var(--tw-gradient-to-position)}.to-rose-600{--tw-gradient-to:#e11d48 var(--tw-gradient-to-position)}.to-slate-700{--tw-gradient-to:#334155 var(--tw-gradient-to-position)}.to-teal-100{--tw-gradient-to:#ccfbf1 var(--tw-gradient-to-position)}.to-teal-600{--tw-gradient-to:#0d9488 var(--tw-gradient-to-position)}.to-teal-700{--tw-gradient-to:#0f766e var(--tw-gradient-to-position)}.to-teal-800{--tw-gradient-to:#115e59 var(--tw-gradient-to-position)}.to-violet-600{--tw-gradient-to:#7c3aed var(--tw-gradient-to-position)}.to-violet-800{--tw-gradient-to:#5b21b6 var(--tw-gradient-to-position)}.to-yellow-100{--tw-gradient-to:#fef9c3 var(--tw-gradient-to-position)}.to-yellow-600{--tw-gradient-to:#ca8a04 var(--tw-gradient-to-position)}.to-yellow-700{--tw-gradient-to:#a16207 var(--tw-gradient-to-position)}.to-yellow-800{--tw-gradient-to:#854d0e var(--tw-gradient-to-position)}.object-contain{-o-object-fit:contain;object-fit:contain}.object-cover{-o-object-fit:cover;object-fit:cover}.p-12{padding:3rem}.p-16{padding:4rem}.p-2{padding:.5rem}.p-2\\.5{padding:.625rem}.p-3{padding:.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1{padding-left:.25rem;padding-right:.25rem}.px-1\\.5{padding-left:.375rem;padding-right:.375rem}.px-12{padding-left:3rem;padding-right:3rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-2\\.5{padding-left:.625rem;padding-right:.625rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.px-8{padding-left:2rem;padding-right:2rem}.py-0\\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-1\\.5{padding-top:.375rem;padding-bottom:.375rem}.py-10{padding-top:2.5rem;padding-bottom:2.5rem}.py-12{padding-top:3rem;padding-bottom:3rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-2\\.5{padding-top:.625rem;padding-bottom:.625rem}.py-20{padding-top:5rem;padding-bottom:5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-3\\.5{padding-top:.875rem;padding-bottom:.875rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-6{padding-top:1.5rem;padding-bottom:1.5rem}.py-8{padding-top:2rem;padding-bottom:2rem}.pb-1{padding-bottom:.25rem}.pb-2{padding-bottom:.5rem}.pb-3{padding-bottom:.75rem}.pb-4{padding-bottom:1rem}.pb-6{padding-bottom:1.5rem}.pb-8{padding-bottom:2rem}.pl-10{padding-left:2.5rem}.pl-3{padding-left:.75rem}.pl-4{padding-left:1rem}.pr-1{padding-right:.25rem}.pr-10{padding-right:2.5rem}.pr-4{padding-right:1rem}.pr-6{padding-right:1.5rem}.pr-9{padding-right:2.25rem}.pt-1{padding-top:.25rem}.pt-16{padding-top:4rem}.pt-2{padding-top:.5rem}.pt-3{padding-top:.75rem}.pt-4{padding-top:1rem}.pt-6{padding-top:1.5rem}.pt-8{padding-top:2rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.text-start{text-align:start}.align-middle{vertical-align:middle}.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-5xl{font-size:3rem;line-height:1}.text-6xl{font-size:3.75rem;line-height:1}.text-\\[10px\\]{font-size:10px}.text-\\[11px\\]{font-size:11px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.italic{font-style:italic}.leading-5{line-height:1.25rem}.leading-none{line-height:1}.leading-relaxed{line-height:1.625}.leading-tight{line-height:1.25}.tracking-wide{letter-spacing:.025em}.tracking-wider{letter-spacing:.05em}.tracking-widest{letter-spacing:.1em}.text-amber-500{--tw-text-opacity:1;color:rgb(245 158 11/var(--tw-text-opacity,1))}.text-amber-600{--tw-text-opacity:1;color:rgb(217 119 6/var(--tw-text-opacity,1))}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9/var(--tw-text-opacity,1))}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14/var(--tw-text-opacity,1))}.text-amber-900{--tw-text-opacity:1;color:rgb(120 53 15/var(--tw-text-opacity,1))}.text-blue-100{--tw-text-opacity:1;color:rgb(219 234 254/var(--tw-text-opacity,1))}.text-blue-200{--tw-text-opacity:1;color:rgb(191 219 254/var(--tw-text-opacity,1))}.text-blue-300{--tw-text-opacity:1;color:rgb(147 197 253/var(--tw-text-opacity,1))}.text-blue-500{--tw-text-opacity:1;color:rgb(59 130 246/var(--tw-text-opacity,1))}.text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity,1))}.text-blue-700{--tw-text-opacity:1;color:rgb(29 78 216/var(--tw-text-opacity,1))}.text-blue-800{--tw-text-opacity:1;color:rgb(30 64 175/var(--tw-text-opacity,1))}.text-blue-900{--tw-text-opacity:1;color:rgb(30 58 138/var(--tw-text-opacity,1))}.text-cyan-100{--tw-text-opacity:1;color:rgb(207 250 254/var(--tw-text-opacity,1))}.text-cyan-600{--tw-text-opacity:1;color:rgb(8 145 178/var(--tw-text-opacity,1))}.text-emerald-100{--tw-text-opacity:1;color:rgb(209 250 229/var(--tw-text-opacity,1))}.text-emerald-200{--tw-text-opacity:1;color:rgb(167 243 208/var(--tw-text-opacity,1))}.text-emerald-500{--tw-text-opacity:1;color:rgb(16 185 129/var(--tw-text-opacity,1))}.text-emerald-600{--tw-text-opacity:1;color:rgb(5 150 105/var(--tw-text-opacity,1))}.text-emerald-700{--tw-text-opacity:1;color:rgb(4 120 87/var(--tw-text-opacity,1))}.text-emerald-800{--tw-text-opacity:1;color:rgb(6 95 70/var(--tw-text-opacity,1))}.text-gray-300{--tw-text-opacity:1;color:rgb(209 213 219/var(--tw-text-opacity,1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175/var(--tw-text-opacity,1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128/var(--tw-text-opacity,1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity,1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81/var(--tw-text-opacity,1))}.text-gray-800{--tw-text-opacity:1;color:rgb(31 41 55/var(--tw-text-opacity,1))}.text-gray-900{--tw-text-opacity:1;color:rgb(17 24 39/var(--tw-text-opacity,1))}.text-green-100{--tw-text-opacity:1;color:rgb(220 252 231/var(--tw-text-opacity,1))}.text-green-200{--tw-text-opacity:1;color:rgb(187 247 208/var(--tw-text-opacity,1))}.text-green-300{--tw-text-opacity:1;color:rgb(134 239 172/var(--tw-text-opacity,1))}.text-green-400{--tw-text-opacity:1;color:rgb(74 222 128/var(--tw-text-opacity,1))}.text-green-500{--tw-text-opacity:1;color:rgb(34 197 94/var(--tw-text-opacity,1))}.text-green-600{--tw-text-opacity:1;color:rgb(22 163 74/var(--tw-text-opacity,1))}.text-green-700{--tw-text-opacity:1;color:rgb(21 128 61/var(--tw-text-opacity,1))}.text-green-800{--tw-text-opacity:1;color:rgb(22 101 52/var(--tw-text-opacity,1))}.text-indigo-100{--tw-text-opacity:1;color:rgb(224 231 255/var(--tw-text-opacity,1))}.text-indigo-400{--tw-text-opacity:1;color:rgb(129 140 248/var(--tw-text-opacity,1))}.text-indigo-500{--tw-text-opacity:1;color:rgb(99 102 241/var(--tw-text-opacity,1))}.text-indigo-600{--tw-text-opacity:1;color:rgb(79 70 229/var(--tw-text-opacity,1))}.text-indigo-700{--tw-text-opacity:1;color:rgb(67 56 202/var(--tw-text-opacity,1))}.text-indigo-800{--tw-text-opacity:1;color:rgb(55 48 163/var(--tw-text-opacity,1))}.text-inherit{color:inherit}.text-lime-800{--tw-text-opacity:1;color:rgb(63 98 18/var(--tw-text-opacity,1))}.text-orange-100{--tw-text-opacity:1;color:rgb(255 237 213/var(--tw-text-opacity,1))}.text-orange-400{--tw-text-opacity:1;color:rgb(251 146 60/var(--tw-text-opacity,1))}.text-orange-500{--tw-text-opacity:1;color:rgb(249 115 22/var(--tw-text-opacity,1))}.text-orange-600{--tw-text-opacity:1;color:rgb(234 88 12/var(--tw-text-opacity,1))}.text-orange-700{--tw-text-opacity:1;color:rgb(194 65 12/var(--tw-text-opacity,1))}.text-orange-800{--tw-text-opacity:1;color:rgb(154 52 18/var(--tw-text-opacity,1))}.text-pink-100{--tw-text-opacity:1;color:rgb(252 231 243/var(--tw-text-opacity,1))}.text-pink-600{--tw-text-opacity:1;color:rgb(219 39 119/var(--tw-text-opacity,1))}.text-purple-100{--tw-text-opacity:1;color:rgb(243 232 255/var(--tw-text-opacity,1))}.text-purple-200{--tw-text-opacity:1;color:rgb(233 213 255/var(--tw-text-opacity,1))}.text-purple-300{--tw-text-opacity:1;color:rgb(216 180 254/var(--tw-text-opacity,1))}.text-purple-500{--tw-text-opacity:1;color:rgb(168 85 247/var(--tw-text-opacity,1))}.text-purple-600{--tw-text-opacity:1;color:rgb(147 51 234/var(--tw-text-opacity,1))}.text-purple-700{--tw-text-opacity:1;color:rgb(126 34 206/var(--tw-text-opacity,1))}.text-purple-800{--tw-text-opacity:1;color:rgb(107 33 168/var(--tw-text-opacity,1))}.text-red-100{--tw-text-opacity:1;color:rgb(254 226 226/var(--tw-text-opacity,1))}.text-red-200{--tw-text-opacity:1;color:rgb(254 202 202/var(--tw-text-opacity,1))}.text-red-300{--tw-text-opacity:1;color:rgb(252 165 165/var(--tw-text-opacity,1))}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113/var(--tw-text-opacity,1))}.text-red-500{--tw-text-opacity:1;color:rgb(239 68 68/var(--tw-text-opacity,1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38/var(--tw-text-opacity,1))}.text-red-700{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity,1))}.text-red-800{--tw-text-opacity:1;color:rgb(153 27 27/var(--tw-text-opacity,1))}.text-red-900{--tw-text-opacity:1;color:rgb(127 29 29/var(--tw-text-opacity,1))}.text-teal-100{--tw-text-opacity:1;color:rgb(204 251 241/var(--tw-text-opacity,1))}.text-teal-600{--tw-text-opacity:1;color:rgb(13 148 136/var(--tw-text-opacity,1))}.text-teal-700{--tw-text-opacity:1;color:rgb(15 118 110/var(--tw-text-opacity,1))}.text-teal-800{--tw-text-opacity:1;color:rgb(17 94 89/var(--tw-text-opacity,1))}.text-violet-100{--tw-text-opacity:1;color:rgb(237 233 254/var(--tw-text-opacity,1))}.text-violet-500{--tw-text-opacity:1;color:rgb(139 92 246/var(--tw-text-opacity,1))}.text-violet-600{--tw-text-opacity:1;color:rgb(124 58 237/var(--tw-text-opacity,1))}.text-violet-800{--tw-text-opacity:1;color:rgb(91 33 182/var(--tw-text-opacity,1))}.text-violet-900{--tw-text-opacity:1;color:rgb(76 29 149/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.text-white\\/80{color:hsla(0,0%,100%,.8)}.text-white\\/90{color:hsla(0,0%,100%,.9)}.text-yellow-100{--tw-text-opacity:1;color:rgb(254 249 195/var(--tw-text-opacity,1))}.text-yellow-200{--tw-text-opacity:1;color:rgb(254 240 138/var(--tw-text-opacity,1))}.text-yellow-300{--tw-text-opacity:1;color:rgb(253 224 71/var(--tw-text-opacity,1))}.text-yellow-400{--tw-text-opacity:1;color:rgb(250 204 21/var(--tw-text-opacity,1))}.text-yellow-500{--tw-text-opacity:1;color:rgb(234 179 8/var(--tw-text-opacity,1))}.text-yellow-600{--tw-text-opacity:1;color:rgb(202 138 4/var(--tw-text-opacity,1))}.text-yellow-700{--tw-text-opacity:1;color:rgb(161 98 7/var(--tw-text-opacity,1))}.text-yellow-800{--tw-text-opacity:1;color:rgb(133 77 14/var(--tw-text-opacity,1))}.text-yellow-900{--tw-text-opacity:1;color:rgb(113 63 18/var(--tw-text-opacity,1))}.underline{text-decoration-line:underline}.no-underline{text-decoration-line:none}.decoration-blue-400\\/50{text-decoration-color:rgba(96,165,250,.5)}.underline-offset-2{text-underline-offset:2px}.opacity-20{opacity:.2}.opacity-30{opacity:.3}.opacity-50{opacity:.5}.opacity-75{opacity:.75}.opacity-80{opacity:.8}.opacity-90{opacity:.9}.opacity-95{opacity:.95}.shadow{--tw-shadow:0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px -1px rgba(0,0,0,.1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color),0 1px 2px -1px var(--tw-shadow-color)}.shadow,.shadow-2xl{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.shadow-lg,.shadow-md{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color),0 2px 4px -2px var(--tw-shadow-color)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgba(0,0,0,.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color)}.shadow-sm,.shadow-xl{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-xl{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color),0 8px 10px -6px var(--tw-shadow-color)}.outline-none{outline:2px solid transparent;outline-offset:2px}.outline{outline-style:solid}.ring-1{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color)}.ring-1,.ring-4{box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.ring-4{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(4px + var(--tw-ring-offset-width)) var(--tw-ring-color)}.ring-purple-500{--tw-ring-opacity:1;--tw-ring-color:rgb(168 85 247/var(--tw-ring-opacity,1))}.ring-white\\/60{--tw-ring-color:hsla(0,0%,100%,.6)}.blur{--tw-blur:blur(8px)}.blur,.filter{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur-lg{--tw-backdrop-blur:blur(16px)}.backdrop-blur-lg,.backdrop-filter{-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.duration-200{transition-duration:.2s}.duration-300{transition-duration:.3s}.ease-in-out{transition-timing-function:cubic-bezier(.4,0,.2,1)}.file\\:ml-4::file-selector-button{margin-left:1rem}.file\\:rounded-lg::file-selector-button{border-radius:.5rem}.file\\:border-0::file-selector-button{border-width:0}.file\\:bg-blue-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(239 246 255/var(--tw-bg-opacity,1))}.file\\:bg-green-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(240 253 244/var(--tw-bg-opacity,1))}.file\\:bg-orange-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(255 247 237/var(--tw-bg-opacity,1))}.file\\:bg-purple-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(250 245 255/var(--tw-bg-opacity,1))}.file\\:px-4::file-selector-button{padding-left:1rem;padding-right:1rem}.file\\:py-2::file-selector-button{padding-top:.5rem;padding-bottom:.5rem}.file\\:text-sm::file-selector-button{font-size:.875rem;line-height:1.25rem}.file\\:font-semibold::file-selector-button{font-weight:600}.file\\:text-blue-700::file-selector-button{--tw-text-opacity:1;color:rgb(29 78 216/var(--tw-text-opacity,1))}.file\\:text-green-700::file-selector-button{--tw-text-opacity:1;color:rgb(21 128 61/var(--tw-text-opacity,1))}.file\\:text-orange-700::file-selector-button{--tw-text-opacity:1;color:rgb(194 65 12/var(--tw-text-opacity,1))}.file\\:text-purple-700::file-selector-button{--tw-text-opacity:1;color:rgb(126 34 206/var(--tw-text-opacity,1))}.placeholder\\:text-right::-moz-placeholder{text-align:right}.placeholder\\:text-right::placeholder{text-align:right}.focus-within\\:border-transparent:focus-within{border-color:transparent}.focus-within\\:ring-2:focus-within{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus-within\\:ring-blue-500:focus-within{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246/var(--tw-ring-opacity,1))}.hover\\:scale-105:hover{--tw-scale-x:1.05;--tw-scale-y:1.05;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\\:border-blue-500:hover{--tw-border-opacity:1;border-color:rgb(59 130 246/var(--tw-border-opacity,1))}.hover\\:border-gray-400:hover{--tw-border-opacity:1;border-color:rgb(156 163 175/var(--tw-border-opacity,1))}.hover\\:border-teal-400:hover{--tw-border-opacity:1;border-color:rgb(45 212 191/var(--tw-border-opacity,1))}.hover\\:bg-amber-700:hover{--tw-bg-opacity:1;background-color:rgb(180 83 9/var(--tw-bg-opacity,1))}.hover\\:bg-black\\/5:hover{background-color:rgba(0,0,0,.05)}.hover\\:bg-blue-100:hover{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity,1))}.hover\\:bg-blue-200:hover{--tw-bg-opacity:1;background-color:rgb(191 219 254/var(--tw-bg-opacity,1))}.hover\\:bg-blue-50:hover{--tw-bg-opacity:1;background-color:rgb(239 246 255/var(--tw-bg-opacity,1))}.hover\\:bg-blue-600:hover{--tw-bg-opacity:1;background-color:rgb(37 99 235/var(--tw-bg-opacity,1))}.hover\\:bg-blue-700:hover{--tw-bg-opacity:1;background-color:rgb(29 78 216/var(--tw-bg-opacity,1))}.hover\\:bg-cyan-700:hover{--tw-bg-opacity:1;background-color:rgb(14 116 144/var(--tw-bg-opacity,1))}.hover\\:bg-emerald-100:hover{--tw-bg-opacity:1;background-color:rgb(209 250 229/var(--tw-bg-opacity,1))}.hover\\:bg-emerald-50:hover{--tw-bg-opacity:1;background-color:rgb(236 253 245/var(--tw-bg-opacity,1))}.hover\\:bg-emerald-700:hover{--tw-bg-opacity:1;background-color:rgb(4 120 87/var(--tw-bg-opacity,1))}.hover\\:bg-fuchsia-700:hover{--tw-bg-opacity:1;background-color:rgb(162 28 175/var(--tw-bg-opacity,1))}.hover\\:bg-gray-100:hover{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity,1))}.hover\\:bg-gray-200:hover{--tw-bg-opacity:1;background-color:rgb(229 231 235/var(--tw-bg-opacity,1))}.hover\\:bg-gray-300:hover{--tw-bg-opacity:1;background-color:rgb(209 213 219/var(--tw-bg-opacity,1))}.hover\\:bg-gray-400:hover{--tw-bg-opacity:1;background-color:rgb(156 163 175/var(--tw-bg-opacity,1))}.hover\\:bg-gray-50:hover{--tw-bg-opacity:1;background-color:rgb(249 250 251/var(--tw-bg-opacity,1))}.hover\\:bg-gray-600:hover{--tw-bg-opacity:1;background-color:rgb(75 85 99/var(--tw-bg-opacity,1))}.hover\\:bg-gray-700:hover{--tw-bg-opacity:1;background-color:rgb(55 65 81/var(--tw-bg-opacity,1))}.hover\\:bg-gray-900:hover{--tw-bg-opacity:1;background-color:rgb(17 24 39/var(--tw-bg-opacity,1))}.hover\\:bg-green-100:hover{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity,1))}.hover\\:bg-green-200:hover{--tw-bg-opacity:1;background-color:rgb(187 247 208/var(--tw-bg-opacity,1))}.hover\\:bg-green-50:hover{--tw-bg-opacity:1;background-color:rgb(240 253 244/var(--tw-bg-opacity,1))}.hover\\:bg-green-600:hover{--tw-bg-opacity:1;background-color:rgb(22 163 74/var(--tw-bg-opacity,1))}.hover\\:bg-green-700:hover{--tw-bg-opacity:1;background-color:rgb(21 128 61/var(--tw-bg-opacity,1))}.hover\\:bg-indigo-50:hover{--tw-bg-opacity:1;background-color:rgb(238 242 255/var(--tw-bg-opacity,1))}.hover\\:bg-indigo-700:hover{--tw-bg-opacity:1;background-color:rgb(67 56 202/var(--tw-bg-opacity,1))}.hover\\:bg-lime-100:hover{--tw-bg-opacity:1;background-color:rgb(236 252 203/var(--tw-bg-opacity,1))}.hover\\:bg-orange-100:hover{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity,1))}.hover\\:bg-orange-50:hover{--tw-bg-opacity:1;background-color:rgb(255 247 237/var(--tw-bg-opacity,1))}.hover\\:bg-orange-700:hover{--tw-bg-opacity:1;background-color:rgb(194 65 12/var(--tw-bg-opacity,1))}.hover\\:bg-pink-600:hover{--tw-bg-opacity:1;background-color:rgb(219 39 119/var(--tw-bg-opacity,1))}.hover\\:bg-pink-700:hover{--tw-bg-opacity:1;background-color:rgb(190 24 93/var(--tw-bg-opacity,1))}.hover\\:bg-purple-100:hover{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity,1))}.hover\\:bg-purple-200:hover{--tw-bg-opacity:1;background-color:rgb(233 213 255/var(--tw-bg-opacity,1))}.hover\\:bg-purple-50:hover{--tw-bg-opacity:1;background-color:rgb(250 245 255/var(--tw-bg-opacity,1))}.hover\\:bg-purple-600:hover{--tw-bg-opacity:1;background-color:rgb(147 51 234/var(--tw-bg-opacity,1))}.hover\\:bg-purple-700:hover{--tw-bg-opacity:1;background-color:rgb(126 34 206/var(--tw-bg-opacity,1))}.hover\\:bg-purple-900:hover{--tw-bg-opacity:1;background-color:rgb(88 28 135/var(--tw-bg-opacity,1))}.hover\\:bg-red-100:hover{--tw-bg-opacity:1;background-color:rgb(254 226 226/var(--tw-bg-opacity,1))}.hover\\:bg-red-200:hover{--tw-bg-opacity:1;background-color:rgb(254 202 202/var(--tw-bg-opacity,1))}.hover\\:bg-red-50:hover{--tw-bg-opacity:1;background-color:rgb(254 242 242/var(--tw-bg-opacity,1))}.hover\\:bg-red-500:hover{--tw-bg-opacity:1;background-color:rgb(239 68 68/var(--tw-bg-opacity,1))}.hover\\:bg-red-600:hover{--tw-bg-opacity:1;background-color:rgb(220 38 38/var(--tw-bg-opacity,1))}.hover\\:bg-red-700:hover{--tw-bg-opacity:1;background-color:rgb(185 28 28/var(--tw-bg-opacity,1))}.hover\\:bg-slate-800:hover{--tw-bg-opacity:1;background-color:rgb(30 41 59/var(--tw-bg-opacity,1))}.hover\\:bg-teal-50:hover{--tw-bg-opacity:1;background-color:rgb(240 253 250/var(--tw-bg-opacity,1))}.hover\\:bg-teal-700:hover{--tw-bg-opacity:1;background-color:rgb(15 118 110/var(--tw-bg-opacity,1))}.hover\\:bg-violet-700:hover{--tw-bg-opacity:1;background-color:rgb(109 40 217/var(--tw-bg-opacity,1))}.hover\\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.hover\\:bg-white\\/10:hover{background-color:hsla(0,0%,100%,.1)}.hover\\:bg-white\\/20:hover{background-color:hsla(0,0%,100%,.2)}.hover\\:bg-white\\/25:hover{background-color:hsla(0,0%,100%,.25)}.hover\\:bg-white\\/30:hover{background-color:hsla(0,0%,100%,.3)}.hover\\:bg-yellow-100:hover{--tw-bg-opacity:1;background-color:rgb(254 249 195/var(--tw-bg-opacity,1))}.hover\\:bg-yellow-600:hover{--tw-bg-opacity:1;background-color:rgb(202 138 4/var(--tw-bg-opacity,1))}.hover\\:bg-yellow-700:hover{--tw-bg-opacity:1;background-color:rgb(161 98 7/var(--tw-bg-opacity,1))}.hover\\:bg-opacity-75:hover{--tw-bg-opacity:0.75}.hover\\:from-amber-500:hover{--tw-gradient-from:#f59e0b var(--tw-gradient-from-position);--tw-gradient-to:rgba(245,158,11,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-amber-600:hover{--tw-gradient-from:#d97706 var(--tw-gradient-from-position);--tw-gradient-to:rgba(217,119,6,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-blue-500:hover{--tw-gradient-from:#3b82f6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(59,130,246,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-blue-600:hover{--tw-gradient-from:#2563eb var(--tw-gradient-from-position);--tw-gradient-to:rgba(37,99,235,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-blue-700:hover{--tw-gradient-from:#1d4ed8 var(--tw-gradient-from-position);--tw-gradient-to:rgba(29,78,216,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-cyan-500:hover{--tw-gradient-from:#06b6d4 var(--tw-gradient-from-position);--tw-gradient-to:rgba(6,182,212,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-cyan-600:hover{--tw-gradient-from:#0891b2 var(--tw-gradient-from-position);--tw-gradient-to:rgba(8,145,178,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-emerald-600:hover{--tw-gradient-from:#059669 var(--tw-gradient-from-position);--tw-gradient-to:rgba(5,150,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-gray-600:hover{--tw-gradient-from:#4b5563 var(--tw-gradient-from-position);--tw-gradient-to:rgba(75,85,99,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-green-500:hover{--tw-gradient-from:#22c55e var(--tw-gradient-from-position);--tw-gradient-to:rgba(34,197,94,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-green-600:hover{--tw-gradient-from:#16a34a var(--tw-gradient-from-position);--tw-gradient-to:rgba(22,163,74,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-green-700:hover{--tw-gradient-from:#15803d var(--tw-gradient-from-position);--tw-gradient-to:rgba(21,128,61,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-indigo-600:hover{--tw-gradient-from:#4f46e5 var(--tw-gradient-from-position);--tw-gradient-to:rgba(79,70,229,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-orange-500:hover{--tw-gradient-from:#f97316 var(--tw-gradient-from-position);--tw-gradient-to:rgba(249,115,22,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-orange-600:hover{--tw-gradient-from:#ea580c var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,88,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-orange-700:hover{--tw-gradient-from:#c2410c var(--tw-gradient-from-position);--tw-gradient-to:rgba(194,65,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-pink-600:hover{--tw-gradient-from:#db2777 var(--tw-gradient-from-position);--tw-gradient-to:rgba(219,39,119,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-purple-500:hover{--tw-gradient-from:#a855f7 var(--tw-gradient-from-position);--tw-gradient-to:rgba(168,85,247,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-purple-600:hover{--tw-gradient-from:#9333ea var(--tw-gradient-from-position);--tw-gradient-to:rgba(147,51,234,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-purple-700:hover{--tw-gradient-from:#7e22ce var(--tw-gradient-from-position);--tw-gradient-to:rgba(126,34,206,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-red-500:hover{--tw-gradient-from:#ef4444 var(--tw-gradient-from-position);--tw-gradient-to:rgba(239,68,68,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-red-600:hover{--tw-gradient-from:#dc2626 var(--tw-gradient-from-position);--tw-gradient-to:rgba(220,38,38,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-slate-700:hover{--tw-gradient-from:#334155 var(--tw-gradient-from-position);--tw-gradient-to:rgba(51,65,85,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-teal-500:hover{--tw-gradient-from:#14b8a6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(20,184,166,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-teal-600:hover{--tw-gradient-from:#0d9488 var(--tw-gradient-from-position);--tw-gradient-to:rgba(13,148,136,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-teal-700:hover{--tw-gradient-from:#0f766e var(--tw-gradient-from-position);--tw-gradient-to:rgba(15,118,110,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-violet-600:hover{--tw-gradient-from:#7c3aed var(--tw-gradient-from-position);--tw-gradient-to:rgba(124,58,237,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-yellow-500:hover{--tw-gradient-from:#eab308 var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,179,8,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-yellow-600:hover{--tw-gradient-from:#ca8a04 var(--tw-gradient-from-position);--tw-gradient-to:rgba(202,138,4,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-yellow-700:hover{--tw-gradient-from:#a16207 var(--tw-gradient-from-position);--tw-gradient-to:rgba(161,98,7,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:to-amber-600:hover{--tw-gradient-to:#d97706 var(--tw-gradient-to-position)}.hover\\:to-amber-700:hover{--tw-gradient-to:#b45309 var(--tw-gradient-to-position)}.hover\\:to-blue-600:hover{--tw-gradient-to:#2563eb var(--tw-gradient-to-position)}.hover\\:to-blue-700:hover{--tw-gradient-to:#1d4ed8 var(--tw-gradient-to-position)}.hover\\:to-cyan-600:hover{--tw-gradient-to:#0891b2 var(--tw-gradient-to-position)}.hover\\:to-cyan-700:hover{--tw-gradient-to:#0e7490 var(--tw-gradient-to-position)}.hover\\:to-emerald-700:hover{--tw-gradient-to:#047857 var(--tw-gradient-to-position)}.hover\\:to-gray-700:hover{--tw-gradient-to:#374151 var(--tw-gradient-to-position)}.hover\\:to-gray-800:hover{--tw-gradient-to:#1f2937 var(--tw-gradient-to-position)}.hover\\:to-green-600:hover{--tw-gradient-to:#16a34a var(--tw-gradient-to-position)}.hover\\:to-green-700:hover{--tw-gradient-to:#15803d var(--tw-gradient-to-position)}.hover\\:to-indigo-700:hover{--tw-gradient-to:#4338ca var(--tw-gradient-to-position)}.hover\\:to-orange-500:hover{--tw-gradient-to:#f97316 var(--tw-gradient-to-position)}.hover\\:to-orange-600:hover{--tw-gradient-to:#ea580c var(--tw-gradient-to-position)}.hover\\:to-orange-700:hover{--tw-gradient-to:#c2410c var(--tw-gradient-to-position)}.hover\\:to-pink-500:hover{--tw-gradient-to:#ec4899 var(--tw-gradient-to-position)}.hover\\:to-pink-700:hover{--tw-gradient-to:#be185d var(--tw-gradient-to-position)}.hover\\:to-purple-600:hover{--tw-gradient-to:#9333ea var(--tw-gradient-to-position)}.hover\\:to-purple-700:hover{--tw-gradient-to:#7e22ce var(--tw-gradient-to-position)}.hover\\:to-red-600:hover{--tw-gradient-to:#dc2626 var(--tw-gradient-to-position)}.hover\\:to-red-700:hover{--tw-gradient-to:#b91c1c var(--tw-gradient-to-position)}.hover\\:to-slate-800:hover{--tw-gradient-to:#1e293b var(--tw-gradient-to-position)}.hover\\:to-teal-600:hover{--tw-gradient-to:#0d9488 var(--tw-gradient-to-position)}.hover\\:to-teal-700:hover{--tw-gradient-to:#0f766e var(--tw-gradient-to-position)}.hover\\:to-teal-800:hover{--tw-gradient-to:#115e59 var(--tw-gradient-to-position)}.hover\\:to-violet-700:hover{--tw-gradient-to:#6d28d9 var(--tw-gradient-to-position)}.hover\\:to-yellow-700:hover{--tw-gradient-to:#a16207 var(--tw-gradient-to-position)}.hover\\:to-yellow-800:hover{--tw-gradient-to:#854d0e var(--tw-gradient-to-position)}.hover\\:text-blue-600:hover{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity,1))}.hover\\:text-blue-800:hover{--tw-text-opacity:1;color:rgb(30 64 175/var(--tw-text-opacity,1))}.hover\\:text-gray-200:hover{--tw-text-opacity:1;color:rgb(229 231 235/var(--tw-text-opacity,1))}.hover\\:text-gray-600:hover{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity,1))}.hover\\:text-gray-700:hover{--tw-text-opacity:1;color:rgb(55 65 81/var(--tw-text-opacity,1))}.hover\\:text-gray-800:hover{--tw-text-opacity:1;color:rgb(31 41 55/var(--tw-text-opacity,1))}.hover\\:text-green-800:hover{--tw-text-opacity:1;color:rgb(22 101 52/var(--tw-text-opacity,1))}.hover\\:text-indigo-200:hover{--tw-text-opacity:1;color:rgb(199 210 254/var(--tw-text-opacity,1))}.hover\\:text-indigo-800:hover{--tw-text-opacity:1;color:rgb(55 48 163/var(--tw-text-opacity,1))}.hover\\:text-orange-100:hover{--tw-text-opacity:1;color:rgb(255 237 213/var(--tw-text-opacity,1))}.hover\\:text-purple-800:hover{--tw-text-opacity:1;color:rgb(107 33 168/var(--tw-text-opacity,1))}.hover\\:text-red-400:hover{--tw-text-opacity:1;color:rgb(248 113 113/var(--tw-text-opacity,1))}.hover\\:text-red-700:hover{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity,1))}.hover\\:text-red-800:hover{--tw-text-opacity:1;color:rgb(153 27 27/var(--tw-text-opacity,1))}.hover\\:text-teal-900:hover{--tw-text-opacity:1;color:rgb(19 78 74/var(--tw-text-opacity,1))}.hover\\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.hover\\:text-white\\/70:hover{color:hsla(0,0%,100%,.7)}.hover\\:underline:hover{text-decoration-line:underline}.hover\\:shadow-2xl:hover{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color)}.hover\\:shadow-2xl:hover,.hover\\:shadow-lg:hover{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.hover\\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.hover\\:shadow-md:hover{--tw-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color),0 2px 4px -2px var(--tw-shadow-color)}.hover\\:shadow-md:hover,.hover\\:shadow-xl:hover{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.hover\\:shadow-xl:hover{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color),0 8px 10px -6px var(--tw-shadow-color)}.hover\\:file\\:bg-blue-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity,1))}.hover\\:file\\:bg-green-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity,1))}.hover\\:file\\:bg-orange-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity,1))}.hover\\:file\\:bg-purple-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity,1))}.focus\\:border-blue-500:focus{--tw-border-opacity:1;border-color:rgb(59 130 246/var(--tw-border-opacity,1))}.focus\\:border-purple-500:focus{--tw-border-opacity:1;border-color:rgb(168 85 247/var(--tw-border-opacity,1))}.focus\\:border-transparent:focus{border-color:transparent}.focus\\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\\:ring-0:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-offset-width)) var(--tw-ring-color)}.focus\\:ring-0:focus,.focus\\:ring-2:focus{box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus\\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color)}.focus\\:ring-inset:focus{--tw-ring-inset:inset}.focus\\:ring-amber-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(245 158 11/var(--tw-ring-opacity,1))}.focus\\:ring-blue-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246/var(--tw-ring-opacity,1))}.focus\\:ring-emerald-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(16 185 129/var(--tw-ring-opacity,1))}.focus\\:ring-fuchsia-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(217 70 239/var(--tw-ring-opacity,1))}.focus\\:ring-gray-400:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(156 163 175/var(--tw-ring-opacity,1))}.focus\\:ring-green-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(34 197 94/var(--tw-ring-opacity,1))}.focus\\:ring-indigo-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(99 102 241/var(--tw-ring-opacity,1))}.focus\\:ring-orange-400:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(251 146 60/var(--tw-ring-opacity,1))}.focus\\:ring-orange-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(249 115 22/var(--tw-ring-opacity,1))}.focus\\:ring-pink-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(236 72 153/var(--tw-ring-opacity,1))}.focus\\:ring-purple-200:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(233 213 255/var(--tw-ring-opacity,1))}.focus\\:ring-purple-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(168 85 247/var(--tw-ring-opacity,1))}.focus\\:ring-teal-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(20 184 166/var(--tw-ring-opacity,1))}.focus\\:ring-white\\/60:focus{--tw-ring-color:hsla(0,0%,100%,.6)}.focus\\:ring-yellow-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(234 179 8/var(--tw-ring-opacity,1))}.focus\\:ring-offset-1:focus{--tw-ring-offset-width:1px}.focus-visible\\:ring-2:focus-visible{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus-visible\\:ring-orange-400:focus-visible{--tw-ring-opacity:1;--tw-ring-color:rgb(251 146 60/var(--tw-ring-opacity,1))}.focus-visible\\:ring-white:focus-visible{--tw-ring-opacity:1;--tw-ring-color:rgb(255 255 255/var(--tw-ring-opacity,1))}.focus-visible\\:ring-offset-2:focus-visible{--tw-ring-offset-width:2px}.focus-visible\\:ring-offset-teal-700:focus-visible{--tw-ring-offset-color:#0f766e}.active\\:scale-\\[0\\.98\\]:active{--tw-scale-x:0.98;--tw-scale-y:0.98;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.disabled\\:opacity-50:disabled{opacity:.5}.group:hover .group-hover\\:scale-110{--tw-scale-x:1.1;--tw-scale-y:1.1;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.group:hover .group-hover\\:bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.group:hover .group-hover\\:text-amber-100{--tw-text-opacity:1;color:rgb(254 243 199/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-amber-500{--tw-text-opacity:1;color:rgb(245 158 11/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-blue-100{--tw-text-opacity:1;color:rgb(219 234 254/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-blue-500{--tw-text-opacity:1;color:rgb(59 130 246/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-cyan-100{--tw-text-opacity:1;color:rgb(207 250 254/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-cyan-500{--tw-text-opacity:1;color:rgb(6 182 212/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-green-100{--tw-text-opacity:1;color:rgb(220 252 231/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-green-500{--tw-text-opacity:1;color:rgb(34 197 94/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-green-600{--tw-text-opacity:1;color:rgb(22 163 74/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-orange-100{--tw-text-opacity:1;color:rgb(255 237 213/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-pink-100{--tw-text-opacity:1;color:rgb(252 231 243/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-purple-100{--tw-text-opacity:1;color:rgb(243 232 255/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-purple-500{--tw-text-opacity:1;color:rgb(168 85 247/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-purple-600{--tw-text-opacity:1;color:rgb(147 51 234/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-red-500{--tw-text-opacity:1;color:rgb(239 68 68/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-teal-100{--tw-text-opacity:1;color:rgb(204 251 241/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-teal-500{--tw-text-opacity:1;color:rgb(20 184 166/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-yellow-500{--tw-text-opacity:1;color:rgb(234 179 8/var(--tw-text-opacity,1))}@media (min-width:640px){.sm\\:mx-0{margin-left:0;margin-right:0}.sm\\:inline{display:inline}.sm\\:w-auto{width:auto}.sm\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.sm\\:flex-row{flex-direction:row}.sm\\:flex-wrap{flex-wrap:wrap}.sm\\:items-end{align-items:flex-end}.sm\\:items-center{align-items:center}.sm\\:rounded-md{border-radius:.375rem}.sm\\:p-8{padding:2rem}.sm\\:px-6{padding-left:1.5rem;padding-right:1.5rem}.sm\\:px-8{padding-left:2rem;padding-right:2rem}.sm\\:py-0{padding-top:0;padding-bottom:0}.sm\\:text-3xl{font-size:1.875rem;line-height:2.25rem}}@media (min-width:768px){.md\\:col-span-2{grid-column:span 2/span 2}.md\\:block{display:block}.md\\:inline-block{display:inline-block}.md\\:inline{display:inline}.md\\:w-auto{width:auto}.md\\:flex-none{flex:none}.md\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.md\\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.md\\:flex-row{flex-direction:row}.md\\:items-start{align-items:flex-start}.md\\:items-center{align-items:center}.md\\:justify-center{justify-content:center}.md\\:self-start{align-self:flex-start}.md\\:p-5{padding:1.25rem}.md\\:text-3xl{font-size:1.875rem;line-height:2.25rem}}@media (min-width:1024px){.lg\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.lg\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.lg\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.lg\\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.lg\\:flex-row{flex-direction:row}.lg\\:items-center{align-items:center}.lg\\:justify-end{justify-content:flex-end}.lg\\:justify-between{justify-content:space-between}.lg\\:px-8{padding-left:2rem;padding-right:2rem}}@media (min-width:1280px){.xl\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (min-width:1536px){.\\32xl\\:px-10{padding-left:2.5rem;padding-right:2.5rem}}';function Lr(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(r=>({note:typeof r=="string"?r:String(r?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function pe(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function te(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("identity_attachment_url")||t.includes("signature_attachment_url")||t.includes("salary_profile_attachment_url")||t.includes("gosi_attachment_url")||t.includes("tax_exemption_attachment_url")||t.includes("additional_1_attachment_url")||t.includes("additional_2_attachment_url")||t.includes("additional_3_attachment_url"):!1}function ea(e){const t=String(e?.message??e??"");return t.includes("attachments_json")&&(t.includes("no such column")||t.includes("no column named"))}const ta=15,Dr=20*1024*1024,Xe=20,Ar=[{column:"identity_attachment_url",label:"ملف الهوية"},{column:"signature_attachment_url",label:"ملف السمة"},{column:"salary_profile_attachment_url",label:"ملف تعريف الراتب"},{column:"gosi_attachment_url",label:"ملف التأمينات الاجتماعية"},{column:"tax_exemption_attachment_url",label:"شهادة الإعفاء الضريبي"},{column:"additional_1_attachment_url",label:"مستند إضافي 1"},{column:"additional_2_attachment_url",label:"مستند إضافي 2"},{column:"additional_3_attachment_url",label:"مستند إضافي 3"}];function gt(e){const t=String(e??"").trim();if(!t||t==="null"||t.includes("..")||t.includes("\\"))return null;const a="/api/attachments/view/";if(t.startsWith(a))return t;const r=t.indexOf(a);if(r>=0)return t.slice(r);if(/^https?:\/\//i.test(t))try{const n=new URL(t);if(n.pathname.startsWith(a))return n.pathname}catch{return null}return/^(customers\/\d+\/|temp\/|\d+\/)/.test(t)?`${a}${t.replace(/^\/+/,"")}`:null}function Ve(e){let t=e;if(typeof e=="string"){const r=e.trim();if(!r)return[];try{t=JSON.parse(r)}catch{return[]}}if(!Array.isArray(t))return[];const a=[];for(const r of t){if(!r||typeof r!="object")continue;const n=String(r.label??"").trim().slice(0,200),s=gt(r.url),o=String(r.id??"").trim()||`att_${Date.now()}_${a.length}`,i=r.page_count;let l=null;if(i!=null&&i!==""){const d=Number(i);Number.isFinite(d)&&d>0&&d<=9999&&(l=Math.floor(d))}if(!(!n||!s)&&(a.push(l!=null?{id:o,label:n,url:s,page_count:l}:{id:o,label:n,url:s}),a.length>=ta))break}return a}function ti(e){const t=[];for(const a of Ar){const r=gt(e[a.column]);r&&t.push({id:`legacy-${a.column}`,label:a.label,url:r})}return t}function ge(e){if(!e)return[];const t=Ve(e.attachments_json),a=ti(e);if(t.length===0)return a;const r=new Set(t.map(s=>s.url)),n=[...t];for(const s of a)if(!r.has(s.url)&&(n.push(s),r.add(s.url),n.length>=ta))break;return n}const ai=`
+  </div>`,l=await fetch(ti,{method:"POST",headers:{Authorization:`Bearer ${t}`,"Content-Type":"application/json"},body:JSON.stringify({from:a,to:[r],subject:s,text:o,html:i})}),d=await l.text();if(!l.ok){let c=d.slice(0,500);try{const p=JSON.parse(d);p.message?c=p.message:p.name&&(c=p.name)}catch{}return{ok:!1,error:c}}return{ok:!0}}function Ma(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}const Dr='*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.\\!container{width:100%!important}.container{width:100%}@media (min-width:640px){.\\!container{max-width:640px!important}.container{max-width:640px}}@media (min-width:768px){.\\!container{max-width:768px!important}.container{max-width:768px}}@media (min-width:1024px){.\\!container{max-width:1024px!important}.container{max-width:1024px}}@media (min-width:1280px){.\\!container{max-width:1280px!important}.container{max-width:1280px}}@media (min-width:1536px){.\\!container{max-width:1536px!important}.container{max-width:1536px}}.pointer-events-none{pointer-events:none}.\\!visible{visibility:visible!important}.visible{visibility:visible}.collapse{visibility:collapse}.static{position:static}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0}.bottom-0{bottom:0}.bottom-6{bottom:1.5rem}.left-0{left:0}.left-1\\/2{left:50%}.left-3{left:.75rem}.left-4{left:1rem}.right-0{right:0}.right-3{right:.75rem}.right-6{right:1.5rem}.top-0{top:0}.top-1\\/2{top:50%}.top-3{top:.75rem}.top-3\\.5{top:.875rem}.top-4{top:1rem}.z-20{z-index:20}.z-40{z-index:40}.z-50{z-index:50}.z-\\[1200\\]{z-index:1200}.z-\\[2000\\]{z-index:2000}.col-span-2{grid-column:span 2/span 2}.col-span-full{grid-column:1/-1}.-mx-4{margin-left:-1rem;margin-right:-1rem}.mx-2{margin-left:.5rem;margin-right:.5rem}.mx-4{margin-left:1rem;margin-right:1rem}.mx-auto{margin-left:auto;margin-right:auto}.my-1{margin-top:.25rem;margin-bottom:.25rem}.my-2{margin-top:.5rem;margin-bottom:.5rem}.my-4{margin-top:1rem;margin-bottom:1rem}.my-6{margin-top:1.5rem;margin-bottom:1.5rem}.my-8{margin-top:2rem;margin-bottom:2rem}.-mt-2{margin-top:-.5rem}.mb-0{margin-bottom:0}.mb-1{margin-bottom:.25rem}.mb-1\\.5{margin-bottom:.375rem}.mb-12{margin-bottom:3rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mb-5{margin-bottom:1.25rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.ml-1{margin-left:.25rem}.ml-2{margin-left:.5rem}.ml-3{margin-left:.75rem}.ml-4{margin-left:1rem}.mr-1{margin-right:.25rem}.mr-2{margin-right:.5rem}.mr-3{margin-right:.75rem}.mr-4{margin-right:1rem}.mr-auto{margin-right:auto}.ms-auto{margin-inline-start:auto}.mt-0\\.5{margin-top:.125rem}.mt-1{margin-top:.25rem}.mt-1\\.5{margin-top:.375rem}.mt-12{margin-top:3rem}.mt-16{margin-top:4rem}.mt-2{margin-top:.5rem}.mt-20{margin-top:5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.line-clamp-3{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}.block{display:block}.inline-block{display:inline-block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.\\!table{display:table!important}.table{display:table}.grid{display:grid}.\\!hidden{display:none!important}.hidden{display:none}.h-1{height:.25rem}.h-10{height:2.5rem}.h-12{height:3rem}.h-16{height:4rem}.h-2{height:.5rem}.h-2\\.5{height:.625rem}.h-20{height:5rem}.h-3{height:.75rem}.h-4{height:1rem}.h-48{height:12rem}.h-5{height:1.25rem}.h-7{height:1.75rem}.h-8{height:2rem}.h-9{height:2.25rem}.h-full{height:100%}.h-screen{height:100vh}.max-h-24{max-height:6rem}.max-h-28{max-height:7rem}.max-h-64{max-height:16rem}.max-h-72{max-height:18rem}.max-h-96{max-height:24rem}.max-h-\\[90vh\\]{max-height:90vh}.max-h-\\[95vh\\]{max-height:95vh}.min-h-0{min-height:0}.min-h-16{min-height:4rem}.min-h-6{min-height:1.5rem}.min-h-\\[5rem\\]{min-height:5rem}.min-h-screen{min-height:100vh}.w-10{width:2.5rem}.w-12{width:3rem}.w-16{width:4rem}.w-2{width:.5rem}.w-2\\.5{width:.625rem}.w-20{width:5rem}.w-24{width:6rem}.w-3{width:.75rem}.w-36{width:9rem}.w-4{width:1rem}.w-48{width:12rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-7{width:1.75rem}.w-72{width:18rem}.w-8{width:2rem}.w-80{width:20rem}.w-full{width:100%}.w-max{width:-moz-max-content;width:max-content}.w-px{width:1px}.min-w-0{min-width:0}.min-w-\\[1\\.25rem\\]{min-width:1.25rem}.min-w-\\[10rem\\]{min-width:10rem}.min-w-\\[11rem\\]{min-width:11rem}.min-w-\\[14rem\\]{min-width:14rem}.min-w-\\[180px\\]{min-width:180px}.min-w-\\[8rem\\]{min-width:8rem}.min-w-full{min-width:100%}.min-w-max{min-width:-moz-max-content;min-width:max-content}.max-w-2xl{max-width:42rem}.max-w-3xl{max-width:48rem}.max-w-4xl{max-width:56rem}.max-w-5xl{max-width:64rem}.max-w-6xl{max-width:72rem}.max-w-7xl{max-width:80rem}.max-w-\\[220px\\]{max-width:220px}.max-w-\\[240px\\]{max-width:240px}.max-w-\\[min\\(100vw-12rem\\2c 28rem\\)\\]{max-width:min(100vw - 12rem,28rem)}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}.max-w-xs{max-width:20rem}.flex-1{flex:1 1 0%}.flex-shrink{flex-shrink:1}.flex-shrink-0,.shrink-0{flex-shrink:0}.border-collapse{border-collapse:collapse}.-translate-x-1\\/2{--tw-translate-x:-50%}.-translate-x-1\\/2,.-translate-y-1\\/2{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.-translate-y-1\\/2{--tw-translate-y:-50%}.translate-x-0{--tw-translate-x:0px}.translate-x-0,.translate-x-full{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.translate-x-full{--tw-translate-x:100%}.rotate-180{--tw-rotate:180deg}.rotate-180,.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-not-allowed{cursor:not-allowed}.cursor-pointer{cursor:pointer}.resize-none{resize:none}.resize-y{resize:vertical}.resize{resize:both}.list-inside{list-style-position:inside}.list-disc{list-style-type:disc}.appearance-none{-webkit-appearance:none;-moz-appearance:none;appearance:none}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-end{align-items:flex-end}.items-center{align-items:center}.items-stretch{align-items:stretch}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:.25rem}.gap-12{gap:3rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}.space-x-2>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.5rem*var(--tw-space-x-reverse));margin-left:calc(.5rem*(1 - var(--tw-space-x-reverse)))}.space-x-3>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.75rem*var(--tw-space-x-reverse));margin-left:calc(.75rem*(1 - var(--tw-space-x-reverse)))}.space-x-4>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(1rem*var(--tw-space-x-reverse));margin-left:calc(1rem*(1 - var(--tw-space-x-reverse)))}.space-y-0\\.5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.125rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.125rem*var(--tw-space-y-reverse))}.space-y-1>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.25rem*var(--tw-space-y-reverse))}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.5rem*var(--tw-space-y-reverse))}.space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.75rem*var(--tw-space-y-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem*var(--tw-space-y-reverse))}.space-y-5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem*var(--tw-space-y-reverse))}.space-y-6>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem*var(--tw-space-y-reverse))}.space-x-reverse>:not([hidden])~:not([hidden]){--tw-space-x-reverse:1}.divide-y>:not([hidden])~:not([hidden]){--tw-divide-y-reverse:0;border-top-width:calc(1px*(1 - var(--tw-divide-y-reverse)));border-bottom-width:calc(1px*var(--tw-divide-y-reverse))}.divide-gray-100>:not([hidden])~:not([hidden]){--tw-divide-opacity:1;border-color:rgb(243 244 246/var(--tw-divide-opacity,1))}.divide-gray-200>:not([hidden])~:not([hidden]){--tw-divide-opacity:1;border-color:rgb(229 231 235/var(--tw-divide-opacity,1))}.self-start{align-self:flex-start}.overflow-auto{overflow:auto}.overflow-hidden{overflow:hidden}.overflow-visible{overflow:visible}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis}.truncate,.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.break-words{overflow-wrap:break-word}.break-all{word-break:break-all}.rounded{border-radius:.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-md{border-radius:.375rem}.rounded-xl{border-radius:.75rem}.rounded-b-lg{border-bottom-right-radius:.5rem}.rounded-b-lg,.rounded-l-lg{border-bottom-left-radius:.5rem}.rounded-l-lg{border-top-left-radius:.5rem}.rounded-r-lg{border-top-right-radius:.5rem;border-bottom-right-radius:.5rem}.rounded-s-xl{border-start-start-radius:.75rem;border-end-start-radius:.75rem}.rounded-t-2xl{border-top-left-radius:1rem;border-top-right-radius:1rem}.rounded-t-lg{border-top-left-radius:.5rem;border-top-right-radius:.5rem}.rounded-t-xl{border-top-left-radius:.75rem;border-top-right-radius:.75rem}.rounded-bl-2xl{border-bottom-left-radius:1rem}.rounded-bl-xl{border-bottom-left-radius:.75rem}.rounded-tr-xl{border-top-right-radius:.75rem}.border{border-width:1px}.border-0{border-width:0}.border-2{border-width:2px}.border-4{border-width:4px}.border-b{border-bottom-width:1px}.border-b-2{border-bottom-width:2px}.border-b-4{border-bottom-width:4px}.border-l{border-left-width:1px}.border-l-4{border-left-width:4px}.border-r{border-right-width:1px}.border-r-4{border-right-width:4px}.border-s{border-inline-start-width:1px}.border-t{border-top-width:1px}.border-t-2{border-top-width:2px}.border-t-4{border-top-width:4px}.border-dashed{border-style:dashed}.border-amber-100{--tw-border-opacity:1;border-color:rgb(254 243 199/var(--tw-border-opacity,1))}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138/var(--tw-border-opacity,1))}.border-amber-500{--tw-border-opacity:1;border-color:rgb(245 158 11/var(--tw-border-opacity,1))}.border-blue-200{--tw-border-opacity:1;border-color:rgb(191 219 254/var(--tw-border-opacity,1))}.border-blue-300{--tw-border-opacity:1;border-color:rgb(147 197 253/var(--tw-border-opacity,1))}.border-blue-400{--tw-border-opacity:1;border-color:rgb(96 165 250/var(--tw-border-opacity,1))}.border-blue-500{--tw-border-opacity:1;border-color:rgb(59 130 246/var(--tw-border-opacity,1))}.border-blue-600{--tw-border-opacity:1;border-color:rgb(37 99 235/var(--tw-border-opacity,1))}.border-cyan-500{--tw-border-opacity:1;border-color:rgb(6 182 212/var(--tw-border-opacity,1))}.border-emerald-200{--tw-border-opacity:1;border-color:rgb(167 243 208/var(--tw-border-opacity,1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246/var(--tw-border-opacity,1))}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235/var(--tw-border-opacity,1))}.border-gray-200\\/80{border-color:rgba(229,231,235,.8)}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219/var(--tw-border-opacity,1))}.border-gray-500{--tw-border-opacity:1;border-color:rgb(107 114 128/var(--tw-border-opacity,1))}.border-green-100{--tw-border-opacity:1;border-color:rgb(220 252 231/var(--tw-border-opacity,1))}.border-green-200{--tw-border-opacity:1;border-color:rgb(187 247 208/var(--tw-border-opacity,1))}.border-green-300{--tw-border-opacity:1;border-color:rgb(134 239 172/var(--tw-border-opacity,1))}.border-green-400{--tw-border-opacity:1;border-color:rgb(74 222 128/var(--tw-border-opacity,1))}.border-green-500{--tw-border-opacity:1;border-color:rgb(34 197 94/var(--tw-border-opacity,1))}.border-green-600{--tw-border-opacity:1;border-color:rgb(22 163 74/var(--tw-border-opacity,1))}.border-indigo-200{--tw-border-opacity:1;border-color:rgb(199 210 254/var(--tw-border-opacity,1))}.border-indigo-500{--tw-border-opacity:1;border-color:rgb(99 102 241/var(--tw-border-opacity,1))}.border-indigo-600{--tw-border-opacity:1;border-color:rgb(79 70 229/var(--tw-border-opacity,1))}.border-lime-100{--tw-border-opacity:1;border-color:rgb(236 252 203/var(--tw-border-opacity,1))}.border-orange-100{--tw-border-opacity:1;border-color:rgb(255 237 213/var(--tw-border-opacity,1))}.border-orange-200{--tw-border-opacity:1;border-color:rgb(254 215 170/var(--tw-border-opacity,1))}.border-orange-300{--tw-border-opacity:1;border-color:rgb(253 186 116/var(--tw-border-opacity,1))}.border-pink-500{--tw-border-opacity:1;border-color:rgb(236 72 153/var(--tw-border-opacity,1))}.border-purple-200{--tw-border-opacity:1;border-color:rgb(233 213 255/var(--tw-border-opacity,1))}.border-purple-400{--tw-border-opacity:1;border-color:rgb(192 132 252/var(--tw-border-opacity,1))}.border-purple-500{--tw-border-opacity:1;border-color:rgb(168 85 247/var(--tw-border-opacity,1))}.border-purple-600{--tw-border-opacity:1;border-color:rgb(147 51 234/var(--tw-border-opacity,1))}.border-red-200{--tw-border-opacity:1;border-color:rgb(254 202 202/var(--tw-border-opacity,1))}.border-red-300{--tw-border-opacity:1;border-color:rgb(252 165 165/var(--tw-border-opacity,1))}.border-red-400{--tw-border-opacity:1;border-color:rgb(248 113 113/var(--tw-border-opacity,1))}.border-red-500{--tw-border-opacity:1;border-color:rgb(239 68 68/var(--tw-border-opacity,1))}.border-red-600{--tw-border-opacity:1;border-color:rgb(220 38 38/var(--tw-border-opacity,1))}.border-slate-200\\/90{border-color:rgba(226,232,240,.9)}.border-transparent{border-color:transparent}.border-violet-200{--tw-border-opacity:1;border-color:rgb(221 214 254/var(--tw-border-opacity,1))}.border-white{--tw-border-opacity:1;border-color:rgb(255 255 255/var(--tw-border-opacity,1))}.border-white\\/15{border-color:hsla(0,0%,100%,.15)}.border-white\\/20{border-color:hsla(0,0%,100%,.2)}.border-white\\/30{border-color:hsla(0,0%,100%,.3)}.border-white\\/40{border-color:hsla(0,0%,100%,.4)}.border-yellow-100{--tw-border-opacity:1;border-color:rgb(254 249 195/var(--tw-border-opacity,1))}.border-yellow-200{--tw-border-opacity:1;border-color:rgb(254 240 138/var(--tw-border-opacity,1))}.border-yellow-300{--tw-border-opacity:1;border-color:rgb(253 224 71/var(--tw-border-opacity,1))}.border-yellow-400{--tw-border-opacity:1;border-color:rgb(250 204 21/var(--tw-border-opacity,1))}.border-yellow-500{--tw-border-opacity:1;border-color:rgb(234 179 8/var(--tw-border-opacity,1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199/var(--tw-bg-opacity,1))}.bg-amber-50{--tw-bg-opacity:1;background-color:rgb(255 251 235/var(--tw-bg-opacity,1))}.bg-amber-50\\/90{background-color:rgba(255,251,235,.9)}.bg-amber-500{--tw-bg-opacity:1;background-color:rgb(245 158 11/var(--tw-bg-opacity,1))}.bg-amber-600{--tw-bg-opacity:1;background-color:rgb(217 119 6/var(--tw-bg-opacity,1))}.bg-black{--tw-bg-opacity:1;background-color:rgb(0 0 0/var(--tw-bg-opacity,1))}.bg-black\\/50{background-color:rgba(0,0,0,.5)}.bg-blue-100{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity,1))}.bg-blue-50{--tw-bg-opacity:1;background-color:rgb(239 246 255/var(--tw-bg-opacity,1))}.bg-blue-500{--tw-bg-opacity:1;background-color:rgb(59 130 246/var(--tw-bg-opacity,1))}.bg-blue-600{--tw-bg-opacity:1;background-color:rgb(37 99 235/var(--tw-bg-opacity,1))}.bg-cyan-500{--tw-bg-opacity:1;background-color:rgb(6 182 212/var(--tw-bg-opacity,1))}.bg-cyan-600{--tw-bg-opacity:1;background-color:rgb(8 145 178/var(--tw-bg-opacity,1))}.bg-emerald-100{--tw-bg-opacity:1;background-color:rgb(209 250 229/var(--tw-bg-opacity,1))}.bg-emerald-50{--tw-bg-opacity:1;background-color:rgb(236 253 245/var(--tw-bg-opacity,1))}.bg-emerald-600{--tw-bg-opacity:1;background-color:rgb(5 150 105/var(--tw-bg-opacity,1))}.bg-fuchsia-600{--tw-bg-opacity:1;background-color:rgb(192 38 211/var(--tw-bg-opacity,1))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity,1))}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235/var(--tw-bg-opacity,1))}.bg-gray-300{--tw-bg-opacity:1;background-color:rgb(209 213 219/var(--tw-bg-opacity,1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251/var(--tw-bg-opacity,1))}.bg-gray-50\\/80{background-color:rgba(249,250,251,.8)}.bg-gray-500{--tw-bg-opacity:1;background-color:rgb(107 114 128/var(--tw-bg-opacity,1))}.bg-gray-600{--tw-bg-opacity:1;background-color:rgb(75 85 99/var(--tw-bg-opacity,1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55/var(--tw-bg-opacity,1))}.bg-gray-900{--tw-bg-opacity:1;background-color:rgb(17 24 39/var(--tw-bg-opacity,1))}.bg-green-100{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity,1))}.bg-green-50{--tw-bg-opacity:1;background-color:rgb(240 253 244/var(--tw-bg-opacity,1))}.bg-green-500{--tw-bg-opacity:1;background-color:rgb(34 197 94/var(--tw-bg-opacity,1))}.bg-green-600{--tw-bg-opacity:1;background-color:rgb(22 163 74/var(--tw-bg-opacity,1))}.bg-indigo-100{--tw-bg-opacity:1;background-color:rgb(224 231 255/var(--tw-bg-opacity,1))}.bg-indigo-50{--tw-bg-opacity:1;background-color:rgb(238 242 255/var(--tw-bg-opacity,1))}.bg-indigo-500{--tw-bg-opacity:1;background-color:rgb(99 102 241/var(--tw-bg-opacity,1))}.bg-indigo-600{--tw-bg-opacity:1;background-color:rgb(79 70 229/var(--tw-bg-opacity,1))}.bg-lime-50{--tw-bg-opacity:1;background-color:rgb(247 254 231/var(--tw-bg-opacity,1))}.bg-lime-500{--tw-bg-opacity:1;background-color:rgb(132 204 22/var(--tw-bg-opacity,1))}.bg-orange-100{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity,1))}.bg-orange-50{--tw-bg-opacity:1;background-color:rgb(255 247 237/var(--tw-bg-opacity,1))}.bg-orange-50\\/80{background-color:rgba(255,247,237,.8)}.bg-orange-500{--tw-bg-opacity:1;background-color:rgb(249 115 22/var(--tw-bg-opacity,1))}.bg-orange-600{--tw-bg-opacity:1;background-color:rgb(234 88 12/var(--tw-bg-opacity,1))}.bg-pink-100{--tw-bg-opacity:1;background-color:rgb(252 231 243/var(--tw-bg-opacity,1))}.bg-pink-500{--tw-bg-opacity:1;background-color:rgb(236 72 153/var(--tw-bg-opacity,1))}.bg-pink-600{--tw-bg-opacity:1;background-color:rgb(219 39 119/var(--tw-bg-opacity,1))}.bg-purple-100{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity,1))}.bg-purple-50{--tw-bg-opacity:1;background-color:rgb(250 245 255/var(--tw-bg-opacity,1))}.bg-purple-500{--tw-bg-opacity:1;background-color:rgb(168 85 247/var(--tw-bg-opacity,1))}.bg-purple-600{--tw-bg-opacity:1;background-color:rgb(147 51 234/var(--tw-bg-opacity,1))}.bg-purple-800{--tw-bg-opacity:1;background-color:rgb(107 33 168/var(--tw-bg-opacity,1))}.bg-red-100{--tw-bg-opacity:1;background-color:rgb(254 226 226/var(--tw-bg-opacity,1))}.bg-red-50{--tw-bg-opacity:1;background-color:rgb(254 242 242/var(--tw-bg-opacity,1))}.bg-red-500{--tw-bg-opacity:1;background-color:rgb(239 68 68/var(--tw-bg-opacity,1))}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38/var(--tw-bg-opacity,1))}.bg-slate-50\\/80{background-color:rgba(248,250,252,.8)}.bg-slate-50\\/90{background-color:rgba(248,250,252,.9)}.bg-slate-700{--tw-bg-opacity:1;background-color:rgb(51 65 85/var(--tw-bg-opacity,1))}.bg-teal-100{--tw-bg-opacity:1;background-color:rgb(204 251 241/var(--tw-bg-opacity,1))}.bg-teal-500{--tw-bg-opacity:1;background-color:rgb(20 184 166/var(--tw-bg-opacity,1))}.bg-teal-600{--tw-bg-opacity:1;background-color:rgb(13 148 136/var(--tw-bg-opacity,1))}.bg-violet-50{--tw-bg-opacity:1;background-color:rgb(245 243 255/var(--tw-bg-opacity,1))}.bg-violet-600{--tw-bg-opacity:1;background-color:rgb(124 58 237/var(--tw-bg-opacity,1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.bg-white\\/10{background-color:hsla(0,0%,100%,.1)}.bg-white\\/15{background-color:hsla(0,0%,100%,.15)}.bg-white\\/20{background-color:hsla(0,0%,100%,.2)}.bg-white\\/60{background-color:hsla(0,0%,100%,.6)}.bg-white\\/80{background-color:hsla(0,0%,100%,.8)}.bg-white\\/90{background-color:hsla(0,0%,100%,.9)}.bg-white\\/95{background-color:hsla(0,0%,100%,.95)}.bg-yellow-100{--tw-bg-opacity:1;background-color:rgb(254 249 195/var(--tw-bg-opacity,1))}.bg-yellow-400{--tw-bg-opacity:1;background-color:rgb(250 204 21/var(--tw-bg-opacity,1))}.bg-yellow-50{--tw-bg-opacity:1;background-color:rgb(254 252 232/var(--tw-bg-opacity,1))}.bg-yellow-500{--tw-bg-opacity:1;background-color:rgb(234 179 8/var(--tw-bg-opacity,1))}.bg-yellow-600{--tw-bg-opacity:1;background-color:rgb(202 138 4/var(--tw-bg-opacity,1))}.bg-opacity-50{--tw-bg-opacity:0.5}.bg-gradient-to-b{background-image:linear-gradient(to bottom,var(--tw-gradient-stops))}.bg-gradient-to-br{background-image:linear-gradient(to bottom right,var(--tw-gradient-stops))}.bg-gradient-to-l{background-image:linear-gradient(to left,var(--tw-gradient-stops))}.bg-gradient-to-r{background-image:linear-gradient(to right,var(--tw-gradient-stops))}.from-amber-50{--tw-gradient-from:#fffbeb var(--tw-gradient-from-position);--tw-gradient-to:rgba(255,251,235,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-amber-500{--tw-gradient-from:#f59e0b var(--tw-gradient-from-position);--tw-gradient-to:rgba(245,158,11,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-amber-600{--tw-gradient-from:#d97706 var(--tw-gradient-from-position);--tw-gradient-to:rgba(217,119,6,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-50{--tw-gradient-from:#eff6ff var(--tw-gradient-from-position);--tw-gradient-to:rgba(239,246,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-500{--tw-gradient-from:#3b82f6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(59,130,246,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-600{--tw-gradient-from:#2563eb var(--tw-gradient-from-position);--tw-gradient-to:rgba(37,99,235,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-700{--tw-gradient-from:#1d4ed8 var(--tw-gradient-from-position);--tw-gradient-to:rgba(29,78,216,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-cyan-50{--tw-gradient-from:#ecfeff var(--tw-gradient-from-position);--tw-gradient-to:rgba(236,254,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-cyan-500{--tw-gradient-from:#06b6d4 var(--tw-gradient-from-position);--tw-gradient-to:rgba(6,182,212,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-emerald-500{--tw-gradient-from:#10b981 var(--tw-gradient-from-position);--tw-gradient-to:rgba(16,185,129,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-emerald-600{--tw-gradient-from:#059669 var(--tw-gradient-from-position);--tw-gradient-to:rgba(5,150,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-gray-50{--tw-gradient-from:#f9fafb var(--tw-gradient-from-position);--tw-gradient-to:rgba(249,250,251,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-gray-500{--tw-gradient-from:#6b7280 var(--tw-gradient-from-position);--tw-gradient-to:hsla(220,9%,46%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-green-50{--tw-gradient-from:#f0fdf4 var(--tw-gradient-from-position);--tw-gradient-to:rgba(240,253,244,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-green-500{--tw-gradient-from:#22c55e var(--tw-gradient-from-position);--tw-gradient-to:rgba(34,197,94,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-green-600{--tw-gradient-from:#16a34a var(--tw-gradient-from-position);--tw-gradient-to:rgba(22,163,74,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-indigo-500{--tw-gradient-from:#6366f1 var(--tw-gradient-from-position);--tw-gradient-to:rgba(99,102,241,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-indigo-600{--tw-gradient-from:#4f46e5 var(--tw-gradient-from-position);--tw-gradient-to:rgba(79,70,229,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-orange-400{--tw-gradient-from:#fb923c var(--tw-gradient-from-position);--tw-gradient-to:rgba(251,146,60,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-orange-500{--tw-gradient-from:#f97316 var(--tw-gradient-from-position);--tw-gradient-to:rgba(249,115,22,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-orange-600{--tw-gradient-from:#ea580c var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,88,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-pink-500{--tw-gradient-from:#ec4899 var(--tw-gradient-from-position);--tw-gradient-to:rgba(236,72,153,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-100{--tw-gradient-from:#f3e8ff var(--tw-gradient-from-position);--tw-gradient-to:rgba(243,232,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-50{--tw-gradient-from:#faf5ff var(--tw-gradient-from-position);--tw-gradient-to:rgba(250,245,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-500{--tw-gradient-from:#a855f7 var(--tw-gradient-from-position);--tw-gradient-to:rgba(168,85,247,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-600{--tw-gradient-from:#9333ea var(--tw-gradient-from-position);--tw-gradient-to:rgba(147,51,234,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-red-50{--tw-gradient-from:#fef2f2 var(--tw-gradient-from-position);--tw-gradient-to:hsla(0,86%,97%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-red-500{--tw-gradient-from:#ef4444 var(--tw-gradient-from-position);--tw-gradient-to:rgba(239,68,68,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-slate-600{--tw-gradient-from:#475569 var(--tw-gradient-from-position);--tw-gradient-to:rgba(71,85,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-teal-50{--tw-gradient-from:#f0fdfa var(--tw-gradient-from-position);--tw-gradient-to:rgba(240,253,250,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-teal-500{--tw-gradient-from:#14b8a6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(20,184,166,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-teal-600{--tw-gradient-from:#0d9488 var(--tw-gradient-from-position);--tw-gradient-to:rgba(13,148,136,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-violet-500{--tw-gradient-from:#8b5cf6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(139,92,246,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-violet-600{--tw-gradient-from:#7c3aed var(--tw-gradient-from-position);--tw-gradient-to:rgba(124,58,237,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-400{--tw-gradient-from:#facc15 var(--tw-gradient-from-position);--tw-gradient-to:rgba(250,204,21,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-50{--tw-gradient-from:#fefce8 var(--tw-gradient-from-position);--tw-gradient-to:hsla(55,92%,95%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-500{--tw-gradient-from:#eab308 var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,179,8,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-600{--tw-gradient-from:#ca8a04 var(--tw-gradient-from-position);--tw-gradient-to:rgba(202,138,4,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.via-blue-50{--tw-gradient-to:rgba(239,246,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#eff6ff var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-green-50{--tw-gradient-to:rgba(240,253,244,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#f0fdf4 var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-indigo-700{--tw-gradient-to:rgba(67,56,202,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#4338ca var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-orange-600{--tw-gradient-to:rgba(234,88,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#ea580c var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-purple-50{--tw-gradient-to:rgba(250,245,255,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#faf5ff var(--tw-gradient-via-position),var(--tw-gradient-to)}.via-white{--tw-gradient-to:hsla(0,0%,100%,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),#fff var(--tw-gradient-via-position),var(--tw-gradient-to)}.to-amber-100{--tw-gradient-to:#fef3c7 var(--tw-gradient-to-position)}.to-amber-600{--tw-gradient-to:#d97706 var(--tw-gradient-to-position)}.to-amber-800{--tw-gradient-to:#92400e var(--tw-gradient-to-position)}.to-blue-100{--tw-gradient-to:#dbeafe var(--tw-gradient-to-position)}.to-blue-50{--tw-gradient-to:#eff6ff var(--tw-gradient-to-position)}.to-blue-600{--tw-gradient-to:#2563eb var(--tw-gradient-to-position)}.to-blue-700{--tw-gradient-to:#1d4ed8 var(--tw-gradient-to-position)}.to-blue-800{--tw-gradient-to:#1e40af var(--tw-gradient-to-position)}.to-blue-900{--tw-gradient-to:#1e3a8a var(--tw-gradient-to-position)}.to-cyan-100{--tw-gradient-to:#cffafe var(--tw-gradient-to-position)}.to-cyan-600{--tw-gradient-to:#0891b2 var(--tw-gradient-to-position)}.to-emerald-600{--tw-gradient-to:#059669 var(--tw-gradient-to-position)}.to-emerald-800{--tw-gradient-to:#065f46 var(--tw-gradient-to-position)}.to-gray-100{--tw-gradient-to:#f3f4f6 var(--tw-gradient-to-position)}.to-gray-600{--tw-gradient-to:#4b5563 var(--tw-gradient-to-position)}.to-gray-700{--tw-gradient-to:#374151 var(--tw-gradient-to-position)}.to-green-100{--tw-gradient-to:#dcfce7 var(--tw-gradient-to-position)}.to-green-500{--tw-gradient-to:#22c55e var(--tw-gradient-to-position)}.to-green-600{--tw-gradient-to:#16a34a var(--tw-gradient-to-position)}.to-green-700{--tw-gradient-to:#15803d var(--tw-gradient-to-position)}.to-indigo-100{--tw-gradient-to:#e0e7ff var(--tw-gradient-to-position)}.to-indigo-50{--tw-gradient-to:#eef2ff var(--tw-gradient-to-position)}.to-indigo-600{--tw-gradient-to:#4f46e5 var(--tw-gradient-to-position)}.to-indigo-800{--tw-gradient-to:#3730a3 var(--tw-gradient-to-position)}.to-orange-100{--tw-gradient-to:#ffedd5 var(--tw-gradient-to-position)}.to-orange-500{--tw-gradient-to:#f97316 var(--tw-gradient-to-position)}.to-orange-600{--tw-gradient-to:#ea580c var(--tw-gradient-to-position)}.to-pink-100{--tw-gradient-to:#fce7f3 var(--tw-gradient-to-position)}.to-pink-50{--tw-gradient-to:#fdf2f8 var(--tw-gradient-to-position)}.to-pink-500{--tw-gradient-to:#ec4899 var(--tw-gradient-to-position)}.to-pink-600{--tw-gradient-to:#db2777 var(--tw-gradient-to-position)}.to-purple-100{--tw-gradient-to:#f3e8ff var(--tw-gradient-to-position)}.to-purple-50{--tw-gradient-to:#faf5ff var(--tw-gradient-to-position)}.to-purple-600{--tw-gradient-to:#9333ea var(--tw-gradient-to-position)}.to-purple-700{--tw-gradient-to:#7e22ce var(--tw-gradient-to-position)}.to-red-500{--tw-gradient-to:#ef4444 var(--tw-gradient-to-position)}.to-red-600{--tw-gradient-to:#dc2626 var(--tw-gradient-to-position)}.to-rose-600{--tw-gradient-to:#e11d48 var(--tw-gradient-to-position)}.to-slate-700{--tw-gradient-to:#334155 var(--tw-gradient-to-position)}.to-teal-100{--tw-gradient-to:#ccfbf1 var(--tw-gradient-to-position)}.to-teal-600{--tw-gradient-to:#0d9488 var(--tw-gradient-to-position)}.to-teal-700{--tw-gradient-to:#0f766e var(--tw-gradient-to-position)}.to-teal-800{--tw-gradient-to:#115e59 var(--tw-gradient-to-position)}.to-violet-600{--tw-gradient-to:#7c3aed var(--tw-gradient-to-position)}.to-violet-800{--tw-gradient-to:#5b21b6 var(--tw-gradient-to-position)}.to-yellow-100{--tw-gradient-to:#fef9c3 var(--tw-gradient-to-position)}.to-yellow-600{--tw-gradient-to:#ca8a04 var(--tw-gradient-to-position)}.to-yellow-700{--tw-gradient-to:#a16207 var(--tw-gradient-to-position)}.to-yellow-800{--tw-gradient-to:#854d0e var(--tw-gradient-to-position)}.object-contain{-o-object-fit:contain;object-fit:contain}.object-cover{-o-object-fit:cover;object-fit:cover}.p-12{padding:3rem}.p-16{padding:4rem}.p-2{padding:.5rem}.p-2\\.5{padding:.625rem}.p-3{padding:.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1{padding-left:.25rem;padding-right:.25rem}.px-1\\.5{padding-left:.375rem;padding-right:.375rem}.px-12{padding-left:3rem;padding-right:3rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-2\\.5{padding-left:.625rem;padding-right:.625rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.px-8{padding-left:2rem;padding-right:2rem}.py-0\\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-1\\.5{padding-top:.375rem;padding-bottom:.375rem}.py-10{padding-top:2.5rem;padding-bottom:2.5rem}.py-12{padding-top:3rem;padding-bottom:3rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-2\\.5{padding-top:.625rem;padding-bottom:.625rem}.py-20{padding-top:5rem;padding-bottom:5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-3\\.5{padding-top:.875rem;padding-bottom:.875rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-6{padding-top:1.5rem;padding-bottom:1.5rem}.py-8{padding-top:2rem;padding-bottom:2rem}.pb-1{padding-bottom:.25rem}.pb-2{padding-bottom:.5rem}.pb-3{padding-bottom:.75rem}.pb-4{padding-bottom:1rem}.pb-6{padding-bottom:1.5rem}.pb-8{padding-bottom:2rem}.pl-10{padding-left:2.5rem}.pl-3{padding-left:.75rem}.pl-4{padding-left:1rem}.pr-1{padding-right:.25rem}.pr-10{padding-right:2.5rem}.pr-4{padding-right:1rem}.pr-6{padding-right:1.5rem}.pr-9{padding-right:2.25rem}.pt-1{padding-top:.25rem}.pt-16{padding-top:4rem}.pt-2{padding-top:.5rem}.pt-3{padding-top:.75rem}.pt-4{padding-top:1rem}.pt-6{padding-top:1.5rem}.pt-8{padding-top:2rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.text-start{text-align:start}.align-middle{vertical-align:middle}.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-5xl{font-size:3rem;line-height:1}.text-6xl{font-size:3.75rem;line-height:1}.text-\\[10px\\]{font-size:10px}.text-\\[11px\\]{font-size:11px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.italic{font-style:italic}.leading-5{line-height:1.25rem}.leading-none{line-height:1}.leading-relaxed{line-height:1.625}.leading-tight{line-height:1.25}.tracking-wide{letter-spacing:.025em}.tracking-wider{letter-spacing:.05em}.tracking-widest{letter-spacing:.1em}.text-amber-500{--tw-text-opacity:1;color:rgb(245 158 11/var(--tw-text-opacity,1))}.text-amber-600{--tw-text-opacity:1;color:rgb(217 119 6/var(--tw-text-opacity,1))}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9/var(--tw-text-opacity,1))}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14/var(--tw-text-opacity,1))}.text-amber-900{--tw-text-opacity:1;color:rgb(120 53 15/var(--tw-text-opacity,1))}.text-blue-100{--tw-text-opacity:1;color:rgb(219 234 254/var(--tw-text-opacity,1))}.text-blue-200{--tw-text-opacity:1;color:rgb(191 219 254/var(--tw-text-opacity,1))}.text-blue-300{--tw-text-opacity:1;color:rgb(147 197 253/var(--tw-text-opacity,1))}.text-blue-500{--tw-text-opacity:1;color:rgb(59 130 246/var(--tw-text-opacity,1))}.text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity,1))}.text-blue-700{--tw-text-opacity:1;color:rgb(29 78 216/var(--tw-text-opacity,1))}.text-blue-800{--tw-text-opacity:1;color:rgb(30 64 175/var(--tw-text-opacity,1))}.text-blue-900{--tw-text-opacity:1;color:rgb(30 58 138/var(--tw-text-opacity,1))}.text-cyan-100{--tw-text-opacity:1;color:rgb(207 250 254/var(--tw-text-opacity,1))}.text-cyan-600{--tw-text-opacity:1;color:rgb(8 145 178/var(--tw-text-opacity,1))}.text-emerald-100{--tw-text-opacity:1;color:rgb(209 250 229/var(--tw-text-opacity,1))}.text-emerald-200{--tw-text-opacity:1;color:rgb(167 243 208/var(--tw-text-opacity,1))}.text-emerald-500{--tw-text-opacity:1;color:rgb(16 185 129/var(--tw-text-opacity,1))}.text-emerald-600{--tw-text-opacity:1;color:rgb(5 150 105/var(--tw-text-opacity,1))}.text-emerald-700{--tw-text-opacity:1;color:rgb(4 120 87/var(--tw-text-opacity,1))}.text-emerald-800{--tw-text-opacity:1;color:rgb(6 95 70/var(--tw-text-opacity,1))}.text-gray-300{--tw-text-opacity:1;color:rgb(209 213 219/var(--tw-text-opacity,1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175/var(--tw-text-opacity,1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128/var(--tw-text-opacity,1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity,1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81/var(--tw-text-opacity,1))}.text-gray-800{--tw-text-opacity:1;color:rgb(31 41 55/var(--tw-text-opacity,1))}.text-gray-900{--tw-text-opacity:1;color:rgb(17 24 39/var(--tw-text-opacity,1))}.text-green-100{--tw-text-opacity:1;color:rgb(220 252 231/var(--tw-text-opacity,1))}.text-green-200{--tw-text-opacity:1;color:rgb(187 247 208/var(--tw-text-opacity,1))}.text-green-300{--tw-text-opacity:1;color:rgb(134 239 172/var(--tw-text-opacity,1))}.text-green-400{--tw-text-opacity:1;color:rgb(74 222 128/var(--tw-text-opacity,1))}.text-green-500{--tw-text-opacity:1;color:rgb(34 197 94/var(--tw-text-opacity,1))}.text-green-600{--tw-text-opacity:1;color:rgb(22 163 74/var(--tw-text-opacity,1))}.text-green-700{--tw-text-opacity:1;color:rgb(21 128 61/var(--tw-text-opacity,1))}.text-green-800{--tw-text-opacity:1;color:rgb(22 101 52/var(--tw-text-opacity,1))}.text-indigo-100{--tw-text-opacity:1;color:rgb(224 231 255/var(--tw-text-opacity,1))}.text-indigo-400{--tw-text-opacity:1;color:rgb(129 140 248/var(--tw-text-opacity,1))}.text-indigo-500{--tw-text-opacity:1;color:rgb(99 102 241/var(--tw-text-opacity,1))}.text-indigo-600{--tw-text-opacity:1;color:rgb(79 70 229/var(--tw-text-opacity,1))}.text-indigo-700{--tw-text-opacity:1;color:rgb(67 56 202/var(--tw-text-opacity,1))}.text-indigo-800{--tw-text-opacity:1;color:rgb(55 48 163/var(--tw-text-opacity,1))}.text-inherit{color:inherit}.text-lime-800{--tw-text-opacity:1;color:rgb(63 98 18/var(--tw-text-opacity,1))}.text-orange-100{--tw-text-opacity:1;color:rgb(255 237 213/var(--tw-text-opacity,1))}.text-orange-400{--tw-text-opacity:1;color:rgb(251 146 60/var(--tw-text-opacity,1))}.text-orange-500{--tw-text-opacity:1;color:rgb(249 115 22/var(--tw-text-opacity,1))}.text-orange-600{--tw-text-opacity:1;color:rgb(234 88 12/var(--tw-text-opacity,1))}.text-orange-700{--tw-text-opacity:1;color:rgb(194 65 12/var(--tw-text-opacity,1))}.text-orange-800{--tw-text-opacity:1;color:rgb(154 52 18/var(--tw-text-opacity,1))}.text-pink-100{--tw-text-opacity:1;color:rgb(252 231 243/var(--tw-text-opacity,1))}.text-pink-600{--tw-text-opacity:1;color:rgb(219 39 119/var(--tw-text-opacity,1))}.text-purple-100{--tw-text-opacity:1;color:rgb(243 232 255/var(--tw-text-opacity,1))}.text-purple-200{--tw-text-opacity:1;color:rgb(233 213 255/var(--tw-text-opacity,1))}.text-purple-300{--tw-text-opacity:1;color:rgb(216 180 254/var(--tw-text-opacity,1))}.text-purple-500{--tw-text-opacity:1;color:rgb(168 85 247/var(--tw-text-opacity,1))}.text-purple-600{--tw-text-opacity:1;color:rgb(147 51 234/var(--tw-text-opacity,1))}.text-purple-700{--tw-text-opacity:1;color:rgb(126 34 206/var(--tw-text-opacity,1))}.text-purple-800{--tw-text-opacity:1;color:rgb(107 33 168/var(--tw-text-opacity,1))}.text-red-100{--tw-text-opacity:1;color:rgb(254 226 226/var(--tw-text-opacity,1))}.text-red-200{--tw-text-opacity:1;color:rgb(254 202 202/var(--tw-text-opacity,1))}.text-red-300{--tw-text-opacity:1;color:rgb(252 165 165/var(--tw-text-opacity,1))}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113/var(--tw-text-opacity,1))}.text-red-500{--tw-text-opacity:1;color:rgb(239 68 68/var(--tw-text-opacity,1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38/var(--tw-text-opacity,1))}.text-red-700{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity,1))}.text-red-800{--tw-text-opacity:1;color:rgb(153 27 27/var(--tw-text-opacity,1))}.text-red-900{--tw-text-opacity:1;color:rgb(127 29 29/var(--tw-text-opacity,1))}.text-teal-100{--tw-text-opacity:1;color:rgb(204 251 241/var(--tw-text-opacity,1))}.text-teal-600{--tw-text-opacity:1;color:rgb(13 148 136/var(--tw-text-opacity,1))}.text-teal-700{--tw-text-opacity:1;color:rgb(15 118 110/var(--tw-text-opacity,1))}.text-teal-800{--tw-text-opacity:1;color:rgb(17 94 89/var(--tw-text-opacity,1))}.text-violet-100{--tw-text-opacity:1;color:rgb(237 233 254/var(--tw-text-opacity,1))}.text-violet-500{--tw-text-opacity:1;color:rgb(139 92 246/var(--tw-text-opacity,1))}.text-violet-600{--tw-text-opacity:1;color:rgb(124 58 237/var(--tw-text-opacity,1))}.text-violet-800{--tw-text-opacity:1;color:rgb(91 33 182/var(--tw-text-opacity,1))}.text-violet-900{--tw-text-opacity:1;color:rgb(76 29 149/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.text-white\\/80{color:hsla(0,0%,100%,.8)}.text-white\\/90{color:hsla(0,0%,100%,.9)}.text-yellow-100{--tw-text-opacity:1;color:rgb(254 249 195/var(--tw-text-opacity,1))}.text-yellow-200{--tw-text-opacity:1;color:rgb(254 240 138/var(--tw-text-opacity,1))}.text-yellow-300{--tw-text-opacity:1;color:rgb(253 224 71/var(--tw-text-opacity,1))}.text-yellow-400{--tw-text-opacity:1;color:rgb(250 204 21/var(--tw-text-opacity,1))}.text-yellow-500{--tw-text-opacity:1;color:rgb(234 179 8/var(--tw-text-opacity,1))}.text-yellow-600{--tw-text-opacity:1;color:rgb(202 138 4/var(--tw-text-opacity,1))}.text-yellow-700{--tw-text-opacity:1;color:rgb(161 98 7/var(--tw-text-opacity,1))}.text-yellow-800{--tw-text-opacity:1;color:rgb(133 77 14/var(--tw-text-opacity,1))}.text-yellow-900{--tw-text-opacity:1;color:rgb(113 63 18/var(--tw-text-opacity,1))}.underline{text-decoration-line:underline}.no-underline{text-decoration-line:none}.decoration-blue-400\\/50{text-decoration-color:rgba(96,165,250,.5)}.underline-offset-2{text-underline-offset:2px}.opacity-20{opacity:.2}.opacity-30{opacity:.3}.opacity-50{opacity:.5}.opacity-75{opacity:.75}.opacity-80{opacity:.8}.opacity-90{opacity:.9}.opacity-95{opacity:.95}.shadow{--tw-shadow:0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px -1px rgba(0,0,0,.1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color),0 1px 2px -1px var(--tw-shadow-color)}.shadow,.shadow-2xl{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.shadow-lg,.shadow-md{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color),0 2px 4px -2px var(--tw-shadow-color)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgba(0,0,0,.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color)}.shadow-sm,.shadow-xl{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-xl{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color),0 8px 10px -6px var(--tw-shadow-color)}.outline-none{outline:2px solid transparent;outline-offset:2px}.outline{outline-style:solid}.ring-1{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color)}.ring-1,.ring-4{box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.ring-4{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(4px + var(--tw-ring-offset-width)) var(--tw-ring-color)}.ring-purple-500{--tw-ring-opacity:1;--tw-ring-color:rgb(168 85 247/var(--tw-ring-opacity,1))}.ring-white\\/60{--tw-ring-color:hsla(0,0%,100%,.6)}.blur{--tw-blur:blur(8px)}.blur,.filter{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur-lg{--tw-backdrop-blur:blur(16px)}.backdrop-blur-lg,.backdrop-filter{-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.duration-200{transition-duration:.2s}.duration-300{transition-duration:.3s}.ease-in-out{transition-timing-function:cubic-bezier(.4,0,.2,1)}.file\\:ml-4::file-selector-button{margin-left:1rem}.file\\:rounded-lg::file-selector-button{border-radius:.5rem}.file\\:border-0::file-selector-button{border-width:0}.file\\:bg-blue-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(239 246 255/var(--tw-bg-opacity,1))}.file\\:bg-green-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(240 253 244/var(--tw-bg-opacity,1))}.file\\:bg-orange-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(255 247 237/var(--tw-bg-opacity,1))}.file\\:bg-purple-50::file-selector-button{--tw-bg-opacity:1;background-color:rgb(250 245 255/var(--tw-bg-opacity,1))}.file\\:px-4::file-selector-button{padding-left:1rem;padding-right:1rem}.file\\:py-2::file-selector-button{padding-top:.5rem;padding-bottom:.5rem}.file\\:text-sm::file-selector-button{font-size:.875rem;line-height:1.25rem}.file\\:font-semibold::file-selector-button{font-weight:600}.file\\:text-blue-700::file-selector-button{--tw-text-opacity:1;color:rgb(29 78 216/var(--tw-text-opacity,1))}.file\\:text-green-700::file-selector-button{--tw-text-opacity:1;color:rgb(21 128 61/var(--tw-text-opacity,1))}.file\\:text-orange-700::file-selector-button{--tw-text-opacity:1;color:rgb(194 65 12/var(--tw-text-opacity,1))}.file\\:text-purple-700::file-selector-button{--tw-text-opacity:1;color:rgb(126 34 206/var(--tw-text-opacity,1))}.placeholder\\:text-right::-moz-placeholder{text-align:right}.placeholder\\:text-right::placeholder{text-align:right}.focus-within\\:border-transparent:focus-within{border-color:transparent}.focus-within\\:ring-2:focus-within{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus-within\\:ring-blue-500:focus-within{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246/var(--tw-ring-opacity,1))}.hover\\:scale-105:hover{--tw-scale-x:1.05;--tw-scale-y:1.05;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\\:border-blue-500:hover{--tw-border-opacity:1;border-color:rgb(59 130 246/var(--tw-border-opacity,1))}.hover\\:border-gray-400:hover{--tw-border-opacity:1;border-color:rgb(156 163 175/var(--tw-border-opacity,1))}.hover\\:border-teal-400:hover{--tw-border-opacity:1;border-color:rgb(45 212 191/var(--tw-border-opacity,1))}.hover\\:bg-amber-700:hover{--tw-bg-opacity:1;background-color:rgb(180 83 9/var(--tw-bg-opacity,1))}.hover\\:bg-black\\/5:hover{background-color:rgba(0,0,0,.05)}.hover\\:bg-blue-100:hover{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity,1))}.hover\\:bg-blue-200:hover{--tw-bg-opacity:1;background-color:rgb(191 219 254/var(--tw-bg-opacity,1))}.hover\\:bg-blue-50:hover{--tw-bg-opacity:1;background-color:rgb(239 246 255/var(--tw-bg-opacity,1))}.hover\\:bg-blue-600:hover{--tw-bg-opacity:1;background-color:rgb(37 99 235/var(--tw-bg-opacity,1))}.hover\\:bg-blue-700:hover{--tw-bg-opacity:1;background-color:rgb(29 78 216/var(--tw-bg-opacity,1))}.hover\\:bg-cyan-700:hover{--tw-bg-opacity:1;background-color:rgb(14 116 144/var(--tw-bg-opacity,1))}.hover\\:bg-emerald-100:hover{--tw-bg-opacity:1;background-color:rgb(209 250 229/var(--tw-bg-opacity,1))}.hover\\:bg-emerald-50:hover{--tw-bg-opacity:1;background-color:rgb(236 253 245/var(--tw-bg-opacity,1))}.hover\\:bg-emerald-700:hover{--tw-bg-opacity:1;background-color:rgb(4 120 87/var(--tw-bg-opacity,1))}.hover\\:bg-fuchsia-700:hover{--tw-bg-opacity:1;background-color:rgb(162 28 175/var(--tw-bg-opacity,1))}.hover\\:bg-gray-100:hover{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity,1))}.hover\\:bg-gray-200:hover{--tw-bg-opacity:1;background-color:rgb(229 231 235/var(--tw-bg-opacity,1))}.hover\\:bg-gray-300:hover{--tw-bg-opacity:1;background-color:rgb(209 213 219/var(--tw-bg-opacity,1))}.hover\\:bg-gray-400:hover{--tw-bg-opacity:1;background-color:rgb(156 163 175/var(--tw-bg-opacity,1))}.hover\\:bg-gray-50:hover{--tw-bg-opacity:1;background-color:rgb(249 250 251/var(--tw-bg-opacity,1))}.hover\\:bg-gray-600:hover{--tw-bg-opacity:1;background-color:rgb(75 85 99/var(--tw-bg-opacity,1))}.hover\\:bg-gray-700:hover{--tw-bg-opacity:1;background-color:rgb(55 65 81/var(--tw-bg-opacity,1))}.hover\\:bg-gray-900:hover{--tw-bg-opacity:1;background-color:rgb(17 24 39/var(--tw-bg-opacity,1))}.hover\\:bg-green-100:hover{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity,1))}.hover\\:bg-green-200:hover{--tw-bg-opacity:1;background-color:rgb(187 247 208/var(--tw-bg-opacity,1))}.hover\\:bg-green-50:hover{--tw-bg-opacity:1;background-color:rgb(240 253 244/var(--tw-bg-opacity,1))}.hover\\:bg-green-600:hover{--tw-bg-opacity:1;background-color:rgb(22 163 74/var(--tw-bg-opacity,1))}.hover\\:bg-green-700:hover{--tw-bg-opacity:1;background-color:rgb(21 128 61/var(--tw-bg-opacity,1))}.hover\\:bg-indigo-50:hover{--tw-bg-opacity:1;background-color:rgb(238 242 255/var(--tw-bg-opacity,1))}.hover\\:bg-indigo-700:hover{--tw-bg-opacity:1;background-color:rgb(67 56 202/var(--tw-bg-opacity,1))}.hover\\:bg-lime-100:hover{--tw-bg-opacity:1;background-color:rgb(236 252 203/var(--tw-bg-opacity,1))}.hover\\:bg-orange-100:hover{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity,1))}.hover\\:bg-orange-50:hover{--tw-bg-opacity:1;background-color:rgb(255 247 237/var(--tw-bg-opacity,1))}.hover\\:bg-orange-700:hover{--tw-bg-opacity:1;background-color:rgb(194 65 12/var(--tw-bg-opacity,1))}.hover\\:bg-pink-600:hover{--tw-bg-opacity:1;background-color:rgb(219 39 119/var(--tw-bg-opacity,1))}.hover\\:bg-pink-700:hover{--tw-bg-opacity:1;background-color:rgb(190 24 93/var(--tw-bg-opacity,1))}.hover\\:bg-purple-100:hover{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity,1))}.hover\\:bg-purple-200:hover{--tw-bg-opacity:1;background-color:rgb(233 213 255/var(--tw-bg-opacity,1))}.hover\\:bg-purple-50:hover{--tw-bg-opacity:1;background-color:rgb(250 245 255/var(--tw-bg-opacity,1))}.hover\\:bg-purple-600:hover{--tw-bg-opacity:1;background-color:rgb(147 51 234/var(--tw-bg-opacity,1))}.hover\\:bg-purple-700:hover{--tw-bg-opacity:1;background-color:rgb(126 34 206/var(--tw-bg-opacity,1))}.hover\\:bg-purple-900:hover{--tw-bg-opacity:1;background-color:rgb(88 28 135/var(--tw-bg-opacity,1))}.hover\\:bg-red-100:hover{--tw-bg-opacity:1;background-color:rgb(254 226 226/var(--tw-bg-opacity,1))}.hover\\:bg-red-200:hover{--tw-bg-opacity:1;background-color:rgb(254 202 202/var(--tw-bg-opacity,1))}.hover\\:bg-red-50:hover{--tw-bg-opacity:1;background-color:rgb(254 242 242/var(--tw-bg-opacity,1))}.hover\\:bg-red-500:hover{--tw-bg-opacity:1;background-color:rgb(239 68 68/var(--tw-bg-opacity,1))}.hover\\:bg-red-600:hover{--tw-bg-opacity:1;background-color:rgb(220 38 38/var(--tw-bg-opacity,1))}.hover\\:bg-red-700:hover{--tw-bg-opacity:1;background-color:rgb(185 28 28/var(--tw-bg-opacity,1))}.hover\\:bg-slate-800:hover{--tw-bg-opacity:1;background-color:rgb(30 41 59/var(--tw-bg-opacity,1))}.hover\\:bg-teal-50:hover{--tw-bg-opacity:1;background-color:rgb(240 253 250/var(--tw-bg-opacity,1))}.hover\\:bg-teal-700:hover{--tw-bg-opacity:1;background-color:rgb(15 118 110/var(--tw-bg-opacity,1))}.hover\\:bg-violet-700:hover{--tw-bg-opacity:1;background-color:rgb(109 40 217/var(--tw-bg-opacity,1))}.hover\\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.hover\\:bg-white\\/10:hover{background-color:hsla(0,0%,100%,.1)}.hover\\:bg-white\\/20:hover{background-color:hsla(0,0%,100%,.2)}.hover\\:bg-white\\/25:hover{background-color:hsla(0,0%,100%,.25)}.hover\\:bg-white\\/30:hover{background-color:hsla(0,0%,100%,.3)}.hover\\:bg-yellow-100:hover{--tw-bg-opacity:1;background-color:rgb(254 249 195/var(--tw-bg-opacity,1))}.hover\\:bg-yellow-600:hover{--tw-bg-opacity:1;background-color:rgb(202 138 4/var(--tw-bg-opacity,1))}.hover\\:bg-yellow-700:hover{--tw-bg-opacity:1;background-color:rgb(161 98 7/var(--tw-bg-opacity,1))}.hover\\:bg-opacity-75:hover{--tw-bg-opacity:0.75}.hover\\:from-amber-500:hover{--tw-gradient-from:#f59e0b var(--tw-gradient-from-position);--tw-gradient-to:rgba(245,158,11,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-amber-600:hover{--tw-gradient-from:#d97706 var(--tw-gradient-from-position);--tw-gradient-to:rgba(217,119,6,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-blue-500:hover{--tw-gradient-from:#3b82f6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(59,130,246,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-blue-600:hover{--tw-gradient-from:#2563eb var(--tw-gradient-from-position);--tw-gradient-to:rgba(37,99,235,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-blue-700:hover{--tw-gradient-from:#1d4ed8 var(--tw-gradient-from-position);--tw-gradient-to:rgba(29,78,216,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-cyan-500:hover{--tw-gradient-from:#06b6d4 var(--tw-gradient-from-position);--tw-gradient-to:rgba(6,182,212,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-cyan-600:hover{--tw-gradient-from:#0891b2 var(--tw-gradient-from-position);--tw-gradient-to:rgba(8,145,178,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-emerald-600:hover{--tw-gradient-from:#059669 var(--tw-gradient-from-position);--tw-gradient-to:rgba(5,150,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-gray-600:hover{--tw-gradient-from:#4b5563 var(--tw-gradient-from-position);--tw-gradient-to:rgba(75,85,99,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-green-500:hover{--tw-gradient-from:#22c55e var(--tw-gradient-from-position);--tw-gradient-to:rgba(34,197,94,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-green-600:hover{--tw-gradient-from:#16a34a var(--tw-gradient-from-position);--tw-gradient-to:rgba(22,163,74,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-green-700:hover{--tw-gradient-from:#15803d var(--tw-gradient-from-position);--tw-gradient-to:rgba(21,128,61,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-indigo-600:hover{--tw-gradient-from:#4f46e5 var(--tw-gradient-from-position);--tw-gradient-to:rgba(79,70,229,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-orange-500:hover{--tw-gradient-from:#f97316 var(--tw-gradient-from-position);--tw-gradient-to:rgba(249,115,22,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-orange-600:hover{--tw-gradient-from:#ea580c var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,88,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-orange-700:hover{--tw-gradient-from:#c2410c var(--tw-gradient-from-position);--tw-gradient-to:rgba(194,65,12,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-pink-600:hover{--tw-gradient-from:#db2777 var(--tw-gradient-from-position);--tw-gradient-to:rgba(219,39,119,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-purple-500:hover{--tw-gradient-from:#a855f7 var(--tw-gradient-from-position);--tw-gradient-to:rgba(168,85,247,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-purple-600:hover{--tw-gradient-from:#9333ea var(--tw-gradient-from-position);--tw-gradient-to:rgba(147,51,234,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-purple-700:hover{--tw-gradient-from:#7e22ce var(--tw-gradient-from-position);--tw-gradient-to:rgba(126,34,206,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-red-500:hover{--tw-gradient-from:#ef4444 var(--tw-gradient-from-position);--tw-gradient-to:rgba(239,68,68,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-red-600:hover{--tw-gradient-from:#dc2626 var(--tw-gradient-from-position);--tw-gradient-to:rgba(220,38,38,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-slate-700:hover{--tw-gradient-from:#334155 var(--tw-gradient-from-position);--tw-gradient-to:rgba(51,65,85,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-teal-500:hover{--tw-gradient-from:#14b8a6 var(--tw-gradient-from-position);--tw-gradient-to:rgba(20,184,166,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-teal-600:hover{--tw-gradient-from:#0d9488 var(--tw-gradient-from-position);--tw-gradient-to:rgba(13,148,136,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-teal-700:hover{--tw-gradient-from:#0f766e var(--tw-gradient-from-position);--tw-gradient-to:rgba(15,118,110,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-violet-600:hover{--tw-gradient-from:#7c3aed var(--tw-gradient-from-position);--tw-gradient-to:rgba(124,58,237,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-yellow-500:hover{--tw-gradient-from:#eab308 var(--tw-gradient-from-position);--tw-gradient-to:rgba(234,179,8,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-yellow-600:hover{--tw-gradient-from:#ca8a04 var(--tw-gradient-from-position);--tw-gradient-to:rgba(202,138,4,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:from-yellow-700:hover{--tw-gradient-from:#a16207 var(--tw-gradient-from-position);--tw-gradient-to:rgba(161,98,7,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\\:to-amber-600:hover{--tw-gradient-to:#d97706 var(--tw-gradient-to-position)}.hover\\:to-amber-700:hover{--tw-gradient-to:#b45309 var(--tw-gradient-to-position)}.hover\\:to-blue-600:hover{--tw-gradient-to:#2563eb var(--tw-gradient-to-position)}.hover\\:to-blue-700:hover{--tw-gradient-to:#1d4ed8 var(--tw-gradient-to-position)}.hover\\:to-cyan-600:hover{--tw-gradient-to:#0891b2 var(--tw-gradient-to-position)}.hover\\:to-cyan-700:hover{--tw-gradient-to:#0e7490 var(--tw-gradient-to-position)}.hover\\:to-emerald-700:hover{--tw-gradient-to:#047857 var(--tw-gradient-to-position)}.hover\\:to-gray-700:hover{--tw-gradient-to:#374151 var(--tw-gradient-to-position)}.hover\\:to-gray-800:hover{--tw-gradient-to:#1f2937 var(--tw-gradient-to-position)}.hover\\:to-green-600:hover{--tw-gradient-to:#16a34a var(--tw-gradient-to-position)}.hover\\:to-green-700:hover{--tw-gradient-to:#15803d var(--tw-gradient-to-position)}.hover\\:to-indigo-700:hover{--tw-gradient-to:#4338ca var(--tw-gradient-to-position)}.hover\\:to-orange-500:hover{--tw-gradient-to:#f97316 var(--tw-gradient-to-position)}.hover\\:to-orange-600:hover{--tw-gradient-to:#ea580c var(--tw-gradient-to-position)}.hover\\:to-orange-700:hover{--tw-gradient-to:#c2410c var(--tw-gradient-to-position)}.hover\\:to-pink-500:hover{--tw-gradient-to:#ec4899 var(--tw-gradient-to-position)}.hover\\:to-pink-700:hover{--tw-gradient-to:#be185d var(--tw-gradient-to-position)}.hover\\:to-purple-600:hover{--tw-gradient-to:#9333ea var(--tw-gradient-to-position)}.hover\\:to-purple-700:hover{--tw-gradient-to:#7e22ce var(--tw-gradient-to-position)}.hover\\:to-red-600:hover{--tw-gradient-to:#dc2626 var(--tw-gradient-to-position)}.hover\\:to-red-700:hover{--tw-gradient-to:#b91c1c var(--tw-gradient-to-position)}.hover\\:to-slate-800:hover{--tw-gradient-to:#1e293b var(--tw-gradient-to-position)}.hover\\:to-teal-600:hover{--tw-gradient-to:#0d9488 var(--tw-gradient-to-position)}.hover\\:to-teal-700:hover{--tw-gradient-to:#0f766e var(--tw-gradient-to-position)}.hover\\:to-teal-800:hover{--tw-gradient-to:#115e59 var(--tw-gradient-to-position)}.hover\\:to-violet-700:hover{--tw-gradient-to:#6d28d9 var(--tw-gradient-to-position)}.hover\\:to-yellow-700:hover{--tw-gradient-to:#a16207 var(--tw-gradient-to-position)}.hover\\:to-yellow-800:hover{--tw-gradient-to:#854d0e var(--tw-gradient-to-position)}.hover\\:text-blue-600:hover{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity,1))}.hover\\:text-blue-800:hover{--tw-text-opacity:1;color:rgb(30 64 175/var(--tw-text-opacity,1))}.hover\\:text-gray-200:hover{--tw-text-opacity:1;color:rgb(229 231 235/var(--tw-text-opacity,1))}.hover\\:text-gray-600:hover{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity,1))}.hover\\:text-gray-700:hover{--tw-text-opacity:1;color:rgb(55 65 81/var(--tw-text-opacity,1))}.hover\\:text-gray-800:hover{--tw-text-opacity:1;color:rgb(31 41 55/var(--tw-text-opacity,1))}.hover\\:text-green-800:hover{--tw-text-opacity:1;color:rgb(22 101 52/var(--tw-text-opacity,1))}.hover\\:text-indigo-200:hover{--tw-text-opacity:1;color:rgb(199 210 254/var(--tw-text-opacity,1))}.hover\\:text-indigo-800:hover{--tw-text-opacity:1;color:rgb(55 48 163/var(--tw-text-opacity,1))}.hover\\:text-orange-100:hover{--tw-text-opacity:1;color:rgb(255 237 213/var(--tw-text-opacity,1))}.hover\\:text-purple-800:hover{--tw-text-opacity:1;color:rgb(107 33 168/var(--tw-text-opacity,1))}.hover\\:text-red-400:hover{--tw-text-opacity:1;color:rgb(248 113 113/var(--tw-text-opacity,1))}.hover\\:text-red-700:hover{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity,1))}.hover\\:text-red-800:hover{--tw-text-opacity:1;color:rgb(153 27 27/var(--tw-text-opacity,1))}.hover\\:text-teal-900:hover{--tw-text-opacity:1;color:rgb(19 78 74/var(--tw-text-opacity,1))}.hover\\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.hover\\:text-white\\/70:hover{color:hsla(0,0%,100%,.7)}.hover\\:underline:hover{text-decoration-line:underline}.hover\\:shadow-2xl:hover{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color)}.hover\\:shadow-2xl:hover,.hover\\:shadow-lg:hover{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.hover\\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.hover\\:shadow-md:hover{--tw-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color),0 2px 4px -2px var(--tw-shadow-color)}.hover\\:shadow-md:hover,.hover\\:shadow-xl:hover{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.hover\\:shadow-xl:hover{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color),0 8px 10px -6px var(--tw-shadow-color)}.hover\\:file\\:bg-blue-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(219 234 254/var(--tw-bg-opacity,1))}.hover\\:file\\:bg-green-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(220 252 231/var(--tw-bg-opacity,1))}.hover\\:file\\:bg-orange-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(255 237 213/var(--tw-bg-opacity,1))}.hover\\:file\\:bg-purple-100::file-selector-button:hover{--tw-bg-opacity:1;background-color:rgb(243 232 255/var(--tw-bg-opacity,1))}.focus\\:border-blue-500:focus{--tw-border-opacity:1;border-color:rgb(59 130 246/var(--tw-border-opacity,1))}.focus\\:border-purple-500:focus{--tw-border-opacity:1;border-color:rgb(168 85 247/var(--tw-border-opacity,1))}.focus\\:border-transparent:focus{border-color:transparent}.focus\\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\\:ring-0:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-offset-width)) var(--tw-ring-color)}.focus\\:ring-0:focus,.focus\\:ring-2:focus{box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus\\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color)}.focus\\:ring-inset:focus{--tw-ring-inset:inset}.focus\\:ring-amber-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(245 158 11/var(--tw-ring-opacity,1))}.focus\\:ring-blue-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246/var(--tw-ring-opacity,1))}.focus\\:ring-emerald-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(16 185 129/var(--tw-ring-opacity,1))}.focus\\:ring-fuchsia-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(217 70 239/var(--tw-ring-opacity,1))}.focus\\:ring-gray-400:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(156 163 175/var(--tw-ring-opacity,1))}.focus\\:ring-green-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(34 197 94/var(--tw-ring-opacity,1))}.focus\\:ring-indigo-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(99 102 241/var(--tw-ring-opacity,1))}.focus\\:ring-orange-400:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(251 146 60/var(--tw-ring-opacity,1))}.focus\\:ring-orange-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(249 115 22/var(--tw-ring-opacity,1))}.focus\\:ring-pink-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(236 72 153/var(--tw-ring-opacity,1))}.focus\\:ring-purple-200:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(233 213 255/var(--tw-ring-opacity,1))}.focus\\:ring-purple-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(168 85 247/var(--tw-ring-opacity,1))}.focus\\:ring-teal-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(20 184 166/var(--tw-ring-opacity,1))}.focus\\:ring-white\\/60:focus{--tw-ring-color:hsla(0,0%,100%,.6)}.focus\\:ring-yellow-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(234 179 8/var(--tw-ring-opacity,1))}.focus\\:ring-offset-1:focus{--tw-ring-offset-width:1px}.focus-visible\\:ring-2:focus-visible{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus-visible\\:ring-orange-400:focus-visible{--tw-ring-opacity:1;--tw-ring-color:rgb(251 146 60/var(--tw-ring-opacity,1))}.focus-visible\\:ring-white:focus-visible{--tw-ring-opacity:1;--tw-ring-color:rgb(255 255 255/var(--tw-ring-opacity,1))}.focus-visible\\:ring-offset-2:focus-visible{--tw-ring-offset-width:2px}.focus-visible\\:ring-offset-teal-700:focus-visible{--tw-ring-offset-color:#0f766e}.active\\:scale-\\[0\\.98\\]:active{--tw-scale-x:0.98;--tw-scale-y:0.98;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.disabled\\:opacity-50:disabled{opacity:.5}.group:hover .group-hover\\:scale-110{--tw-scale-x:1.1;--tw-scale-y:1.1;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.group:hover .group-hover\\:bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.group:hover .group-hover\\:text-amber-100{--tw-text-opacity:1;color:rgb(254 243 199/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-amber-500{--tw-text-opacity:1;color:rgb(245 158 11/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-blue-100{--tw-text-opacity:1;color:rgb(219 234 254/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-blue-500{--tw-text-opacity:1;color:rgb(59 130 246/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-cyan-100{--tw-text-opacity:1;color:rgb(207 250 254/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-cyan-500{--tw-text-opacity:1;color:rgb(6 182 212/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-green-100{--tw-text-opacity:1;color:rgb(220 252 231/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-green-500{--tw-text-opacity:1;color:rgb(34 197 94/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-green-600{--tw-text-opacity:1;color:rgb(22 163 74/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-orange-100{--tw-text-opacity:1;color:rgb(255 237 213/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-pink-100{--tw-text-opacity:1;color:rgb(252 231 243/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-purple-100{--tw-text-opacity:1;color:rgb(243 232 255/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-purple-500{--tw-text-opacity:1;color:rgb(168 85 247/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-purple-600{--tw-text-opacity:1;color:rgb(147 51 234/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-red-500{--tw-text-opacity:1;color:rgb(239 68 68/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-teal-100{--tw-text-opacity:1;color:rgb(204 251 241/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-teal-500{--tw-text-opacity:1;color:rgb(20 184 166/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.group:hover .group-hover\\:text-yellow-500{--tw-text-opacity:1;color:rgb(234 179 8/var(--tw-text-opacity,1))}@media (min-width:640px){.sm\\:mx-0{margin-left:0;margin-right:0}.sm\\:inline{display:inline}.sm\\:w-auto{width:auto}.sm\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.sm\\:flex-row{flex-direction:row}.sm\\:flex-wrap{flex-wrap:wrap}.sm\\:items-end{align-items:flex-end}.sm\\:items-center{align-items:center}.sm\\:rounded-md{border-radius:.375rem}.sm\\:p-8{padding:2rem}.sm\\:px-6{padding-left:1.5rem;padding-right:1.5rem}.sm\\:px-8{padding-left:2rem;padding-right:2rem}.sm\\:py-0{padding-top:0;padding-bottom:0}.sm\\:text-3xl{font-size:1.875rem;line-height:2.25rem}}@media (min-width:768px){.md\\:col-span-2{grid-column:span 2/span 2}.md\\:block{display:block}.md\\:inline-block{display:inline-block}.md\\:inline{display:inline}.md\\:w-auto{width:auto}.md\\:flex-none{flex:none}.md\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.md\\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.md\\:flex-row{flex-direction:row}.md\\:items-start{align-items:flex-start}.md\\:items-center{align-items:center}.md\\:justify-center{justify-content:center}.md\\:self-start{align-self:flex-start}.md\\:p-5{padding:1.25rem}.md\\:text-3xl{font-size:1.875rem;line-height:2.25rem}}@media (min-width:1024px){.lg\\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.lg\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.lg\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.lg\\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.lg\\:flex-row{flex-direction:row}.lg\\:items-center{align-items:center}.lg\\:justify-end{justify-content:flex-end}.lg\\:justify-between{justify-content:space-between}.lg\\:px-8{padding-left:2rem;padding-right:2rem}}@media (min-width:1280px){.xl\\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (min-width:1536px){.\\32xl\\:px-10{padding-left:2.5rem;padding-right:2.5rem}}';function Ar(e){if(e==null||String(e).trim()==="")return null;try{const t=JSON.parse(String(e));if(!Array.isArray(t))return"[]";const a=t.map(r=>({note:typeof r=="string"?r:String(r?.note??"")}));return JSON.stringify(a)}catch{return"[]"}}function pe(e){const t=String(e?.message??e??"");return t.includes("solutions_json")&&(t.includes("no such column")||t.includes("no column named"))}function te(e){const t=String(e?.message??e??"");return t.includes("no such column")||t.includes("no column named")?t.includes("identity_attachment_url")||t.includes("signature_attachment_url")||t.includes("salary_profile_attachment_url")||t.includes("gosi_attachment_url")||t.includes("tax_exemption_attachment_url")||t.includes("additional_1_attachment_url")||t.includes("additional_2_attachment_url")||t.includes("additional_3_attachment_url"):!1}function ea(e){const t=String(e?.message??e??"");return t.includes("attachments_json")&&(t.includes("no such column")||t.includes("no column named"))}const ta=15,Br=20*1024*1024,Xe=20,Nr=[{column:"identity_attachment_url",label:"ملف الهوية"},{column:"signature_attachment_url",label:"ملف السمة"},{column:"salary_profile_attachment_url",label:"ملف تعريف الراتب"},{column:"gosi_attachment_url",label:"ملف التأمينات الاجتماعية"},{column:"tax_exemption_attachment_url",label:"شهادة الإعفاء الضريبي"},{column:"additional_1_attachment_url",label:"مستند إضافي 1"},{column:"additional_2_attachment_url",label:"مستند إضافي 2"},{column:"additional_3_attachment_url",label:"مستند إضافي 3"}];function gt(e){const t=String(e??"").trim();if(!t||t==="null"||t.includes("..")||t.includes("\\"))return null;const a="/api/attachments/view/";if(t.startsWith(a))return t;const r=t.indexOf(a);if(r>=0)return t.slice(r);if(/^https?:\/\//i.test(t))try{const n=new URL(t);if(n.pathname.startsWith(a))return n.pathname}catch{return null}return/^(customers\/\d+\/|temp\/|\d+\/)/.test(t)?`${a}${t.replace(/^\/+/,"")}`:null}function Ye(e){let t=e;if(typeof e=="string"){const r=e.trim();if(!r)return[];try{t=JSON.parse(r)}catch{return[]}}if(!Array.isArray(t))return[];const a=[];for(const r of t){if(!r||typeof r!="object")continue;const n=String(r.label??"").trim().slice(0,200),s=gt(r.url),o=String(r.id??"").trim()||`att_${Date.now()}_${a.length}`,i=r.page_count;let l=null;if(i!=null&&i!==""){const d=Number(i);Number.isFinite(d)&&d>0&&d<=9999&&(l=Math.floor(d))}if(!(!n||!s)&&(a.push(l!=null?{id:o,label:n,url:s,page_count:l}:{id:o,label:n,url:s}),a.length>=ta))break}return a}function ri(e){const t=[];for(const a of Nr){const r=gt(e[a.column]);r&&t.push({id:`legacy-${a.column}`,label:a.label,url:r})}return t}function ge(e){if(!e)return[];const t=Ye(e.attachments_json),a=ri(e);if(t.length===0)return a;const r=new Set(t.map(s=>s.url)),n=[...t];for(const s of a)if(!r.has(s.url)&&(n.push(s),r.add(s.url),n.length>=ta))break;return n}const ni=`
   attachments_json,
   identity_attachment_url,
   signature_attachment_url,
@@ -34820,7 +35582,7 @@ window.CC_USER_ID = ${t};
   additional_1_attachment_url,
   additional_2_attachment_url,
   additional_3_attachment_url
-`;async function Br(e,t,a){const r=n=>{if(n){!t.attachments_json&&n.attachments_json&&(t.attachments_json=n.attachments_json);for(const s of Ar){const o=gt(n[s.column]);!gt(t[s.column])&&o&&(t[s.column]=o)}}};try{const n=await e.prepare(`SELECT ${ai} FROM customers WHERE id = ?`).bind(a).first();r(n)}catch(n){if(ea(n)){try{const s=await e.prepare(`
+`;async function jr(e,t,a){const r=n=>{if(n){!t.attachments_json&&n.attachments_json&&(t.attachments_json=n.attachments_json);for(const s of Nr){const o=gt(n[s.column]);!gt(t[s.column])&&o&&(t[s.column]=o)}}};try{const n=await e.prepare(`SELECT ${ni} FROM customers WHERE id = ?`).bind(a).first();r(n)}catch(n){if(ea(n)){try{const s=await e.prepare(`
             SELECT
               identity_attachment_url,
               signature_attachment_url,
@@ -34831,16 +35593,16 @@ window.CC_USER_ID = ${t};
               additional_2_attachment_url,
               additional_3_attachment_url
             FROM customers WHERE id = ?
-          `).bind(a).first();r(s)}catch(s){if(!te(s))throw s}return}if(!te(n))throw n}}function ri(e){return JSON.stringify(e.map(t=>{const a={id:t.id,label:t.label,url:t.url};return t.page_count!=null&&t.page_count>0&&(a.page_count=t.page_count),a}))}async function Je(e,t,a){const r=ri(a);try{await e.prepare("UPDATE customers SET attachments_json = ? WHERE id = ?").bind(r,t).run()}catch(n){if(!ea(n))throw n}}function Nr(e,t="لا توجد مرفقات"){return e.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          `).bind(a).first();r(s)}catch(s){if(!te(s))throw s}return}if(!te(n))throw n}}function si(e){return JSON.stringify(e.map(t=>{const a={id:t.id,label:t.label,url:t.url};return t.page_count!=null&&t.page_count>0&&(a.page_count=t.page_count),a}))}async function Je(e,t,a){const r=si(a);try{await e.prepare("UPDATE customers SET attachments_json = ? WHERE id = ?").bind(r,t).run()}catch(n){if(!ea(n))throw n}}function Or(e,t="لا توجد مرفقات"){return e.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
     ${e.map(a=>`
       <div class="border border-gray-200 rounded-lg p-3 bg-white">
         <p class="text-sm font-medium text-gray-800 mb-2">${B(a.label)}</p>
         ${a.page_count!=null&&a.page_count>0?`<p class="text-xs text-gray-500 mb-2">${a.page_count} صفحة</p>`:""}
-        <a href="${di(a.url)}" target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 text-sm">
+        <a href="${pi(a.url)}" target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 text-sm">
           <i class="fas fa-external-link-alt ml-1"></i> عرض الملف
         </a>
       </div>`).join("")}
-  </div>`:`<div class="text-sm text-gray-500 text-center py-2">${B(t)}</div>`}function jr(e){const{hiddenInputId:t,listContainerId:a,addButtonId:r,includeHidden:n=!0}=e;return`
+  </div>`:`<div class="text-sm text-gray-500 text-center py-2">${B(t)}</div>`}function Mr(e){const{hiddenInputId:t,listContainerId:a,addButtonId:r,includeHidden:n=!0}=e;return`
     ${n?`<input type="hidden" name="attachments_json" id="${F(t)}" value="[]">`:""}
     <div id="${F(a)}" class="space-y-3"></div>
     <button type="button" id="${F(r)}"
@@ -34849,10 +35611,10 @@ window.CC_USER_ID = ${t};
       إضافة مرفق
     </button>
     <p class="text-xs text-gray-500 mt-2">JPG, PNG أو PDF (حد أقصى ${Xe}MB لكل ملف)</p>
-  `}const Or=`
+  `}const Fr=`
 .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
 .modal-backdrop.hidden { display:none; }
-`,Mr=`
+`,qr=`
 #listAttachmentsModal.list-attachments-modal {
   position: fixed;
   inset: 0;
@@ -34883,10 +35645,10 @@ window.CC_USER_ID = ${t};
 body.list-attachments-modal-open {
   overflow: hidden;
 }
-`;function ni(e){const{modalId:t,openBtnId:a,closeBtnId:r,doneBtnId:n,hiddenInputId:s,listContainerId:o,addButtonId:i,existingAttachments:l=[],sectionTitle:d="المرفقات",modalTitle:c="المرفقات (اختياري)"}=e,p=l.length>0?`
+`;function oi(e){const{modalId:t,openBtnId:a,closeBtnId:r,doneBtnId:n,hiddenInputId:s,listContainerId:o,addButtonId:i,existingAttachments:l=[],sectionTitle:d="المرفقات",modalTitle:c="المرفقات (اختياري)"}=e,p=l.length>0?`
       <div class="mt-4 bg-white p-4 rounded-lg border border-gray-100">
         <h3 class="font-bold text-gray-700 mb-3 text-sm">المرفقات الحالية:</h3>
-        ${Nr(l)}
+        ${Or(l)}
       </div>`:"";return`
     <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
       <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -34915,7 +35677,7 @@ body.list-attachments-modal-open {
             <i class="fas fa-times text-xl"></i>
           </button>
         </div>
-        ${jr({hiddenInputId:s,listContainerId:o,addButtonId:i,includeHidden:!1})}
+        ${Mr({hiddenInputId:s,listContainerId:o,addButtonId:i,includeHidden:!1})}
         <div class="flex justify-end gap-3 mt-6">
           <button type="button" id="${F(n)}"
                   class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
@@ -34923,7 +35685,7 @@ body.list-attachments-modal-open {
           </button>
         </div>
       </div>
-    </div>`}function Fr(e){const{modalId:t,openBtnId:a,closeBtnId:r,doneBtnId:n}=e;return`
+    </div>`}function Pr(e){const{modalId:t,openBtnId:a,closeBtnId:r,doneBtnId:n}=e;return`
 (function () {
   var modal = document.getElementById('${F(t)}');
   var openBtn = document.getElementById('${F(a)}');
@@ -34941,7 +35703,7 @@ body.list-attachments-modal-open {
   document.addEventListener('keydown', function (e) {
     if (e && e.key === 'Escape' && !modal.classList.contains('hidden')) close();
   });
-})();`}function ft(e){return F(JSON.stringify(ge(e)))}function qr(){return`
+})();`}function ft(e){return F(JSON.stringify(ge(e)))}function $r(){return`
     <div id="listAttachmentsModal" class="list-attachments-modal modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="listAttachmentsModalTitle">
       <div class="list-attachments-modal-panel bg-white rounded-2xl shadow-2xl mx-auto" onclick="event.stopPropagation()">
         <div class="flex-shrink-0 bg-white border-b px-6 py-4 flex items-center justify-between">
@@ -34954,7 +35716,7 @@ body.list-attachments-modal-open {
           </button>
         </div>
         <div class="list-attachments-modal-body p-6">
-          ${jr({hiddenInputId:"list_attachments_json",listContainerId:"list_attachments_list",addButtonId:"list_attachments_add"})}
+          ${Mr({hiddenInputId:"list_attachments_json",listContainerId:"list_attachments_list",addButtonId:"list_attachments_add"})}
         </div>
         <div class="flex-shrink-0 bg-white border-t px-6 py-4 flex justify-end gap-3">
           <button type="button" onclick="closeListAttachmentsModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium">إلغاء</button>
@@ -34963,7 +35725,7 @@ body.list-attachments-modal-open {
           </button>
         </div>
       </div>
-    </div>`}function Pr(){return`
+    </div>`}function Hr(){return`
   var listAttCustomerId = null;
   var listAttRequestId = null;
   function openListAttachmentsFromRow(btn, requestId) {
@@ -35099,10 +35861,10 @@ body.list-attachments-modal-open {
     } finally {
       if (saveBtn) saveBtn.disabled = false;
     }
-  }`}const si="__custom__";function oi(){return`
+  }`}const ii="__custom__";function li(){return`
 if (!window.__obligationDropdownHelpersLoaded) {
   window.__obligationDropdownHelpersLoaded = true;
-  window.OBLIGATION_DROPDOWN_CUSTOM_VALUE = ${JSON.stringify(si)};
+  window.OBLIGATION_DROPDOWN_CUSTOM_VALUE = ${JSON.stringify(ii)};
   window.collectObligationDropdownFromRow = function (tr, selectClass, customClass) {
     var sel = tr.querySelector('.' + selectClass);
     if (!sel) return '';
@@ -35151,8 +35913,8 @@ if (!window.__obligationDropdownHelpersLoaded) {
     sync();
   };
   window.wireObligationTypeRow = window.wireObligationDropdownRow;
-}`}function $r(e){const{tbodyId:t,addBtnId:a,typeSelectClass:r,typeCustomInputClass:n,totalClass:s,monthlyClass:o,dueClass:i,removeClass:l,obligationTypeNamesJson:d,initialRowsJson:c="[]"}=e;return`
-${oi()}
+}`}function Ur(e){const{tbodyId:t,addBtnId:a,typeSelectClass:r,typeCustomInputClass:n,totalClass:s,monthlyClass:o,dueClass:i,removeClass:l,obligationTypeNamesJson:d,initialRowsJson:c="[]"}=e;return`
+${li()}
 (function () {
   var tbody = document.getElementById(${JSON.stringify(t)});
   var addBtn = document.getElementById(${JSON.stringify(a)});
@@ -35188,7 +35950,7 @@ ${oi()}
 (function () {
   if (window.initDynamicCustomerAttachments) return;
   var MAX_ATTACHMENTS = ${ta};
-  var MAX_FILE_BYTES = ${Dr};
+  var MAX_FILE_BYTES = ${Br};
   var MAX_FILE_MB = ${Xe};
   var PDFJS_VERSION = '3.11.174';
   var pdfJsLoading = null;
@@ -35403,7 +36165,7 @@ ${oi()}
     updateAddButton();
   };
 })();
-`}function Yt(e){const t=String(e?.message??e??"");return t.includes("location_id")&&(t.includes("no such column")||t.includes("no column named"))}const Hr=["شراء عقار","رهن حر","فك رهن","شراء مديونية","بناء ذاتي","أرض وقرض","قرض شخصي","تمويل مؤسسات ( نقاط بيع)","إعادة تمويل"];function Ur(e){const t=String(e??"").trim();return t==="military"||t==="retired"?t:"civilian"}function Wr(e){const t=String(e??"").trim();return t&&Hr.includes(t)?t:null}function zr(e,t){const a=String(e??"").trim(),r=['<option value="">-- اختر نوع المنتج --</option>',...Hr.map(n=>{const s=B(n);return`<option value="${s}"${n===a?" selected":""}>${s}</option>`})].join("");return`<select name="product_type" class="${F(t)}">${r}</select>`}const Gr=["ارض","فيلا","شقه","عمارة تجاريه","أرض زراعيه","استراحة","دور"];function Yr(e){const t=String(e??"").trim();return t&&Gr.includes(t)?t:null}function Vr(e,t){const a=String(e??"").trim(),r=['<option value="">-- اختر نوع العقار --</option>',...Gr.map(n=>{const s=B(n);return`<option value="${s}"${n===a?" selected":""}>${s}</option>`})].join("");return`<select name="property_type" class="${F(t)}">${r}</select>`}function Jr(e){const t=String(e?.message??e??"");return t.includes("location_id")&&(t.includes("no such column")||t.includes("no column named"))}async function ii(e,t,a){if(t)try{await e.prepare("UPDATE financing_requests SET location_id = ? WHERE customer_id = ?").bind(a,t).run()}catch(r){if(!Jr(r))throw r}}async function aa(e,t,a){if(!t)return;const r=Object.entries(a).filter(([,o])=>o!==void 0);if(r.length===0)return;const n=r.map(([o])=>`${o} = ?`).join(", "),s=r.map(([,o])=>o??null);try{await e.prepare(`
+`}function Vt(e){const t=String(e?.message??e??"");return t.includes("location_id")&&(t.includes("no such column")||t.includes("no column named"))}const zr=["شراء عقار","رهن حر","فك رهن","شراء مديونية","بناء ذاتي","أرض وقرض","قرض شخصي","تمويل مؤسسات ( نقاط بيع)","إعادة تمويل"];function Wr(e){const t=String(e??"").trim();return t==="military"||t==="retired"?t:"civilian"}function Gr(e){const t=String(e??"").trim();return t&&zr.includes(t)?t:null}function Vr(e,t){const a=String(e??"").trim(),r=['<option value="">-- اختر نوع المنتج --</option>',...zr.map(n=>{const s=B(n);return`<option value="${s}"${n===a?" selected":""}>${s}</option>`})].join("");return`<select name="product_type" class="${F(t)}">${r}</select>`}const Yr=["ارض","فيلا","شقه","عمارة تجاريه","أرض زراعيه","استراحة","دور"];function Jr(e){const t=String(e??"").trim();return t&&Yr.includes(t)?t:null}function Xr(e,t){const a=String(e??"").trim(),r=['<option value="">-- اختر نوع العقار --</option>',...Yr.map(n=>{const s=B(n);return`<option value="${s}"${n===a?" selected":""}>${s}</option>`})].join("");return`<select name="property_type" class="${F(t)}">${r}</select>`}function Qr(e){const t=String(e?.message??e??"");return t.includes("location_id")&&(t.includes("no such column")||t.includes("no column named"))}async function di(e,t,a){if(t)try{await e.prepare("UPDATE financing_requests SET location_id = ? WHERE customer_id = ?").bind(a,t).run()}catch(r){if(!Qr(r))throw r}}async function aa(e,t,a){if(!t)return;const r=Object.entries(a).filter(([,o])=>o!==void 0);if(r.length===0)return;const n=r.map(([o])=>`${o} = ?`).join(", "),s=r.map(([,o])=>o??null);try{await e.prepare(`
       UPDATE customers
       SET ${n}
       WHERE id = ?
@@ -35411,7 +36173,7 @@ ${oi()}
     UPDATE financing_requests
     SET ${n}
     WHERE customer_id = ?
-  `).bind(...s,t).run()}function ra(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function Ke(e){let a=ra(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const r=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(r)?{normalized:`966${r}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). الصيغة: 5XXXXXXXX"}}function le(e){const t=ra(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const Xr=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function he(e){return String(e??"").trim().toLowerCase()}function Ee(e){return Xr.has(e)}function li(e,t){const a=String(e??"").trim().toLowerCase().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").replace(/^-+|-+$/g,"").slice(0,64);return a||he(t)||"main"}async function Qr(e,t,a){let r=he(a)||"location";(!r||Ee(r))&&(r="loc-"+(r||"branch"));for(let n=0;n<60;n++){const s=n===0?"":`-${n+1}`,o=(r+s).slice(0,64);if(!await e.prepare("SELECT id FROM tenant_locations WHERE tenant_id = ? AND slug = ? LIMIT 1").bind(t,o).first())return o}return`${r}-${Date.now()}`.slice(0,64)}function B(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function F(e){return String(e??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}function di(e){return B(e)}function Kr(e){return e?`<span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full border ${{نشط:"bg-green-100 text-green-800 border-green-200","بانتظار موافقة ممثل البنك":"bg-amber-100 text-amber-800 border-amber-200","بانتظار موافقة الإدارة":"bg-blue-100 text-blue-800 border-blue-200","بانتظار التمويل":"bg-purple-100 text-purple-800 border-purple-200",مكتمل:"bg-teal-100 text-teal-800 border-teal-200",مؤرشف:"bg-gray-100 text-gray-600 border-gray-200"}[e]??"bg-gray-100 text-gray-700 border-gray-200"}">${B(e)}</span>`:'<span class="text-xs text-gray-400">لا يوجد عقد</span>'}function At(e){let a=ra(String(e??"").trim()).replace(/[^\d]/g,"");return!a||(a.startsWith("00966")?a=a.slice(5):a.startsWith("966")?a=a.slice(3):a.startsWith("05")&&a.length===10?a=a.slice(1):a.startsWith("0")&&(a=a.replace(/^0+/,"")),a.length===9&&a.startsWith("5")&&(a="966"+a),!a.startsWith("966")||a.length!==12||!/^9665\d{8}$/.test(a))?null:a}function ci(e){const t=At(e);return t?`https://wa.me/${t}`:null}function na(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function we(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||Xr.has(e))}const Zr="رابط الشركة";function pi(e,t){const a=String(e??"").trim();return a||(String(t??"").trim()?"":Zr)}function dt(e){if(!e||typeof e!="object")return e;const t=pi(e.affiliate_label,e.affiliate_path_segment);return t?{...e,affiliate_label:t}:e}const ui=2e3,Oa=2e3;function Ze(e){if(e==null||String(e).trim()==="")return{ok:!0,value:null};const t=String(e).trim();return t.length>Oa?{ok:!1,error:`العنوان يتجاوز ${Oa} حرفاً`}:{ok:!0,value:t}}function et(e){if(e==null||String(e).trim()==="")return{ok:!0,value:null};const t=String(e).trim();return us(t)?{ok:!0,value:t}:{ok:!1,error:"يرجى اختيار مدينة من القائمة"}}function K(e){const t=String(e??"").trim();if(!t||t.length>ui||t.includes("..")||t.includes("\\"))return null;if(/^https?:\/\//i.test(t))try{const a=new URL(t);return a.protocol!=="http:"&&a.protocol!=="https:"?null:t}catch{return null}return t.startsWith("/")&&/^\/[\w\-./?=&%:#+]*$/i.test(t)?t:null}function sa(e,t=.12){const a=Number(e);return Number.isFinite(a)?Math.min(.25,Math.max(.03,a)):t}function je(e,t=1){const a=Number(e);return Number.isFinite(a)?Math.min(1,Math.max(.1,a)):t}function en(e){return{document_watermark_url:e.document_watermark_url??null,document_watermark_enabled:Number(e.document_watermark_enabled)===1,document_watermark_opacity:sa(e.document_watermark_opacity,.12),document_header_url:e.document_header_url??null,document_header_enabled:Number(e.document_header_enabled)===1,document_header_opacity:je(e.document_header_opacity,1),document_footer_url:e.document_footer_url??null,document_footer_enabled:Number(e.document_footer_enabled)===1,document_footer_opacity:je(e.document_footer_opacity,1)}}function Ut(...e){for(const t of e)if(t!=null&&String(t).trim()!=="")return String(t).trim();return null}function tn(e,t){return t?{...e,contact_bg_color:t.contact_bg_color,contact_form_color:t.contact_form_color,contact_text_color:t.contact_text_color,contact_custom_fields:t.contact_custom_fields}:e}function an(e){const t={};if("contact_bg_color"in e){const a=String(e.contact_bg_color??"").trim();if(a==="")t.contact_bg_color=null;else if(/^#[0-9a-fA-F]{3,8}$/.test(a))t.contact_bg_color=a;else return{ok:!1,error:"لون الخلفية غير صالح، استخدم صيغة hex مثل #0f766e"}}if("contact_form_color"in e){const a=String(e.contact_form_color??"").trim();if(a==="")t.contact_form_color=null;else if(/^#[0-9a-fA-F]{3,8}$/.test(a))t.contact_form_color=a;else return{ok:!1,error:"لون النافذة غير صالح، استخدم صيغة hex مثل #ffffff"}}if("contact_text_color"in e){const a=String(e.contact_text_color??"").trim();if(a===""||a==="black")t.contact_text_color=a===""?null:"black";else if(a==="white")t.contact_text_color="white";else return{ok:!1,error:"لون النص يجب أن يكون black أو white"}}if("contact_custom_fields"in e){const a=e.contact_custom_fields;if(a==null||Array.isArray(a)&&a.length===0)t.contact_custom_fields=null;else if(Array.isArray(a)){const r=a.filter(n=>n&&typeof n=="object"&&String(n.label??"").trim()).slice(0,3).map(n=>{const s=["text","number","select","checkbox"].includes(String(n.type||"text"))?String(n.type):"text";return{label:String(n.label).trim().slice(0,100),required:!!n.required,type:s}});t.contact_custom_fields=r.length>0?JSON.stringify(r):null}else return{ok:!1,error:"contact_custom_fields يجب أن يكون مصفوفة"}}return{ok:!0,updates:t}}function rn(e,t,a){return{company_name:t.name,slug:e.slug,contact_email:Ut(t.contact_email,a?.contact_email,e.contact_email),contact_phone:Ut(t.contact_phone,a?.contact_phone,e.contact_phone),logo_url:Ut(t.logo_url,a?.logo_url,e.logo_url),primary_color:e.primary_color,secondary_color:e.secondary_color,public_city:t.city,public_address:t.address,contact_bg_color:e.contact_bg_color??null,contact_form_color:e.contact_form_color??null,contact_text_color:e.contact_text_color??null,contact_custom_fields:e.contact_custom_fields??null}}function bt(e,t,a){const r=B(e.company_name),n=String(e.contact_phone??"").trim(),s=String(e.contact_email??"").trim(),o=B(s),i=B(n),l=ci(n),d=l?F(l):"",c=B(e.primary_color||"#0f766e"),p=B(e.secondary_color||"#14b8a6"),u=e.contact_bg_color?`background:${F(e.contact_bg_color)};`:`background:linear-gradient(135deg,${c},${p});`,g=e.contact_form_color?`background:${F(e.contact_form_color)};`:"background:#ffffff;",f=e.contact_text_color==="white"?`
+  `).bind(...s,t).run()}function ra(e){return e.replace(/[٠-٩]/g,t=>String(t.charCodeAt(0)-1632)).replace(/[۰-۹]/g,t=>String(t.charCodeAt(0)-1776))}function Ke(e){let a=ra(String(e??"").trim()).replace(/[^\d]/g,"");if(!a)return{normalized:null,error:"يرجى إدخال رقم الجوال (بدون +966). مثال صحيح: 5XXXXXXXX"};a.startsWith("00966")?a=a.slice(2):a.startsWith("966")||(a=`966${a.replace(/^0+/,"")}`);const r=a.startsWith("966")?a.slice(3):a;return/^5\d{8}$/.test(r)?{normalized:`966${r}`,error:null}:{normalized:null,error:"صيغة رقم الجوال غير صحيحة. أدخل 9 أرقام تبدأ بـ 5 فقط (بدون +966). الصيغة: 5XXXXXXXX"}}function le(e){const t=ra(String(e??"").trim()).replace(/[^\d]/g,"");return t?t.startsWith("00966")?t.slice(5):t.startsWith("966")?t.slice(3):t.startsWith("05")&&t.length===10?t.slice(1):t:""}const Kr=new Set(["admin","api","c","calculator","calculator-old","contracts-module","forgot-password","login","packages","subscribe","test"]);function he(e){return String(e??"").trim().toLowerCase()}function Ee(e){return Kr.has(e)}function ci(e,t){const a=String(e??"").trim().toLowerCase().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").replace(/^-+|-+$/g,"").slice(0,64);return a||he(t)||"main"}async function Zr(e,t,a){let r=he(a)||"location";(!r||Ee(r))&&(r="loc-"+(r||"branch"));for(let n=0;n<60;n++){const s=n===0?"":`-${n+1}`,o=(r+s).slice(0,64);if(!await e.prepare("SELECT id FROM tenant_locations WHERE tenant_id = ? AND slug = ? LIMIT 1").bind(t,o).first())return o}return`${r}-${Date.now()}`.slice(0,64)}function B(e){return String(e??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}function F(e){return String(e??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}function pi(e){return B(e)}function en(e){return e?`<span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full border ${{نشط:"bg-green-100 text-green-800 border-green-200","بانتظار موافقة ممثل البنك":"bg-amber-100 text-amber-800 border-amber-200","بانتظار موافقة الإدارة":"bg-blue-100 text-blue-800 border-blue-200","بانتظار التمويل":"bg-purple-100 text-purple-800 border-purple-200",مكتمل:"bg-teal-100 text-teal-800 border-teal-200",مؤرشف:"bg-gray-100 text-gray-600 border-gray-200"}[e]??"bg-gray-100 text-gray-700 border-gray-200"}">${B(e)}</span>`:'<span class="text-xs text-gray-400">لا يوجد عقد</span>'}function At(e){let a=ra(String(e??"").trim()).replace(/[^\d]/g,"");return!a||(a.startsWith("00966")?a=a.slice(5):a.startsWith("966")?a=a.slice(3):a.startsWith("05")&&a.length===10?a=a.slice(1):a.startsWith("0")&&(a=a.replace(/^0+/,"")),a.length===9&&a.startsWith("5")&&(a="966"+a),!a.startsWith("966")||a.length!==12||!/^9665\d{8}$/.test(a))?null:a}function ui(e){const t=At(e);return t?`https://wa.me/${t}`:null}function na(e){return String(e??"").trim().toLowerCase().replace(/^\/+/g,"")}function we(e){return!(!e||e.length>64||!/^[a-z0-9_-]+$/.test(e)||Kr.has(e))}const tn="رابط الشركة";function mi(e,t){const a=String(e??"").trim();return a||(String(t??"").trim()?"":tn)}function dt(e){if(!e||typeof e!="object")return e;const t=mi(e.affiliate_label,e.affiliate_path_segment);return t?{...e,affiliate_label:t}:e}const gi=2e3,Fa=2e3;function Ze(e){if(e==null||String(e).trim()==="")return{ok:!0,value:null};const t=String(e).trim();return t.length>Fa?{ok:!1,error:`العنوان يتجاوز ${Fa} حرفاً`}:{ok:!0,value:t}}function et(e){if(e==null||String(e).trim()==="")return{ok:!0,value:null};const t=String(e).trim();return gs(t)?{ok:!0,value:t}:{ok:!1,error:"يرجى اختيار مدينة من القائمة"}}function K(e){const t=String(e??"").trim();if(!t||t.length>gi||t.includes("..")||t.includes("\\"))return null;if(/^https?:\/\//i.test(t))try{const a=new URL(t);return a.protocol!=="http:"&&a.protocol!=="https:"?null:t}catch{return null}return t.startsWith("/")&&/^\/[\w\-./?=&%:#+]*$/i.test(t)?t:null}function sa(e,t=.12){const a=Number(e);return Number.isFinite(a)?Math.min(1,Math.max(.03,a)):t}function je(e,t=1){const a=Number(e);return Number.isFinite(a)?Math.min(1,Math.max(.1,a)):t}function an(e){return{document_watermark_url:e.document_watermark_url??null,document_watermark_enabled:Number(e.document_watermark_enabled)===1,document_watermark_opacity:sa(e.document_watermark_opacity,.12),document_header_url:e.document_header_url??null,document_header_enabled:Number(e.document_header_enabled)===1,document_header_opacity:je(e.document_header_opacity,1),document_footer_url:e.document_footer_url??null,document_footer_enabled:Number(e.document_footer_enabled)===1,document_footer_opacity:je(e.document_footer_opacity,1)}}function Ut(...e){for(const t of e)if(t!=null&&String(t).trim()!=="")return String(t).trim();return null}function rn(e,t){return t?{...e,contact_bg_color:t.contact_bg_color,contact_form_color:t.contact_form_color,contact_text_color:t.contact_text_color,contact_custom_fields:t.contact_custom_fields}:e}function nn(e){const t={};if("contact_bg_color"in e){const a=String(e.contact_bg_color??"").trim();if(a==="")t.contact_bg_color=null;else if(/^#[0-9a-fA-F]{3,8}$/.test(a))t.contact_bg_color=a;else return{ok:!1,error:"لون الخلفية غير صالح، استخدم صيغة hex مثل #0f766e"}}if("contact_form_color"in e){const a=String(e.contact_form_color??"").trim();if(a==="")t.contact_form_color=null;else if(/^#[0-9a-fA-F]{3,8}$/.test(a))t.contact_form_color=a;else return{ok:!1,error:"لون النافذة غير صالح، استخدم صيغة hex مثل #ffffff"}}if("contact_text_color"in e){const a=String(e.contact_text_color??"").trim();if(a===""||a==="black")t.contact_text_color=a===""?null:"black";else if(a==="white")t.contact_text_color="white";else return{ok:!1,error:"لون النص يجب أن يكون black أو white"}}if("contact_custom_fields"in e){const a=e.contact_custom_fields;if(a==null||Array.isArray(a)&&a.length===0)t.contact_custom_fields=null;else if(Array.isArray(a)){const r=a.filter(n=>n&&typeof n=="object"&&String(n.label??"").trim()).slice(0,3).map(n=>{const s=["text","number","select","checkbox"].includes(String(n.type||"text"))?String(n.type):"text";return{label:String(n.label).trim().slice(0,100),required:!!n.required,type:s}});t.contact_custom_fields=r.length>0?JSON.stringify(r):null}else return{ok:!1,error:"contact_custom_fields يجب أن يكون مصفوفة"}}return{ok:!0,updates:t}}function sn(e,t,a){return{company_name:t.name,slug:e.slug,contact_email:Ut(t.contact_email,a?.contact_email,e.contact_email),contact_phone:Ut(t.contact_phone,a?.contact_phone,e.contact_phone),logo_url:Ut(t.logo_url,a?.logo_url,e.logo_url),primary_color:e.primary_color,secondary_color:e.secondary_color,public_city:t.city,public_address:t.address,contact_bg_color:e.contact_bg_color??null,contact_form_color:e.contact_form_color??null,contact_text_color:e.contact_text_color??null,contact_custom_fields:e.contact_custom_fields??null}}function bt(e,t,a){const r=B(e.company_name),n=String(e.contact_phone??"").trim(),s=String(e.contact_email??"").trim(),o=B(s),i=B(n),l=ui(n),d=l?F(l):"",c=B(e.primary_color||"#0f766e"),p=B(e.secondary_color||"#14b8a6"),u=e.contact_bg_color?`background:${F(e.contact_bg_color)};`:`background:linear-gradient(135deg,${c},${p});`,g=e.contact_form_color?`background:${F(e.contact_form_color)};`:"background:#ffffff;",f=e.contact_text_color==="white"?`
     <style>
       #contactCardHeader h1,
       #contactCardHeader > p { color: rgba(255,255,255,0.92) !important; }
@@ -35598,7 +36360,7 @@ ${oi()}
       <\/script>
     </body>
     </html>
-  `}async function nn(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function mi(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}async function sn(e,t){const a=`USR${t.userId}`;if(await e.prepare("SELECT id FROM hr_employees WHERE employee_code = ? LIMIT 1").bind(a).first())return!1;let n="موظف";t.roleId===3?n="مشرف المبيعات":t.roleId===5&&(n="موظف التمويل");const s=t.fullName.trim()||t.username.trim()||a,o=new Date().toISOString().slice(0,10);return await e.prepare(`
+  `}async function on(e,t){await e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id = ?").bind(t),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?").bind(t),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?").bind(t),e.prepare("DELETE FROM calculations WHERE bank_id = ?").bind(t),e.prepare("DELETE FROM banks WHERE id = ?").bind(t)])}async function fi(e){return e.batch([e.prepare("DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)"),e.prepare("DELETE FROM banks WHERE tenant_id IS NULL")])}async function ln(e,t){const a=`USR${t.userId}`;if(await e.prepare("SELECT id FROM hr_employees WHERE employee_code = ? LIMIT 1").bind(a).first())return!1;let n="موظف";t.roleId===3?n="مشرف المبيعات":t.roleId===5&&(n="موظف التمويل");const s=t.fullName.trim()||t.username.trim()||a,o=new Date().toISOString().slice(0,10);return await e.prepare(`
       INSERT INTO hr_employees (
         tenant_id, employee_code, employee_number,
         full_name, full_name_ar,
@@ -35612,13 +36374,13 @@ ${oi()}
         0, 0, 0,
         ?
       )
-    `).bind(t.tenantId,a,a,s,s,t.email,t.phone,t.department,n,o,`linked_user:${t.userId}`).run(),!0}async function gi(e,t){let a=`
+    `).bind(t.tenantId,a,a,s,s,t.email,t.phone,t.department,n,o,`linked_user:${t.userId}`).run(),!0}async function bi(e,t){let a=`
     SELECT id, tenant_id, role_id, full_name, username, email, phone, hr_section
     FROM users
     WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id IS NOT NULL
-  `;const r=[];t!=null&&typeof t=="number"&&!Number.isNaN(t)&&(a+=" AND tenant_id = ?",r.push(t));const n=r.length?e.prepare(a).bind(...r):e.prepare(a),{results:s}=await n.all();let o=0,i=0;const l=[];for(const d of s||[]){const c=Number(d.id),p=Number(d.tenant_id);let u=Number(d.role_id);if(u===13?u=3:u===14&&(u=4),!c||Number.isNaN(c)||!p||Number.isNaN(p))continue;const g=d.email,b=d.phone,f=g!=null&&String(g).trim()!==""?String(g).trim():null,w=b!=null&&String(b).trim()!==""?String(b).trim():null,h=d.full_name!=null?String(d.full_name).trim():"",y=d.hr_section,S=y!=null&&String(y).trim()!==""?String(y).trim():null;try{await sn(e,{tenantId:p,userId:c,roleId:u,fullName:h,username:String(d.username??""),email:f,phone:w,department:S})?o++:i++}catch(_){l.push({userId:c,message:String(_?.message??_)})}}return{synced:o,skipped:i,errors:l}}async function fi(e){const t=e.res;if(!(!t?.body||!(t.headers.get("content-type")||"").includes("text/html"))&&!(t.status<200||t.status>=300))try{let n=await t.clone().text();if(n.includes('id="tailwind-inline-budget"'))return;const s=/<link[^>]+href=["']\/tailwind\.css(?:\?[^"']*)?["'][^>]*\s*\/?>/gi;if(!s.test(n))return;s.lastIndex=0,n=n.replace(s,"");const o=`<style id="tailwind-inline-budget">
-${Rr}
-</style>`,l=n.lastIndexOf("</head>");l!==-1?n=n.slice(0,l)+o+n.slice(l):n=o+n;const d=new Headers(t.headers);d.set("content-type","text/html; charset=UTF-8"),e.res=new Response(n,{status:t.status,statusText:t.statusText,headers:d})}catch{}}const m=new er;m.use("*",async(e,t)=>{await t(),await fi(e)});m.get("/tailwind.css",e=>e.newResponse(Rr,200,{"Content-Type":"text/css; charset=utf-8","Cache-Control":"public, max-age=86400"}));Mo(m,E);const de=()=>`
+  `;const r=[];t!=null&&typeof t=="number"&&!Number.isNaN(t)&&(a+=" AND tenant_id = ?",r.push(t));const n=r.length?e.prepare(a).bind(...r):e.prepare(a),{results:s}=await n.all();let o=0,i=0;const l=[];for(const d of s||[]){const c=Number(d.id),p=Number(d.tenant_id);let u=Number(d.role_id);if(u===13?u=3:u===14&&(u=4),!c||Number.isNaN(c)||!p||Number.isNaN(p))continue;const g=d.email,b=d.phone,f=g!=null&&String(g).trim()!==""?String(g).trim():null,w=b!=null&&String(b).trim()!==""?String(b).trim():null,h=d.full_name!=null?String(d.full_name).trim():"",y=d.hr_section,S=y!=null&&String(y).trim()!==""?String(y).trim():null;try{await ln(e,{tenantId:p,userId:c,roleId:u,fullName:h,username:String(d.username??""),email:f,phone:w,department:S})?o++:i++}catch(_){l.push({userId:c,message:String(_?.message??_)})}}return{synced:o,skipped:i,errors:l}}async function hi(e){const t=e.res;if(!(!t?.body||!(t.headers.get("content-type")||"").includes("text/html"))&&!(t.status<200||t.status>=300))try{let n=await t.clone().text();if(n.includes('id="tailwind-inline-budget"'))return;const s=/<link[^>]+href=["']\/tailwind\.css(?:\?[^"']*)?["'][^>]*\s*\/?>/gi;if(!s.test(n))return;s.lastIndex=0,n=n.replace(s,"");const o=`<style id="tailwind-inline-budget">
+${Dr}
+</style>`,l=n.lastIndexOf("</head>");l!==-1?n=n.slice(0,l)+o+n.slice(l):n=o+n;const d=new Headers(t.headers);d.set("content-type","text/html; charset=UTF-8"),e.res=new Response(n,{status:t.status,statusText:t.statusText,headers:d})}catch{}}const m=new ar;m.use("*",async(e,t)=>{await t(),await hi(e)});m.get("/tailwind.css",e=>e.newResponse(Dr,200,{"Content-Type":"text/css; charset=utf-8","Cache-Control":"public, max-age=86400"}));qo(m,E);const de=()=>`
   /* Wide-screen layout: let pages span available width (avoid big empty side whitespace) */
   @media (min-width: 1024px) {
     .max-w-7xl,
@@ -35846,7 +36608,7 @@ ${Rr}
       min-width: 60px !important;
     }
   }
-`;m.use("*",ts());m.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});m.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}if(a.startsWith("/api/public/")){await t();return}const r=await E(e);if(C(r.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a.startsWith("/api/financing-requests/")&&(n==="PUT"||n==="DELETE")){await t();return}if(a==="/api/attachments/upload"&&n==="POST"){await t();return}if(a==="/api/customers"&&n==="GET"){await t();return}if(a==="/api/customers"&&n==="POST"){await t();return}if(n==="POST"&&/^\/api\/customers\/\d+$/.test(a)){await t();return}if(a==="/api/requests"&&n==="POST"){await t();return}if(a==="/api/customers/import-csv"&&n==="POST"){await t();return}if(a==="/api/requests/import-csv"&&n==="POST"){await t();return}if((a==="/api/rates/import-csv"||a==="/api/rates/upload-excel")&&n==="POST"){await t();return}if(a==="/api/customer-reviews"&&n==="POST"){await t();return}if(a.startsWith("/api/customer-reviews/")&&n==="DELETE"){await t();return}if(a==="/api/customer-reviews"&&n==="GET"){await t();return}if(a.startsWith("/api/customer-reviews/")&&n==="GET"){await t();return}if(a==="/api/customer-alarms"&&(n==="GET"||n==="POST")){await t();return}if(a.startsWith("/api/customer-alarms/")&&(n==="GET"||n==="PUT"||n==="DELETE")){await t();return}if(n==="PUT"&&/^\/api\/requests\/\d+\/complete$/.test(a)){await t();return}if(a==="/api/reports/requests-followup"&&n==="GET"){await t();return}if(a==="/api/follow-ups"&&n==="GET"){await t();return}if(a.startsWith("/api/follow-ups/")&&(n==="GET"||n==="POST"||n==="PATCH")){await t();return}if(a==="/api/my-followup-tasks"&&(n==="GET"||n==="PATCH")){await t();return}if(a.startsWith("/api/my-followup-tasks/")&&(n==="GET"||n==="PATCH"||n==="POST")){await t();return}if(a==="/api/my-tenant-followup-staff"&&n==="GET"){await t();return}if(a==="/api/my-followup-task-passes/incoming"&&n==="GET"){await t();return}if(a.startsWith("/api/my-followup-task-passes/")&&n==="PATCH"){await t();return}if(a==="/api/requests/sample-csv"&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}if(a==="/api/my-leaves"&&(n==="GET"||n==="POST")){await t();return}if(n==="GET"&&(a==="/api/banks"||a==="/api/rates"||a==="/api/financing-types"||a==="/api/tenants"||a==="/api/admin/bank-agents"||a==="/api/admin/filter-employees")){await t();return}if(n==="POST"&&(a==="/api/calculator/save-customer"||a==="/api/calculator/submit-request"||a==="/api/workflow/update-stage"||a==="/api/workflow/add-action"||a==="/api/workflow/add-note"||a==="/api/workflow/create-task"||a==="/api/workflow/customer-update-stage"||a==="/api/workflow/customer-add-action"||a==="/api/workflow/customer-add-note"||a==="/api/workflow/customer-create-task")){await t();return}if(a==="/api/tenant-contact-affiliates"&&n==="GET"){await t();return}if(a.startsWith("/api/contract-tables/")){await t();return}if(a==="/api/contracts/party-logo-upload"&&n==="POST"){await t();return}if(a==="/api/tenant/document-watermark"&&n==="GET"){await t();return}if(n==="GET"&&a.startsWith("/api/attachments/view/")){await t();return}if(a.startsWith("/api/chat/")){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});async function bi(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],r=e.req.path.match(/^\/c\/([^\/]+)/),n=r?r[1]:null;let s=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(s=await e.env.DB.prepare(`
+`;m.use("*",rs());m.use("*",async(e,t)=>{e.req.path.startsWith("/api/")&&console.log(`🔍 [${e.req.method}] ${e.req.path} - DB binding: ${!!e.env?.DB}`),await t()});m.use("/api/*",async(e,t)=>{const a=e.req.path;if(a==="/api/auth/login"||a==="/api/auth/logout"||a.startsWith("/api/auth/forgot")||a.startsWith("/api/auth/reset")){await t();return}if(a.startsWith("/api/public/")){await t();return}const r=await E(e);if(C(r.roleId)!==5){await t();return}const n=e.req.method;if(a==="/api/financing-requests"&&n==="GET"){await t();return}if(a.startsWith("/api/financing-requests/")&&(n==="PUT"||n==="DELETE")){await t();return}if(a==="/api/attachments/upload"&&n==="POST"){await t();return}if(a==="/api/customers"&&n==="GET"){await t();return}if(a==="/api/customers"&&n==="POST"){await t();return}if(n==="POST"&&/^\/api\/customers\/\d+$/.test(a)){await t();return}if(a==="/api/requests"&&n==="POST"){await t();return}if(a==="/api/customers/import-csv"&&n==="POST"){await t();return}if(a==="/api/requests/import-csv"&&n==="POST"){await t();return}if((a==="/api/rates/import-csv"||a==="/api/rates/upload-excel")&&n==="POST"){await t();return}if(a==="/api/customer-reviews"&&n==="POST"){await t();return}if(a.startsWith("/api/customer-reviews/")&&n==="DELETE"){await t();return}if(a==="/api/customer-reviews"&&n==="GET"){await t();return}if(a.startsWith("/api/customer-reviews/")&&n==="GET"){await t();return}if(a==="/api/customer-alarms"&&(n==="GET"||n==="POST")){await t();return}if(a.startsWith("/api/customer-alarms/")&&(n==="GET"||n==="PUT"||n==="DELETE")){await t();return}if(n==="PUT"&&/^\/api\/requests\/\d+\/complete$/.test(a)){await t();return}if(a==="/api/reports/requests-followup"&&n==="GET"){await t();return}if(a==="/api/follow-ups"&&n==="GET"){await t();return}if(a.startsWith("/api/follow-ups/")&&(n==="GET"||n==="POST"||n==="PATCH")){await t();return}if(a==="/api/my-followup-tasks"&&(n==="GET"||n==="PATCH")){await t();return}if(a.startsWith("/api/my-followup-tasks/")&&(n==="GET"||n==="PATCH"||n==="POST")){await t();return}if(a==="/api/my-tenant-followup-staff"&&n==="GET"){await t();return}if(a==="/api/my-followup-task-passes/incoming"&&n==="GET"){await t();return}if(a.startsWith("/api/my-followup-task-passes/")&&n==="PATCH"){await t();return}if(a==="/api/requests/sample-csv"&&n==="GET"){await t();return}if(a==="/api/sidebar-filter-counts"&&n==="GET"){await t();return}if(a==="/api/my-leaves"&&(n==="GET"||n==="POST")){await t();return}if(n==="GET"&&(a==="/api/banks"||a==="/api/rates"||a==="/api/financing-types"||a==="/api/tenants"||a==="/api/admin/bank-agents"||a==="/api/admin/filter-employees")){await t();return}if(n==="POST"&&(a==="/api/calculator/save-customer"||a==="/api/calculator/submit-request"||a==="/api/workflow/update-stage"||a==="/api/workflow/add-action"||a==="/api/workflow/add-note"||a==="/api/workflow/create-task"||a==="/api/workflow/customer-update-stage"||a==="/api/workflow/customer-add-action"||a==="/api/workflow/customer-add-note"||a==="/api/workflow/customer-create-task")){await t();return}if(a==="/api/tenant-contact-affiliates"&&n==="GET"){await t();return}if(a.startsWith("/api/contract-tables/")){await t();return}if(a==="/api/contracts/party-logo-upload"&&n==="POST"){await t();return}if(a==="/api/tenant/document-watermark"&&n==="GET"){await t();return}if(n==="GET"&&a.startsWith("/api/attachments/view/")){await t();return}if(a.startsWith("/api/chat/")){await t();return}return e.json({success:!1,error:"غير مصرح"},403)});async function yi(e){if(!e.env?.DB)return console.error("❌ getTenant: DB binding not available"),null;const a=(e.req.header("host")||"").split(":")[0].split(".")[0],r=e.req.path.match(/^\/c\/([^\/]+)/),n=r?r[1]:null;let s=null;return a&&a!=="localhost"&&a!=="3000-ii8t2q2dzwwe7ckmslxss-3844e1b6"&&(s=await e.env.DB.prepare(`
       SELECT * FROM tenants 
       WHERE subdomain = ? AND status = 'active'
       LIMIT 1
@@ -35856,9 +36618,9 @@ ${Rr}
       LIMIT 1
     `).bind(n).first()),s||(s=await e.env.DB.prepare(`
       SELECT * FROM tenants WHERE id = 1 LIMIT 1
-    `).bind().first()),s}function hi(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const r=a.replace(/-/g,"+").replace(/_/g,"/"),n=r.length%4;if(n===1)return null;const s=n===0?"":"=".repeat(4-n);return r+s}function ue(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function yi(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,r=Date.parse(a);return Number.isNaN(r)?null:r}const Ma=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function oa(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const r=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return r.length>0?r:[...Ma]}catch{return[...Ma]}}function ia(e){const t=C(e);return t===1||t===2}function ct(e){return ia(e)?"/admin/dashboard":"/admin/panel"}function Wt(e){return JSON.stringify(e).replace(/</g,"\\u003c")}function _e(e,t){const a=C(e),r=(t||"").trim(),n=r.toLowerCase();return a===1?"مدير النظام":a===2?r||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"موظف التمويل":a===6?"موظف مزدوج":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="dual_agent"?"موظف مزدوج":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":r==="موظف"?"موظف":r==="مشرف"||r.includes("مشرف")?"مشرف المبيعات":r||"غير محدد"}function qe(e){return e===1||e===2}async function E(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const h=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",h?"Present":"Missing"),h){const S=h.split(";").map(_=>_.trim()).find(_=>_.startsWith("authToken="));S?(t=S.startsWith("authToken=")?S.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const h=e.req.query("tenant_id");return{userId:null,tenantId:h?parseInt(h):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=hi(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const r=atob(a);console.log("🔍 [getUserInfo] Decoded token:",r.substring(0,50)+"...");const n=r.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const s=ue(n[0]);if(!s)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const o=ue(n[1]),i=C(ue(n[2])),l=ue(n[3]);if(!l)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:s,tenantIdFromToken:o,tokenRoleId:i,tokenIssuedAtMs:l}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",s);const d=await e.env.DB.prepare(`
+    `).bind().first()),s}function xi(e){const t=e.trim();if(!t)return null;let a=t;try{a=decodeURIComponent(t)}catch{}const r=a.replace(/-/g,"+").replace(/_/g,"/"),n=r.length%4;if(n===1)return null;const s=n===0?"":"=".repeat(4-n);return r+s}function ue(e){if(!e||e==="null"||e==="undefined")return null;const t=Number.parseInt(e,10);return Number.isNaN(t)?null:t}function vi(e){if(!e)return null;const t=e.includes("T")?e:e.replace(" ","T"),a=/Z$|[+-]\d\d:\d\d$/.test(t)?t:`${t}Z`,r=Date.parse(a);return Number.isNaN(r)?null:r}const qa=["قرض شخصي","قرض عقاري","تمويل سيارة قائم","بطاقة ائتمان","تمويل تعاوني","تقسيط / شراء بالأقساط","سلفة راتب","التزامات أخرى"];async function oa(e,t){try{let a;t!=null?a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND (tenant_id IS NULL OR tenant_id = ?) ORDER BY sort_order ASC, type_name ASC").bind(t).all()).results||[]:a=(await e.prepare("SELECT type_name FROM obligation_types WHERE is_active = 1 AND tenant_id IS NULL ORDER BY sort_order ASC, type_name ASC").all()).results||[];const r=a.map(n=>n.type_name).filter(n=>typeof n=="string"&&n.length>0);return r.length>0?r:[...qa]}catch{return[...qa]}}function ia(e){const t=C(e);return t===1||t===2}function ct(e){return ia(e)?"/admin/dashboard":"/admin/panel"}function zt(e){return JSON.stringify(e).replace(/</g,"\\u003c")}function _e(e,t){const a=C(e),r=(t||"").trim(),n=r.toLowerCase();return a===1?"مدير النظام":a===2?r||"حساب شركة":a===3?"مشرف المبيعات":a===4?"موظف":a===5?"موظف التمويل":a===6?"موظف مزدوج":n==="supervisor"?"مشرف المبيعات":n==="employee"?"موظف":n==="dual_agent"?"موظف مزدوج":n==="company_admin"?"حساب شركة":n==="super_admin"?"مدير النظام":r==="موظف"?"موظف":r==="مشرف"||r.includes("مشرف")?"مشرف المبيعات":r||"غير محدد"}function qe(e){return e===1||e===2}async function E(e){try{console.log("🔍 [getUserInfo] Starting user info retrieval...");let t=e.req.header("Authorization")?.replace("Bearer ","");if(console.log("🔍 [getUserInfo] Token from header:",t?"Found":"Not found"),!t){const h=e.req.header("Cookie");if(console.log("🔍 [getUserInfo] Cookie header:",h?"Present":"Missing"),h){const S=h.split(";").map(_=>_.trim()).find(_=>_.startsWith("authToken="));S?(t=S.startsWith("authToken=")?S.slice(10):"",console.log("✅ [getUserInfo] Token found in cookie")):console.log("❌ [getUserInfo] No authToken cookie found")}}if(!t){console.log("❌ [getUserInfo] No token found in header or cookie");const h=e.req.query("tenant_id");return{userId:null,tenantId:h?parseInt(h):null,roleId:null,tokenRoleId:null,assignedBankId:null}}console.log("🔍 [getUserInfo] Token found:",t.substring(0,20)+"..."),console.log("🔍 [getUserInfo] Normalizing token...");const a=xi(t);if(!a)return console.log("❌ [getUserInfo] Invalid token format after normalization"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};console.log("🔍 [getUserInfo] Decoding token...");const r=atob(a);console.log("🔍 [getUserInfo] Decoded token:",r.substring(0,50)+"...");const n=r.split(":");console.log("🔍 [getUserInfo] Token parts:",n.length,"parts");const s=ue(n[0]);if(!s)return console.log("❌ [getUserInfo] Invalid token payload - no userId"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const o=ue(n[1]),i=C(ue(n[2])),l=ue(n[3]);if(!l)return console.log("❌ [getUserInfo] Invalid token payload - missing issue timestamp"),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};if(console.log("🔍 [getUserInfo] Parsed:",{userId:s,tenantIdFromToken:o,tokenRoleId:i,tokenIssuedAtMs:l}),!e.env?.DB)return console.error("❌ [getUserInfo] DB binding not available"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i??null,assignedBankId:null};console.log("🔍 [getUserInfo] Querying database for user:",s);const d=await e.env.DB.prepare(`
       SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
-    `).bind(s).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const c=yi(d.last_login??null);if(c&&l<c)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:l,userLastLoginMs:c}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const p=C(d.role_id),u=d.assigned_bank_id,g=u!=null&&!Number.isNaN(Number(u))?Number(u):null;if(p===1){const h=e.req.query("tenant_id"),y={userId:d.id,tenantId:h?parseInt(h):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",y),y}const b=d.tenant_id;let f=b??o;if(f==null&&(p===5||p===6)&&g!=null&&e.env?.DB)try{const h=await e.env.DB.prepare("SELECT tenant_id FROM banks WHERE id = ? LIMIT 1").bind(g).first();h?.tenant_id!=null&&!Number.isNaN(Number(h.tenant_id))&&(f=Number(h.tenant_id))}catch{}const w={userId:d.id,tenantId:f,roleId:p,tokenRoleId:i,assignedBankId:p===5||p===6?g:null};return console.log("✅ [getUserInfo] Returning user info:",w),w}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(r){return`Failed to stringify: ${r}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}function ke(e){const t=Number(e);return[t,t,t,t]}function ht(e){const t=Number(e);return[t,t,t]}async function xi(e,t,a,r,n=""){try{await e.prepare(`INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+    `).bind(s).first();if(!d)return console.log("❌ [getUserInfo] User not found in database"),{userId:null,tenantId:null,roleId:null,tokenRoleId:i,assignedBankId:null};console.log("✅ [getUserInfo] User found:",{id:d.id,tenant_id:d.tenant_id,role_id:d.role_id});const c=vi(d.last_login??null);if(c&&l<c)return console.log("❌ [getUserInfo] Token invalidated by a newer login",{tokenIssuedAtMs:l,userLastLoginMs:c}),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null};const p=C(d.role_id),u=d.assigned_bank_id,g=u!=null&&!Number.isNaN(Number(u))?Number(u):null;if(p===1){const h=e.req.query("tenant_id"),y={userId:d.id,tenantId:h?parseInt(h):null,roleId:1,tokenRoleId:i,assignedBankId:null};return console.log("✅ [getUserInfo] Returning super admin info:",y),y}const b=d.tenant_id;let f=b??o;if(f==null&&(p===5||p===6)&&g!=null&&e.env?.DB)try{const h=await e.env.DB.prepare("SELECT tenant_id FROM banks WHERE id = ? LIMIT 1").bind(g).first();h?.tenant_id!=null&&!Number.isNaN(Number(h.tenant_id))&&(f=Number(h.tenant_id))}catch{}const w={userId:d.id,tenantId:f,roleId:p,tokenRoleId:i,assignedBankId:p===5||p===6?g:null};return console.log("✅ [getUserInfo] Returning user info:",w),w}catch(t){const a={message:t?.message||"Unknown error",name:t?.name||"Error",stack:t?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(t,Object.getOwnPropertyNames(t),2)}catch(r){return`Failed to stringify: ${r}`}})()};return console.error("❌ [getUserInfo] ERROR DUMP:",a),{userId:null,tenantId:null,roleId:null,tokenRoleId:null,assignedBankId:null}}}function ke(e){const t=Number(e);return[t,t,t,t]}function ht(e){const t=Number(e);return[t,t,t]}async function wi(e,t,a,r,n=""){try{await e.prepare(`INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(customer_id) DO UPDATE SET
            employee_id = excluded.employee_id,
@@ -35917,7 +36679,7 @@ ${Rr}
         )
       ))
     )
-  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`;async function on(e,t,a){return la(e,a,t)}async function Bt(e,t,a){try{return await e.prepare("UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?").bind(a,t).run(),{ok:!0}}catch(r){const n=String(r?.message||r||"");if(/no such column:\s*assigned_bank_agent_id/i.test(n))return{ok:!1,missingColumn:!0};throw r}}async function xt(e,t,a){try{await e.prepare("UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE customer_id = ?").bind(a,t).run()}catch{}}async function vi(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function ln(e,t,a){let r="SELECT id, full_name, phone, national_id, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let o=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(o=parseInt(String(i),10)),o==null&&t.userId){const l=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();l?.tenant_id!=null&&(o=l.tenant_id)}if(o==null)return{results:[]};r+=" WHERE tenant_id = ?",n.push(o)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};r+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};a?.filterRole4ByFundingRequests?(r+=` WHERE tenant_id = ? AND EXISTS (
+  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`;async function dn(e,t,a){return la(e,a,t)}async function Bt(e,t,a){try{return await e.prepare("UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?").bind(a,t).run(),{ok:!0}}catch(r){const n=String(r?.message||r||"");if(/no such column:\s*assigned_bank_agent_id/i.test(n))return{ok:!1,missingColumn:!0};throw r}}async function xt(e,t,a){try{await e.prepare("UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE customer_id = ?").bind(a,t).run()}catch{}}async function _i(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function cn(e,t,a){let r="SELECT id, full_name, phone, national_id, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers";const n=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let o=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(o=parseInt(String(i),10)),o==null&&t.userId){const l=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();l?.tenant_id!=null&&(o=l.tenant_id)}if(o==null)return{results:[]};r+=" WHERE tenant_id = ?",n.push(o)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};r+=" WHERE tenant_id = ?",n.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};a?.filterRole4ByFundingRequests?(r+=` WHERE tenant_id = ? AND EXISTS (
         SELECT 1 FROM customer_assignments ca
         WHERE ca.customer_id = customers.id AND ca.employee_id = ?
       ) AND EXISTS (
@@ -35958,7 +36720,7 @@ ${Rr}
         SELECT 1 FROM financing_requests fr
         WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
       )
-    )`,n.push(t.tenantId,t.userId,t.userId)}else r+=" WHERE 1 = 0";r+=" ORDER BY full_name";let s;try{s=n.length?await e.env.DB.prepare(r).bind(...n).all():await e.env.DB.prepare(r).all()}catch(o){const i=String(o?.message||o||"");if(/no such column:\s*is_completed/i.test(i)&&t.tenantId!=null){const l=r.replace("COALESCE(is_completed, 0) as is_completed","0 as is_completed");s=n.length?await e.env.DB.prepare(l).bind(...n).all():await e.env.DB.prepare(l).all()}else throw o}return{results:s.results||[]}}async function Nt(e,t){const a=Number(t);return!Number.isFinite(a)||a<=0?!1:await e.prepare("SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? LIMIT 1").bind(a).first()!=null}function H(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const wi=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"],_i=["/admin/company-settings"];function Ei(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let r=e.replace(a,"");const n=`
+    )`,n.push(t.tenantId,t.userId,t.userId)}else r+=" WHERE 1 = 0";r+=" ORDER BY full_name";let s;try{s=n.length?await e.env.DB.prepare(r).bind(...n).all():await e.env.DB.prepare(r).all()}catch(o){const i=String(o?.message||o||"");if(/no such column:\s*is_completed/i.test(i)&&t.tenantId!=null){const l=r.replace("COALESCE(is_completed, 0) as is_completed","0 as is_completed");s=n.length?await e.env.DB.prepare(l).bind(...n).all():await e.env.DB.prepare(l).all()}else throw o}return{results:s.results||[]}}async function Nt(e,t){const a=Number(t);return!Number.isFinite(a)||a<=0?!1:await e.prepare("SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? LIMIT 1").bind(a).first()!=null}function H(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const Ei=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"],ki=["/admin/company-settings"];function Ii(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let r=e.replace(a,"");const n=`
 <style>
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
@@ -35967,7 +36729,7 @@ ${Rr}
   [href^="/admin/saas-settings"],
   [href^="/admin/tenant-calculators"] { display: none !important; }
 </style>
-`,o=r.lastIndexOf("</head>");return o!==-1?r=r.slice(0,o)+n+r.slice(o):r=n+r,r}const ki={1:["/admin/dashboard","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/chat"],2:["/admin/dashboard","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/","/admin/company-settings","/admin/company-settings/locations","/admin/chat"],3:["/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/admin/my-leaves","/calculator","/","/admin/chat"],4:["/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/contracts","/admin/contracts/list","/admin/contracts/new","/admin/contracts/templates","/admin/my-tasks","/my-tasks","/admin/my-leaves","/calculator","/","/admin/chat"],5:["/admin/panel","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/contact-affiliates","/admin/contracts","/admin/contracts/list","/admin/contracts/view","/admin/my-tasks","/my-tasks","/admin/my-leaves","/calculator","/","/admin/chat"],6:["/admin/panel","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/contact-affiliates","/admin/contracts","/admin/contracts/list","/admin/contracts/new","/admin/contracts/view","/admin/contracts/templates","/admin/my-tasks","/my-tasks","/admin/my-leaves","/calculator","/","/admin/chat"]};function Ii(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const r=e==="/admin/panel",n=r?`
+`,o=r.lastIndexOf("</head>");return o!==-1?r=r.slice(0,o)+n+r.slice(o):r=n+r,r}const Si={1:["/admin/dashboard","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/banks","/admin/rates","/admin/subscriptions","/admin/packages","/admin/users","/admin/roles","/admin/notifications","/calculator","/","/admin/tenants","/admin/tenant-calculators","/admin/saas-settings","/admin/reports","/admin/payments","/admin/settings","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/chat"],2:["/admin/dashboard","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/reports","/admin/banks","/admin/rates","/admin/payments","/admin/users","/admin/hr","/admin/contracts","/admin/follow-ups","/admin/notifications","/calculator","/","/admin/company-settings","/admin/company-settings/locations","/admin/chat"],3:["/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/reports","/admin/banks","/admin/rates","/admin/contracts","/admin/contracts/list","/admin/follow-ups","/admin/my-leaves","/calculator","/","/admin/chat"],4:["/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/contracts","/admin/contracts/list","/admin/contracts/new","/admin/contracts/templates","/admin/my-tasks","/my-tasks","/admin/my-leaves","/calculator","/","/admin/chat"],5:["/admin/panel","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/contact-affiliates","/admin/contracts","/admin/contracts/list","/admin/contracts/view","/admin/my-tasks","/my-tasks","/admin/my-leaves","/calculator","/","/admin/chat"],6:["/admin/panel","/admin/customers","/admin/customers/completed","/admin/customers/archived","/admin/requests","/admin/requests/completed","/admin/contact-affiliates","/admin/contracts","/admin/contracts/list","/admin/contracts/new","/admin/contracts/view","/admin/contracts/templates","/admin/my-tasks","/my-tasks","/admin/my-leaves","/calculator","/","/admin/chat"]};function Ti(e,t,a){if(!e.startsWith("/admin/")||e==="/admin/contracts"||e.startsWith("/admin/contracts/")||t.includes('id="global-persistent-sidebar"'))return t;const r=e==="/admin/panel",n=r?`
   html.admin-panel-rail body { transition: margin 0.28s ease; }
   html.admin-panel-rail #global-persistent-sidebar {
     transition: transform 0.28s ease;
@@ -36048,7 +36810,7 @@ ${Rr}
       margin-right: 0 !important;
     }
   }
-`:"",s=a?.roleId??4,o=JSON.stringify(ki),i=`
+`:"",s=a?.roleId??4,o=JSON.stringify(Si),i=`
 <style>
   #global-persistent-sidebar {
     position: fixed;
@@ -36726,20 +37488,20 @@ ${r?`
     `:""}
   })();
 <\/script>
-`;let d=t;const p=d.lastIndexOf("</head>");p!==-1?d=d.slice(0,p)+i+d.slice(p):d=i+d;const g=d.lastIndexOf("</body>"),b=e!=="/admin/chat"?Ko(a?.userId??null,a?.roleId??null):"";return g!==-1?d=d.slice(0,g)+l+b+d.slice(g):d=d+l+b,d}m.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await E(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const r=H(a),n=e.req.path||"";if(wi.some(l=>n===l||n.startsWith(l+"/"))&&!r)return e.redirect(ct(a.roleId));const o=C(a.roleId);if(_i.some(l=>n===l||n.startsWith(l+"/"))&&o!==2)return e.redirect(ct(a.roleId));if(n==="/admin/dashboard"&&!ia(a.roleId))return e.redirect("/admin/panel");if(Zs(n)&&!St(o))return e.redirect(ct(a.roleId));if(o===5&&!(n==="/admin"||n==="/admin/panel"||n.startsWith("/admin/customers")||n.startsWith("/admin/requests")||n.startsWith("/admin/follow-ups")||n==="/admin/my-tasks"||n==="/my-tasks"||n==="/admin/my-leaves"||n.startsWith("/admin/contracts")||n==="/admin/contact-affiliates"||n==="/admin/chat"||n==="/calculator"||n==="/"))return e.redirect("/admin/panel");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const l=e.res;if(l.status>=300&&l.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(l.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const d=l.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",d),d.includes("text/html")&&l.body){console.log("🔒 [RBAC] Processing HTML response...");const p=await l.clone().text();console.log("🔒 [RBAC] HTML length:",p.length);let u=p;r||(u=Ei(u));const g=C(a.roleId)??4;u=Ii(n,u,{roleId:g,userId:a.userId}),(n==="/admin/contracts"||n.startsWith("/admin/contracts/"))&&u.includes("</head>")&&(u=u.replace("</head>",`<script>window.USER_ROLE_ID=${g};<\/script></head>`)),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const b=new Headers(l.headers);b.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:l.status,statusText:l.statusText,headers:b}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(l){const d={message:l?.message||"Unknown error",name:l?.name||"Error",stack:l?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(l,Object.getOwnPropertyNames(l),2)}catch(c){return`Failed to stringify: ${c}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",d)}}catch(a){const r={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",r),e.json({success:!1,error:"RBAC Middleware Error",dd:r},500)}});m.get("/api/user-info",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:C(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});m.use("/c/:tenant/*",async(e,t)=>{const a=await bi(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function Si(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function jt(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
+`;let d=t;const p=d.lastIndexOf("</head>");p!==-1?d=d.slice(0,p)+i+d.slice(p):d=i+d;const g=d.lastIndexOf("</body>"),b=e!=="/admin/chat"?ei(a?.userId??null,a?.roleId??null):"";return g!==-1?d=d.slice(0,g)+l+b+d.slice(g):d=d+l+b,d}m.use("/admin/*",async(e,t)=>{try{console.log("🔒 [RBAC] Checking access for:",e.req.path);const a=await E(e);if(console.log("🔒 [RBAC] User info:",{userId:a.userId,roleId:a.roleId,tenantId:a.tenantId,tokenRoleId:a.tokenRoleId}),!a.userId)return console.log("🔒 [RBAC] No userId, redirecting to login"),e.redirect("/login");const r=H(a),n=e.req.path||"";if(Ei.some(l=>n===l||n.startsWith(l+"/"))&&!r)return e.redirect(ct(a.roleId));const o=C(a.roleId);if(ki.some(l=>n===l||n.startsWith(l+"/"))&&o!==2)return e.redirect(ct(a.roleId));if(n==="/admin/dashboard"&&!ia(a.roleId))return e.redirect("/admin/panel");if(to(n)&&!St(o))return e.redirect(ct(a.roleId));if(o===5&&!(n==="/admin"||n==="/admin/panel"||n.startsWith("/admin/customers")||n.startsWith("/admin/requests")||n.startsWith("/admin/follow-ups")||n==="/admin/my-tasks"||n==="/my-tasks"||n==="/admin/my-leaves"||n.startsWith("/admin/contracts")||n==="/admin/contact-affiliates"||n==="/admin/chat"||n==="/calculator"||n==="/"))return e.redirect("/admin/panel");if(await t(),e.res)try{console.log("🔒 [RBAC] Post-processing admin HTML response");const l=e.res;if(l.status>=300&&l.status<400){console.log("🔒 [RBAC] Skipping HTML processing - redirect response");return}if(l.status>=400){console.log("🔒 [RBAC] Skipping HTML processing - error response");return}const d=l.headers.get("content-type")||"";if(console.log("🔒 [RBAC] Content-Type:",d),d.includes("text/html")&&l.body){console.log("🔒 [RBAC] Processing HTML response...");const p=await l.clone().text();console.log("🔒 [RBAC] HTML length:",p.length);let u=p;r||(u=Ii(u));const g=C(a.roleId)??4;u=Ti(n,u,{roleId:g,userId:a.userId}),(n==="/admin/contracts"||n.startsWith("/admin/contracts/"))&&u.includes("</head>")&&(u=u.replace("</head>",`<script>window.USER_ROLE_ID=${g};<\/script></head>`)),console.log("🔒 [RBAC] HTML processed, updated length:",u.length);const b=new Headers(l.headers);b.set("content-type","text/html; charset=UTF-8"),e.res=new Response(u,{status:l.status,statusText:l.statusText,headers:b}),console.log("🔒 [RBAC] HTML processing complete")}else console.log("🔒 [RBAC] Not HTML response or no body, skipping")}catch(l){const d={message:l?.message||"Unknown error",name:l?.name||"Error",stack:l?.stack||"No stack trace",error_stringified:(()=>{try{return JSON.stringify(l,Object.getOwnPropertyNames(l),2)}catch(c){return`Failed to stringify: ${c}`}})()};console.error("❌ [RBAC] Error processing HTML DUMP:",d)}}catch(a){const r={message:a?.message||"Unknown error",name:a?.name||"Error",stack:a?.stack||"No stack trace",path:e.req.path,error_stringified:(()=>{try{return JSON.stringify(a,Object.getOwnPropertyNames(a),2)}catch(n){return`Failed to stringify: ${n}`}})()};return console.error("❌ [RBAC] CRITICAL ERROR DUMP:",r),e.json({success:!1,error:"RBAC Middleware Error",dd:r},500)}});m.get("/api/user-info",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT id, full_name, email, tenant_id, role_id FROM users WHERE id = ?").bind(t.userId).first();return a?e.json({success:!0,user:{id:a.id,full_name:a.full_name,email:a.email,tenant_id:a.tenant_id,role_id:C(a.role_id)}}):e.json({success:!1,error:"User not found"},404)}catch(t){return console.error("Error in /api/user-info:",t),e.json({success:!1,error:t.message},500)}});m.use("/c/:tenant/*",async(e,t)=>{const a=await yi(e);if(!a)return e.json({error:"Tenant not found",message:"الشركة غير موجودة أو غير نشطة"},404);e.set("tenant",a),e.set("tenantId",a.id),await t()});function Ci(){if(typeof crypto<"u"&&typeof crypto.randomUUID=="function")return crypto.randomUUID();const e=()=>Math.floor(Math.random()*4294967295).toString(16).padStart(8,"0");return`${e().slice(0,8)}-${e().slice(0,4)}-4${e().slice(1,4)}-a${e().slice(2,5)}-${e()}${e().slice(0,4)}`}async function jt(e,t){if(!t)return null;if(/^\d+$/.test(t)){const n=Number(t);if(Number.isInteger(n)&&n>0)return n}return(await e.env.DB.prepare(`
     SELECT id FROM tenants WHERE public_uuid = ? LIMIT 1
   `).bind(t).first())?.id??null}m.get("/api/tenants",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM tenants ORDER BY created_at DESC
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/tenants",async e=>{try{const t=await e.req.json(),a=he(t.slug);if(!t.company_name||!a)return e.json({success:!1,error:"اسم الشركة والـ Slug مطلوبان"},400);if(Ee(a))return e.json({success:!1,error:"هذا الـ Slug محجوز ولا يمكن استخدامه"},400);if(await e.env.DB.prepare(`
       SELECT id FROM tenants WHERE slug = ?
-    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=t.logo_url!=null&&String(t.logo_url).trim()!==""?K(t.logo_url):null;if(t.logo_url!=null&&String(t.logo_url).trim()!==""&&!n)return e.json({success:!1,error:"رابط شعار الشركة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);const s=String(t.location_name??"").trim();if(!s)return e.json({success:!1,error:"اسم الموقع الرئيسي مطلوب"},400);const o=et(t.city);if(!o.ok)return e.json({success:!1,error:o.error},400);if(!o.value)return e.json({success:!1,error:"المدينة مطلوبة لتحديد موقع الشركة"},400);const i=Ze(t.address);if(!i.ok)return e.json({success:!1,error:i.error},400);if(!i.value)return e.json({success:!1,error:"العنوان التفصيلي مطلوب لتحديد موقع الشركة"},400);const l=Si(),d=await e.env.DB.prepare(`
+    `).bind(a).first())return e.json({success:!1,error:"الـ Slug موجود بالفعل"},400);const n=t.logo_url!=null&&String(t.logo_url).trim()!==""?K(t.logo_url):null;if(t.logo_url!=null&&String(t.logo_url).trim()!==""&&!n)return e.json({success:!1,error:"رابط شعار الشركة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);const s=String(t.location_name??"").trim();if(!s)return e.json({success:!1,error:"اسم الموقع الرئيسي مطلوب"},400);const o=et(t.city);if(!o.ok)return e.json({success:!1,error:o.error},400);if(!o.value)return e.json({success:!1,error:"المدينة مطلوبة لتحديد موقع الشركة"},400);const i=Ze(t.address);if(!i.ok)return e.json({success:!1,error:i.error},400);if(!i.value)return e.json({success:!1,error:"العنوان التفصيلي مطلوب لتحديد موقع الشركة"},400);const l=Ci(),d=await e.env.DB.prepare(`
       INSERT INTO tenants (
         public_uuid,
         company_name, slug, subdomain, status, max_users, 
         max_customers, max_requests, contact_email, contact_phone,
         primary_color, secondary_color, logo_url, city, address
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(l,t.company_name,a,t.subdomain||a,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2",n,o.value,i.value).run(),c=Number(d.meta.last_row_id);let p=li(s,a);p=await Qr(e.env.DB,c,p);const u=t.contact_email!=null&&String(t.contact_email).trim()!==""?String(t.contact_email).trim():null,g=t.contact_phone!=null&&String(t.contact_phone).trim()!==""?String(t.contact_phone).trim():null;return await e.env.DB.prepare(`
+    `).bind(l,t.company_name,a,t.subdomain||a,t.status||"active",t.max_users||10,t.max_customers||500,t.max_requests||2e3,t.contact_email||"",t.contact_phone||"",t.primary_color||"#667eea",t.secondary_color||"#764ba2",n,o.value,i.value).run(),c=Number(d.meta.last_row_id);let p=ci(s,a);p=await Zr(e.env.DB,c,p);const u=t.contact_email!=null&&String(t.contact_email).trim()!==""?String(t.contact_email).trim():null,g=t.contact_phone!=null&&String(t.contact_phone).trim()!==""?String(t.contact_phone).trim():null;return await e.env.DB.prepare(`
       INSERT INTO tenant_locations (
         tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url,
         is_primary, is_active
@@ -36771,18 +37533,18 @@ ${r?`
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
       FROM tenants WHERE id = ? LIMIT 1
-    `).bind(t.tenantId).first();return a?e.json({success:!0,data:{...a,...en(a)}}):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/my-tenant/logo-upload",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(t.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!t.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"تخزين الملفات غير مُهيأ"},500);let a;try{a=await e.req.formData()}catch{return e.json({success:!1,error:"توقعنا نموذجاً متعدد الأجزاء (ملف)"},400)}const r=a.get("file");if(!r||!(r instanceof File))return e.json({success:!1,error:"لم يتم اختيار ملف"},400);const n=r,s=2*1024*1024;if(n.size>s)return e.json({success:!1,error:"الحد الأقصى لحجم الشعار 2 ميجابايت"},400);const o=(n.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(o))return e.json({success:!1,error:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);if(!await e.env.DB.prepare("SELECT id FROM tenants WHERE id = ? LIMIT 1").bind(t.tenantId).first())return e.json({success:!1,error:"الشركة غير موجودة"},404);const l=Date.now(),d=Math.random().toString(36).slice(2,9),c=(n.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",p=["jpg","jpeg","png","gif","webp"].includes(c)?c:"jpg",u=`tenants/${t.tenantId}/company_logo_${l}_${d}.${p}`,g=await n.arrayBuffer();await e.env.ATTACHMENTS.put(u,g,{httpMetadata:{contentType:n.type||`image/${p==="jpg"?"jpeg":p}`}});const b=`/api/attachments/view/${u}`;return e.json({success:!0,url:b,filename:u})}catch(t){return e.json({success:!1,error:t.message},500)}});async function da(e,t){try{const a=await E(e);if(!a.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(a.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!a.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"تخزين الملفات غير مُهيأ"},500);let r;try{r=await e.req.formData()}catch{return e.json({success:!1,error:"توقعنا نموذجاً متعدد الأجزاء (ملف)"},400)}const n=r.get("file");if(!n||!(n instanceof File))return e.json({success:!1,error:"لم يتم اختيار ملف"},400);const s=n,o=2*1024*1024;if(s.size>o)return e.json({success:!1,error:`الحد الأقصى لحجم ${t.maxLabelAr} 2 ميجابايت`},400);const i=(s.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(i))return e.json({success:!1,error:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);if(!await e.env.DB.prepare("SELECT id FROM tenants WHERE id = ? LIMIT 1").bind(a.tenantId).first())return e.json({success:!1,error:"الشركة غير موجودة"},404);const d=Date.now(),c=Math.random().toString(36).slice(2,9),p=(s.name.split(".").pop()||"png").replace(/[^a-z0-9]/gi,"").toLowerCase()||"png",u=["jpg","jpeg","png","gif","webp"].includes(p)?p:"png",g=`tenants/${a.tenantId}/${t.keyPrefix}_${d}_${c}.${u}`,b=await s.arrayBuffer();await e.env.ATTACHMENTS.put(g,b,{httpMetadata:{contentType:s.type||`image/${u==="jpg"?"jpeg":u}`}});const f=`/api/attachments/view/${g}`;return e.json({success:!0,url:f,filename:g})}catch(a){return e.json({success:!1,error:a.message},500)}}m.post("/api/my-tenant/watermark-upload",e=>da(e,{keyPrefix:"document_watermark",maxLabelAr:"صورة العلامة المائية"}));m.post("/api/my-tenant/header-upload",e=>da(e,{keyPrefix:"document_header",maxLabelAr:"صورة ترويسة الصفحة"}));m.post("/api/my-tenant/footer-upload",e=>da(e,{keyPrefix:"document_footer",maxLabelAr:"صورة تذييل الصفحة"}));m.patch("/api/my-tenant",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(t.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!t.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);const a=await e.req.json().catch(()=>({})),r={};if("company_name"in a){const c=String(a.company_name??"").trim();if(!c)return e.json({success:!1,error:"اسم الشركة مطلوب"},400);r.company_name=c}if("contact_email"in a){const c=a.contact_email;if(c==null||String(c).trim()==="")r.contact_email=null;else{const p=String(c).trim();if(p.length>200)return e.json({success:!1,error:"البريد الإلكتروني طويل جداً"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p))return e.json({success:!1,error:"صيغة البريد الإلكتروني غير صحيحة"},400);r.contact_email=p}}if("contact_phone"in a){const c=a.contact_phone;if(c==null||String(c).trim()==="")r.contact_phone=null;else{const p=At(String(c));if(!p)return e.json({success:!1,error:"صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX)."},400);r.contact_phone=p}}if("logo_url"in a){const c=a.logo_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط الشعار غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.logo_url=u}if("city"in a){const c=et(a.city);if(!c.ok)return e.json({success:!1,error:c.error},400);r.city=c.value}if("address"in a){const c=Ze(a.address);if(!c.ok)return e.json({success:!1,error:c.error},400);r.address=c.value}if("whatsapp_greeting"in a){const c=gs(a.whatsapp_greeting);if(!c.ok)return e.json({success:!1,error:c.error},400);r.whatsapp_greeting=c.value}if("document_watermark_url"in a){const c=a.document_watermark_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط العلامة المائية غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.document_watermark_url=u}if("document_watermark_enabled"in a){const c=a.document_watermark_enabled===!0||a.document_watermark_enabled===1||a.document_watermark_enabled==="1";r.document_watermark_enabled=c?"1":"0"}if("document_watermark_opacity"in a){const c=Number(a.document_watermark_opacity);if(!Number.isFinite(c))return e.json({success:!1,error:"شفافية العلامة المائية غير صالحة"},400);r.document_watermark_opacity=String(sa(c,.12))}if("document_header_url"in a){const c=a.document_header_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط ترويسة الصفحة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.document_header_url=u}if("document_header_enabled"in a){const c=a.document_header_enabled===!0||a.document_header_enabled===1||a.document_header_enabled==="1";r.document_header_enabled=c?"1":"0"}if("document_header_opacity"in a){const c=Number(a.document_header_opacity);if(!Number.isFinite(c))return e.json({success:!1,error:"شفافية ترويسة الصفحة غير صالحة"},400);r.document_header_opacity=String(je(c,1))}if("document_footer_url"in a){const c=a.document_footer_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط تذييل الصفحة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.document_footer_url=u}if("document_footer_enabled"in a){const c=a.document_footer_enabled===!0||a.document_footer_enabled===1||a.document_footer_enabled==="1";r.document_footer_enabled=c?"1":"0"}if("document_footer_opacity"in a){const c=Number(a.document_footer_opacity);if(!Number.isFinite(c))return e.json({success:!1,error:"شفافية تذييل الصفحة غير صالحة"},400);r.document_footer_opacity=String(je(c,1))}const n=an(a);if(!n.ok)return e.json({success:!1,error:n.error},400);Object.assign(r,n.updates);const s=Object.keys(r);if(s.length===0)return e.json({success:!1,error:"لا توجد حقول للتحديث"},400);if(!await e.env.DB.prepare("SELECT id FROM tenants WHERE id = ?").bind(t.tenantId).first())return e.json({success:!1,error:"الشركة غير موجودة"},404);const i=s.map(c=>`${c} = ?`).join(", "),l=s.map(c=>r[c]);await e.env.DB.prepare(`UPDATE tenants SET ${i} WHERE id = ?`).bind(...l,t.tenantId).run();const d=await e.env.DB.prepare(`
+    `).bind(t.tenantId).first();return a?e.json({success:!0,data:{...a,...an(a)}}):e.json({success:!1,error:"الشركة غير موجودة"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/my-tenant/logo-upload",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(t.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!t.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"تخزين الملفات غير مُهيأ"},500);let a;try{a=await e.req.formData()}catch{return e.json({success:!1,error:"توقعنا نموذجاً متعدد الأجزاء (ملف)"},400)}const r=a.get("file");if(!r||!(r instanceof File))return e.json({success:!1,error:"لم يتم اختيار ملف"},400);const n=r,s=2*1024*1024;if(n.size>s)return e.json({success:!1,error:"الحد الأقصى لحجم الشعار 2 ميجابايت"},400);const o=(n.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(o))return e.json({success:!1,error:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);if(!await e.env.DB.prepare("SELECT id FROM tenants WHERE id = ? LIMIT 1").bind(t.tenantId).first())return e.json({success:!1,error:"الشركة غير موجودة"},404);const l=Date.now(),d=Math.random().toString(36).slice(2,9),c=(n.name.split(".").pop()||"jpg").replace(/[^a-z0-9]/gi,"").toLowerCase()||"jpg",p=["jpg","jpeg","png","gif","webp"].includes(c)?c:"jpg",u=`tenants/${t.tenantId}/company_logo_${l}_${d}.${p}`,g=await n.arrayBuffer();await e.env.ATTACHMENTS.put(u,g,{httpMetadata:{contentType:n.type||`image/${p==="jpg"?"jpeg":p}`}});const b=`/api/attachments/view/${u}`;return e.json({success:!0,url:b,filename:u})}catch(t){return e.json({success:!1,error:t.message},500)}});async function da(e,t){try{const a=await E(e);if(!a.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(a.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!a.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"تخزين الملفات غير مُهيأ"},500);let r;try{r=await e.req.formData()}catch{return e.json({success:!1,error:"توقعنا نموذجاً متعدد الأجزاء (ملف)"},400)}const n=r.get("file");if(!n||!(n instanceof File))return e.json({success:!1,error:"لم يتم اختيار ملف"},400);const s=n,o=2*1024*1024;if(s.size>o)return e.json({success:!1,error:`الحد الأقصى لحجم ${t.maxLabelAr} 2 ميجابايت`},400);const i=(s.type||"").toLowerCase();if(!/^image\/(png|jpe?g|gif|webp)$/.test(i))return e.json({success:!1,error:"يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط"},400);if(!await e.env.DB.prepare("SELECT id FROM tenants WHERE id = ? LIMIT 1").bind(a.tenantId).first())return e.json({success:!1,error:"الشركة غير موجودة"},404);const d=Date.now(),c=Math.random().toString(36).slice(2,9),p=(s.name.split(".").pop()||"png").replace(/[^a-z0-9]/gi,"").toLowerCase()||"png",u=["jpg","jpeg","png","gif","webp"].includes(p)?p:"png",g=`tenants/${a.tenantId}/${t.keyPrefix}_${d}_${c}.${u}`,b=await s.arrayBuffer();await e.env.ATTACHMENTS.put(g,b,{httpMetadata:{contentType:s.type||`image/${u==="jpg"?"jpeg":u}`}});const f=`/api/attachments/view/${g}`;return e.json({success:!0,url:f,filename:g})}catch(a){return e.json({success:!1,error:a.message},500)}}m.post("/api/my-tenant/watermark-upload",e=>da(e,{keyPrefix:"document_watermark",maxLabelAr:"صورة العلامة المائية"}));m.post("/api/my-tenant/header-upload",e=>da(e,{keyPrefix:"document_header",maxLabelAr:"صورة ترويسة الصفحة"}));m.post("/api/my-tenant/footer-upload",e=>da(e,{keyPrefix:"document_footer",maxLabelAr:"صورة تذييل الصفحة"}));m.patch("/api/my-tenant",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(t.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!t.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);const a=await e.req.json().catch(()=>({})),r={};if("company_name"in a){const c=String(a.company_name??"").trim();if(!c)return e.json({success:!1,error:"اسم الشركة مطلوب"},400);r.company_name=c}if("contact_email"in a){const c=a.contact_email;if(c==null||String(c).trim()==="")r.contact_email=null;else{const p=String(c).trim();if(p.length>200)return e.json({success:!1,error:"البريد الإلكتروني طويل جداً"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p))return e.json({success:!1,error:"صيغة البريد الإلكتروني غير صحيحة"},400);r.contact_email=p}}if("contact_phone"in a){const c=a.contact_phone;if(c==null||String(c).trim()==="")r.contact_phone=null;else{const p=At(String(c));if(!p)return e.json({success:!1,error:"صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX)."},400);r.contact_phone=p}}if("logo_url"in a){const c=a.logo_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط الشعار غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.logo_url=u}if("city"in a){const c=et(a.city);if(!c.ok)return e.json({success:!1,error:c.error},400);r.city=c.value}if("address"in a){const c=Ze(a.address);if(!c.ok)return e.json({success:!1,error:c.error},400);r.address=c.value}if("whatsapp_greeting"in a){const c=bs(a.whatsapp_greeting);if(!c.ok)return e.json({success:!1,error:c.error},400);r.whatsapp_greeting=c.value}if("document_watermark_url"in a){const c=a.document_watermark_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط العلامة المائية غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.document_watermark_url=u}if("document_watermark_enabled"in a){const c=a.document_watermark_enabled===!0||a.document_watermark_enabled===1||a.document_watermark_enabled==="1";r.document_watermark_enabled=c?"1":"0"}if("document_watermark_opacity"in a){const c=Number(a.document_watermark_opacity);if(!Number.isFinite(c))return e.json({success:!1,error:"شفافية العلامة المائية غير صالحة"},400);r.document_watermark_opacity=String(sa(c,.12))}if("document_header_url"in a){const c=a.document_header_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط ترويسة الصفحة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.document_header_url=u}if("document_header_enabled"in a){const c=a.document_header_enabled===!0||a.document_header_enabled===1||a.document_header_enabled==="1";r.document_header_enabled=c?"1":"0"}if("document_header_opacity"in a){const c=Number(a.document_header_opacity);if(!Number.isFinite(c))return e.json({success:!1,error:"شفافية ترويسة الصفحة غير صالحة"},400);r.document_header_opacity=String(je(c,1))}if("document_footer_url"in a){const c=a.document_footer_url,p=c==null?"":String(c).trim(),u=p===""?null:K(p);if(p!==""&&!u)return e.json({success:!1,error:"رابط تذييل الصفحة غير صالح (استخدم https:// أو مساراً يبدأ بـ /)"},400);r.document_footer_url=u}if("document_footer_enabled"in a){const c=a.document_footer_enabled===!0||a.document_footer_enabled===1||a.document_footer_enabled==="1";r.document_footer_enabled=c?"1":"0"}if("document_footer_opacity"in a){const c=Number(a.document_footer_opacity);if(!Number.isFinite(c))return e.json({success:!1,error:"شفافية تذييل الصفحة غير صالحة"},400);r.document_footer_opacity=String(je(c,1))}const n=nn(a);if(!n.ok)return e.json({success:!1,error:n.error},400);Object.assign(r,n.updates);const s=Object.keys(r);if(s.length===0)return e.json({success:!1,error:"لا توجد حقول للتحديث"},400);if(!await e.env.DB.prepare("SELECT id FROM tenants WHERE id = ?").bind(t.tenantId).first())return e.json({success:!1,error:"الشركة غير موجودة"},404);const i=s.map(c=>`${c} = ?`).join(", "),l=s.map(c=>r[c]);await e.env.DB.prepare(`UPDATE tenants SET ${i} WHERE id = ?`).bind(...l,t.tenantId).run();const d=await e.env.DB.prepare(`
       SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, whatsapp_greeting,
              document_watermark_url, document_watermark_enabled, document_watermark_opacity,
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
       FROM tenants WHERE id = ? LIMIT 1
-    `).bind(t.tenantId).first();return e.json({success:!0,data:d&&{...d,...en(d)},message:"تم تحديث بيانات الشركة"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/tenant/whatsapp-greeting",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(!t.tenantId)return e.json({success:!0,data:{whatsapp_greeting:"",company_name:""}});const a=await _t(e.env.DB,t.tenantId);return e.json({success:!0,data:{whatsapp_greeting:a.greeting,company_name:a.companyName}})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/tenant/document-watermark",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);let a=t.tenantId;if(!a&&H(t)){const p=e.req.query("tenant_id");p&&/^\d+$/.test(String(p))&&(a=parseInt(String(p),10))}const r={enabled:!1,url:null,opacity:.12,header:{enabled:!1,url:null,opacity:1},footer:{enabled:!1,url:null,opacity:1}};if(!a)return e.json({success:!0,data:r});const n=await e.env.DB.prepare(`
+    `).bind(t.tenantId).first();return e.json({success:!0,data:d&&{...d,...an(d)},message:"تم تحديث بيانات الشركة"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/tenant/whatsapp-greeting",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(!t.tenantId)return e.json({success:!0,data:{whatsapp_greeting:"",company_name:""}});const a=await _t(e.env.DB,t.tenantId);return e.json({success:!0,data:{whatsapp_greeting:a.greeting,company_name:a.companyName}})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/tenant/document-watermark",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);let a=t.tenantId;if(!a&&H(t)){const p=e.req.query("tenant_id");p&&/^\d+$/.test(String(p))&&(a=parseInt(String(p),10))}const r={enabled:!1,url:null,opacity:.12,header:{enabled:!1,url:null,opacity:1},footer:{enabled:!1,url:null,opacity:1}};if(!a)return e.json({success:!0,data:r});const n=await e.env.DB.prepare(`
       SELECT document_watermark_url, document_watermark_enabled, document_watermark_opacity, logo_url,
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
       FROM tenants WHERE id = ? LIMIT 1
-    `).bind(a).first(),s=n?.document_watermark_url?K(n.document_watermark_url):null,o=n?.logo_url?K(n.logo_url):null,i=s||o,l=Number(n?.document_watermark_enabled)===1&&!!i,d=n?.document_header_url?K(n.document_header_url):null,c=n?.document_footer_url?K(n.document_footer_url):null;return e.json({success:!0,data:{enabled:l,url:l?i:null,opacity:sa(n?.document_watermark_opacity,.12),header:{enabled:Number(n?.document_header_enabled)===1&&!!d,url:Number(n?.document_header_enabled)===1&&d?d:null,opacity:je(n?.document_header_opacity,1)},footer:{enabled:Number(n?.document_footer_enabled)===1&&!!c,url:Number(n?.document_footer_enabled)===1&&c?c:null,opacity:je(n?.document_footer_opacity,1)}}})}catch(t){return e.json({success:!1,error:t.message},500)}});async function dn(e,t){return e.prepare(`
+    `).bind(a).first(),s=n?.document_watermark_url?K(n.document_watermark_url):null,o=n?.logo_url?K(n.logo_url):null,i=s||o,l=Number(n?.document_watermark_enabled)===1&&!!i,d=n?.document_header_url?K(n.document_header_url):null,c=n?.document_footer_url?K(n.document_footer_url):null;return e.json({success:!0,data:{enabled:l,url:l?i:null,opacity:sa(n?.document_watermark_opacity,.12),header:{enabled:Number(n?.document_header_enabled)===1&&!!d,url:Number(n?.document_header_enabled)===1&&d?d:null,opacity:je(n?.document_header_opacity,1)},footer:{enabled:Number(n?.document_footer_enabled)===1&&!!c,url:Number(n?.document_footer_enabled)===1&&c?c:null,opacity:je(n?.document_footer_opacity,1)}}})}catch(t){return e.json({success:!1,error:t.message},500)}});async function pn(e,t){return e.prepare(`
       SELECT id, name, slug, city, address, contact_phone, contact_email, logo_url
       FROM tenant_locations
       WHERE tenant_id = ? AND is_primary = 1 AND is_active = 1
@@ -36799,7 +37561,7 @@ ${r?`
       FROM tenant_locations
       WHERE id = ? AND tenant_id = ? AND is_active = 1
       LIMIT 1
-    `).bind(a,t.tenantId).first();return r?e.json({success:!0,data:r}):e.json({success:!1,error:"الموقع غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/my-tenant/locations",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(t.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!t.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);const a=await e.req.json().catch(()=>({})),r=String(a.name??"").trim();let n=tt(a.slug);if(!r)return e.json({success:!1,error:"اسم الموقع مطلوب"},400);if(!n||!we(n))return e.json({success:!1,error:"معرّف الموقع (slug) غير صالح"},400);const s=et(a.city);if(!s.ok)return e.json({success:!1,error:s.error},400);if(!s.value)return e.json({success:!1,error:"المدينة مطلوبة"},400);const o=Ze(a.address);if(!o.ok)return e.json({success:!1,error:o.error},400);if(!o.value)return e.json({success:!1,error:"العنوان مطلوب"},400);let i=null;if(a.contact_phone!=null&&String(a.contact_phone).trim()!==""){const p=At(String(a.contact_phone));if(!p)return e.json({success:!1,error:"صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX)."},400);i=p}let l=null;if(a.contact_email!=null&&String(a.contact_email).trim()!==""){const p=String(a.contact_email).trim();if(p.length>200)return e.json({success:!1,error:"البريد الإلكتروني طويل جداً"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p))return e.json({success:!1,error:"صيغة البريد الإلكتروني غير صحيحة"},400);l=p}let d=null;if(a.logo_url!=null&&String(a.logo_url).trim()!==""&&(d=K(a.logo_url),!d))return e.json({success:!1,error:"رابط الشعار غير صالح"},400);n=await Qr(e.env.DB,t.tenantId,n),await e.env.DB.prepare(`
+    `).bind(a,t.tenantId).first();return r?e.json({success:!0,data:r}):e.json({success:!1,error:"الموقع غير موجود"},404)}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/my-tenant/locations",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"غير مصرح"},401);if(C(t.roleId)!==2)return e.json({success:!1,error:"غير مصرح"},403);if(!t.tenantId)return e.json({success:!1,error:"لا توجد شركة مرتبطة بهذا الحساب"},400);const a=await e.req.json().catch(()=>({})),r=String(a.name??"").trim();let n=tt(a.slug);if(!r)return e.json({success:!1,error:"اسم الموقع مطلوب"},400);if(!n||!we(n))return e.json({success:!1,error:"معرّف الموقع (slug) غير صالح"},400);const s=et(a.city);if(!s.ok)return e.json({success:!1,error:s.error},400);if(!s.value)return e.json({success:!1,error:"المدينة مطلوبة"},400);const o=Ze(a.address);if(!o.ok)return e.json({success:!1,error:o.error},400);if(!o.value)return e.json({success:!1,error:"العنوان مطلوب"},400);let i=null;if(a.contact_phone!=null&&String(a.contact_phone).trim()!==""){const p=At(String(a.contact_phone));if(!p)return e.json({success:!1,error:"صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX)."},400);i=p}let l=null;if(a.contact_email!=null&&String(a.contact_email).trim()!==""){const p=String(a.contact_email).trim();if(p.length>200)return e.json({success:!1,error:"البريد الإلكتروني طويل جداً"},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p))return e.json({success:!1,error:"صيغة البريد الإلكتروني غير صحيحة"},400);l=p}let d=null;if(a.logo_url!=null&&String(a.logo_url).trim()!==""&&(d=K(a.logo_url),!d))return e.json({success:!1,error:"رابط الشعار غير صالح"},400);n=await Zr(e.env.DB,t.tenantId,n),await e.env.DB.prepare(`
       INSERT INTO tenant_locations (
         tenant_id, name, slug, city, address, contact_phone, contact_email, logo_url,
         is_primary, is_active
@@ -36846,7 +37608,7 @@ ${r?`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
       VALUES (?, ?, ?, 0)
       RETURNING id
-    `).bind(r.id,s,o.toISOString()).first();if(!i?.id)return console.error("Forgot password: INSERT RETURNING id failed"),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500);const l=(e.env.EMAIL_FROM?.trim()||"Tamweel <onboarding@resend.dev>").trim(),d=await ei({apiKey:a,from:l,to:n,code:s});return d.ok?e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني"}):(console.error("Resend forgot-password error:",d.error),await e.env.DB.prepare("DELETE FROM password_change_notifications WHERE id = ?").bind(i.id).run(),e.json({success:!1,message:"تعذر إرسال البريد الإلكتروني. تحقق من عنوان المرسل في Resend أو حاول لاحقاً."},502))}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});m.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),r=await e.env.DB.prepare(`
+    `).bind(r.id,s,o.toISOString()).first();if(!i?.id)return console.error("Forgot password: INSERT RETURNING id failed"),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500);const l=(e.env.EMAIL_FROM?.trim()||"Tamweel <onboarding@resend.dev>").trim(),d=await ai({apiKey:a,from:l,to:n,code:s});return d.ok?e.json({success:!0,message:"تم إرسال رمز التحقق إلى بريدك الإلكتروني"}):(console.error("Resend forgot-password error:",d.error),await e.env.DB.prepare("DELETE FROM password_change_notifications WHERE id = ?").bind(i.id).run(),e.json({success:!1,message:"تعذر إرسال البريد الإلكتروني. تحقق من عنوان المرسل في Resend أو حاول لاحقاً."},502))}catch(t){return console.error("Forgot password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});m.post("/api/auth/verify-reset-code",async e=>{try{const{email:t,code:a}=await e.req.json(),r=await e.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(t,t).first();if(!r)return e.json({success:!1,message:"المستخدم غير موجود"},404);const n=await e.env.DB.prepare(`
       SELECT id, verification_code, expires_at, is_used
@@ -36860,12 +37622,12 @@ ${r?`
       UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).bind(r,n.id).run(),await e.env.DB.prepare(`
       UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
-    `).bind(n.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});m.get("/api/banks",async e=>{try{let t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,r=null;const n=e.req.header("Authorization"),s=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],o=n?.replace("Bearer ","")||s;if(o)try{const p=atob(o).split(":"),u=p[1]!=="null"?parseInt(p[1]):null,g=p[2]?parseInt(p[2]):null;(!a||Number.isNaN(a))&&u&&!Number.isNaN(u)&&(a=u),g&&!Number.isNaN(g)&&(r=g)}catch{}const i=e.req.query("include_global")==="1";let l="SELECT * FROM banks",d;return r===1?(l+=" ORDER BY bank_name",d=(await e.env.DB.prepare(l).all()).results):a!==null&&!Number.isNaN(a)?(i?l+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name":l+=" WHERE tenant_id = ? ORDER BY bank_name",d=(await e.env.DB.prepare(l).bind(a).all()).results):(l+=" WHERE 1=0 ORDER BY bank_name",d=(await e.env.DB.prepare(l).all()).results),e.json({success:!0,data:d})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:r,logo_url:n,is_active:s,tenant_id:o}=t;if(!a||!String(a).trim())return e.json({success:!1,error:"اسم البنك مطلوب."},400);let i=o??null;if(i==null){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const g=atob(p).split(":");i=g[1]!=="null"?parseInt(g[1],10):null}}const l=await Er(e.env.DB,{tenantId:i,bankName:a,bankCode:r});if(l)return e.json({success:!1,error:mt(l)},409);const d=await e.env.DB.prepare(`
+    `).bind(n.id).run(),e.json({success:!0,message:"تم تغيير كلمة السر بنجاح"})):e.json({success:!1,message:"المستخدم غير موجود"},404)}catch(t){return console.error("Reset password error:",t),e.json({success:!1,message:"حدث خطأ. الرجاء المحاولة مرة أخرى."},500)}});m.get("/api/banks",async e=>{try{let t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,r=null;const n=e.req.header("Authorization"),s=e.req.header("Cookie")?.split("authToken=")[1]?.split(";")[0],o=n?.replace("Bearer ","")||s;if(o)try{const p=atob(o).split(":"),u=p[1]!=="null"?parseInt(p[1]):null,g=p[2]?parseInt(p[2]):null;(!a||Number.isNaN(a))&&u&&!Number.isNaN(u)&&(a=u),g&&!Number.isNaN(g)&&(r=g)}catch{}const i=e.req.query("include_global")==="1";let l="SELECT * FROM banks",d;return r===1?(l+=" ORDER BY bank_name",d=(await e.env.DB.prepare(l).all()).results):a!==null&&!Number.isNaN(a)?(i?l+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name":l+=" WHERE tenant_id = ? ORDER BY bank_name",d=(await e.env.DB.prepare(l).bind(a).all()).results):(l+=" WHERE 1=0 ORDER BY bank_name",d=(await e.env.DB.prepare(l).all()).results),e.json({success:!0,data:d})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/banks",async e=>{try{const t=await e.req.json(),{bank_name:a,bank_code:r,logo_url:n,is_active:s,tenant_id:o}=t;if(!a||!String(a).trim())return e.json({success:!1,error:"اسم البنك مطلوب."},400);let i=o??null;if(i==null){const p=e.req.header("Authorization")?.replace("Bearer ","");if(p){const g=atob(p).split(":");i=g[1]!=="null"?parseInt(g[1],10):null}}const l=await Ir(e.env.DB,{tenantId:i,bankName:a,bankCode:r});if(l)return e.json({success:!1,error:mt(l)},409);const d=await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
       VALUES (?, ?, ?, ?, ?)
-    `).bind(String(a).trim(),r!=null&&String(r).trim()!==""?String(r).trim():null,n||null,s??1,i).run();return e.json({success:!0,id:d.meta.last_row_id})}catch(t){const a=kr(t);return a?e.json({success:!1,error:a},409):(console.error("Add bank error:",t),e.json({success:!1,error:"فشل إضافة البنك. حاول مرة أخرى لاحقاً."},500))}});m.put("/api/banks/:id",async e=>{try{const t=parseInt(e.req.param("id"),10);if(Number.isNaN(t))return e.json({success:!1,error:"معرّف البنك غير صالح."},400);const a=await e.req.json(),{bank_name:r,bank_code:n,logo_url:s,is_active:o}=a;if(!r||!String(r).trim())return e.json({success:!1,error:"اسم البنك مطلوب."},400);const l=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(l){const h=atob(l).split(":");d=h[1]!=="null"?parseInt(h[1],10):null}const c=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!c)return e.json({success:!1,error:"البنك غير موجود."},404);if(d!=null&&c.tenant_id!==d)return e.json({success:!1,error:"غير مصرح بتعديل هذا البنك."},403);const p=d??c.tenant_id,u=await Er(e.env.DB,{tenantId:p,bankName:r,bankCode:n,excludeId:t});if(u)return e.json({success:!1,error:mt(u)},409);let g="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";const b=String(r).trim(),f=n!=null&&String(n).trim()!==""?String(n).trim():null;return d!=null?(g+=" AND tenant_id = ?",await e.env.DB.prepare(g).bind(b,f,s||null,o??1,t,d).run()):await e.env.DB.prepare(g).bind(b,f,s||null,o??1,t).run(),e.json({success:!0})}catch(t){const a=kr(t);return a?e.json({success:!1,error:a},409):(console.error("Update bank error:",t),e.json({success:!1,error:"فشل تحديث البنك. حاول مرة أخرى لاحقاً."},500))}});m.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),r=a.get("bank_name"),n=a.get("bank_code"),s=a.get("logo_url")||null,o=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
+    `).bind(String(a).trim(),r!=null&&String(r).trim()!==""?String(r).trim():null,n||null,s??1,i).run();return e.json({success:!0,id:d.meta.last_row_id})}catch(t){const a=Sr(t);return a?e.json({success:!1,error:a},409):(console.error("Add bank error:",t),e.json({success:!1,error:"فشل إضافة البنك. حاول مرة أخرى لاحقاً."},500))}});m.put("/api/banks/:id",async e=>{try{const t=parseInt(e.req.param("id"),10);if(Number.isNaN(t))return e.json({success:!1,error:"معرّف البنك غير صالح."},400);const a=await e.req.json(),{bank_name:r,bank_code:n,logo_url:s,is_active:o}=a;if(!r||!String(r).trim())return e.json({success:!1,error:"اسم البنك مطلوب."},400);const l=e.req.header("Authorization")?.replace("Bearer ","");let d=null;if(l){const h=atob(l).split(":");d=h[1]!=="null"?parseInt(h[1],10):null}const c=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!c)return e.json({success:!1,error:"البنك غير موجود."},404);if(d!=null&&c.tenant_id!==d)return e.json({success:!1,error:"غير مصرح بتعديل هذا البنك."},403);const p=d??c.tenant_id,u=await Ir(e.env.DB,{tenantId:p,bankName:r,bankCode:n,excludeId:t});if(u)return e.json({success:!1,error:mt(u)},409);let g="UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?";const b=String(r).trim(),f=n!=null&&String(n).trim()!==""?String(n).trim():null;return d!=null?(g+=" AND tenant_id = ?",await e.env.DB.prepare(g).bind(b,f,s||null,o??1,t,d).run()):await e.env.DB.prepare(g).bind(b,f,s||null,o??1,t).run(),e.json({success:!0})}catch(t){const a=Sr(t);return a?e.json({success:!1,error:a},409):(console.error("Update bank error:",t),e.json({success:!1,error:"فشل تحديث البنك. حاول مرة أخرى لاحقاً."},500))}});m.post("/api/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),r=a.get("bank_name"),n=a.get("bank_code"),s=a.get("logo_url")||null,o=parseInt(a.get("is_active")||"1");return await e.env.DB.prepare(`
       UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(r,n,s,o,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});m.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),r=e.req.header("Authorization")?.replace("Bearer ","");let n=null,s=null;if(r)try{const l=atob(r).split(":");n=l[1]!=="null"?parseInt(l[1]):null,s=l[2]?parseInt(l[2]):null}catch{}const o=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!o)return e.json({success:!1,error:"البنك غير موجود"},404);if(o.tenant_id===null){if(s!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==o.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await nn(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(a)try{const i=atob(a).split(":");r=i[2]?parseInt(i[2]):null}catch{}if(r!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await mi(e.env.DB),s=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${s} بنك عام`,deleted_count:s})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",r;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",r=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",r=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,r=await E(e),n=Number.isFinite(a)?a:r.tenantId,o=(await oa(e.env.DB,n)).map((i,l)=>({id:l+1,type_name:i}));return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(n){const d=atob(n).split(":");s=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(s=a);let o=`
+    `).bind(r,n,s,o,t).run(),e.redirect("/admin/banks")}catch(t){return e.json({success:!1,error:t.message},500)}});m.delete("/api/banks/:id",async e=>{try{const t=e.req.param("id"),r=e.req.header("Authorization")?.replace("Bearer ","");let n=null,s=null;if(r)try{const l=atob(r).split(":");n=l[1]!=="null"?parseInt(l[1]):null,s=l[2]?parseInt(l[2]):null}catch{}const o=await e.env.DB.prepare("SELECT id, tenant_id FROM banks WHERE id = ?").bind(t).first();if(!o)return e.json({success:!1,error:"البنك غير موجود"},404);if(o.tenant_id===null){if(s!==1)return e.json({success:!1,error:"لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها"},403)}else if(n!==o.tenant_id)return e.json({success:!1,error:"البنك غير موجود أو لا يمكنك حذفه"},404);return await on(e.env.DB,t),e.json({success:!0,message:"تم حذف البنك بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.delete("/api/banks/global/all",async e=>{try{const a=e.req.header("Authorization")?.replace("Bearer ","");let r=null;if(a)try{const i=atob(a).split(":");r=i[2]?parseInt(i[2]):null}catch{}if(r!==1)return e.json({success:!1,error:"غير مصرح لك بحذف البنوك العامة"},403);const n=await fi(e.env.DB),s=n[n.length-1]?.meta?.changes??0;return e.json({success:!0,message:`تم حذف ${s} بنك عام`,deleted_count:s})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/financing-types",async e=>{try{const t=e.req.query("tenant_id");let a="SELECT * FROM financing_types",r;return t?(a+=" WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY type_name",r=(await e.env.DB.prepare(a).bind(parseInt(t)).all()).results):(a+=" ORDER BY type_name",r=(await e.env.DB.prepare(a).all()).results),e.json({success:!0,data:r})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/obligation-types",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):NaN,r=await E(e),n=Number.isFinite(a)?a:r.tenantId,o=(await oa(e.env.DB,n)).map((i,l)=>({id:l+1,type_name:i}));return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/rates",async e=>{try{const t=e.req.query("tenant_id"),a=t?parseInt(t,10):null,n=e.req.header("Authorization")?.replace("Bearer ","");let s=null;if(n){const d=atob(n).split(":");s=d[1]!=="null"?parseInt(d[1]):null}a!==null&&!Number.isNaN(a)&&(s=a);let o=`
       SELECT 
         r.*,
         b.bank_name,
@@ -36891,7 +37653,7 @@ ${r?`
       FROM bank_financing_rates r
       LEFT JOIN banks b ON r.bank_id = b.id
       LEFT JOIN financing_types f ON r.financing_type_id = f.id
-    `,n=[];t.roleId===1?a&&(r+=" WHERE r.tenant_id = ?",n.push(a)):t.roleId===2||t.roleId===3?t.tenantId&&(r+=" WHERE r.tenant_id = ?",n.push(t.tenantId)):a&&(r+=" WHERE r.tenant_id = ?",n.push(a)),r+=" ORDER BY b.bank_name, f.type_name";const s=n.length>0?await e.env.DB.prepare(r).bind(...n).all():await e.env.DB.prepare(r).all(),o=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i=s.results.map((d,c)=>[String(d.max_duration??""),String(d.min_duration??""),String(d.max_amount??""),String(d.min_amount??""),String(d.rate??""),String(d.financing_type_name??""),String(d.bank_name??""),String(c+1)]),l=Et([o,...i],"نسب التمويل");return kt(l,`نسب_التمويل_${new Date().toISOString().split("T")[0]}.xls`)}catch(t){return e.json({success:!1,error:t.message},500)}});async function cn(e,t,a){let r=0,n=0;const s=[];for(let o=0;o<t.length;o++){const i=t[o]||{};try{const l=Number(i.bank_id),d=Number(i.financing_type_id),c=i.rate;if(!l||!d||c===void 0||c===null||c===""){s.push(`Row ${o+1}: invalid row (bank=${i.bank_id}, type=${i.financing_type_id}, rate=${c})`);continue}const p=await e.prepare(`SELECT id FROM bank_financing_rates
+    `,n=[];t.roleId===1?a&&(r+=" WHERE r.tenant_id = ?",n.push(a)):t.roleId===2||t.roleId===3?t.tenantId&&(r+=" WHERE r.tenant_id = ?",n.push(t.tenantId)):a&&(r+=" WHERE r.tenant_id = ?",n.push(a)),r+=" ORDER BY b.bank_name, f.type_name";const s=n.length>0?await e.env.DB.prepare(r).bind(...n).all():await e.env.DB.prepare(r).all(),o=["الحد الأقصى للمدة (شهر)","الحد الأدنى للمدة (شهر)","الحد الأقصى للمبلغ (ريال)","الحد الأدنى للمبلغ (ريال)","النسبة %","نوع التمويل","البنك","رقم تسلسلي"],i=s.results.map((d,c)=>[String(d.max_duration??""),String(d.min_duration??""),String(d.max_amount??""),String(d.min_amount??""),String(d.rate??""),String(d.financing_type_name??""),String(d.bank_name??""),String(c+1)]),l=Et([o,...i],"نسب التمويل");return kt(l,`نسب_التمويل_${new Date().toISOString().split("T")[0]}.xls`)}catch(t){return e.json({success:!1,error:t.message},500)}});async function un(e,t,a){let r=0,n=0;const s=[];for(let o=0;o<t.length;o++){const i=t[o]||{};try{const l=Number(i.bank_id),d=Number(i.financing_type_id),c=i.rate;if(!l||!d||c===void 0||c===null||c===""){s.push(`Row ${o+1}: invalid row (bank=${i.bank_id}, type=${i.financing_type_id}, rate=${c})`);continue}const p=await e.prepare(`SELECT id FROM bank_financing_rates
            WHERE bank_id = ? AND financing_type_id = ? AND tenant_id = ?
            LIMIT 1`).bind(l,d,a).first();p?.id?(await e.prepare(`UPDATE bank_financing_rates
              SET rate = ?,
@@ -36904,7 +37666,7 @@ ${r?`
                  is_active = ?
              WHERE id = ? AND tenant_id = ?`).bind(c,i.min_amount??null,i.max_amount??null,i.min_salary??null,i.max_salary??null,i.min_duration??null,i.max_duration??null,i.is_active!==void 0?i.is_active:1,p.id,a).run(),n++):(await e.prepare(`INSERT INTO bank_financing_rates
              (bank_id, financing_type_id, rate, min_amount, max_amount, min_salary, max_salary, min_duration, max_duration, is_active, tenant_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(l,d,c,i.min_amount??null,i.max_amount??null,i.min_salary??null,i.max_salary??null,i.min_duration??null,i.max_duration??null,i.is_active!==void 0?i.is_active:1,a).run(),r++)}catch(l){s.push(`Row ${o+1}: ${l?.message||String(l)}`)}}return{created:r,updated:n,errors:s}}async function pn(e,t,a){let r=t.tenantId!=null&&!Number.isNaN(Number(t.tenantId))?Number(t.tenantId):null;if(!r&&t.roleId===1){const n=Number.parseInt(String(a?.tenant_id??""),10);!Number.isNaN(n)&&n>0&&(r=n);const s=Number.parseInt(String(a?.rates?.[0]?.tenant_id??""),10);!r&&!Number.isNaN(s)&&s>0&&(r=s);const o=Number.parseInt(String(e.req.query("tenant_id")??""),10);!r&&!Number.isNaN(o)&&o>0&&(r=o)}return r}m.post("/api/rates/import-csv",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(t.roleId===3)return e.json({success:!1,error:"Forbidden"},403);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>null),r=a?.rates;if(!Array.isArray(r)||r.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const n=await pn(e,t,a);if(!n)return e.json({success:!1,error:"يجب تحديد الشركة"},400);const{created:s,updated:o,errors:i}=await cn(e.env.DB,r,n);return e.json({success:!0,created:s,updated:o,errors:i.length?i:void 0,message:`تم إضافة ${s} سجل جديد وتحديث ${o} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/rates/upload-excel",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(t.roleId===3)return e.json({success:!1,error:"Forbidden"},403);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>null),r=a?.rates;if(!Array.isArray(r)||r.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const n=await pn(e,t,a);if(!n)return e.json({success:!1,error:"يجب تحديد الشركة"},400);const{created:s,updated:o,errors:i}=await cn(e.env.DB,r,n);return e.json({success:!0,created:s,updated:o,errors:i.length?i:void 0,message:`تم إضافة ${s} سجل جديد وتحديث ${o} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(l,d,c,i.min_amount??null,i.max_amount??null,i.min_salary??null,i.max_salary??null,i.min_duration??null,i.max_duration??null,i.is_active!==void 0?i.is_active:1,a).run(),r++)}catch(l){s.push(`Row ${o+1}: ${l?.message||String(l)}`)}}return{created:r,updated:n,errors:s}}async function mn(e,t,a){let r=t.tenantId!=null&&!Number.isNaN(Number(t.tenantId))?Number(t.tenantId):null;if(!r&&t.roleId===1){const n=Number.parseInt(String(a?.tenant_id??""),10);!Number.isNaN(n)&&n>0&&(r=n);const s=Number.parseInt(String(a?.rates?.[0]?.tenant_id??""),10);!r&&!Number.isNaN(s)&&s>0&&(r=s);const o=Number.parseInt(String(e.req.query("tenant_id")??""),10);!r&&!Number.isNaN(o)&&o>0&&(r=o)}return r}m.post("/api/rates/import-csv",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(t.roleId===3)return e.json({success:!1,error:"Forbidden"},403);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>null),r=a?.rates;if(!Array.isArray(r)||r.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const n=await mn(e,t,a);if(!n)return e.json({success:!1,error:"يجب تحديد الشركة"},400);const{created:s,updated:o,errors:i}=await un(e.env.DB,r,n);return e.json({success:!0,created:s,updated:o,errors:i.length?i:void 0,message:`تم إضافة ${s} سجل جديد وتحديث ${o} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/rates/upload-excel",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);if(t.roleId===3)return e.json({success:!1,error:"Forbidden"},403);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=await e.req.json().catch(()=>null),r=a?.rates;if(!Array.isArray(r)||r.length===0)return e.json({success:!1,error:"لا توجد بيانات للرفع"},400);const n=await mn(e,t,a);if(!n)return e.json({success:!1,error:"يجب تحديد الشركة"},400);const{created:s,updated:o,errors:i}=await un(e.env.DB,r,n);return e.json({success:!0,created:s,updated:o,errors:i.length?i:void 0,message:`تم إضافة ${s} سجل جديد وتحديث ${o} سجل`})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/packages",async e=>{try{const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM packages ORDER BY price
     `).all();return e.json({success:!0,data:t})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/packages",async e=>{try{const t=await e.req.formData(),a=t.get("package_name"),r=t.get("description"),n=t.get("price"),s=t.get("duration_months"),o=t.get("max_calculations"),i=t.get("max_users"),l=t.get("is_active")||"1",d=await e.env.DB.prepare(`
       INSERT INTO packages (package_name, description, price, duration_months, max_calculations, max_users, is_active)
@@ -36968,7 +37730,7 @@ ${r?`
              (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id`;a!==1&&r&&(n+=` WHERE (u.tenant_id = ${r} OR (u.role_id IN (5, 15, 6) AND EXISTS (SELECT 1 FROM banks b WHERE b.id = u.assigned_bank_id AND b.tenant_id = ${r})))`),n+=`
-      ORDER BY u.id DESC`;const{results:s}=await e.env.DB.prepare(n).all(),o=(s||[]).map(i=>({...i,role_name:_e(i.role_id,i.role_name),company_name:i.tenant_name||null}));return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/admin/sync-users-to-hr",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=H(t),r=t.roleId===2;if(!a&&!r)return e.json({success:!1,error:"Forbidden"},403);let n=null;if(a){const d=(await e.req.json().catch(()=>({})))?.tenant_id;if(d!=null&&String(d).trim()!==""){const c=parseInt(String(d),10);n=Number.isNaN(c)?null:c}}else if(t.tenantId!=null&&!Number.isNaN(Number(t.tenantId)))n=t.tenantId;else return e.json({success:!1,error:"No tenant context"},400);const{synced:s,skipped:o,errors:i}=await gi(e.env.DB,n);return e.json({success:!0,message:"تمت المزامنة",synced:s,skipped:o,errors:i,tenant_id:n})}catch(t){return e.json({success:!1,error:t.message||"Sync failed"},500)}});m.post("/api/users",async e=>{try{const t=await e.req.formData(),a=String(t.get("username")??"").trim(),r=t.get("password"),n=t.get("full_name"),s=t.get("email"),o=s!=null&&String(s).trim()!==""?String(s).trim().toLowerCase():null,i=t.get("phone"),l=t.get("hr_section"),d=l!=null&&String(l).trim()!==""?String(l).trim():null,c=t.get("role_id"),p=t.get("subscription_id")||null,u=t.get("is_active")||"1",g=await E(e);if(!g.userId)return e.json({success:!1,error:"Unauthorized"},401);const b=Number.parseInt(String(c||""),10);if(Number.isNaN(b))return e.json({success:!1,error:"Invalid role_id"},400);if(b===1&&!H(g))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let f=null;const w=t.get("tenant_id");if(H(g))if(w!=null&&String(w).trim()!==""){const v=parseInt(String(w),10);f=Number.isNaN(v)?null:v}else f=null;else{if(!g.tenantId)return e.json({success:!1,error:"No tenant context"},400);f=g.tenantId}let h=null;if(b===5||b===6){if(!(H(g)||g.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء موظف التمويل أو الموظف المزدوج"},403);const x=typeof f=="number"?f:parseInt(String(f||""),10);if(!x||Number.isNaN(x))return e.json({success:!1,error:"يجب اختيار الشركة لهذا الدور"},400);h=null}if(!a)return e.json({success:!1,error:"اسم المستخدم مطلوب"},400);if(!o)return e.json({success:!1,error:"البريد الإلكتروني مطلوب — يُستخدم لإرسال رمز استعادة كلمة المرور."},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o))return e.json({success:!1,error:"صيغة البريد الإلكتروني غير صحيحة"},400);if(await e.env.DB.prepare(`
+      ORDER BY u.id DESC`;const{results:s}=await e.env.DB.prepare(n).all(),o=(s||[]).map(i=>({...i,role_name:_e(i.role_id,i.role_name),company_name:i.tenant_name||null}));return e.json({success:!0,data:o})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/admin/sync-users-to-hr",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=H(t),r=t.roleId===2;if(!a&&!r)return e.json({success:!1,error:"Forbidden"},403);let n=null;if(a){const d=(await e.req.json().catch(()=>({})))?.tenant_id;if(d!=null&&String(d).trim()!==""){const c=parseInt(String(d),10);n=Number.isNaN(c)?null:c}}else if(t.tenantId!=null&&!Number.isNaN(Number(t.tenantId)))n=t.tenantId;else return e.json({success:!1,error:"No tenant context"},400);const{synced:s,skipped:o,errors:i}=await bi(e.env.DB,n);return e.json({success:!0,message:"تمت المزامنة",synced:s,skipped:o,errors:i,tenant_id:n})}catch(t){return e.json({success:!1,error:t.message||"Sync failed"},500)}});m.post("/api/users",async e=>{try{const t=await e.req.formData(),a=String(t.get("username")??"").trim(),r=t.get("password"),n=t.get("full_name"),s=t.get("email"),o=s!=null&&String(s).trim()!==""?String(s).trim().toLowerCase():null,i=t.get("phone"),l=t.get("hr_section"),d=l!=null&&String(l).trim()!==""?String(l).trim():null,c=t.get("role_id"),p=t.get("subscription_id")||null,u=t.get("is_active")||"1",g=await E(e);if(!g.userId)return e.json({success:!1,error:"Unauthorized"},401);const b=Number.parseInt(String(c||""),10);if(Number.isNaN(b))return e.json({success:!1,error:"Invalid role_id"},400);if(b===1&&!H(g))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);let f=null;const w=t.get("tenant_id");if(H(g))if(w!=null&&String(w).trim()!==""){const v=parseInt(String(w),10);f=Number.isNaN(v)?null:v}else f=null;else{if(!g.tenantId)return e.json({success:!1,error:"No tenant context"},400);f=g.tenantId}let h=null;if(b===5||b===6){if(!(H(g)||g.roleId===2))return e.json({success:!1,error:"غير مسموح بإنشاء موظف التمويل أو الموظف المزدوج"},403);const x=typeof f=="number"?f:parseInt(String(f||""),10);if(!x||Number.isNaN(x))return e.json({success:!1,error:"يجب اختيار الشركة لهذا الدور"},400);h=null}if(!a)return e.json({success:!1,error:"اسم المستخدم مطلوب"},400);if(!o)return e.json({success:!1,error:"البريد الإلكتروني مطلوب — يُستخدم لإرسال رمز استعادة كلمة المرور."},400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o))return e.json({success:!1,error:"صيغة البريد الإلكتروني غير صحيحة"},400);if(await e.env.DB.prepare(`
       SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)
     `).bind(a).first())return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400);if(await e.env.DB.prepare(`
       SELECT id FROM users
@@ -36976,7 +37738,7 @@ ${r?`
     `).bind(o).first())return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);const k=(await e.env.DB.prepare(`
       INSERT INTO users (username, password, full_name, email, phone, hr_section, role_id, subscription_id, is_active, tenant_id, assigned_bank_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(a,r,n,o,i,d,b,p,u,f,h).run()).meta.last_row_id;if((b===3||b===4||b===5||b===6)&&typeof f=="number"&&!Number.isNaN(f)&&k!=null&&Number(k)>0&&typeof f=="number")try{const v=f,x=o,I=i!=null&&String(i).trim()!==""?String(i).trim():null,L=n!=null?String(n).trim():"";await sn(e.env.DB,{tenantId:v,userId:Number(k),roleId:b,fullName:L,username:String(a??""),email:x,phone:I,department:d})}catch(v){return console.error("Error syncing new user to hr_employees:",v),await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(k).run(),e.json({success:!1,error:v?.message||"تم إنشاء الحساب لكن تعذر إضافة السجل في الموارد البشرية. لم يتم حفظ المستخدم."},500)}return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:k})}catch(t){console.error("Error adding user:",t);const a=String(t?.message??"");if(a.includes("UNIQUE constraint")){if(a.includes("users.email"))return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);if(a.includes("users.username"))return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400)}return e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});m.get("/api/admin/company-banks",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!H(t)&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.query("tenant_id"),r=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id required"},400);if(!H(t)&&t.tenantId!==r)return e.json({success:!1,error:"Forbidden"},403);try{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(r).all();return e.json({success:!0,data:n||[]})}catch{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(r).all();return e.json({success:!0,data:n||[]})}}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/admin/bank-agents",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),r=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id required"},400);if(!H(t)&&Number(t.tenantId)!==r)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(Pe).bind(...ke(r)).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/admin/filter-employees",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),r=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id required"},400);if(!H(t)&&Number(t.tenantId)!==r)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(yt).bind(...ht(r)).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});m.put("/api/users/:id",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),r=await e.req.json(),{username:n,full_name:s,email:o,phone:i,role_id:l,subscription_id:d,is_active:c}=r,p=Number.parseInt(String(l??""),10);if(Number.isNaN(p))return e.json({success:!1,error:"Invalid role_id"},400);if(p===1&&!H(t))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);const u=await e.env.DB.prepare("SELECT id, tenant_id, role_id, assigned_bank_id FROM users WHERE id = ?").bind(a).first();if(!u)return e.json({success:!1,error:"User not found"},404);const g=await mr(e.env.DB,Number(a),u.role_id,p);if(!g.ok)return e.json({success:!1,error:g.error},400);let b=null;if(p===5||p===6){if(!(H(t)||t.roleId===2))return e.json({success:!1,error:"Forbidden"},403);if(!(u.tenant_id!=null?Number(u.tenant_id):null))return e.json({success:!1,error:"This role requires a company (tenant)"},400);b=u.assigned_bank_id!=null&&!Number.isNaN(Number(u.assigned_bank_id))?Number(u.assigned_bank_id):null}return await e.env.DB.prepare(`
+    `).bind(a,r,n,o,i,d,b,p,u,f,h).run()).meta.last_row_id;if((b===3||b===4||b===5||b===6)&&typeof f=="number"&&!Number.isNaN(f)&&k!=null&&Number(k)>0&&typeof f=="number")try{const v=f,x=o,I=i!=null&&String(i).trim()!==""?String(i).trim():null,L=n!=null?String(n).trim():"";await ln(e.env.DB,{tenantId:v,userId:Number(k),roleId:b,fullName:L,username:String(a??""),email:x,phone:I,department:d})}catch(v){return console.error("Error syncing new user to hr_employees:",v),await e.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(k).run(),e.json({success:!1,error:v?.message||"تم إنشاء الحساب لكن تعذر إضافة السجل في الموارد البشرية. لم يتم حفظ المستخدم."},500)}return e.json({success:!0,message:"تم إضافة المستخدم بنجاح",userId:k})}catch(t){console.error("Error adding user:",t);const a=String(t?.message??"");if(a.includes("UNIQUE constraint")){if(a.includes("users.email"))return e.json({success:!1,error:"البريد الإلكتروني موجود مسبقاً! الرجاء استخدام بريد إلكتروني آخر."},400);if(a.includes("users.username"))return e.json({success:!1,error:"اسم المستخدم موجود مسبقاً! الرجاء اختيار اسم مستخدم آخر."},400)}return e.json({success:!1,error:t.message||"حدث خطأ أثناء إضافة المستخدم"},500)}});m.get("/api/admin/company-banks",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!H(t)&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.query("tenant_id"),r=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id required"},400);if(!H(t)&&t.tenantId!==r)return e.json({success:!1,error:"Forbidden"},403);try{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY bank_name").bind(r).all();return e.json({success:!0,data:n||[]})}catch{const{results:n}=await e.env.DB.prepare("SELECT id, bank_name FROM banks WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name").bind(r).all();return e.json({success:!0,data:n||[]})}}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/admin/bank-agents",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),r=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id required"},400);if(!H(t)&&Number(t.tenantId)!==r)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(Pe).bind(...ke(r)).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/admin/filter-employees",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.query("tenant_id"),r=a!=null&&String(a).trim()!==""?parseInt(String(a),10):NaN;if(!r||Number.isNaN(r))return e.json({success:!1,error:"tenant_id required"},400);if(!H(t)&&Number(t.tenantId)!==r)return e.json({success:!1,error:"Forbidden"},403);const{results:n}=await e.env.DB.prepare(yt).bind(...ht(r)).all();return e.json({success:!0,data:n||[]})}catch(t){return e.json({success:!1,error:t.message},500)}});m.put("/api/users/:id",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),r=await e.req.json(),{username:n,full_name:s,email:o,phone:i,role_id:l,subscription_id:d,is_active:c}=r,p=Number.parseInt(String(l??""),10);if(Number.isNaN(p))return e.json({success:!1,error:"Invalid role_id"},400);if(p===1&&!H(t))return e.json({success:!1,error:"Forbidden: cannot grant SaaS role"},403);const u=await e.env.DB.prepare("SELECT id, tenant_id, role_id, assigned_bank_id FROM users WHERE id = ?").bind(a).first();if(!u)return e.json({success:!1,error:"User not found"},404);const g=await fr(e.env.DB,Number(a),u.role_id,p);if(!g.ok)return e.json({success:!1,error:g.error},400);let b=null;if(p===5||p===6){if(!(H(t)||t.roleId===2))return e.json({success:!1,error:"Forbidden"},403);if(!(u.tenant_id!=null?Number(u.tenant_id):null))return e.json({success:!1,error:"This role requires a company (tenant)"},400);b=u.assigned_bank_id!=null&&!Number.isNaN(Number(u.assigned_bank_id))?Number(u.assigned_bank_id):null}return await e.env.DB.prepare(`
       UPDATE users 
       SET username = ?, full_name = ?, email = ?, phone = ?, role_id = ?, subscription_id = ?, is_active = ?, assigned_bank_id = ?
       WHERE id = ?
@@ -37100,7 +37862,7 @@ ${r?`
           </div>
         </body>
         </html>
-      `,400);const o=s.normalized,i=a.get("email")||null,l=a.get("national_id"),d=l!=null&&String(l).trim()?String(l).trim():null,c=a.get("date_of_birth")||null,p=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,g=Ur(a.get("job_type")),b=a.get("job_title")||null,f=a.get("military_rank")||null,w=a.get("work_start_date")||null,h=a.get("city")||null,y=Wr(a.get("product_type")),S=Yr(a.get("property_type")),_=a.get("property_owner")?.trim()||null,k=a.get("real_estate_office")?.trim()||null,T=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,v=parseFloat(a.get("monthly_salary")||"0"),x=a.get("notes")?.trim()||null,I=String(a.get("enrollment_source")??"").trim();let L=null,R=null;if(I==="affiliate"||I==="calculator")L=I,R=I==="affiliate"&&String(a.get("enrollment_source_label")??"").trim().slice(0,200)||null;else{const A=String(a.get("manual_enrollment_source")??"").trim().slice(0,200);A&&(L="manual",R=A)}const D=Lr(a.get("solutions_json")),j=Ve(a.get("attachments_json")),q=(a.get("identity_attachment_url")||"").trim()||null,N=(a.get("signature_attachment_url")||"").trim()||null,U=(a.get("salary_profile_attachment_url")||"").trim()||null,se=(a.get("gosi_attachment_url")||"").trim()||null,Se=(a.get("tax_exemption_attachment_url")||"").trim()||null,ce=(a.get("additional_1_attachment_url")||"").trim()||null,at=(a.get("additional_2_attachment_url")||"").trim()||null,Te=(a.get("additional_3_attachment_url")||"").trim()||null,J=await E(e);let P=J.tenantId;const ye=J.userId;if(!P&&J.roleId===1){const A=Number.parseInt(String(a.get("tenant_id")??""),10);!Number.isNaN(A)&&A>0&&(P=A)}const Ce=C(J.roleId);if(!P&&Ce!=null&&Ce!==1){const A="يجب ربط حسابك بشركة قبل إضافة عملاء.";return t?e.json({ok:!1,code:"NO_TENANT",message:A},400):e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">شركة غير محددة</h1><p class="text-red-800 mt-2">${A}</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,400)}if(!P&&Ce===1){const A=await e.env.DB.prepare(`
+      `,400);const o=s.normalized,i=a.get("email")||null,l=a.get("national_id"),d=l!=null&&String(l).trim()?String(l).trim():null,c=a.get("date_of_birth")||null,p=a.get("dob_calendar_type")||"gregorian",u=a.get("employer_name")||null,g=Wr(a.get("job_type")),b=a.get("job_title")||null,f=a.get("military_rank")||null,w=a.get("work_start_date")||null,h=a.get("city")||null,y=Gr(a.get("product_type")),S=Jr(a.get("property_type")),_=a.get("property_owner")?.trim()||null,k=a.get("real_estate_office")?.trim()||null,T=a.get("basic_salary")?parseFloat(a.get("basic_salary")):null,v=parseFloat(a.get("monthly_salary")||"0"),x=a.get("notes")?.trim()||null,I=String(a.get("enrollment_source")??"").trim();let L=null,R=null;if(I==="affiliate"||I==="calculator")L=I,R=I==="affiliate"&&String(a.get("enrollment_source_label")??"").trim().slice(0,200)||null;else{const A=String(a.get("manual_enrollment_source")??"").trim().slice(0,200);A&&(L="manual",R=A)}const D=Ar(a.get("solutions_json")),j=Ye(a.get("attachments_json")),q=(a.get("identity_attachment_url")||"").trim()||null,N=(a.get("signature_attachment_url")||"").trim()||null,U=(a.get("salary_profile_attachment_url")||"").trim()||null,se=(a.get("gosi_attachment_url")||"").trim()||null,Se=(a.get("tax_exemption_attachment_url")||"").trim()||null,ce=(a.get("additional_1_attachment_url")||"").trim()||null,at=(a.get("additional_2_attachment_url")||"").trim()||null,Te=(a.get("additional_3_attachment_url")||"").trim()||null,J=await E(e);let P=J.tenantId;const ye=J.userId;if(!P&&J.roleId===1){const A=Number.parseInt(String(a.get("tenant_id")??""),10);!Number.isNaN(A)&&A>0&&(P=A)}const Ce=C(J.roleId);if(!P&&Ce!=null&&Ce!==1){const A="يجب ربط حسابك بشركة قبل إضافة عملاء.";return t?e.json({ok:!1,code:"NO_TENANT",message:A},400):e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">شركة غير محددة</h1><p class="text-red-800 mt-2">${A}</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>`,400)}if(!P&&Ce===1){const A=await e.env.DB.prepare(`
         SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1
       `).first();A?.id&&(P=A.id)}if(!P)throw new Error("Missing tenant context for customer creation");const rt=await e.env.DB.prepare("SELECT COUNT(*) as n FROM tenant_locations WHERE tenant_id = ? AND is_active = 1").bind(P).first(),pa=Number(rt?.n??0),M=a.get("location_id");let G=null;if(M!=null&&String(M).trim()!==""){const A=Number.parseInt(String(M),10);if(!Number.isFinite(A)||A<=0)return t?e.json({ok:!1,code:"INVALID_LOCATION",message:"يرجى اختيار موقع تسجيل صحيح."},400):e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع غير صالح</h1><p class="text-amber-800 mt-2">يرجى اختيار موقع تسجيل صحيح.</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>',400);if(!await e.env.DB.prepare("SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1").bind(A,P).first())return t?e.json({ok:!1,code:"LOCATION_NOT_ALLOWED",message:"الموقع المختار لا يتبع هذه الشركة أو غير مفعّل."},400):e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة</h1><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>',400);G=A}else if(pa>0)return t?e.json({ok:!1,code:"LOCATION_REQUIRED",message:"موقع التسجيل مطلوب. اختر الفرع الذي سُجّل فيه العميل."},400):e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع الذي سُجّل فيه العميل.</p><a href="/admin/customers/add" class="inline-block mt-4 text-blue-600 underline">العودة</a></div></body></html>',400);if(d){let A="SELECT id, full_name FROM customers WHERE national_id = ?",$=[d];P&&(A+=" AND tenant_id = ?",$.push(P));const O=await e.env.DB.prepare(A).bind(...$).first();if(O)return t?e.json({ok:!1,code:"DUPLICATE_NATIONAL_ID",message:`الرقم الوطني "${d}" مسجل مسبقاً في هذه الشركة لعميل آخر.`,hint:"احذف القيمة من حقل (الرقم الوطني) أو أدخل رقماً مختلفاً. تحقق أيضاً من خاصية الحفظ التلقائي (Autofill) في المتصفح إن كنت قد أزلت القيمة ولا تزال تظهر هذه الرسالة.",details:{national_id:d,existing:{id:O.id,full_name:O.full_name}}},409):e.html(`
           <!DOCTYPE html>
@@ -37145,7 +37907,7 @@ ${r?`
             </div>
           </body>
           </html>
-        `)}const Y=o.slice(3),Z=`0${Y}`;let ee="SELECT id, full_name FROM customers WHERE (phone = ? OR phone = ? OR phone = ?)",oe=[o,Y,Z];P&&(ee+=" AND tenant_id = ?",oe.push(P));const ae=await e.env.DB.prepare(ee).bind(...oe).first();if(ae)return t?e.json({ok:!1,code:"DUPLICATE_PHONE",message:"يوجد عميل آخر بنفس رقم الهاتف في هذه الشركة.",details:{phone:o,existing:{id:ae.id,full_name:ae.full_name}}},409):e.html(`
+        `)}const V=o.slice(3),Z=`0${V}`;let ee="SELECT id, full_name FROM customers WHERE (phone = ? OR phone = ? OR phone = ?)",oe=[o,V,Z];P&&(ee+=" AND tenant_id = ?",oe.push(P));const ae=await e.env.DB.prepare(ee).bind(...oe).first();if(ae)return t?e.json({ok:!1,code:"DUPLICATE_PHONE",message:"يوجد عميل آخر بنفس رقم الهاتف في هذه الشركة.",details:{phone:o,existing:{id:ae.id,full_name:ae.full_name}}},409):e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -37184,7 +37946,7 @@ ${r?`
           </div>
         </body>
         </html>
-      `);const X=[r,o,i,d,c,p==="hijri"?"hijri":"gregorian",u,g,b,g==="military"?f:null,w,h,T,v,P,x,L,R,q,N,U,se,Se,ce,at,Te,G];let V;try{V=await e.env.DB.prepare(`
+      `);const X=[r,o,i,d,c,p==="hijri"?"hijri":"gregorian",u,g,b,g==="military"?f:null,w,h,T,v,P,x,L,R,q,N,U,se,Se,ce,at,Te,G];let Y;try{Y=await e.env.DB.prepare(`
       INSERT INTO customers (
         full_name, phone, email, national_id, birthdate, dob_calendar_type,
         employer_name, job_type, job_title, military_rank, work_start_date, city,
@@ -37195,7 +37957,7 @@ ${r?`
         solutions_json
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...X,D).run()}catch(A){if(Yt(A))try{V=await e.env.DB.prepare(`
+    `).bind(...X,D).run()}catch(A){if(Vt(A))try{Y=await e.env.DB.prepare(`
       INSERT INTO customers (
         full_name, phone, email, national_id, birthdate, dob_calendar_type,
         employer_name, job_type, job_title, military_rank, work_start_date, city,
@@ -37205,7 +37967,7 @@ ${r?`
         solutions_json
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(...X.slice(0,-1),D).run()}catch($){if(pe($))try{V=await e.env.DB.prepare(`
+    `).bind(...X.slice(0,-1),D).run()}catch($){if(pe($))try{Y=await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, birthdate, dob_calendar_type,
             employer_name, job_type, job_title, military_rank, work_start_date, city,
@@ -37214,16 +37976,16 @@ ${r?`
             additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,-1)).run()}catch(O){if(!te(O))throw O;V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,-1)).run()}catch(O){if(!te(O))throw O;Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16)).run()}else if(te($))try{V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,16)).run()}else if(te($))try{Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16),D).run()}catch(O){if(!pe(O))throw O;V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,16),D).run()}catch(O){if(!pe(O))throw O;Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16)).run()}else throw $}else if(pe(A))try{V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,16)).run()}else throw $}else if(pe(A))try{Y=await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, birthdate, dob_calendar_type,
             employer_name, job_type, job_title, military_rank, work_start_date, city,
@@ -37233,7 +37995,7 @@ ${r?`
             location_id
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X).run()}catch($){if(Yt($))try{V=await e.env.DB.prepare(`
+        `).bind(...X).run()}catch($){if(Vt($))try{Y=await e.env.DB.prepare(`
           INSERT INTO customers (
             full_name, phone, email, national_id, birthdate, dob_calendar_type,
             employer_name, job_type, job_title, military_rank, work_start_date, city,
@@ -37242,19 +38004,19 @@ ${r?`
             additional_1_attachment_url, additional_2_attachment_url, additional_3_attachment_url
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,-1)).run()}catch(O){if(!te(O))throw O;V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,-1)).run()}catch(O){if(!te(O))throw O;Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16)).run()}else if(te($))V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,16)).run()}else if(te($))Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16)).run();else throw $}else if(te(A))try{V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,16)).run();else throw $}else if(te(A))try{Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes, solutions_json)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16),D).run()}catch($){if(!pe($))throw $;V=await e.env.DB.prepare(`
+        `).bind(...X.slice(0,16),D).run()}catch($){if(!pe($))throw $;Y=await e.env.DB.prepare(`
           INSERT INTO customers (full_name, phone, email, national_id, birthdate, dob_calendar_type, employer_name, job_type, job_title, military_rank, work_start_date, city, basic_salary, monthly_salary, tenant_id, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(...X.slice(0,16)).run()}else throw A}const re=Number(V?.meta?.last_row_id||0),hn=C(J.roleId);if(ye&&re)try{const A=Number(ye);if(Ls(hn)&&A>0)try{await e.env.DB.prepare("UPDATE customers SET created_by = ?, assigned_bank_agent_id = ? WHERE id = ?").bind(A,A,re).run(),await xt(e.env.DB,re,A)}catch(O){const Le=String(O?.message||O||"");/no such column:\s*assigned_bank_agent_id/i.test(Le)&&await e.env.DB.prepare("UPDATE customers SET created_by = ? WHERE id = ?").bind(ye,re).run()}else await e.env.DB.prepare("UPDATE customers SET created_by = ? WHERE id = ?").bind(ye,re).run()}catch{}if(re){try{await e.env.DB.prepare("UPDATE customers SET product_type = ? WHERE id = ?").bind(y,re).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_type = ? WHERE id = ?").bind(S,re).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?").bind(_,k,re).run()}catch{}j.length>0&&await Je(e.env.DB,re,j)}const Re=V.meta?.last_row_id,ua=a.get("obligations_json");if(Re&&ua)try{const A=JSON.parse(ua);if(Array.isArray(A)&&A.length>0){let $=0;for(const O of A){const Le=O.obligation_type??"",xn=Number(O.total_amount)||0,ga=Number(O.monthly_installment)||0,vn=O.due_date||null;$+=ga,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(Re,Le,xn,ga,vn,P).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind($,Re).run()}}catch{}const yn=C(J.roleId),ma=re||Number(Re||0);if(ma>0&&J.userId&&Rs(yn))try{await xi(e.env.DB,ma,Number(J.userId),Number(J.userId),"")}catch(A){console.error("Auto-assign new customer to employee (role 4/6) failed:",A)}const Mt=re||Number(Re||0);if(Mt>0){const A=C(J.roleId);if((A===2||A===1)&&P){const $=a.get("assigned_bank_agent_id");if($){const O=Number($);if(O>0&&await la(e.env.DB,O,P)){const Le=await Bt(e.env.DB,Mt,O);Le.missingColumn?console.error("[customer create] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1"):Le.ok&&await xt(e.env.DB,Mt,O)}}}}return t?e.json({ok:!0,redirect:"/admin/customers",id:Re||null}):e.redirect("/admin/customers")}catch(a){return t?e.json({ok:!1,code:"SERVER_ERROR",message:a?.message||"لم نتمكن من إضافة العميل."},500):e.html(`
+        `).bind(...X.slice(0,16)).run()}else throw A}const re=Number(Y?.meta?.last_row_id||0),xn=C(J.roleId);if(ye&&re)try{const A=Number(ye);if(As(xn)&&A>0)try{await e.env.DB.prepare("UPDATE customers SET created_by = ?, assigned_bank_agent_id = ? WHERE id = ?").bind(A,A,re).run(),await xt(e.env.DB,re,A)}catch(O){const Le=String(O?.message||O||"");/no such column:\s*assigned_bank_agent_id/i.test(Le)&&await e.env.DB.prepare("UPDATE customers SET created_by = ? WHERE id = ?").bind(ye,re).run()}else await e.env.DB.prepare("UPDATE customers SET created_by = ? WHERE id = ?").bind(ye,re).run()}catch{}if(re){try{await e.env.DB.prepare("UPDATE customers SET product_type = ? WHERE id = ?").bind(y,re).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_type = ? WHERE id = ?").bind(S,re).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?").bind(_,k,re).run()}catch{}j.length>0&&await Je(e.env.DB,re,j)}const Re=Y.meta?.last_row_id,ua=a.get("obligations_json");if(Re&&ua)try{const A=JSON.parse(ua);if(Array.isArray(A)&&A.length>0){let $=0;for(const O of A){const Le=O.obligation_type??"",wn=Number(O.total_amount)||0,ga=Number(O.monthly_installment)||0,_n=O.due_date||null;$+=ga,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(Re,Le,wn,ga,_n,P).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind($,Re).run()}}catch{}const vn=C(J.roleId),ma=re||Number(Re||0);if(ma>0&&J.userId&&Ds(vn))try{await wi(e.env.DB,ma,Number(J.userId),Number(J.userId),"")}catch(A){console.error("Auto-assign new customer to employee (role 4/6) failed:",A)}const Mt=re||Number(Re||0);if(Mt>0){const A=C(J.roleId);if((A===2||A===1)&&P){const $=a.get("assigned_bank_agent_id");if($){const O=Number($);if(O>0&&await la(e.env.DB,O,P)){const Le=await Bt(e.env.DB,Mt,O);Le.missingColumn?console.error("[customer create] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1"):Le.ok&&await xt(e.env.DB,Mt,O)}}}}return t?e.json({ok:!0,redirect:"/admin/customers",id:Re||null}):e.redirect("/admin/customers")}catch(a){return t?e.json({ok:!1,code:"SERVER_ERROR",message:a?.message||"لم نتمكن من إضافة العميل."},500):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -37285,7 +38047,7 @@ ${r?`
         </div>
       </body>
       </html>
-    `)}});m.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await E(e);if(!a.userId||!a.roleId)return e.redirect("/login");const r=await e.env.DB.prepare("SELECT id, tenant_id, enrollment_source, enrollment_source_label FROM customers WHERE id = ?").bind(t).first();if(!r)return e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير موجود</title></head><body class="p-8"><h1>العميل غير موجود</h1></body></html>',404);if(!await Q(e.env.DB,a,r))return e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير مصرح</title></head><body class="p-8"><h1>غير مصرح بتعديل هذا العميل</h1></body></html>',403);const n=await e.req.formData();if(String(n.get("attachments_only")||"")==="1"){const M=Ve(n.get("attachments_json"));return await Je(e.env.DB,t,M),e.json({success:!0})}const s=n.get("full_name"),o=n.get("phone"),i=Ke(o);if(!i.normalized)return e.html(`
+    `)}});m.post("/api/customers/:id",async e=>{try{const t=e.req.param("id"),a=await E(e);if(!a.userId||!a.roleId)return e.redirect("/login");const r=await e.env.DB.prepare("SELECT id, tenant_id, enrollment_source, enrollment_source_label FROM customers WHERE id = ?").bind(t).first();if(!r)return e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير موجود</title></head><body class="p-8"><h1>العميل غير موجود</h1></body></html>',404);if(!await Q(e.env.DB,a,r))return e.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير مصرح</title></head><body class="p-8"><h1>غير مصرح بتعديل هذا العميل</h1></body></html>',403);const n=await e.req.formData();if(String(n.get("attachments_only")||"")==="1"){const M=Ye(n.get("attachments_json"));return await Je(e.env.DB,t,M),e.json({success:!0})}const s=n.get("full_name"),o=n.get("phone"),i=Ke(o);if(!i.normalized)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -37315,7 +38077,7 @@ ${r?`
           </div>
         </body>
         </html>
-      `,400);const l=i.normalized,d=n.get("email")||null,c=n.get("national_id"),p=c!=null&&String(c).trim()?String(c).trim():null,u=n.get("date_of_birth")||null,g=n.get("dob_calendar_type")||"gregorian",b=n.get("employer_name")||null,f=Ur(n.get("job_type")),w=n.get("job_title")||null,h=n.get("military_rank")||null,y=n.get("work_start_date")||null,S=n.get("city")||null,_=Wr(n.get("product_type")),k=Yr(n.get("property_type")),T=n.get("property_owner")?.trim()||null,v=n.get("real_estate_office")?.trim()||null,x=n.get("basic_salary")?parseFloat(n.get("basic_salary")):null,I=parseFloat(n.get("monthly_salary")||"0"),L=n.get("notes")?.trim()||null,R=Lr(n.get("solutions_json")),D=Ve(n.get("attachments_json")),j=n.get("identity_attachment_url")?.trim()||n.get("id_attachment_url")?.trim()||null,q=n.get("signature_attachment_url")?.trim()||n.get("bank_statement_attachment_url")?.trim()||null,N=n.get("salary_profile_attachment_url")?.trim()||n.get("salary_attachment_url")?.trim()||null,U=n.get("gosi_attachment_url")?.trim()||null,se=n.get("tax_exemption_attachment_url")?.trim()||null,Se=n.get("additional_1_attachment_url")?.trim()||n.get("additional_attachment_url")?.trim()||null,ce=n.get("additional_2_attachment_url")?.trim()||null,at=n.get("additional_3_attachment_url")?.trim()||null;let Te;const J=r.tenant_id!=null?Number(r.tenant_id):NaN;if(Number.isFinite(J)&&J>0){const M=await e.env.DB.prepare("SELECT COUNT(*) as n FROM tenant_locations WHERE tenant_id = ? AND is_active = 1").bind(J).first();if(Number(M?.n??0)>0){const Y=n.get("location_id");if(Y==null||String(Y).trim()==="")return e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع الذي سُجّل فيه العميل.</p><a href="/admin/customers/${t}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,400);const Z=Number.parseInt(String(Y),10);if(!Number.isFinite(Z)||Z<=0)return e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع غير صالح</h1><p class="text-amber-800 mt-2">يرجى اختيار موقع تسجيل صحيح.</p><a href="/admin/customers/${t}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,400);if(!await e.env.DB.prepare("SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1").bind(Z,J).first())return e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة</h1><a href="/admin/customers/${t}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,400);Te=Z}}const P=[s,l,d,p,u,g==="hijri"?"hijri":"gregorian",b,f,w,f==="military"?h:null,y,S,x,I,L,j,q,N,U,se,Se,ce,at];try{await e.env.DB.prepare(`
+      `,400);const l=i.normalized,d=n.get("email")||null,c=n.get("national_id"),p=c!=null&&String(c).trim()?String(c).trim():null,u=n.get("date_of_birth")||null,g=n.get("dob_calendar_type")||"gregorian",b=n.get("employer_name")||null,f=Wr(n.get("job_type")),w=n.get("job_title")||null,h=n.get("military_rank")||null,y=n.get("work_start_date")||null,S=n.get("city")||null,_=Gr(n.get("product_type")),k=Jr(n.get("property_type")),T=n.get("property_owner")?.trim()||null,v=n.get("real_estate_office")?.trim()||null,x=n.get("basic_salary")?parseFloat(n.get("basic_salary")):null,I=parseFloat(n.get("monthly_salary")||"0"),L=n.get("notes")?.trim()||null,R=Ar(n.get("solutions_json")),D=Ye(n.get("attachments_json")),j=n.get("identity_attachment_url")?.trim()||n.get("id_attachment_url")?.trim()||null,q=n.get("signature_attachment_url")?.trim()||n.get("bank_statement_attachment_url")?.trim()||null,N=n.get("salary_profile_attachment_url")?.trim()||n.get("salary_attachment_url")?.trim()||null,U=n.get("gosi_attachment_url")?.trim()||null,se=n.get("tax_exemption_attachment_url")?.trim()||null,Se=n.get("additional_1_attachment_url")?.trim()||n.get("additional_attachment_url")?.trim()||null,ce=n.get("additional_2_attachment_url")?.trim()||null,at=n.get("additional_3_attachment_url")?.trim()||null;let Te;const J=r.tenant_id!=null?Number(r.tenant_id):NaN;if(Number.isFinite(J)&&J>0){const M=await e.env.DB.prepare("SELECT COUNT(*) as n FROM tenant_locations WHERE tenant_id = ? AND is_active = 1").bind(J).first();if(Number(M?.n??0)>0){const V=n.get("location_id");if(V==null||String(V).trim()==="")return e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع التسجيل مطلوب</h1><p class="text-amber-800 mt-2">اختر الفرع الذي سُجّل فيه العميل.</p><a href="/admin/customers/${t}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,400);const Z=Number.parseInt(String(V),10);if(!Number.isFinite(Z)||Z<=0)return e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-amber-50 border border-amber-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-amber-900">موقع غير صالح</h1><p class="text-amber-800 mt-2">يرجى اختيار موقع تسجيل صحيح.</p><a href="/admin/customers/${t}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,400);if(!await e.env.DB.prepare("SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1").bind(Z,J).first())return e.html(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title><script src="https://cdn.tailwindcss.com"><\/script></head><body class="bg-gray-50 p-8"><div class="max-w-lg mx-auto bg-red-50 border border-red-200 p-6 rounded-lg"><h1 class="text-xl font-bold text-red-900">الموقع لا يتبع هذه الشركة</h1><a href="/admin/customers/${t}/edit" class="inline-block mt-4 text-blue-600 underline">العودة للتعديل</a></div></body></html>`,400);Te=Z}}const P=[s,l,d,p,u,g==="hijri"?"hijri":"gregorian",b,f,w,f==="military"?h:null,y,S,x,I,L,j,q,N,U,se,Se,ce,at];try{await e.env.DB.prepare(`
       UPDATE customers 
       SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
           employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?,
@@ -37345,7 +38107,7 @@ ${r?`
           SET full_name = ?, phone = ?, email = ?, national_id = ?, birthdate = ?, dob_calendar_type = ?,
               employer_name = ?, job_type = ?, job_title = ?, military_rank = ?, work_start_date = ?, city = ?, basic_salary = ?, monthly_salary = ?, notes = ?
           WHERE id = ?
-        `).bind(...P.slice(0,15),t).run()}else throw M}if(Te!==void 0){try{await e.env.DB.prepare("UPDATE customers SET location_id = ? WHERE id = ?").bind(Te,t).run()}catch(M){if(!Yt(M))throw M}await ii(e.env.DB,t,Te)}try{await e.env.DB.prepare("UPDATE customers SET product_type = ? WHERE id = ?").bind(_,t).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_type = ? WHERE id = ?").bind(k,t).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?").bind(T,v,t).run()}catch{}n.get("attachments_json")!=null&&await Je(e.env.DB,t,D);const ye=C(a.roleId);if(ye===2||ye===1){const M=n.get("assigned_bank_agent_id");if(M!==null){const G=r.tenant_id!=null?Number(r.tenant_id):null;let Y=!1;const Z=M!=null?String(M).trim():"";let ee=null;if(Z==="")ee=null;else{const oe=Number(Z);if(Number.isFinite(oe)&&oe>0){const ae=Math.floor(oe);await la(e.env.DB,ae,G)?ee=ae:(console.warn("[customer edit] bank agent rejected — keeping existing assignment",ae,G),Y=!0)}else Y=!0}if(!Y){const oe=await Bt(e.env.DB,Number(t),ee);oe.missingColumn?console.error("[customer edit] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1"):oe.ok&&await xt(e.env.DB,Number(t),ee)}}}const Ce=n.get("obligations_json");if(Ce)try{const G=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const Y=JSON.parse(Ce);if(Array.isArray(Y)&&Y.length>0){let Z=0;for(const ee of Y){const oe=ee.obligation_type??"",ae=Number(ee.total_amount)||0,X=Number(ee.monthly_installment)||0,V=ee.due_date||null;Z+=X,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,oe,ae,X,V,G).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(Z,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}await aa(e.env.DB,t,{identity_attachment_url:j,signature_attachment_url:q,salary_profile_attachment_url:N,gosi_attachment_url:U,tax_exemption_attachment_url:se,additional_1_attachment_url:Se,additional_2_attachment_url:ce,additional_3_attachment_url:at});const rt=String(r?.enrollment_source??"").trim();if(!(rt==="calculator"||rt==="affiliate")){const M=String(n.get("manual_enrollment_source")??"").trim().slice(0,200),G=M?"manual":null,Y=M||null;try{await e.env.DB.prepare("UPDATE customers SET enrollment_source = ?, enrollment_source_label = ? WHERE id = ?").bind(G,Y,t).run()}catch{}}return e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const r=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!r)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,r.id).first()}catch(l){if(!pe(l))throw l;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,r.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const o=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const l=n.solutions_json;if(l){const d=JSON.parse(l);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:o,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),r=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;r&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(r).first())?.id??null);let s=null;if(n!=null?s=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():s=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!s)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(s.id).all()).results||[];return e.json({success:!0,customer:s,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/customers/:id/obligations",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),r=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!r)return e.json({success:!1,error:"Not found"},404);if(!await Q(e.env.DB,t,r))return e.json({success:!1,error:"Forbidden"},403);const s=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:s})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/customers/:id/obligations",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),r=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!r)return e.json({success:!1,error:"Not found"},404);if(!await Q(e.env.DB,t,r))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),s=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let o=0;for(const i of s){const l=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,p=i.due_date||null;o+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,l,d,c,p,r.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(o,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/financing-requests",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
+        `).bind(...P.slice(0,15),t).run()}else throw M}if(Te!==void 0){try{await e.env.DB.prepare("UPDATE customers SET location_id = ? WHERE id = ?").bind(Te,t).run()}catch(M){if(!Vt(M))throw M}await di(e.env.DB,t,Te)}try{await e.env.DB.prepare("UPDATE customers SET product_type = ? WHERE id = ?").bind(_,t).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_type = ? WHERE id = ?").bind(k,t).run()}catch{}try{await e.env.DB.prepare("UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?").bind(T,v,t).run()}catch{}n.get("attachments_json")!=null&&await Je(e.env.DB,t,D);const ye=C(a.roleId);if(ye===2||ye===1){const M=n.get("assigned_bank_agent_id");if(M!==null){const G=r.tenant_id!=null?Number(r.tenant_id):null;let V=!1;const Z=M!=null?String(M).trim():"";let ee=null;if(Z==="")ee=null;else{const oe=Number(Z);if(Number.isFinite(oe)&&oe>0){const ae=Math.floor(oe);await la(e.env.DB,ae,G)?ee=ae:(console.warn("[customer edit] bank agent rejected — keeping existing assignment",ae,G),V=!0)}else V=!0}if(!V){const oe=await Bt(e.env.DB,Number(t),ee);oe.missingColumn?console.error("[customer edit] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1"):oe.ok&&await xt(e.env.DB,Number(t),ee)}}}const Ce=n.get("obligations_json");if(Ce)try{const G=(await e.env.DB.prepare("SELECT tenant_id FROM customers WHERE id = ?").bind(t).first())?.tenant_id??null;await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(t).run();const V=JSON.parse(Ce);if(Array.isArray(V)&&V.length>0){let Z=0;for(const ee of V){const oe=ee.obligation_type??"",ae=Number(ee.total_amount)||0,X=Number(ee.monthly_installment)||0,Y=ee.due_date||null;Z+=X,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(t,oe,ae,X,Y,G).run()}await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(Z,t).run()}else await e.env.DB.prepare("UPDATE customers SET monthly_obligations = 0 WHERE id = ?").bind(t).run()}catch{}await aa(e.env.DB,t,{identity_attachment_url:j,signature_attachment_url:q,salary_profile_attachment_url:N,gosi_attachment_url:U,tax_exemption_attachment_url:se,additional_1_attachment_url:Se,additional_2_attachment_url:ce,additional_3_attachment_url:at});const rt=String(r?.enrollment_source??"").trim();if(!(rt==="calculator"||rt==="affiliate")){const M=String(n.get("manual_enrollment_source")??"").trim().slice(0,200),G=M?"manual":null,V=M||null;try{await e.env.DB.prepare("UPDATE customers SET enrollment_source = ?, enrollment_source_label = ? WHERE id = ?").bind(G,V,t).run()}catch{}}return e.redirect("/admin/customers")}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/calculator/customers",async e=>{try{const t=e.req.query("tenant_slug");if(!t)return e.json({success:!1,error:"tenant_slug required"},400);const a=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(t).first();if(!a)return e.json({success:!1,customers:[]});const n=(await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary FROM customers WHERE tenant_id = ? ORDER BY full_name").bind(a.id).all()).results||[];return e.json({success:!0,customers:n})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/calculator/customer-by-id",async e=>{try{const t=e.req.query("customer_id"),a=e.req.query("tenant_slug");if(!t||!a)return e.json({success:!1,error:"customer_id and tenant_slug required"},400);const r=await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(a).first();if(!r)return e.json({success:!1,customer:null,obligations:[],solutions:[]});let n=null;try{n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations, solutions_json FROM customers WHERE id = ? AND tenant_id = ?").bind(t,r.id).first()}catch(l){if(!pe(l))throw l;n=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE id = ? AND tenant_id = ?").bind(t,r.id).first()}if(!n)return e.json({success:!1,customer:null,obligations:[],solutions:[]});const o=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(t).all()).results||[];let i=[];try{const l=n.solutions_json;if(l){const d=JSON.parse(l);Array.isArray(d)&&(i=d.map(c=>({note:typeof c=="string"?c:String(c?.note??"")})))}}catch{}return e.json({success:!0,customer:n,obligations:o,solutions:i})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/calculator/customer-by-identifier",async e=>{try{const t=e.req.query("national_id"),a=e.req.query("phone"),r=e.req.query("tenant_slug");if(!t&&!a)return e.json({success:!1,error:"Provide national_id or phone"},400);let n=null;r&&(n=(await e.env.DB.prepare("SELECT id FROM tenants WHERE slug = ?").bind(r).first())?.id??null);let s=null;if(n!=null?s=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE tenant_id = ? AND (national_id = ? OR phone = ?) LIMIT 1").bind(n,t||"",a||"").first():s=await e.env.DB.prepare("SELECT id, full_name, phone, national_id, basic_salary, monthly_salary, monthly_obligations FROM customers WHERE national_id = ? OR phone = ? LIMIT 1").bind(t||"",a||"").first(),!s)return e.json({success:!1,customer:null,obligations:[]});const i=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(s.id).all()).results||[];return e.json({success:!0,customer:s,obligations:i})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/customers/:id/obligations",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),r=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!r)return e.json({success:!1,error:"Not found"},404);if(!await Q(e.env.DB,t,r))return e.json({success:!1,error:"Forbidden"},403);const s=(await e.env.DB.prepare("SELECT id, obligation_type, total_amount, monthly_installment, due_date FROM customer_obligations WHERE customer_id = ? ORDER BY id").bind(a).all()).results||[];return e.json({success:!0,obligations:s})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/customers/:id/obligations",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"Unauthorized"},401);const a=e.req.param("id"),r=await e.env.DB.prepare("SELECT id, tenant_id FROM customers WHERE id = ?").bind(a).first();if(!r)return e.json({success:!1,error:"Not found"},404);if(!await Q(e.env.DB,t,r))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json(),s=Array.isArray(n?.obligations)?n.obligations:[];await e.env.DB.prepare("DELETE FROM customer_obligations WHERE customer_id = ?").bind(a).run();let o=0;for(const i of s){const l=i.obligation_type??"",d=Number(i.total_amount)||0,c=Number(i.monthly_installment)||0,p=i.due_date||null;o+=c,await e.env.DB.prepare("INSERT INTO customer_obligations (customer_id, obligation_type, total_amount, monthly_installment, due_date, tenant_id) VALUES (?, ?, ?, ?, ?, ?)").bind(a,l,d,c,p,r.tenant_id).run()}return await e.env.DB.prepare("UPDATE customers SET monthly_obligations = ? WHERE id = ?").bind(o,a).run(),e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/api/financing-requests",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.json({success:!1,error:"غير مصرح"},401);let a=`
       SELECT
         f.*,
         c.full_name as customer_name,
@@ -37508,7 +38270,7 @@ ${r?`
       ${x}
     `).bind(...y).first(),L=Number(I?.count||0);return e.json({success:!0,customers:{all:o,0:l,1:Number(s?.rating_1||0),2:Number(s?.rating_2||0),3:Number(s?.rating_3||0),4:Number(s?.rating_4||0),5:Number(s?.rating_5||0),completed:p,archived:w},requests:{all:v,byState:T,completed:L}})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/requests",async e=>{try{const a=(e.req.header("Accept")||"").includes("application/json")||e.req.header("X-Requested-With")==="fetch",r=await e.req.formData(),n=r.get("customer_id"),s=r.get("financing_type_id"),o=r.get("requested_amount"),i=r.get("duration_months"),l=r.get("salary_at_request"),d=r.get("selected_bank_id");let c=d!=null&&String(d).trim()!==""?parseInt(String(d),10):null;c!=null&&Number.isNaN(c)&&(c=null);const p=r.get("assigned_bank_agent_id");let u=p!=null&&String(p).trim()!==""?parseInt(String(p),10):null;u!=null&&Number.isNaN(u)&&(u=null);const g=r.get("status")||"pending",b=r.get("notes")||"",f=await E(e);if(!f.userId||!f.roleId)return e.json({success:!1,error:"غير مصرح"},401);const w=await e.env.DB.prepare(`
       SELECT id, tenant_id, location_id, assigned_bank_agent_id FROM customers WHERE id = ?
-    `).bind(n).first();if(!w)return e.json({success:!1,error:"العميل غير موجود"},400);if(await Nt(e.env.DB,w.id))return e.json({success:!1,error:"يوجد طلب تمويل مسبق لهذا العميل"},400);const h=w.location_id!=null&&Number.isFinite(Number(w.location_id))?Number(w.location_id):null;if(f.roleId!==1){if(!f.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(w.tenant_id!==f.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}const y=u??w.assigned_bank_agent_id??null,S=w,_=C(f.roleId);if(_===4||_===6){const R=await Q(e.env.DB,f,S),D=f.userId!=null&&u!=null&&Number(u)===Number(f.userId);if(!R&&!D)return e.json({success:!1,error:_===6?"غير مصرح: اختر عميلاً مخصصاً لك أو عيّن نفسك موظف تمويل على الطلب":"غير مصرح: العميل غير مخصص لك"},403)}else if(_===5){const R=await Q(e.env.DB,f,S),D=f.userId!=null&&u!=null&&Number(u)===Number(f.userId);if(!R&&!D)return e.json({success:!1,error:"غير مصرح: اختر نفسك كموظف تمويل على هذا الطلب لربط العميل بك، أو اختر عميلاً مرتبطًا بطلباتك"},403)}const k=f.roleId===1?w.tenant_id:f.tenantId;if(y!=null){if(!c||Number.isNaN(c))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);const R=k!=null?Number(k):NaN;if(!R||Number.isNaN(R))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await on(e.env.DB,R,y))return e.json({success:!1,error:"موظف التمويل غير صالح لهذه الشركة"},400)}const T=f.userId,v=[n,s,c,o,l,i,g,b,k,y],x=[{loc:!0,cb:!0},{loc:!1,cb:!0},{loc:!0,cb:!1},{loc:!1,cb:!1}];let I,L;for(const R of x)try{R.loc&&R.cb?I=await e.env.DB.prepare(`
+    `).bind(n).first();if(!w)return e.json({success:!1,error:"العميل غير موجود"},400);if(await Nt(e.env.DB,w.id))return e.json({success:!1,error:"يوجد طلب تمويل مسبق لهذا العميل"},400);const h=w.location_id!=null&&Number.isFinite(Number(w.location_id))?Number(w.location_id):null;if(f.roleId!==1){if(!f.tenantId)return e.json({success:!1,error:"يجب تحديد الشركة"},400);if(w.tenant_id!==f.tenantId)return e.json({success:!1,error:"غير مصرح لهذه الشركة"},403)}const y=u??w.assigned_bank_agent_id??null,S=w,_=C(f.roleId);if(_===4||_===6){const R=await Q(e.env.DB,f,S),D=f.userId!=null&&u!=null&&Number(u)===Number(f.userId);if(!R&&!D)return e.json({success:!1,error:_===6?"غير مصرح: اختر عميلاً مخصصاً لك أو عيّن نفسك موظف تمويل على الطلب":"غير مصرح: العميل غير مخصص لك"},403)}else if(_===5){const R=await Q(e.env.DB,f,S),D=f.userId!=null&&u!=null&&Number(u)===Number(f.userId);if(!R&&!D)return e.json({success:!1,error:"غير مصرح: اختر نفسك كموظف تمويل على هذا الطلب لربط العميل بك، أو اختر عميلاً مرتبطًا بطلباتك"},403)}const k=f.roleId===1?w.tenant_id:f.tenantId;if(y!=null){if(!c||Number.isNaN(c))return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);const R=k!=null?Number(k):NaN;if(!R||Number.isNaN(R))return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await dn(e.env.DB,R,y))return e.json({success:!1,error:"موظف التمويل غير صالح لهذه الشركة"},400)}const T=f.userId,v=[n,s,c,o,l,i,g,b,k,y],x=[{loc:!0,cb:!0},{loc:!1,cb:!0},{loc:!0,cb:!1},{loc:!1,cb:!1}];let I,L;for(const R of x)try{R.loc&&R.cb?I=await e.env.DB.prepare(`
       INSERT INTO financing_requests (
         customer_id, financing_type_id, selected_bank_id, 
         requested_amount, salary_at_request, duration_months, 
@@ -37536,22 +38298,22 @@ ${r?`
             customer_id, financing_type_id, selected_bank_id,
             requested_amount, salary_at_request, duration_months,
             status, notes, tenant_id, created_by, assigned_bank_agent_id, location_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(c,k,v,w,_,y,I,L,f,t.userId,b,u).run()}catch(R){if(!Jr(R))throw R;await e.env.DB.prepare(`INSERT INTO financing_requests (
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(c,k,v,w,_,y,I,L,f,t.userId,b,u).run()}catch(R){if(!Qr(R))throw R;await e.env.DB.prepare(`INSERT INTO financing_requests (
             customer_id, financing_type_id, selected_bank_id,
             requested_amount, salary_at_request, duration_months,
             status, notes, tenant_id, created_by, assigned_bank_agent_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(c,k,v,w,_,y,I,L,f,t.userId,b).run()}n++}catch(l){s.push(`Row ${o+1}: ${l?.message||String(l)}`)}}return e.json({success:!0,created:n,errors:s.length?s:void 0,message:`تمت إضافة ${n} طلب`})}catch(t){return e.json({success:!1,error:t.message},500)}});const zt="pre_workflow";function vt(e){const t=Number(e);return Number.isInteger(t)&&t>0?t:null}async function Ot(e){await e.prepare(`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(c,k,v,w,_,y,I,L,f,t.userId,b).run()}n++}catch(l){s.push(`Row ${o+1}: ${l?.message||String(l)}`)}}return e.json({success:!0,created:n,errors:s.length?s:void 0,message:`تمت إضافة ${n} طلب`})}catch(t){return e.json({success:!1,error:t.message},500)}});const Wt="pre_workflow";function vt(e){const t=Number(e);return Number.isInteger(t)&&t>0?t:null}async function Ot(e){await e.prepare(`
     INSERT OR IGNORE INTO workflow_stages (stage_name, stage_name_ar, stage_order, stage_color, stage_icon, is_active)
     VALUES (?, ?, 0, '#94A3B8', 'fa-hourglass-start', 1)
-  `).bind(zt,"قبل سير العمل").run(),await e.prepare(`
+  `).bind(Wt,"قبل سير العمل").run(),await e.prepare(`
     UPDATE workflow_stages
     SET stage_name_ar = ?, stage_order = 0, stage_color = '#94A3B8', stage_icon = 'fa-hourglass-start', is_active = 1
     WHERE stage_name = ?
-  `).bind("قبل سير العمل",zt).run();const t=await e.prepare(`
+  `).bind("قبل سير العمل",Wt).run();const t=await e.prepare(`
     SELECT id FROM workflow_stages WHERE stage_name = ?
-  `).bind(zt).first();if(!t?.id)throw new Error("Unable to initialize pre-workflow stage");return t.id}async function un(e,t,a){const r=vt(a);if(r)return r;const n=await e.prepare(`
+  `).bind(Wt).first();if(!t?.id)throw new Error("Unable to initialize pre-workflow stage");return t.id}async function gn(e,t,a){const r=vt(a);if(r)return r;const n=await e.prepare(`
     SELECT current_stage_id FROM financing_requests WHERE id = ?
-  `).bind(t).first();return vt(n?.current_stage_id)??await Ot(e)}async function mn(e,t,a){const r=vt(a);if(r)return r;const n=await e.prepare(`
+  `).bind(t).first();return vt(n?.current_stage_id)??await Ot(e)}async function fn(e,t,a){const r=vt(a);if(r)return r;const n=await e.prepare(`
     SELECT current_workflow_stage_id FROM customers WHERE id = ?
   `).bind(t).first();return vt(n?.current_workflow_stage_id)??await Ot(e)}m.get("/api/workflow/stages",async e=>{try{await Ot(e.env.DB);const{results:t}=await e.env.DB.prepare(`
       SELECT * FROM workflow_stages 
@@ -37597,7 +38359,7 @@ ${r?`
       LEFT JOIN users completed_user ON wst.completed_by = completed_user.id
       WHERE wst.request_id = ?
       ORDER BY wst.due_date ASC
-    `).bind(a).all();return e.json({success:!0,data:{transitions:r,actions:n,tasks:s}})}catch(t){return e.json({success:!1,error:t.message},500)}});const Ti={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function Ci(e){return e&&Ti[e]||null}m.post("/api/workflow/update-stage",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===4)return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,newStageId:r,notes:n,userId:s}=await e.req.json();if(!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);const o=await e.env.DB.prepare(`
+    `).bind(a).all();return e.json({success:!0,data:{transitions:r,actions:n,tasks:s}})}catch(t){return e.json({success:!1,error:t.message},500)}});const Ri={draft:"pending",submitted:"pending",missing_docs:"under_review",processing:"under_review",underwriting:"under_review",conditional_approval:"under_review",documentation:"under_review",approved:"approved",final_approval:"approved",disbursed:"approved",active:"approved",closed:"approved",rejected:"rejected",cancelled:"cancelled"};function Li(e){return e&&Ri[e]||null}m.post("/api/workflow/update-stage",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===4)return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,newStageId:r,notes:n,userId:s}=await e.req.json();if(!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);const o=await e.env.DB.prepare(`
       SELECT stage_name FROM workflow_stages WHERE id = ?
     `).bind(r).first(),i=await e.env.DB.prepare(`
       SELECT status, current_stage_id FROM financing_requests WHERE id = ?
@@ -37612,7 +38374,7 @@ ${r?`
           WHERE request_id = ? AND to_stage_id = ?
           ORDER BY created_at DESC
           LIMIT 1
-        `).bind(n,s,a,r).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"});const d=Ci(o?.stage_name||null),c=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],p=[r];d&&(c.push("status = ?"),p.push(d),d==="pending"?c.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):d==="under_review"?c.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):d==="approved"?c.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):d==="rejected"&&c.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(d==="approved"||d==="rejected"||d==="under_review")&&c.push("reviewed_at = CURRENT_TIMESTAMP")),p.push(a),await e.env.DB.prepare(`
+        `).bind(n,s,a,r).run(),e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"});const d=Li(o?.stage_name||null),c=["current_stage_id = ?","stage_entered_at = CURRENT_TIMESTAMP"],p=[r];d&&(c.push("status = ?"),p.push(d),d==="pending"?c.push("pending_at = COALESCE(pending_at, CURRENT_TIMESTAMP)"):d==="under_review"?c.push("under_review_at = COALESCE(under_review_at, CURRENT_TIMESTAMP)"):d==="approved"?c.push("approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)"):d==="rejected"&&c.push("rejected_at = COALESCE(rejected_at, CURRENT_TIMESTAMP)"),(d==="approved"||d==="rejected"||d==="under_review")&&c.push("reviewed_at = CURRENT_TIMESTAMP")),p.push(a),await e.env.DB.prepare(`
       UPDATE financing_requests 
       SET ${c.join(", ")}
       WHERE id = ?
@@ -37625,7 +38387,7 @@ ${r?`
       `).bind(n,s,a,r).run(),d&&i?.status&&i.status!==d&&await e.env.DB.prepare(`
         INSERT INTO financing_request_status_history (request_id, old_status, new_status, changed_by, notes)
         VALUES (?, ?, ?, ?, ?)
-      `).bind(a,i.status,d,s||null,n||"").run();try{const u=(await e.env.DB.prepare("SELECT stage_name_ar FROM workflow_stages WHERE id = ?").bind(r).first())?.stage_name_ar||o?.stage_name||"",g=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),b=g?.full_name||"",f=g?.tenant_id??null,h=(await e.env.DB.prepare("SELECT customer_id FROM financing_requests WHERE id = ?").bind(a).first())?.customer_id??null;if(h){const y=await Me(e.env.DB,h,t.userId,t.roleId,f,Number(a));y.length&&await Fe(e.env.DB,{customerId:h,tenantId:f,targetUserIds:y,customerName:`تحديث مرحلة: ${u}`,note:`قام ${b} بتحديث مرحلة الطلب #${a} إلى: ${u}`,linkUrl:`/admin/requests/${a}/workflow#request`})}}catch{}return e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/add-action",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,stageId:r,actionType:n,actionData:s,performedBy:o,notes:i}=await e.req.json();if(!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);const l=o||t.userId,d=await un(e.env.DB,a,r);if(await e.env.DB.prepare(`
+      `).bind(a,i.status,d,s||null,n||"").run();try{const u=(await e.env.DB.prepare("SELECT stage_name_ar FROM workflow_stages WHERE id = ?").bind(r).first())?.stage_name_ar||o?.stage_name||"",g=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),b=g?.full_name||"",f=g?.tenant_id??null,h=(await e.env.DB.prepare("SELECT customer_id FROM financing_requests WHERE id = ?").bind(a).first())?.customer_id??null;if(h){const y=await Me(e.env.DB,h,t.userId,t.roleId,f,Number(a));y.length&&await Fe(e.env.DB,{customerId:h,tenantId:f,targetUserIds:y,customerName:`تحديث مرحلة: ${u}`,note:`قام ${b} بتحديث مرحلة الطلب #${a} إلى: ${u}`,linkUrl:`/admin/requests/${a}/workflow#request`})}}catch{}return e.json({success:!0,message:"تم تحديث مرحلة الطلب بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/add-action",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,stageId:r,actionType:n,actionData:s,performedBy:o,notes:i}=await e.req.json();if(!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);const l=o||t.userId,d=await gn(e.env.DB,a,r);if(await e.env.DB.prepare(`
       SELECT id FROM workflow_stage_actions
       WHERE request_id = ? AND stage_id = ? AND action_type = ?
         AND performed_by = ?
@@ -37636,7 +38398,7 @@ ${r?`
       INSERT INTO workflow_stage_actions
       (request_id, stage_id, action_type, action_data, performed_by, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(a,d,n,s??null,l,i??null).run();try{const p={call:"اتصال هاتفي",email:"بريد إلكتروني",meeting:"اجتماع",document:"مستند",approval:"موافقة",rejection:"رفض",followup:"متابعة",other:"أخرى"}[n]||n,u=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),g=u?.full_name||"",b=u?.tenant_id??null,w=(await e.env.DB.prepare("SELECT customer_id FROM financing_requests WHERE id = ?").bind(a).first())?.customer_id??null;if(w){const h=await Me(e.env.DB,w,t.userId,t.roleId,b,Number(a));h.length&&await Fe(e.env.DB,{customerId:w,tenantId:b,targetUserIds:h,customerName:`إجراء: ${p}`,note:`قام ${g} بإضافة إجراء "${p}" على الطلب #${a}${i?" — "+i:""}`,linkUrl:`/admin/requests/${a}/workflow#request`})}}catch{}return e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/add-note",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!Oe(t.roleId))return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,stageId:r,noteText:n,performedBy:s}=await e.req.json(),o=String(n||"").trim();if(!o)return e.json({success:!1,error:"Note text is required"},400);if(!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);await ca(e.env.DB);const i=s||t.userId,l=await un(e.env.DB,a,r);if(await e.env.DB.prepare(`
+    `).bind(a,d,n,s??null,l,i??null).run();try{const p={call:"اتصال هاتفي",email:"بريد إلكتروني",meeting:"اجتماع",document:"مستند",approval:"موافقة",rejection:"رفض",followup:"متابعة",other:"أخرى"}[n]||n,u=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),g=u?.full_name||"",b=u?.tenant_id??null,w=(await e.env.DB.prepare("SELECT customer_id FROM financing_requests WHERE id = ?").bind(a).first())?.customer_id??null;if(w){const h=await Me(e.env.DB,w,t.userId,t.roleId,b,Number(a));h.length&&await Fe(e.env.DB,{customerId:w,tenantId:b,targetUserIds:h,customerName:`إجراء: ${p}`,note:`قام ${g} بإضافة إجراء "${p}" على الطلب #${a}${i?" — "+i:""}`,linkUrl:`/admin/requests/${a}/workflow#request`})}}catch{}return e.json({success:!0,message:"تم إضافة الإجراء بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/add-note",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!Oe(t.roleId))return e.json({success:!1,error:"Forbidden"},403);const{requestId:a,stageId:r,noteText:n,performedBy:s}=await e.req.json(),o=String(n||"").trim();if(!o)return e.json({success:!1,error:"Note text is required"},400);if(!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);await ca(e.env.DB);const i=s||t.userId,l=await gn(e.env.DB,a,r);if(await e.env.DB.prepare(`
       SELECT id FROM workflow_stage_notes
       WHERE request_id = ? AND stage_id = ? AND performed_by = ?
         AND note_text = ?
@@ -37849,13 +38611,13 @@ ${r?`
     `).bind(1,"طلب تمويل جديد",`تم استلام طلب تمويل جديد برقم #${i} بمبلغ ${t.requested_amount.toLocaleString("ar-SA")} ريال من ${t.full_name}`,"info","request",i).run(),e.json({success:!0,request_id:i,customer_id:s,message:"تم إرسال طلبك بنجاح"})}catch(t){return console.error("Calculator submit error:",t),e.json({success:!1,error:t.message,message:"حدث خطأ أثناء إرسال الطلب. الرجاء المحاولة مرة أخرى."},500)}});m.put("/api/financing-requests/:id",async e=>{try{const t=e.req.param("id"),a=await E(e);if(!a.userId)return e.json({success:!1,error:"Unauthorized"},401);const r=C(a.roleId);if(r===3)return e.json({success:!1,error:"Forbidden"},403);const n=e.req.header("Authorization");let s=null;if(n&&n.startsWith("Bearer ")){const U=n.substring(7).split(".");U.length===3&&(s=JSON.parse(atob(U[1])).tenant_id||null)}if((r===4||r===5)&&!await ne(e.env.DB,a,Number(t)))return e.json({success:!1,error:"Forbidden"},403);const o=await e.req.json(),{requested_amount:i,duration_months:l,salary_at_request:d,monthly_obligations:c,identity_attachment_url:p,signature_attachment_url:u,salary_profile_attachment_url:g,gosi_attachment_url:b,tax_exemption_attachment_url:f,additional_1_attachment_url:w,additional_2_attachment_url:h,additional_3_attachment_url:y}=o,S=N=>{if(N===void 0)return;if(N===null||N==="")return null;const U=parseInt(String(N),10);return Number.isNaN(U)?null:U},_=S(o.financing_type_id),k=S(o.selected_bank_id),T=S(o.assigned_bank_agent_id),v=o.status,x=o.notes,I=await e.env.DB.prepare(`SELECT fr.tenant_id, fr.customer_id, c.tenant_id AS customer_tenant_id
        FROM financing_requests fr
        LEFT JOIN customers c ON fr.customer_id = c.id
-       WHERE fr.id = ?`).bind(t).first(),L=I?.tenant_id!=null?Number(I.tenant_id):I?.customer_tenant_id!=null?Number(I.customer_tenant_id):null;if(k!=null&&L!=null&&!await vi(e.env.DB,L,k))return e.json({success:!1,error:"البنك غير صالح لهذه الشركة"},400);if(T!=null){if(k==null)return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);if(L==null)return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await on(e.env.DB,L,T))return e.json({success:!1,error:"موظف التمويل غير صالح لهذه الشركة"},400)}const R=[],D=[];if(o.requested_amount!==void 0&&(R.push("requested_amount = ?"),D.push(Number(o.requested_amount))),o.duration_months!==void 0&&(R.push("duration_months = ?"),D.push(parseInt(String(o.duration_months),10))),o.salary_at_request!==void 0&&(R.push("salary_at_request = ?"),D.push(Number(o.salary_at_request)||0)),o.monthly_obligations!==void 0&&(R.push("monthly_obligations = ?"),D.push(Number(o.monthly_obligations)||0)),_!==void 0&&(R.push("financing_type_id = ?"),D.push(_)),k!==void 0&&(R.push("selected_bank_id = ?"),D.push(k)),T!==void 0&&(R.push("assigned_bank_agent_id = ?"),D.push(T)),v!=null){const N=String(v).trim();N!==""&&(R.push("status = ?"),D.push(N))}if(x!==void 0&&(R.push("notes = ?"),D.push(x==null?"":String(x))),p&&(R.push("identity_attachment_url = ?"),D.push(p)),u&&(R.push("signature_attachment_url = ?"),D.push(u)),g&&(R.push("salary_profile_attachment_url = ?"),D.push(g)),b&&(R.push("gosi_attachment_url = ?"),D.push(b)),f&&(R.push("tax_exemption_attachment_url = ?"),D.push(f)),w&&(R.push("additional_1_attachment_url = ?"),D.push(w)),h&&(R.push("additional_2_attachment_url = ?"),D.push(h)),y&&(R.push("additional_3_attachment_url = ?"),D.push(y)),R.length>0){D.push(t);let N=`
+       WHERE fr.id = ?`).bind(t).first(),L=I?.tenant_id!=null?Number(I.tenant_id):I?.customer_tenant_id!=null?Number(I.customer_tenant_id):null;if(k!=null&&L!=null&&!await _i(e.env.DB,L,k))return e.json({success:!1,error:"البنك غير صالح لهذه الشركة"},400);if(T!=null){if(k==null)return e.json({success:!1,error:"يجب اختيار البنك عند تعيين موظف التمويل"},400);if(L==null)return e.json({success:!1,error:"تعذر تحديد الشركة لتعيين موظف التمويل"},400);if(!await dn(e.env.DB,L,T))return e.json({success:!1,error:"موظف التمويل غير صالح لهذه الشركة"},400)}const R=[],D=[];if(o.requested_amount!==void 0&&(R.push("requested_amount = ?"),D.push(Number(o.requested_amount))),o.duration_months!==void 0&&(R.push("duration_months = ?"),D.push(parseInt(String(o.duration_months),10))),o.salary_at_request!==void 0&&(R.push("salary_at_request = ?"),D.push(Number(o.salary_at_request)||0)),o.monthly_obligations!==void 0&&(R.push("monthly_obligations = ?"),D.push(Number(o.monthly_obligations)||0)),_!==void 0&&(R.push("financing_type_id = ?"),D.push(_)),k!==void 0&&(R.push("selected_bank_id = ?"),D.push(k)),T!==void 0&&(R.push("assigned_bank_agent_id = ?"),D.push(T)),v!=null){const N=String(v).trim();N!==""&&(R.push("status = ?"),D.push(N))}if(x!==void 0&&(R.push("notes = ?"),D.push(x==null?"":String(x))),p&&(R.push("identity_attachment_url = ?"),D.push(p)),u&&(R.push("signature_attachment_url = ?"),D.push(u)),g&&(R.push("salary_profile_attachment_url = ?"),D.push(g)),b&&(R.push("gosi_attachment_url = ?"),D.push(b)),f&&(R.push("tax_exemption_attachment_url = ?"),D.push(f)),w&&(R.push("additional_1_attachment_url = ?"),D.push(w)),h&&(R.push("additional_2_attachment_url = ?"),D.push(h)),y&&(R.push("additional_3_attachment_url = ?"),D.push(y)),R.length>0){D.push(t);let N=`
       UPDATE financing_requests 
       SET ${R.join(", ")}
       WHERE id = ?
     `;s!==null&&r!==5&&(N+=" AND tenant_id = ?",D.push(s)),await e.env.DB.prepare(N).bind(...D).run()}T!==void 0&&I?.customer_id!=null&&(await Bt(e.env.DB,Number(I.customer_id),T)).ok&&await xt(e.env.DB,Number(I.customer_id),T);const q=(await e.env.DB.prepare(`
       SELECT customer_id FROM financing_requests WHERE id = ?
-    `).bind(t).first())?.customer_id;return o.attachments_json!==void 0&&q!=null?await Je(e.env.DB,q,Ve(o.attachments_json)):await aa(e.env.DB,q,{identity_attachment_url:p,signature_attachment_url:u,salary_profile_attachment_url:g,gosi_attachment_url:b,tax_exemption_attachment_url:f,additional_1_attachment_url:w,additional_2_attachment_url:h,additional_3_attachment_url:y}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});m.put("/api/financing-requests/:id/status",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id");if(C(t.roleId)===4&&!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);const{status:n,notes:s}=await e.req.json(),o=await e.env.DB.prepare(`
+    `).bind(t).first())?.customer_id;return o.attachments_json!==void 0&&q!=null?await Je(e.env.DB,q,Ye(o.attachments_json)):await aa(e.env.DB,q,{identity_attachment_url:p,signature_attachment_url:u,salary_profile_attachment_url:g,gosi_attachment_url:b,tax_exemption_attachment_url:f,additional_1_attachment_url:w,additional_2_attachment_url:h,additional_3_attachment_url:y}),e.json({success:!0})}catch(t){return console.error("Update financing request error:",t),e.json({success:!1,error:t.message},500)}});m.put("/api/financing-requests/:id/status",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const a=e.req.param("id");if(C(t.roleId)===4&&!await ne(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);const{status:n,notes:s}=await e.req.json(),o=await e.env.DB.prepare(`
       SELECT status FROM financing_requests WHERE id = ?
     `).bind(a).first(),l={pending:"pending_at",under_review:"under_review_at",processing:"processing_at",approved:"approved_at",rejected:"rejected_at"}[n];l?await e.env.DB.prepare(`
         UPDATE financing_requests 
@@ -37871,7 +38633,7 @@ ${r?`
     `).bind(a).first(),c={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"موافق عليه",rejected:"مرفوض"},p={pending:"info",under_review:"warning",approved:"success",rejected:"error"};return await e.env.DB.prepare(`
       INSERT INTO notifications (user_id, title, message, type, category, related_request_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${a} إلى: ${c[n]||n}`,p[n]||"info","status_change",a).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});m.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),r=String(t.get("request_id")||"").trim(),n=String(t.get("customer_id")||"").trim(),s=String(t.get("attachment_id")||"").trim(),o=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),i=new Set(["identity","signature","salary_profile","gosi","tax_exemption","additional_1","additional_2","additional_3"]),l=o.toLowerCase(),d=!!s,c=s.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,64);if(!d&&!i.has(l))return e.json({success:!1,error:"Invalid attachment type"},400);if(d&&!c)return e.json({success:!1,error:"Invalid attachment id"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const p=a;if(p.size>Dr)return e.json({success:!1,error:`File too large. Max size is ${Xe}MB`},400);const u=Date.now(),g=Math.random().toString(36).substring(7),f=(p.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin";let w;if(d){const S=n.replace(/[^0-9]/g,"");w=`${S?`customers/${S}`:"temp"}/${c}_${u}.${f}`}else r?w=`${r}/${l}_${u}.${f}`:w=`temp/${l}_${u}_${g}.${f}`;const h=await p.arrayBuffer();await e.env.ATTACHMENTS.put(w,h,{httpMetadata:{contentType:p.type}});const y=`/api/attachments/view/${w}`;if(r&&!d){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const _={identity:"identity_attachment_url",signature:"signature_attachment_url",salary_profile:"salary_profile_attachment_url",gosi:"gosi_attachment_url",tax_exemption:"tax_exemption_attachment_url",additional_1:"additional_1_attachment_url",additional_2:"additional_2_attachment_url",additional_3:"additional_3_attachment_url"}[l];await e.env.DB.prepare(`
+    `).bind(1,"تحديث حالة الطلب",`تم تحديث حالة الطلب #${a} إلى: ${c[n]||n}`,p[n]||"info","status_change",a).run(),e.json({success:!0})}catch(t){return console.error("Update status error:",t),e.json({success:!1,error:t.message},500)}});m.post("/api/attachments/upload",async e=>{try{if(!e.env?.ATTACHMENTS)return e.json({success:!1,error:"Attachment storage not configured"},500);const t=await e.req.formData(),a=t.get("file"),r=String(t.get("request_id")||"").trim(),n=String(t.get("customer_id")||"").trim(),s=String(t.get("attachment_id")||"").trim(),o=String(t.get("attachmentType")||t.get("attachment_type")||"").trim(),i=new Set(["identity","signature","salary_profile","gosi","tax_exemption","additional_1","additional_2","additional_3"]),l=o.toLowerCase(),d=!!s,c=s.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,64);if(!d&&!i.has(l))return e.json({success:!1,error:"Invalid attachment type"},400);if(d&&!c)return e.json({success:!1,error:"Invalid attachment id"},400);if(!a||!(a instanceof File))return e.json({success:!1,error:"No file provided"},400);const p=a;if(p.size>Br)return e.json({success:!1,error:`File too large. Max size is ${Xe}MB`},400);const u=Date.now(),g=Math.random().toString(36).substring(7),f=(p.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase()||"bin";let w;if(d){const S=n.replace(/[^0-9]/g,"");w=`${S?`customers/${S}`:"temp"}/${c}_${u}.${f}`}else r?w=`${r}/${l}_${u}.${f}`:w=`temp/${l}_${u}_${g}.${f}`;const h=await p.arrayBuffer();await e.env.ATTACHMENTS.put(w,h,{httpMetadata:{contentType:p.type}});const y=`/api/attachments/view/${w}`;if(r&&!d){if(!e.env?.DB)return e.json({success:!1,error:"Database not configured"},500);const _={identity:"identity_attachment_url",signature:"signature_attachment_url",salary_profile:"salary_profile_attachment_url",gosi:"gosi_attachment_url",tax_exemption:"tax_exemption_attachment_url",additional_1:"additional_1_attachment_url",additional_2:"additional_2_attachment_url",additional_3:"additional_3_attachment_url"}[l];await e.env.DB.prepare(`
         UPDATE financing_requests 
         SET ${_} = ? 
         WHERE id = ?
@@ -38030,9 +38792,9 @@ ${r?`
       UPDATE users
       SET full_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, customer_limit = ?
       WHERE id = ?
-    `).bind(r,n,s,o,i,d,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(as));m.get("/calculator",e=>e.html(tr));m.get("/calculator-old",e=>e.html(rs));m.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `).bind(r,n,s,o,i,d,t).run(),e.json({success:!0,message:"تم تحديث بيانات المستخدم بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.get("/",async e=>e.req.query("test")==="bindings"?e.json({DB:!!e.env.DB,ATTACHMENTS:!!e.env.ATTACHMENTS,timestamp:new Date().toISOString()}):e.html(ns));m.get("/calculator",e=>e.html(rr));m.get("/calculator-old",e=>e.html(ss));m.get("/c/:tenant/calculator",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(tr.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
+  `).bind(t).first();return a?e.html(rr.replace(/حاسبة التمويل الذكية/g,`حاسبة تمويل ${a.company_name}`).replace("/api/calculator/submit-request",`/api/c/${t}/calculator/submit-request`).replace("<script>",`<script>
         // Tenant information for company-specific calculator
         window.TENANT_NAME = '${a.company_name.replace(/'/g,"\\'")}';
     `).replace("سيتم التواصل معك قريباً من ' + selectedBestOffer.bank.bank_name",`سيتم المراجعة من شركة ${a.company_name.replace(/'/g,"\\'")} وسوف يتم التواصل معك قريباً'`)):e.html(`
@@ -38057,7 +38819,7 @@ ${r?`
         </div>
       </body>
       </html>
-    `)});m.get("/login",e=>e.html(ns));m.get("/forgot-password",e=>e.html(ss));m.get("/packages",e=>e.html(os));m.get("/subscribe",e=>e.html(is));m.get("/admin",e=>e.html(`
+    `)});m.get("/login",e=>e.html(os));m.get("/forgot-password",e=>e.html(is));m.get("/packages",e=>e.html(ls));m.get("/subscribe",e=>e.html(ds));m.get("/admin",e=>e.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -38339,10 +39101,10 @@ ${r?`
     FROM role_permissions rp
     JOIN permissions p ON rp.permission_id = p.id
     WHERE rp.role_id = ?
-  `).bind(t.roleId).all(),n=Array.isArray(r.results)?r.results:[];let s=ar;if(t.roleId!==1){const o=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of o){const l=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");s=s.replace(l,"")}s=s.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return s=s.replace("<!--__PANEL_USER_BOOT__-->",`<script>
-      window.USER_DATA = ${Wt({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:_e(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
-      window.USER_PERMISSIONS = ${Wt(n.map(o=>o.permission_key))};
-      window.USER_PERMISSIONS_FULL = ${Wt(n)};
+  `).bind(t.roleId).all(),n=Array.isArray(r.results)?r.results:[];let s=nr;if(t.roleId!==1){const o=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"];for(const i of o){const l=new RegExp(`<a[^>]*\\bhref=["']${i}["'][^>]*>[\\s\\S]*?<\\/a>`,"g");s=s.replace(l,"")}s=s.replace("</head>",'<style>[data-superadmin-only="true"]{display:none !important;}</style></head>')}return s=s.replace("<!--__PANEL_USER_BOOT__-->",`<script>
+      window.USER_DATA = ${zt({id:a.id,username:a.username,full_name:a.full_name,email:a.email,role_id:a.role_id,role_name:_e(a.role_id,a.role_name),role_description:a.role_description,tenant_id:a.tenant_id,company_name:a.company_name})};
+      window.USER_PERMISSIONS = ${zt(n.map(o=>o.permission_key))};
+      window.USER_PERMISSIONS_FULL = ${zt(n)};
       window.USER_ROLE_ID = ${C(t.roleId)??4};
       console.log('✅ User data loaded:', window.USER_DATA);
       console.log('✅ User permissions:', window.USER_PERMISSIONS.length, 'permissions');
@@ -39668,9 +40430,9 @@ ${r?`
           </div>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});m.get("/admin/tenants",e=>e.html(ls));m.get("/admin/tenant-calculators",e=>e.html(ds));m.get("/admin/saas-settings",e=>e.html(rr));m.get("/admin/settings",e=>e.html(rr));m.get("/admin/company-settings",e=>e.html(ms));m.get("/admin/company-settings/locations/new",e=>e.html(bs));m.get("/admin/company-settings/locations/:id/edit",e=>{const t=e.req.param("id"),a=String(t??"").trim();return/^\d+$/.test(a)?e.html(hs(a)):e.notFound()});m.get("/admin/company-settings/locations",e=>e.html(fs));m.get("/admin/reports",e=>e.html(ys));m.get("/admin/reports/customers",e=>e.html(xs));m.get("/admin/reports/requests",e=>e.html(vs));m.get("/admin/reports/financial",e=>e.html(ws));m.get("/admin/reports/banks",e=>e.html(to));m.get("/admin/reports/performance",e=>e.html(ao));m.get("/admin/reports/clicks",e=>e.html(ro));m.get("/admin/reports/workflow",async e=>{const t=await E(e);return!t.userId||!t.roleId?e.html("<h1>غير مصرح بالوصول</h1>",401):C(t.roleId)!==1?e.html("<h1>غير مصرح بالوصول</h1>",403):e.html(no)});m.get("/admin/reports/employee-performance",e=>e.html(so));m.get("/admin/payments",e=>e.html(Es));m.get("/admin/banks",e=>e.html(ks));m.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>خطأ في تحميل الصفحة: ${t.message}</h1>`)}});m.get("/admin/tenants",e=>e.html(cs));m.get("/admin/tenant-calculators",e=>e.html(ps));m.get("/admin/saas-settings",e=>e.html(sr));m.get("/admin/settings",e=>e.html(sr));m.get("/admin/company-settings",e=>e.html(fs));m.get("/admin/company-settings/locations/new",e=>e.html(ys));m.get("/admin/company-settings/locations/:id/edit",e=>{const t=e.req.param("id"),a=String(t??"").trim();return/^\d+$/.test(a)?e.html(xs(a)):e.notFound()});m.get("/admin/company-settings/locations",e=>e.html(hs));m.get("/admin/reports",e=>e.html(vs));m.get("/admin/reports/customers",e=>e.html(ws));m.get("/admin/reports/requests",e=>e.html(_s));m.get("/admin/reports/financial",e=>e.html(Es));m.get("/admin/reports/banks",e=>e.html(ro));m.get("/admin/reports/performance",e=>e.html(no));m.get("/admin/reports/clicks",e=>e.html(so));m.get("/admin/reports/workflow",async e=>{const t=await E(e);return!t.userId||!t.roleId?e.html("<h1>غير مصرح بالوصول</h1>",401):C(t.roleId)!==1?e.html("<h1>غير مصرح بالوصول</h1>",403):e.html(oo)});m.get("/admin/reports/employee-performance",e=>e.html(io));m.get("/admin/payments",e=>e.html(Is));m.get("/admin/banks",e=>e.html(Ss));m.get("/c/:tenant/admin",async e=>{const t=e.req.param("tenant"),a=await e.env.DB.prepare(`
     SELECT * FROM tenants WHERE slug = ? AND status = 'active'
-  `).bind(t).first();return a?e.html(ar.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
+  `).bind(t).first();return a?e.html(nr.replace("لوحة التحكم - نظام حاسبة التمويل",`لوحة التحكم - ${a.company_name}`)):e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -40429,7 +41191,7 @@ ${r?`
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
       <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
-      <style>${Or}</style>
+      <style>${Fr}</style>
     </head>
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
@@ -40822,14 +41584,14 @@ ${r?`
                   <i class="fas fa-box text-violet-600 ml-1"></i>
                   نوع منتج التمويل
                 </label>
-                ${zr(null,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
+                ${Vr(null,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-home text-sky-600 ml-1"></i>
                   نوع العقار
                 </label>
-                ${Vr(null,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
+                ${Xr(null,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -40978,7 +41740,7 @@ ${r?`
           const form = document.getElementById('add-customer-form');
           if (!form) return;
           // Attachments modal controls (upload inputs live inside the modal; URLs are hidden fields in the main form)
-          ${Fr({modalId:"customerAttachmentsModal",openBtnId:"openCustomerAttachmentsModal",closeBtnId:"closeCustomerAttachmentsModal",doneBtnId:"doneCustomerAttachmentsModal"})}
+          ${Pr({modalId:"customerAttachmentsModal",openBtnId:"openCustomerAttachmentsModal",closeBtnId:"closeCustomerAttachmentsModal",doneBtnId:"doneCustomerAttachmentsModal"})}
           ${Qe()}
           initDynamicCustomerAttachments({
             hiddenInputId: 'customer_attachments_json',
@@ -41128,7 +41890,7 @@ ${r?`
             addRow();
           })();
 
-          ${$r({tbodyId:"add-obligations-tbody",addBtnId:"add-obligation-row",typeSelectClass:"oblig-type",typeCustomInputClass:"oblig-type-custom",totalClass:"oblig-total",monthlyClass:"oblig-monthly",dueClass:"oblig-due",removeClass:"oblig-remove",obligationTypeNamesJson:JSON.stringify(l)})}
+          ${Ur({tbodyId:"add-obligations-tbody",addBtnId:"add-obligation-row",typeSelectClass:"oblig-type",typeCustomInputClass:"oblig-type-custom",totalClass:"oblig-total",monthlyClass:"oblig-monthly",dueClass:"oblig-due",removeClass:"oblig-remove",obligationTypeNamesJson:JSON.stringify(l)})}
 
           form.addEventListener('submit', async function (event) {
             event.preventDefault();
@@ -42939,13 +43701,13 @@ ${r?`
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});m.get("/admin/rates/add",async e=>{try{const t=await E(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Is(a||"",r.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});m.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const r=await e.env.DB.prepare(`
+    `)}catch(t){return e.html(`<h1>Error: ${t.message}</h1>`,500)}});m.get("/admin/rates/add",async e=>{try{const t=await E(e);let a=e.req.query("tenant_id")||(t.tenantId?t.tenantId.toString():null);if(t.roleId!==1&&t.roleId!==2)return e.html("<h1>خطأ: ليس لديك صلاحية لإضافة نسب التمويل</h1>",403);if(t.roleId===2&&!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);t.roleId===1&&!a&&(a=null);const r=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),n=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Ts(a||"",r.results,n.results))}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`,500)}});m.get("/admin/rates/edit/:id",async e=>{const t=e.req.param("id"),a=e.req.query("tenant_id");if(!a)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const r=await e.env.DB.prepare(`
     SELECT r.*, b.bank_name, f.type_name
     FROM bank_financing_rates r
     LEFT JOIN banks b ON r.bank_id = b.id
     LEFT JOIN financing_types f ON r.financing_type_id = f.id
     WHERE r.id = ? AND r.tenant_id = ?
-  `).bind(t,a).first();if(!r)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Ss(a,r,n.results,s.results))});m.get("/admin/customers",async e=>{try{const t=await E(e);console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const a=C(t.roleId);if(!t.userId||!t.roleId)return e.html(`
+  `).bind(t,a).first();if(!r)return e.html("<h1>خطأ: النسبة غير موجودة</h1>",404);const n=await e.env.DB.prepare("SELECT * FROM banks WHERE is_active = 1 ORDER BY bank_name").all(),s=await e.env.DB.prepare("SELECT * FROM financing_types ORDER BY type_name").all();return e.html(Cs(a,r,n.results,s.results))});m.get("/admin/customers",async e=>{try{const t=await E(e);console.log("🔍 Customer Page - User Info:",{userId:t.userId,tenantId:t.tenantId,roleId:t.roleId});const a=C(t.roleId);if(!t.userId||!t.roleId)return e.html(`
         <!DOCTYPE html>
         <html lang="ar" dir="rtl">
         <head>
@@ -43087,7 +43849,7 @@ ${r?`
           )
         )`);s=await e.env.DB.prepare(R).bind(t.tenantId,t.userId,t.userId,t.userId).all()}else throw x}if(t.userId&&s.results.length>0)try{const x=await e.env.DB.prepare(`SELECT customer_id, COUNT(*) AS cnt FROM customer_alarms
                     WHERE user_id = ? AND is_read = 0 AND customer_id IS NOT NULL
-                    GROUP BY customer_id`).bind(t.userId).all(),I={};for(const L of x.results||[])I[String(L.customer_id)]=Number(L.cnt)||0;for(const L of s.results)L.unread_alarm_count=I[String(L.id)]||0}catch{}let o="SELECT customer_id, MAX(id) AS latest_request_id FROM financing_requests WHERE 1=1";const i=[];t.roleId!==1&&(t.tenantId?(o+=" AND tenant_id = ?",i.push(t.tenantId)):t.userId&&(o+=" AND user_id = ?",i.push(t.userId))),o+=" GROUP BY customer_id";const l=i.length>0?await e.env.DB.prepare(o).bind(...i).all():await e.env.DB.prepare(o).all(),d=new Set(l.results.map(x=>x.customer_id)),c=new Map(l.results.map(x=>[x.customer_id,x.latest_request_id])),p=JSON.stringify(s.results.map(x=>{const I=x.resolved_bank_agent_id!=null&&x.resolved_bank_agent_id!==""?Number(x.resolved_bank_agent_id):x.assigned_bank_agent_id!=null&&x.assigned_bank_agent_id!==""?Number(x.assigned_bank_agent_id):null,L=x.assigned_bank_agent_name?String(x.assigned_bank_agent_name):"",R=!I||Number.isNaN(I)?"غير معيّن":L||"—",D=x.enrollment_source==="calculator"?"الحاسبة":x.enrollment_source==="affiliate"?x.enrollment_source_label||"affiliate":x.enrollment_source==="manual"?String(x.enrollment_source_label||"").trim()||"يدوي":String(x.enrollment_source_label||"").trim();return[String(x.id??""),String(x.full_name||"-"),String(x.phone||"-"),String(x.email||"-"),String(D||""),String(x.enrollment_location_name||"—"),String(x.assigned_employee_name||"غير مخصص"),String(R||"—"),String(x.national_id||"-"),new Date(x.created_at).toLocaleDateString("ar-SA")]})).replace(/</g,"\\u003c"),u=t.roleId!==3,g=!0,b=Oe(t.roleId),f=!1,w=a===4||a===6?"0":"all",h=pr(t.roleId);let y=[];h&&t.tenantId&&(y=(await e.env.DB.prepare(yt).bind(...ht(Number(t.tenantId))).all()).results);let S=[],_=[];if(t.tenantId){const x=Number(t.tenantId);S=(await e.env.DB.prepare(yt).bind(...ht(x)).all()).results||[],_=(await e.env.DB.prepare(Pe).bind(...ke(x)).all()).results||[]}const k=JSON.stringify(S.map(x=>String(x.full_name||x.username||"").trim()).filter(Boolean)).replace(/</g,"\\u003c"),T=JSON.stringify(_.map(x=>{const I=String(x.full_name||x.username||"").trim();return I?`${I} #${x.id}`:`#${x.id}`})).replace(/</g,"\\u003c"),v=await _t(e.env.DB,t.tenantId);return e.html(`
+                    GROUP BY customer_id`).bind(t.userId).all(),I={};for(const L of x.results||[])I[String(L.customer_id)]=Number(L.cnt)||0;for(const L of s.results)L.unread_alarm_count=I[String(L.id)]||0}catch{}let o="SELECT customer_id, MAX(id) AS latest_request_id FROM financing_requests WHERE 1=1";const i=[];t.roleId!==1&&(t.tenantId?(o+=" AND tenant_id = ?",i.push(t.tenantId)):t.userId&&(o+=" AND user_id = ?",i.push(t.userId))),o+=" GROUP BY customer_id";const l=i.length>0?await e.env.DB.prepare(o).bind(...i).all():await e.env.DB.prepare(o).all(),d=new Set(l.results.map(x=>x.customer_id)),c=new Map(l.results.map(x=>[x.customer_id,x.latest_request_id])),p=JSON.stringify(s.results.map(x=>{const I=x.resolved_bank_agent_id!=null&&x.resolved_bank_agent_id!==""?Number(x.resolved_bank_agent_id):x.assigned_bank_agent_id!=null&&x.assigned_bank_agent_id!==""?Number(x.assigned_bank_agent_id):null,L=x.assigned_bank_agent_name?String(x.assigned_bank_agent_name):"",R=!I||Number.isNaN(I)?"غير معيّن":L||"—",D=x.enrollment_source==="calculator"?"الحاسبة":x.enrollment_source==="affiliate"?x.enrollment_source_label||"affiliate":x.enrollment_source==="manual"?String(x.enrollment_source_label||"").trim()||"يدوي":String(x.enrollment_source_label||"").trim();return[String(x.id??""),String(x.full_name||"-"),String(x.phone||"-"),String(x.email||"-"),String(D||""),String(x.enrollment_location_name||"—"),String(x.assigned_employee_name||"غير مخصص"),String(R||"—"),String(x.national_id||"-"),new Date(x.created_at).toLocaleDateString("ar-SA")]})).replace(/</g,"\\u003c"),u=t.roleId!==3,g=!0,b=Oe(t.roleId),f=!1,w=a===4||a===6?"0":"all",h=mr(t.roleId);let y=[];h&&t.tenantId&&(y=(await e.env.DB.prepare(yt).bind(...ht(Number(t.tenantId))).all()).results);let S=[],_=[];if(t.tenantId){const x=Number(t.tenantId);S=(await e.env.DB.prepare(yt).bind(...ht(x)).all()).results||[],_=(await e.env.DB.prepare(Pe).bind(...ke(x)).all()).results||[]}const k=JSON.stringify(S.map(x=>String(x.full_name||x.username||"").trim()).filter(Boolean)).replace(/</g,"\\u003c"),T=JSON.stringify(_.map(x=>{const I=String(x.full_name||x.username||"").trim();return I?`${I} #${x.id}`:`#${x.id}`})).replace(/</g,"\\u003c"),v=await _t(e.env.DB,t.tenantId);return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -43128,7 +43890,7 @@ ${r?`
           .alarm-unread-dot { display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:50%; animation:pulse-glow 1.5s infinite; position:absolute; top:-3px; left:-3px; }
           .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
           .modal-backdrop.hidden { display:none; }
-          ${Mr}
+          ${qr}
           #notifPanel { position:fixed; top:0; left:0; bottom:0; width:400px; max-width:95vw; background:#fff; box-shadow:4px 0 30px rgba(0,0,0,.15); z-index:1100; display:flex; flex-direction:column; transform:translateX(-100%); transition:transform .3s ease; }
           #notifPanel.open { transform:translateX(0); }
           #notifPanelOverlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:1099; display:none; }
@@ -43400,7 +44162,7 @@ ${r?`
                       ${!R||Number.isNaN(R)?'<span class="text-xs text-amber-700">غير معيّن</span>':`<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" title="معرّف المستخدم (دور 5): ${R}"><span class="truncate-cell sm">${D||"—"}</span></span>`}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
-                      ${Kr(x.contract_status)}
+                      ${en(x.contract_status)}
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${x.id}">
                       <span class="text-gray-300 text-sm">—</span>
@@ -43541,7 +44303,7 @@ ${r?`
           </div>
         </div>
 
-        ${qr()}
+        ${$r()}
 
         <!-- Toast -->
         <div id="toastMsg" class="fixed bottom-6 right-6 z-[2000] hidden">
@@ -43574,7 +44336,7 @@ ${r?`
         <script>
           ${Kt}
           ${Qe()}
-          ${Pr()}
+          ${Hr()}
 
           const customerIdsWithRequests = new Set(${JSON.stringify([...d])});
           const DEFAULT_REQUESTS_FILTER = ${JSON.stringify(w)};
@@ -45913,7 +46675,7 @@ ${r?`
                 ${s.length>0?`
                     <div class="mb-6 bg-gray-50 p-4 rounded-lg">
                       <h3 class="font-bold text-gray-700 mb-3">المرفقات الحالية:</h3>
-                      ${Nr(s)}
+                      ${Or(s)}
                     </div>
                   `:""}
                 <div class="space-y-2">
@@ -46249,7 +47011,7 @@ ${r?`
       FROM workflow_stages
       WHERE is_active = 1
       ORDER BY stage_order ASC, id ASC
-    `).all())?.results||[]).map(v=>String(v?.stage_name_ar||"").trim()).filter(v=>v.length>0),i=["قيد الانتظار","قيد المراجعة","مقبول","موافق عليه","مرفوض","قيد المعالجة","مكتمل","ملغي","غير محدد"],l=Array.from(new Set([...o,...i])),d=JSON.stringify(l).replace(/</g,"\\u003c"),c=C(t.roleId),p=c!==3,u=Ds(c),g=St(c),b=Oe(t.roleId),f=pr(t.roleId);let w=[];f&&t.tenantId&&(w=(await e.env.DB.prepare("SELECT id, full_name, username FROM users WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id = ? ORDER BY full_name").bind(t.tenantId).all()).results);let h=[],y=[];if(t.tenantId){const v=Number(t.tenantId);h=(await e.env.DB.prepare(yt).bind(...ht(v)).all()).results||[],y=(await e.env.DB.prepare(Pe).bind(...ke(v)).all()).results||[]}const S=JSON.stringify(h.map(v=>String(v.full_name||v.username||"").trim()).filter(Boolean)).replace(/</g,"\\u003c"),_=JSON.stringify(y.map(v=>{const x=String(v.full_name||v.username||"").trim();return x?`${x} #${v.id}`:`#${v.id}`})).replace(/</g,"\\u003c"),k=await _t(e.env.DB,t.tenantId),T=JSON.stringify(n.results.map(v=>{const I={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[String(v.status||"")]||String(v.status||""),L=v.customer_name||"عميل #"+String(v.customer_id||""),R=v.bank_name||"بنك #"+String(v.selected_bank_id||"-"),D=v.assigned_employee_name?String(v.assigned_employee_name):"—",j=v.bank_agent_role5_user_id!=null?Number(v.bank_agent_role5_user_id):null,q=v.assigned_bank_agent_name?String(v.assigned_bank_agent_name):"",N=j!=null&&!Number.isNaN(j)&&q||"—";return[String(L),String(le(v.customer_phone)||"—"),String(v.enrollment_location_name||"—"),String(D),String(N),String(R),String(v.requested_amount||0),String(v.duration_months||""),String(I||""),new Date(v.created_at).toLocaleDateString("ar-SA")]})).replace(/</g,"\\u003c");return e.html(`
+    `).all())?.results||[]).map(v=>String(v?.stage_name_ar||"").trim()).filter(v=>v.length>0),i=["قيد الانتظار","قيد المراجعة","مقبول","موافق عليه","مرفوض","قيد المعالجة","مكتمل","ملغي","غير محدد"],l=Array.from(new Set([...o,...i])),d=JSON.stringify(l).replace(/</g,"\\u003c"),c=C(t.roleId),p=c!==3,u=Bs(c),g=St(c),b=Oe(t.roleId),f=mr(t.roleId);let w=[];f&&t.tenantId&&(w=(await e.env.DB.prepare("SELECT id, full_name, username FROM users WHERE role_id IN (3, 4, 6, 13, 14) AND tenant_id = ? ORDER BY full_name").bind(t.tenantId).all()).results);let h=[],y=[];if(t.tenantId){const v=Number(t.tenantId);h=(await e.env.DB.prepare(yt).bind(...ht(v)).all()).results||[],y=(await e.env.DB.prepare(Pe).bind(...ke(v)).all()).results||[]}const S=JSON.stringify(h.map(v=>String(v.full_name||v.username||"").trim()).filter(Boolean)).replace(/</g,"\\u003c"),_=JSON.stringify(y.map(v=>{const x=String(v.full_name||v.username||"").trim();return x?`${x} #${v.id}`:`#${v.id}`})).replace(/</g,"\\u003c"),k=await _t(e.env.DB,t.tenantId),T=JSON.stringify(n.results.map(v=>{const I={pending:"قيد الانتظار",under_review:"قيد المراجعة",approved:"مقبول",rejected:"مرفوض",processing:"قيد المعالجة",completed:"مكتمل",cancelled:"ملغي"}[String(v.status||"")]||String(v.status||""),L=v.customer_name||"عميل #"+String(v.customer_id||""),R=v.bank_name||"بنك #"+String(v.selected_bank_id||"-"),D=v.assigned_employee_name?String(v.assigned_employee_name):"—",j=v.bank_agent_role5_user_id!=null?Number(v.bank_agent_role5_user_id):null,q=v.assigned_bank_agent_name?String(v.assigned_bank_agent_name):"",N=j!=null&&!Number.isNaN(j)&&q||"—";return[String(L),String(le(v.customer_phone)||"—"),String(v.enrollment_location_name||"—"),String(D),String(N),String(R),String(v.requested_amount||0),String(v.duration_months||""),String(I||""),new Date(v.created_at).toLocaleDateString("ar-SA")]})).replace(/</g,"\\u003c");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -46327,7 +47089,7 @@ ${r?`
           }
 
           ${Qt}
-          ${Mr}
+          ${qr}
 
           ${de()}
         </style>
@@ -46574,7 +47336,7 @@ ${r?`
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right">
-                      ${Kr(v.contract_status)}
+                      ${en(v.contract_status)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${new Date(v.created_at).toLocaleDateString("ar-SA")}</td>
                   </tr>
@@ -46599,7 +47361,7 @@ ${r?`
           </div>
         </div>
 
-        ${qr()}
+        ${$r()}
         <div id="toastMsg" class="fixed bottom-6 right-6 z-[2000] hidden">
           <div class="bg-gray-800 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-2">
             <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
@@ -46610,7 +47372,7 @@ ${r?`
         <script>
           ${Kt}
           ${Qe()}
-          ${Pr()}
+          ${Hr()}
           function showToast(msg, type) {
             var t = document.getElementById('toastMsg');
             if (!t) return;
@@ -47563,7 +48325,7 @@ ${r?`
         <!-- ===== END CUSTOMER ALARM GLOW ===== -->
       </body>
       </html>
-    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});m.get("/admin/requests/:id/delete",async e=>{try{const t=await E(e);if(!t.userId)return e.redirect("/login");if(C(t.roleId)===3)return e.redirect("/admin/requests");const a=e.req.param("id"),r=C(t.roleId);return(r===4||r===5)&&!await ne(e.env.DB,t,Number(a))?e.html("<h1>غير مصرح بحذف هذا الطلب</h1>",403):(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1"))}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});m.get("/admin/requests/new",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.redirect("/login");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await ln(e,t);let r="SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1";const n=[];t.roleId!==1&&(t.tenantId?(r+=" AND tenant_id = ?",n.push(t.tenantId)):t.userId&&(r+=" AND user_id = ?",n.push(t.userId)));const s=n.length>0?await e.env.DB.prepare(r).bind(...n).all():await e.env.DB.prepare(r).all(),o=new Set(s.results.map(h=>Number(h.customer_id)).filter(h=>Number.isFinite(h))),i=a.filter(h=>!o.has(Number(h.id))),l=e.req.query("customer_id");let d=null;if(l!=null&&String(l).trim()!==""){const h=parseInt(String(l),10);!Number.isNaN(h)&&h>0&&(d=h)}const c=d!=null&&a.some(h=>Number(h.id)===d)&&!o.has(d);let p="SELECT id, bank_name FROM banks WHERE is_active = 1";const u=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);p+=" AND (tenant_id = ? OR tenant_id IS NULL)",u.push(t.tenantId)}p+=" ORDER BY bank_name";let g;try{g=u.length?await e.env.DB.prepare(p).bind(...u).all():await e.env.DB.prepare(p).all()}catch(h){console.error("Error loading banks for /admin/requests/new:",h),g=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const b=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),f=JSON.stringify(i.map(h=>({id:h.id,name:h.full_name||"",text:`${h.full_name} - ${h.phone}`,tenant_id:h.tenant_id!=null?Number(h.tenant_id):null,is_completed:h.is_completed?1:0}))).replace(/</g,"\\u003c"),w=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
+    `)}catch(t){return console.error("Error in /admin/requests:",t),e.html(`<h1>خطأ في تحميل البيانات</h1><p style="color:red; direction:ltr;">${t.message}</p><pre style="direction:ltr; text-align:left;">${t.stack}</pre>`)}});m.get("/admin/requests/:id/delete",async e=>{try{const t=await E(e);if(!t.userId)return e.redirect("/login");if(C(t.roleId)===3)return e.redirect("/admin/requests");const a=e.req.param("id"),r=C(t.roleId);return(r===4||r===5)&&!await ne(e.env.DB,t,Number(a))?e.html("<h1>غير مصرح بحذف هذا الطلب</h1>",403):(await e.env.DB.prepare("DELETE FROM financing_requests WHERE id = ?").bind(a).run(),e.redirect("/admin/requests?deleted=1"))}catch(t){return console.error("Error deleting financing request:",t),e.redirect("/admin/requests?error="+encodeURIComponent(t.message))}});m.get("/admin/requests/new",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.redirect("/login");if((t.roleId===2||t.roleId===3)&&!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:a}=await cn(e,t);let r="SELECT DISTINCT customer_id FROM financing_requests WHERE 1=1";const n=[];t.roleId!==1&&(t.tenantId?(r+=" AND tenant_id = ?",n.push(t.tenantId)):t.userId&&(r+=" AND user_id = ?",n.push(t.userId)));const s=n.length>0?await e.env.DB.prepare(r).bind(...n).all():await e.env.DB.prepare(r).all(),o=new Set(s.results.map(h=>Number(h.customer_id)).filter(h=>Number.isFinite(h))),i=a.filter(h=>!o.has(Number(h.id))),l=e.req.query("customer_id");let d=null;if(l!=null&&String(l).trim()!==""){const h=parseInt(String(l),10);!Number.isNaN(h)&&h>0&&(d=h)}const c=d!=null&&a.some(h=>Number(h.id)===d)&&!o.has(d);let p="SELECT id, bank_name FROM banks WHERE is_active = 1";const u=[];if(t.roleId!==1){if(!t.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);p+=" AND (tenant_id = ? OR tenant_id IS NULL)",u.push(t.tenantId)}p+=" ORDER BY bank_name";let g;try{g=u.length?await e.env.DB.prepare(p).bind(...u).all():await e.env.DB.prepare(p).all()}catch(h){console.error("Error loading banks for /admin/requests/new:",h),g=await e.env.DB.prepare("SELECT id, bank_name FROM banks ORDER BY bank_name").all()}const b=await e.env.DB.prepare("SELECT id, type_name FROM financing_types ORDER BY type_name").all(),f=JSON.stringify(i.map(h=>({id:h.id,name:h.full_name||"",text:`${h.full_name} - ${h.phone}`,tenant_id:h.tenant_id!=null?Number(h.tenant_id):null,is_completed:h.is_completed?1:0}))).replace(/</g,"\\u003c"),w=JSON.stringify({viewerRoleId:t.roleId,viewerTenantId:t.tenantId!=null?Number(t.tenantId):null}).replace(/</g,"\\u003c");return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -48058,7 +48820,7 @@ ${r?`
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(t).first();if(!r)return e.html("<h1>الطلب غير موجود</h1>");const n=C(a.roleId);if((n===4||n===5)&&!await ne(e.env.DB,a,Number(t)))return e.html("<h1>غير مصرح بعرض هذا الطلب</h1>",403);const s=n===5||n===6;return await Br(e.env.DB,r,r.customer_id),e.html(`
+    `).bind(t).first();if(!r)return e.html("<h1>الطلب غير موجود</h1>");const n=C(a.roleId);if((n===4||n===5)&&!await ne(e.env.DB,a,Number(t)))return e.html("<h1>غير مصرح بعرض هذا الطلب</h1>",403);const s=n===5||n===6;return await jr(e.env.DB,r,r.customer_id),e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -48396,7 +49158,7 @@ ${r?`
         <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
         <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"><\/script>
-        <style>${Or}</style>
+        <style>${Fr}</style>
       </head>
       <body class="bg-gray-50">
         <div class="max-w-4xl mx-auto p-6">
@@ -48551,11 +49313,11 @@ ${r?`
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">نوع منتج التمويل</label>
-                  ${zr(r.product_type,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
+                  ${Vr(r.product_type,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">نوع العقار</label>
-                  ${Vr(r.property_type,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
+                  ${Xr(r.property_type,"w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent")}
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">رقم مالك العقار</label>
@@ -48573,7 +49335,7 @@ ${r?`
                 </label>
                 <textarea name="notes" rows="2" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y" placeholder="أي ملاحظات إضافية (اختياري)">${(r.notes||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}</textarea>
               </div>
-              ${ni({modalId:"editCustomerAttachmentsModal",openBtnId:"openEditCustomerAttachmentsModal",closeBtnId:"closeEditCustomerAttachmentsModal",doneBtnId:"doneEditCustomerAttachmentsModal",hiddenInputId:"edit_customer_attachments_json",listContainerId:"edit_customer_attachments_list",addButtonId:"edit_customer_add_attachment_btn",existingAttachments:l})}
+              ${oi({modalId:"editCustomerAttachmentsModal",openBtnId:"openEditCustomerAttachmentsModal",closeBtnId:"closeEditCustomerAttachmentsModal",doneBtnId:"doneEditCustomerAttachmentsModal",hiddenInputId:"edit_customer_attachments_json",listContainerId:"edit_customer_attachments_list",addButtonId:"edit_customer_add_attachment_btn",existingAttachments:l})}
               <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
                 <h3 class="text-sm font-bold text-gray-700 mb-3">
                   <i class="fas fa-lightbulb text-amber-500 ml-1"></i>
@@ -48653,7 +49415,7 @@ ${r?`
                   if (__editAttEl && __editAttEl.textContent) editCustomerAttachmentsInitialJson = JSON.parse(__editAttEl.textContent) || [];
                 } catch (e) { editCustomerAttachmentsInitialJson = []; }
                 ${Qe()}
-                ${Fr({modalId:"editCustomerAttachmentsModal",openBtnId:"openEditCustomerAttachmentsModal",closeBtnId:"closeEditCustomerAttachmentsModal",doneBtnId:"doneEditCustomerAttachmentsModal"})}
+                ${Pr({modalId:"editCustomerAttachmentsModal",openBtnId:"openEditCustomerAttachmentsModal",closeBtnId:"closeEditCustomerAttachmentsModal",doneBtnId:"doneEditCustomerAttachmentsModal"})}
                 initDynamicCustomerAttachments({
                   hiddenInputId: 'edit_customer_attachments_json',
                   listContainerId: 'edit_customer_attachments_list',
@@ -48731,7 +49493,7 @@ ${r?`
                 }
                 var editTbody = document.getElementById('edit-obligations-tbody');
                 var editHidden = document.getElementById('edit_obligations_json');
-                ${$r({tbodyId:"edit-obligations-tbody",addBtnId:"edit-add-obligation-row",typeSelectClass:"edit-oblig-type",typeCustomInputClass:"edit-oblig-type-custom",totalClass:"edit-oblig-total",monthlyClass:"edit-oblig-monthly",dueClass:"edit-oblig-due",removeClass:"edit-oblig-remove",obligationTypeNamesJson:JSON.stringify(o),initialRowsJson:JSON.stringify(s)})}
+                ${Ur({tbodyId:"edit-obligations-tbody",addBtnId:"edit-add-obligation-row",typeSelectClass:"edit-oblig-type",typeCustomInputClass:"edit-oblig-type-custom",totalClass:"edit-oblig-total",monthlyClass:"edit-oblig-monthly",dueClass:"edit-oblig-due",removeClass:"edit-oblig-remove",obligationTypeNamesJson:JSON.stringify(o),initialRowsJson:JSON.stringify(s)})}
                 if (editForm) {
                   editForm.addEventListener('submit', async function (event) {
                     event.preventDefault();
@@ -49285,7 +50047,7 @@ ${r?`
         LEFT JOIN users u ON wst.assigned_to = u.id
         WHERE wst.request_id = ?
         ORDER BY wst.created_at DESC
-      `).bind(c).all();p={transitions:g,actions:b,notes:f,tasks:w}}const u=Qs({customerId:parseInt(a,10),customer:r,stages:n,customerTimeline:{transitions:s,actions:o,notes:i,tasks:l},requestId:c,request:d??null,requestTimeline:p,roleId:t.roleId,userId:t.userId,activeTab:"customer"});return e.html(u)}catch(t){return console.error("خطأ في عرض سير عمل العميل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});m.get("/admin/requests/:id/report",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id");if(!await ne(e.env.DB,t,Number(a)))return e.html("<h1>غير مصرح بعرض تقرير هذا الطلب</h1>",403);const r=await e.env.DB.prepare(`
+      `).bind(c).all();p={transitions:g,actions:b,notes:f,tasks:w}}const u=Zs({customerId:parseInt(a,10),customer:r,stages:n,customerTimeline:{transitions:s,actions:o,notes:i,tasks:l},requestId:c,request:d??null,requestTimeline:p,roleId:t.roleId,userId:t.userId,activeTab:"customer"});return e.html(u)}catch(t){return console.error("خطأ في عرض سير عمل العميل:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});m.get("/admin/requests/:id/report",async e=>{try{const t=await E(e);if(!t.userId||!t.roleId)return e.redirect("/login");const a=e.req.param("id");if(!await ne(e.env.DB,t,Number(a)))return e.html("<h1>غير مصرح بعرض تقرير هذا الطلب</h1>",403);const r=await e.env.DB.prepare(`
       SELECT 
         fr.*,
         c.full_name as customer_name,
@@ -49302,7 +50064,7 @@ ${r?`
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN financing_types ft ON fr.financing_type_id = ft.id
       WHERE fr.id = ?
-    `).bind(a).first();if(!r)return e.html("<h1>الطلب غير موجود</h1>");const n=r;await Br(e.env.DB,n,n.customer_id);const s=d=>d?new Date(d).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",o=d=>d?d.toLocaleString("ar-SA"):"غير محدد",i={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},l=i[n.status]||i.pending;return e.html(`
+    `).bind(a).first();if(!r)return e.html("<h1>الطلب غير موجود</h1>");const n=r;await jr(e.env.DB,n,n.customer_id);const s=d=>d?new Date(d).toLocaleDateString("ar-SA",{year:"numeric",month:"long",day:"numeric"}):"غير محدد",o=d=>d?d.toLocaleString("ar-SA"):"غير محدد",i={pending:{text:"قيد المراجعة",color:"yellow",icon:"clock"},approved:{text:"مقبول",color:"green",icon:"check-circle"},rejected:{text:"مرفوض",color:"red",icon:"times-circle"}},l=i[n.status]||i.pending;return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -49634,14 +50396,14 @@ ${r?`
       WHERE customer_id = ? AND to_stage_id = ?
         AND created_at >= datetime('now', '-20 seconds')
       LIMIT 1
-    `).bind(a,r).first()&&o?.current_workflow_stage_id===r)return e.json({success:!0});await e.env.DB.prepare("UPDATE customers SET current_workflow_stage_id = ? WHERE id = ?").bind(r,a).run(),await e.env.DB.prepare("INSERT INTO customer_workflow_transitions (customer_id, from_stage_id, to_stage_id, transitioned_by, notes) VALUES (?, ?, ?, ?, ?)").bind(a,o?.current_workflow_stage_id??null,r,s||t.userId,n||null).run();try{const d=(await e.env.DB.prepare("SELECT stage_name_ar FROM workflow_stages WHERE id = ?").bind(r).first())?.stage_name_ar||"",c=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),p=c?.full_name||"",u=c?.tenant_id??null,g=await Me(e.env.DB,a,t.userId,t.roleId,u);g.length&&await Fe(e.env.DB,{customerId:a,tenantId:u,targetUserIds:g,customerName:`تحديث مرحلة: ${d}`,note:`قام ${p} بتحديث مرحلة العميل #${a} إلى: ${d}`,linkUrl:`/admin/customers/${a}/workflow#customer`})}catch{}return e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/customer-add-action",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const{customerId:a,stageId:r,actionType:n,notes:s,performedBy:o}=await e.req.json();if(!await It(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);await $e(e.env.DB);const i=o||t.userId,l=await mn(e.env.DB,a,r);if(await e.env.DB.prepare(`
+    `).bind(a,r).first()&&o?.current_workflow_stage_id===r)return e.json({success:!0});await e.env.DB.prepare("UPDATE customers SET current_workflow_stage_id = ? WHERE id = ?").bind(r,a).run(),await e.env.DB.prepare("INSERT INTO customer_workflow_transitions (customer_id, from_stage_id, to_stage_id, transitioned_by, notes) VALUES (?, ?, ?, ?, ?)").bind(a,o?.current_workflow_stage_id??null,r,s||t.userId,n||null).run();try{const d=(await e.env.DB.prepare("SELECT stage_name_ar FROM workflow_stages WHERE id = ?").bind(r).first())?.stage_name_ar||"",c=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),p=c?.full_name||"",u=c?.tenant_id??null,g=await Me(e.env.DB,a,t.userId,t.roleId,u);g.length&&await Fe(e.env.DB,{customerId:a,tenantId:u,targetUserIds:g,customerName:`تحديث مرحلة: ${d}`,note:`قام ${p} بتحديث مرحلة العميل #${a} إلى: ${d}`,linkUrl:`/admin/customers/${a}/workflow#customer`})}catch{}return e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/customer-add-action",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(C(t.roleId)===5)return e.json({success:!1,error:"Forbidden"},403);const{customerId:a,stageId:r,actionType:n,notes:s,performedBy:o}=await e.req.json();if(!await It(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);await $e(e.env.DB);const i=o||t.userId,l=await fn(e.env.DB,a,r);if(await e.env.DB.prepare(`
       SELECT id FROM customer_workflow_actions
       WHERE customer_id = ? AND stage_id = ? AND action_type = ?
         AND performed_by = ?
         AND COALESCE(notes, '') = COALESCE(?, '')
         AND created_at >= datetime('now', '-20 seconds')
       LIMIT 1
-    `).bind(a,l,n,i,s??"").first())return e.json({success:!0});await e.env.DB.prepare("INSERT INTO customer_workflow_actions (customer_id, stage_id, action_type, performed_by, notes) VALUES (?, ?, ?, ?, ?)").bind(a,l,n,i,s||null).run();try{const c={call:"اتصال هاتفي",email:"بريد إلكتروني",meeting:"اجتماع",document:"مستند",approval:"موافقة",rejection:"رفض",followup:"متابعة",other:"أخرى"}[n]||n,p=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),u=p?.full_name||"",g=p?.tenant_id??null,b=await Me(e.env.DB,a,t.userId,t.roleId,g);b.length&&await Fe(e.env.DB,{customerId:a,tenantId:g,targetUserIds:b,customerName:`إجراء: ${c}`,note:`قام ${u} بإضافة إجراء "${c}" على العميل #${a}${s?" — "+s:""}`,linkUrl:`/admin/customers/${a}/workflow#customer`})}catch{}return e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/customer-add-note",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!Oe(t.roleId))return e.json({success:!1,error:"Forbidden"},403);const{customerId:a,stageId:r,noteText:n,performedBy:s}=await e.req.json(),o=String(n||"").trim();if(!o)return e.json({success:!1,error:"Note text is required"},400);if(!await It(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);await $e(e.env.DB);const i=s||t.userId,l=await mn(e.env.DB,a,r);if(await e.env.DB.prepare(`
+    `).bind(a,l,n,i,s??"").first())return e.json({success:!0});await e.env.DB.prepare("INSERT INTO customer_workflow_actions (customer_id, stage_id, action_type, performed_by, notes) VALUES (?, ?, ?, ?, ?)").bind(a,l,n,i,s||null).run();try{const c={call:"اتصال هاتفي",email:"بريد إلكتروني",meeting:"اجتماع",document:"مستند",approval:"موافقة",rejection:"رفض",followup:"متابعة",other:"أخرى"}[n]||n,p=await e.env.DB.prepare("SELECT full_name, tenant_id FROM users WHERE id = ?").bind(t.userId).first(),u=p?.full_name||"",g=p?.tenant_id??null,b=await Me(e.env.DB,a,t.userId,t.roleId,g);b.length&&await Fe(e.env.DB,{customerId:a,tenantId:g,targetUserIds:b,customerName:`إجراء: ${c}`,note:`قام ${u} بإضافة إجراء "${c}" على العميل #${a}${s?" — "+s:""}`,linkUrl:`/admin/customers/${a}/workflow#customer`})}catch{}return e.json({success:!0})}catch(t){return e.json({success:!1,error:t.message},500)}});m.post("/api/workflow/customer-add-note",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(!Oe(t.roleId))return e.json({success:!1,error:"Forbidden"},403);const{customerId:a,stageId:r,noteText:n,performedBy:s}=await e.req.json(),o=String(n||"").trim();if(!o)return e.json({success:!1,error:"Note text is required"},400);if(!await It(e.env.DB,t,Number(a)))return e.json({success:!1,error:"Forbidden"},403);await $e(e.env.DB);const i=s||t.userId,l=await fn(e.env.DB,a,r);if(await e.env.DB.prepare(`
       SELECT id FROM customer_workflow_notes
       WHERE customer_id = ? AND stage_id = ? AND performed_by = ?
         AND note_text = ?
@@ -49732,7 +50494,7 @@ ${r?`
       LEFT JOIN users u ON cwt.assigned_to = u.id
       WHERE cwt.customer_id = ?
       ORDER BY cwt.created_at DESC
-    `).bind(n).all(),b=Ks(parseInt(a),r,s,{transitions:o,actions:i,notes:l,tasks:d},{transitions:c,actions:p,notes:u,tasks:g},t.roleId,t.userId,"request");return e.html(b)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});m.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
+    `).bind(n).all(),b=eo(parseInt(a),r,s,{transitions:o,actions:i,notes:l,tasks:d},{transitions:c,actions:p,notes:u,tasks:g},t.roleId,t.userId,"request");return e.html(b)}catch(t){return console.error("خطأ في عرض Workflow:",t),e.html(`<h1>حدث خطأ: ${t.message}</h1>`)}});m.post("/api/banks",async e=>{try{const t=await e.req.parseBody();return await e.env.DB.prepare(`
       INSERT INTO banks (bank_name, description, is_active, created_at)
       VALUES (?, ?, 1, datetime('now'))
     `).bind(t.bank_name,t.description||"").run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل إضافة البنك"},500)}});m.get("/admin/banks/:id",async e=>{try{const t=e.req.param("id"),a=await e.env.DB.prepare("SELECT * FROM banks WHERE id = ?").bind(t).first();return a?e.html(`
@@ -49853,7 +50615,7 @@ ${r?`
       UPDATE banks 
       SET bank_name = ?, description = ?
       WHERE id = ?
-    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});m.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await nn(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});m.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
+    `).bind(a.bank_name,a.description||"",t).run(),e.redirect("/admin/banks")}catch{return e.json({error:"فشل تعديل البنك"},500)}});m.get("/admin/banks/:id/delete",async e=>{try{const t=e.req.param("id");return await on(e.env.DB,t),e.redirect("/admin/banks")}catch{return e.html("<h1>خطأ في حذف البنك</h1>")}});m.get("/admin/banks",async e=>{try{const t=await e.env.DB.prepare("SELECT * FROM banks ORDER BY bank_name").all();return e.html(`
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
@@ -51909,7 +52671,7 @@ ${r?`
         <\/script>
       </body>
       </html>
-    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});m.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),r=await E(e);if(!r.userId)return e.html("<h1>Unauthorized</h1>",401);const n=H(r),s=a.get("username"),o=a.get("full_name"),i=a.get("email")||null,l=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),p=a.get("tenant_id")||null,u=a.get("is_active"),g=a.get("customer_limit"),b=g===""||g==null?null:parseInt(String(g),10)||null,f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const w=await e.env.DB.prepare("SELECT id, tenant_id, role_id, assigned_bank_id FROM users WHERE id = ?").bind(t).first();if(!w)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(C(w.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!r.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const h=await mr(e.env.DB,Number(t),w.role_id,f);if(!h.ok)return e.html(`<h1>غير مسموح</h1><p>${h.errorAr}</p>`,400);const y=n?p:r.tenantId,S=y!=null&&String(y).trim()!==""?parseInt(String(y),10):NaN;let _=null;if(f===5||f===6){if(!(n||r.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>",403);if(!S||Number.isNaN(S))return e.html("<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>",400);const x=w.assigned_bank_id;_=x!=null&&!Number.isNaN(Number(x))?Number(x):null}let k=`
+    `)}catch(t){return e.html(`<h1>خطأ: ${t.message}</h1>`)}});m.post("/admin/users/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.formData(),r=await E(e);if(!r.userId)return e.html("<h1>Unauthorized</h1>",401);const n=H(r),s=a.get("username"),o=a.get("full_name"),i=a.get("email")||null,l=a.get("phone")||null,d=a.get("password"),c=a.get("role_id"),p=a.get("tenant_id")||null,u=a.get("is_active"),g=a.get("customer_limit"),b=g===""||g==null?null:parseInt(String(g),10)||null,f=Number.parseInt(String(c||""),10);if(Number.isNaN(f))return e.html("<h1>خطأ</h1><p>role_id غير صحيح</p>",400);const w=await e.env.DB.prepare("SELECT id, tenant_id, role_id, assigned_bank_id FROM users WHERE id = ?").bind(t).first();if(!w)return e.html("<h1>المستخدم غير موجود</h1>",404);if(!n){if(C(w.role_id)===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك تعديل مستخدم SaaS.</p>",403);if(f===1)return e.html("<h1>غير مسموح</h1><p>لا يمكنك منح دور SaaS.</p>",403);if(!r.tenantId)return e.html("<h1>خطأ</h1><p>لا يوجد سياق شركة للمستخدم الحالي.</p>",400)}const h=await fr(e.env.DB,Number(t),w.role_id,f);if(!h.ok)return e.html(`<h1>غير مسموح</h1><p>${h.errorAr}</p>`,400);const y=n?p:r.tenantId,S=y!=null&&String(y).trim()!==""?parseInt(String(y),10):NaN;let _=null;if(f===5||f===6){if(!(n||r.roleId===2))return e.html("<h1>غير مسموح</h1><p>لا يمكنك ضبط دور موظف التمويل.</p>",403);if(!S||Number.isNaN(S))return e.html("<h1>خطأ</h1><p>يجب ربط موظف التمويل بشركة.</p>",400);const x=w.assigned_bank_id;_=x!=null&&!Number.isNaN(Number(x))?Number(x):null}let k=`
       UPDATE users
       SET username = ?, full_name = ?, email = ?, phone = ?,
           role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?
@@ -52723,7 +53485,7 @@ ${r?`
       GROUP BY d.department_name
       ORDER BY total DESC
       LIMIT 5
-    `).bind(a).all();return o.salariesLabels=c.results?.map(p=>p.department||"غير محدد")||[],o.salariesData=c.results?.map(p=>p.total||0)||[],o.performanceLabels=["ممتاز","جيد جداً","جيد"],o.performanceData=[30,50,20],o.details=[],e.json({success:!0,data:o})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});No(m,E);Xo(m,E);m.get("/admin/chat",async e=>{const t=await E(e);return t.userId?e.html(Qo({userId:t.userId,tenantId:t.tenantId,roleId:t.roleId})):e.redirect("/login")});async function Ie(e,t="all",a={}){const r=await E(e);return!r.userId||!r.roleId?e.redirect("/login"):r.roleId===4||r.roleId===6?a.allowRole4?null:e.redirect("/admin/contracts/list"):r.roleId===5&&a.blockRole5?e.redirect("/admin/requests"):r.roleId===5&&a.blockRole5Panel?e.redirect("/admin/contracts/list"):r.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}m.get("/admin/contracts",async e=>{const t=await Ie(e,"all",{blockRole5Panel:!0});return t||e.html(Eo)});m.get("/admin/contracts/list",async e=>{const t=await Ie(e,"list-new-only",{allowRole4:!0});if(t)return t;const a=await E(e);let r=ko;return a.roleId===3?r=Ir(r):a.roleId===5&&(r=Sr(r)),e.html(r)});m.get("/admin/contracts/new",async e=>{const t=await Ie(e,"list-new-only",{allowRole4:!0,blockRole5Panel:!0});if(t)return t;const a=await E(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3||a.roleId===4||a.roleId===5||a.roleId===6)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:r}=await ln(e,a,{scopeSuperAdminToTenant:!0,filterRole4ByFundingRequests:!0}),n=g=>(g||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),s=g=>(g||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),o=r.map(g=>{const b=g.national_id&&!String(g.national_id).startsWith("TEMP-")?String(g.national_id):"",f=s(g.full_name||"")+(g.phone?" — "+s(g.phone):"")+(b?" ("+s(b)+")":"");return`<option value="${n(String(g.id))}" data-name="${n(g.full_name||"")}" data-national-id="${n(b)}" data-phone="${n(g.phone||"")}" data-city="${n(g.city||"")}">${f}</option>`}).join(`
+    `).bind(a).all();return o.salariesLabels=c.results?.map(p=>p.department||"غير محدد")||[],o.salariesData=c.results?.map(p=>p.total||0)||[],o.performanceLabels=["ممتاز","جيد جداً","جيد"],o.performanceData=[30,50,20],o.details=[],e.json({success:!0,data:o})}catch(t){return console.error("Error generating report:",t),e.json({success:!0,data:{totalEmployees:0,attendanceRate:0,totalSalaries:0,avgPerformance:0,attendanceLabels:[],attendanceData:[],leavesLabels:[],leavesData:[],salariesLabels:[],salariesData:[],performanceLabels:[],performanceData:[],details:[]}})}});Oo(m,E);Ko(m,E);m.get("/admin/chat",async e=>{const t=await E(e);return t.userId?e.html(Zo({userId:t.userId,tenantId:t.tenantId,roleId:t.roleId})):e.redirect("/login")});async function Ie(e,t="all",a={}){const r=await E(e);return!r.userId||!r.roleId?e.redirect("/login"):r.roleId===4||r.roleId===6?a.allowRole4?null:e.redirect("/admin/contracts/list"):r.roleId===5&&a.blockRole5?e.redirect("/admin/requests"):r.roleId===5&&a.blockRole5Panel?e.redirect("/admin/contracts/list"):r.roleId===3?t==="list-new-only"?null:e.redirect("/admin/contracts/list"):null}m.get("/admin/contracts",async e=>{const t=await Ie(e,"all",{blockRole5Panel:!0});return t||e.html(Io)});m.get("/admin/contracts/list",async e=>{const t=await Ie(e,"list-new-only",{allowRole4:!0});if(t)return t;const a=await E(e);let r=So;return a.roleId===3?r=Tr(r):a.roleId===5&&(r=Cr(r)),e.html(r)});m.get("/admin/contracts/new",async e=>{const t=await Ie(e,"list-new-only",{allowRole4:!0,blockRole5Panel:!0});if(t)return t;const a=await E(e);if(!a.userId||!a.roleId)return e.redirect("/login");if(a.roleId===3&&e.req.query("edit"))return e.redirect("/admin/contracts/list");if((a.roleId===2||a.roleId===3||a.roleId===4||a.roleId===5||a.roleId===6)&&!a.tenantId)return e.html("<h1>خطأ: يجب تحديد الشركة</h1>",400);const{results:r}=await cn(e,a,{scopeSuperAdminToTenant:!0,filterRole4ByFundingRequests:!0}),n=g=>(g||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),s=g=>(g||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),o=r.map(g=>{const b=g.national_id&&!String(g.national_id).startsWith("TEMP-")?String(g.national_id):"",f=s(g.full_name||"")+(g.phone?" — "+s(g.phone):"")+(b?" ("+s(b)+")":"");return`<option value="${n(String(g.id))}" data-name="${n(g.full_name||"")}" data-national-id="${n(b)}" data-phone="${n(g.phone||"")}" data-city="${n(g.city||"")}">${f}</option>`}).join(`
 `);let i="",l="",d="";const c=a.tenantId;if(c){const g=await e.env.DB.prepare("SELECT company_name, contact_phone FROM tenants WHERE id = ?").bind(c).first();if(g&&(l=n(g.company_name||""),d=n((g.contact_phone||"").trim()),i='<span class="text-muted">تُعبأ الحقول أدناه تلقائياً من بيانات شركتك الحالية؛ يمكنك تعديلها قبل الحفظ.</span>',g.company_name)){const b=(g.contact_phone||"").trim();i+=`<br><span style="margin-top:8px;display:inline-block;"><strong>${s(g.company_name)}</strong>${b?` — ${s(b)}`:""}</span>`}}i||(i=a.roleId===1?'<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>':'<span class="text-muted">تعذر تحميل بيانات الشركة.</span>');let p="";try{const g=a.tenantId;if(g){let b,f;(a.roleId===4||a.roleId===6)&&a.userId?(b=`SELECT fr.id, fr.customer_id, fr.requested_amount,
                         ft.type_name, b.bank_name
                  FROM financing_requests fr
@@ -52739,7 +53501,7 @@ ${r?`
                  LEFT JOIN financing_types ft ON ft.id = fr.financing_type_id
                  LEFT JOIN banks b ON b.id = fr.selected_bank_id
                  WHERE fr.tenant_id = ?
-                 ORDER BY fr.id DESC LIMIT 500`,f=[g]);const w=(await e.env.DB.prepare(b).bind(...f).all()).results,h={};for(const y of w){const S=String(y.customer_id);h[S]||(h[S]=[]),h[S].push({id:y.id,requested_amount:y.requested_amount??null,type_name:y.type_name??null,bank_name:y.bank_name??null})}p=`<script>window._contractsFRs = ${JSON.stringify(h)};<\/script>`}}catch{}let u=Io.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",o).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",l).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d).replace("<!--CONTRACTS_FINANCING_REQUESTS_JSON-->",p);return a.roleId===3&&(u=Ir(u)),e.html(u)});m.get("/admin/contracts/view",async e=>{const t=await Ie(e,"list-new-only",{allowRole4:!0});if(t)return t;const r=(await E(e)).roleId===5?Sr(ka):ka;return e.html(r)});m.get("/admin/contracts/templates",async e=>{const t=await Ie(e,"all",{allowRole4:!0,blockRole5Panel:!0});return t||e.html(So)});m.get("/admin/contracts/notes",async e=>{const t=await Ie(e,"all",{blockRole5Panel:!0});return t||e.html(Ro)});m.get("/admin/contracts/archive",async e=>{const t=await Ie(e,"all",{blockRole5Panel:!0});return t||e.html(Lo)});m.get("/admin/contracts/settings",async e=>(await E(e)).userId?e.redirect("/admin/contracts/list"):e.redirect("/login"));m.get("/admin/hr",e=>e.html(oo));m.get("/admin/hr/employees",e=>e.html(io));m.get("/admin/hr/employees/:id",e=>e.html(lo));m.get("/admin/hr/employees/:id/edit",e=>e.html(co));m.get("/admin/hr/attendance",e=>e.html(po));m.get("/admin/hr/leaves",e=>e.html(uo));m.get("/admin/hr/salaries",e=>e.html(mo));m.get("/admin/hr/performance",e=>e.html(go));m.get("/admin/hr/promotions",e=>e.html(fo));m.get("/admin/hr/documents",e=>e.html(bo));m.get("/admin/hr/reports",e=>e.html(ho));m.get("/admin/my-leaves",e=>e.html(`<!DOCTYPE html>
+                 ORDER BY fr.id DESC LIMIT 500`,f=[g]);const w=(await e.env.DB.prepare(b).bind(...f).all()).results,h={};for(const y of w){const S=String(y.customer_id);h[S]||(h[S]=[]),h[S].push({id:y.id,requested_amount:y.requested_amount??null,type_name:y.type_name??null,bank_name:y.bank_name??null})}p=`<script>window._contractsFRs = ${JSON.stringify(h)};<\/script>`}}catch{}let u=To.replace("<!--CONTRACTS_CUSTOMERS_OPTIONS-->",o).replace("<!--CONTRACTS_PARTY_ONE_SUMMARY-->",i).replace("<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->",l).replace("<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->",d).replace("<!--CONTRACTS_FINANCING_REQUESTS_JSON-->",p);return a.roleId===3&&(u=Tr(u)),e.html(u)});m.get("/admin/contracts/view",async e=>{const t=await Ie(e,"list-new-only",{allowRole4:!0});if(t)return t;const r=(await E(e)).roleId===5?Cr(ka):ka;return e.html(r)});m.get("/admin/contracts/templates",async e=>{const t=await Ie(e,"all",{allowRole4:!0,blockRole5Panel:!0});return t||e.html(Co)});m.get("/admin/contracts/notes",async e=>{const t=await Ie(e,"all",{blockRole5Panel:!0});return t||e.html(Do)});m.get("/admin/contracts/archive",async e=>{const t=await Ie(e,"all",{blockRole5Panel:!0});return t||e.html(Ao)});m.get("/admin/contracts/settings",async e=>(await E(e)).userId?e.redirect("/admin/contracts/list"):e.redirect("/login"));m.get("/admin/hr",e=>e.html(lo));m.get("/admin/hr/employees",e=>e.html(co));m.get("/admin/hr/employees/:id",e=>e.html(po));m.get("/admin/hr/employees/:id/edit",e=>e.html(uo));m.get("/admin/hr/attendance",e=>e.html(mo));m.get("/admin/hr/leaves",e=>e.html(go));m.get("/admin/hr/salaries",e=>e.html(fo));m.get("/admin/hr/performance",e=>e.html(bo));m.get("/admin/hr/promotions",e=>e.html(ho));m.get("/admin/hr/documents",e=>e.html(yo));m.get("/admin/hr/reports",e=>e.html(xo));m.get("/admin/my-leaves",e=>e.html(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -52994,7 +53756,7 @@ ${r?`
           a.working_hours as work_hours
         FROM hr_attendance a 
         LEFT JOIN hr_employees e ON a.employee_id = e.id 
-        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(r).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function gn(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[r,n]=e.split(":").map(Number),[s,o]=t.split(":").map(Number),i=r*60+n;let l=s*60+o;l<i&&(l+=1440);const d=l-i,c=Math.round(d/60*100)/100,p=Math.floor(c),u=Math.round((c-p)*60),g=`${p}:${u.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:g}}catch(r){return console.error("Error calculating working hours:",r),{workingHours:null,workHoursFormatted:null}}}m.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),r=(await E(e)).tenantId,{workingHours:n,workHoursFormatted:s}=gn(t.check_in_time,t.check_out_time,t.attendance_date),o=await e.env.DB.prepare(`
+        ORDER BY a.attendance_date DESC, a.check_in_time DESC`,n=await e.env.DB.prepare(r).all();return console.log("🔍 HR Attendance API - Results count:",n.results?.length||0),e.json({success:!0,data:n.results||[]})}catch(t){return console.error("Error fetching attendance:",t),e.json({success:!1,error:t.message},500)}});function bn(e,t,a){if(!e||!t)return{workingHours:null,workHoursFormatted:null};try{const[r,n]=e.split(":").map(Number),[s,o]=t.split(":").map(Number),i=r*60+n;let l=s*60+o;l<i&&(l+=1440);const d=l-i,c=Math.round(d/60*100)/100,p=Math.floor(c),u=Math.round((c-p)*60),g=`${p}:${u.toString().padStart(2,"0")}`;return{workingHours:c,workHoursFormatted:g}}catch(r){return console.error("Error calculating working hours:",r),{workingHours:null,workHoursFormatted:null}}}m.post("/api/hr/attendance",async e=>{try{const t=await e.req.json(),r=(await E(e)).tenantId,{workingHours:n,workHoursFormatted:s}=bn(t.check_in_time,t.check_out_time,t.attendance_date),o=await e.env.DB.prepare(`
       INSERT INTO hr_attendance (
         employee_id,
         attendance_date,
@@ -53011,7 +53773,7 @@ ${r?`
     `).bind(t.employee_id,t.attendance_date,t.check_in_time,t.check_out_time||null,t.status||"present",t.late_minutes||0,t.overtime_minutes||0,t.notes||null,n,s,r).run();return e.json({success:!0,id:o.meta.last_row_id,message:"تم تسجيل الحضور بنجاح"})}catch(t){return e.json({success:!1,error:t.message},500)}});m.put("/api/hr/attendance/:id",async e=>{try{const t=e.req.param("id"),a=await e.req.json(),n=(await E(e)).tenantId,s=await e.env.DB.prepare(`
       SELECT check_in_time, attendance_date FROM hr_attendance 
       WHERE id = ? AND tenant_id = ?
-    `).bind(t,n).first();if(!s)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const o=a.check_in_time||s.check_in_time,i=a.check_out_time||null,l=a.attendance_date||s.attendance_date,{workingHours:d,workHoursFormatted:c}=gn(o,i,l),p=[],u=[];return a.check_in_time!==void 0&&(p.push("check_in_time = ?"),u.push(a.check_in_time)),a.check_out_time!==void 0&&(p.push("check_out_time = ?"),u.push(a.check_out_time||null)),a.status!==void 0&&(p.push("status = ?"),u.push(a.status)),a.notes!==void 0&&(p.push("notes = ?"),u.push(a.notes||null)),a.late_minutes!==void 0&&(p.push("late_minutes = ?"),u.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(p.push("overtime_minutes = ?"),u.push(a.overtime_minutes||0)),d!==null&&(p.push("working_hours = ?"),p.push("work_hours = ?"),u.push(d,c)),p.push("updated_at = CURRENT_TIMESTAMP"),u.push(t,n),p.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
+    `).bind(t,n).first();if(!s)return e.json({success:!1,error:"سجل الحضور غير موجود"},404);const o=a.check_in_time||s.check_in_time,i=a.check_out_time||null,l=a.attendance_date||s.attendance_date,{workingHours:d,workHoursFormatted:c}=bn(o,i,l),p=[],u=[];return a.check_in_time!==void 0&&(p.push("check_in_time = ?"),u.push(a.check_in_time)),a.check_out_time!==void 0&&(p.push("check_out_time = ?"),u.push(a.check_out_time||null)),a.status!==void 0&&(p.push("status = ?"),u.push(a.status)),a.notes!==void 0&&(p.push("notes = ?"),u.push(a.notes||null)),a.late_minutes!==void 0&&(p.push("late_minutes = ?"),u.push(a.late_minutes||0)),a.overtime_minutes!==void 0&&(p.push("overtime_minutes = ?"),u.push(a.overtime_minutes||0)),d!==null&&(p.push("working_hours = ?"),p.push("work_hours = ?"),u.push(d,c)),p.push("updated_at = CURRENT_TIMESTAMP"),u.push(t,n),p.length===1?e.json({success:!1,error:"لا توجد بيانات للتحديث"},400):(await e.env.DB.prepare(`
       UPDATE hr_attendance 
       SET ${p.join(", ")}
       WHERE id = ? AND tenant_id = ?
@@ -53044,7 +53806,7 @@ ${r?`
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
         LIMIT 1
-      `).bind(p.id,o).first();if(!k)return e.json({success:!1,error:"رابط الإحالة غير معروف"},400);u=k.path_segment,g=k.label}else g=Zr;let b=null;if(i){if(!we(i))return e.json({success:!1,error:"مسار الموقع غير صالح"},400);const k=await e.env.DB.prepare(`
+      `).bind(p.id,o).first();if(!k)return e.json({success:!1,error:"رابط الإحالة غير معروف"},400);u=k.path_segment,g=k.label}else g=tn;let b=null;if(i){if(!we(i))return e.json({success:!1,error:"مسار الموقع غير صالح"},400);const k=await e.env.DB.prepare(`
         SELECT id FROM tenant_locations
         WHERE tenant_id = ? AND slug = ? AND is_active = 1
         LIMIT 1
@@ -53097,7 +53859,7 @@ ${r?`
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(s,r,n,o?.contact_bg_color??null,o?.contact_form_color??null,o?.contact_text_color??null,o?.contact_custom_fields??null).run(),e.json({success:!0,message:"تم إنشاء رابط الإحالة"})}catch(t){const a=String(t?.message||"");return a.includes("UNIQUE")||a.toLowerCase().includes("unique")?e.json({success:!1,error:"هذا المسار مستخدم بالفعل لهذه الشركة"},400):e.json({success:!1,error:t?.message||"Server error"},500)}});m.patch("/api/tenant-contact-affiliates/:id",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid id"},400);const r=await e.env.DB.prepare(`
       SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
-    `).bind(a).first();if(!r)return e.json({success:!1,error:"Not found"},404);if(t.roleId===2&&(!t.tenantId||r.tenant_id!==t.tenantId))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json().catch(()=>({})),s={};if("label"in n){const c=String(n.label??"").trim();if(!c||c.length>120)return e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400);s.label=c}const o=an(n);if(!o.ok)return e.json({success:!1,error:o.error},400);if(Object.assign(s,o.updates),"copy_from_company"in n&&n.copy_from_company){const c=await e.env.DB.prepare(`
+    `).bind(a).first();if(!r)return e.json({success:!1,error:"Not found"},404);if(t.roleId===2&&(!t.tenantId||r.tenant_id!==t.tenantId))return e.json({success:!1,error:"Forbidden"},403);const n=await e.req.json().catch(()=>({})),s={};if("label"in n){const c=String(n.label??"").trim();if(!c||c.length>120)return e.json({success:!1,error:"العنوان مطلوب (حتى 120 حرفاً)"},400);s.label=c}const o=nn(n);if(!o.ok)return e.json({success:!1,error:o.error},400);if(Object.assign(s,o.updates),"copy_from_company"in n&&n.copy_from_company){const c=await e.env.DB.prepare(`
         SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
         FROM tenants WHERE id = ? LIMIT 1
       `).bind(r.tenant_id).first();s.contact_bg_color=c?.contact_bg_color??null,s.contact_form_color=c?.contact_form_color??null,s.contact_text_color=c?.contact_text_color??null,s.contact_custom_fields=c?.contact_custom_fields??null}const i=Object.keys(s);if(i.length===0)return e.json({success:!1,error:"لا توجد حقول للتحديث"},400);const l=i.map(c=>`${c} = ?`).join(", "),d=i.map(c=>s[c]);return await e.env.DB.prepare(`UPDATE tenant_contact_affiliate_links SET ${l} WHERE id = ?`).bind(...d,a).run(),e.json({success:!0,message:"تم حفظ تصميم الرابط"})}catch(t){return e.json({success:!1,error:t?.message||"Server error"},500)}});m.delete("/api/tenant-contact-affiliates/:id",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);if(t.roleId!==1&&t.roleId!==2)return e.json({success:!1,error:"Forbidden"},403);const a=parseInt(e.req.param("id"),10);if(!Number.isFinite(a)||a<=0)return e.json({success:!1,error:"Invalid id"},400);const r=await e.env.DB.prepare(`
@@ -54773,6 +55535,7 @@ ${r?`
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"><\/script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'"><\/script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"><\/script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"><\/script>
       <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"><\/script>
@@ -54851,93 +55614,59 @@ ${r?`
             </span>
             <i id="contactCustomChevron" class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
           </button>
-          <div id="contactCustomBody" class="hidden px-5 pb-5 border-t border-gray-100 pt-5 space-y-6">
-
-            <!-- Colors row -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <!-- Background Color -->
-              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
-                  <i class="fas fa-fill-drip text-amber-500 ml-1"></i>
-                  لون الخلفية
-                </label>
-                <div class="flex items-center gap-2 mb-2">
-                  <input type="color" id="cc_bg_picker"
-                    class="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 p-1 bg-white shrink-0" />
-                  <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e"
-                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent font-mono text-xs text-left" />
-                </div>
-                <button type="button" id="cc_bg_clear" class="text-xs text-red-500 hover:text-red-700">مسح</button>
-              </div>
-
-              <!-- Form Card Color -->
-              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
-                  <i class="fas fa-square text-amber-500 ml-1"></i>
-                  لون النافذة
-                </label>
-                <div class="flex items-center gap-2 mb-2">
-                  <input type="color" id="cc_form_picker" value="#ffffff"
-                    class="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 p-1 bg-white shrink-0" />
-                  <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff"
-                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent font-mono text-xs text-left" />
-                </div>
-                <button type="button" id="cc_form_clear" class="text-xs text-red-500 hover:text-red-700">مسح</button>
-              </div>
-
-              <!-- Text Color Toggle -->
-              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
-                  <i class="fas fa-font text-amber-500 ml-1"></i>
-                  لون النص
-                </label>
-                <div class="flex gap-2 mt-1">
-                  <button type="button" id="cc_text_black"
-                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white">
-                    <span class="w-3.5 h-3.5 rounded-full bg-black border border-white/30 inline-block"></span>
-                    أسود
-                  </button>
-                  <button type="button" id="cc_text_white"
-                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700">
-                    <span class="w-3.5 h-3.5 rounded-full bg-white border border-gray-300 inline-block"></span>
-                    أبيض
-                  </button>
-                </div>
-                <p class="text-xs text-gray-400 mt-2 leading-relaxed">يؤثر على النموذج والعناوين داخل النافذة.</p>
-              </div>
-            </div>
-
-            <!-- Custom Fields -->
-            <div>
-              <p class="text-sm font-bold text-gray-700 mb-3">
-                <i class="fas fa-list-ul text-amber-500 ml-1"></i>
-                حقول إضافية في نموذج التواصل
-                <span class="text-xs font-normal text-gray-400 mr-1">(حد أقصى 3)</span>
-              </p>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                ${[0,1,2].map(r=>`
-                <div class="flex flex-col gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-gray-400 w-4 shrink-0">${r+1}</span>
-                    <input type="text" id="cc_field_label_${r}" maxlength="100" placeholder="اسم الحقل"
-                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent text-sm text-right" />
+          <div id="contactCustomBody" class="hidden px-5 pb-5 border-t border-gray-100 pt-5">
+            <div class="flex flex-col lg:flex-row gap-6">
+              <div class="w-full lg:w-5/12 shrink-0 space-y-4">
+                <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                  <div class="mb-5">
+                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">ثيمات جاهزة</p>
+                    <div class="flex flex-wrap gap-2" id="cc_presetsStrip"></div>
                   </div>
-                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none pr-6">
-                    <input type="checkbox" id="cc_field_required_${r}" class="rounded border-gray-300 text-amber-500 focus:ring-amber-400" />
-                    مطلوب
-                  </label>
-                </div>`).join("")}
+                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون الخلفية</p>
+                  <div class="flex items-center gap-2 mb-4">
+                    <div class="relative h-9 w-9 shrink-0">
+                      <span id="cc_bg_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#0f766e;"></span>
+                      <input type="color" id="cc_bg" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                    </div>
+                    <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e"
+                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
+                    <button type="button" id="cc_bg_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>
+                  </div>
+                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النافذة</p>
+                  <div class="flex items-center gap-2 mb-4">
+                    <div class="relative h-9 w-9 shrink-0">
+                      <span id="cc_form_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#ffffff;"></span>
+                      <input type="color" id="cc_form" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                    </div>
+                    <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff"
+                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
+                    <button type="button" id="cc_form_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>
+                  </div>
+                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النص</p>
+                  <div class="flex gap-2">
+                    <button type="button" id="cc_text_black" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white">أسود</button>
+                    <button type="button" id="cc_text_white" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700">أبيض</button>
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                  <p class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-list-ul text-amber-500 ml-1"></i>حقول إضافية <span class="text-xs font-normal text-gray-400">(حد أقصى 3)</span></p>
+                  <ul id="cc_fieldsList" class="mb-1"></ul>
+                  <button type="button" id="cc_addFieldBtn" class="inline-flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-800 font-medium mt-1"><i class="fas fa-plus-circle"></i> إضافة حقل</button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                  <button type="button" id="cc_save_btn" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i class="fas fa-save"></i>حفظ الإعدادات</button>
+                  <span id="cc_msg" class="text-sm"></span>
+                </div>
               </div>
-              <p class="text-xs text-gray-400 mt-2">اتركها فارغة لإخفائها.</p>
-            </div>
-
-            <div class="flex items-center gap-3 pt-1 border-t border-gray-100">
-              <button type="button" id="cc_save_btn"
-                class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow transition-all">
-                <i class="fas fa-save"></i>
-                حفظ الإعدادات
-              </button>
-              <span id="cc_msg" class="text-sm"></span>
+              <div class="w-full lg:flex-1 min-w-0">
+                <div class="flex flex-col items-center">
+                  <p class="text-xs text-gray-400 uppercase tracking-widest mb-3 font-bold">معاينة مباشرة</p>
+                  <div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">
+                    <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>
+                    <div id="cc_previewScreen" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -55818,74 +56547,290 @@ ${r?`
 
         // ── Contact page customization panel ──────────────────────────────────
         (function () {
+          var CC_PRESETS = [
+            { name: 'افتراضي', bg: '#0f766e', form: '#ffffff', text: 'black' },
+            { name: 'ليلي', bg: '#0f172a', form: '#1e293b', text: 'white' },
+            { name: 'بنفسجي', bg: '#4f46e5', form: '#eef2ff', text: 'black' },
+            { name: 'ذهبي', bg: '#92400e', form: '#fffbeb', text: 'black' },
+            { name: 'وردي', bg: '#be185d', form: '#fff1f2', text: 'black' },
+            { name: 'رمادي', bg: '#374151', form: '#f9fafb', text: 'black' },
+            { name: 'سماوي', bg: '#0369a1', form: '#f0f9ff', text: 'black' },
+            { name: 'أخضر', bg: '#166534', form: '#f0fdf4', text: 'black' }
+          ];
+          var ccCompanyName = 'اسم الشركة';
+          var ccLogoUrl = '';
+          var selectedTextColor = 'black';
+
           var toggle = document.getElementById('contactCustomToggle');
           var body = document.getElementById('contactCustomBody');
           var chevron = document.getElementById('contactCustomChevron');
-          var bgPicker = document.getElementById('cc_bg_picker');
+          var bgPicker = document.getElementById('cc_bg');
+          var bgSwatch = document.getElementById('cc_bg_swatch');
           var bgText = document.getElementById('cc_bg_text');
           var bgClear = document.getElementById('cc_bg_clear');
-          var formPicker = document.getElementById('cc_form_picker');
+          var formPicker = document.getElementById('cc_form');
+          var formSwatch = document.getElementById('cc_form_swatch');
           var formText = document.getElementById('cc_form_text');
           var formClear = document.getElementById('cc_form_clear');
           var textBlackBtn = document.getElementById('cc_text_black');
           var textWhiteBtn = document.getElementById('cc_text_white');
           var saveBtn = document.getElementById('cc_save_btn');
           var msgEl = document.getElementById('cc_msg');
-          var selectedTextColor = 'black';
+          var fieldsList = document.getElementById('cc_fieldsList');
+          var addFieldBtn = document.getElementById('cc_addFieldBtn');
+          var presetsStrip = document.getElementById('cc_presetsStrip');
+
+          function ccEscape(v) {
+            return String(v ?? '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+          }
+
+          function setColorPair(picker, swatch, text, hex, fallback) {
+            var v = (hex || '').trim();
+            if (text) text.value = v;
+            var paint = /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
+            if (picker) picker.value = paint;
+            if (swatch) swatch.style.background = /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : fallback;
+          }
+
+          function setTextColorToggle(val) {
+            selectedTextColor = val === 'white' ? 'white' : 'black';
+            textBlackBtn.className = selectedTextColor === 'black'
+              ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
+              : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
+            textWhiteBtn.className = selectedTextColor === 'white'
+              ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
+              : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
+          }
+
+          function ccFieldItemHtml(field) {
+            var f = field || {};
+            var t = f.type || 'text';
+            return (
+              '<li data-field-item class="flex items-center gap-2 p-2.5 rounded-lg border border-gray-200 bg-white mb-2" style="touch-action:none;">' +
+              '<span data-field-handle class="flex items-center justify-center w-7 h-8 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 shrink-0 cursor-grab active:cursor-grabbing" title="سحب لإعادة الترتيب">' +
+              '<i class="fas fa-grip-vertical text-sm pointer-events-none"></i></span>' +
+              '<select class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white" data-field-type>' +
+              '<option value="text"' + (t === 'text' ? ' selected' : '') + '>نص</option>' +
+              '<option value="number"' + (t === 'number' ? ' selected' : '') + '>رقم</option>' +
+              '<option value="select"' + (t === 'select' ? ' selected' : '') + '>قائمة</option>' +
+              '<option value="checkbox"' + (t === 'checkbox' ? ' selected' : '') + '>موافقة</option>' +
+              '</select>' +
+              '<input type="text" maxlength="100" placeholder="اسم الحقل" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-field-label value="' + ccEscape(f.label || '') + '" />' +
+              '<label class="flex items-center gap-1 text-xs text-gray-500 shrink-0 select-none cursor-pointer">' +
+              '<input type="checkbox" class="rounded text-amber-500" data-field-required' + (f.required ? ' checked' : '') + ' /> مطلوب</label>' +
+              '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-field-remove><i class="fas fa-times"></i></button>' +
+              '</li>'
+            );
+          }
+
+          function updateAddFieldBtn() {
+            if (!fieldsList || !addFieldBtn) return;
+            addFieldBtn.style.display = fieldsList.querySelectorAll('[data-field-item]').length >= 3 ? 'none' : '';
+          }
+
+          function getCcFields(includeEmpty) {
+            if (!fieldsList) return [];
+            var result = [];
+            fieldsList.querySelectorAll('[data-field-item]').forEach(function (li) {
+              var label = li.querySelector('[data-field-label]');
+              var required = li.querySelector('[data-field-required]');
+              var type = li.querySelector('[data-field-type]');
+              var labelVal = label ? label.value.trim() : '';
+              if (labelVal || includeEmpty) {
+                result.push({
+                  label: labelVal || 'اسم الحقل',
+                  required: !!(required && required.checked),
+                  type: (type && type.value) || 'text',
+                  draft: !labelVal
+                });
+              }
+            });
+            return result;
+          }
+
+          function previewInputBar(inputBg, inputBorder, hint, hintColor) {
+            return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;padding:0 6px;">'
+              + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ccEscape(hint || '') + '</span></div>';
+          }
+
+          function updateCcPreview() {
+            var screen = document.getElementById('cc_previewScreen');
+            if (!screen) return;
+            var bgRaw = (bgText && bgText.value || '').trim();
+            var formRaw = (formText && formText.value || '').trim();
+            var bgCss = /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
+            var formBg = /^#[0-9a-fA-F]{3,8}$/.test(formRaw) ? formRaw : '#ffffff';
+            var isWhiteText = selectedTextColor === 'white';
+            var textClass = isWhiteText ? 'color:rgba(255,255,255,0.88)' : 'color:#111827';
+            var subTextStyle = isWhiteText ? 'color:rgba(255,255,255,0.6)' : 'color:#6b7280';
+            var hintColor = isWhiteText ? 'rgba(255,255,255,0.45)' : '#9ca3af';
+            var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
+            var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
+            var fields = getCcFields(true);
+            var company = ccEscape(ccCompanyName || 'اسم الشركة');
+            var brandHtml = ccLogoUrl
+              ? '<div style="display:flex;justify-content:center;margin-bottom:6px;"><img src="' + ccEscape(ccLogoUrl) + '" alt="" style="max-height:36px;max-width:120px;object-fit:contain;border-radius:6px;background:#fff;padding:3px;" /></div>'
+              : '<div style="width:32px;height:32px;border-radius:50%;background:#0f766e;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-comments" style="color:#fff;font-size:12px;"></i></div>';
+
+            var fieldsHtml = fields.map(function (f) {
+              if (f.type === 'checkbox') {
+                return '<div style="margin-bottom:6px;display:flex;align-items:center;gap:4px;">'
+                  + '<div style="width:10px;height:10px;border-radius:2px;border:1px solid ' + inputBorder + ';background:' + inputBg + ';flex-shrink:0;"></div>'
+                  + '<div style="font-size:8px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div></div>';
+              }
+              return '<div style="margin-bottom:6px;">'
+                + '<div style="font-size:8px;margin-bottom:3px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
+                + previewInputBar(inputBg, inputBorder, f.label, hintColor) + '</div>';
+            }).join('');
+
+            screen.innerHTML =
+              '<div style="height:100%;overflow-y:auto;background:' + bgCss + ';padding:14px 10px;box-sizing:border-box;">'
+              + '<div style="background:' + formBg + ';border-radius:14px;padding:14px;width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.18);">'
+              + '<div style="text-align:center;margin-bottom:10px;">' + brandHtml
+              + '<div style="font-size:10px;font-weight:700;' + textClass + '">' + company + '</div>'
+              + '<div style="font-size:7.5px;margin-top:2px;' + subTextStyle + '">أرسل بياناتك وسيتم التواصل معك</div></div>'
+              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">الاسم *</div>'
+              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك', hintColor) + '</div>'
+              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رقم الجوال *</div>'
+              + previewInputBar(inputBg, inputBorder, '5xxxxxxxx', hintColor) + '</div>'
+              + fieldsHtml
+              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رسالتك *</div>'
+              + '<div style="background:' + inputBg + ';border-radius:5px;height:36px;border:1px solid ' + inputBorder + ';padding:4px 6px;"><span style="font-size:7px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+              + '<div style="background:#0f766e;border-radius:7px;height:24px;display:flex;align-items:center;justify-content:center;">'
+              + '<span style="color:#fff;font-size:9px;font-weight:700;">إرسال</span></div></div></div>';
+          }
+
+          function applyCcPreset(preset) {
+            setColorPair(bgPicker, bgSwatch, bgText, preset.bg, '#0f766e');
+            setColorPair(formPicker, formSwatch, formText, preset.form, '#ffffff');
+            setTextColorToggle(preset.text || 'black');
+            updateCcPreview();
+          }
+
+          function initCcSortable() {
+            if (!fieldsList) return;
+            if (fieldsList._sortableInstance && typeof fieldsList._sortableInstance.destroy === 'function') {
+              try { fieldsList._sortableInstance.destroy(); } catch (_) {}
+            }
+            if (typeof Sortable === 'undefined') return;
+            fieldsList._sortableInstance = Sortable.create(fieldsList, {
+              animation: 150,
+              handle: '[data-field-handle]',
+              draggable: '[data-field-item]',
+              ghostClass: 'opacity-40',
+              forceFallback: true,
+              fallbackOnBody: true,
+              fallbackTolerance: 3,
+              onEnd: function () { updateCcPreview(); }
+            });
+          }
+
+          function fillCcFields(raw) {
+            var fields = [];
+            if (Array.isArray(raw)) fields = raw;
+            else if (typeof raw === 'string') {
+              try { var parsed = JSON.parse(raw); if (Array.isArray(parsed)) fields = parsed; } catch (_) {}
+            }
+            if (fieldsList) {
+              fieldsList.innerHTML = fields.slice(0, 3).map(function (f) { return ccFieldItemHtml(f); }).join('');
+            }
+            updateAddFieldBtn();
+            initCcSortable();
+          }
+
+          if (presetsStrip) {
+            presetsStrip.innerHTML = CC_PRESETS.map(function (p, i) {
+              return '<button type="button" title="' + ccEscape(p.name) + '" data-cc-preset="' + i + '" style="background:' + p.bg + ';" class="h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-gray-200 cursor-pointer hover:scale-110 transition-transform"></button>';
+            }).join('');
+            presetsStrip.querySelectorAll('[data-cc-preset]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var idx = parseInt(btn.getAttribute('data-cc-preset'), 10);
+                if (CC_PRESETS[idx]) applyCcPreset(CC_PRESETS[idx]);
+              });
+            });
+          }
+
+          function wireColorPair(picker, swatch, text, clearBtn, fallback) {
+            if (picker && text && swatch) {
+              picker.addEventListener('input', function () {
+                text.value = this.value;
+                swatch.style.background = this.value;
+                updateCcPreview();
+              });
+              text.addEventListener('input', function () {
+                var v = this.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                  picker.value = v;
+                  swatch.style.background = v;
+                }
+                updateCcPreview();
+              });
+            }
+            if (clearBtn) {
+              clearBtn.addEventListener('click', function () {
+                text.value = '';
+                picker.value = fallback;
+                swatch.style.background = fallback;
+                updateCcPreview();
+              });
+            }
+          }
+
+          wireColorPair(bgPicker, bgSwatch, bgText, bgClear, '#0f766e');
+          wireColorPair(formPicker, formSwatch, formText, formClear, '#ffffff');
+
+          textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); updateCcPreview(); });
+          textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); updateCcPreview(); });
+
+          if (body) {
+            body.addEventListener('input', function () { updateCcPreview(); });
+            body.addEventListener('change', function () { updateCcPreview(); });
+          }
+
+          if (fieldsList) {
+            fieldsList.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-field-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-field-item]');
+              if (li) li.remove();
+              updateAddFieldBtn();
+              updateCcPreview();
+            });
+          }
+
+          if (addFieldBtn) {
+            addFieldBtn.addEventListener('click', function () {
+              if (!fieldsList) return;
+              if (fieldsList.querySelectorAll('[data-field-item]').length >= 3) return;
+              fieldsList.insertAdjacentHTML('beforeend', ccFieldItemHtml({ label: '', required: false, type: 'text' }));
+              updateAddFieldBtn();
+              updateCcPreview();
+            });
+          }
 
           toggle.addEventListener('click', function () {
             var hidden = body.classList.toggle('hidden');
             chevron.style.transform = hidden ? '' : 'rotate(180deg)';
+            if (!hidden) updateCcPreview();
           });
-
-          bgPicker.addEventListener('input', function () { bgText.value = this.value; });
-          bgText.addEventListener('input', function () {
-            var v = this.value.trim();
-            if (/^#[0-9a-fA-F]{6}$/.test(v)) bgPicker.value = v;
-          });
-          bgClear.addEventListener('click', function () { bgText.value = ''; bgPicker.value = '#0f766e'; });
-
-          formPicker.addEventListener('input', function () { formText.value = this.value; });
-          formText.addEventListener('input', function () {
-            var v = this.value.trim();
-            if (/^#[0-9a-fA-F]{6}$/.test(v)) formPicker.value = v;
-          });
-          formClear.addEventListener('click', function () { formText.value = ''; formPicker.value = '#ffffff'; });
-
-          function setTextColorToggle(val) {
-            selectedTextColor = val === 'white' ? 'white' : 'black';
-            if (selectedTextColor === 'black') {
-              textBlackBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white';
-              textWhiteBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700';
-            } else {
-              textBlackBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700';
-              textWhiteBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white';
-            }
-          }
-          textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); });
-          textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); });
 
           async function loadContactCustom() {
             try {
               var res = await axios.get('/api/my-tenant');
               if (!res.data || res.data.success !== true || !res.data.data) return;
               var d = res.data.data;
-              var bg = d.contact_bg_color || '';
-              bgText.value = bg;
-              if (/^#[0-9a-fA-F]{6}$/.test(bg)) bgPicker.value = bg;
-              var fc = d.contact_form_color || '';
-              formText.value = fc;
-              if (/^#[0-9a-fA-F]{6}$/.test(fc)) formPicker.value = fc;
+              ccCompanyName = d.company_name || d.slug || 'اسم الشركة';
+              ccLogoUrl = d.logo_url || '';
+              setColorPair(bgPicker, bgSwatch, bgText, d.contact_bg_color || '', '#0f766e');
+              setColorPair(formPicker, formSwatch, formText, d.contact_form_color || '', '#ffffff');
               setTextColorToggle(d.contact_text_color || 'black');
-              var fields = [];
-              if (d.contact_custom_fields) { try { fields = JSON.parse(d.contact_custom_fields); } catch (_) {} }
-              for (var i = 0; i < 3; i++) {
-                var f = fields[i] || {};
-                var lbl = document.getElementById('cc_field_label_' + i);
-                var req = document.getElementById('cc_field_required_' + i);
-                if (lbl) lbl.value = f.label || '';
-                if (req) req.checked = !!f.required;
-              }
+              fillCcFields(d.contact_custom_fields);
+              updateCcPreview();
             } catch (_) {}
           }
 
@@ -55893,16 +56838,11 @@ ${r?`
             saveBtn.disabled = true;
             msgEl.textContent = '';
             msgEl.className = 'text-sm';
-            var bg = bgText.value.trim();
-            var fc = formText.value.trim();
-            var customFields = [];
-            for (var i = 0; i < 3; i++) {
-              var lbl = document.getElementById('cc_field_label_' + i);
-              var req = document.getElementById('cc_field_required_' + i);
-              if (lbl && lbl.value.trim()) {
-                customFields.push({ label: lbl.value.trim(), required: !!(req && req.checked) });
-              }
-            }
+            var bg = (bgText.value || '').trim();
+            var fc = (formText.value || '').trim();
+            var customFields = getCcFields(false).map(function (f) {
+              return { label: f.label, required: f.required, type: f.type };
+            });
             try {
               var res = await axios.patch('/api/my-tenant', {
                 contact_bg_color: bg === '' ? null : bg,
@@ -55948,7 +56888,7 @@ ${r?`
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
-  `).bind(n.id,r).first();if(!o)return e.notFound();const i=await dn(e.env.DB,n.id),l=rn(n,s,i);return e.html(bt(tn(l,o),o,{locationSlug:s.slug}))});m.get("/:slug/:secondSegment",async e=>{const t=he(e.req.param("slug")),a=tt(e.req.param("secondSegment"));if(!t||Ee(t)||!a||!we(a))return e.notFound();const r=await e.env.DB.prepare(`
+  `).bind(n.id,r).first();if(!o)return e.notFound();const i=await pn(e.env.DB,n.id),l=sn(n,s,i);return e.html(bt(rn(l,o),o,{locationSlug:s.slug}))});m.get("/:slug/:secondSegment",async e=>{const t=he(e.req.param("slug")),a=tt(e.req.param("secondSegment"));if(!t||Ee(t)||!a||!we(a))return e.notFound();const r=await e.env.DB.prepare(`
     SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenants
     WHERE slug = ? AND status = 'active'
@@ -55958,17 +56898,17 @@ ${r?`
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
-  `).bind(r.id,a).first();if(n)return e.html(bt(tn(r,n),n));const s=await e.env.DB.prepare(`
+  `).bind(r.id,a).first();if(n)return e.html(bt(rn(r,n),n));const s=await e.env.DB.prepare(`
     SELECT id, name, slug, city, address, contact_phone, contact_email, logo_url
     FROM tenant_locations
     WHERE tenant_id = ? AND slug = ? AND is_active = 1
     LIMIT 1
-  `).bind(r.id,a).first();if(!s)return e.notFound();const o=await dn(e.env.DB,r.id),i=rn(r,s,o);return e.html(bt(i,null,{locationSlug:s.slug}))});m.get("/:slug",async e=>{const t=he(e.req.param("slug"));if(!t||Ee(t))return e.notFound();const a=await e.env.DB.prepare(`
+  `).bind(r.id,a).first();if(!s)return e.notFound();const o=await pn(e.env.DB,r.id),i=sn(r,s,o);return e.html(bt(i,null,{locationSlug:s.slug}))});m.get("/:slug",async e=>{const t=he(e.req.param("slug"));if(!t||Ee(t))return e.notFound();const a=await e.env.DB.prepare(`
     SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
-  `).bind(t).first();return a?e.html(bt(a,null)):e.notFound()});const Fa="[تذكير-تلقائي-تقييم]",Ri={5:3,4:5,3:7,2:9},Li={5:"عميل ممتاز",4:"عميل جيد",3:"عميل مقبول",2:"عميل سيئ"};async function fn(e){await e.prepare("ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT").run().catch(()=>{}),await e.prepare("ALTER TABLE customer_alarms ADD COLUMN link_url TEXT").run().catch(()=>{});const t=new Date,a=t.toISOString().split("T")[0],{results:r}=await e.prepare(`
+  `).bind(t).first();return a?e.html(bt(a,null)):e.notFound()});const Pa="[تذكير-تلقائي-تقييم]",Di={5:3,4:5,3:7,2:9},Ai={5:"عميل ممتاز",4:"عميل جيد",3:"عميل مقبول",2:"عميل سيئ"};async function hn(e){await e.prepare("ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT").run().catch(()=>{}),await e.prepare("ALTER TABLE customer_alarms ADD COLUMN link_url TEXT").run().catch(()=>{});const t=new Date,a=t.toISOString().split("T")[0],{results:r}=await e.prepare(`
     SELECT
       c.id        AS customer_id,
       c.full_name AS customer_name,
@@ -56010,15 +56950,15 @@ ${r?`
     AND cr.rating BETWEEN 2 AND 5
     AND c.assigned_bank_agent_id IS NOT NULL
     AND c.tenant_id IS NOT NULL
-  `).all();let n=0,s=0;const o=new Date(t);o.setHours(0,0,0,0);for(const i of r){const l=Ri[i.rating];if(!l){s++;continue}const d=new Date(String(i.rating_date));d.setHours(0,0,0,0);const c=Math.floor((o.getTime()-d.getTime())/864e5);if(c<l){s++;continue}const p=Math.floor(c/l),u=new Date(d);u.setDate(u.getDate()+p*l);const g=u.toISOString().split("T")[0];if(await e.prepare(`
+  `).all();let n=0,s=0;const o=new Date(t);o.setHours(0,0,0,0);for(const i of r){const l=Di[i.rating];if(!l){s++;continue}const d=new Date(String(i.rating_date));d.setHours(0,0,0,0);const c=Math.floor((o.getTime()-d.getTime())/864e5);if(c<l){s++;continue}const p=Math.floor(c/l),u=new Date(d);u.setDate(u.getDate()+p*l);const g=u.toISOString().split("T")[0];if(await e.prepare(`
       SELECT id FROM customer_alarms
       WHERE customer_id = ?
         AND user_id = ?
         AND note LIKE ?
         AND alarm_date_gregorian >= ?
       LIMIT 1
-    `).bind(i.customer_id,i.user_id,`${Fa}%`,g).first()){s++;continue}const f=Li[i.rating],w=`${Fa} راجع العميل: ${i.customer_name} - التقييم: ${f} (كل ${l} أيام)`;await e.prepare(`
+    `).bind(i.customer_id,i.user_id,`${Pa}%`,g).first()){s++;continue}const f=Ai[i.rating],w=`${Pa} راجع العميل: ${i.customer_name} - التقييم: ${f} (كل ${l} أيام)`;await e.prepare(`
       INSERT INTO customer_alarms
         (customer_id, customer_name, alarm_date_gregorian, note, user_id, tenant_id, alarm_type, is_read)
       VALUES (?, ?, ?, ?, ?, ?, 'reminder', 0)
-    `).bind(i.customer_id,i.customer_name,a,w,i.user_id,i.tenant_id).run(),n++}return{created:n,skipped:s}}m.post("/api/customer-reminders/trigger",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT role FROM users WHERE id = ?").bind(t.userId).first();if(!a||a.role!==1&&a.role!==2)return e.json({success:!1,error:"Forbidden"},403);const r=await fn(e.env.DB);return e.json({success:!0,...r})}catch(t){return console.error("Error triggering customer reminders:",t),e.json({success:!1,error:t.message},500)}});const Di={fetch:m.fetch.bind(m),async scheduled(e,t,a){a.waitUntil(fn(t.DB).then(({created:r,skipped:n})=>{console.log(`[customer-reminders] created=${r} skipped=${n}`)}))}},qa=new er,Ai=Object.assign({"/src/index.tsx":Di});let bn=!1;for(const[,e]of Object.entries(Ai))e&&(qa.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),qa.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),bn=!0);if(!bn)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{qa as default};
+    `).bind(i.customer_id,i.customer_name,a,w,i.user_id,i.tenant_id).run(),n++}return{created:n,skipped:s}}m.post("/api/customer-reminders/trigger",async e=>{try{const t=await E(e);if(!t.userId)return e.json({success:!1,error:"Unauthorized"},401);const a=await e.env.DB.prepare("SELECT role FROM users WHERE id = ?").bind(t.userId).first();if(!a||a.role!==1&&a.role!==2)return e.json({success:!1,error:"Forbidden"},403);const r=await hn(e.env.DB);return e.json({success:!0,...r})}catch(t){return console.error("Error triggering customer reminders:",t),e.json({success:!1,error:t.message},500)}});const Bi={fetch:m.fetch.bind(m),async scheduled(e,t,a){a.waitUntil(hn(t.DB).then(({created:r,skipped:n})=>{console.log(`[customer-reminders] created=${r} skipped=${n}`)}))}},$a=new ar,Ni=Object.assign({"/src/index.tsx":Bi});let yn=!1;for(const[,e]of Object.entries(Ni))e&&($a.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),$a.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),yn=!0);if(!yn)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{$a as default};

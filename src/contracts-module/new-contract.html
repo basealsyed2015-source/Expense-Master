@@ -271,7 +271,7 @@
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">رقم سند الأمر <span class="required">*</span></label>
-                <input type="text" class="form-control" id="note_order_number" placeholder="مثال: 3617" required />
+                <input type="text" class="form-control" id="note_order_number" placeholder="أدخل رقماً غير مستخدم" required />
                 <div class="invalid-feedback">يرجى إدخال رقم سند الأمر</div>
               </div>
               <div class="form-group">
@@ -285,8 +285,8 @@
             </div>
           </div>
 
-          <!-- Status -->
-          <div class="form-section">
+          <!-- Status (role 2 only — others use workflow buttons) -->
+          <div class="form-section" id="contractStatusSection" hidden>
             <div class="form-section-title"><i class="fas fa-info-circle"></i> حالة العقد</div>
             <div class="form-grid">
               <div class="form-group">
@@ -898,10 +898,11 @@
     function getFormData() {
       const selectedCustomerId = document.getElementById('customer_lookup')?.value || '';
       const roleId = getContractsRoleId();
+      const statusEl = document.getElementById('status');
       const statusValue =
         (roleId === 4 || roleId === 6) && !editingContractId
           ? CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL
-          : document.getElementById('status').value;
+          : (statusEl?.value || 'بانتظار التمويل');
       return {
         contract_number: document.getElementById('contract_number').value,
         template_id: selectedTemplate?.template_id != null ? Number(selectedTemplate.template_id) : null,
@@ -927,7 +928,7 @@
         note_order_number: document.getElementById('note_order_number').value,
         note_due_date: document.getElementById('note_due_date').value,
         status: statusValue,
-        notes: document.getElementById('notes').value,
+        notes: document.getElementById('notes')?.value || '',
         is_archived: false,
         financing_request_id: (function() {
           const v = document.getElementById('financing_request_id')?.value;
@@ -940,6 +941,7 @@
       const btn = event.target;
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+      let createdContractId = null;
       try {
         const data = getFormData();
         let contract;
@@ -948,19 +950,32 @@
           showToast('تم تحديث العقد بنجاح', 'success');
         } else {
           contract = await API.create('contracts', data);
+          createdContractId = contract?.id || null;
           // Create linked promissory note
           if (data.note_order_number) {
-            await API.create('promissory_notes', {
-              note_number: data.note_order_number,
-              contract_id: contract.id,
-              debtor_name: data.party_two_name,
-              debtor_id: data.party_two_id,
-              amount: data.commission_amount,
-              due_date: data.note_due_date || '',
-              issue_date: data.date_gregorian,
-              payment_place: 'الرياض',
-              status: 'ساري'
-            });
+            try {
+              await API.create('promissory_notes', {
+                note_number: data.note_order_number,
+                contract_id: contract.id,
+                debtor_name: data.party_two_name,
+                debtor_id: data.party_two_id,
+                amount: data.commission_amount,
+                due_date: data.note_due_date || '',
+                issue_date: data.date_gregorian,
+                payment_place: 'الرياض',
+                status: 'ساري'
+              });
+            } catch (noteErr) {
+              const noteMsg = noteErr instanceof Error ? noteErr.message : String(noteErr);
+              showToast(
+                noteMsg && noteMsg.length > 5
+                  ? `تم حفظ العقد، لكن سند الأمر فشل: ${noteMsg}`
+                  : 'تم حفظ العقد، لكن رقم سند الأمر مستخدم مسبقاً',
+                'warning'
+              );
+              setTimeout(() => { window.location.href = `contract-view.html?id=${contract.id}`; }, 1800);
+              return;
+            }
           }
           showToast(
             (getContractsRoleId() === 4 || getContractsRoleId() === 6)
@@ -975,6 +990,9 @@
         showToast(msg && msg.length > 5 ? msg : 'خطأ في حفظ العقد', 'error');
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> حفظ العقد';
+        if (createdContractId) {
+          setTimeout(() => { window.location.href = `contract-view.html?id=${createdContractId}`; }, 1800);
+        }
       }
     }
 
@@ -1002,8 +1020,15 @@
       }
     }
 
+    function configureContractStatusSectionVisibility() {
+      const section = document.getElementById('contractStatusSection');
+      if (!section) return;
+      section.hidden = getContractsRoleId() !== 2;
+    }
+
     // Auto-calc commission on amount change
       document.addEventListener('DOMContentLoaded', async () => {
+      configureContractStatusSectionVisibility();
       document.getElementById('party_one_logo_file')?.addEventListener('change', onPartyOneLogoFileChange);
       document.getElementById('party_one_logo_clear')?.addEventListener('click', () => {
         setPartyOneLogoPreview('');
@@ -1046,6 +1071,7 @@
 
     async function loadContractForEdit(id) {
       try {
+        configureContractStatusSectionVisibility();
         const c = await API.getOne('contracts', id);
         selectedContractTypeKey = c.template_id != null ? Number(c.template_id) : null;
         selectedTemplate = {

@@ -34,7 +34,7 @@ export const companySettingsPage = `<!DOCTYPE html>
 
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <p class="text-sm text-gray-600 mb-6 leading-relaxed" dir="rtl">
-      عدّل اسم الشركة وبيانات التواصل والموقع (المدينة والعنوان) وشعار الشركة وعلامة المستندات المائية.
+      عدّل اسم الشركة وبيانات التواصل والموقع (المدينة والعنوان) وشعار الشركة في صفحة التواصل وروابط الإحالة.
     </p>
 
     <div id="loadError" class="hidden mb-6 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-3" dir="rtl"></div>
@@ -126,16 +126,10 @@ export const companySettingsPage = `<!DOCTYPE html>
       </div>
 
       <div class="pt-4 border-t border-gray-100 space-y-4">
-        <div>
-          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
-            <i class="fas fa-stamp text-teal-600"></i>
-            علامة مائية للمستندات
-          </h2>
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
-            صورة خلفية خفيفة تظهر خلف نص العقود عند المعاينة والطباعة، دون حجب المحتوى (مختلفة عن علامة «مسودة غير معتمدة»).
-            عند التفعيل بدون صورة مخصصة يُستخدم شعار الشركة تلقائياً.
-          </p>
-        </div>
+        <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
+          <i class="fas fa-stamp text-teal-600"></i>
+          علامة مائية للمستندات
+        </h2>
         <label class="flex items-start gap-3 cursor-pointer select-none" dir="rtl">
           <input type="checkbox" id="document_watermark_enabled"
             class="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
@@ -160,18 +154,14 @@ export const companySettingsPage = `<!DOCTYPE html>
               إزالة الصورة
             </button>
           </div>
-          <p class="text-xs text-gray-500 mt-2 leading-relaxed" dir="rtl">PNG أو JPEG أو GIF أو WebP — بحد أقصى 2 ميجابايت. يُفضَّل شعار بخلفية شفافة.</p>
           <p id="watermark_file_hint" class="text-xs text-teal-700 mt-2 font-medium hidden leading-relaxed" dir="rtl"></p>
         </div>
         <div id="watermarkPreviewWrap" class="hidden">
-          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة العلامة المائية</span>
+          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة</span>
           <div class="mt-2 p-6 bg-white rounded-lg border border-gray-200 flex justify-center relative overflow-hidden min-h-[140px]">
             <div class="absolute inset-0 flex items-center justify-center pointer-events-none" id="watermarkPreviewBg">
               <img id="watermarkPreview" alt="" class="max-h-24 max-w-[200px] object-contain" style="opacity:0.08;" />
             </div>
-            <p class="relative z-[1] text-sm text-gray-700 text-center leading-relaxed px-4" dir="rtl">
-              مثال لنص العقد — العلامة المائية تظهر خلف النص بشفافية منخفضة.
-            </p>
           </div>
         </div>
         <div>
@@ -179,22 +169,16 @@ export const companySettingsPage = `<!DOCTYPE html>
             الشفافية
             <span id="opacity_value_label" class="text-teal-700 font-bold mr-1">12%</span>
           </label>
-          <input type="range" id="document_watermark_opacity" min="3" max="25" step="1" value="12"
+          <input type="range" id="document_watermark_opacity" min="3" max="100" step="1" value="12"
             class="w-full accent-teal-600" />
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">من 3٪ (أخف) إلى 25٪ (أوضح قليلاً). الافتراضي 12٪.</p>
         </div>
       </div>
 
       <div class="pt-4 border-t border-gray-100 space-y-4">
-        <div>
-          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
-            <i class="fas fa-heading text-teal-600"></i>
-            ترويسة الصفحة (Header)
-          </h2>
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
-            صورة ترويسة تظهر أعلى كل صفحة من العقد. النص يبدأ أسفلها ولا يتداخل معها.
-          </p>
-        </div>
+        <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
+          <i class="fas fa-heading text-teal-600"></i>
+          ترويسة الصفحة
+        </h2>
         <label class="flex items-start gap-3 cursor-pointer select-none" dir="rtl">
           <input type="checkbox" id="document_header_enabled"
             class="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
@@ -213,7 +197,7 @@ export const companySettingsPage = `<!DOCTYPE html>
           <p id="header_file_hint" class="text-xs text-teal-700 mt-2 font-medium hidden leading-relaxed" dir="rtl"></p>
         </div>
         <div id="headerPreviewWrap" class="hidden">
-          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة الترويسة</span>
+          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة</span>
           <div class="mt-2 p-3 bg-white rounded-lg border border-gray-200 flex justify-center overflow-hidden">
             <img id="headerPreview" alt="" class="w-full max-h-28 object-contain" style="opacity:1;" />
           </div>
@@ -225,20 +209,14 @@ export const companySettingsPage = `<!DOCTYPE html>
           </label>
           <input type="range" id="document_header_opacity" min="10" max="100" step="1" value="100"
             class="w-full accent-teal-600" />
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">الافتراضي 100٪ (معتم بالكامل).</p>
         </div>
       </div>
 
       <div class="pt-4 border-t border-gray-100 space-y-4">
-        <div>
-          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
-            <i class="fas fa-grip-lines text-teal-600"></i>
-            تذييل الصفحة (Footer)
-          </h2>
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">
-            صورة تذييل تظهر أسفل كل صفحة من العقد. النص يتوقف فوقها ولا يتداخل معها.
-          </p>
-        </div>
+        <h2 class="text-base font-bold text-gray-800 flex items-center gap-2" dir="rtl">
+          <i class="fas fa-grip-lines text-teal-600"></i>
+          تذييل الصفحة
+        </h2>
         <label class="flex items-start gap-3 cursor-pointer select-none" dir="rtl">
           <input type="checkbox" id="document_footer_enabled"
             class="mt-1 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
@@ -257,7 +235,7 @@ export const companySettingsPage = `<!DOCTYPE html>
           <p id="footer_file_hint" class="text-xs text-teal-700 mt-2 font-medium hidden leading-relaxed" dir="rtl"></p>
         </div>
         <div id="footerPreviewWrap" class="hidden">
-          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة التذييل</span>
+          <span class="text-xs font-bold text-gray-600" dir="rtl">معاينة</span>
           <div class="mt-2 p-3 bg-white rounded-lg border border-gray-200 flex justify-center overflow-hidden">
             <img id="footerPreview" alt="" class="w-full max-h-28 object-contain" style="opacity:1;" />
           </div>
@@ -269,7 +247,6 @@ export const companySettingsPage = `<!DOCTYPE html>
           </label>
           <input type="range" id="document_footer_opacity" min="10" max="100" step="1" value="100"
             class="w-full accent-teal-600" />
-          <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">الافتراضي 100٪ (معتم بالكامل).</p>
         </div>
       </div>
 
@@ -340,7 +317,7 @@ export const companySettingsPage = `<!DOCTYPE html>
       var el = document.getElementById('document_watermark_opacity');
       var pct = el ? parseInt(el.value, 10) : 12;
       if (!Number.isFinite(pct)) pct = 12;
-      return Math.min(0.25, Math.max(0.03, pct / 100));
+      return Math.min(1, Math.max(0.03, pct / 100));
     }
 
     function syncOpacityLabel() {
@@ -349,7 +326,7 @@ export const companySettingsPage = `<!DOCTYPE html>
       var img = document.getElementById('watermarkPreview');
       var pct = el ? parseInt(el.value, 10) : 12;
       if (label) label.textContent = pct + '%';
-      if (img) img.style.opacity = String(pct / 100);
+      if (img) img.style.opacity = String(Math.min(1, Math.max(0.03, pct / 100)));
     }
 
     function getLetterheadOpacityFraction(id) {
@@ -529,7 +506,7 @@ export const companySettingsPage = `<!DOCTYPE html>
         if (wmEnabled) wmEnabled.checked = !!d.document_watermark_enabled;
         var opacityPct = Math.round((Number(d.document_watermark_opacity) || 0.12) * 100);
         if (opacityPct < 3) opacityPct = 3;
-        if (opacityPct > 25) opacityPct = 25;
+        if (opacityPct > 100) opacityPct = 100;
         var opacityEl = document.getElementById('document_watermark_opacity');
         if (opacityEl) opacityEl.value = String(opacityPct);
         syncOpacityLabel();

@@ -3,7 +3,7 @@
  * Source: src/contracts-module/templates.html
  */
 export const contractsTemplatesPage = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" translate="no" class="notranslate">
 <head>
   <style id="contracts-module-styles">
 /* =============================================
@@ -886,6 +886,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Contract template text must never be rewritten by Chrome/Edge Translate -->
+  <meta name="google" content="notranslate" />
   <title>إدارة القوالب | شركة الموعد للمقاولات العامة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
@@ -934,7 +936,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       background: #fff;
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow: hidden;
+      overflow: visible;
     }
     .builder-toolbar {
       padding: 14px 20px;
@@ -954,14 +956,38 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
     .builder-toolbar button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
     .editor-area {
-      min-height: 300px;
+      min-height: 420px;
       padding: 20px;
       outline: none;
       font-family: 'Tajawal', sans-serif;
-      font-size: 14px;
-      line-height: 2;
+      font-size: 12px;
+      line-height: 1.6;
     }
+    .tox-tinymce { border-radius: 0 0 8px 8px !important; border: none !important; }
+    .builder-area .tox .tox-toolbar,
+    .builder-area .tox .tox-toolbar__primary { background: #fff; }
+    .tox.tox-tinymce-aux,
+    .tox-tinymce-aux {
+      z-index: 2147483646 !important;
+    }
+    .template-editor-panel {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+    .template-editor-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .template-editor-actions .spacer { flex: 1; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/tinymce@7.6.1/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 <body>
 
@@ -993,108 +1019,147 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/panel">← العودة للوحة الرئيسية</a>
     </div>
     <header class="topbar">
-      <div class="topbar-title"><h1><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
+      <div class="topbar-title"><h1 id="pageTopTitle"><i class="fas fa-layer-group"></i> إدارة القوالب</h1></div>
       <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <div class="topbar-trailing">
         <div class="current-date" id="currentDate"></div>
-        <button type="button" class="btn btn-primary" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
+        <button type="button" class="btn btn-primary" id="newTemplateTopBtn" data-contracts-action="new-template"><i class="fas fa-plus"></i> قالب جديد</button>
       </div>
     </header>
 
     <div class="page-content">
 
-      <div class="page-header">
-        <div class="page-header-title">
-          <h2>قوالب العقود</h2>
-          <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+      <!-- List view -->
+      <div id="templatesListView">
+        <div class="page-header">
+          <div class="page-header-title">
+            <h2>قوالب العقود</h2>
+            <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+          </div>
+        </div>
+        <div class="templates-grid" id="templatesGrid">
+          <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
         </div>
       </div>
 
-      <!-- Templates Grid -->
-      <div class="templates-grid" id="templatesGrid">
-        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+      <!-- Full-page editor -->
+      <div id="templateEditorView" style="display:none;">
+        <button type="button" class="back-link" onclick="closeTemplateEditor()" style="background:none;border:none;cursor:pointer;font-family:inherit;">
+          <i class="fas fa-arrow-right"></i> العودة للقوالب
+        </button>
+        <div class="page-header" style="margin-top:8px;">
+          <div class="page-header-title">
+            <h2 id="editorPageTitle">إضافة قالب جديد</h2>
+            <p>عدّل بيانات القالب ونص العقد، ثم احفظ أو عاين قبل الحفظ</p>
+          </div>
+        </div>
+
+        <div class="template-editor-panel notranslate" translate="no">
+          <form id="templateForm" class="notranslate" translate="no">
+            <input type="hidden" id="tpl_id" />
+            <div class="form-grid" style="margin-bottom:16px;">
+              <div class="form-group">
+                <label class="form-label">اسم القالب <span class="required">*</span></label>
+                <input type="text" class="form-control notranslate" id="tpl_name" translate="no" lang="ar" placeholder="مثال: عقد وساطة عقارية" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">نوع القالب</label>
+                <select class="form-control notranslate" id="tpl_type" translate="no" lang="ar">
+                  <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
+                  <option value="عقد إيجار">عقد إيجار</option>
+                  <option value="عقد بيع">عقد بيع</option>
+                  <option value="عقد مقاولات">عقد مقاولات</option>
+                  <option value="أخرى">أخرى</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">المحكمة المختصة</label>
+                <input type="text" class="form-control notranslate" id="tpl_court" translate="no" lang="ar" value="الرياض" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">الحالة</label>
+                <select class="form-control" id="tpl_active">
+                  <option value="true">مفعّل</option>
+                  <option value="false">معطّل</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">وضع العرض</label>
+                <select class="form-control" id="tpl_render_mode">
+                  <option value="structured">Structured — تخطيط ثابت</option>
+                  <option value="document">Document — نص القالب (خط / صفحات)</option>
+                </select>
+                <small class="text-muted" style="display:block;margin-top:6px;line-height:1.5;">
+                  Document يستخدم جسم القالب للطباعة والترقيم. Structured يستخدم التخطيط الثابت في صفحة العقد.
+                </small>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:16px;">
+              <label class="form-label">الترويسة</label>
+              <textarea class="form-control notranslate" id="tpl_header" translate="no" lang="ar" rows="2" placeholder="محتوى الترويسة الإضافي"></textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom:8px;">
+              <label class="form-label">جسم العقد <small class="text-muted">(استخدم {{variable}} للمتغيرات)</small></label>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <label class="form-label" style="margin:0;" for="tpl_doc_font_size">حجم خط المستند</label>
+                <select class="form-control notranslate" id="tpl_doc_font_size" translate="no" style="width:auto;min-width:110px;" onchange="onDocFontSizeChange(this.value)">
+                  <option value="5px">5px</option>
+                  <option value="6px">6px</option>
+                  <option value="7px">7px</option>
+                  <option value="8px">8px</option>
+                  <option value="9px">9px</option>
+                  <option value="10px">10px</option>
+                  <option value="11px">11px</option>
+                  <option value="12px" selected>12px</option>
+                  <option value="14px">14px</option>
+                  <option value="16px">16px</option>
+                  <option value="18px">18px</option>
+                  <option value="20px">20px</option>
+                  <option value="24px">24px</option>
+                  <option value="28px">28px</option>
+                  <option value="32px">32px</option>
+                </select>
+                <small class="text-muted">يُطبَّق على كامل نص العقد عند الحفظ والعرض</small>
+              </div>
+              <div class="builder-area notranslate" translate="no">
+                <div class="builder-toolbar">
+                  <button type="button" onclick="insertVar('{{date_gregorian}}')">📅 تاريخ ميلادي</button>
+                  <button type="button" onclick="insertVar('{{date_hijri}}')">🗓 تاريخ هجري</button>
+                  <button type="button" onclick="insertVar('{{party_two_name}}')">👤 اسم العميل</button>
+                  <button type="button" onclick="insertVar('{{party_two_id}}')">🪪 رقم الهوية</button>
+                  <button type="button" onclick="insertVar('{{party_two_phone}}')">📱 الجوال</button>
+                  <button type="button" onclick="insertVar('{{party_two_address}}')">📍 العنوان</button>
+                  <button type="button" onclick="insertVar('{{finance_type}}')">🏦 نوع التمويل</button>
+                  <button type="button" onclick="insertVar('{{finance_amount}}')">💰 مبلغ التمويل</button>
+                  <button type="button" onclick="insertVar('{{commission_amount}}')">💵 مبلغ السعي</button>
+                  <button type="button" onclick="insertVar('{{note_order_number}}')">📋 رقم السند</button>
+                  <button type="button" onclick="insertVar('{{bank_name}}')">🏛 اسم البنك</button>
+                  <button type="button" onclick="insertVar('{{property_description}}')">🏠 وصف العقار</button>
+                  <button type="button" onclick="insertVar('{{contract_number}}')">🔢 رقم العقد</button>
+                </div>
+                <textarea class="form-control editor-area notranslate" id="tpl_body" translate="no" lang="ar" rows="10" placeholder="اكتب بنود العقد هنا...&#10;استخدم المتغيرات من الأزرار أعلاه مثل {{party_two_name}}"></textarea>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top:16px;">
+              <label class="form-label">التذييل (الخاتمة)</label>
+              <input type="text" class="form-control notranslate" id="tpl_footer" translate="no" lang="ar" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
+            </div>
+          </form>
+
+          <div class="template-editor-actions">
+            <button type="button" class="btn btn-outline" onclick="previewEditorTemplate()"><i class="fas fa-eye"></i> معاينة</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-ghost" onclick="closeTemplateEditor()">إلغاء</button>
+            <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save"></i> حفظ القالب</button>
+          </div>
+        </div>
       </div>
 
     </div>
   </main>
-
-  <!-- Modal: New/Edit Template -->
-  <div class="modal-overlay" id="templateModal" aria-hidden="true">
-    <div class="modal-box" style="max-width:820px;" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h3 id="modalTitle"><i class="fas fa-layer-group"></i> إضافة قالب جديد</h3>
-        <button class="modal-close" onclick="closeModal('templateModal')"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="modal-body">
-        <form id="templateForm">
-          <input type="hidden" id="tpl_id" />
-          <div class="form-grid" style="margin-bottom:16px;">
-            <div class="form-group">
-              <label class="form-label">اسم القالب <span class="required">*</span></label>
-              <input type="text" class="form-control" id="tpl_name" placeholder="مثال: عقد وساطة عقارية" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label">نوع القالب</label>
-              <select class="form-control" id="tpl_type">
-                <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
-                <option value="عقد إيجار">عقد إيجار</option>
-                <option value="عقد بيع">عقد بيع</option>
-                <option value="عقد مقاولات">عقد مقاولات</option>
-                <option value="أخرى">أخرى</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">المحكمة المختصة</label>
-              <input type="text" class="form-control" id="tpl_court" value="الرياض" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">الحالة</label>
-              <select class="form-control" id="tpl_active">
-                <option value="true">مفعّل</option>
-                <option value="false">معطّل</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-bottom:16px;">
-            <label class="form-label">الترويسة</label>
-            <textarea class="form-control" id="tpl_header" rows="2" placeholder="محتوى الترويسة الإضافي"></textarea>
-          </div>
-
-          <div class="form-group" style="margin-bottom:8px;">
-            <label class="form-label">جسم العقد <small class="text-muted">(استخدم {{variable}} للمتغيرات)</small></label>
-            <div class="builder-area">
-              <div class="builder-toolbar">
-                <button type="button" onclick="insertVar('{{date_gregorian}}')">📅 تاريخ ميلادي</button>
-                <button type="button" onclick="insertVar('{{date_hijri}}')">🗓 تاريخ هجري</button>
-                <button type="button" onclick="insertVar('{{party_two_name}}')">👤 اسم العميل</button>
-                <button type="button" onclick="insertVar('{{party_two_id}}')">🪪 رقم الهوية</button>
-                <button type="button" onclick="insertVar('{{party_two_phone}}')">📱 الجوال</button>
-                <button type="button" onclick="insertVar('{{party_two_address}}')">📍 العنوان</button>
-                <button type="button" onclick="insertVar('{{finance_type}}')">🏦 نوع التمويل</button>
-                <button type="button" onclick="insertVar('{{finance_amount}}')">💰 مبلغ التمويل</button>
-                <button type="button" onclick="insertVar('{{commission_amount}}')">💵 مبلغ السعي</button>
-                <button type="button" onclick="insertVar('{{note_order_number}}')">📋 رقم السند</button>
-                <button type="button" onclick="insertVar('{{bank_name}}')">🏛 اسم البنك</button>
-                <button type="button" onclick="insertVar('{{property_description}}')">🏠 وصف العقار</button>
-                <button type="button" onclick="insertVar('{{contract_number}}')">🔢 رقم العقد</button>
-              </div>
-              <textarea class="form-control editor-area" id="tpl_body" rows="10" placeholder="اكتب بنود العقد هنا...&#10;استخدم المتغيرات من الأزرار أعلاه مثل {{party_two_name}}"></textarea>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-top:16px;">
-            <label class="form-label">التذييل (الخاتمة)</label>
-            <input type="text" class="form-control" id="tpl_footer" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" onclick="saveTemplate()"><i class="fas fa-save"></i> حفظ القالب</button>
-        <button type="button" class="btn btn-ghost" onclick="closeModal('templateModal')">إلغاء</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Modal: Preview Template -->
   <div class="modal-overlay" id="previewModal" aria-hidden="true">
@@ -1103,13 +1168,237 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         <h3><i class="fas fa-eye"></i> معاينة القالب</h3>
         <button class="modal-close" onclick="closeModal('previewModal')"><i class="fas fa-times"></i></button>
       </div>
-      <div class="modal-body" id="previewContent"></div>
+      <div class="modal-body notranslate" id="previewContent" translate="no" lang="ar"></div>
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260401"></script>
+  <script src="/contracts-module/js/app.js?v=20260713"></script>
   <script>
     let editingId = null;
+    let tplBodyEditorReady = null;
+
+    /** True when body was saved from a rich editor (vs legacy plain text). */
+    function isRichHtmlTemplate(body) {
+      return /<(?:p|div|span|strong|b|em|i|u|br|ul|ol|li|h[1-6]|table|tr|td|th|a)\\b/i.test(String(body || ''));
+    }
+
+    function normalizeDocFontSize(v, fallback) {
+      const fb = fallback || '12px';
+      const s = String(v == null ? '' : v).trim();
+      const m = s.match(/^(\\d+(?:\\.\\d+)?)\\s*px$/i);
+      if (m) return Math.round(parseFloat(m[1]) * 1000) / 1000 + 'px';
+      const n = parseFloat(s);
+      if (!isNaN(n) && n > 0) return Math.round(n * 1000) / 1000 + 'px';
+      return fb;
+    }
+
+    function extractDocFontSize(html) {
+      const raw = String(html || '');
+      let m = raw.match(/tpl-doc-font[^>]*>[\\s\\S]*?font-size\\s*:\\s*([\\d.]+px)/i)
+        || raw.match(/class=["'][^"']*tpl-doc-font[^"']*["'][^>]*style=["'][^"']*font-size\\s*:\\s*([\\d.]+px)/i)
+        || raw.match(/style=["'][^"']*font-size\\s*:\\s*([\\d.]+px)[^"']*["'][^>]*class=["'][^"']*tpl-doc-font/i);
+      if (m) return normalizeDocFontSize(m[1]);
+      m = raw.match(/font-size\\s*:\\s*([\\d.]+px)/i);
+      return m ? normalizeDocFontSize(m[1]) : '12px';
+    }
+
+    function setDocFontSizeSelect(sizePx) {
+      const sel = document.getElementById('tpl_doc_font_size');
+      if (!sel) return;
+      const size = normalizeDocFontSize(sizePx);
+      if (![...sel.options].some((o) => o.value === size)) {
+        const opt = document.createElement('option');
+        opt.value = size;
+        opt.textContent = size;
+        sel.appendChild(opt);
+      }
+      sel.value = size;
+    }
+
+    /** Persist document font size as an outer wrapper so print/view can keep it after pagination. */
+    function enforceDocFontSizeOnHtml(html, sizePx) {
+      const size = normalizeDocFontSize(sizePx);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      tmp.querySelectorAll('.tpl-doc-font').forEach((el) => {
+        const parent = el.parentNode;
+        if (!parent) return;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        el.remove();
+      });
+      const wrap = document.createElement('div');
+      wrap.className = 'tpl-doc-font';
+      wrap.setAttribute('style', 'font-size:' + size + ';line-height:1.6');
+      while (tmp.firstChild) wrap.appendChild(tmp.firstChild);
+      tmp.appendChild(wrap);
+      return tmp.innerHTML;
+    }
+
+    async function applyDocFontSizeToEditor(sizePx) {
+      const size = normalizeDocFontSize(sizePx);
+      setDocFontSizeSelect(size);
+      await ensureTplBodyEditor();
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (!ed) return;
+      const body = ed.getBody();
+      if (body) {
+        body.style.fontSize = size;
+        body.style.lineHeight = '1.6';
+      }
+      try {
+        ed.dom.setAttrib(ed.getBody(), 'data-doc-font-size', size);
+      } catch (_) { /* ignore */ }
+    }
+
+    async function onDocFontSizeChange(sizePx) {
+      await applyDocFontSizeToEditor(sizePx);
+    }
+
+    function escHtml(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Load legacy plain text into TinyMCE without changing stored format until save. */
+    function bodyToEditorHtml(body) {
+      const raw = String(body || '');
+      if (!raw.trim()) return '';
+      if (isRichHtmlTemplate(raw)) return raw;
+      return escHtml(raw).replace(/\\r\\n|\\r|\\n/g, '<br>');
+    }
+
+    function sanitizeTemplateHtml(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = String(html || '');
+      tmp.querySelectorAll('script,iframe,object,embed,link,meta').forEach((el) => el.remove());
+      tmp.querySelectorAll('*').forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+          const n = attr.name;
+          const v = attr.value || '';
+          if (/^on/i.test(n) || ((n === 'href' || n === 'src') && /^\\s*javascript:/i.test(v))) {
+            el.removeAttribute(n);
+          }
+        });
+      });
+      return tmp.innerHTML;
+    }
+
+    /** Chrome Translate wraps text in dir=auto + vertical-align:inherit spans and often English legalese. */
+    function looksBrowserTranslated(html) {
+      const s = String(html || '');
+      if (/vertical-align\\s*:\\s*inherit/i.test(s) && /dir\\s*=\\s*["']?auto["']?/i.test(s)) return true;
+      if (/\\bWhereas\\b/i.test(s) || /\\bFirst Party\\b/i.test(s) || /\\bSecond Party\\b/i.test(s)) return true;
+      if (/\\bArticle\\s+(One|Two|Three|[1-9]|I{1,3})\\b/i.test(s)) return true;
+      if (/\\b(hereinafter|pursuant|aforesaid|Witnesseth)\\b/i.test(s)) return true;
+      return false;
+    }
+
+    function getTplBodyContent() {
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (ed) return ed.getContent({ format: 'html' }) || '';
+      return document.getElementById('tpl_body').value || '';
+    }
+
+    async function setTplBodyContent(body) {
+      await ensureTplBodyEditor();
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (ed) {
+        ed.setContent(bodyToEditorHtml(body));
+        try { ed.fire('ResizeEditor'); } catch (_) {}
+      } else {
+        document.getElementById('tpl_body').value = body || '';
+      }
+    }
+
+    function ensureTplBodyEditor() {
+      if (typeof tinymce === 'undefined') return Promise.resolve(null);
+      const existing = tinymce.get('tpl_body');
+      if (existing) return Promise.resolve(existing);
+      if (tplBodyEditorReady) return tplBodyEditorReady;
+      tplBodyEditorReady = new Promise((resolve) => {
+        tinymce.init({
+          selector: '#tpl_body',
+          license_key: 'gpl',
+          base_url: 'https://cdn.jsdelivr.net/npm/tinymce@7.6.1',
+          suffix: '.min',
+          directionality: 'rtl',
+          menubar: false,
+          branding: false,
+          promotion: false,
+          statusbar: false,
+          height: 480,
+          plugins: 'lists link',
+          toolbar: 'fontsize | bold italic underline | alignright aligncenter alignleft | bullist numlist | removeformat',
+          font_size_formats: '5px 6px 7px 8px 9px 10px 11px 12px 14px 16px 18px 20px 24px 28px 32px',
+          ui_mode: 'split',
+          // Stop Chrome/Edge Translate from rewriting Arabic contract text inside the iframe
+          body_class: 'notranslate',
+          content_style:
+            "body { font-family: 'Tajawal', sans-serif; font-size: 12px; line-height: 1.6; direction: rtl; } p { margin: 0; } .tpl-doc-font { line-height: 1.6; }",
+          setup(editor) {
+            function markNoTranslate() {
+              try {
+                const iframe = editor.iframeElement;
+                if (iframe) {
+                  iframe.setAttribute('translate', 'no');
+                  iframe.classList.add('notranslate');
+                }
+                const doc = editor.getDoc();
+                if (doc?.documentElement) {
+                  doc.documentElement.setAttribute('translate', 'no');
+                  doc.documentElement.setAttribute('lang', 'ar');
+                  doc.documentElement.setAttribute('dir', 'rtl');
+                  doc.documentElement.classList.add('notranslate');
+                }
+                const body = editor.getBody();
+                if (body) {
+                  body.setAttribute('translate', 'no');
+                  body.setAttribute('lang', 'ar');
+                  body.classList.add('notranslate');
+                }
+              } catch (_) { /* ignore */ }
+            }
+            editor.on('init', () => {
+              markNoTranslate();
+              const sel = document.getElementById('tpl_doc_font_size');
+              if (sel && sel.value) applyDocFontSizeToEditor(sel.value);
+              resolve(editor);
+            });
+            editor.on('LoadContent SetContent', markNoTranslate);
+            editor.on('ExecCommand', (e) => {
+              if (e.command === 'FontSize' && e.value) {
+                setDocFontSizeSelect(e.value);
+                try {
+                  editor.getBody().style.fontSize = normalizeDocFontSize(e.value);
+                  editor.getBody().style.lineHeight = '1.6';
+                } catch (_) { /* ignore */ }
+              }
+            });
+          }
+        }).catch(() => resolve(null));
+      });
+      return tplBodyEditorReady;
+    }
+
+    function showTemplateEditor(isEdit) {
+      document.getElementById('templatesListView').style.display = 'none';
+      document.getElementById('templateEditorView').style.display = 'block';
+      const topBtn = document.getElementById('newTemplateTopBtn');
+      if (topBtn) topBtn.style.display = 'none';
+      document.getElementById('pageTopTitle').innerHTML = isEdit
+        ? '<i class="fas fa-edit"></i> تعديل القالب'
+        : '<i class="fas fa-plus"></i> قالب جديد';
+      document.getElementById('editorPageTitle').textContent = isEdit ? 'تعديل القالب' : 'إضافة قالب جديد';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function closeTemplateEditor() {
+      document.getElementById('templateEditorView').style.display = 'none';
+      document.getElementById('templatesListView').style.display = 'block';
+      const topBtn = document.getElementById('newTemplateTopBtn');
+      if (topBtn) topBtn.style.display = '';
+      document.getElementById('pageTopTitle').innerHTML = '<i class="fas fa-layer-group"></i> إدارة القوالب';
+      editingId = null;
+    }
 
     function parseTemplateVars(t) {
       const raw = t.variables_list;
@@ -1143,7 +1432,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function buildTemplateCard(t) {
       const vars = parseTemplateVars(t);
-      const isActive = t.is_active === true || t.is_active === 'true';
+      const isActive = t.is_active === true || t.is_active === 'true' || t.is_active === 1;
+      const isDocument = t.render_mode === 'document';
       const roleId = getContractsRoleId();
       const canManageExistingTemplates = roleId !== 4;
       return \`
@@ -1154,10 +1444,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               <div class="template-card-name">\${t.template_name}</div>
               <div class="template-card-type">\${t.template_type || '—'}</div>
             </div>
-            <div style="margin-right:auto;">
+            <div style="margin-right:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
               \${isActive
                 ? '<span class="badge badge-active" style="font-size:11px;">مفعّل</span>'
                 : '<span class="badge badge-archived" style="font-size:11px;">معطّل</span>'}
+              <span class="badge" style="font-size:10px;background:\${isDocument ? 'rgba(200,168,75,0.2)' : 'rgba(255,255,255,0.15)'};color:#fff;">\${isDocument ? 'Document' : 'Structured'}</span>
             </div>
           </div>
           <div class="template-card-body">
@@ -1182,12 +1473,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function openNewTemplateModal() {
       editingId = null;
-      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus"></i> إضافة قالب جديد';
       document.getElementById('templateForm').reset();
       document.getElementById('tpl_footer').value = 'والله ولي التوفيق';
       document.getElementById('tpl_court').value = 'الرياض';
-      document.getElementById('tpl_body').value = getDefaultBody();
-      openModal('templateModal');
+      document.getElementById('tpl_render_mode').value = 'structured';
+      setDocFontSizeSelect('12px');
+      showTemplateEditor(false);
+      setTplBodyContent(getDefaultBody()).then(() => applyDocFontSizeToEditor('12px'));
     }
     globalThis.openNewTemplateModal = openNewTemplateModal;
 
@@ -1222,7 +1514,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     async function editTemplate(id) {
       editingId = id;
-      document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل القالب';
       try {
         const t = await API.getOne('templates', id);
         document.getElementById('tpl_id').value = t.id;
@@ -1230,16 +1521,26 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         document.getElementById('tpl_type').value = t.template_type || 'عقد وساطة عقارية';
         document.getElementById('tpl_court').value = t.court_city || 'الرياض';
         document.getElementById('tpl_active').value = t.is_active ? 'true' : 'false';
+        document.getElementById('tpl_render_mode').value = t.render_mode === 'document' ? 'document' : 'structured';
         document.getElementById('tpl_header').value = t.header_content || '';
-        document.getElementById('tpl_body').value = t.body_content || '';
         document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
-        openModal('templateModal');
+        const docSize = extractDocFontSize(t.body_content || '');
+        setDocFontSizeSelect(docSize);
+        showTemplateEditor(true);
+        await setTplBodyContent(t.body_content || '');
+        await applyDocFontSizeToEditor(docSize);
       } catch (e) {
         showToast('خطأ في تحميل القالب', 'error');
       }
     }
 
     function insertVar(v) {
+      const ed = typeof tinymce !== 'undefined' ? tinymce.get('tpl_body') : null;
+      if (ed) {
+        ed.focus();
+        ed.insertContent(v);
+        return;
+      }
       const ta = document.getElementById('tpl_body');
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
@@ -1252,33 +1553,46 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const name = document.getElementById('tpl_name').value.trim();
       if (!name) { showToast('يرجى إدخال اسم القالب', 'warning'); return; }
 
-      const body = document.getElementById('tpl_body').value;
-      const vars = [...body.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);
-      const uniqueVars = [...new Set(vars)];
-
-      const data = {
-        template_name: name,
-        template_type: document.getElementById('tpl_type').value,
-        court_city: document.getElementById('tpl_court').value || 'الرياض',
-        is_active: document.getElementById('tpl_active').value === 'true',
-        header_content: document.getElementById('tpl_header').value,
-        body_content: body,
-        footer_content: document.getElementById('tpl_footer').value,
-        variables_list: uniqueVars
-      };
-
       try {
+        await ensureTplBodyEditor();
+        let body = getTplBodyContent();
+        if (typeof body !== 'string') body = String(body || '');
+        body = sanitizeTemplateHtml(body);
+        if (looksBrowserTranslated(body)) {
+          showToast('يبدو أن المتصفح ترجم نص القالب إلى الإنجليزية. عطّل الترجمة وأعد تحميل القالب قبل الحفظ.', 'error');
+          return;
+        }
+        const docSize = normalizeDocFontSize(document.getElementById('tpl_doc_font_size')?.value || '12px');
+        body = enforceDocFontSizeOnHtml(body, docSize);
+        const vars = [...body.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);
+        const uniqueVars = [...new Set(vars)];
+
+        const data = {
+          template_name: name,
+          template_type: document.getElementById('tpl_type').value,
+          court_city: document.getElementById('tpl_court').value || 'الرياض',
+          is_active: document.getElementById('tpl_active').value === 'true',
+          render_mode: document.getElementById('tpl_render_mode').value === 'document' ? 'document' : 'structured',
+          header_content: document.getElementById('tpl_header').value,
+          body_content: body,
+          footer_content: document.getElementById('tpl_footer').value,
+          variables_list: uniqueVars
+        };
+
+        const saveOpts = { timeoutMs: 60000 };
         if (editingId) {
-          await API.update('templates', editingId, data);
+          await API.update('templates', editingId, data, saveOpts);
           showToast('تم تحديث القالب بنجاح', 'success');
         } else {
-          await API.create('templates', data);
+          await API.create('templates', data, saveOpts);
           showToast('تم إضافة القالب بنجاح', 'success');
         }
-        closeModal('templateModal');
+        closeTemplateEditor();
         loadTemplates();
       } catch (e) {
-        showToast('خطأ في حفظ القالب', 'error');
+        console.error('saveTemplate failed', e);
+        const detail = (e && e.message) ? String(e.message).trim() : '';
+        showToast(detail ? \`خطأ في حفظ القالب: \${detail}\` : 'خطأ في حفظ القالب', 'error');
       }
     }
 
@@ -1293,38 +1607,65 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    const PREVIEW_SAMPLE = {
+      party_two_name: 'عقيل بن هريسان العنزي',
+      party_two_id: '1030460636',
+      party_two_phone: '0554456710',
+      party_two_address: 'حائل',
+      date_gregorian: '2025/11/25',
+      date_hijri: '1447/06/04',
+      finance_type: 'رهن عقاري',
+      finance_amount: '810,000 ريال',
+      commission_amount: '24,000 ريال',
+      note_order_number: '3617',
+      bank_name: 'بنك الراجحي',
+      contract_number: 'CNT-2025-001',
+      property_description: 'شقة سكنية',
+      property_location: 'الرياض - حي النرجس'
+    };
+
+    function showBodyPreview(rawBody) {
+      const raw = String(rawBody || '');
+      const filled = raw.replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (m, key) =>
+        Object.prototype.hasOwnProperty.call(PREVIEW_SAMPLE, key) ? String(PREVIEW_SAMPLE[key]) : m
+      );
+      const rich = isRichHtmlTemplate(raw);
+      const docFont = extractDocFontSize(raw);
+      const previewHtml = rich
+        ? sanitizeTemplateHtml(filled)
+        : escHtml(filled).replace(/\\r\\n|\\r|\\n/g, '<br>');
+
+      document.getElementById('previewContent').innerHTML = \`
+        <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:\${docFont};line-height:1.6;\${rich ? '' : 'white-space:pre-wrap;'}">\${previewHtml}</div>
+        <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
+          <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
+        </div>
+      \`;
+      openModal('previewModal');
+    }
+
     async function previewTemplate(id) {
       try {
         const t = await API.getOne('templates', id);
-        const preview = (t.body_content || '')
-          .replace(/\\{\\{party_two_name\\}\\}/g, 'عقيل بن هريسان العنزي')
-          .replace(/\\{\\{party_two_id\\}\\}/g, '1030460636')
-          .replace(/\\{\\{party_two_phone\\}\\}/g, '0554456710')
-          .replace(/\\{\\{party_two_address\\}\\}/g, 'حائل')
-          .replace(/\\{\\{date_gregorian\\}\\}/g, '2025/11/25')
-          .replace(/\\{\\{date_hijri\\}\\}/g, '1447/06/04')
-          .replace(/\\{\\{finance_type\\}\\}/g, 'رهن عقاري')
-          .replace(/\\{\\{finance_amount\\}\\}/g, '810,000 ريال')
-          .replace(/\\{\\{commission_amount\\}\\}/g, '24,000 ريال')
-          .replace(/\\{\\{note_order_number\\}\\}/g, '3617')
-          .replace(/\\{\\{bank_name\\}\\}/g, 'بنك الراجحي')
-          .replace(/\\{\\{contract_number\\}\\}/g, 'CNT-2025-001')
-          .replace(/\\{\\{property_description\\}\\}/g, 'شقة سكنية')
-          .replace(/\\{\\{property_location\\}\\}/g, 'الرياض - حي النرجس');
-
-        document.getElementById('previewContent').innerHTML = \`
-          <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:14px;line-height:2;white-space:pre-wrap;">\${preview}</div>
-          <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
-            <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
-          </div>
-        \`;
-        openModal('previewModal');
+        showBodyPreview(t.body_content || '');
       } catch (e) {
         showToast('خطأ في المعاينة', 'error');
       }
     }
 
-    document.addEventListener('DOMContentLoaded', loadTemplates);
+    /** Preview current editor content (including unsaved changes). */
+    async function previewEditorTemplate() {
+      try {
+        await ensureTplBodyEditor();
+        showBodyPreview(getTplBodyContent());
+      } catch (e) {
+        showToast('خطأ في المعاينة', 'error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTemplates();
+    });
   </script>
 </body>
 </html>

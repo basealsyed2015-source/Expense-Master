@@ -1450,7 +1450,7 @@ function normalizeTenantLogoUrl(raw: unknown): string | null {
 function clampWatermarkOpacity(raw: unknown, fallback = 0.12): number {
   const n = Number(raw)
   if (!Number.isFinite(n)) return fallback
-  return Math.min(0.25, Math.max(0.03, n))
+  return Math.min(1, Math.max(0.03, n))
 }
 
 /** Letterhead header/footer opacity: 10%–100%, default 100%. */
@@ -35817,6 +35817,7 @@ app.get('/admin/follow-ups', async (c) => {
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'"></script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
@@ -35895,93 +35896,59 @@ app.get('/admin/follow-ups', async (c) => {
             </span>
             <i id="contactCustomChevron" class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
           </button>
-          <div id="contactCustomBody" class="hidden px-5 pb-5 border-t border-gray-100 pt-5 space-y-6">
-
-            <!-- Colors row -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <!-- Background Color -->
-              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
-                  <i class="fas fa-fill-drip text-amber-500 ml-1"></i>
-                  لون الخلفية
-                </label>
-                <div class="flex items-center gap-2 mb-2">
-                  <input type="color" id="cc_bg_picker"
-                    class="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 p-1 bg-white shrink-0" />
-                  <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e"
-                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent font-mono text-xs text-left" />
-                </div>
-                <button type="button" id="cc_bg_clear" class="text-xs text-red-500 hover:text-red-700">مسح</button>
-              </div>
-
-              <!-- Form Card Color -->
-              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
-                  <i class="fas fa-square text-amber-500 ml-1"></i>
-                  لون النافذة
-                </label>
-                <div class="flex items-center gap-2 mb-2">
-                  <input type="color" id="cc_form_picker" value="#ffffff"
-                    class="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 p-1 bg-white shrink-0" />
-                  <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff"
-                    class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent font-mono text-xs text-left" />
-                </div>
-                <button type="button" id="cc_form_clear" class="text-xs text-red-500 hover:text-red-700">مسح</button>
-              </div>
-
-              <!-- Text Color Toggle -->
-              <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                <label class="block text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
-                  <i class="fas fa-font text-amber-500 ml-1"></i>
-                  لون النص
-                </label>
-                <div class="flex gap-2 mt-1">
-                  <button type="button" id="cc_text_black"
-                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white">
-                    <span class="w-3.5 h-3.5 rounded-full bg-black border border-white/30 inline-block"></span>
-                    أسود
-                  </button>
-                  <button type="button" id="cc_text_white"
-                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700">
-                    <span class="w-3.5 h-3.5 rounded-full bg-white border border-gray-300 inline-block"></span>
-                    أبيض
-                  </button>
-                </div>
-                <p class="text-xs text-gray-400 mt-2 leading-relaxed">يؤثر على النموذج والعناوين داخل النافذة.</p>
-              </div>
-            </div>
-
-            <!-- Custom Fields -->
-            <div>
-              <p class="text-sm font-bold text-gray-700 mb-3">
-                <i class="fas fa-list-ul text-amber-500 ml-1"></i>
-                حقول إضافية في نموذج التواصل
-                <span class="text-xs font-normal text-gray-400 mr-1">(حد أقصى 3)</span>
-              </p>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                ${[0, 1, 2].map(i => `
-                <div class="flex flex-col gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-gray-400 w-4 shrink-0">${i + 1}</span>
-                    <input type="text" id="cc_field_label_${i}" maxlength="100" placeholder="اسم الحقل"
-                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent text-sm text-right" />
+          <div id="contactCustomBody" class="hidden px-5 pb-5 border-t border-gray-100 pt-5">
+            <div class="flex flex-col lg:flex-row gap-6">
+              <div class="w-full lg:w-5/12 shrink-0 space-y-4">
+                <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                  <div class="mb-5">
+                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">ثيمات جاهزة</p>
+                    <div class="flex flex-wrap gap-2" id="cc_presetsStrip"></div>
                   </div>
-                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-600 select-none pr-6">
-                    <input type="checkbox" id="cc_field_required_${i}" class="rounded border-gray-300 text-amber-500 focus:ring-amber-400" />
-                    مطلوب
-                  </label>
-                </div>`).join('')}
+                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون الخلفية</p>
+                  <div class="flex items-center gap-2 mb-4">
+                    <div class="relative h-9 w-9 shrink-0">
+                      <span id="cc_bg_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#0f766e;"></span>
+                      <input type="color" id="cc_bg" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                    </div>
+                    <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e"
+                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
+                    <button type="button" id="cc_bg_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>
+                  </div>
+                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النافذة</p>
+                  <div class="flex items-center gap-2 mb-4">
+                    <div class="relative h-9 w-9 shrink-0">
+                      <span id="cc_form_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#ffffff;"></span>
+                      <input type="color" id="cc_form" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                    </div>
+                    <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff"
+                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
+                    <button type="button" id="cc_form_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>
+                  </div>
+                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النص</p>
+                  <div class="flex gap-2">
+                    <button type="button" id="cc_text_black" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white">أسود</button>
+                    <button type="button" id="cc_text_white" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700">أبيض</button>
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                  <p class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-list-ul text-amber-500 ml-1"></i>حقول إضافية <span class="text-xs font-normal text-gray-400">(حد أقصى 3)</span></p>
+                  <ul id="cc_fieldsList" class="mb-1"></ul>
+                  <button type="button" id="cc_addFieldBtn" class="inline-flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-800 font-medium mt-1"><i class="fas fa-plus-circle"></i> إضافة حقل</button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                  <button type="button" id="cc_save_btn" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i class="fas fa-save"></i>حفظ الإعدادات</button>
+                  <span id="cc_msg" class="text-sm"></span>
+                </div>
               </div>
-              <p class="text-xs text-gray-400 mt-2">اتركها فارغة لإخفائها.</p>
-            </div>
-
-            <div class="flex items-center gap-3 pt-1 border-t border-gray-100">
-              <button type="button" id="cc_save_btn"
-                class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow transition-all">
-                <i class="fas fa-save"></i>
-                حفظ الإعدادات
-              </button>
-              <span id="cc_msg" class="text-sm"></span>
+              <div class="w-full lg:flex-1 min-w-0">
+                <div class="flex flex-col items-center">
+                  <p class="text-xs text-gray-400 uppercase tracking-widest mb-3 font-bold">معاينة مباشرة</p>
+                  <div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">
+                    <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>
+                    <div id="cc_previewScreen" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -36862,74 +36829,290 @@ app.get('/admin/follow-ups', async (c) => {
 
         // ── Contact page customization panel ──────────────────────────────────
         (function () {
+          var CC_PRESETS = [
+            { name: 'افتراضي', bg: '#0f766e', form: '#ffffff', text: 'black' },
+            { name: 'ليلي', bg: '#0f172a', form: '#1e293b', text: 'white' },
+            { name: 'بنفسجي', bg: '#4f46e5', form: '#eef2ff', text: 'black' },
+            { name: 'ذهبي', bg: '#92400e', form: '#fffbeb', text: 'black' },
+            { name: 'وردي', bg: '#be185d', form: '#fff1f2', text: 'black' },
+            { name: 'رمادي', bg: '#374151', form: '#f9fafb', text: 'black' },
+            { name: 'سماوي', bg: '#0369a1', form: '#f0f9ff', text: 'black' },
+            { name: 'أخضر', bg: '#166534', form: '#f0fdf4', text: 'black' }
+          ];
+          var ccCompanyName = 'اسم الشركة';
+          var ccLogoUrl = '';
+          var selectedTextColor = 'black';
+
           var toggle = document.getElementById('contactCustomToggle');
           var body = document.getElementById('contactCustomBody');
           var chevron = document.getElementById('contactCustomChevron');
-          var bgPicker = document.getElementById('cc_bg_picker');
+          var bgPicker = document.getElementById('cc_bg');
+          var bgSwatch = document.getElementById('cc_bg_swatch');
           var bgText = document.getElementById('cc_bg_text');
           var bgClear = document.getElementById('cc_bg_clear');
-          var formPicker = document.getElementById('cc_form_picker');
+          var formPicker = document.getElementById('cc_form');
+          var formSwatch = document.getElementById('cc_form_swatch');
           var formText = document.getElementById('cc_form_text');
           var formClear = document.getElementById('cc_form_clear');
           var textBlackBtn = document.getElementById('cc_text_black');
           var textWhiteBtn = document.getElementById('cc_text_white');
           var saveBtn = document.getElementById('cc_save_btn');
           var msgEl = document.getElementById('cc_msg');
-          var selectedTextColor = 'black';
+          var fieldsList = document.getElementById('cc_fieldsList');
+          var addFieldBtn = document.getElementById('cc_addFieldBtn');
+          var presetsStrip = document.getElementById('cc_presetsStrip');
+
+          function ccEscape(v) {
+            return String(v ?? '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+          }
+
+          function setColorPair(picker, swatch, text, hex, fallback) {
+            var v = (hex || '').trim();
+            if (text) text.value = v;
+            var paint = /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
+            if (picker) picker.value = paint;
+            if (swatch) swatch.style.background = /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : fallback;
+          }
+
+          function setTextColorToggle(val) {
+            selectedTextColor = val === 'white' ? 'white' : 'black';
+            textBlackBtn.className = selectedTextColor === 'black'
+              ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
+              : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
+            textWhiteBtn.className = selectedTextColor === 'white'
+              ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
+              : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
+          }
+
+          function ccFieldItemHtml(field) {
+            var f = field || {};
+            var t = f.type || 'text';
+            return (
+              '<li data-field-item class="flex items-center gap-2 p-2.5 rounded-lg border border-gray-200 bg-white mb-2" style="touch-action:none;">' +
+              '<span data-field-handle class="flex items-center justify-center w-7 h-8 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 shrink-0 cursor-grab active:cursor-grabbing" title="سحب لإعادة الترتيب">' +
+              '<i class="fas fa-grip-vertical text-sm pointer-events-none"></i></span>' +
+              '<select class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white" data-field-type>' +
+              '<option value="text"' + (t === 'text' ? ' selected' : '') + '>نص</option>' +
+              '<option value="number"' + (t === 'number' ? ' selected' : '') + '>رقم</option>' +
+              '<option value="select"' + (t === 'select' ? ' selected' : '') + '>قائمة</option>' +
+              '<option value="checkbox"' + (t === 'checkbox' ? ' selected' : '') + '>موافقة</option>' +
+              '</select>' +
+              '<input type="text" maxlength="100" placeholder="اسم الحقل" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-field-label value="' + ccEscape(f.label || '') + '" />' +
+              '<label class="flex items-center gap-1 text-xs text-gray-500 shrink-0 select-none cursor-pointer">' +
+              '<input type="checkbox" class="rounded text-amber-500" data-field-required' + (f.required ? ' checked' : '') + ' /> مطلوب</label>' +
+              '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-field-remove><i class="fas fa-times"></i></button>' +
+              '</li>'
+            );
+          }
+
+          function updateAddFieldBtn() {
+            if (!fieldsList || !addFieldBtn) return;
+            addFieldBtn.style.display = fieldsList.querySelectorAll('[data-field-item]').length >= 3 ? 'none' : '';
+          }
+
+          function getCcFields(includeEmpty) {
+            if (!fieldsList) return [];
+            var result = [];
+            fieldsList.querySelectorAll('[data-field-item]').forEach(function (li) {
+              var label = li.querySelector('[data-field-label]');
+              var required = li.querySelector('[data-field-required]');
+              var type = li.querySelector('[data-field-type]');
+              var labelVal = label ? label.value.trim() : '';
+              if (labelVal || includeEmpty) {
+                result.push({
+                  label: labelVal || 'اسم الحقل',
+                  required: !!(required && required.checked),
+                  type: (type && type.value) || 'text',
+                  draft: !labelVal
+                });
+              }
+            });
+            return result;
+          }
+
+          function previewInputBar(inputBg, inputBorder, hint, hintColor) {
+            return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;padding:0 6px;">'
+              + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ccEscape(hint || '') + '</span></div>';
+          }
+
+          function updateCcPreview() {
+            var screen = document.getElementById('cc_previewScreen');
+            if (!screen) return;
+            var bgRaw = (bgText && bgText.value || '').trim();
+            var formRaw = (formText && formText.value || '').trim();
+            var bgCss = /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
+            var formBg = /^#[0-9a-fA-F]{3,8}$/.test(formRaw) ? formRaw : '#ffffff';
+            var isWhiteText = selectedTextColor === 'white';
+            var textClass = isWhiteText ? 'color:rgba(255,255,255,0.88)' : 'color:#111827';
+            var subTextStyle = isWhiteText ? 'color:rgba(255,255,255,0.6)' : 'color:#6b7280';
+            var hintColor = isWhiteText ? 'rgba(255,255,255,0.45)' : '#9ca3af';
+            var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
+            var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
+            var fields = getCcFields(true);
+            var company = ccEscape(ccCompanyName || 'اسم الشركة');
+            var brandHtml = ccLogoUrl
+              ? '<div style="display:flex;justify-content:center;margin-bottom:6px;"><img src="' + ccEscape(ccLogoUrl) + '" alt="" style="max-height:36px;max-width:120px;object-fit:contain;border-radius:6px;background:#fff;padding:3px;" /></div>'
+              : '<div style="width:32px;height:32px;border-radius:50%;background:#0f766e;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-comments" style="color:#fff;font-size:12px;"></i></div>';
+
+            var fieldsHtml = fields.map(function (f) {
+              if (f.type === 'checkbox') {
+                return '<div style="margin-bottom:6px;display:flex;align-items:center;gap:4px;">'
+                  + '<div style="width:10px;height:10px;border-radius:2px;border:1px solid ' + inputBorder + ';background:' + inputBg + ';flex-shrink:0;"></div>'
+                  + '<div style="font-size:8px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div></div>';
+              }
+              return '<div style="margin-bottom:6px;">'
+                + '<div style="font-size:8px;margin-bottom:3px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
+                + previewInputBar(inputBg, inputBorder, f.label, hintColor) + '</div>';
+            }).join('');
+
+            screen.innerHTML =
+              '<div style="height:100%;overflow-y:auto;background:' + bgCss + ';padding:14px 10px;box-sizing:border-box;">'
+              + '<div style="background:' + formBg + ';border-radius:14px;padding:14px;width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.18);">'
+              + '<div style="text-align:center;margin-bottom:10px;">' + brandHtml
+              + '<div style="font-size:10px;font-weight:700;' + textClass + '">' + company + '</div>'
+              + '<div style="font-size:7.5px;margin-top:2px;' + subTextStyle + '">أرسل بياناتك وسيتم التواصل معك</div></div>'
+              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">الاسم *</div>'
+              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك', hintColor) + '</div>'
+              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رقم الجوال *</div>'
+              + previewInputBar(inputBg, inputBorder, '5xxxxxxxx', hintColor) + '</div>'
+              + fieldsHtml
+              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رسالتك *</div>'
+              + '<div style="background:' + inputBg + ';border-radius:5px;height:36px;border:1px solid ' + inputBorder + ';padding:4px 6px;"><span style="font-size:7px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+              + '<div style="background:#0f766e;border-radius:7px;height:24px;display:flex;align-items:center;justify-content:center;">'
+              + '<span style="color:#fff;font-size:9px;font-weight:700;">إرسال</span></div></div></div>';
+          }
+
+          function applyCcPreset(preset) {
+            setColorPair(bgPicker, bgSwatch, bgText, preset.bg, '#0f766e');
+            setColorPair(formPicker, formSwatch, formText, preset.form, '#ffffff');
+            setTextColorToggle(preset.text || 'black');
+            updateCcPreview();
+          }
+
+          function initCcSortable() {
+            if (!fieldsList) return;
+            if (fieldsList._sortableInstance && typeof fieldsList._sortableInstance.destroy === 'function') {
+              try { fieldsList._sortableInstance.destroy(); } catch (_) {}
+            }
+            if (typeof Sortable === 'undefined') return;
+            fieldsList._sortableInstance = Sortable.create(fieldsList, {
+              animation: 150,
+              handle: '[data-field-handle]',
+              draggable: '[data-field-item]',
+              ghostClass: 'opacity-40',
+              forceFallback: true,
+              fallbackOnBody: true,
+              fallbackTolerance: 3,
+              onEnd: function () { updateCcPreview(); }
+            });
+          }
+
+          function fillCcFields(raw) {
+            var fields = [];
+            if (Array.isArray(raw)) fields = raw;
+            else if (typeof raw === 'string') {
+              try { var parsed = JSON.parse(raw); if (Array.isArray(parsed)) fields = parsed; } catch (_) {}
+            }
+            if (fieldsList) {
+              fieldsList.innerHTML = fields.slice(0, 3).map(function (f) { return ccFieldItemHtml(f); }).join('');
+            }
+            updateAddFieldBtn();
+            initCcSortable();
+          }
+
+          if (presetsStrip) {
+            presetsStrip.innerHTML = CC_PRESETS.map(function (p, i) {
+              return '<button type="button" title="' + ccEscape(p.name) + '" data-cc-preset="' + i + '" style="background:' + p.bg + ';" class="h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-gray-200 cursor-pointer hover:scale-110 transition-transform"></button>';
+            }).join('');
+            presetsStrip.querySelectorAll('[data-cc-preset]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var idx = parseInt(btn.getAttribute('data-cc-preset'), 10);
+                if (CC_PRESETS[idx]) applyCcPreset(CC_PRESETS[idx]);
+              });
+            });
+          }
+
+          function wireColorPair(picker, swatch, text, clearBtn, fallback) {
+            if (picker && text && swatch) {
+              picker.addEventListener('input', function () {
+                text.value = this.value;
+                swatch.style.background = this.value;
+                updateCcPreview();
+              });
+              text.addEventListener('input', function () {
+                var v = this.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                  picker.value = v;
+                  swatch.style.background = v;
+                }
+                updateCcPreview();
+              });
+            }
+            if (clearBtn) {
+              clearBtn.addEventListener('click', function () {
+                text.value = '';
+                picker.value = fallback;
+                swatch.style.background = fallback;
+                updateCcPreview();
+              });
+            }
+          }
+
+          wireColorPair(bgPicker, bgSwatch, bgText, bgClear, '#0f766e');
+          wireColorPair(formPicker, formSwatch, formText, formClear, '#ffffff');
+
+          textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); updateCcPreview(); });
+          textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); updateCcPreview(); });
+
+          if (body) {
+            body.addEventListener('input', function () { updateCcPreview(); });
+            body.addEventListener('change', function () { updateCcPreview(); });
+          }
+
+          if (fieldsList) {
+            fieldsList.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-field-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-field-item]');
+              if (li) li.remove();
+              updateAddFieldBtn();
+              updateCcPreview();
+            });
+          }
+
+          if (addFieldBtn) {
+            addFieldBtn.addEventListener('click', function () {
+              if (!fieldsList) return;
+              if (fieldsList.querySelectorAll('[data-field-item]').length >= 3) return;
+              fieldsList.insertAdjacentHTML('beforeend', ccFieldItemHtml({ label: '', required: false, type: 'text' }));
+              updateAddFieldBtn();
+              updateCcPreview();
+            });
+          }
 
           toggle.addEventListener('click', function () {
             var hidden = body.classList.toggle('hidden');
             chevron.style.transform = hidden ? '' : 'rotate(180deg)';
+            if (!hidden) updateCcPreview();
           });
-
-          bgPicker.addEventListener('input', function () { bgText.value = this.value; });
-          bgText.addEventListener('input', function () {
-            var v = this.value.trim();
-            if (/^#[0-9a-fA-F]{6}$/.test(v)) bgPicker.value = v;
-          });
-          bgClear.addEventListener('click', function () { bgText.value = ''; bgPicker.value = '#0f766e'; });
-
-          formPicker.addEventListener('input', function () { formText.value = this.value; });
-          formText.addEventListener('input', function () {
-            var v = this.value.trim();
-            if (/^#[0-9a-fA-F]{6}$/.test(v)) formPicker.value = v;
-          });
-          formClear.addEventListener('click', function () { formText.value = ''; formPicker.value = '#ffffff'; });
-
-          function setTextColorToggle(val) {
-            selectedTextColor = val === 'white' ? 'white' : 'black';
-            if (selectedTextColor === 'black') {
-              textBlackBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white';
-              textWhiteBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700';
-            } else {
-              textBlackBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-200 bg-white text-gray-700';
-              textWhiteBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 text-sm font-bold transition-all border-gray-800 bg-gray-800 text-white';
-            }
-          }
-          textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); });
-          textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); });
 
           async function loadContactCustom() {
             try {
               var res = await axios.get('/api/my-tenant');
               if (!res.data || res.data.success !== true || !res.data.data) return;
               var d = res.data.data;
-              var bg = d.contact_bg_color || '';
-              bgText.value = bg;
-              if (/^#[0-9a-fA-F]{6}$/.test(bg)) bgPicker.value = bg;
-              var fc = d.contact_form_color || '';
-              formText.value = fc;
-              if (/^#[0-9a-fA-F]{6}$/.test(fc)) formPicker.value = fc;
+              ccCompanyName = d.company_name || d.slug || 'اسم الشركة';
+              ccLogoUrl = d.logo_url || '';
+              setColorPair(bgPicker, bgSwatch, bgText, d.contact_bg_color || '', '#0f766e');
+              setColorPair(formPicker, formSwatch, formText, d.contact_form_color || '', '#ffffff');
               setTextColorToggle(d.contact_text_color || 'black');
-              var fields = [];
-              if (d.contact_custom_fields) { try { fields = JSON.parse(d.contact_custom_fields); } catch (_) {} }
-              for (var i = 0; i < 3; i++) {
-                var f = fields[i] || {};
-                var lbl = document.getElementById('cc_field_label_' + i);
-                var req = document.getElementById('cc_field_required_' + i);
-                if (lbl) lbl.value = f.label || '';
-                if (req) req.checked = !!f.required;
-              }
+              fillCcFields(d.contact_custom_fields);
+              updateCcPreview();
             } catch (_) {}
           }
 
@@ -36937,16 +37120,11 @@ app.get('/admin/follow-ups', async (c) => {
             saveBtn.disabled = true;
             msgEl.textContent = '';
             msgEl.className = 'text-sm';
-            var bg = bgText.value.trim();
-            var fc = formText.value.trim();
-            var customFields = [];
-            for (var i = 0; i < 3; i++) {
-              var lbl = document.getElementById('cc_field_label_' + i);
-              var req = document.getElementById('cc_field_required_' + i);
-              if (lbl && lbl.value.trim()) {
-                customFields.push({ label: lbl.value.trim(), required: !!(req && req.checked) });
-              }
-            }
+            var bg = (bgText.value || '').trim();
+            var fc = (formText.value || '').trim();
+            var customFields = getCcFields(false).map(function (f) {
+              return { label: f.label, required: f.required, type: f.type };
+            });
             try {
               var res = await axios.patch('/api/my-tenant', {
                 contact_bg_color: bg === '' ? null : bg,

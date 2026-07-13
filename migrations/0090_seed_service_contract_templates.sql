@@ -14,7 +14,7 @@ SELECT
   'عقد تقديم خدمات وحلول - مكتب حلول الموعد',
   'عقد وساطة عقارية',
   '',
-  'بعون الله وتوفيقه أنه في يوم (..........) وتاريخ {{date_hijri}} هـ - الموافق {{date_gregorian}} م، تم توقيع هذا العقد بين كل من: -
+  'بعون الله وتوفيقه أنه في يوم ({{day_name}}) وتاريخ {{date_hijri}} هـ - الموافق {{date_gregorian}} م، تم توقيع هذا العقد بين كل من: -
 
 السادة/ مكتب حلول الموعد للخدمات العامة، سجل تجاري رقم (3350179573) عنوانها مدينة (الرياض) حي (التعاون) طريق الامام سعود الفرعي – الرمز البريدي (12476) هاتف رقم (920012979)، (ويشار اليه في هذا العقد بالطرف الأول)
 
@@ -48,12 +48,9 @@ SELECT
 
 البند العاشر: - حرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها وقد تفاهم الطرفان على الوفاء بالعقد وحسن المعاملة وإعطاء كل ذي حق حقه.
 
-الطرف الأول: مكتب حلول الموعد للخدمات العامة — الختم:
-الطرف الثاني: {{party_two_name}} — التوقيع:
-
-——————————————————————————————
-
-سند لأمر
+<div class="tpl-sig-row"><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الأول</div><div>مكتب حلول الموعد للخدمات العامة</div><div class="tpl-sig-space"></div><div>الختم:</div></div><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الثاني</div><div>{{party_two_name}}</div><div class="tpl-sig-space"></div><div>التوقيع:</div></div></div>
+<div class="tpl-page-break" style="page-break-before:always;"></div>
+<p class="tpl-note-title" style="text-align:center;font-weight:800;">سند لأمر</p>
 
 رقم القيد ({{note_order_number}})
 التاريخ: {{date_gregorian}} م
@@ -69,7 +66,7 @@ SELECT
 
 الاســـم: {{party_two_name}}    التوقيع:',
   'عقد تقديم خدمات وحلول',
-  '["date_hijri","date_gregorian","party_two_name","party_two_id","party_two_address","party_two_phone","finance_type","property_description","finance_amount","commission_amount","note_order_number"]',
+  '["date_hijri","date_gregorian","day_name","party_two_name","party_two_id","party_two_address","party_two_phone","finance_type","property_description","finance_amount","commission_amount","note_order_number"]',
   1,
   'الرياض'
 WHERE NOT EXISTS (
@@ -84,7 +81,7 @@ SELECT
   'عقد تقديم خدمات وحلول - شركة وصله',
   'عقد وساطة عقارية',
   '',
-  'بعون الله وتوفيقه أنه في يوم (............) وتاريخ {{date_hijri}} هـ - الموافق {{date_gregorian}} م، تم توقيع هذا العقد بين كل من: -
+  'بعون الله وتوفيقه أنه في يوم ({{day_name}}) وتاريخ {{date_hijri}} هـ - الموافق {{date_gregorian}} م، تم توقيع هذا العقد بين كل من: -
 
 السادة / شركة وصله للخدمات العقارية والتحصيل - سجل تجاري رقم (1010805234) عنوانها مدينة الرياض طريق الامام سعود الفرعي، حي التعاون، هاتف رقم (0112225256) (ويشار اليها في هذا العقد بالطرف الأول)
 
@@ -118,12 +115,9 @@ SELECT
 
 البند العاشر: - حرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها وقد تفاهم الطرفان على الوفاء بالعقد وحسن المعاملة وإعطاء كل ذي حق حقه.
 
-الطرف الأول: شركة وصله للخدمات العقارية والتحصيل — الختم:
-الطرف الثاني: {{party_two_name}} — التوقيع:
-
-——————————————————————————————
-
-سند لأمر
+<div class="tpl-sig-row"><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الأول</div><div>شركة وصله للخدمات العقارية والتحصيل</div><div class="tpl-sig-space"></div><div>الختم:</div></div><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الثاني</div><div>{{party_two_name}}</div><div class="tpl-sig-space"></div><div>التوقيع:</div></div></div>
+<div class="tpl-page-break" style="page-break-before:always;"></div>
+<p class="tpl-note-title" style="text-align:center;font-weight:800;">سند لأمر</p>
 
 رقم القيد ({{note_order_number}})
 التاريخ: {{date_gregorian}} م
@@ -139,7 +133,7 @@ SELECT
 
 الاســـم: {{party_two_name}}    التوقيع:',
   'عقد تقديم خدمات وحلول',
-  '["date_hijri","date_gregorian","party_two_name","party_two_id","party_two_address","party_two_phone","finance_type","finance_amount","commission_amount","note_order_number"]',
+  '["date_hijri","date_gregorian","day_name","party_two_name","party_two_id","party_two_address","party_two_phone","finance_type","finance_amount","commission_amount","note_order_number"]',
   1,
   'الرياض'
 WHERE NOT EXISTS (
