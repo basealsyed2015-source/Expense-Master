@@ -265,6 +265,19 @@
               <label class="form-label">التذييل (الخاتمة)</label>
               <input type="text" class="form-control notranslate" id="tpl_footer" translate="no" lang="ar" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
             </div>
+
+            <div class="form-group" style="margin-top:16px;">
+              <label class="form-label">ختم الطرف الأول <small class="text-muted">(يظهر في معاينة/طباعة العقد بعد اكتماله فقط)</small></label>
+              <input type="file" class="form-control notranslate" id="tpl_stamp_file" translate="no" accept="image/png,image/jpeg,image/webp,image/gif" />
+              <input type="hidden" id="tpl_stamp_url" />
+              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">PNG أو JPEG أو WebP أو GIF — حتى 2 ميجابايت · ختم مستقل لكل قالب</div>
+              <div id="tpl_stamp_preview" style="margin-top:10px;display:none;">
+                <img id="tpl_stamp_img" alt="" style="max-height:90px;max-width:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
+                <div style="margin-top:8px;">
+                  <button type="button" class="btn btn-ghost btn-sm" id="tpl_stamp_clear"><i class="fas fa-times"></i> إزالة الختم</button>
+                </div>
+              </div>
+            </div>
           </form>
 
           <div class="template-editor-actions">
@@ -589,6 +602,58 @@
       `;
     }
 
+    function setTemplateStampPreview(url) {
+      const hidden = document.getElementById('tpl_stamp_url');
+      const prev = document.getElementById('tpl_stamp_preview');
+      const img = document.getElementById('tpl_stamp_img');
+      const fileInput = document.getElementById('tpl_stamp_file');
+      if (hidden) hidden.value = url || '';
+      if (url && img && prev) {
+        img.src = url;
+        prev.style.display = 'block';
+      } else if (prev) {
+        prev.style.display = 'none';
+        if (img) img.removeAttribute('src');
+        if (fileInput) fileInput.value = '';
+      }
+    }
+
+    function templateStampUploadUrl() {
+      let path = '/api/contracts/template-stamp-upload';
+      const t = new URLSearchParams(window.location.search).get('tenant_id');
+      if (t && /^\d+$/.test(t)) path += '?tenant_id=' + encodeURIComponent(t);
+      return path;
+    }
+
+    async function onTemplateStampFileChange(ev) {
+      const input = ev?.target || document.getElementById('tpl_stamp_file');
+      const file = input?.files?.[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('الحد الأقصى لصورة الختم 2 ميجابايت', 'warning');
+        input.value = '';
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append('file', file, file.name || 'stamp.png');
+        const t = new URLSearchParams(window.location.search).get('tenant_id');
+        if (t && /^\d+$/.test(t)) fd.append('tenant_id', t);
+        const res = await fetch(templateStampUploadUrl(), { method: 'POST', body: fd, credentials: 'same-origin' });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((j && (j.detail || j.error)) || ('HTTP ' + res.status));
+        }
+        if (!j.url) throw new Error('لم يُرجع الخادم رابط الختم');
+        setTemplateStampPreview(j.url);
+        showToast('تم رفع الختم', 'success');
+      } catch (e) {
+        console.error(e);
+        showToast('تعذر رفع الختم: ' + (e.message || e), 'error');
+        input.value = '';
+      }
+    }
+
     function openNewTemplateModal() {
       editingId = null;
       document.getElementById('templateForm').reset();
@@ -596,6 +661,7 @@
       document.getElementById('tpl_court').value = 'الرياض';
       document.getElementById('tpl_render_mode').value = 'structured';
       setDocFontSizeSelect('12px');
+      setTemplateStampPreview('');
       showTemplateEditor(false);
       setTplBodyContent(getDefaultBody()).then(() => applyDocFontSizeToEditor('12px'));
     }
@@ -642,6 +708,7 @@
         document.getElementById('tpl_render_mode').value = t.render_mode === 'document' ? 'document' : 'structured';
         document.getElementById('tpl_header').value = t.header_content || '';
         document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
+        setTemplateStampPreview(t.stamp_url || '');
         const docSize = extractDocFontSize(t.body_content || '');
         setDocFontSizeSelect(docSize);
         showTemplateEditor(true);
@@ -694,6 +761,7 @@
           header_content: document.getElementById('tpl_header').value,
           body_content: body,
           footer_content: document.getElementById('tpl_footer').value,
+          stamp_url: document.getElementById('tpl_stamp_url')?.value || '',
           variables_list: uniqueVars
         };
 
@@ -783,6 +851,8 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       loadTemplates();
+      document.getElementById('tpl_stamp_file')?.addEventListener('change', onTemplateStampFileChange);
+      document.getElementById('tpl_stamp_clear')?.addEventListener('click', () => setTemplateStampPreview(''));
     });
   </script>
 </body>

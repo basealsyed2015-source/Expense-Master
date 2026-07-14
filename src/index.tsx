@@ -1503,6 +1503,16 @@ type PublicContactTenantRow = {
   contact_text_color?: string | null
   /** JSON array of up to 3 custom fields: [{label:string, required:boolean}] */
   contact_custom_fields?: string | null
+  /** Full-bleed background image URL (overrides bg color) */
+  contact_bg_image_url?: string | null
+  /** JSON array of trust badge objects {icon, text} shown below the form */
+  contact_trust_badges?: string | null
+  /** Hero title shown above the form card (default: أرسل بياناتك) */
+  contact_hero_title?: string | null
+  /** Hero subtitle shown above the form card in accent color */
+  contact_hero_subtitle?: string | null
+  /** Accent color for divider lines, subtitle, and badge icons */
+  contact_accent_color?: string | null
 }
 
 function pickFirstNonEmptyContactField(
@@ -1519,6 +1529,12 @@ type ContactPageDesignFields = {
   contact_form_color: string | null
   contact_text_color: string | null
   contact_custom_fields: string | null
+  contact_bg_image_url?: string | null
+  contact_logo_url?: string | null
+  contact_trust_badges?: string | null
+  contact_hero_title?: string | null
+  contact_hero_subtitle?: string | null
+  contact_accent_color?: string | null
 }
 
 type AffiliateContactLinkRow = {
@@ -1534,10 +1550,16 @@ function withAffiliateContactDesign(
   if (!affiliate) return tenant
   return {
     ...tenant,
-    contact_bg_color: affiliate.contact_bg_color,
-    contact_form_color: affiliate.contact_form_color,
-    contact_text_color: affiliate.contact_text_color,
-    contact_custom_fields: affiliate.contact_custom_fields,
+    contact_bg_color: affiliate.contact_bg_color ?? tenant.contact_bg_color,
+    contact_form_color: affiliate.contact_form_color ?? tenant.contact_form_color,
+    contact_text_color: affiliate.contact_text_color ?? tenant.contact_text_color,
+    contact_custom_fields: affiliate.contact_custom_fields ?? tenant.contact_custom_fields,
+    contact_bg_image_url: affiliate.contact_bg_image_url ?? tenant.contact_bg_image_url ?? null,
+    contact_trust_badges: affiliate.contact_trust_badges ?? tenant.contact_trust_badges ?? null,
+    contact_hero_title: affiliate.contact_hero_title ?? tenant.contact_hero_title ?? null,
+    contact_hero_subtitle: affiliate.contact_hero_subtitle ?? tenant.contact_hero_subtitle ?? null,
+    contact_accent_color: affiliate.contact_accent_color ?? tenant.contact_accent_color ?? null,
+    logo_url: affiliate.contact_logo_url ?? tenant.logo_url,
   }
 }
 
@@ -1598,6 +1620,49 @@ function parseContactDesignBodyFields(
       return { ok: false, error: 'contact_custom_fields يجب أن يكون مصفوفة' }
     }
   }
+  if ('contact_trust_badges' in body) {
+    const VALID_ICONS = new Set([
+      'fas fa-shield-alt', 'fas fa-bolt', 'fas fa-check-circle', 'fas fa-star',
+      'fas fa-lock', 'fas fa-handshake', 'fas fa-gem', 'fas fa-award',
+      'fas fa-phone', 'fas fa-clock'
+    ])
+    const raw = body.contact_trust_badges
+    if (raw == null) {
+      updates.contact_trust_badges = null
+    } else if (Array.isArray(raw)) {
+      const items = (raw as any[])
+        .map((x: any) => {
+          if (typeof x === 'string') return { icon: 'fas fa-check-circle', text: x.trim() }
+          return {
+            icon: VALID_ICONS.has(String(x?.icon ?? '')) ? String(x.icon) : 'fas fa-check-circle',
+            text: String(x?.text ?? '').trim()
+          }
+        })
+        .filter(x => x.text)
+        .slice(0, 4)
+      updates.contact_trust_badges = JSON.stringify(items)
+    } else {
+      return { ok: false, error: 'contact_trust_badges يجب أن يكون مصفوفة' }
+    }
+  }
+  if ('contact_hero_title' in body) {
+    const raw = body.contact_hero_title
+    updates.contact_hero_title = (raw == null || String(raw).trim() === '') ? null : String(raw).trim().slice(0, 80)
+  }
+  if ('contact_hero_subtitle' in body) {
+    const raw = body.contact_hero_subtitle
+    updates.contact_hero_subtitle = (raw == null || String(raw).trim() === '') ? null : String(raw).trim().slice(0, 80)
+  }
+  if ('contact_accent_color' in body) {
+    const raw = String(body.contact_accent_color ?? '').trim()
+    if (raw === '') {
+      updates.contact_accent_color = null
+    } else if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) {
+      updates.contact_accent_color = raw
+    } else {
+      return { ok: false, error: 'لون التمييز غير صالح، استخدم صيغة hex مثل #d97706' }
+    }
+  }
   return { ok: true, updates }
 }
 
@@ -1656,35 +1721,30 @@ function buildPublicContactPageHtml(
   const waHrefAttr = waHref ? escapeHtmlAttr(waHref) : ''
   const primaryColor = escapeHtml(tenant.primary_color || '#0f766e')
   const secondaryColor = escapeHtml(tenant.secondary_color || '#14b8a6')
-  const bgStyle = tenant.contact_bg_color
-    ? `background:${escapeHtmlAttr(tenant.contact_bg_color)};`
-    : `background:linear-gradient(135deg,${primaryColor},${secondaryColor});`
+  const bgStyle = tenant.contact_bg_image_url
+    ? `background:url(${escapeHtmlAttr(tenant.contact_bg_image_url)}) center/cover no-repeat;`
+    : tenant.contact_bg_color
+      ? `background:${escapeHtmlAttr(tenant.contact_bg_color)};`
+      : `background:linear-gradient(135deg,${primaryColor},${secondaryColor});`
   const formCardStyle = tenant.contact_form_color
     ? `background:${escapeHtmlAttr(tenant.contact_form_color)};`
     : 'background:#ffffff;'
   const isWhiteText = tenant.contact_text_color === 'white'
   const textColorCss = isWhiteText ? `
     <style>
-      #contactCardHeader h1,
-      #contactCardHeader > p { color: rgba(255,255,255,0.92) !important; }
-      #contactCardHeader .text-gray-900,
-      #contactCardHeader .text-gray-700,
-      #contactCardHeader .text-gray-600,
-      #contactCardHeader .text-gray-500,
-      #contactCardHeader .text-gray-400,
-      #contactCardHeader .text-emerald-700 { color: rgba(255,255,255,0.88) !important; }
-      #contactForm label { color: rgba(255,255,255,0.88) !important; }
+      #contactForm label, #contactForm .block { color: rgba(255,255,255,0.88) !important; }
       #contactForm p, #contactForm span.text-xs { color: rgba(255,255,255,0.65) !important; }
-      #contactForm input:not([type=submit]):not([type=button]),
-      #contactForm textarea {
+      .field-icon-wrap { border-color: rgba(255,255,255,0.25) !important; background: rgba(255,255,255,0.05); }
+      .field-icon-wrap input, .field-icon-wrap textarea {
         color: #ffffff !important;
-        background-color: rgba(255,255,255,0.08) !important;
-        border-color: rgba(255,255,255,0.28) !important;
+        background-color: transparent !important;
       }
-      #contactForm input::placeholder, #contactForm textarea::placeholder { color: rgba(255,255,255,0.45) !important; }
-      #contactForm .bg-gray-100 { background-color: rgba(255,255,255,0.12) !important; }
-      #contactForm .text-gray-700 { color: rgba(255,255,255,0.85) !important; }
-      #contactForm .border-gray-300, #contactForm .border-l { border-color: rgba(255,255,255,0.25) !important; }
+      .field-icon-wrap input::placeholder, .field-icon-wrap textarea::placeholder { color: rgba(255,255,255,0.45) !important; }
+      .field-icon-wrap .fi { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.2) !important; color: rgba(255,255,255,0.5) !important; }
+      .phone-prefix { background: rgba(255,255,255,0.12) !important; border-color: rgba(255,255,255,0.2) !important; color: rgba(255,255,255,0.85) !important; }
+      .section-divider span { color: rgba(255,255,255,0.9) !important; }
+      .trust-item { color: rgba(255,255,255,0.6) !important; }
+      .trust-row { border-color: rgba(255,255,255,0.12) !important; }
     </style>` : ''
   const affiliatePathJson = JSON.stringify(affiliate?.path_segment ?? null)
   const locationSlugJson = JSON.stringify(opts?.locationSlug ?? null)
@@ -1751,6 +1811,16 @@ function buildPublicContactPageHtml(
       </div>`
     : ''
 
+  const hasBgImage = !!tenant.contact_bg_image_url
+  const headerOnDark = hasBgImage || !!tenant.contact_bg_color
+  const headerTextColor = isWhiteText || headerOnDark ? 'rgba(255,255,255,0.95)' : '#111827'
+  const headerSubColor = isWhiteText || headerOnDark ? 'rgba(255,255,255,0.7)' : '#4b5563'
+  const accentColor = escapeHtml((tenant.contact_accent_color ?? null) || '#d97706')
+  const submitBtnStyle = isWhiteText
+    ? 'background:rgba(255,255,255,0.92);color:#111827;'
+    : `background:${escapeHtmlAttr(primaryColor)};color:#fff;`
+  const locationStr = [tenant.public_city, tenant.public_address].filter(Boolean).join(' — ')
+
   return `
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -1761,101 +1831,134 @@ function buildPublicContactPageHtml(
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       ${textColorCss}
+      <style>
+        .field-icon-wrap { display:flex; align-items:center; border:1px solid #d1d5db; border-radius:0.75rem; overflow:hidden; transition:box-shadow .15s; }
+        .field-icon-wrap:focus-within { box-shadow:0 0 0 2px ${escapeHtmlAttr(primaryColor)}40; border-color:${escapeHtmlAttr(primaryColor)}; }
+        .field-icon-wrap input, .field-icon-wrap textarea { flex:1; padding:.75rem 1rem; border:0; outline:none; background:transparent; min-width:0; }
+        .field-icon-wrap .fi { display:flex; align-items:center; justify-content:center; width:2.75rem; background:#f9fafb; border-right:1px solid #e5e7eb; color:#9ca3af; flex-shrink:0; align-self:stretch; }
+        .field-icon-wrap textarea { resize:none; }
+        .phone-prefix { display:flex; align-items:center; padding:0 .75rem; background:#f3f4f6; border-left:1px solid #e5e7eb; color:#374151; font-weight:600; font-size:.9rem; white-space:nowrap; flex-shrink:0; }
+        .submit-btn { width:100%; padding:.9rem 1.5rem; border-radius:.75rem; font-size:1.1rem; font-weight:700; border:0; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:.6rem; transition:opacity .15s,transform .1s; }
+        .submit-btn:hover { opacity:.9; }
+        .submit-btn:active { transform:scale(.99); }
+        .submit-btn:disabled { opacity:.6; cursor:not-allowed; }
+        .trust-row { display:flex; align-items:center; justify-content:center; gap:1.25rem; flex-wrap:wrap; padding-top:1.25rem; margin-top:1.25rem; border-top:1px solid rgba(0,0,0,0.07); }
+        .trust-item { display:flex; align-items:center; gap:.4rem; font-size:.75rem; color:#6b7280; }
+        .trust-item i { font-size:.8rem; }
+        .section-divider { display:flex; align-items:center; gap:.75rem; margin-bottom:1.5rem; }
+        .section-divider span { font-size:.95rem; font-weight:700; white-space:nowrap; color:#111827; }
+        .section-divider .line { flex:1; height:1px; }
+        .contact-chips { display:flex; flex-wrap:wrap; justify-content:center; gap:.5rem; margin-bottom:1.25rem; }
+        .contact-chip { display:inline-flex; align-items:center; gap:.5rem; padding:.4rem .85rem; border-radius:9999px; font-size:.8rem; font-weight:600; }
+      </style>
     </head>
-    <body class="min-h-screen bg-gray-50">
-      <div class="min-h-screen p-6" style="${bgStyle}">
-        <div class="w-full max-w-3xl mx-auto">
-          <div class="rounded-2xl shadow-2xl p-8" style="${formCardStyle}">
-            <div id="contactCardHeader" class="mb-8">
+    <body style="margin:0;background:#f3f4f6;">
+      <div style="position:relative;min-height:100vh;${bgStyle}">
+        ${hasBgImage ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);pointer-events:none;z-index:0;"></div>` : ''}
+        <div style="position:relative;z-index:1;" class="min-h-screen py-10 px-4">
+          <div class="w-full max-w-xl mx-auto">
+
+            <!-- ── Header ── -->
+            <div id="contactCardHeader" style="text-align:center;margin-bottom:1.75rem;">
               ${
                 logoNorm
-                  ? `<div class="flex justify-center mb-5"><img src="${logoAttr}" alt="" class="max-h-24 max-w-[220px] object-contain rounded-xl shadow-md bg-white p-3 border border-gray-100" width="220" height="96" loading="lazy" decoding="async" /></div>`
-                  : `<div class="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center text-white text-3xl shadow-md" style="background:${primaryColor};">
-                <i class="fas fa-comments"></i>
-              </div>`
+                  ? `<div style="display:flex;justify-content:center;margin-bottom:1rem;">
+                       <img src="${logoAttr}" alt="" style="max-height:88px;max-width:200px;object-fit:contain;border-radius:.75rem;background:#fff;padding:.5rem .75rem;box-shadow:0 4px 20px rgba(0,0,0,0.18);" loading="lazy" decoding="async" />
+                     </div>`
+                  : `<div style="width:72px;height:72px;border-radius:50%;margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.22);background:${escapeHtmlAttr(primaryColor)};">
+                       <i class="fas fa-comments"></i>
+                     </div>`
               }
-              <h1 class="text-2xl md:text-3xl font-bold text-gray-900 text-center px-2 leading-tight">${companyName}</h1>
-              ${
-                tenant.public_city || tenant.public_address
-                  ? `<p class="text-gray-700 text-center text-sm mt-2">${escapeHtml(
-                      [tenant.public_city, tenant.public_address].filter(Boolean).join(' — ')
-                    )}</p>`
-                  : ''
-              }
-              <p class="text-gray-600 text-center text-sm mt-2 mb-6">أرسل بياناتك وسيتم التواصل معك</p>
-              <div class="mb-2">
-                <p class="text-center text-xs font-medium text-gray-500 mb-3">بيانات التواصل</p>
-                <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3">
-                  ${
-                    phoneRaw
-                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-black/8 px-4 py-3" style="background:rgba(0,0,0,0.04);">
-                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white text-sm shadow-sm" style="background:#25D366;">
-                      <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
-                    </span>
-                    <span class="min-w-0 flex-1 text-right">
-                      <span class="block text-xs text-gray-500">واتساب</span>
-                      ${
-                        waHref
-                          ? `<a href="${waHrefAttr}" target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-emerald-700 dir-ltr block break-all underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-offset-1 rounded" style="--tw-ring-color:${primaryColor};">${contactPhone}</a>`
-                          : `<span class="text-sm font-semibold text-gray-900 dir-ltr block break-all">${contactPhone}</span>`
-                      }
-                    </span>
-                  </div>`
-                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-black/10 px-4 py-3 text-gray-400" style="background:rgba(0,0,0,0.02);">
-                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500 text-sm">
-                      <i class="fab fa-whatsapp text-lg" aria-hidden="true"></i>
-                    </span>
-                    <span class="min-w-0 flex-1 text-right text-sm">لا يوجد رقم مسجل</span>
-                  </div>`
-                  }
-                  ${
-                    emailRaw
-                      ? `<div class="group flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-black/8 px-4 py-3" style="background:rgba(0,0,0,0.04);">
-                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white text-sm shadow-sm" style="background:${primaryColor};">
-                      <i class="fas fa-envelope" aria-hidden="true"></i>
-                    </span>
-                    <span class="min-w-0 flex-1 text-right">
-                      <span class="block text-xs text-gray-500">البريد</span>
-                      <span class="text-sm font-semibold text-gray-900 dir-ltr block break-all">${contactEmail}</span>
-                    </span>
-                  </div>`
-                      : `<div class="flex flex-1 min-w-0 items-center gap-3 rounded-lg border border-dashed border-black/10 px-4 py-3 text-gray-400" style="background:rgba(0,0,0,0.02);">
-                    <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-500 text-sm">
-                      <i class="fas fa-envelope" aria-hidden="true"></i>
-                    </span>
-                    <span class="min-w-0 flex-1 text-right text-sm">لا يوجد بريد مسجل</span>
-                  </div>`
-                  }
-                </div>
-              </div>
+              <h1 style="margin:0 0 .35rem;font-size:1.55rem;font-weight:800;color:${escapeHtmlAttr(headerTextColor)};text-shadow:${hasBgImage ? '0 2px 8px rgba(0,0,0,0.4)' : 'none'};">${companyName}</h1>
+              ${locationStr ? `<p style="margin:.3rem 0 0;font-size:.82rem;color:${escapeHtmlAttr(headerSubColor)};display:flex;align-items:center;justify-content:center;gap:.5rem;">
+                <span style="height:1px;width:28px;background:${escapeHtmlAttr(primaryColor)};display:inline-block;opacity:.7;"></span>
+                ${escapeHtml(locationStr)}
+                <span style="height:1px;width:28px;background:${escapeHtmlAttr(primaryColor)};display:inline-block;opacity:.7;"></span>
+              </p>` : ''}
+              ${tenant.contact_hero_title != null ? `<p style="margin:.9rem 0 0;font-size:1.25rem;font-weight:700;color:${escapeHtmlAttr(headerTextColor)};text-shadow:${hasBgImage ? '0 2px 8px rgba(0,0,0,0.35)' : 'none'};">${escapeHtml(tenant.contact_hero_title)}</p>` : `<p style="margin:.9rem 0 0;font-size:1.25rem;font-weight:700;color:${escapeHtmlAttr(headerTextColor)};text-shadow:${hasBgImage ? '0 2px 8px rgba(0,0,0,0.35)' : 'none'};">أرسل بياناتك</p>`}
+              ${tenant.contact_hero_subtitle != null ? `<p style="margin:.15rem 0 0;font-size:1.05rem;font-weight:600;color:${accentColor};text-shadow:${hasBgImage ? '0 2px 6px rgba(0,0,0,0.3)' : 'none'};">${escapeHtml(tenant.contact_hero_subtitle)}</p>` : `<p style="margin:.15rem 0 0;font-size:1.05rem;font-weight:600;color:${accentColor};text-shadow:${hasBgImage ? '0 2px 6px rgba(0,0,0,0.3)' : 'none'};">وسيتم التواصل معك</p>`}
+              ${(phoneRaw || emailRaw) ? `
+              <div class="contact-chips" style="margin-top:1rem;">
+                ${phoneRaw ? `<${waHref ? `a href="${waHrefAttr}" target="_blank" rel="noopener noreferrer"` : 'span'} class="contact-chip" style="background:#25D366;color:#fff;">
+                  <i class="fab fa-whatsapp"></i>${contactPhone}
+                </${waHref ? 'a' : 'span'}>` : ''}
+                ${emailRaw ? `<span class="contact-chip" style="background:rgba(255,255,255,0.18);color:${escapeHtmlAttr(headerTextColor)};border:1px solid rgba(255,255,255,0.3);">
+                  <i class="fas fa-envelope"></i>${contactEmail}
+                </span>` : ''}
+              </div>` : ''}
             </div>
-            <form id="contactForm" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">الاسم <span class="text-red-500">*</span></label>
-                <input id="customer_name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب اسمك" required />
+
+            <!-- ── Form card ── -->
+            <div style="${formCardStyle}border-radius:1.25rem;box-shadow:0 24px 64px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.04);padding:2rem 1.75rem;">
+              <div class="section-divider">
+                <div class="line" style="background:linear-gradient(to left,${accentColor},transparent);"></div>
+                <span>بيانات التواصل</span>
+                <div class="line" style="background:linear-gradient(to right,${accentColor},transparent);"></div>
               </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال <span class="text-red-500">*</span></label>
-                <div class="flex items-center rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent overflow-hidden">
-                  <span class="px-3 py-3 bg-gray-100 text-gray-700 border-l border-gray-300 font-semibold" dir="ltr">+966</span>
-                  <input id="customer_phone" type="tel" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="rtl"
-                         class="w-full px-4 py-3 border-0 focus:ring-0 focus:outline-none text-right placeholder:text-right"
-                         placeholder="5xxxxxxxx"
-                         oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
-                         oninvalid="this.setCustomValidity('يرجى إدخال 9 أرقام تبدأ بـ 5 (بدون +966)، الصيغة: 5XXXXXXXX')" />
+
+              <form id="contactForm" style="display:flex;flex-direction:column;gap:1.1rem;">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1.5">الاسم <span class="text-red-500">*</span></label>
+                  <div class="field-icon-wrap">
+                    <input id="customer_name" type="text" placeholder="اكتب اسمك الكامل" required />
+                    <span class="fi"><i class="fas fa-user text-sm"></i></span>
+                  </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">أدخل 9 أرقام فقط تبدأ بـ 5. سيتم الحفظ تلقائياً بصيغة <span dir="ltr">+966</span>.</p>
-              </div>
-              ${customFieldsHtml}
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">رسالتك <span class="text-red-500">*</span></label>
-                <textarea id="customer_message" rows="5" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="اكتب رسالتك هنا..." required></textarea>
-              </div>
-              <button id="submitBtn" type="submit" class="w-full text-white font-semibold py-3 rounded-lg" style="background:${primaryColor};">
-                <i class="fas fa-paper-plane ml-2"></i>إرسال
-              </button>
-              <p id="formStatus" class="text-sm"></p>
-            </form>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1.5">رقم الجوال <span class="text-red-500">*</span></label>
+                  <div class="field-icon-wrap">
+                    <input id="customer_phone" type="tel" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="ltr"
+                           style="text-align:right;"
+                           placeholder="5xxxxxxxx"
+                           oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
+                           oninvalid="this.setCustomValidity('أدخل 9 أرقام تبدأ بـ 5')" />
+                    <span class="phone-prefix" dir="ltr">+966</span>
+                  </div>
+                </div>
+                ${customFieldsHtml}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1.5">رسالتك <span class="text-red-500">*</span></label>
+                  <div class="field-icon-wrap" style="align-items:flex-start;">
+                    <textarea id="customer_message" rows="4" placeholder="اكتب رسالتك هنا..." required style="padding-top:.75rem;"></textarea>
+                    <span class="fi" style="padding-top:.85rem;align-items:flex-start;"><i class="fas fa-comment-dots text-sm"></i></span>
+                  </div>
+                </div>
+                <button id="submitBtn" type="submit" class="submit-btn" style="${submitBtnStyle}margin-top:.25rem;">
+                  <i class="fas fa-paper-plane"></i>إرسال الطلب
+                </button>
+                <p id="formStatus" class="text-sm" style="margin:0;text-align:center;"></p>
+              </form>
+
+              <!-- Trust badges -->
+              ${(() => {
+                type BadgeItem = { icon: string; text: string }
+                const DEFAULT_BADGES: BadgeItem[] = [
+                  { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
+                  { icon: 'fas fa-bolt', text: 'رد سريع' },
+                  { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
+                ]
+                let badges: BadgeItem[] | null = null
+                if (tenant.contact_trust_badges) {
+                  try {
+                    const parsed = JSON.parse(tenant.contact_trust_badges)
+                    if (Array.isArray(parsed)) {
+                      badges = parsed.map((x: any) =>
+                        typeof x === 'string'
+                          ? { icon: 'fas fa-check-circle', text: String(x) }
+                          : { icon: String(x?.icon ?? 'fas fa-check-circle'), text: String(x?.text ?? '') }
+                      ).filter(x => x.text)
+                    }
+                  } catch { /* ignore */ }
+                }
+                if (badges === null) badges = DEFAULT_BADGES
+                if (badges.length === 0) return ''
+                return `<div class="trust-row">${badges.map((b, i) =>
+                  (i > 0 ? '<div style="color:#e5e7eb;">|</div>' : '')
+                  + `<div class="trust-item"><i class="${escapeHtmlAttr(b.icon)}" style="color:${accentColor};"></i>${escapeHtml(b.text)}</div>`
+                ).join('')}</div>`
+              })()}
+            </div>
+
           </div>
         </div>
       </div>
@@ -1872,7 +1975,7 @@ function buildPublicContactPageHtml(
           statusEl.textContent = '';
           statusEl.className = 'text-sm';
           submitBtn.disabled = true;
-          submitBtn.textContent = 'جاري الإرسال...';
+          submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>جاري الإرسال...';
 
           const payload = {
             customer_name: document.getElementById('customer_name').value.trim(),
@@ -1913,7 +2016,7 @@ function buildPublicContactPageHtml(
             statusEl.className = 'text-sm text-red-700';
           } finally {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fas fa-paper-plane ml-2"></i>إرسال';
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i>إرسال الطلب';
           }
         });
       </script>
@@ -2553,6 +2656,10 @@ app.use('/api/*', async (c, next) => {
     return
   }
   if (p === '/api/contracts/party-logo-upload' && method === 'POST') {
+    await next()
+    return
+  }
+  if (p === '/api/contracts/template-stamp-upload' && method === 'POST') {
     await next()
     return
   }
@@ -4733,7 +4840,7 @@ app.get('/api/my-tenant', async (c) => {
       return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
     }
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, whatsapp_greeting,
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color, whatsapp_greeting,
              document_watermark_url, document_watermark_enabled, document_watermark_opacity,
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
@@ -4816,6 +4923,43 @@ app.post('/api/my-tenant/logo-upload', async (c) => {
 
     const publicUrl = `/api/attachments/view/${key}`
     return c.json({ success: true, url: publicUrl, filename: key })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+app.post('/api/my-tenant/contact-bg-image-upload', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (normalizeRoleId(info.roleId) !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403)
+    if (!info.tenantId) return c.json({ success: false, error: 'لا توجد شركة مرتبطة' }, 400)
+    if (!c.env?.ATTACHMENTS) return c.json({ success: false, error: 'تخزين الملفات غير مُهيأ' }, 500)
+
+    let formData: FormData
+    try { formData = await c.req.formData() }
+    catch { return c.json({ success: false, error: 'توقعنا نموذجاً متعدد الأجزاء (ملف)' }, 400) }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) return c.json({ success: false, error: 'لم يتم اختيار ملف' }, 400)
+    const file = fileEntry
+    if (file.size > 2 * 1024 * 1024) return c.json({ success: false, error: 'الحد الأقصى 2 ميجابايت' }, 400)
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) return c.json({ success: false, error: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'jpg'
+    const key = `tenants/${info.tenantId}/contact_bg_${timestamp}_${random}.${ext}`
+
+    await c.env.ATTACHMENTS.put(key, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` }
+    })
+    const publicUrl = `/api/attachments/view/${key}`
+    await c.env.DB.prepare(`UPDATE tenants SET contact_bg_image_url = ? WHERE id = ?`)
+      .bind(publicUrl, info.tenantId).run()
+    return c.json({ success: true, url: publicUrl })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -5064,6 +5208,10 @@ app.patch('/api/my-tenant', async (c) => {
       }
       updates.document_footer_opacity = String(clampLetterheadOpacity(n, 1))
     }
+    if ('contact_bg_image_url' in body) {
+      const raw = body.contact_bg_image_url
+      updates.contact_bg_image_url = (raw == null || String(raw).trim() === '') ? null : String(raw).trim()
+    }
     const designParsed = parseContactDesignBodyFields(body as Record<string, unknown>)
     if (!designParsed.ok) {
       return c.json({ success: false, error: designParsed.error }, 400)
@@ -5090,6 +5238,7 @@ app.patch('/api/my-tenant', async (c) => {
 
     const row = await c.env.DB.prepare(`
       SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, whatsapp_greeting,
+             contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color,
              document_watermark_url, document_watermark_enabled, document_watermark_opacity,
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
@@ -33206,7 +33355,8 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
 
     const { results } = await c.env.DB.prepare(`
       SELECT id, tenant_id, path_segment, label, created_at,
-             contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+             contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+             contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
@@ -33372,6 +33522,16 @@ app.patch('/api/tenant-contact-affiliates/:id', async (c) => {
     }
     Object.assign(updates, designParsed.updates)
 
+    if ('contact_bg_image_url' in body) {
+      const raw = body.contact_bg_image_url
+      updates.contact_bg_image_url = (raw == null || raw === '') ? null : String(raw).trim()
+    }
+
+    if ('contact_logo_url' in body) {
+      const raw = body.contact_logo_url
+      updates.contact_logo_url = (raw == null || raw === '') ? null : String(raw).trim()
+    }
+
     if ('copy_from_company' in body && body.copy_from_company) {
       const companyDesign = await c.env.DB.prepare(`
         SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
@@ -33433,6 +33593,88 @@ app.delete('/api/tenant-contact-affiliates/:id', async (c) => {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
 })
+
+async function uploadAffiliateLinkImage(
+  c: any,
+  column: 'contact_bg_image_url' | 'contact_logo_url',
+  keySuffix: string,
+  maxLabelAr: string
+): Promise<Response> {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    if (!c.env?.ATTACHMENTS) {
+      return c.json({ success: false, error: 'تخزين الملفات غير مُهيأ' }, 500)
+    }
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) {
+      return c.json({ success: false, error: 'Invalid id' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(
+      `SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1`
+    ).bind(linkId).first<{ id: number; tenant_id: number }>()
+
+    if (!row) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.roleId === 2 && userInfo.tenantId !== row.tenant_id) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ success: false, error: 'توقعنا نموذجاً متعدد الأجزاء (ملف)' }, 400)
+    }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ success: false, error: 'لم يتم اختيار ملف' }, 400)
+    }
+
+    const file = fileEntry
+    if (file.size > 2 * 1024 * 1024) {
+      return c.json({ success: false, error: `الحد الأقصى لحجم ${maxLabelAr} 2 ميجابايت` }, 400)
+    }
+
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ success: false, error: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'jpg'
+    const key = `tenants/${row.tenant_id}/affiliate_${linkId}_${keySuffix}_${timestamp}_${random}.${ext}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    await c.env.ATTACHMENTS.put(key, arrayBuffer, {
+      httpMetadata: { contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` }
+    })
+
+    const publicUrl = `/api/attachments/view/${key}`
+    await c.env.DB.prepare(
+      `UPDATE tenant_contact_affiliate_links SET ${column} = ? WHERE id = ?`
+    ).bind(publicUrl, linkId).run()
+
+    return c.json({ success: true, url: publicUrl })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+}
+
+app.post('/api/tenant-contact-affiliates/:id/bg-image-upload', (c) =>
+  uploadAffiliateLinkImage(c, 'contact_bg_image_url', 'bg', 'صورة الخلفية')
+)
+
+app.post('/api/tenant-contact-affiliates/:id/logo-upload', (c) =>
+  uploadAffiliateLinkImage(c, 'contact_logo_url', 'logo', 'الشعار')
+)
 
 // Follow-up module data (roles 1,2,3 — not employees (4) or bank agents (5))
 app.get('/api/follow-ups', async (c) => {
@@ -35202,57 +35444,124 @@ app.get('/admin/contact-affiliates', async (c) => {
         function designPanelHtml(id) {
           return (
             '<div class="mt-4 pt-4 border-t border-amber-100">' +
-            '<div class="flex flex-col lg:flex-row gap-6">' +
-            '<div class="w-full lg:w-5/12 shrink-0 space-y-4">' +
-            '<div class="bg-gray-50 rounded-xl border border-gray-200 p-4">' +
-            '<div class="mb-5">' +
-            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">ثيمات جاهزة</p>' +
-            '<div class="flex flex-wrap gap-2" id="presetsStrip_' + id + '"></div>' +
+            '<div class="flex flex-col lg:flex-row">' +
+
+            // ── Controls column ──────────────────────────────────
+            '<div class="w-full lg:w-[420px] shrink-0 space-y-3 pb-4 lg:pb-0 lg:pr-4">' +
+
+            // Content section
+            '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden">' +
+            '<div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">' +
+            '<i class="fas fa-pen-nib text-amber-500 text-xs"></i>' +
+            '<span class="text-xs font-bold text-gray-600 uppercase tracking-wide">المحتوى</span>' +
             '</div>' +
-            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون الخلفية</p>' +
-            '<div class="flex items-center gap-2 mb-4">' +
-            '<div class="relative h-9 w-9 shrink-0">' +
-            '<span id="affBg_' + id + '_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#0f766e;"></span>' +
-            '<input type="color" id="affBg_' + id + '" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />' +
+            '<div class="p-4 space-y-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-500 mb-1">السطر الرئيسي</label>' +
+            '<input type="text" id="affHeroTitle_' + id + '" maxlength="80" placeholder="أرسل بياناتك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" /></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-500 mb-1">السطر الثانوي <span class="font-normal text-gray-400">(بلون التمييز)</span></label>' +
+            '<input type="text" id="affHeroSubtitle_' + id + '" maxlength="80" placeholder="وسيتم التواصل معك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" /></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(حد أقصى 4)</span></label>' +
+            '<ul id="badgesList_' + id + '" class="space-y-1.5 mb-2"></ul>' +
+            '<button type="button" id="addBadgeBtn_' + id + '" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>' +
             '</div>' +
-            '<input type="text" id="affBg_' + id + '_text" maxlength="9" dir="ltr" placeholder="#0f766e" class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />' +
-            '<button type="button" id="affBg_' + id + '_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>' +
             '</div>' +
-            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النافذة</p>' +
-            '<div class="flex items-center gap-2 mb-4">' +
-            '<div class="relative h-9 w-9 shrink-0">' +
-            '<span id="affForm_' + id + '_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#ffffff;"></span>' +
-            '<input type="color" id="affForm_' + id + '" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />' +
             '</div>' +
-            '<input type="text" id="affForm_' + id + '_text" maxlength="9" dir="ltr" placeholder="#ffffff" class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />' +
-            '<button type="button" id="affForm_' + id + '_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>' +
+
+            // Images section
+            '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden">' +
+            '<div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">' +
+            '<i class="fas fa-images text-amber-500 text-xs"></i>' +
+            '<span class="text-xs font-bold text-gray-600 uppercase tracking-wide">الصور</span>' +
             '</div>' +
-            '<p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النص</p>' +
+            '<div class="p-4 space-y-4">' +
+            '<div>' +
+            '<label class="block text-xs font-semibold text-gray-500 mb-2">صورة الخلفية</label>' +
+            '<input type="hidden" id="affBgImageUrl_' + id + '" value="" />' +
+            '<div id="affBgImagePreview_' + id + '" class="mb-2 rounded-lg border border-gray-200 hidden" style="height:64px;background:center/cover no-repeat;"></div>' +
+            '<div class="flex items-center gap-2 flex-wrap">' +
+            '<label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-amber-400 transition-colors"><i class="fas fa-folder-open text-amber-400 text-xs"></i> اختر ملفاً<input type="file" id="affBgImageFile_' + id + '" accept="image/*" class="hidden" /></label>' +
+            '<button type="button" id="affBgImageUploadBtn_' + id + '" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-colors"><i class="fas fa-upload text-xs"></i> رفع</button>' +
+            '<button type="button" id="affBgImageClear_' + id + '" class="hidden inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition-colors"><i class="fas fa-times-circle"></i> إزالة</button>' +
+            '<span id="affBgImageMsg_' + id + '" class="text-xs text-gray-400"></span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="border-t border-gray-100 pt-4">' +
+            '<label class="block text-xs font-semibold text-gray-500 mb-2">شعار الرابط <span class="font-normal text-gray-400">(افتراضي: شعار الشركة)</span></label>' +
+            '<input type="hidden" id="affLogoUrl_' + id + '" value="" />' +
+            '<div id="affLogoPreview_' + id + '" class="mb-2 flex justify-center items-center rounded-lg border border-gray-100 bg-gray-50 p-2" style="min-height:52px;">' +
+            '<img id="affLogoImg_' + id + '" src="" alt="" style="max-height:44px;max-width:110px;object-fit:contain;display:none;" />' +
+            '<span id="affLogoPlaceholder_' + id + '" class="text-xs text-gray-400 italic">شعار الشركة</span>' +
+            '</div>' +
+            '<div class="flex items-center gap-2 flex-wrap">' +
+            '<label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-amber-400 transition-colors"><i class="fas fa-folder-open text-amber-400 text-xs"></i> اختر ملفاً<input type="file" id="affLogoFile_' + id + '" accept="image/*" class="hidden" /></label>' +
+            '<button type="button" id="affLogoUploadBtn_' + id + '" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-colors"><i class="fas fa-upload text-xs"></i> رفع</button>' +
+            '<button type="button" id="affLogoClear_' + id + '" class="hidden inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition-colors"><i class="fas fa-times-circle"></i> شعار الشركة</button>' +
+            '<span id="affLogoMsg_' + id + '" class="text-xs text-gray-400"></span>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+
+            // Colors section
+            '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden">' +
+            '<div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">' +
+            '<i class="fas fa-palette text-amber-500 text-xs"></i>' +
+            '<span class="text-xs font-bold text-gray-600 uppercase tracking-wide">الألوان</span>' +
+            '</div>' +
+            '<div class="p-4">' +
+            '<div class="mb-4"><p class="text-xs font-semibold text-gray-500 mb-2">ثيمات جاهزة</p><div class="flex flex-wrap gap-1.5" id="presetsStrip_' + id + '"></div></div>' +
+            '<div class="space-y-3">' +
+            '<div><label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون الخلفية</label>' +
+            '<div class="flex items-center gap-2"><div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200"><span id="affBg_' + id + '_swatch" class="absolute inset-0" style="background:#0f766e;"></span><input type="color" id="affBg_' + id + '" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" /></div>' +
+            '<input type="text" id="affBg_' + id + '_text" maxlength="9" dir="ltr" placeholder="#0f766e" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />' +
+            '<button type="button" id="affBg_' + id + '_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button></div></div>' +
+            '<div><label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون بطاقة النموذج</label>' +
+            '<div class="flex items-center gap-2"><div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200"><span id="affForm_' + id + '_swatch" class="absolute inset-0" style="background:#ffffff;"></span><input type="color" id="affForm_' + id + '" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" /></div>' +
+            '<input type="text" id="affForm_' + id + '_text" maxlength="9" dir="ltr" placeholder="#ffffff" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />' +
+            '<button type="button" id="affForm_' + id + '_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button></div></div>' +
+            '<div><label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون التمييز <span class="font-normal text-gray-400">(الخطوط + العنوان الفرعي)</span></label>' +
+            '<div class="flex items-center gap-2"><div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200"><span id="affAccent_' + id + '_swatch" class="absolute inset-0" style="background:#d97706;"></span><input type="color" id="affAccent_' + id + '" value="#d97706" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" /></div>' +
+            '<input type="text" id="affAccent_' + id + '_text" maxlength="9" dir="ltr" placeholder="#d97706" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />' +
+            '<button type="button" id="affAccent_' + id + '_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button></div></div>' +
+            '<div><label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون نص النموذج</label>' +
             '<div class="flex gap-2">' +
-            '<button type="button" data-aff-text-black="' + id + '" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white">أسود</button>' +
-            '<button type="button" data-aff-text-white="' + id + '" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700">أبيض</button>' +
+            '<button type="button" data-aff-text-black="' + id + '" class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white transition-colors">داكن</button>' +
+            '<button type="button" data-aff-text-white="' + id + '" class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-600 transition-colors">فاتح</button>' +
+            '</div></div>' +
             '</div>' +
             '</div>' +
-            '<div class="bg-gray-50 rounded-xl border border-gray-200 p-4">' +
-            '<p class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-list-ul text-amber-500 ml-1"></i>حقول إضافية <span class="text-xs font-normal text-gray-400">(حد أقصى 3)</span></p>' +
-            '<ul id="fieldsList_' + id + '" class="mb-1"></ul>' +
-            '<button type="button" id="addFieldBtn_' + id + '" class="inline-flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-800 font-medium mt-1"><i class="fas fa-plus-circle"></i> إضافة حقل</button>' +
             '</div>' +
+
+            // Custom fields section
+            '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden">' +
+            '<div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">' +
+            '<i class="fas fa-list-ul text-amber-500 text-xs"></i>' +
+            '<span class="text-xs font-bold text-gray-600 uppercase tracking-wide">حقول إضافية <span class="normal-case font-normal text-gray-400">(حد أقصى 3)</span></span>' +
+            '</div>' +
+            '<div class="p-4">' +
+            '<ul id="fieldsList_' + id + '" class="mb-2 space-y-2"></ul>' +
+            '<button type="button" id="addFieldBtn_' + id + '" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة حقل</button>' +
+            '</div>' +
+            '</div>' +
+
+            // Save
             '<div class="flex flex-wrap items-center gap-2 pt-1">' +
-            '<button type="button" data-aff-save-design="' + id + '" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i class="fas fa-save"></i>حفظ التصميم</button>' +
-            '<button type="button" data-aff-copy-company="' + id + '" class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-2 rounded-lg text-sm"><i class="fas fa-copy"></i>نسخ من تصميم الشركة</button>' +
+            '<button type="button" data-aff-save-design="' + id + '" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm hover:shadow transition-all"><i class="fas fa-save"></i>حفظ التصميم</button>' +
+            '<button type="button" data-aff-copy-company="' + id + '" class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-2.5 rounded-xl text-sm transition-colors"><i class="fas fa-copy text-gray-400"></i>نسخ من الشركة</button>' +
             '<span data-aff-design-msg="' + id + '" class="text-sm"></span>' +
             '</div>' +
+
             '</div>' +
-            '<div class="w-full lg:flex-1 min-w-0">' +
-            '<div class="flex flex-col items-center">' +
-            '<p class="text-xs text-gray-400 uppercase tracking-widest mb-3 font-bold">معاينة مباشرة</p>' +
+
+            // ── Preview column ──────────────────────────────────
+            '<div class="flex-1 min-w-0 flex flex-col items-center justify-start p-5 bg-gray-50 border-t lg:border-t-0 lg:border-r border-gray-100">' +
+            '<p class="text-xs text-gray-400 uppercase tracking-widest mb-4 font-bold">معاينة مباشرة</p>' +
             '<div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">' +
             '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>' +
             '<div id="previewScreen_' + id + '" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>' +
             '</div>' +
             '</div>' +
-            '</div>' +
+
             '</div>' +
             '</div>'
           );
@@ -35322,6 +35631,74 @@ app.get('/admin/contact-affiliates', async (c) => {
           return result;
         }
 
+        var BADGE_ICON_OPTIONS = [
+          { value: 'fas fa-shield-alt', label: '🛡 أمان' },
+          { value: 'fas fa-bolt', label: '⚡ سرعة' },
+          { value: 'fas fa-check-circle', label: '✓ تأكيد' },
+          { value: 'fas fa-star', label: '⭐ تميّز' },
+          { value: 'fas fa-lock', label: '🔒 خصوصية' },
+          { value: 'fas fa-handshake', label: '🤝 ثقة' },
+          { value: 'fas fa-gem', label: '💎 جودة' },
+          { value: 'fas fa-award', label: '🏆 احترافية' },
+          { value: 'fas fa-phone', label: '📞 تواصل' },
+          { value: 'fas fa-clock', label: '🕐 توقيت' },
+        ];
+
+        function badgeIconOptions(selected) {
+          return BADGE_ICON_OPTIONS.map(function(o) {
+            return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
+          }).join('');
+        }
+
+        function badgeItemHtml(badge) {
+          var text = typeof badge === 'string' ? badge : (badge && badge.text || '');
+          var icon = typeof badge === 'string' ? 'fas fa-check-circle' : (badge && badge.icon || 'fas fa-check-circle');
+          return '<li data-badge-item class="flex items-center gap-2">' +
+            '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + badgeIconOptions(icon) + '</select>' +
+            '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + escapeHtml(text) + '" />' +
+            '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-badge-remove><i class="fas fa-times"></i></button>' +
+            '</li>';
+        }
+
+        function getAffBadges(id) {
+          var list = document.getElementById('badgesList_' + id);
+          if (!list) return null;
+          var items = list.querySelectorAll('[data-badge-item]');
+          var result = [];
+          items.forEach(function (li) {
+            var input = li.querySelector('[data-badge-label]');
+            var iconEl = li.querySelector('[data-badge-icon]');
+            var val = input ? input.value.trim() : '';
+            if (val) result.push({ icon: iconEl ? iconEl.value : 'fas fa-check-circle', text: val });
+          });
+          return result;
+        }
+
+        function updateAddBadgeBtn(id) {
+          var list = document.getElementById('badgesList_' + id);
+          var btn = document.getElementById('addBadgeBtn_' + id);
+          if (!list || !btn) return;
+          btn.style.display = list.querySelectorAll('[data-badge-item]').length >= 4 ? 'none' : '';
+        }
+
+        function fillBadgesList(id, raw) {
+          var list = document.getElementById('badgesList_' + id);
+          if (!list) return;
+          var badges = [];
+          if (Array.isArray(raw)) badges = raw;
+          else if (typeof raw === 'string') {
+            try { var p = JSON.parse(raw); if (Array.isArray(p)) badges = p; } catch (_) {}
+          } else {
+            badges = [
+              { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
+              { icon: 'fas fa-bolt', text: 'رد سريع' },
+              { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
+            ];
+          }
+          list.innerHTML = badges.slice(0, 4).map(badgeItemHtml).join('');
+          updateAddBadgeBtn(id);
+        }
+
         function fieldItemHtml(field) {
           var f = field || {};
           var t = f.type || 'text';
@@ -35379,6 +35756,38 @@ app.get('/admin/contact-affiliates', async (c) => {
           });
         }
 
+        function setAffBgImagePreview(id, imageUrl) {
+          var preview = document.getElementById('affBgImagePreview_' + id);
+          var clearBtn = document.getElementById('affBgImageClear_' + id);
+          var hidden = document.getElementById('affBgImageUrl_' + id);
+          if (imageUrl) {
+            if (preview) { preview.style.backgroundImage = 'url(' + imageUrl + ')'; preview.classList.remove('hidden'); }
+            if (clearBtn) clearBtn.classList.remove('hidden');
+          } else {
+            if (preview) { preview.style.backgroundImage = ''; preview.classList.add('hidden'); }
+            if (clearBtn) clearBtn.classList.add('hidden');
+          }
+          if (hidden) hidden.value = imageUrl || '';
+        }
+
+        function setAffLogoPreview(id, logoUrl) {
+          var img = document.getElementById('affLogoImg_' + id);
+          var placeholder = document.getElementById('affLogoPlaceholder_' + id);
+          var clearBtn = document.getElementById('affLogoClear_' + id);
+          var hidden = document.getElementById('affLogoUrl_' + id);
+          if (logoUrl) {
+            if (img) { img.src = logoUrl; img.style.display = ''; }
+            if (placeholder) placeholder.style.display = 'none';
+            if (clearBtn) clearBtn.classList.remove('hidden');
+          } else {
+            var companyLogo = (PREVIEW_LOGO_URL || '').trim();
+            if (img) { img.src = companyLogo; img.style.display = companyLogo ? '' : 'none'; }
+            if (placeholder) placeholder.style.display = companyLogo ? 'none' : '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+          }
+          if (hidden) hidden.value = logoUrl || '';
+        }
+
         function previewInputBar(inputBg, inputBorder, hint, hintColor) {
           return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;padding:0 6px;">'
             + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(hint || '') + '</span>'
@@ -35391,7 +35800,11 @@ app.get('/admin/contact-affiliates', async (c) => {
 
           var bgRaw = getAffBg(id);
           var formRaw = getAffForm(id);
-          var bgCss = /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
+          var bgImageHidden = document.getElementById('affBgImageUrl_' + id);
+          var bgImageUrl = bgImageHidden ? (bgImageHidden.value || '').trim() : '';
+          var bgCss = bgImageUrl
+            ? 'url(' + bgImageUrl + ') center/cover no-repeat'
+            : /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
           var formBg = /^#[0-9a-fA-F]{3,8}$/.test(formRaw) ? formRaw : '#ffffff';
           var isWhiteText = getAffTextColor(id) === 'white';
           var textClass = isWhiteText ? 'color:rgba(255,255,255,0.88)' : 'color:#111827';
@@ -35400,8 +35813,14 @@ app.get('/admin/contact-affiliates', async (c) => {
           var fields = getAffFields(id, { includeEmpty: true });
           var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
           var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
+          var accentEl = document.getElementById('affAccent_' + id + '_text');
+          var accentColor = (accentEl && /^#[0-9a-fA-F]{3,8}$/.test((accentEl.value || '').trim())) ? accentEl.value.trim() : '#d97706';
+          var submitBg = isWhiteText ? 'rgba(255,255,255,0.92)' : '#111827';
+          var submitFg = isWhiteText ? '#111827' : '#fff';
           var company = escapeHtml(PREVIEW_COMPANY_NAME || 'اسم الشركة');
-          var logoUrl = (PREVIEW_LOGO_URL || '').trim();
+          var affLogoHidden = document.getElementById('affLogoUrl_' + id);
+          var affLogoUrl = affLogoHidden ? (affLogoHidden.value || '').trim() : '';
+          var logoUrl = (affLogoUrl || PREVIEW_LOGO_URL || '').trim();
           var brandHtml = logoUrl
             ? '<div style="display:flex;justify-content:center;margin-bottom:6px;"><img src="' + escapeHtml(logoUrl) + '" alt="" style="max-height:36px;max-width:120px;object-fit:contain;border-radius:6px;background:#fff;padding:3px;" /></div>'
             : '<div style="width:32px;height:32px;border-radius:50%;background:#0f766e;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;">'
@@ -35420,23 +35839,63 @@ app.get('/admin/contact-affiliates', async (c) => {
               + '</div>';
           }).join('');
 
+          var overlayHtml = bgImageUrl ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.42);border-radius:26px;pointer-events:none;"></div>' : '';
+          var headerTextCss = 'color:rgba(255,255,255,0.95);text-shadow:0 1px 6px rgba(0,0,0,0.35);';
+          var headerSubCss = 'color:rgba(255,255,255,0.7);';
+          var accentCss = 'color:#d97706;'; // amber preview accent
           screen.innerHTML =
-            '<div style="height:100%;overflow-y:auto;background:' + bgCss + ';padding:14px 10px;box-sizing:border-box;">'
-            + '<div style="background:' + formBg + ';border-radius:14px;padding:14px;width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.18);">'
+            '<div style="height:100%;overflow-y:auto;position:relative;background:' + bgCss + ';border-radius:26px;">'
+            + overlayHtml
+            + '<div style="position:relative;z-index:1;padding:14px 10px;box-sizing:border-box;">'
+            // ── Header (outside card) ──
             + '<div style="text-align:center;margin-bottom:10px;">'
             + brandHtml
-            + '<div style="font-size:10px;font-weight:700;' + textClass + '">' + company + '</div>'
-            + '<div style="font-size:7.5px;margin-top:2px;' + subTextStyle + '">أرسل بياناتك وسيتم التواصل معك</div>'
+            + '<div style="font-size:10px;font-weight:800;' + headerTextCss + '">' + company + '</div>'
+            + (function() {
+                var htEl = document.getElementById('affHeroTitle_' + id);
+                var hsEl = document.getElementById('affHeroSubtitle_' + id);
+                var ht = htEl && htEl.value.trim() ? escapeHtml(htEl.value.trim()) : 'أرسل بياناتك';
+                var hs = hsEl && hsEl.value.trim() ? escapeHtml(hsEl.value.trim()) : 'وسيتم التواصل معك';
+                return '<div style="font-size:8px;font-weight:700;margin-top:3px;' + headerTextCss + '">' + ht + '</div>'
+                  + '<div style="font-size:7.5px;font-weight:600;margin-top:1px;color:' + accentColor + ';">' + hs + '</div>';
+              })()
             + '</div>'
-            + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">الاسم *</div>'
-            + previewInputBar(inputBg, inputBorder, 'اكتب اسمك', hintColor) + '</div>'
-            + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رقم الجوال *</div>'
-            + previewInputBar(inputBg, inputBorder, '5xxxxxxxx', hintColor) + '</div>'
+            // ── Form card ──
+            + '<div style="background:' + formBg + ';border-radius:10px;padding:10px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);">'
+            + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;">'
+            + '<div style="flex:1;height:1px;background:linear-gradient(to left,' + accentColor + ',transparent);"></div>'
+            + '<span style="font-size:7.5px;font-weight:700;color:#111827;white-space:nowrap;">بيانات التواصل</span>'
+            + '<div style="flex:1;height:1px;background:linear-gradient(to right,' + accentColor + ',transparent);"></div>'
+            + '</div>'
+            + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">الاسم *</div>'
+            + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor) + '</div>'
+            + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رقم الجوال *</div>'
+            + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;">'
+            + '<span style="font-size:6px;padding:0 4px;border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;" dir="ltr">+966</span>'
+            + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;">5xxxxxxxx</span>'
+            + '</div></div>'
             + fieldsHtml
-            + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رسالتك *</div>'
-            + '<div style="background:' + inputBg + ';border-radius:5px;height:36px;border:1px solid ' + inputBorder + ';padding:4px 6px;"><span style="font-size:7px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
-            + '<div style="background:#0f766e;border-radius:7px;height:24px;display:flex;align-items:center;justify-content:center;">'
-            + '<span style="color:#fff;font-size:9px;font-weight:700;">إرسال</span></div>'
+            + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رسالتك *</div>'
+            + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';padding:3px 5px;"><span style="font-size:6px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+            + '<div style="background:' + submitBg + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
+            + '<span style="color:' + submitFg + ';font-size:8px;font-weight:700;">إرسال الطلب</span></div>'
+            + (function() {
+                var badges = getAffBadges(id);
+                if (badges === null) badges = [
+                  { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
+                  { icon: 'fas fa-bolt', text: 'رد سريع' },
+                  { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
+                ];
+                if (!badges.length) return '';
+                return '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:6px;border-top:1px solid rgba(0,0,0,0.06);">'
+                  + badges.map(function(b) {
+                      return '<span style="display:inline-flex;align-items:center;gap:2px;font-size:6px;color:#9ca3af;">'
+                        + '<i class="' + escapeHtml(b.icon) + '" style="font-size:7px;"></i>'
+                        + escapeHtml(b.text) + '</span>';
+                    }).join('')
+                  + '</div>';
+              })()
+            + '</div>'
             + '</div>'
             + '</div>';
         }
@@ -35475,6 +35934,14 @@ app.get('/admin/contact-affiliates', async (c) => {
             }).join('');
           }
           updateAddFieldBtn(id);
+          fillBadgesList(id, d.contact_trust_badges || null);
+          var htEl = document.getElementById('affHeroTitle_' + id);
+          var hsEl = document.getElementById('affHeroSubtitle_' + id);
+          if (htEl) htEl.value = d.contact_hero_title || '';
+          if (hsEl) hsEl.value = d.contact_hero_subtitle || '';
+          setColorControls('affAccent_' + id, d.contact_accent_color || '#d97706', '#d97706');
+          setAffBgImagePreview(id, d.contact_bg_image_url || '');
+          setAffLogoPreview(id, d.contact_logo_url || '');
         }
 
         function collectDesignPayload(id) {
@@ -35486,7 +35953,11 @@ app.get('/admin/contact-affiliates', async (c) => {
             contact_text_color: getAffTextColor(id),
             contact_custom_fields: getAffFields(id).map(function (f) {
               return { label: f.label, required: f.required, type: f.type };
-            })
+            }),
+            contact_trust_badges: getAffBadges(id),
+            contact_hero_title: (document.getElementById('affHeroTitle_' + id) || {}).value || null,
+            contact_hero_subtitle: (document.getElementById('affHeroSubtitle_' + id) || {}).value || null,
+            contact_accent_color: (function() { var el = document.getElementById('affAccent_' + id + '_text'); return el && el.value.trim() ? el.value.trim() : null; })(),
           };
         }
 
@@ -35533,6 +36004,7 @@ app.get('/admin/contact-affiliates', async (c) => {
 
           wireColorPair('affBg_' + id, '#0f766e', id);
           wireColorPair('affForm_' + id, '#ffffff', id);
+          wireColorPair('affAccent_' + id, '#d97706', id);
 
           if (presetsStrip) {
             presetsStrip.innerHTML = PRESETS.map(function (p, i) {
@@ -35576,9 +36048,142 @@ app.get('/admin/contact-affiliates', async (c) => {
             });
           }
 
+          // ── Trust badges ──────────────────────────────────────────────────────
+          var badgesList = document.getElementById('badgesList_' + id);
+          var addBadgeBtn = document.getElementById('addBadgeBtn_' + id);
+          if (badgesList) {
+            badgesList.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-badge-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-badge-item]');
+              if (li) li.remove();
+              updateAddBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+          if (addBadgeBtn) {
+            addBadgeBtn.addEventListener('click', function () {
+              var bl = document.getElementById('badgesList_' + id);
+              if (!bl || bl.querySelectorAll('[data-badge-item]').length >= 4) return;
+              bl.insertAdjacentHTML('beforeend', badgeItemHtml(''));
+              updateAddBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+
           fillDesignPanel(id, row);
           initFieldsSortable(id);
           updatePreview(id);
+
+          // ── Background image upload ────────────────────────────────────────
+          var bgImageFile = document.getElementById('affBgImageFile_' + id);
+          var bgImageUploadBtn = document.getElementById('affBgImageUploadBtn_' + id);
+          var bgImageClear = document.getElementById('affBgImageClear_' + id);
+          var bgImageMsg = document.getElementById('affBgImageMsg_' + id);
+          if (bgImageUploadBtn && bgImageFile) {
+            bgImageUploadBtn.addEventListener('click', function () { bgImageFile.click(); });
+            bgImageFile.addEventListener('change', async function () {
+              var file = bgImageFile.files && bgImageFile.files[0];
+              if (!file) return;
+              var fd = new FormData();
+              fd.append('file', file);
+              bgImageUploadBtn.disabled = true;
+              if (bgImageMsg) { bgImageMsg.textContent = 'جاري الرفع...'; }
+              try {
+                var res = await axios.post('/api/tenant-contact-affiliates/' + id + '/bg-image-upload', fd);
+                if (res.data && res.data.success) {
+                  setAffBgImagePreview(id, res.data.url);
+                  updatePreview(id);
+                  if (bgImageMsg) { bgImageMsg.textContent = 'تم رفع الصورة.'; }
+                  var rowIdx = AFFILIATE_ROWS.findIndex(function (r) { return Number(r.id) === Number(id); });
+                  if (rowIdx >= 0) AFFILIATE_ROWS[rowIdx].contact_bg_image_url = res.data.url;
+                } else {
+                  if (bgImageMsg) { bgImageMsg.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الرفع.'; }
+                }
+              } catch (err) {
+                if (bgImageMsg) { bgImageMsg.textContent = 'فشل رفع الصورة.'; }
+              } finally {
+                bgImageUploadBtn.disabled = false;
+                bgImageFile.value = '';
+              }
+            });
+          }
+          if (bgImageClear) {
+            bgImageClear.addEventListener('click', async function () {
+              if (!confirm('إزالة صورة الخلفية؟')) return;
+              bgImageClear.disabled = true;
+              try {
+                var res = await axios.patch('/api/tenant-contact-affiliates/' + id, { contact_bg_image_url: null });
+                if (res.data && res.data.success) {
+                  setAffBgImagePreview(id, '');
+                  updatePreview(id);
+                  var rowIdx = AFFILIATE_ROWS.findIndex(function (r) { return Number(r.id) === Number(id); });
+                  if (rowIdx >= 0) AFFILIATE_ROWS[rowIdx].contact_bg_image_url = null;
+                } else {
+                  alert((res.data && res.data.error) ? res.data.error : 'فشل الإزالة.');
+                }
+              } catch (err) {
+                alert('فشل الإزالة.');
+              } finally {
+                bgImageClear.disabled = false;
+              }
+            });
+          }
+
+          // ── Per-affiliate logo upload ──────────────────────────────────────
+          var logoFile = document.getElementById('affLogoFile_' + id);
+          var logoUploadBtn = document.getElementById('affLogoUploadBtn_' + id);
+          var logoClear = document.getElementById('affLogoClear_' + id);
+          var logoMsg = document.getElementById('affLogoMsg_' + id);
+          if (logoUploadBtn && logoFile) {
+            logoUploadBtn.addEventListener('click', function () { logoFile.click(); });
+            logoFile.addEventListener('change', async function () {
+              var file = logoFile.files && logoFile.files[0];
+              if (!file) return;
+              var fd = new FormData();
+              fd.append('file', file);
+              logoUploadBtn.disabled = true;
+              if (logoMsg) { logoMsg.textContent = 'جاري الرفع...'; }
+              try {
+                var res = await axios.post('/api/tenant-contact-affiliates/' + id + '/logo-upload', fd);
+                if (res.data && res.data.success) {
+                  setAffLogoPreview(id, res.data.url);
+                  updatePreview(id);
+                  if (logoMsg) { logoMsg.textContent = 'تم رفع الشعار.'; }
+                  var rowIdx = AFFILIATE_ROWS.findIndex(function (r) { return Number(r.id) === Number(id); });
+                  if (rowIdx >= 0) AFFILIATE_ROWS[rowIdx].contact_logo_url = res.data.url;
+                } else {
+                  if (logoMsg) { logoMsg.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الرفع.'; }
+                }
+              } catch (err) {
+                if (logoMsg) { logoMsg.textContent = 'فشل رفع الشعار.'; }
+              } finally {
+                logoUploadBtn.disabled = false;
+                logoFile.value = '';
+              }
+            });
+          }
+          if (logoClear) {
+            logoClear.addEventListener('click', async function () {
+              if (!confirm('العودة لشعار الشركة الافتراضي؟')) return;
+              logoClear.disabled = true;
+              try {
+                var res = await axios.patch('/api/tenant-contact-affiliates/' + id, { contact_logo_url: null });
+                if (res.data && res.data.success) {
+                  setAffLogoPreview(id, '');
+                  updatePreview(id);
+                  var rowIdx = AFFILIATE_ROWS.findIndex(function (r) { return Number(r.id) === Number(id); });
+                  if (rowIdx >= 0) AFFILIATE_ROWS[rowIdx].contact_logo_url = null;
+                } else {
+                  alert((res.data && res.data.error) ? res.data.error : 'فشل الإزالة.');
+                }
+              } catch (err) {
+                alert('فشل الإزالة.');
+              } finally {
+                logoClear.disabled = false;
+              }
+            });
+          }
 
           if (saveBtn) {
             saveBtn.addEventListener('click', async function () {
@@ -35896,57 +36501,162 @@ app.get('/admin/follow-ups', async (c) => {
             </span>
             <i id="contactCustomChevron" class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
           </button>
-          <div id="contactCustomBody" class="hidden px-5 pb-5 border-t border-gray-100 pt-5">
-            <div class="flex flex-col lg:flex-row gap-6">
-              <div class="w-full lg:w-5/12 shrink-0 space-y-4">
-                <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                  <div class="mb-5">
-                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">ثيمات جاهزة</p>
-                    <div class="flex flex-wrap gap-2" id="cc_presetsStrip"></div>
+          <div id="contactCustomBody" class="hidden border-t border-gray-100">
+            <div class="flex flex-col lg:flex-row">
+              <!-- ── Controls column ── -->
+              <div class="w-full lg:w-[420px] shrink-0 p-5 space-y-3 border-l border-gray-100">
+
+                <!-- Content -->
+                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                    <i class="fas fa-pen-nib text-amber-500 text-xs"></i>
+                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">المحتوى</span>
                   </div>
-                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون الخلفية</p>
-                  <div class="flex items-center gap-2 mb-4">
-                    <div class="relative h-9 w-9 shrink-0">
-                      <span id="cc_bg_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#0f766e;"></span>
-                      <input type="color" id="cc_bg" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                  <div class="p-4 space-y-3">
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-500 mb-1">السطر الرئيسي</label>
+                      <input type="text" id="cc_hero_title" maxlength="80" placeholder="أرسل بياناتك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
                     </div>
-                    <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e"
-                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
-                    <button type="button" id="cc_bg_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>
-                  </div>
-                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النافذة</p>
-                  <div class="flex items-center gap-2 mb-4">
-                    <div class="relative h-9 w-9 shrink-0">
-                      <span id="cc_form_swatch" class="absolute inset-0 rounded-lg border-2 border-white shadow-md ring-1 ring-gray-200 pointer-events-none" style="background:#ffffff;"></span>
-                      <input type="color" id="cc_form" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-500 mb-1">السطر الثانوي <span class="font-normal text-gray-400">(بلون التمييز)</span></label>
+                      <input type="text" id="cc_hero_subtitle" maxlength="80" placeholder="وسيتم التواصل معك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
                     </div>
-                    <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff"
-                      class="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white font-mono text-sm text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
-                    <button type="button" id="cc_form_clear" class="text-gray-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-sm"></i></button>
-                  </div>
-                  <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">لون النص</p>
-                  <div class="flex gap-2">
-                    <button type="button" id="cc_text_black" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white">أسود</button>
-                    <button type="button" id="cc_text_white" class="flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700">أبيض</button>
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(حد أقصى 4)</span></label>
+                      <ul id="cc_badgesList" class="space-y-1.5 mb-2"></ul>
+                      <button type="button" id="cc_addBadgeBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>
+                    </div>
                   </div>
                 </div>
-                <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                  <p class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-list-ul text-amber-500 ml-1"></i>حقول إضافية <span class="text-xs font-normal text-gray-400">(حد أقصى 3)</span></p>
-                  <ul id="cc_fieldsList" class="mb-1"></ul>
-                  <button type="button" id="cc_addFieldBtn" class="inline-flex items-center gap-1.5 text-sm text-amber-600 hover:text-amber-800 font-medium mt-1"><i class="fas fa-plus-circle"></i> إضافة حقل</button>
+
+                <!-- Images -->
+                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                    <i class="fas fa-images text-amber-500 text-xs"></i>
+                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">الصور</span>
+                  </div>
+                  <div class="p-4 space-y-4">
+                    <!-- Bg image -->
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-500 mb-2">صورة الخلفية <span class="font-normal text-gray-400">(تملأ الخلفية بالكامل)</span></label>
+                      <input type="hidden" id="cc_bg_image_url" value="" />
+                      <div id="cc_bg_image_preview" class="mb-2 rounded-lg border border-gray-200 hidden" style="height:64px;background:center/cover no-repeat;"></div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-amber-400 transition-colors">
+                          <i class="fas fa-folder-open text-amber-400 text-xs"></i> اختر ملفاً
+                          <input type="file" accept="image/*" id="cc_bg_image_file" class="hidden" />
+                        </label>
+                        <button type="button" id="cc_bg_image_upload_btn" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-colors">
+                          <i class="fas fa-upload text-xs"></i> رفع
+                        </button>
+                        <button type="button" id="cc_bg_image_clear_btn" class="hidden inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition-colors">
+                          <i class="fas fa-times-circle"></i> إزالة
+                        </button>
+                        <span id="cc_bg_image_msg" class="text-xs text-gray-400"></span>
+                      </div>
+                    </div>
+                    <div class="border-t border-gray-100 pt-4">
+                      <label class="block text-xs font-semibold text-gray-500 mb-2">شعار الصفحة</label>
+                      <div id="cc_logo_preview" class="mb-2 flex justify-center items-center rounded-lg border border-gray-100 bg-gray-50 p-2" style="min-height:52px;">
+                        <img id="cc_logo_img" src="" alt="" style="max-height:44px;max-width:110px;object-fit:contain;display:none;" />
+                        <span id="cc_logo_placeholder" class="text-xs text-gray-400 italic">لا يوجد شعار</span>
+                      </div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-amber-400 transition-colors">
+                          <i class="fas fa-folder-open text-amber-400 text-xs"></i> اختر ملفاً
+                          <input type="file" accept="image/*" id="cc_logo_file" class="hidden" />
+                        </label>
+                        <button type="button" id="cc_logo_upload_btn" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-colors">
+                          <i class="fas fa-upload text-xs"></i> رفع
+                        </button>
+                        <span id="cc_logo_msg" class="text-xs text-gray-400"></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 pt-1">
-                  <button type="button" id="cc_save_btn" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i class="fas fa-save"></i>حفظ الإعدادات</button>
+
+                <!-- Colors -->
+                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                    <i class="fas fa-palette text-amber-500 text-xs"></i>
+                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">الألوان</span>
+                  </div>
+                  <div class="p-4">
+                    <div class="mb-4">
+                      <p class="text-xs font-semibold text-gray-500 mb-2">ثيمات جاهزة</p>
+                      <div class="flex flex-wrap gap-1.5" id="cc_presetsStrip"></div>
+                    </div>
+                    <!-- Color rows -->
+                    <div class="space-y-3">
+                      <div>
+                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون الخلفية</label>
+                        <div class="flex items-center gap-2">
+                          <div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200">
+                            <span id="cc_bg_swatch" class="absolute inset-0" style="background:#0f766e;"></span>
+                            <input type="color" id="cc_bg" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                          </div>
+                          <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />
+                          <button type="button" id="cc_bg_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون بطاقة النموذج</label>
+                        <div class="flex items-center gap-2">
+                          <div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200">
+                            <span id="cc_form_swatch" class="absolute inset-0" style="background:#ffffff;"></span>
+                            <input type="color" id="cc_form" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                          </div>
+                          <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />
+                          <button type="button" id="cc_form_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون التمييز <span class="font-normal text-gray-400">(الخطوط + العنوان الفرعي)</span></label>
+                        <div class="flex items-center gap-2">
+                          <div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200">
+                            <span id="cc_accent_swatch" class="absolute inset-0" style="background:#d97706;"></span>
+                            <input type="color" id="cc_accent" value="#d97706" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                          </div>
+                          <input type="text" id="cc_accent_text" maxlength="9" dir="ltr" placeholder="#d97706" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />
+                          <button type="button" id="cc_accent_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button>
+                        </div>
+                      </div>
+                      <div>
+                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون نص النموذج</label>
+                        <div class="flex gap-2">
+                          <button type="button" id="cc_text_black" class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white transition-colors">داكن</button>
+                          <button type="button" id="cc_text_white" class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-600 transition-colors">فاتح</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Custom fields -->
+                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                    <i class="fas fa-list-ul text-amber-500 text-xs"></i>
+                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">حقول إضافية <span class="normal-case font-normal text-gray-400">(حد أقصى 3)</span></span>
+                  </div>
+                  <div class="p-4">
+                    <ul id="cc_fieldsList" class="mb-2 space-y-2"></ul>
+                    <button type="button" id="cc_addFieldBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة حقل</button>
+                  </div>
+                </div>
+
+                <!-- Save -->
+                <div class="flex items-center gap-3 pt-1">
+                  <button type="button" id="cc_save_btn" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm hover:shadow transition-all"><i class="fas fa-save"></i>حفظ الإعدادات</button>
                   <span id="cc_msg" class="text-sm"></span>
                 </div>
               </div>
-              <div class="w-full lg:flex-1 min-w-0">
-                <div class="flex flex-col items-center">
-                  <p class="text-xs text-gray-400 uppercase tracking-widest mb-3 font-bold">معاينة مباشرة</p>
-                  <div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">
-                    <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>
-                    <div id="cc_previewScreen" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>
-                  </div>
+
+              <!-- ── Preview column ── -->
+              <div class="flex-1 min-w-0 flex flex-col items-center justify-start p-5 bg-gray-50 border-t lg:border-t-0">
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-4 font-bold">معاينة مباشرة</p>
+                <div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">
+                  <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>
+                  <div id="cc_previewScreen" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>
                 </div>
               </div>
             </div>
@@ -36841,6 +37551,7 @@ app.get('/admin/follow-ups', async (c) => {
           ];
           var ccCompanyName = 'اسم الشركة';
           var ccLogoUrl = '';
+          var ccBgImageUrl = '';
           var selectedTextColor = 'black';
 
           var toggle = document.getElementById('contactCustomToggle');
@@ -36856,6 +37567,10 @@ app.get('/admin/follow-ups', async (c) => {
           var formClear = document.getElementById('cc_form_clear');
           var textBlackBtn = document.getElementById('cc_text_black');
           var textWhiteBtn = document.getElementById('cc_text_white');
+          var accentPicker = document.getElementById('cc_accent');
+          var accentSwatch = document.getElementById('cc_accent_swatch');
+          var accentText = document.getElementById('cc_accent_text');
+          var accentClear = document.getElementById('cc_accent_clear');
           var saveBtn = document.getElementById('cc_save_btn');
           var msgEl = document.getElementById('cc_msg');
           var fieldsList = document.getElementById('cc_fieldsList');
@@ -36940,16 +37655,114 @@ app.get('/admin/follow-ups', async (c) => {
               + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ccEscape(hint || '') + '</span></div>';
           }
 
+          function setCcLogoPreview(logoUrl) {
+            ccLogoUrl = logoUrl || '';
+            var img = document.getElementById('cc_logo_img');
+            var placeholder = document.getElementById('cc_logo_placeholder');
+            if (logoUrl) {
+              if (img) { img.src = logoUrl; img.style.display = ''; }
+              if (placeholder) placeholder.style.display = 'none';
+            } else {
+              if (img) { img.src = ''; img.style.display = 'none'; }
+              if (placeholder) placeholder.style.display = '';
+            }
+            updateCcPreview();
+          }
+
+          var CC_BADGE_ICONS = [
+            { value: 'fas fa-shield-alt', label: '🛡 أمان' },
+            { value: 'fas fa-bolt', label: '⚡ سرعة' },
+            { value: 'fas fa-check-circle', label: '✓ تأكيد' },
+            { value: 'fas fa-star', label: '⭐ تميّز' },
+            { value: 'fas fa-lock', label: '🔒 خصوصية' },
+            { value: 'fas fa-handshake', label: '🤝 ثقة' },
+            { value: 'fas fa-gem', label: '💎 جودة' },
+            { value: 'fas fa-award', label: '🏆 احترافية' },
+            { value: 'fas fa-phone', label: '📞 تواصل' },
+            { value: 'fas fa-clock', label: '🕐 توقيت' },
+          ];
+
+          function ccBadgeIconOptions(selected) {
+            return CC_BADGE_ICONS.map(function(o) {
+              return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
+            }).join('');
+          }
+
+          function ccBadgeItemHtml(badge) {
+            var text = typeof badge === 'string' ? badge : (badge && badge.text || '');
+            var icon = typeof badge === 'string' ? 'fas fa-check-circle' : (badge && badge.icon || 'fas fa-check-circle');
+            return '<li data-badge-item class="flex items-center gap-2">' +
+              '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + ccBadgeIconOptions(icon) + '</select>' +
+              '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + ccEscape(text) + '" />' +
+              '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-badge-remove><i class="fas fa-times"></i></button>' +
+              '</li>';
+          }
+
+          function updateCcAddBadgeBtn() {
+            var bl = document.getElementById('cc_badgesList');
+            var btn = document.getElementById('cc_addBadgeBtn');
+            if (!bl || !btn) return;
+            btn.style.display = bl.querySelectorAll('[data-badge-item]').length >= 4 ? 'none' : '';
+          }
+
+          function fillCcBadges(raw) {
+            var bl = document.getElementById('cc_badgesList');
+            if (!bl) return;
+            var badges = [];
+            if (Array.isArray(raw)) badges = raw;
+            else if (typeof raw === 'string') {
+              try { var p = JSON.parse(raw); if (Array.isArray(p)) badges = p; } catch (_) {}
+            } else {
+              badges = [
+                { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
+                { icon: 'fas fa-bolt', text: 'رد سريع' },
+                { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
+              ];
+            }
+            bl.innerHTML = badges.slice(0, 4).map(ccBadgeItemHtml).join('');
+            updateCcAddBadgeBtn();
+          }
+
+          function getCcBadges() {
+            var bl = document.getElementById('cc_badgesList');
+            if (!bl) return [];
+            var result = [];
+            bl.querySelectorAll('[data-badge-item]').forEach(function(li) {
+              var inp = li.querySelector('[data-badge-label]');
+              var iconEl = li.querySelector('[data-badge-icon]');
+              var v = inp ? inp.value.trim() : '';
+              if (v) result.push({ icon: iconEl ? iconEl.value : 'fas fa-check-circle', text: v });
+            });
+            return result;
+          }
+
+          function setCcBgImagePreview(imageUrl) {
+            ccBgImageUrl = imageUrl || '';
+            var preview = document.getElementById('cc_bg_image_preview');
+            var clearBtn = document.getElementById('cc_bg_image_clear_btn');
+            if (imageUrl) {
+              if (preview) { preview.style.backgroundImage = 'url(' + imageUrl + ')'; preview.classList.remove('hidden'); }
+              if (clearBtn) clearBtn.classList.remove('hidden');
+            } else {
+              if (preview) { preview.style.backgroundImage = ''; preview.classList.add('hidden'); }
+              if (clearBtn) clearBtn.classList.add('hidden');
+            }
+            updateCcPreview();
+          }
+
           function updateCcPreview() {
             var screen = document.getElementById('cc_previewScreen');
             if (!screen) return;
             var bgRaw = (bgText && bgText.value || '').trim();
             var formRaw = (formText && formText.value || '').trim();
-            var bgCss = /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
+            var bgCss = ccBgImageUrl
+              ? 'url(' + ccBgImageUrl + ') center/cover no-repeat'
+              : /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
             var formBg = /^#[0-9a-fA-F]{3,8}$/.test(formRaw) ? formRaw : '#ffffff';
+            var accentRaw = (accentText && accentText.value || '').trim();
+            var ccAccentColor = /^#[0-9a-fA-F]{3,8}$/.test(accentRaw) ? accentRaw : '#d97706';
             var isWhiteText = selectedTextColor === 'white';
             var textClass = isWhiteText ? 'color:rgba(255,255,255,0.88)' : 'color:#111827';
-            var subTextStyle = isWhiteText ? 'color:rgba(255,255,255,0.6)' : 'color:#6b7280';
             var hintColor = isWhiteText ? 'rgba(255,255,255,0.45)' : '#9ca3af';
             var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
             var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
@@ -36961,30 +37774,72 @@ app.get('/admin/follow-ups', async (c) => {
 
             var fieldsHtml = fields.map(function (f) {
               if (f.type === 'checkbox') {
-                return '<div style="margin-bottom:6px;display:flex;align-items:center;gap:4px;">'
+                return '<div style="margin-bottom:5px;display:flex;align-items:center;gap:4px;">'
                   + '<div style="width:10px;height:10px;border-radius:2px;border:1px solid ' + inputBorder + ';background:' + inputBg + ';flex-shrink:0;"></div>'
-                  + '<div style="font-size:8px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div></div>';
+                  + '<div style="font-size:7px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
+                  + '</div>';
               }
-              return '<div style="margin-bottom:6px;">'
-                + '<div style="font-size:8px;margin-bottom:3px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
+              return '<div style="margin-bottom:5px;">'
+                + '<div style="font-size:7px;margin-bottom:2px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
                 + previewInputBar(inputBg, inputBorder, f.label, hintColor) + '</div>';
             }).join('');
 
+            var overlayHtml = ccBgImageUrl ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.42);border-radius:26px;pointer-events:none;"></div>' : '';
+            var headerTextCss = 'color:rgba(255,255,255,0.95);text-shadow:0 1px 6px rgba(0,0,0,0.35);';
+            var accentCss = 'color:#d97706;';
             screen.innerHTML =
-              '<div style="height:100%;overflow-y:auto;background:' + bgCss + ';padding:14px 10px;box-sizing:border-box;">'
-              + '<div style="background:' + formBg + ';border-radius:14px;padding:14px;width:100%;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.18);">'
-              + '<div style="text-align:center;margin-bottom:10px;">' + brandHtml
-              + '<div style="font-size:10px;font-weight:700;' + textClass + '">' + company + '</div>'
-              + '<div style="font-size:7.5px;margin-top:2px;' + subTextStyle + '">أرسل بياناتك وسيتم التواصل معك</div></div>'
-              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">الاسم *</div>'
-              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك', hintColor) + '</div>'
-              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رقم الجوال *</div>'
-              + previewInputBar(inputBg, inputBorder, '5xxxxxxxx', hintColor) + '</div>'
+              '<div style="height:100%;overflow-y:auto;position:relative;background:' + bgCss + ';border-radius:26px;">'
+              + overlayHtml
+              + '<div style="position:relative;z-index:1;padding:14px 10px;box-sizing:border-box;">'
+              + '<div style="text-align:center;margin-bottom:10px;">'
+              + brandHtml
+              + '<div style="font-size:10px;font-weight:800;' + headerTextCss + '">' + company + '</div>'
+              + (function() {
+                  var htEl = document.getElementById('cc_hero_title');
+                  var hsEl = document.getElementById('cc_hero_subtitle');
+                  var ht = htEl && htEl.value.trim() ? ccEscape(htEl.value.trim()) : 'أرسل بياناتك';
+                  var hs = hsEl && hsEl.value.trim() ? ccEscape(hsEl.value.trim()) : 'وسيتم التواصل معك';
+                  return '<div style="font-size:8px;font-weight:700;margin-top:3px;' + headerTextCss + '">' + ht + '</div>'
+                    + '<div style="font-size:7.5px;font-weight:600;margin-top:1px;color:' + ccAccentColor + ';">' + hs + '</div>';
+                })()
+              + '</div>'
+              + '<div style="background:' + formBg + ';border-radius:10px;padding:10px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);">'
+              + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;">'
+              + '<div style="flex:1;height:1px;background:linear-gradient(to left,' + ccAccentColor + ',transparent);"></div>'
+              + '<span style="font-size:7.5px;font-weight:700;color:#111827;white-space:nowrap;">بيانات التواصل</span>'
+              + '<div style="flex:1;height:1px;background:linear-gradient(to right,' + ccAccentColor + ',transparent);"></div>'
+              + '</div>'
+              + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">الاسم *</div>'
+              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor) + '</div>'
+              + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رقم الجوال *</div>'
+              + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;">'
+              + '<span style="font-size:6px;padding:0 4px;border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;" dir="ltr">+966</span>'
+              + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;">5xxxxxxxx</span>'
+              + '</div></div>'
               + fieldsHtml
-              + '<div style="margin-bottom:6px;"><div style="font-size:8px;margin-bottom:3px;' + textClass + '">رسالتك *</div>'
-              + '<div style="background:' + inputBg + ';border-radius:5px;height:36px;border:1px solid ' + inputBorder + ';padding:4px 6px;"><span style="font-size:7px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
-              + '<div style="background:#0f766e;border-radius:7px;height:24px;display:flex;align-items:center;justify-content:center;">'
-              + '<span style="color:#fff;font-size:9px;font-weight:700;">إرسال</span></div></div></div>';
+              + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رسالتك *</div>'
+              + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';padding:3px 5px;"><span style="font-size:6px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+              + '<div style="background:' + (isWhiteText ? 'rgba(255,255,255,0.92)' : '#111827') + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
+              + '<span style="color:' + (isWhiteText ? '#111827' : '#fff') + ';font-size:8px;font-weight:700;">إرسال الطلب</span></div>'
+              + (function() {
+                  var badges = getCcBadges();
+                  if (!badges.length) badges = [
+                    { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
+                    { icon: 'fas fa-bolt', text: 'رد سريع' },
+                    { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
+                  ];
+                  if (!badges.length) return '';
+                  return '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:6px;border-top:1px solid rgba(0,0,0,0.06);">'
+                    + badges.map(function(b) {
+                        return '<span style="display:inline-flex;align-items:center;gap:2px;font-size:6px;color:#9ca3af;">'
+                          + '<i class="' + ccEscape(b.icon) + '" style="font-size:7px;"></i>'
+                          + ccEscape(b.text) + '</span>';
+                      }).join('')
+                    + '</div>';
+                })()
+              + '</div>'
+              + '</div>'
+              + '</div>';
           }
 
           function applyCcPreset(preset) {
@@ -37065,6 +37920,103 @@ app.get('/admin/follow-ups', async (c) => {
 
           wireColorPair(bgPicker, bgSwatch, bgText, bgClear, '#0f766e');
           wireColorPair(formPicker, formSwatch, formText, formClear, '#ffffff');
+          wireColorPair(accentPicker, accentSwatch, accentText, accentClear, '#d97706');
+
+          // Bg image upload for company contact page
+          (function () {
+            var fileInput = document.getElementById('cc_bg_image_file');
+            var uploadBtn = document.getElementById('cc_bg_image_upload_btn');
+            var clearBtn = document.getElementById('cc_bg_image_clear_btn');
+            var msgEl2 = document.getElementById('cc_bg_image_msg');
+            if (uploadBtn && fileInput) {
+              uploadBtn.addEventListener('click', async function () {
+                var file = fileInput.files && fileInput.files[0];
+                if (!file) { if (msgEl2) { msgEl2.textContent = 'اختر صورة أولاً'; msgEl2.style.color = '#dc2626'; } return; }
+                uploadBtn.disabled = true;
+                if (msgEl2) { msgEl2.textContent = 'جارٍ الرفع...'; msgEl2.style.color = '#6b7280'; }
+                try {
+                  var fd = new FormData(); fd.append('file', file);
+                  var res = await axios.post('/api/my-tenant/contact-bg-image-upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                  if (res.data && res.data.success && res.data.url) {
+                    setCcBgImagePreview(res.data.url);
+                    if (msgEl2) { msgEl2.textContent = 'تم رفع الصورة'; msgEl2.style.color = '#16a34a'; }
+                    fileInput.value = '';
+                  } else {
+                    if (msgEl2) { msgEl2.textContent = (res.data && res.data.error) || 'فشل الرفع'; msgEl2.style.color = '#dc2626'; }
+                  }
+                } catch (err) {
+                  if (msgEl2) { msgEl2.textContent = (err.response && err.response.data && err.response.data.error) || 'فشل الرفع'; msgEl2.style.color = '#dc2626'; }
+                } finally { uploadBtn.disabled = false; }
+              });
+            }
+            if (clearBtn) {
+              clearBtn.addEventListener('click', async function () {
+                clearBtn.disabled = true;
+                try {
+                  await axios.patch('/api/my-tenant', { contact_bg_image_url: null });
+                  setCcBgImagePreview('');
+                  if (msgEl2) { msgEl2.textContent = 'تمت الإزالة'; msgEl2.style.color = '#16a34a'; }
+                } catch (_) {
+                  if (msgEl2) { msgEl2.textContent = 'فشلت الإزالة'; msgEl2.style.color = '#dc2626'; }
+                } finally { clearBtn.disabled = false; }
+              });
+            }
+          })();
+
+          // Logo upload for company contact page
+          (function () {
+            var fileInput = document.getElementById('cc_logo_file');
+            var uploadBtn = document.getElementById('cc_logo_upload_btn');
+            var msgEl3 = document.getElementById('cc_logo_msg');
+            if (uploadBtn && fileInput) {
+              uploadBtn.addEventListener('click', async function () {
+                var file = fileInput.files && fileInput.files[0];
+                if (!file) { if (msgEl3) { msgEl3.textContent = 'اختر صورة أولاً'; msgEl3.style.color = '#dc2626'; } return; }
+                uploadBtn.disabled = true;
+                if (msgEl3) { msgEl3.textContent = 'جارٍ الرفع...'; msgEl3.style.color = '#6b7280'; }
+                try {
+                  var fd = new FormData(); fd.append('file', file);
+                  var res = await axios.post('/api/my-tenant/logo-upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                  if (res.data && res.data.success && res.data.logo_url) {
+                    setCcLogoPreview(res.data.logo_url);
+                    if (msgEl3) { msgEl3.textContent = 'تم رفع الشعار'; msgEl3.style.color = '#16a34a'; }
+                    fileInput.value = '';
+                  } else {
+                    if (msgEl3) { msgEl3.textContent = (res.data && res.data.error) || 'فشل الرفع'; msgEl3.style.color = '#dc2626'; }
+                  }
+                } catch (err) {
+                  if (msgEl3) { msgEl3.textContent = (err.response && err.response.data && err.response.data.error) || 'فشل الرفع'; msgEl3.style.color = '#dc2626'; }
+                } finally { uploadBtn.disabled = false; }
+              });
+            }
+          })();
+
+          // Trust badges wiring
+          (function () {
+            var bl = document.getElementById('cc_badgesList');
+            var addBtn = document.getElementById('cc_addBadgeBtn');
+            fillCcBadges(null);
+            if (bl) {
+              bl.addEventListener('click', function (e) {
+                var rm = e.target && e.target.closest ? e.target.closest('[data-badge-remove]') : null;
+                if (!rm) return;
+                var li = rm.closest('[data-badge-item]');
+                if (li) li.remove();
+                updateCcAddBadgeBtn();
+                updateCcPreview();
+              });
+              bl.addEventListener('input', function () { updateCcPreview(); });
+            }
+            if (addBtn) {
+              addBtn.addEventListener('click', function () {
+                var list = document.getElementById('cc_badgesList');
+                if (!list || list.querySelectorAll('[data-badge-item]').length >= 4) return;
+                list.insertAdjacentHTML('beforeend', ccBadgeItemHtml(''));
+                updateCcAddBadgeBtn();
+                updateCcPreview();
+              });
+            }
+          })();
 
           textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); updateCcPreview(); });
           textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); updateCcPreview(); });
@@ -37107,12 +38059,18 @@ app.get('/admin/follow-ups', async (c) => {
               if (!res.data || res.data.success !== true || !res.data.data) return;
               var d = res.data.data;
               ccCompanyName = d.company_name || d.slug || 'اسم الشركة';
-              ccLogoUrl = d.logo_url || '';
+              setCcLogoPreview(d.logo_url || '');
               setColorPair(bgPicker, bgSwatch, bgText, d.contact_bg_color || '', '#0f766e');
               setColorPair(formPicker, formSwatch, formText, d.contact_form_color || '', '#ffffff');
+              setColorPair(accentPicker, accentSwatch, accentText, d.contact_accent_color || '#d97706', '#d97706');
               setTextColorToggle(d.contact_text_color || 'black');
               fillCcFields(d.contact_custom_fields);
-              updateCcPreview();
+              fillCcBadges(d.contact_trust_badges);
+              var htEl2 = document.getElementById('cc_hero_title');
+              var hsEl2 = document.getElementById('cc_hero_subtitle');
+              if (htEl2) htEl2.value = d.contact_hero_title || '';
+              if (hsEl2) hsEl2.value = d.contact_hero_subtitle || '';
+              setCcBgImagePreview(d.contact_bg_image_url || '');
             } catch (_) {}
           }
 
@@ -37130,7 +38088,11 @@ app.get('/admin/follow-ups', async (c) => {
                 contact_bg_color: bg === '' ? null : bg,
                 contact_form_color: fc === '' ? null : fc,
                 contact_text_color: selectedTextColor,
-                contact_custom_fields: customFields
+                contact_custom_fields: customFields,
+                contact_trust_badges: getCcBadges(),
+                contact_hero_title: (document.getElementById('cc_hero_title') || {}).value || null,
+                contact_hero_subtitle: (document.getElementById('cc_hero_subtitle') || {}).value || null,
+                contact_accent_color: (accentText && accentText.value.trim()) ? accentText.value.trim() : null,
               });
               if (res.data && res.data.success) {
                 msgEl.textContent = 'تم الحفظ بنجاح.';
@@ -37177,7 +38139,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -37212,7 +38174,8 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   }
 
   const affiliate = await c.env.DB.prepare(`
-    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+           contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
@@ -37242,7 +38205,7 @@ app.get('/:slug/:secondSegment', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -37255,7 +38218,8 @@ app.get('/:slug/:secondSegment', async (c) => {
   }
 
   const affiliate = await c.env.DB.prepare(`
-    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+           contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
@@ -37302,7 +38266,7 @@ app.get('/:slug', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1

@@ -48,7 +48,7 @@ SELECT
 
 البند العاشر: - حرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها وقد تفاهم الطرفان على الوفاء بالعقد وحسن المعاملة وإعطاء كل ذي حق حقه.
 
-<div class="tpl-sig-row"><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الأول</div><div>مكتب حلول الموعد للخدمات العامة</div><div class="tpl-sig-space"></div><div>الختم:</div></div><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الثاني</div><div>{{party_two_name}}</div><div class="tpl-sig-space"></div><div>التوقيع:</div></div></div>
+<div class="tpl-sig-row"><div class="tpl-sig-col tpl-sig-col--party-one"><div class="tpl-sig-label">الطرف الأول</div><div class="tpl-sig-name">مكتب حلول الموعد للخدمات العامة</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">الختم:</span><div class="tpl-sig-space"></div></div></div><div class="tpl-sig-col tpl-sig-col--party-two"><div class="tpl-sig-label">الطرف الثاني</div><div class="tpl-sig-name">{{party_two_name}}</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">التوقيع:</span><div class="tpl-sig-space"></div></div></div></div>
 <div class="tpl-page-break" style="page-break-before:always;"></div>
 <p class="tpl-note-title" style="text-align:center;font-weight:800;">سند لأمر</p>
 
@@ -115,7 +115,7 @@ SELECT
 
 البند العاشر: - حرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها وقد تفاهم الطرفان على الوفاء بالعقد وحسن المعاملة وإعطاء كل ذي حق حقه.
 
-<div class="tpl-sig-row"><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الأول</div><div>شركة وصله للخدمات العقارية والتحصيل</div><div class="tpl-sig-space"></div><div>الختم:</div></div><div class="tpl-sig-col"><div class="tpl-sig-label">الطرف الثاني</div><div>{{party_two_name}}</div><div class="tpl-sig-space"></div><div>التوقيع:</div></div></div>
+<div class="tpl-sig-row"><div class="tpl-sig-col tpl-sig-col--party-one"><div class="tpl-sig-label">الطرف الأول</div><div class="tpl-sig-name">شركة وصله للخدمات العقارية والتحصيل</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">الختم:</span><div class="tpl-sig-space"></div></div></div><div class="tpl-sig-col tpl-sig-col--party-two"><div class="tpl-sig-label">الطرف الثاني</div><div class="tpl-sig-name">{{party_two_name}}</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">التوقيع:</span><div class="tpl-sig-space"></div></div></div></div>
 <div class="tpl-page-break" style="page-break-before:always;"></div>
 <p class="tpl-note-title" style="text-align:center;font-weight:800;">سند لأمر</p>
 

@@ -158,6 +158,39 @@ function normalizePartyOneLogo(
   return { ok: true, value: s }
 }
 
+function normalizeTemplateStampUrl(
+  raw: unknown
+): { ok: true; value: string | null } | { ok: false; response: Response } {
+  if (raw == null || raw === '') return { ok: true, value: null }
+  const s = typeof raw === 'string' ? raw.trim() : String(raw).trim()
+  if (!s) return { ok: true, value: null }
+  if (s.startsWith('/api/attachments/view/')) {
+    if (s.includes('..') || s.length > 2000) {
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({
+            error: 'stamp_url_invalid',
+            detail: 'رابط الختم غير صالح.'
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+        )
+      }
+    }
+    return { ok: true, value: s }
+  }
+  return {
+    ok: false,
+    response: new Response(
+      JSON.stringify({
+        error: 'stamp_url_invalid',
+        detail: 'ارفع صورة الختم من صفحة القالب (R2).'
+      }),
+      { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+    )
+  }
+}
+
 function tenantFilterClause(
   info: UserInfo,
   c: Context,
@@ -379,14 +412,16 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       if (looksBrowserTranslatedTemplate(body.body_content)) {
         return c.json({ error: 'browser_translate_blocked', detail: TRANSLATE_BLOCKED_MSG }, 400)
       }
+      const stampNorm = normalizeTemplateStampUrl(body.stamp_url)
+      if (!stampNorm.ok) return stampNorm.response
       const renderMode = String(body.render_mode ?? 'structured') === 'document' ? 'document' : 'structured'
       let r: { meta: { last_row_id: number | null } }
       try {
         r = await c.env.DB.prepare(
           `INSERT INTO contract_templates (
             tenant_id, template_name, template_type, header_content, body_content, footer_content,
-            variables_list, is_active, court_city, render_mode
-          ) VALUES (?,?,?,?,?,?,?,?,?,?)`
+            variables_list, is_active, court_city, render_mode, stamp_url
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -398,7 +433,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             normalizeVariablesList(body.variables_list),
             body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
             body.court_city ?? null,
-            renderMode
+            renderMode,
+            stampNorm.value
           )
           .run()
       } catch (e: unknown) {
@@ -656,6 +692,12 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       touch('variables_list', 'variables_list')
       touch('is_active', 'is_active')
       touch('court_city', 'court_city')
+      if (method === 'PUT' || body.stamp_url !== undefined) {
+        const stampNorm = normalizeTemplateStampUrl(body.stamp_url)
+        if (!stampNorm.ok) return stampNorm.response
+        fields.push('stamp_url = ?')
+        vals.push(stampNorm.value)
+      }
       if (method === 'PUT' || body.render_mode !== undefined) {
         fields.push('render_mode = ?')
         vals.push(String(body.render_mode ?? 'structured') === 'document' ? 'document' : 'structured')
@@ -911,6 +953,74 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     const rawExt = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'
     const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'jpg'
     const key = `contracts/${tenantId}/party_logo_${timestamp}_${random}.${ext}`
+
+    const arrayBuffer = await file.arrayBuffer()
+    await attachments.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      }
+    })
+
+    const publicUrl = `/api/attachments/view/${key}`
+    return c.json({ success: true, url: publicUrl, filename: key })
+  })
+
+  /**
+   * Per-template first-party stamp (ختم). Stored on contract_templates.stamp_url.
+   * Key: `contracts/{tenantId}/template_stamp_{timestamp}_{random}.ext`
+   */
+  app.post('/api/contracts/template-stamp-upload', async (c) => {
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
+    if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
+    if (info.roleId === 4 || info.roleId === 6 || isContractsModuleReadOnlyRole(info)) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+    const attachments = (c.env as { ATTACHMENTS?: { put: (k: string, b: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> } }).ATTACHMENTS
+    if (!attachments) {
+      return c.json(
+        { error: 'storage_not_configured', detail: 'Attachment storage (R2) not configured' },
+        500
+      )
+    }
+
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ error: 'invalid_form', detail: 'Expected multipart/form-data' }, 400)
+    }
+
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ error: 'no_file', detail: 'No file provided' }, 400)
+    }
+
+    const file = fileEntry
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return c.json({ error: 'file_too_large', detail: 'الحد الأقصى 2 ميجابايت' }, 400)
+    }
+
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ error: 'invalid_type', detail: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+
+    const tidFromForm = formData.get('tenant_id')
+    const body: Record<string, unknown> = {}
+    if (tidFromForm != null && String(tidFromForm).trim() !== '') {
+      body.tenant_id = tidFromForm
+    }
+    const { tenantId, error: te } = resolveWriteTenantId(info, body, c)
+    if (te) return te
+    if (tenantId == null) return c.json({ error: 'missing_tenant', detail: 'Missing tenant' }, 400)
+
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'png').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'png'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'png'
+    const key = `contracts/${tenantId}/template_stamp_${timestamp}_${random}.${ext}`
 
     const arrayBuffer = await file.arrayBuffer()
     await attachments.put(key, arrayBuffer, {

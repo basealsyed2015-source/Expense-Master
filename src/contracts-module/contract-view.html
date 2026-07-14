@@ -165,9 +165,8 @@
       align-items: flex-start;
       gap: 28px;
       width: 100%;
-      margin: 18px 0 8px;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      margin: 12px 0 6px;
+      /* Do not use page-break-before here — break is only after signatures (tpl-page-break). */
     }
     .tpl-sig-col {
       flex: 1 1 0;
@@ -178,19 +177,53 @@
       font-weight: 700;
       margin-bottom: 4px;
     }
+    .tpl-sig-col .tpl-sig-name {
+      margin-bottom: 2px;
+      line-height: 1.35;
+    }
+    .tpl-sig-field {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 6px 0 4px;
+      width: 100%;
+    }
+    .tpl-sig-field-lbl {
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
     .tpl-sig-col .tpl-sig-space {
-      height: 72px;
-      margin: 10px 0 6px;
+      flex: 1 1 auto;
+      min-width: 72px;
+      max-width: 150px;
+      height: 52px;
+      margin: 0;
       border-bottom: 1px solid #bbb;
+      position: relative;
+    }
+    .tpl-sig-col .tpl-sig-space.tpl-sig-space--stamp {
+      border-bottom: none;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tpl-sig-col .tpl-stamp-img {
+      max-height: 64px;
+      max-width: 110px;
+      object-fit: contain;
+      display: block;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .tpl-page-break {
-      display: block;
+      display: none; /* marker only — paginator starts a new A4 sheet after signatures */
       height: 0;
       margin: 0;
       padding: 0;
       border: 0;
-      page-break-before: always;
-      break-before: page;
     }
     .tpl-note-title {
       text-align: center !important;
@@ -1255,7 +1288,7 @@
           /page-break-before\s*:\s*always/i.test(block.getAttribute?.('style') || '');
 
         if (forceBreak) {
-          // Always start سند لأمر (etc.) on a new sheet, regardless of remaining space / font size.
+          // Only forces the page AFTER signatures (before سند لأمر) — never above them.
           if (current.inner.children.length > 0) {
             current = createA4Sheet(isDraft, pages.length, 1, docFont);
             pages.push(current);
@@ -1265,13 +1298,20 @@
         }
 
         current.inner.appendChild(block);
-        if (measureInnerContentHeight(current.inner) > maxH + 2 && current.inner.children.length > 1) {
-          current.inner.removeChild(block);
-          current = createA4Sheet(isDraft, pages.length, 1, docFont);
-          pages.push(current);
-          stage.appendChild(current.sheet);
-          current.inner.appendChild(block);
+        const overflows = measureInnerContentHeight(current.inner) > maxH + 2 && current.inner.children.length > 1;
+        if (!overflows) return;
+
+        // Never open a new page above the signature block — keep الختم/التوقيع under the body.
+        // Slight overflow is clipped by the sheet; compact inline labels keep this within 2 pages.
+        if (block.classList?.contains('tpl-sig-row')) {
+          return;
         }
+
+        current.inner.removeChild(block);
+        current = createA4Sheet(isDraft, pages.length, 1, docFont);
+        pages.push(current);
+        stage.appendChild(current.sheet);
+        current.inner.appendChild(block);
       });
 
       const pageCount = pages.length;
@@ -1283,7 +1323,10 @@
     }
 
     function afterContractRendered() {
+      // Stamp before pagination so A4 height measurement includes الختم (avoids clipping).
+      applyPartyOneStampIfCompleted();
       paginateContractToA4();
+      applyPartyOneStampIfCompleted();
       const stage = document.getElementById('printArea');
       if (stage && stage.classList.contains('contract-a4-stage')) {
         stage.classList.add('a4-preview-scaled');
@@ -1297,6 +1340,37 @@
       updateDraftWatermark();
       requestAnimationFrame(fitDraftWatermark);
       if (getParam('print') === '1') setTimeout(printPage, 1200);
+    }
+
+    /** Show template stamp in party-one signature column only after the contract is completed. */
+    function applyPartyOneStampIfCompleted() {
+      const host = document.getElementById('printArea') || document.getElementById('contractDoc');
+      if (!host || !currentContract || !currentTemplate) return;
+      if (!isContractCompletedStatus(currentContract.status)) return;
+      const stampUrl = String(currentTemplate.stamp_url || '').trim();
+      if (!stampUrl || !stampUrl.startsWith('/api/attachments/view/')) return;
+
+      const cols = host.querySelectorAll('.tpl-sig-row .tpl-sig-col--party-one, .tpl-sig-row .tpl-sig-col');
+      cols.forEach((col) => {
+        if (col.classList.contains('tpl-sig-col--party-two')) return;
+        const labelText = (col.querySelector('.tpl-sig-label')?.textContent || '').trim();
+        if (labelText.includes('التوقيع')) return;
+        const isPartyOne =
+          col.classList.contains('tpl-sig-col--party-one') ||
+          labelText.includes('الختم') ||
+          labelText.includes('الطرف الأول');
+        if (!isPartyOne) return;
+        const space = col.querySelector('.tpl-sig-space');
+        if (!space || space.querySelector('.tpl-stamp-img')) return;
+        space.classList.add('tpl-sig-space--stamp');
+        space.innerHTML = `<img class="tpl-stamp-img" src="${escHtml(stampUrl)}" alt="ختم الطرف الأول" />`;
+      });
+    }
+
+    function refreshContractDocumentView() {
+      if (!currentContract) return;
+      renderContractDoc(currentContract);
+      afterContractRendered();
     }
 
     // ======= LOAD =======
@@ -1825,7 +1899,7 @@
       try {
         await API.patch('contracts', currentContract.id, { status: newStatus });
         currentContract.status = newStatus;
-        updateDraftWatermark();
+        refreshContractDocumentView();
         showToast(`✓ تم تغيير الحالة إلى: ${newStatus}`, 'success');
       } catch (e) { showToast('خطأ في تحديث الحالة', 'error'); }
     }
@@ -1848,7 +1922,7 @@
         currentContract = updated || { ...currentContract, status: newStatus };
         document.getElementById('statusSelect').value = currentContract.status || newStatus;
         configureApprovalActions();
-        updateDraftWatermark();
+        refreshContractDocumentView();
         showToast('تم اعتماد العقد بنجاح', 'success');
       } catch (e) {
         showToast('خطأ في اعتماد العقد', 'error');
