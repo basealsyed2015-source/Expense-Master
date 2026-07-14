@@ -1507,6 +1507,8 @@ type PublicContactTenantRow = {
   contact_bg_image_url?: string | null
   /** JSON array of trust badge objects {icon, text} shown below the form */
   contact_trust_badges?: string | null
+  /** JSON array of trust badge objects {icon, text} shown inside the form, above the divider line */
+  contact_form_badges?: string | null
   /** Hero title shown above the form card (default: أرسل بياناتك) */
   contact_hero_title?: string | null
   /** Hero subtitle shown above the form card in accent color */
@@ -1532,6 +1534,7 @@ type ContactPageDesignFields = {
   contact_bg_image_url?: string | null
   contact_logo_url?: string | null
   contact_trust_badges?: string | null
+  contact_form_badges?: string | null
   contact_hero_title?: string | null
   contact_hero_subtitle?: string | null
   contact_accent_color?: string | null
@@ -1556,6 +1559,7 @@ function withAffiliateContactDesign(
     contact_custom_fields: affiliate.contact_custom_fields ?? tenant.contact_custom_fields,
     contact_bg_image_url: affiliate.contact_bg_image_url ?? tenant.contact_bg_image_url ?? null,
     contact_trust_badges: affiliate.contact_trust_badges ?? tenant.contact_trust_badges ?? null,
+    contact_form_badges: affiliate.contact_form_badges ?? tenant.contact_form_badges ?? null,
     contact_hero_title: affiliate.contact_hero_title ?? tenant.contact_hero_title ?? null,
     contact_hero_subtitle: affiliate.contact_hero_subtitle ?? tenant.contact_hero_subtitle ?? null,
     contact_accent_color: affiliate.contact_accent_color ?? tenant.contact_accent_color ?? null,
@@ -1632,17 +1636,38 @@ function parseContactDesignBodyFields(
     } else if (Array.isArray(raw)) {
       const items = (raw as any[])
         .map((x: any) => {
-          if (typeof x === 'string') return { icon: 'fas fa-check-circle', text: x.trim() }
-          return {
-            icon: VALID_ICONS.has(String(x?.icon ?? '')) ? String(x.icon) : 'fas fa-check-circle',
-            text: String(x?.text ?? '').trim()
-          }
+          const iconRaw = x?.icon == null || String(x.icon).trim() === '' ? null : String(x.icon).trim()
+          if (iconRaw !== null && !VALID_ICONS.has(iconRaw)) return null
+          return { icon: iconRaw, text: String(x?.text ?? '').trim() }
         })
-        .filter(x => x.text)
+        .filter((x): x is { icon: string | null; text: string } => x !== null && x.text.length > 0)
         .slice(0, 4)
       updates.contact_trust_badges = JSON.stringify(items)
     } else {
       return { ok: false, error: 'contact_trust_badges يجب أن يكون مصفوفة' }
+    }
+  }
+  if ('contact_form_badges' in body) {
+    const VALID_ICONS = new Set([
+      'fas fa-shield-alt', 'fas fa-bolt', 'fas fa-check-circle', 'fas fa-star',
+      'fas fa-lock', 'fas fa-handshake', 'fas fa-gem', 'fas fa-award',
+      'fas fa-phone', 'fas fa-clock'
+    ])
+    const raw = body.contact_form_badges
+    if (raw == null || (Array.isArray(raw) && raw.length === 0)) {
+      updates.contact_form_badges = null
+    } else if (Array.isArray(raw)) {
+      const items = (raw as any[])
+        .map((x: any) => {
+          const iconRaw = x?.icon == null || String(x.icon).trim() === '' ? null : String(x.icon).trim()
+          if (iconRaw !== null && !VALID_ICONS.has(iconRaw)) return null
+          return { icon: iconRaw, text: String(x?.text ?? '').trim() }
+        })
+        .filter((x): x is { icon: string | null; text: string } => x !== null && x.text.length > 0)
+        .slice(0, 3)
+      updates.contact_form_badges = JSON.stringify(items)
+    } else {
+      return { ok: false, error: 'contact_form_badges يجب أن يكون مصفوفة' }
     }
   }
   if ('contact_hero_title' in body) {
@@ -1818,8 +1843,41 @@ function buildPublicContactPageHtml(
   const accentColor = escapeHtml((tenant.contact_accent_color ?? null) || '#d97706')
   const submitBtnStyle = isWhiteText
     ? 'background:rgba(255,255,255,0.92);color:#111827;'
-    : `background:${escapeHtmlAttr(primaryColor)};color:#fff;`
+    : 'background:#111827;color:#fff;'
   const locationStr = [tenant.public_city, tenant.public_address].filter(Boolean).join(' — ')
+
+  // Build badges HTML — shared helper
+  type BadgeItem = { icon: string | null; text: string }
+  const DEFAULT_BADGES: BadgeItem[] = [
+    { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
+    { icon: 'fas fa-bolt', text: 'رد سريع' },
+    { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
+  ]
+  function buildBadgesInner(jsonStr: string | null | undefined, useDefault: boolean): string {
+    let badges: BadgeItem[] | null = null
+    if (jsonStr) {
+      try {
+        const parsed = JSON.parse(jsonStr)
+        if (Array.isArray(parsed)) {
+          badges = parsed.map((x: any) =>
+            typeof x === 'string'
+              ? { icon: 'fas fa-check-circle', text: String(x) }
+              : { icon: (x?.icon == null || String(x.icon).trim() === '') ? null : String(x.icon).trim(), text: String(x?.text ?? '') }
+          ).filter(x => x.text)
+        }
+      } catch { /* ignore */ }
+    }
+    if (badges === null) badges = useDefault ? DEFAULT_BADGES : []
+    if (badges.length === 0) return ''
+    return badges.map((b, i) =>
+      (i > 0 ? '<div style="color:#e5e7eb;">|</div>' : '')
+      + `<div class="trust-item">${b.icon ? `<i class="${escapeHtmlAttr(b.icon)}" style="color:${accentColor};"></i>` : ''}${escapeHtml(b.text)}</div>`
+    ).join('')
+  }
+  // Below the divider line — uses default badges if none configured
+  const badgesInner = buildBadgesInner(tenant.contact_trust_badges, true)
+  // Inside the form, above the divider line — only shown if explicitly configured (no default)
+  const formBadgesInner = buildBadgesInner(tenant.contact_form_badges, false)
 
   return `
     <!DOCTYPE html>
@@ -1835,9 +1893,9 @@ function buildPublicContactPageHtml(
         .field-icon-wrap { display:flex; align-items:center; border:1px solid #d1d5db; border-radius:0.75rem; overflow:hidden; transition:box-shadow .15s; }
         .field-icon-wrap:focus-within { box-shadow:0 0 0 2px ${escapeHtmlAttr(primaryColor)}40; border-color:${escapeHtmlAttr(primaryColor)}; }
         .field-icon-wrap input, .field-icon-wrap textarea { flex:1; padding:.75rem 1rem; border:0; outline:none; background:transparent; min-width:0; }
-        .field-icon-wrap .fi { display:flex; align-items:center; justify-content:center; width:2.75rem; background:#f9fafb; border-right:1px solid #e5e7eb; color:#9ca3af; flex-shrink:0; align-self:stretch; }
+        .field-icon-wrap .fi { display:flex; align-items:center; justify-content:center; width:2.75rem; background:#f9fafb; border-left:1px solid #e5e7eb; color:#9ca3af; flex-shrink:0; align-self:stretch; }
         .field-icon-wrap textarea { resize:none; }
-        .phone-prefix { display:flex; align-items:center; padding:0 .75rem; background:#f3f4f6; border-left:1px solid #e5e7eb; color:#374151; font-weight:600; font-size:.9rem; white-space:nowrap; flex-shrink:0; }
+        .phone-prefix { display:flex; align-items:center; padding:0 .75rem; background:#f3f4f6; border-right:1px solid #e5e7eb; color:#374151; font-weight:600; font-size:.9rem; white-space:nowrap; flex-shrink:0; }
         .submit-btn { width:100%; padding:.9rem 1.5rem; border-radius:.75rem; font-size:1.1rem; font-weight:700; border:0; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:.6rem; transition:opacity .15s,transform .1s; }
         .submit-btn:hover { opacity:.9; }
         .submit-btn:active { transform:scale(.99); }
@@ -1871,9 +1929,9 @@ function buildPublicContactPageHtml(
               }
               <h1 style="margin:0 0 .35rem;font-size:1.55rem;font-weight:800;color:${escapeHtmlAttr(headerTextColor)};text-shadow:${hasBgImage ? '0 2px 8px rgba(0,0,0,0.4)' : 'none'};">${companyName}</h1>
               ${locationStr ? `<p style="margin:.3rem 0 0;font-size:.82rem;color:${escapeHtmlAttr(headerSubColor)};display:flex;align-items:center;justify-content:center;gap:.5rem;">
-                <span style="height:1px;width:28px;background:${escapeHtmlAttr(primaryColor)};display:inline-block;opacity:.7;"></span>
+                <span style="height:1px;width:28px;background:${accentColor};display:inline-block;opacity:.7;"></span>
                 ${escapeHtml(locationStr)}
-                <span style="height:1px;width:28px;background:${escapeHtmlAttr(primaryColor)};display:inline-block;opacity:.7;"></span>
+                <span style="height:1px;width:28px;background:${accentColor};display:inline-block;opacity:.7;"></span>
               </p>` : ''}
               ${tenant.contact_hero_title != null ? `<p style="margin:.9rem 0 0;font-size:1.25rem;font-weight:700;color:${escapeHtmlAttr(headerTextColor)};text-shadow:${hasBgImage ? '0 2px 8px rgba(0,0,0,0.35)' : 'none'};">${escapeHtml(tenant.contact_hero_title)}</p>` : `<p style="margin:.9rem 0 0;font-size:1.25rem;font-weight:700;color:${escapeHtmlAttr(headerTextColor)};text-shadow:${hasBgImage ? '0 2px 8px rgba(0,0,0,0.35)' : 'none'};">أرسل بياناتك</p>`}
               ${tenant.contact_hero_subtitle != null ? `<p style="margin:.15rem 0 0;font-size:1.05rem;font-weight:600;color:${accentColor};text-shadow:${hasBgImage ? '0 2px 6px rgba(0,0,0,0.3)' : 'none'};">${escapeHtml(tenant.contact_hero_subtitle)}</p>` : `<p style="margin:.15rem 0 0;font-size:1.05rem;font-weight:600;color:${accentColor};text-shadow:${hasBgImage ? '0 2px 6px rgba(0,0,0,0.3)' : 'none'};">وسيتم التواصل معك</p>`}
@@ -1900,63 +1958,38 @@ function buildPublicContactPageHtml(
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">الاسم <span class="text-red-500">*</span></label>
                   <div class="field-icon-wrap">
-                    <input id="customer_name" type="text" placeholder="اكتب اسمك الكامل" required />
                     <span class="fi"><i class="fas fa-user text-sm"></i></span>
+                    <input id="customer_name" type="text" placeholder="اكتب اسمك الكامل" required />
                   </div>
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">رقم الجوال <span class="text-red-500">*</span></label>
                   <div class="field-icon-wrap">
+                    <span class="phone-prefix" dir="ltr">+966</span>
                     <input id="customer_phone" type="tel" required inputmode="numeric" maxlength="9" pattern="5[0-9]{8}" dir="ltr"
                            style="text-align:right;"
                            placeholder="5xxxxxxxx"
                            oninput="this.value = this.value.replace(/[^0-9٠-٩۰-۹]/g, '').slice(0, 9); this.setCustomValidity('');"
                            oninvalid="this.setCustomValidity('أدخل 9 أرقام تبدأ بـ 5')" />
-                    <span class="phone-prefix" dir="ltr">+966</span>
                   </div>
                 </div>
                 ${customFieldsHtml}
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1.5">رسالتك <span class="text-red-500">*</span></label>
                   <div class="field-icon-wrap" style="align-items:flex-start;">
-                    <textarea id="customer_message" rows="4" placeholder="اكتب رسالتك هنا..." required style="padding-top:.75rem;"></textarea>
                     <span class="fi" style="padding-top:.85rem;align-items:flex-start;"><i class="fas fa-comment-dots text-sm"></i></span>
+                    <textarea id="customer_message" rows="4" placeholder="اكتب رسالتك هنا..." required style="padding-top:.75rem;"></textarea>
                   </div>
                 </div>
                 <button id="submitBtn" type="submit" class="submit-btn" style="${submitBtnStyle}margin-top:.25rem;">
                   <i class="fas fa-paper-plane"></i>إرسال الطلب
                 </button>
                 <p id="formStatus" class="text-sm" style="margin:0;text-align:center;"></p>
+                ${formBadgesInner ? `<div class="trust-row" style="border-top:none;margin-top:.5rem;padding-top:.5rem;">${formBadgesInner}</div>` : ''}
               </form>
 
-              <!-- Trust badges -->
-              ${(() => {
-                type BadgeItem = { icon: string; text: string }
-                const DEFAULT_BADGES: BadgeItem[] = [
-                  { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
-                  { icon: 'fas fa-bolt', text: 'رد سريع' },
-                  { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
-                ]
-                let badges: BadgeItem[] | null = null
-                if (tenant.contact_trust_badges) {
-                  try {
-                    const parsed = JSON.parse(tenant.contact_trust_badges)
-                    if (Array.isArray(parsed)) {
-                      badges = parsed.map((x: any) =>
-                        typeof x === 'string'
-                          ? { icon: 'fas fa-check-circle', text: String(x) }
-                          : { icon: String(x?.icon ?? 'fas fa-check-circle'), text: String(x?.text ?? '') }
-                      ).filter(x => x.text)
-                    }
-                  } catch { /* ignore */ }
-                }
-                if (badges === null) badges = DEFAULT_BADGES
-                if (badges.length === 0) return ''
-                return `<div class="trust-row">${badges.map((b, i) =>
-                  (i > 0 ? '<div style="color:#e5e7eb;">|</div>' : '')
-                  + `<div class="trust-item"><i class="${escapeHtmlAttr(b.icon)}" style="color:${accentColor};"></i>${escapeHtml(b.text)}</div>`
-                ).join('')}</div>`
-              })()}
+              <!-- Trust badges below divider line -->
+              ${badgesInner ? `<div class="trust-row">${badgesInner}</div>` : ''}
             </div>
 
           </div>
@@ -4840,7 +4873,7 @@ app.get('/api/my-tenant', async (c) => {
       return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
     }
     const row = await c.env.DB.prepare(`
-      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color, whatsapp_greeting,
+      SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color, whatsapp_greeting,
              document_watermark_url, document_watermark_enabled, document_watermark_opacity,
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
@@ -5238,7 +5271,7 @@ app.patch('/api/my-tenant', async (c) => {
 
     const row = await c.env.DB.prepare(`
       SELECT company_name, contact_email, contact_phone, city, address, logo_url, slug, public_uuid, whatsapp_greeting,
-             contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color,
+             contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color,
              document_watermark_url, document_watermark_enabled, document_watermark_opacity,
              document_header_url, document_header_enabled, document_header_opacity,
              document_footer_url, document_footer_enabled, document_footer_opacity
@@ -33356,7 +33389,7 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
     const { results } = await c.env.DB.prepare(`
       SELECT id, tenant_id, path_segment, label, created_at,
              contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
-             contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+             contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
@@ -35303,15 +35336,17 @@ app.get('/admin/contact-affiliates', async (c) => {
 
   let previewCompanyName = 'اسم الشركة'
   let previewLogoUrl = ''
+  let previewPrimaryColor = '#0f766e'
   if (!isSuper && userInfo.tenantId) {
     const tenantRow = await c.env.DB.prepare(
-      'SELECT company_name, logo_url FROM tenants WHERE id = ? LIMIT 1'
+      'SELECT company_name, logo_url, primary_color FROM tenants WHERE id = ? LIMIT 1'
     )
       .bind(userInfo.tenantId)
-      .first<{ company_name: string; logo_url: string | null }>()
+      .first<{ company_name: string; logo_url: string | null; primary_color: string | null }>()
     if (tenantRow?.company_name) previewCompanyName = tenantRow.company_name
     const logoNorm = normalizeTenantLogoUrl(tenantRow?.logo_url)
     if (logoNorm) previewLogoUrl = logoNorm
+    if (tenantRow?.primary_color) previewPrimaryColor = tenantRow.primary_color
   }
 
   return c.html(`
@@ -35384,6 +35419,7 @@ app.get('/admin/contact-affiliates', async (c) => {
         var TENANT_META = {};
         var PREVIEW_COMPANY_NAME = ${JSON.stringify(previewCompanyName)};
         var PREVIEW_LOGO_URL = ${JSON.stringify(previewLogoUrl)};
+        var PREVIEW_PRIMARY_COLOR = ${JSON.stringify(previewPrimaryColor)};
 
         function escapeHtml(v) {
           return String(v ?? '')
@@ -35420,7 +35456,8 @@ app.get('/admin/contact-affiliates', async (c) => {
           rows.forEach(function (t) {
             TENANT_META[String(t.id)] = {
               company_name: t.company_name || t.slug || '',
-              logo_url: t.logo_url || ''
+              logo_url: t.logo_url || '',
+              primary_color: t.primary_color || '#0f766e'
             };
           });
           sel.innerHTML = '<option value="">-- اختر شركة --</option>' +
@@ -35460,7 +35497,11 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<input type="text" id="affHeroTitle_' + id + '" maxlength="80" placeholder="أرسل بياناتك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" /></div>' +
             '<div><label class="block text-xs font-semibold text-gray-500 mb-1">السطر الثانوي <span class="font-normal text-gray-400">(بلون التمييز)</span></label>' +
             '<input type="text" id="affHeroSubtitle_' + id + '" maxlength="80" placeholder="وسيتم التواصل معك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" /></div>' +
-            '<div><label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(حد أقصى 4)</span></label>' +
+            '<div><label class="block text-xs font-semibold text-gray-500 mb-1">شارات النموذج <span class="font-normal text-gray-400">(داخل النموذج، فوق الخط — حد أقصى 3)</span></label>' +
+            '<ul id="formBadgesList_' + id + '" class="space-y-1.5 mb-2"></ul>' +
+            '<button type="button" id="addFormBadgeBtn_' + id + '" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>' +
+            '</div>' +
+            '<div><label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(تحت الخط — حد أقصى 4)</span></label>' +
             '<ul id="badgesList_' + id + '" class="space-y-1.5 mb-2"></ul>' +
             '<button type="button" id="addBadgeBtn_' + id + '" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>' +
             '</div>' +
@@ -35645,18 +35686,31 @@ app.get('/admin/contact-affiliates', async (c) => {
         ];
 
         function badgeIconOptions(selected) {
-          return BADGE_ICON_OPTIONS.map(function(o) {
+          var noIconSel = (!selected || selected === '') ? ' selected' : '';
+          var opts = '<option value=""' + noIconSel + '>بدون أيقونة</option>';
+          opts += BADGE_ICON_OPTIONS.map(function(o) {
             return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
           }).join('');
+          return opts;
         }
 
         function badgeItemHtml(badge) {
           var text = typeof badge === 'string' ? badge : (badge && badge.text || '');
-          var icon = typeof badge === 'string' ? 'fas fa-check-circle' : (badge && badge.icon || 'fas fa-check-circle');
+          var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
           return '<li data-badge-item class="flex items-center gap-2">' +
             '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + badgeIconOptions(icon) + '</select>' +
             '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + escapeHtml(text) + '" />' +
             '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-badge-remove><i class="fas fa-times"></i></button>' +
+            '</li>';
+        }
+
+        function formBadgeItemHtml(badge) {
+          var text = typeof badge === 'string' ? badge : (badge && badge.text || '');
+          var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
+          return '<li data-form-badge-item class="flex items-center gap-2">' +
+            '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-form-badge-icon style="min-width:0;">' + badgeIconOptions(icon) + '</select>' +
+            '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-form-badge-label value="' + escapeHtml(text) + '" />' +
+            '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-form-badge-remove><i class="fas fa-times"></i></button>' +
             '</li>';
         }
 
@@ -35669,7 +35723,21 @@ app.get('/admin/contact-affiliates', async (c) => {
             var input = li.querySelector('[data-badge-label]');
             var iconEl = li.querySelector('[data-badge-icon]');
             var val = input ? input.value.trim() : '';
-            if (val) result.push({ icon: iconEl ? iconEl.value : 'fas fa-check-circle', text: val });
+            if (val) result.push({ icon: iconEl ? (iconEl.value || null) : null, text: val });
+          });
+          return result;
+        }
+
+        function getAffFormBadges(id) {
+          var list = document.getElementById('formBadgesList_' + id);
+          if (!list) return null;
+          var items = list.querySelectorAll('[data-form-badge-item]');
+          var result = [];
+          items.forEach(function (li) {
+            var input = li.querySelector('[data-form-badge-label]');
+            var iconEl = li.querySelector('[data-form-badge-icon]');
+            var val = input ? input.value.trim() : '';
+            if (val) result.push({ icon: iconEl ? (iconEl.value || null) : null, text: val });
           });
           return result;
         }
@@ -35679,6 +35747,13 @@ app.get('/admin/contact-affiliates', async (c) => {
           var btn = document.getElementById('addBadgeBtn_' + id);
           if (!list || !btn) return;
           btn.style.display = list.querySelectorAll('[data-badge-item]').length >= 4 ? 'none' : '';
+        }
+
+        function updateAddFormBadgeBtn(id) {
+          var list = document.getElementById('formBadgesList_' + id);
+          var btn = document.getElementById('addFormBadgeBtn_' + id);
+          if (!list || !btn) return;
+          btn.style.display = list.querySelectorAll('[data-form-badge-item]').length >= 3 ? 'none' : '';
         }
 
         function fillBadgesList(id, raw) {
@@ -35697,6 +35772,18 @@ app.get('/admin/contact-affiliates', async (c) => {
           }
           list.innerHTML = badges.slice(0, 4).map(badgeItemHtml).join('');
           updateAddBadgeBtn(id);
+        }
+
+        function fillFormBadgesList(id, raw) {
+          var list = document.getElementById('formBadgesList_' + id);
+          if (!list) return;
+          var badges = [];
+          if (Array.isArray(raw)) badges = raw;
+          else if (typeof raw === 'string') {
+            try { var p = JSON.parse(raw); if (Array.isArray(p)) badges = p; } catch (_) {}
+          }
+          list.innerHTML = badges.slice(0, 3).map(formBadgeItemHtml).join('');
+          updateAddFormBadgeBtn(id);
         }
 
         function fieldItemHtml(field) {
@@ -35788,9 +35875,13 @@ app.get('/admin/contact-affiliates', async (c) => {
           if (hidden) hidden.value = logoUrl || '';
         }
 
-        function previewInputBar(inputBg, inputBorder, hint, hintColor) {
-          return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;padding:0 6px;">'
-            + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(hint || '') + '</span>'
+        function previewInputBar(inputBg, inputBorder, hint, hintColor, iconClass, iconBg, iconColor) {
+          var iconHtml = iconClass
+            ? '<span style="width:16px;height:100%;display:inline-flex;align-items:center;justify-content:center;background:' + (iconBg || 'rgba(0,0,0,0.04)') + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="' + iconClass + '" style="font-size:5px;color:' + (iconColor || '#9ca3af') + ';"></i></span>'
+            : '';
+          return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;overflow:hidden;">'
+            + iconHtml
+            + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;padding:0 5px;">' + escapeHtml(hint || '') + '</span>'
             + '</div>';
         }
 
@@ -35817,6 +35908,8 @@ app.get('/admin/contact-affiliates', async (c) => {
           var accentColor = (accentEl && /^#[0-9a-fA-F]{3,8}$/.test((accentEl.value || '').trim())) ? accentEl.value.trim() : '#d97706';
           var submitBg = isWhiteText ? 'rgba(255,255,255,0.92)' : '#111827';
           var submitFg = isWhiteText ? '#111827' : '#fff';
+          var iconBg = isWhiteText ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
+          var iconColor = isWhiteText ? 'rgba(255,255,255,0.5)' : '#9ca3af';
           var company = escapeHtml(PREVIEW_COMPANY_NAME || 'اسم الشركة');
           var affLogoHidden = document.getElementById('affLogoUrl_' + id);
           var affLogoUrl = affLogoHidden ? (affLogoHidden.value || '').trim() : '';
@@ -35868,15 +35961,17 @@ app.get('/admin/contact-affiliates', async (c) => {
             + '<div style="flex:1;height:1px;background:linear-gradient(to right,' + accentColor + ',transparent);"></div>'
             + '</div>'
             + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">الاسم *</div>'
-            + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor) + '</div>'
+            + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor, 'fas fa-user', iconBg, iconColor) + '</div>'
             + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رقم الجوال *</div>'
-            + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;">'
-            + '<span style="font-size:6px;padding:0 4px;border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;" dir="ltr">+966</span>'
-            + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;">5xxxxxxxx</span>'
+            + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;overflow:hidden;">'
+            + '<span style="font-size:6px;padding:0 4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;flex-shrink:0;align-self:stretch;display:flex;align-items:center;" dir="ltr">+966</span>'
+            + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;flex:1;">5xxxxxxxx</span>'
             + '</div></div>'
             + fieldsHtml
             + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رسالتك *</div>'
-            + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';padding:3px 5px;"><span style="font-size:6px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+            + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';display:flex;align-items:flex-start;overflow:hidden;">'
+            + '<span style="width:16px;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="fas fa-comment-dots" style="font-size:5px;color:' + iconColor + ';"></i></span>'
+            + '<span style="font-size:6px;color:' + hintColor + ';padding:3px 4px;flex:1;">اكتب رسالتك هنا...</span></div></div>'
             + '<div style="background:' + submitBg + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
             + '<span style="color:' + submitFg + ';font-size:8px;font-weight:700;">إرسال الطلب</span></div>'
             + (function() {
@@ -35935,6 +36030,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           }
           updateAddFieldBtn(id);
           fillBadgesList(id, d.contact_trust_badges || null);
+          fillFormBadgesList(id, d.contact_form_badges || null);
           var htEl = document.getElementById('affHeroTitle_' + id);
           var hsEl = document.getElementById('affHeroSubtitle_' + id);
           if (htEl) htEl.value = d.contact_hero_title || '';
@@ -35955,6 +36051,7 @@ app.get('/admin/contact-affiliates', async (c) => {
               return { label: f.label, required: f.required, type: f.type };
             }),
             contact_trust_badges: getAffBadges(id),
+            contact_form_badges: getAffFormBadges(id),
             contact_hero_title: (document.getElementById('affHeroTitle_' + id) || {}).value || null,
             contact_hero_subtitle: (document.getElementById('affHeroSubtitle_' + id) || {}).value || null,
             contact_accent_color: (function() { var el = document.getElementById('affAccent_' + id + '_text'); return el && el.value.trim() ? el.value.trim() : null; })(),
@@ -36044,6 +36141,29 @@ app.get('/admin/contact-affiliates', async (c) => {
               if (l.querySelectorAll('[data-field-item]').length >= 3) return;
               l.insertAdjacentHTML('beforeend', fieldItemHtml({ label: '', required: false, type: 'text' }));
               updateAddFieldBtn(id);
+              updatePreview(id);
+            });
+          }
+
+          // ── Form badges (inside form, above divider) ──────────────────────────
+          var formBadgesList = document.getElementById('formBadgesList_' + id);
+          var addFormBadgeBtn = document.getElementById('addFormBadgeBtn_' + id);
+          if (formBadgesList) {
+            formBadgesList.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-form-badge-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-form-badge-item]');
+              if (li) li.remove();
+              updateAddFormBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+          if (addFormBadgeBtn) {
+            addFormBadgeBtn.addEventListener('click', function () {
+              var bl = document.getElementById('formBadgesList_' + id);
+              if (!bl || bl.querySelectorAll('[data-form-badge-item]').length >= 3) return;
+              bl.insertAdjacentHTML('beforeend', formBadgeItemHtml(''));
+              updateAddFormBadgeBtn(id);
               updatePreview(id);
             });
           }
@@ -36269,6 +36389,7 @@ app.get('/admin/contact-affiliates', async (c) => {
               var meta = tid ? TENANT_META[String(tid)] : null;
               PREVIEW_COMPANY_NAME = (meta && meta.company_name) || slug || 'اسم الشركة';
               PREVIEW_LOGO_URL = (meta && meta.logo_url) || '';
+              PREVIEW_PRIMARY_COLOR = (meta && meta.primary_color) || '#0f766e';
             }
             var origin = window.location.origin;
             var locs = Array.isArray(res.data.locations) ? res.data.locations : [];
@@ -36522,7 +36643,12 @@ app.get('/admin/follow-ups', async (c) => {
                       <input type="text" id="cc_hero_subtitle" maxlength="80" placeholder="وسيتم التواصل معك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(حد أقصى 4)</span></label>
+                      <label class="block text-xs font-semibold text-gray-500 mb-1">شارات النموذج <span class="font-normal text-gray-400">(داخل النموذج، فوق الخط — حد أقصى 3)</span></label>
+                      <ul id="cc_formBadgesList" class="space-y-1.5 mb-2"></ul>
+                      <button type="button" id="cc_addFormBadgeBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(تحت الخط — حد أقصى 4)</span></label>
                       <ul id="cc_badgesList" class="space-y-1.5 mb-2"></ul>
                       <button type="button" id="cc_addBadgeBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>
                     </div>
@@ -37553,6 +37679,7 @@ app.get('/admin/follow-ups', async (c) => {
           var ccLogoUrl = '';
           var ccBgImageUrl = '';
           var selectedTextColor = 'black';
+          var ccPrimaryColor = PREVIEW_PRIMARY_COLOR || '#0f766e';
 
           var toggle = document.getElementById('contactCustomToggle');
           var body = document.getElementById('contactCustomBody');
@@ -37650,9 +37777,13 @@ app.get('/admin/follow-ups', async (c) => {
             return result;
           }
 
-          function previewInputBar(inputBg, inputBorder, hint, hintColor) {
-            return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;padding:0 6px;">'
-              + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ccEscape(hint || '') + '</span></div>';
+          function previewInputBar(inputBg, inputBorder, hint, hintColor, iconClass, iconBg, iconColor) {
+            var iconHtml = iconClass
+              ? '<span style="width:16px;height:100%;display:inline-flex;align-items:center;justify-content:center;background:' + (iconBg || 'rgba(0,0,0,0.04)') + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="' + iconClass + '" style="font-size:5px;color:' + (iconColor || '#9ca3af') + ';"></i></span>'
+              : '';
+            return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;overflow:hidden;">'
+              + iconHtml
+              + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;padding:0 5px;">' + ccEscape(hint || '') + '</span></div>';
           }
 
           function setCcLogoPreview(logoUrl) {
@@ -37683,14 +37814,17 @@ app.get('/admin/follow-ups', async (c) => {
           ];
 
           function ccBadgeIconOptions(selected) {
-            return CC_BADGE_ICONS.map(function(o) {
+            var noIconSel = (!selected || selected === '') ? ' selected' : '';
+            var opts = '<option value=""' + noIconSel + '>بدون أيقونة</option>';
+            opts += CC_BADGE_ICONS.map(function(o) {
               return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
             }).join('');
+            return opts;
           }
 
           function ccBadgeItemHtml(badge) {
             var text = typeof badge === 'string' ? badge : (badge && badge.text || '');
-            var icon = typeof badge === 'string' ? 'fas fa-check-circle' : (badge && badge.icon || 'fas fa-check-circle');
+            var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
             return '<li data-badge-item class="flex items-center gap-2">' +
               '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + ccBadgeIconOptions(icon) + '</select>' +
               '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + ccEscape(text) + '" />' +
@@ -37703,6 +37837,13 @@ app.get('/admin/follow-ups', async (c) => {
             var btn = document.getElementById('cc_addBadgeBtn');
             if (!bl || !btn) return;
             btn.style.display = bl.querySelectorAll('[data-badge-item]').length >= 4 ? 'none' : '';
+          }
+
+          function updateCcAddFormBadgeBtn() {
+            var bl = document.getElementById('cc_formBadgesList');
+            var btn = document.getElementById('cc_addFormBadgeBtn');
+            if (!bl || !btn) return;
+            btn.style.display = bl.querySelectorAll('[data-badge-item]').length >= 3 ? 'none' : '';
           }
 
           function fillCcBadges(raw) {
@@ -37723,6 +37864,18 @@ app.get('/admin/follow-ups', async (c) => {
             updateCcAddBadgeBtn();
           }
 
+          function fillCcFormBadges(raw) {
+            var bl = document.getElementById('cc_formBadgesList');
+            if (!bl) return;
+            var badges = [];
+            if (Array.isArray(raw)) badges = raw;
+            else if (typeof raw === 'string') {
+              try { var p = JSON.parse(raw); if (Array.isArray(p)) badges = p; } catch (_) {}
+            }
+            bl.innerHTML = badges.slice(0, 3).map(ccBadgeItemHtml).join('');
+            updateCcAddFormBadgeBtn();
+          }
+
           function getCcBadges() {
             var bl = document.getElementById('cc_badgesList');
             if (!bl) return [];
@@ -37731,7 +37884,20 @@ app.get('/admin/follow-ups', async (c) => {
               var inp = li.querySelector('[data-badge-label]');
               var iconEl = li.querySelector('[data-badge-icon]');
               var v = inp ? inp.value.trim() : '';
-              if (v) result.push({ icon: iconEl ? iconEl.value : 'fas fa-check-circle', text: v });
+              if (v) result.push({ icon: iconEl ? (iconEl.value || null) : null, text: v });
+            });
+            return result;
+          }
+
+          function getCcFormBadges() {
+            var bl = document.getElementById('cc_formBadgesList');
+            if (!bl) return [];
+            var result = [];
+            bl.querySelectorAll('[data-badge-item]').forEach(function(li) {
+              var inp = li.querySelector('[data-badge-label]');
+              var iconEl = li.querySelector('[data-badge-icon]');
+              var v = inp ? inp.value.trim() : '';
+              if (v) result.push({ icon: iconEl ? (iconEl.value || null) : null, text: v });
             });
             return result;
           }
@@ -37766,6 +37932,8 @@ app.get('/admin/follow-ups', async (c) => {
             var hintColor = isWhiteText ? 'rgba(255,255,255,0.45)' : '#9ca3af';
             var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
             var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
+            var iconBg = isWhiteText ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
+            var iconColor = isWhiteText ? 'rgba(255,255,255,0.5)' : '#9ca3af';
             var fields = getCcFields(true);
             var company = ccEscape(ccCompanyName || 'اسم الشركة');
             var brandHtml = ccLogoUrl
@@ -37810,15 +37978,17 @@ app.get('/admin/follow-ups', async (c) => {
               + '<div style="flex:1;height:1px;background:linear-gradient(to right,' + ccAccentColor + ',transparent);"></div>'
               + '</div>'
               + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">الاسم *</div>'
-              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor) + '</div>'
+              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor, 'fas fa-user', iconBg, iconColor) + '</div>'
               + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رقم الجوال *</div>'
-              + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;">'
-              + '<span style="font-size:6px;padding:0 4px;border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;" dir="ltr">+966</span>'
-              + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;">5xxxxxxxx</span>'
+              + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;overflow:hidden;">'
+              + '<span style="font-size:6px;padding:0 4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;flex-shrink:0;align-self:stretch;display:flex;align-items:center;" dir="ltr">+966</span>'
+              + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;flex:1;">5xxxxxxxx</span>'
               + '</div></div>'
               + fieldsHtml
               + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رسالتك *</div>'
-              + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';padding:3px 5px;"><span style="font-size:6px;color:' + hintColor + ';">اكتب رسالتك هنا...</span></div></div>'
+              + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';display:flex;align-items:flex-start;overflow:hidden;">'
+              + '<span style="width:16px;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="fas fa-comment-dots" style="font-size:5px;color:' + iconColor + ';"></i></span>'
+              + '<span style="font-size:6px;color:' + hintColor + ';padding:3px 4px;flex:1;">اكتب رسالتك هنا...</span></div></div>'
               + '<div style="background:' + (isWhiteText ? 'rgba(255,255,255,0.92)' : '#111827') + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
               + '<span style="color:' + (isWhiteText ? '#111827' : '#fff') + ';font-size:8px;font-weight:700;">إرسال الطلب</span></div>'
               + (function() {
@@ -37846,6 +38016,7 @@ app.get('/admin/follow-ups', async (c) => {
             setColorPair(bgPicker, bgSwatch, bgText, preset.bg, '#0f766e');
             setColorPair(formPicker, formSwatch, formText, preset.form, '#ffffff');
             setTextColorToggle(preset.text || 'black');
+            fillCcFormBadges(null);
             updateCcPreview();
           }
 
@@ -37991,6 +38162,33 @@ app.get('/admin/follow-ups', async (c) => {
             }
           })();
 
+          // Form badges wiring (inside form, above divider)
+          (function () {
+            var fbl = document.getElementById('cc_formBadgesList');
+            var fAddBtn = document.getElementById('cc_addFormBadgeBtn');
+            fillCcFormBadges(null);
+            if (fbl) {
+              fbl.addEventListener('click', function (e) {
+                var rm = e.target && e.target.closest ? e.target.closest('[data-badge-remove]') : null;
+                if (!rm) return;
+                var li = rm.closest('[data-badge-item]');
+                if (li) li.remove();
+                updateCcAddFormBadgeBtn();
+                updateCcPreview();
+              });
+              fbl.addEventListener('input', function () { updateCcPreview(); });
+            }
+            if (fAddBtn) {
+              fAddBtn.addEventListener('click', function () {
+                var list = document.getElementById('cc_formBadgesList');
+                if (!list || list.querySelectorAll('[data-badge-item]').length >= 3) return;
+                list.insertAdjacentHTML('beforeend', ccBadgeItemHtml(''));
+                updateCcAddFormBadgeBtn();
+                updateCcPreview();
+              });
+            }
+          })();
+
           // Trust badges wiring
           (function () {
             var bl = document.getElementById('cc_badgesList');
@@ -38059,6 +38257,7 @@ app.get('/admin/follow-ups', async (c) => {
               if (!res.data || res.data.success !== true || !res.data.data) return;
               var d = res.data.data;
               ccCompanyName = d.company_name || d.slug || 'اسم الشركة';
+              ccPrimaryColor = d.primary_color || '#0f766e';
               setCcLogoPreview(d.logo_url || '');
               setColorPair(bgPicker, bgSwatch, bgText, d.contact_bg_color || '', '#0f766e');
               setColorPair(formPicker, formSwatch, formText, d.contact_form_color || '', '#ffffff');
@@ -38066,6 +38265,7 @@ app.get('/admin/follow-ups', async (c) => {
               setTextColorToggle(d.contact_text_color || 'black');
               fillCcFields(d.contact_custom_fields);
               fillCcBadges(d.contact_trust_badges);
+              fillCcFormBadges(d.contact_form_badges);
               var htEl2 = document.getElementById('cc_hero_title');
               var hsEl2 = document.getElementById('cc_hero_subtitle');
               if (htEl2) htEl2.value = d.contact_hero_title || '';
@@ -38090,6 +38290,7 @@ app.get('/admin/follow-ups', async (c) => {
                 contact_text_color: selectedTextColor,
                 contact_custom_fields: customFields,
                 contact_trust_badges: getCcBadges(),
+                contact_form_badges: getCcFormBadges(),
                 contact_hero_title: (document.getElementById('cc_hero_title') || {}).value || null,
                 contact_hero_subtitle: (document.getElementById('cc_hero_subtitle') || {}).value || null,
                 contact_accent_color: (accentText && accentText.value.trim()) ? accentText.value.trim() : null,
@@ -38139,7 +38340,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -38175,7 +38376,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
 
   const affiliate = await c.env.DB.prepare(`
     SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
-           contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+           contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
@@ -38205,7 +38406,7 @@ app.get('/:slug/:secondSegment', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -38219,7 +38420,7 @@ app.get('/:slug/:secondSegment', async (c) => {
 
   const affiliate = await c.env.DB.prepare(`
     SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
-           contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+           contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
     LIMIT 1
@@ -38266,7 +38467,7 @@ app.get('/:slug', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
