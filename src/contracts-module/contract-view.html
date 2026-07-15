@@ -30,6 +30,7 @@
       padding: 24px 12px 32px;
       background: #e8eaee;
       border-radius: 10px;
+      overflow-x: auto;
     }
     /* Screen-only enlarge (~125%). Applied after pagination so page breaks stay correct. */
     .contract-a4-stage.a4-preview-scaled {
@@ -71,6 +72,14 @@
     }
     .a4-sheet + .a4-sheet {
       /* visual page gap already from stage gap */
+    }
+    /* Landscape A4: 297mm × 210mm (rotated) */
+    .a4-sheet--landscape {
+      width: 297mm;
+      max-width: 297mm;
+      height: 210mm;
+      min-height: 210mm;
+      max-height: 210mm;
     }
     .a4-sheet-inner {
       position: relative;
@@ -531,6 +540,11 @@
       page-break-inside: avoid;
     }
 
+    /* Named pages must be top-level — browsers ignore @page nested inside @media print. */
+    @page portrait-page { size: A4 portrait; margin: 0; }
+    @page landscape-page { size: A4 landscape; margin: 0; }
+    @page { margin: 0; }
+
     /* ===== PRINT — match on-screen A4 sheets 1:1 ===== */
     @media print {
       .sidebar,
@@ -541,25 +555,28 @@
       .no-print,
       .a4-page-label { display: none !important; }
 
+      /* Do NOT lock print containers to 210mm — landscape sheets are 297mm wide and get clipped. */
       html, body {
         background: #fff !important;
         margin: 0 !important;
         padding: 0 !important;
-        width: 210mm !important;
+        width: auto !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        overflow: visible !important;
       }
-      .main-content {
-        margin: 0 !important;
-        width: 210mm !important;
-        max-width: 210mm !important;
-      }
-      .page-content {
-        padding: 0 !important;
-        background: #fff !important;
-        margin: 0 !important;
-      }
+      .main-content,
+      .page-content,
       #contractDoc {
         margin: 0 !important;
         padding: 0 !important;
+        width: auto !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        overflow: visible !important;
+      }
+      .page-content {
+        background: #fff !important;
       }
       .contract-a4-stage {
         display: block !important;
@@ -570,12 +587,9 @@
         border-radius: 0 !important;
         zoom: 1 !important;
         transform: none !important;
-      }
-
-      /* One sheet = one physical A4 page, edge-to-edge (no browser page margin) */
-      @page {
-        size: A4 portrait;
-        margin: 0;
+        width: auto !important;
+        max-width: none !important;
+        overflow: visible !important;
       }
 
       .contract-doc,
@@ -592,12 +606,22 @@
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
+        page: portrait-page;
         page-break-after: always;
         break-after: page;
         page-break-inside: avoid;
         break-inside: avoid;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+      .a4-sheet--landscape {
+        page: landscape-page;
+        width: 297mm !important;
+        max-width: 297mm !important;
+        min-width: 297mm !important;
+        height: 210mm !important;
+        min-height: 210mm !important;
+        max-height: 210mm !important;
       }
       .a4-sheet:not(.has-letterhead) {
         padding: 18mm 16mm !important;
@@ -1021,18 +1045,20 @@
     }
 
     /** Usable body height: real A4 probe with letterhead so packing matches the layout. */
-    function getA4ContentHeightPx() {
+    function getA4ContentHeightPx(orientation) {
+      const isLandscape = orientation === 'landscape';
+      const mmH = isLandscape ? 210 : 297;
       const holder = document.createElement('div');
       holder.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;';
-      const built = createA4Sheet(false, 0, 1);
-      built.sheet.style.height = '297mm';
-      built.sheet.style.minHeight = '297mm';
+      const built = createA4Sheet(false, 0, 1, null, orientation);
+      built.sheet.style.height = mmH + 'mm';
+      built.sheet.style.minHeight = mmH + 'mm';
       built.sheet.style.margin = '0';
       holder.appendChild(built.sheet);
       document.body.appendChild(holder);
       void built.sheet.offsetHeight;
 
-      const pageH = built.sheet.clientHeight || Math.round(297 * 3.78);
+      const pageH = built.sheet.clientHeight || Math.round(mmH * 3.78);
       const headerEl = built.sheet.querySelector('.a4-letterhead-header');
       const footerEl = built.sheet.querySelector('.a4-letterhead-footer');
       const headerH = headerEl ? headerEl.offsetHeight : 0;
@@ -1216,9 +1242,10 @@
       });
     }
 
-    function createA4Sheet(isDraft, pageIndex, pageCount, docFont) {
+    function createA4Sheet(isDraft, pageIndex, pageCount, docFont, orientation) {
+      const isLandscape = orientation === 'landscape';
       const sheet = document.createElement('div');
-      sheet.className = 'a4-sheet' + (isDraft ? ' is-draft' : '');
+      sheet.className = 'a4-sheet' + (isDraft ? ' is-draft' : '') + (isLandscape ? ' a4-sheet--landscape' : '');
       if (docFont) {
         sheet.style.setProperty('--doc-body-font-size', docFont);
         sheet.style.fontSize = docFont;
@@ -1246,6 +1273,40 @@
     }
 
     /**
+     * Keep a marked template section on one physical sheet. The transform is only
+     * applied when the section exceeds its orientation's usable height.
+     */
+    function fitSheetContentToSinglePage(page, maxH) {
+      const inner = page?.inner;
+      if (!inner || !maxH) return;
+
+      inner.style.transform = '';
+      inner.style.transformOrigin = '';
+      inner.style.width = '';
+
+      const initialH = measureInnerContentHeight(inner);
+      if (initialH <= maxH + 2) return;
+
+      let scale = Math.min(1, (maxH - 2) / initialH);
+      // Compensating the width changes wrapping, so converge on the final scale.
+      for (let i = 0; i < 5; i++) {
+        inner.style.width = `${100 / scale}%`;
+        const rawH = measureInnerContentHeight(inner);
+        const nextScale = Math.min(1, (maxH - 2) / Math.max(1, rawH));
+        if (Math.abs(nextScale - scale) < 0.002) {
+          scale = nextScale;
+          break;
+        }
+        scale = nextScale;
+      }
+
+      inner.style.width = `${100 / scale}%`;
+      inner.style.transformOrigin = 'top right';
+      inner.style.transform = `scale(${scale})`;
+      inner.dataset.sectionFitScale = scale.toFixed(3);
+    }
+
+    /**
      * Split the rendered contract into stacked A4 sheets for on-screen preview.
      * Print uses the same sheets with page-break-after.
      */
@@ -1267,8 +1328,14 @@
 
       const blocks = Array.from(bodyEl.children);
       if (!blocks.length) return;
+      // Mixed-orientation service templates define two fixed sections:
+      // one portrait contract sheet, then one landscape سند لأمر sheet.
+      const enforceSinglePageSections = blocks.some((block) =>
+        block.classList?.contains('tpl-page-break--landscape')
+      );
 
-      const maxH = getA4ContentHeightPx();
+      const maxHPortrait = getA4ContentHeightPx('portrait');
+      const maxHLandscape = getA4ContentHeightPx('landscape');
       const stage = document.createElement('div');
       stage.className = 'contract-a4-stage' + (isDraft ? ' is-draft' : '');
       stage.id = 'printArea';
@@ -1278,26 +1345,41 @@
       host.insertBefore(stage, source);
 
       const pages = [];
-      let current = createA4Sheet(isDraft, 0, 1, docFont);
+      let currentOrientation = 'portrait';
+      let current = createA4Sheet(isDraft, 0, 1, docFont, 'portrait');
       pages.push(current);
       stage.appendChild(current.sheet);
 
       blocks.forEach((block) => {
+        const isLandscapeBreak = block.classList?.contains('tpl-page-break--landscape');
         const forceBreak =
           block.classList?.contains('tpl-page-break') ||
           /page-break-before\s*:\s*always/i.test(block.getAttribute?.('style') || '');
 
         if (forceBreak) {
-          // Only forces the page AFTER signatures (before سند لأمر) — never above them.
+          const nextOrientation = isLandscapeBreak ? 'landscape' : currentOrientation;
           if (current.inner.children.length > 0) {
-            current = createA4Sheet(isDraft, pages.length, 1, docFont);
+            if (enforceSinglePageSections) {
+              const currentMaxH = currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
+              fitSheetContentToSinglePage(current, currentMaxH);
+            }
+            // Close current page and open a new one with the target orientation.
+            currentOrientation = nextOrientation;
+            current = createA4Sheet(isDraft, pages.length, 1, docFont, currentOrientation);
             pages.push(current);
             stage.appendChild(current.sheet);
+          } else if (nextOrientation !== currentOrientation) {
+            // Current page is empty — switch its orientation in-place instead of adding a blank sheet.
+            current.sheet.classList.add('a4-sheet--landscape');
+            currentOrientation = nextOrientation;
           }
           return;
         }
 
+        const maxH = currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
         current.inner.appendChild(block);
+        if (enforceSinglePageSections) return;
+
         const overflows = measureInnerContentHeight(current.inner) > maxH + 2 && current.inner.children.length > 1;
         if (!overflows) return;
 
@@ -1308,11 +1390,16 @@
         }
 
         current.inner.removeChild(block);
-        current = createA4Sheet(isDraft, pages.length, 1, docFont);
+        current = createA4Sheet(isDraft, pages.length, 1, docFont, currentOrientation);
         pages.push(current);
         stage.appendChild(current.sheet);
         current.inner.appendChild(block);
       });
+
+      if (enforceSinglePageSections) {
+        const currentMaxH = currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
+        fitSheetContentToSinglePage(current, currentMaxH);
+      }
 
       const pageCount = pages.length;
       pages.forEach((p, i) => {
@@ -1940,6 +2027,64 @@
 
     document.addEventListener('DOMContentLoaded', loadContract);
     window.addEventListener('resize', fitDraftWatermark);
+
+    /** Expand print ancestors so 297mm landscape sheets are not clipped to portrait width. */
+    function prepareMixedOrientationPrint() {
+      const nodes = [
+        document.documentElement,
+        document.body,
+        document.querySelector('.main-content'),
+        document.querySelector('.page-content'),
+        document.getElementById('contractDoc'),
+        document.getElementById('printArea')
+      ].filter(Boolean);
+      nodes.forEach((el) => {
+        el.dataset.printWidthPrev = el.style.width || '';
+        el.dataset.printMaxWidthPrev = el.style.maxWidth || '';
+        el.dataset.printOverflowPrev = el.style.overflow || '';
+        el.dataset.printOverflowXPrev = el.style.overflowX || '';
+        el.style.setProperty('width', 'auto', 'important');
+        el.style.setProperty('max-width', 'none', 'important');
+        el.style.setProperty('overflow', 'visible', 'important');
+        el.style.setProperty('overflow-x', 'visible', 'important');
+      });
+      document.documentElement.classList.add('printing-mixed-a4');
+    }
+
+    function restoreMixedOrientationPrint() {
+      const nodes = [
+        document.documentElement,
+        document.body,
+        document.querySelector('.main-content'),
+        document.querySelector('.page-content'),
+        document.getElementById('contractDoc'),
+        document.getElementById('printArea')
+      ].filter(Boolean);
+      nodes.forEach((el) => {
+        el.style.width = el.dataset.printWidthPrev || '';
+        el.style.maxWidth = el.dataset.printMaxWidthPrev || '';
+        el.style.overflow = el.dataset.printOverflowPrev || '';
+        el.style.overflowX = el.dataset.printOverflowXPrev || '';
+        delete el.dataset.printWidthPrev;
+        delete el.dataset.printMaxWidthPrev;
+        delete el.dataset.printOverflowPrev;
+        delete el.dataset.printOverflowXPrev;
+      });
+      document.documentElement.classList.remove('printing-mixed-a4');
+    }
+
+    function printPage() {
+      const mixed = !!document.querySelector('.a4-sheet--landscape');
+      if (mixed) prepareMixedOrientationPrint();
+      const cleanup = () => {
+        if (mixed) restoreMixedOrientationPrint();
+        window.removeEventListener('afterprint', cleanup);
+      };
+      window.addEventListener('afterprint', cleanup);
+      window.print();
+      // Safari / some WebViews never fire afterprint
+      setTimeout(cleanup, 2000);
+    }
     window.addEventListener('beforeprint', () => {
       requestAnimationFrame(fitDraftWatermark);
     });

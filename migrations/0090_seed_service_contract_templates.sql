@@ -49,8 +49,9 @@ SELECT
 البند العاشر: - حرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها وقد تفاهم الطرفان على الوفاء بالعقد وحسن المعاملة وإعطاء كل ذي حق حقه.
 
 <div class="tpl-sig-row"><div class="tpl-sig-col tpl-sig-col--party-one"><div class="tpl-sig-label">الطرف الأول</div><div class="tpl-sig-name">مكتب حلول الموعد للخدمات العامة</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">الختم:</span><div class="tpl-sig-space"></div></div></div><div class="tpl-sig-col tpl-sig-col--party-two"><div class="tpl-sig-label">الطرف الثاني</div><div class="tpl-sig-name">{{party_two_name}}</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">التوقيع:</span><div class="tpl-sig-space"></div></div></div></div>
-<div class="tpl-page-break" style="page-break-before:always;"></div>
-<p class="tpl-note-title" style="text-align:center;font-weight:800;">سند لأمر</p>
+<div class="tpl-page-break tpl-page-break--landscape" style="page-break-before:always;"></div>
+<div class="tpl-note-section" style="font-size:12px;line-height:1.6">
+<p class="tpl-note-title" style="text-align:center;font-weight:800;font-size:18px;">سند لأمر</p>
 
 رقم القيد ({{note_order_number}})
 التاريخ: {{date_gregorian}} م
@@ -64,7 +65,7 @@ SELECT
 كما يجوز لمكتب حلول الموعد للخدمات العامة تظهير هذا السند لأي طرف دون موافقة المدين.
 ولحامل هذه الورقة حق الرجوع على المدين دون مصاريف أو احتجاج.
 
-الاســـم: {{party_two_name}}    التوقيع:',
+الاســـم: {{party_two_name}}    التوقيع:</div>',
   'عقد تقديم خدمات وحلول',
   '["date_hijri","date_gregorian","day_name","party_two_name","party_two_id","party_two_address","party_two_phone","finance_type","property_description","finance_amount","commission_amount","note_order_number"]',
   1,
@@ -116,8 +117,9 @@ SELECT
 البند العاشر: - حرر هذا العقد من نسختين أصليتين بيد كل طرف نسخة للعمل بموجبها وقد تفاهم الطرفان على الوفاء بالعقد وحسن المعاملة وإعطاء كل ذي حق حقه.
 
 <div class="tpl-sig-row"><div class="tpl-sig-col tpl-sig-col--party-one"><div class="tpl-sig-label">الطرف الأول</div><div class="tpl-sig-name">شركة وصله للخدمات العقارية والتحصيل</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">الختم:</span><div class="tpl-sig-space"></div></div></div><div class="tpl-sig-col tpl-sig-col--party-two"><div class="tpl-sig-label">الطرف الثاني</div><div class="tpl-sig-name">{{party_two_name}}</div><div class="tpl-sig-field"><span class="tpl-sig-field-lbl">التوقيع:</span><div class="tpl-sig-space"></div></div></div></div>
-<div class="tpl-page-break" style="page-break-before:always;"></div>
-<p class="tpl-note-title" style="text-align:center;font-weight:800;">سند لأمر</p>
+<div class="tpl-page-break tpl-page-break--landscape" style="page-break-before:always;"></div>
+<div class="tpl-note-section" style="font-size:12px;line-height:1.6">
+<p class="tpl-note-title" style="text-align:center;font-weight:800;font-size:18px;">سند لأمر</p>
 
 رقم القيد ({{note_order_number}})
 التاريخ: {{date_gregorian}} م
@@ -131,7 +133,7 @@ SELECT
 كما يجوز لشركة وصله للخدمات العقارية والتحصيل تظهير هذا السند لأي طرف دون موافقة المدين.
 ولحامل هذه الورقة حق الرجوع على المدين دون مصاريف أو احتجاج.
 
-الاســـم: {{party_two_name}}    التوقيع:',
+الاســـم: {{party_two_name}}    التوقيع:</div>',
   'عقد تقديم خدمات وحلول',
   '["date_hijri","date_gregorian","day_name","party_two_name","party_two_id","party_two_address","party_two_phone","finance_type","finance_amount","commission_amount","note_order_number"]',
   1,

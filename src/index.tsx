@@ -1841,9 +1841,7 @@ function buildPublicContactPageHtml(
   const headerTextColor = isWhiteText || headerOnDark ? 'rgba(255,255,255,0.95)' : '#111827'
   const headerSubColor = isWhiteText || headerOnDark ? 'rgba(255,255,255,0.7)' : '#4b5563'
   const accentColor = escapeHtml((tenant.contact_accent_color ?? null) || '#d97706')
-  const submitBtnStyle = isWhiteText
-    ? 'background:rgba(255,255,255,0.92);color:#111827;'
-    : 'background:#111827;color:#fff;'
+  const submitBtnStyle = `background:${accentColor};color:#fff;`
   const locationStr = [tenant.public_city, tenant.public_address].filter(Boolean).join(' — ')
 
   // Build badges HTML — shared helper
@@ -1869,9 +1867,8 @@ function buildPublicContactPageHtml(
     }
     if (badges === null) badges = useDefault ? DEFAULT_BADGES : []
     if (badges.length === 0) return ''
-    return badges.map((b, i) =>
-      (i > 0 ? '<div style="color:#e5e7eb;">|</div>' : '')
-      + `<div class="trust-item">${b.icon ? `<i class="${escapeHtmlAttr(b.icon)}" style="color:${accentColor};"></i>` : ''}${escapeHtml(b.text)}</div>`
+    return badges.map((b) =>
+      `<div class="trust-item">${b.icon ? `<i class="${escapeHtmlAttr(b.icon)}" style="color:${accentColor};"></i>` : ''}<span>${escapeHtml(b.text)}</span></div>`
     ).join('')
   }
   // Below the divider line — uses default badges if none configured
@@ -1900,9 +1897,9 @@ function buildPublicContactPageHtml(
         .submit-btn:hover { opacity:.9; }
         .submit-btn:active { transform:scale(.99); }
         .submit-btn:disabled { opacity:.6; cursor:not-allowed; }
-        .trust-row { display:flex; align-items:center; justify-content:center; gap:1.25rem; flex-wrap:wrap; padding-top:1.25rem; margin-top:1.25rem; border-top:1px solid rgba(0,0,0,0.07); }
-        .trust-item { display:flex; align-items:center; gap:.4rem; font-size:.75rem; color:#6b7280; }
-        .trust-item i { font-size:.8rem; }
+        .trust-row { display:flex; align-items:center; justify-content:center; gap:0.65rem 1rem; flex-wrap:wrap; padding:1.25rem 0.15rem 0.35rem; margin-top:1.25rem; border-top:1px solid rgba(0,0,0,0.07); }
+        .trust-item { display:inline-flex; align-items:center; gap:.4rem; font-size:.75rem; line-height:1.45; color:#6b7280; flex:0 1 auto; max-width:100%; min-width:0; overflow:visible; white-space:normal; text-align:center; }
+        .trust-item i { font-size:.8rem; line-height:1; flex-shrink:0; }
         .section-divider { display:flex; align-items:center; gap:.75rem; margin-bottom:1.5rem; }
         .section-divider span { font-size:.95rem; font-weight:700; white-space:nowrap; color:#111827; }
         .section-divider .line { flex:1; height:1px; }
@@ -1947,7 +1944,7 @@ function buildPublicContactPageHtml(
             </div>
 
             <!-- ── Form card ── -->
-            <div style="${formCardStyle}border-radius:1.25rem;box-shadow:0 24px 64px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.04);padding:2rem 1.75rem;">
+            <div style="${formCardStyle}border-radius:1.25rem;box-shadow:0 24px 64px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.04);padding:2rem 1.75rem 2.25rem;overflow:visible;">
               <div class="section-divider">
                 <div class="line" style="background:linear-gradient(to left,${accentColor},transparent);"></div>
                 <span>بيانات التواصل</span>
@@ -1982,7 +1979,7 @@ function buildPublicContactPageHtml(
                   </div>
                 </div>
                 <button id="submitBtn" type="submit" class="submit-btn" style="${submitBtnStyle}margin-top:.25rem;">
-                  <i class="fas fa-paper-plane"></i>إرسال الطلب
+                  <i class="fas fa-paper-plane"></i>احصل على استشارة مجانية
                 </button>
                 <p id="formStatus" class="text-sm" style="margin:0;text-align:center;"></p>
                 ${formBadgesInner ? `<div class="trust-row" style="border-top:none;margin-top:.5rem;padding-top:.5rem;">${formBadgesInner}</div>` : ''}
@@ -2049,7 +2046,7 @@ function buildPublicContactPageHtml(
             statusEl.className = 'text-sm text-red-700';
           } finally {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i>إرسال الطلب';
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i>احصل على استشارة مجانية';
           }
         });
       </script>
@@ -35699,7 +35696,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
           return '<li data-badge-item class="flex items-center gap-2">' +
             '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + badgeIconOptions(icon) + '</select>' +
-            '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + escapeHtml(text) + '" />' +
+            '<input type="text" maxlength="100" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + escapeHtml(text) + '" />' +
             '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-badge-remove><i class="fas fa-times"></i></button>' +
             '</li>';
         }
@@ -35709,7 +35706,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
           return '<li data-form-badge-item class="flex items-center gap-2">' +
             '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-form-badge-icon style="min-width:0;">' + badgeIconOptions(icon) + '</select>' +
-            '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-form-badge-label value="' + escapeHtml(text) + '" />' +
+            '<input type="text" maxlength="100" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-form-badge-label value="' + escapeHtml(text) + '" />' +
             '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-form-badge-remove><i class="fas fa-times"></i></button>' +
             '</li>';
         }
@@ -35906,8 +35903,8 @@ app.get('/admin/contact-affiliates', async (c) => {
           var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
           var accentEl = document.getElementById('affAccent_' + id + '_text');
           var accentColor = (accentEl && /^#[0-9a-fA-F]{3,8}$/.test((accentEl.value || '').trim())) ? accentEl.value.trim() : '#d97706';
-          var submitBg = isWhiteText ? 'rgba(255,255,255,0.92)' : '#111827';
-          var submitFg = isWhiteText ? '#111827' : '#fff';
+          var submitBg = accentColor;
+          var submitFg = '#fff';
           var iconBg = isWhiteText ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
           var iconColor = isWhiteText ? 'rgba(255,255,255,0.5)' : '#9ca3af';
           var company = escapeHtml(PREVIEW_COMPANY_NAME || 'اسم الشركة');
@@ -35939,7 +35936,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           screen.innerHTML =
             '<div style="height:100%;overflow-y:auto;position:relative;background:' + bgCss + ';border-radius:26px;">'
             + overlayHtml
-            + '<div style="position:relative;z-index:1;padding:14px 10px;box-sizing:border-box;">'
+            + '<div style="position:relative;z-index:1;padding:14px 10px 28px;box-sizing:border-box;">'
             // ── Header (outside card) ──
             + '<div style="text-align:center;margin-bottom:10px;">'
             + brandHtml
@@ -35954,7 +35951,7 @@ app.get('/admin/contact-affiliates', async (c) => {
               })()
             + '</div>'
             // ── Form card ──
-            + '<div style="background:' + formBg + ';border-radius:10px;padding:10px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);">'
+            + '<div style="background:' + formBg + ';border-radius:10px;padding:10px 10px 14px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);overflow:visible;">'
             + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;">'
             + '<div style="flex:1;height:1px;background:linear-gradient(to left,' + accentColor + ',transparent);"></div>'
             + '<span style="font-size:7.5px;font-weight:700;color:#111827;white-space:nowrap;">بيانات التواصل</span>'
@@ -35973,7 +35970,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             + '<span style="width:16px;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="fas fa-comment-dots" style="font-size:5px;color:' + iconColor + ';"></i></span>'
             + '<span style="font-size:6px;color:' + hintColor + ';padding:3px 4px;flex:1;">اكتب رسالتك هنا...</span></div></div>'
             + '<div style="background:' + submitBg + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
-            + '<span style="color:' + submitFg + ';font-size:8px;font-weight:700;">إرسال الطلب</span></div>'
+            + '<span style="color:' + submitFg + ';font-size:8px;font-weight:700;">احصل على استشارة مجانية</span></div>'
             + (function() {
                 var badges = getAffBadges(id);
                 if (badges === null) badges = [
@@ -35982,11 +35979,12 @@ app.get('/admin/contact-affiliates', async (c) => {
                   { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
                 ];
                 if (!badges.length) return '';
-                return '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:6px;border-top:1px solid rgba(0,0,0,0.06);">'
+                return '<div style="display:flex;justify-content:center;align-items:center;gap:5px 8px;flex-wrap:wrap;margin-top:8px;padding:7px 2px 4px;border-top:1px solid rgba(0,0,0,0.06);overflow:visible;">'
                   + badges.map(function(b) {
-                      return '<span style="display:inline-flex;align-items:center;gap:2px;font-size:6px;color:#9ca3af;">'
-                        + '<i class="' + escapeHtml(b.icon) + '" style="font-size:7px;"></i>'
-                        + escapeHtml(b.text) + '</span>';
+                      var icon = b && b.icon ? String(b.icon).trim() : '';
+                      return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:6.5px;line-height:1.35;color:#9ca3af;flex:0 1 auto;max-width:100%;min-width:0;overflow:visible;white-space:normal;text-align:center;">'
+                        + (icon ? '<i class="' + escapeHtml(icon) + '" style="font-size:7px;line-height:1;flex-shrink:0;"></i>' : '')
+                        + '<span style="overflow:visible;">' + escapeHtml(b.text) + '</span></span>';
                     }).join('')
                   + '</div>';
               })()
@@ -37679,7 +37677,8 @@ app.get('/admin/follow-ups', async (c) => {
           var ccLogoUrl = '';
           var ccBgImageUrl = '';
           var selectedTextColor = 'black';
-          var ccPrimaryColor = PREVIEW_PRIMARY_COLOR || '#0f766e';
+          // PREVIEW_PRIMARY_COLOR exists on /admin/contact-affiliates only — do not reference it here
+          var ccPrimaryColor = '#0f766e';
 
           var toggle = document.getElementById('contactCustomToggle');
           var body = document.getElementById('contactCustomBody');
@@ -37827,7 +37826,7 @@ app.get('/admin/follow-ups', async (c) => {
             var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
             return '<li data-badge-item class="flex items-center gap-2">' +
               '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + ccBadgeIconOptions(icon) + '</select>' +
-              '<input type="text" maxlength="40" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + ccEscape(text) + '" />' +
+              '<input type="text" maxlength="100" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + ccEscape(text) + '" />' +
               '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-badge-remove><i class="fas fa-times"></i></button>' +
               '</li>';
           }
@@ -37958,7 +37957,7 @@ app.get('/admin/follow-ups', async (c) => {
             screen.innerHTML =
               '<div style="height:100%;overflow-y:auto;position:relative;background:' + bgCss + ';border-radius:26px;">'
               + overlayHtml
-              + '<div style="position:relative;z-index:1;padding:14px 10px;box-sizing:border-box;">'
+              + '<div style="position:relative;z-index:1;padding:14px 10px 28px;box-sizing:border-box;">'
               + '<div style="text-align:center;margin-bottom:10px;">'
               + brandHtml
               + '<div style="font-size:10px;font-weight:800;' + headerTextCss + '">' + company + '</div>'
@@ -37971,7 +37970,7 @@ app.get('/admin/follow-ups', async (c) => {
                     + '<div style="font-size:7.5px;font-weight:600;margin-top:1px;color:' + ccAccentColor + ';">' + hs + '</div>';
                 })()
               + '</div>'
-              + '<div style="background:' + formBg + ';border-radius:10px;padding:10px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);">'
+              + '<div style="background:' + formBg + ';border-radius:10px;padding:10px 10px 14px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);overflow:visible;">'
               + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;">'
               + '<div style="flex:1;height:1px;background:linear-gradient(to left,' + ccAccentColor + ',transparent);"></div>'
               + '<span style="font-size:7.5px;font-weight:700;color:#111827;white-space:nowrap;">بيانات التواصل</span>'
@@ -37989,8 +37988,8 @@ app.get('/admin/follow-ups', async (c) => {
               + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';display:flex;align-items:flex-start;overflow:hidden;">'
               + '<span style="width:16px;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="fas fa-comment-dots" style="font-size:5px;color:' + iconColor + ';"></i></span>'
               + '<span style="font-size:6px;color:' + hintColor + ';padding:3px 4px;flex:1;">اكتب رسالتك هنا...</span></div></div>'
-              + '<div style="background:' + (isWhiteText ? 'rgba(255,255,255,0.92)' : '#111827') + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
-              + '<span style="color:' + (isWhiteText ? '#111827' : '#fff') + ';font-size:8px;font-weight:700;">إرسال الطلب</span></div>'
+              + '<div style="background:' + ccAccentColor + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
+              + '<span style="color:#fff;font-size:8px;font-weight:700;">احصل على استشارة مجانية</span></div>'
               + (function() {
                   var badges = getCcBadges();
                   if (!badges.length) badges = [
@@ -37999,11 +37998,12 @@ app.get('/admin/follow-ups', async (c) => {
                     { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
                   ];
                   if (!badges.length) return '';
-                  return '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:6px;border-top:1px solid rgba(0,0,0,0.06);">'
+                  return '<div style="display:flex;justify-content:center;align-items:center;gap:5px 8px;flex-wrap:wrap;margin-top:8px;padding:7px 2px 4px;border-top:1px solid rgba(0,0,0,0.06);overflow:visible;">'
                     + badges.map(function(b) {
-                        return '<span style="display:inline-flex;align-items:center;gap:2px;font-size:6px;color:#9ca3af;">'
-                          + '<i class="' + ccEscape(b.icon) + '" style="font-size:7px;"></i>'
-                          + ccEscape(b.text) + '</span>';
+                        var icon = b && b.icon ? String(b.icon).trim() : '';
+                        return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:6.5px;line-height:1.35;color:#9ca3af;flex:0 1 auto;max-width:100%;min-width:0;overflow:visible;white-space:normal;text-align:center;">'
+                          + (icon ? '<i class="' + ccEscape(icon) + '" style="font-size:7px;line-height:1;flex-shrink:0;"></i>' : '')
+                          + '<span style="overflow:visible;">' + ccEscape(b.text) + '</span></span>';
                       }).join('')
                     + '</div>';
                 })()
