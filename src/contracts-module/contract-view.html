@@ -105,6 +105,9 @@
     .a4-letterhead-footer {
       margin-top: auto; /* pin to bottom of the A4 sheet */
     }
+    .a4-sheet--portrait-half .a4-letterhead-footer {
+      margin-top: 0; /* follow inner content instead of pinning to bottom */
+    }
     .a4-letterhead-header img,
     .a4-letterhead-footer img {
       width: 100%;
@@ -233,6 +236,20 @@
       margin: 0;
       padding: 0;
       border: 0;
+    }
+    .a4-sheet--portrait-half .a4-sheet-inner {
+      flex: 0 0 auto;
+      min-height: 0;
+    }
+    /* Watermarks on half-page sheets must span only the top half of the sheet
+       (matches the reduced bordered area). Applies to both the company logo bg
+       watermark and the draft diagonal. Inline JS refines to the inner's exact
+       rect; this CSS is a hard fallback. */
+    .a4-sheet--portrait-half .draft-watermark,
+    .a4-sheet--portrait-half .a4-sheet-bg-watermark {
+      top: 0 !important;
+      bottom: auto !important;
+      height: 50% !important;
     }
     .tpl-note-title {
       text-align: center !important;
@@ -640,6 +657,10 @@
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
+      .a4-sheet--portrait-half .a4-sheet-inner {
+        flex: 0 0 auto !important;
+        overflow: hidden !important;
+      }
       .a4-sheet.has-letterhead .a4-sheet-inner {
         padding: 6mm 16mm !important;
       }
@@ -654,6 +675,9 @@
       }
       .a4-letterhead-footer {
         margin-top: auto !important;
+      }
+      .a4-sheet--portrait-half .a4-letterhead-footer {
+        margin-top: 0 !important;
       }
       .a4-letterhead-header img,
       .a4-letterhead-footer img {
@@ -986,7 +1010,16 @@
         if (!inner || !doc || (watermark && watermark.hidden)) return;
 
         const W = doc.offsetWidth || 794;
-        const H = Math.min(doc.offsetHeight || 1123, Math.round(297 * 3.78));
+        const fullH = doc.offsetHeight || 1123;
+        // If the watermark box was explicitly constrained (half-page sheets set
+        // top/height inline), use its own rendered height — that's the true
+        // allocated area for the diagonal. Otherwise fall back to full sheet.
+        const isConstrained = watermark.dataset && watermark.dataset.wmConstrained === '1';
+        const wmH = watermark.offsetHeight;
+        const H = isConstrained && wmH
+          ? wmH
+          : Math.min(fullH, Math.round(297 * 3.78));
+
         const diag = Math.round(Math.sqrt(W * W + H * H));
         // Negative = counter-clockwise: top-right → bottom-left (RTL diagonal)
         const angleDeg = -(Math.atan2(H, W) * 180 / Math.PI);
@@ -1153,10 +1186,11 @@
         const ownStyle = el.getAttribute('style') || '';
         const nextInherit = mergeStyles(inherited, ownStyle);
 
-        // Keep atomic layout blocks (signatures / forced page breaks / note titles)
+        // Keep atomic layout blocks (signatures / forced page breaks / note sections)
         if (
           el.classList.contains('tpl-sig-row') ||
           el.classList.contains('tpl-page-break') ||
+          el.classList.contains('tpl-note-section') ||
           el.classList.contains('tpl-note-title') ||
           /page-break-before\s*:\s*always/i.test(ownStyle)
         ) {
@@ -1328,10 +1362,12 @@
 
       const blocks = Array.from(bodyEl.children);
       if (!blocks.length) return;
-      // Mixed-orientation service templates define two fixed sections:
-      // one portrait contract sheet, then one landscape سند لأمر sheet.
+      // Service templates with fixed sections: one portrait contract sheet, then a second sheet.
+      // tpl-page-break--landscape → landscape second sheet (legacy).
+      // tpl-page-break--portrait-half → portrait second sheet, content scaled to top half only.
       const enforceSinglePageSections = blocks.some((block) =>
-        block.classList?.contains('tpl-page-break--landscape')
+        block.classList?.contains('tpl-page-break--landscape') ||
+        block.classList?.contains('tpl-page-break--portrait-half')
       );
 
       const maxHPortrait = getA4ContentHeightPx('portrait');
@@ -1349,23 +1385,30 @@
       let current = createA4Sheet(isDraft, 0, 1, docFont, 'portrait');
       pages.push(current);
       stage.appendChild(current.sheet);
+      let nextSectionIsHalf = false;
 
       blocks.forEach((block) => {
         const isLandscapeBreak = block.classList?.contains('tpl-page-break--landscape');
+        const isPortraitHalfBreak = block.classList?.contains('tpl-page-break--portrait-half');
         const forceBreak =
           block.classList?.contains('tpl-page-break') ||
           /page-break-before\s*:\s*always/i.test(block.getAttribute?.('style') || '');
 
         if (forceBreak) {
           const nextOrientation = isLandscapeBreak ? 'landscape' : currentOrientation;
+          if (isPortraitHalfBreak) nextSectionIsHalf = true;
           if (current.inner.children.length > 0) {
             if (enforceSinglePageSections) {
-              const currentMaxH = currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
+              const currentMaxH = current.isHalf ? maxHPortrait / 2
+                : currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
               fitSheetContentToSinglePage(current, currentMaxH);
             }
             // Close current page and open a new one with the target orientation.
             currentOrientation = nextOrientation;
             current = createA4Sheet(isDraft, pages.length, 1, docFont, currentOrientation);
+            current.isHalf = nextSectionIsHalf;
+            if (nextSectionIsHalf) current.sheet.classList.add('a4-sheet--portrait-half');
+            nextSectionIsHalf = false;
             pages.push(current);
             stage.appendChild(current.sheet);
           } else if (nextOrientation !== currentOrientation) {
@@ -1397,8 +1440,49 @@
       });
 
       if (enforceSinglePageSections) {
-        const currentMaxH = currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
-        fitSheetContentToSinglePage(current, currentMaxH);
+        const halfBudget = Math.round(maxHPortrait * 0.45);
+        if (current.isHalf && current.inner) {
+          // Fit the note section by actual font-size scaling (not transform).
+          // transform:scale doesn't shrink DOM layout — combined with overflow
+          // hidden it was clipping real lines. Reducing font-size changes true
+          // layout, so content actually fits and no lines are lost.
+          const noteSection = current.inner.querySelector('.tpl-note-section');
+          if (noteSection) {
+            const naturalH = noteSection.offsetHeight;
+            if (naturalH > halfBudget) {
+              const scale = halfBudget / naturalH;
+              const bodyFS = parseFloat(getComputedStyle(noteSection).fontSize) || 20;
+              noteSection.style.fontSize = (bodyFS * scale).toFixed(2) + 'px';
+              const title = noteSection.querySelector('.tpl-note-title');
+              if (title) {
+                const titleFS = parseFloat(getComputedStyle(title).fontSize) || 28;
+                title.style.fontSize = (titleFS * scale).toFixed(2) + 'px';
+              }
+            }
+          }
+          // Constrain the draft watermark to the inner's rect explicitly.
+          // Moving it into inner via inset:0 was unreliable — inline top/height
+          // wins over any CSS and forces the diagonal to center on the note
+          // area, not the full sheet.
+          const sheetRect = current.sheet.getBoundingClientRect();
+          const innerRect = current.inner.getBoundingClientRect();
+          const topPx = Math.max(0, Math.round(innerRect.top - sheetRect.top));
+          const heightPx = Math.max(1, Math.round(innerRect.height));
+          const constrainWm = (wm) => {
+            if (!wm) return;
+            wm.style.setProperty('top', topPx + 'px', 'important');
+            wm.style.setProperty('bottom', 'auto', 'important');
+            wm.style.setProperty('left', '0', 'important');
+            wm.style.setProperty('right', '0', 'important');
+            wm.style.setProperty('height', heightPx + 'px', 'important');
+            wm.dataset.wmConstrained = '1';
+          };
+          constrainWm(current.sheet.querySelector('.draft-watermark'));
+          constrainWm(current.sheet.querySelector('.a4-sheet-bg-watermark'));
+        } else {
+          const currentMaxH = currentOrientation === 'landscape' ? maxHLandscape : maxHPortrait;
+          fitSheetContentToSinglePage(current, currentMaxH);
+        }
       }
 
       const pageCount = pages.length;

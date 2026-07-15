@@ -33218,23 +33218,27 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
 
     let affiliatePathSegment: string | null = null
     let affiliateLabel: string | null = null
+    let affiliateLinkId: number | null = null
+    let affiliateLinkAssignmentMode: string = 'auto'
     if (affiliatePathRaw) {
       if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
         return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
       }
       const affRow = await c.env.DB.prepare(`
-        SELECT path_segment, label
+        SELECT id, path_segment, label, assignment_mode
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
         LIMIT 1
       `)
         .bind(tenant.id, affiliatePathRaw)
-        .first<{ path_segment: string; label: string }>()
+        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null }>()
       if (!affRow) {
         return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
       }
       affiliatePathSegment = affRow.path_segment
       affiliateLabel = affRow.label
+      affiliateLinkId = affRow.id
+      affiliateLinkAssignmentMode = affRow.assignment_mode ?? 'auto'
     } else {
       affiliateLabel = CONTACT_COMPANY_LINK_SOURCE_LABEL
     }
@@ -33292,43 +33296,84 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       null
     const createdFollowupId = Number(createdFollowupIdRaw)
 
-    const scheduledAtNow = new Date().toISOString()
-    const taskTitle = `متابعة طلب تواصل: ${customerName}`
-
     let assignedUserId: number | null = null
     try {
-      const { results: staffRows } = await c.env.DB.prepare(`
-        SELECT id FROM users
-        WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
-        ORDER BY id ASC
-      `).bind(tenant.id).all<{ id: number }>()
+      if (affiliateLinkId && affiliateLinkAssignmentMode === 'custom') {
+        // Custom mode: use per-link roster
+        const { results: rosterRows } = await c.env.DB.prepare(`
+          SELECT a.id, a.user_id, a.assignment_limit, a.assigned_count
+          FROM affiliate_link_employee_assignments a
+          INNER JOIN users u ON u.id = a.user_id
+          WHERE a.affiliate_link_id = ? AND u.is_active = 1
+            AND (a.assignment_limit IS NULL OR a.assigned_count < a.assignment_limit)
+          ORDER BY a.id ASC
+        `).bind(affiliateLinkId).all<{ id: number; user_id: number; assignment_limit: number | null; assigned_count: number }>()
 
-      const staff = (staffRows || []) as { id: number }[]
-      if (staff.length) {
-        const stateRow = await c.env.DB.prepare(`
-          SELECT last_auto_assigned_user_id
-          FROM tenant_followup_auto_assign_state
-          WHERE tenant_id = ?
-          LIMIT 1
-        `).bind(tenant.id).first<{ last_auto_assigned_user_id: number | null }>()
+        const eligible = (rosterRows || []) as { id: number; user_id: number; assignment_limit: number | null; assigned_count: number }[]
 
-        const staffIds = staff.map((u) => u.id)
-        const lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
-        function pickNextUserId(last: number | null): number {
-          if (last == null) return staffIds[0]
-          const idx = staffIds.indexOf(last)
-          if (idx === -1) return staffIds[0]
-          return staffIds[(idx + 1) % staffIds.length]
+        if (!eligible.length) {
+          await c.env.DB.prepare(`
+            UPDATE tenant_contact_affiliate_links
+            SET unassigned_limit_count = unassigned_limit_count + 1
+            WHERE id = ?
+          `).bind(affiliateLinkId).run()
+          assignedUserId = null
+        } else {
+          const linkRow = await c.env.DB.prepare(`
+            SELECT last_picked_roster_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+          `).bind(affiliateLinkId).first<{ last_picked_roster_id: number | null }>()
+
+          const lastRosterId = linkRow?.last_picked_roster_id ?? null
+          let picked = eligible[0]
+          if (lastRosterId != null) {
+            const afterIdx = eligible.findIndex((r) => r.id > lastRosterId)
+            if (afterIdx >= 0) picked = eligible[afterIdx]
+          }
+
+          assignedUserId = picked.user_id
+          await c.env.DB.prepare(`
+            UPDATE affiliate_link_employee_assignments SET assigned_count = assigned_count + 1 WHERE id = ?
+          `).bind(picked.id).run()
+          await c.env.DB.prepare(`
+            UPDATE tenant_contact_affiliate_links SET last_picked_roster_id = ? WHERE id = ?
+          `).bind(picked.id, affiliateLinkId).run()
         }
+      } else {
+        // Auto mode: existing tenant-wide round-robin
+        const { results: staffRows } = await c.env.DB.prepare(`
+          SELECT id FROM users
+          WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
+          ORDER BY id ASC
+        `).bind(tenant.id).all<{ id: number }>()
 
-        assignedUserId = pickNextUserId(lastId)
+        const staff = (staffRows || []) as { id: number }[]
+        if (staff.length) {
+          const stateRow = await c.env.DB.prepare(`
+            SELECT last_auto_assigned_user_id
+            FROM tenant_followup_auto_assign_state
+            WHERE tenant_id = ?
+            LIMIT 1
+          `).bind(tenant.id).first<{ last_auto_assigned_user_id: number | null }>()
+
+          const staffIds = staff.map((u) => u.id)
+          const lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
+          function pickNextUserId(last: number | null): number {
+            if (last == null) return staffIds[0]
+            const idx = staffIds.indexOf(last)
+            if (idx === -1) return staffIds[0]
+            return staffIds[(idx + 1) % staffIds.length]
+          }
+          assignedUserId = pickNextUserId(lastId)
+        }
       }
-    } catch (assignError) {
-      // Don't block public submission on assignment failures.
+    } catch (_assignError) {
       assignedUserId = null
     }
 
     if (Number.isFinite(createdFollowupId) && createdFollowupId > 0) {
+      const scheduledAtNow = new Date().toISOString()
+      const taskTitle = `متابعة طلب تواصل: ${customerName}`
+
       await c.env.DB.prepare(`
         INSERT INTO company_contact_followup_tasks
           (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
@@ -33345,7 +33390,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         null
       ).run()
 
-      if (assignedUserId != null) {
+      if (assignedUserId != null && !(affiliateLinkId && affiliateLinkAssignmentMode === 'custom')) {
         await c.env.DB.prepare(`
           INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
           VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -33386,19 +33431,29 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
     const { results } = await c.env.DB.prepare(`
       SELECT id, tenant_id, path_segment, label, created_at,
              contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
-             contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+             contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges,
+             contact_hero_title, contact_hero_subtitle, contact_accent_color,
+             assignment_mode, unassigned_limit_count
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
     `).bind(tenantId).all()
 
     const tenantRow = await c.env.DB.prepare(`
-      SELECT slug, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+      SELECT slug, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+             contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
       FROM tenants WHERE id = ? LIMIT 1
     `)
       .bind(tenantId)
       .first<
-        { slug: string } & ContactPageDesignFields
+        { slug: string } & ContactPageDesignFields & {
+          contact_bg_image_url: string | null
+          contact_trust_badges: string | null
+          contact_form_badges: string | null
+          contact_hero_title: string | null
+          contact_hero_subtitle: string | null
+          contact_accent_color: string | null
+        }
       >()
 
     const locRes = await c.env.DB.prepare(`
@@ -33419,6 +33474,12 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
             contact_form_color: tenantRow.contact_form_color ?? null,
             contact_text_color: tenantRow.contact_text_color ?? null,
             contact_custom_fields: tenantRow.contact_custom_fields ?? null,
+            contact_bg_image_url: tenantRow.contact_bg_image_url ?? null,
+            contact_trust_badges: tenantRow.contact_trust_badges ?? null,
+            contact_form_badges: tenantRow.contact_form_badges ?? null,
+            contact_hero_title: tenantRow.contact_hero_title ?? null,
+            contact_hero_subtitle: tenantRow.contact_hero_subtitle ?? null,
+            contact_accent_color: tenantRow.contact_accent_color ?? null,
           }
         : null,
       locations: locRes.results || [],
@@ -33705,6 +33766,205 @@ app.post('/api/tenant-contact-affiliates/:id/bg-image-upload', (c) =>
 app.post('/api/tenant-contact-affiliates/:id/logo-upload', (c) =>
   uploadAffiliateLinkImage(c, 'contact_logo_url', 'logo', 'الشعار')
 )
+
+app.get('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) return c.json({ success: false, error: 'Invalid id' }, 400)
+
+    const link = await c.env.DB.prepare(`
+      SELECT id, tenant_id, assignment_mode, unassigned_limit_count
+      FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `).bind(linkId).first<{ id: number; tenant_id: number; assignment_mode: string | null; unassigned_limit_count: number }>()
+
+    if (!link) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.roleId === 2 && userInfo.tenantId !== link.tenant_id) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const tenantId = link.tenant_id
+
+    const { results: roster } = await c.env.DB.prepare(`
+      SELECT a.id, a.user_id, a.role_context, a.assignment_limit, a.assigned_count,
+             u.full_name, u.role_id
+      FROM affiliate_link_employee_assignments a
+      INNER JOIN users u ON u.id = a.user_id
+      WHERE a.affiliate_link_id = ?
+      ORDER BY a.id ASC
+    `).bind(linkId).all<{ id: number; user_id: number; role_context: string; assignment_limit: number | null; assigned_count: number; full_name: string; role_id: number }>()
+
+    const { results: allStaff } = await c.env.DB.prepare(`
+      SELECT id, full_name, role_id FROM users
+      WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
+      ORDER BY full_name ASC
+    `).bind(tenantId).all<{ id: number; full_name: string; role_id: number }>()
+
+    const staff = (allStaff || []) as { id: number; full_name: string; role_id: number }[]
+    const availableEmployees = staff.filter((u) => u.role_id === 4 || u.role_id === 6)
+    const availableBankAgents = staff.filter((u) => u.role_id === 14 || u.role_id === 6)
+
+    return c.json({
+      success: true,
+      assignment_mode: link.assignment_mode ?? 'auto',
+      unassigned_limit_count: link.unassigned_limit_count ?? 0,
+      roster: roster || [],
+      available_employees: availableEmployees,
+      available_bank_agents: availableBankAgents,
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) return c.json({ success: false, error: 'Invalid id' }, 400)
+
+    const link = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `).bind(linkId).first<{ id: number; tenant_id: number }>()
+
+    if (!link) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.roleId === 2 && userInfo.tenantId !== link.tenant_id) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const tenantId = link.tenant_id
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
+    const mode = String(body.assignment_mode ?? 'auto') === 'custom' ? 'custom' : 'auto'
+    const rosterInput = Array.isArray(body.roster) ? body.roster : []
+
+    await c.env.DB.prepare(`
+      UPDATE tenant_contact_affiliate_links SET assignment_mode = ? WHERE id = ?
+    `).bind(mode, linkId).run()
+
+    if (mode === 'custom' && rosterInput.length > 0) {
+      const { results: validUsers } = await c.env.DB.prepare(`
+        SELECT id, role_id FROM users
+        WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
+      `).bind(tenantId).all<{ id: number; role_id: number }>()
+
+      const userRoleMap = new Map<number, number>((validUsers || []).map((u) => [u.id, u.role_id]))
+
+      const validatedRoster: { user_id: number; role_context: string; assignment_limit: number | null }[] = []
+      for (const item of rosterInput) {
+        const uid = parseInt(String((item as any)?.user_id ?? ''), 10)
+        const ctx = String((item as any)?.role_context ?? '')
+        if (!Number.isFinite(uid) || uid <= 0) continue
+        if (ctx !== 'employee' && ctx !== 'bank_agent') continue
+        const roleId = userRoleMap.get(uid)
+        if (!roleId) continue
+        if (ctx === 'employee' && roleId !== 4 && roleId !== 6) continue
+        if (ctx === 'bank_agent' && roleId !== 14 && roleId !== 6) continue
+        const rawLimit = (item as any)?.assignment_limit
+        const limit = rawLimit == null || rawLimit === '' ? null : parseInt(String(rawLimit), 10)
+        validatedRoster.push({ user_id: uid, role_context: ctx, assignment_limit: Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null })
+      }
+
+      const incomingKeys = new Set(validatedRoster.map((r) => `${r.user_id}:${r.role_context}`))
+      const { results: existingRows } = await c.env.DB.prepare(`
+        SELECT id, user_id, role_context FROM affiliate_link_employee_assignments WHERE affiliate_link_id = ?
+      `).bind(linkId).all<{ id: number; user_id: number; role_context: string }>()
+
+      for (const ex of (existingRows || [])) {
+        if (!incomingKeys.has(`${ex.user_id}:${ex.role_context}`)) {
+          await c.env.DB.prepare(`DELETE FROM affiliate_link_employee_assignments WHERE id = ?`).bind(ex.id).run()
+        }
+      }
+
+      for (const r of validatedRoster) {
+        await c.env.DB.prepare(`
+          INSERT INTO affiliate_link_employee_assignments (affiliate_link_id, user_id, role_context, assignment_limit)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(affiliate_link_id, user_id, role_context) DO UPDATE SET
+            assignment_limit = excluded.assignment_limit
+        `).bind(linkId, r.user_id, r.role_context, r.assignment_limit).run()
+      }
+    } else if (mode === 'auto') {
+      // When switching back to auto, remove roster entries
+      await c.env.DB.prepare(`DELETE FROM affiliate_link_employee_assignments WHERE affiliate_link_id = ?`).bind(linkId).run()
+    }
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/tenant-contact-affiliates/:id/reset-unassigned-count', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) return c.json({ success: false, error: 'Invalid id' }, 400)
+
+    const link = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `).bind(linkId).first<{ id: number; tenant_id: number }>()
+
+    if (!link) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.roleId === 2 && userInfo.tenantId !== link.tenant_id) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    await c.env.DB.prepare(`
+      UPDATE tenant_contact_affiliate_links SET unassigned_limit_count = 0 WHERE id = ?
+    `).bind(linkId).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/tenant-contact-affiliates/:id/unassigned-customers', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const linkId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(linkId) || linkId <= 0) return c.json({ success: false, error: 'Invalid id' }, 400)
+
+    const link = await c.env.DB.prepare(`
+      SELECT id, tenant_id, path_segment FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+    `).bind(linkId).first<{ id: number; tenant_id: number; path_segment: string }>()
+
+    if (!link) return c.json({ success: false, error: 'Not found' }, 404)
+    if (userInfo.roleId === 2 && userInfo.tenantId !== link.tenant_id) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT f.id, f.customer_name, f.customer_phone, f.customer_message, f.created_at,
+             t.id AS task_id
+      FROM company_contact_followups f
+      LEFT JOIN company_contact_followup_tasks t
+        ON t.followup_id = f.id AND t.assigned_user_id IS NULL
+      WHERE f.tenant_id = ?
+        AND f.affiliate_path_segment = ?
+        AND EXISTS (
+          SELECT 1 FROM company_contact_followup_tasks t2
+          WHERE t2.followup_id = f.id AND t2.assigned_user_id IS NULL
+        )
+      ORDER BY f.created_at DESC
+      LIMIT 200
+    `).bind(link.tenant_id, link.path_segment).all()
+
+    const { results: staffRows } = await c.env.DB.prepare(`
+      SELECT id, full_name, role_id FROM users
+      WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
+      ORDER BY full_name ASC
+    `).bind(link.tenant_id).all<{ id: number; full_name: string; role_id: number }>()
+
+    return c.json({ success: true, data: results || [], staff: staffRows || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
 
 // Follow-up module data (roles 1,2,3 — not employees (4) or bank agents (5))
 app.get('/api/follow-ups', async (c) => {
@@ -35403,9 +35663,38 @@ app.get('/admin/contact-affiliates', async (c) => {
           <p id="formMsg" class="text-sm mt-2"></p>
         </div>
 
+        <div id="mainLinkWrap" class="bg-white rounded-xl border border-blue-200 mb-6 hidden">
+          <div class="px-4 py-3 border-b border-blue-100 flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold shrink-0">
+                <i class="fas fa-building"></i>الرابط الرئيسي
+              </span>
+              <div class="min-w-0">
+                <div class="font-semibold text-gray-900">رابط الشركة الأساسي</div>
+                <div class="text-xs text-gray-500 mt-0.5 break-all" id="mainLinkUrl" dir="ltr"></div>
+              </div>
+            </div>
+            <button type="button" id="mainLinkToggleBtn" class="text-blue-700 text-sm hover:underline font-medium shrink-0">
+              <i class="fas fa-palette ml-1"></i>تخصيص الصفحة
+            </button>
+          </div>
+          <div class="hidden p-4" id="mainLinkPanelWrap"></div>
+        </div>
+
         <div id="listWrap" class="bg-white rounded-xl border">
-          <div class="px-4 py-3 border-b font-semibold text-gray-800">الروابط الحالية</div>
+          <div class="px-4 py-3 border-b font-semibold text-gray-800">روابط الأفلييت</div>
           <div id="listBody" class="p-4 text-sm text-gray-500">جاري التحميل...</div>
+        </div>
+      </div>
+
+      <!-- Unassigned customers modal -->
+      <div id="unassignedModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between px-5 py-4 border-b">
+            <h3 class="font-bold text-gray-900 text-base" id="unassignedModalTitle">العملاء غير المُعيَّنين</h3>
+            <button type="button" id="closeUnassignedModal" class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+          </div>
+          <div id="unassignedModalBody" class="overflow-y-auto flex-1 p-4"></div>
         </div>
       </div>
 
@@ -35425,6 +35714,68 @@ app.get('/admin/contact-affiliates', async (c) => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+        }
+
+        async function openUnassignedModal(linkId) {
+          var modal = document.getElementById('unassignedModal');
+          var modalBody = document.getElementById('unassignedModalBody');
+          if (!modal || !modalBody) return;
+          modal.classList.remove('hidden');
+          modalBody.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">جاري التحميل...</p>';
+          try {
+            var res = await axios.get('/api/tenant-contact-affiliates/' + linkId + '/unassigned-customers');
+            if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
+            var items = res.data.data || [];
+            var staff = res.data.staff || [];
+            var staffOptions = staff.map(function(u) {
+              return '<option value="' + u.id + '">' + escapeHtml(u.full_name) + '</option>';
+            }).join('');
+            if (!items.length) {
+              modalBody.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">لا يوجد عملاء غير مُعيَّنين.</p>';
+              return;
+            }
+            modalBody.innerHTML = '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b text-right text-xs text-gray-500"><th class="py-2 px-3">الاسم</th><th class="py-2 px-3">الجوال</th><th class="py-2 px-3">التاريخ</th><th class="py-2 px-3">الرسالة</th><th class="py-2 px-3">تعيين</th></tr></thead><tbody>' +
+              items.map(function(item) {
+                var date = item.created_at ? new Date(item.created_at).toLocaleDateString('ar-SA') : '';
+                var msgStr = String(item.customer_message || '');
+                var msg = msgStr.slice(0, 60) + (msgStr.length > 60 ? '...' : '');
+                return '<tr class="border-b hover:bg-gray-50" data-followup-id="' + item.id + '">' +
+                  '<td class="py-2 px-3 font-medium">' + escapeHtml(item.customer_name) + '</td>' +
+                  '<td class="py-2 px-3 dir-ltr text-left">' + escapeHtml(item.customer_phone) + '</td>' +
+                  '<td class="py-2 px-3 text-gray-500">' + escapeHtml(date) + '</td>' +
+                  '<td class="py-2 px-3 text-gray-600 max-w-xs">' + escapeHtml(msg) + '</td>' +
+                  '<td class="py-2 px-3"><select class="border rounded px-2 py-1 text-xs" data-quick-assign><option value="">تعيين...</option>' + staffOptions + '</select></td>' +
+                  '</tr>';
+              }).join('') +
+              '</tbody></table></div>';
+            // Wire quick-assign using POST /api/follow-ups/:id/tasks
+            modalBody.querySelectorAll('[data-quick-assign]').forEach(function(sel) {
+              sel.addEventListener('change', async function() {
+                var userId = sel.value;
+                if (!userId) return;
+                var row = sel.closest('tr');
+                var followupId = row && row.getAttribute('data-followup-id');
+                if (!followupId) return;
+                try {
+                  // Use the existing follow-up tasks endpoint to assign
+                  await axios.post('/api/follow-ups/' + followupId + '/tasks', {
+                    task_title: 'متابعة طلب تواصل',
+                    scheduled_at_gregorian: new Date().toISOString(),
+                    scheduled_at_hijri: null,
+                    priority: 'regular',
+                    assigned_user_id: parseInt(userId, 10)
+                  });
+                  row.style.opacity = '0.4';
+                  sel.disabled = true;
+                } catch (_) {
+                  alert('تعذر التعيين.');
+                  sel.value = '';
+                }
+              });
+            });
+          } catch (e) {
+            modalBody.innerHTML = '<p class="text-red-600 text-sm text-center py-8">' + escapeHtml(e.message || 'خطأ') + '</p>';
+          }
         }
 
         function currentTenantId() {
@@ -35598,10 +35949,79 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>' +
             '<div id="previewScreen_' + id + '" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>' +
             '</div>' +
+
+            // Assignment control panel — same width as config column, below phone preview
+            (String(id) !== 'company' ? (
+            '<div id="assignPanel_' + id + '" class="mt-5 w-full" style="max-width:420px;">' +
+            '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">' +
+            '<div class="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">' +
+            '<i class="fas fa-users-cog text-amber-500 text-sm"></i>' +
+            '<span class="text-sm font-bold text-gray-700">توزيع المهام</span>' +
+            '</div>' +
+            '<div class="p-4 space-y-4">' +
+
+            // Mode toggle
+            '<div class="flex gap-6">' +
+            '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="radio" name="assignMode_' + id + '" value="auto" id="assignModeAuto_' + id + '" checked class="accent-amber-500" />' +
+            '<span class="text-sm font-medium text-gray-700">تلقائي (الافتراضي)</span>' +
+            '</label>' +
+            '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="radio" name="assignMode_' + id + '" value="custom" id="assignModeCustom_' + id + '" class="accent-amber-500" />' +
+            '<span class="text-sm font-medium text-gray-700">مخصص</span>' +
+            '</label>' +
             '</div>' +
 
+            // Custom section (hidden by default, revealed when custom selected)
+            '<div id="assignCustomSection_' + id + '" class="hidden space-y-4">' +
+
+            // Employees + Bank agents side by side on wide screens
+            '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+
+            // Employees subsection
+            '<div class="rounded-lg border border-gray-200 p-3 space-y-2">' +
+            '<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">موظفون</div>' +
+            '<select id="addEmployeeSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة موظف</option></select>' +
+            '<div id="employeeRoster_' + id + '" class="space-y-2"></div>' +
             '</div>' +
-            '</div>'
+
+            // Bank agents subsection
+            '<div class="rounded-lg border border-gray-200 p-3 space-y-2">' +
+            '<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">وكلاء البنك</div>' +
+            '<select id="addBankAgentSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة وكيل</option></select>' +
+            '<div id="bankAgentRoster_' + id + '" class="space-y-2"></div>' +
+            '</div>' +
+
+            '</div>' + // end grid
+
+            // Unassigned banner
+            '<div id="unassignedBanner_' + id + '" class="hidden rounded-lg bg-red-50 border border-red-200 p-3">' +
+            '<div class="flex items-center justify-between gap-2 flex-wrap">' +
+            '<span class="text-sm text-red-700 font-medium"><i class="fas fa-exclamation-triangle ml-1"></i><span id="unassignedCountEl_' + id + '">0</span> عملاء بدون تعيين (حد مكتمل)</span>' +
+            '<div class="flex gap-3">' +
+            '<button type="button" id="viewUnassignedBtn_' + id + '" class="text-sm text-blue-600 hover:underline font-medium">عرض</button>' +
+            '<span class="text-gray-300">|</span>' +
+            '<button type="button" id="resetUnassignedBtn_' + id + '" class="text-sm text-gray-500 hover:text-red-600">إعادة ضبط</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+
+            '</div>' + // end assignCustomSection
+
+            // Save row
+            '<div class="flex items-center gap-3">' +
+            '<button type="button" id="saveAssignBtn_' + id + '" class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm"><i class="fas fa-save ml-1"></i>حفظ إعدادات التوزيع</button>' +
+            '<p id="assignMsg_' + id + '" class="text-sm"></p>' +
+            '</div>' +
+
+            '</div>' + // end p-4
+            '</div>' + // end rounded-xl
+            '</div>'   // end assignPanel
+            ) : '') +
+
+            '</div>' + // closes preview column
+            '</div>' + // closes flex row
+            '</div>'   // closes outer wrapper
           );
         }
 
@@ -36086,6 +36506,207 @@ app.get('/admin/contact-affiliates', async (c) => {
           }
         }
 
+        function rosterCardHtml(userId, roleId, roleContext, name, assignedCount, limitVal, panelId) {
+          var isDual = roleId === 6;
+          var badge = isDual
+            ? '<span class="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-bold mr-1">مزدوج</span>'
+            : '';
+          var isLimited = limitVal != null;
+          var limitedInput = '<input type="number" min="1" value="' + (isLimited ? limitVal : '') + '" data-limit-input class="w-16 px-1.5 py-0.5 border rounded text-sm ' + (isLimited ? '' : 'hidden') + '" placeholder="10" />';
+          return (
+            '<div class="p-2.5 bg-gray-50 rounded-lg border border-gray-100" data-roster-item data-user-id="' + userId + '" data-role-context="' + roleContext + '">' +
+            '<div class="flex items-center justify-between mb-1.5">' +
+            '<span class="text-sm font-semibold text-gray-800">' + badge + escapeHtml(name) + '</span>' +
+            '<button type="button" data-roster-remove class="text-gray-300 hover:text-red-500 text-sm leading-none"><i class="fas fa-times"></i></button>' +
+            '</div>' +
+            '<div class="flex items-center gap-3 flex-wrap">' +
+            '<label class="flex items-center gap-1.5 cursor-pointer">' +
+            '<input type="radio" name="lm_' + panelId + '_' + userId + '_' + roleContext + '" value="unlimited" ' + (!isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
+            '<span class="text-sm text-gray-600">غير محدود</span>' +
+            '</label>' +
+            '<label class="flex items-center gap-1.5 cursor-pointer">' +
+            '<input type="radio" name="lm_' + panelId + '_' + userId + '_' + roleContext + '" value="limited" ' + (isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
+            '<span class="text-sm text-gray-600">محدود:</span>' +
+            limitedInput +
+            '</label>' +
+            '</div>' +
+            '<div class="text-xs text-gray-400 mt-1.5">مُعيَّن عبر هذا الرابط: <span class="font-medium text-gray-600">' + assignedCount + (isLimited ? ' / ' + limitVal : '') + '</span></div>' +
+            '</div>'
+          );
+        }
+
+        async function wireAssignmentPanel(id) {
+          var panelEl = document.getElementById('assignPanel_' + id);
+          if (!panelEl) return;
+
+          // Fetch config
+          var cfg = null;
+          try {
+            var res = await axios.get('/api/tenant-contact-affiliates/' + id + '/assignment-config');
+            if (res.data && res.data.success) cfg = res.data;
+          } catch (_) {}
+          if (!cfg) return;
+
+          // Set mode
+          var autoRadio = document.getElementById('assignModeAuto_' + id);
+          var customRadio = document.getElementById('assignModeCustom_' + id);
+          var customSection = document.getElementById('assignCustomSection_' + id);
+          if (cfg.assignment_mode === 'custom') {
+            if (customRadio) customRadio.checked = true;
+            if (customSection) customSection.classList.remove('hidden');
+          } else {
+            if (autoRadio) autoRadio.checked = true;
+          }
+
+          // Unassigned counter
+          var banner = document.getElementById('unassignedBanner_' + id);
+          var countEl = document.getElementById('unassignedCountEl_' + id);
+          if (cfg.unassigned_limit_count > 0 && banner && countEl) {
+            countEl.textContent = cfg.unassigned_limit_count;
+            banner.classList.remove('hidden');
+          }
+
+          // Populate pickers
+          var empSel = document.getElementById('addEmployeeSelect_' + id);
+          var agentSel = document.getElementById('addBankAgentSelect_' + id);
+          if (empSel && Array.isArray(cfg.available_employees)) {
+            empSel.innerHTML = '<option value="">+ إضافة موظف</option>' +
+              cfg.available_employees.map(function(u) {
+                return '<option value="' + u.id + '" data-role-id="' + u.role_id + '" data-name="' + escapeHtml(u.full_name) + '">' + escapeHtml(u.full_name) + (u.role_id === 6 ? ' (مزدوج)' : '') + '</option>';
+              }).join('');
+          }
+          if (agentSel && Array.isArray(cfg.available_bank_agents)) {
+            agentSel.innerHTML = '<option value="">+ إضافة وكيل</option>' +
+              cfg.available_bank_agents.map(function(u) {
+                return '<option value="' + u.id + '" data-role-id="' + u.role_id + '" data-name="' + escapeHtml(u.full_name) + '">' + escapeHtml(u.full_name) + (u.role_id === 6 ? ' (مزدوج)' : '') + '</option>';
+              }).join('');
+          }
+
+          // Render existing roster
+          var empRoster = document.getElementById('employeeRoster_' + id);
+          var agentRoster = document.getElementById('bankAgentRoster_' + id);
+          if (Array.isArray(cfg.roster)) {
+            cfg.roster.forEach(function(r) {
+              var html = rosterCardHtml(r.user_id, r.role_id, r.role_context, r.full_name, r.assigned_count, r.assignment_limit, id);
+              if (r.role_context === 'employee' && empRoster) empRoster.insertAdjacentHTML('beforeend', html);
+              if (r.role_context === 'bank_agent' && agentRoster) agentRoster.insertAdjacentHTML('beforeend', html);
+            });
+          }
+
+          // Wire limit-mode radios and limit input (event delegation on roster containers)
+          function wireRosterContainer(container) {
+            if (!container) return;
+            container.addEventListener('change', function(e) {
+              var card = e.target.closest('[data-roster-item]');
+              if (!card) return;
+              var radios = card.querySelectorAll('[data-limit-mode]');
+              var limitInput = card.querySelector('[data-limit-input]');
+              var isLimited = false;
+              radios.forEach(function(r) { if (r.value === 'limited' && r.checked) isLimited = true; });
+              if (limitInput) {
+                if (isLimited) limitInput.classList.remove('hidden');
+                else limitInput.classList.add('hidden');
+              }
+            });
+            container.addEventListener('click', function(e) {
+              var rmBtn = e.target && e.target.closest ? e.target.closest('[data-roster-remove]') : null;
+              if (!rmBtn) return;
+              var card = rmBtn.closest('[data-roster-item]');
+              if (card) card.remove();
+            });
+          }
+          wireRosterContainer(empRoster);
+          wireRosterContainer(agentRoster);
+
+          // Helper to add a roster card from picker
+          function addFromPicker(sel, ctx, targetRoster) {
+            if (!sel) return;
+            sel.addEventListener('change', function() {
+              var opt = sel.options[sel.selectedIndex];
+              var uid = sel.value;
+              if (!uid) return;
+              var roleId = parseInt(opt.getAttribute('data-role-id') || '0', 10);
+              var name = opt.getAttribute('data-name') || opt.text;
+              // Check if already in roster
+              if (targetRoster && targetRoster.querySelector('[data-user-id="' + uid + '"][data-role-context="' + ctx + '"]')) {
+                sel.value = '';
+                return;
+              }
+              var html = rosterCardHtml(uid, roleId, ctx, name, 0, null, id);
+              if (targetRoster) targetRoster.insertAdjacentHTML('beforeend', html);
+              sel.value = '';
+            });
+          }
+          addFromPicker(empSel, 'employee', empRoster);
+          addFromPicker(agentSel, 'bank_agent', agentRoster);
+
+          // Mode toggle
+          [autoRadio, customRadio].forEach(function(radio) {
+            if (!radio) return;
+            radio.addEventListener('change', function() {
+              if (customSection) {
+                if (customRadio && customRadio.checked) customSection.classList.remove('hidden');
+                else customSection.classList.add('hidden');
+              }
+            });
+          });
+
+          // Save button
+          var saveBtn = document.getElementById('saveAssignBtn_' + id);
+          var msgEl = document.getElementById('assignMsg_' + id);
+          if (saveBtn) {
+            saveBtn.addEventListener('click', async function() {
+              saveBtn.disabled = true;
+              if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-xs text-center'; }
+              try {
+                var mode = customRadio && customRadio.checked ? 'custom' : 'auto';
+                var roster = [];
+                var allCards = panelEl.querySelectorAll('[data-roster-item]');
+                allCards.forEach(function(card) {
+                  var uid = parseInt(card.getAttribute('data-user-id') || '0', 10);
+                  var ctx = card.getAttribute('data-role-context') || '';
+                  var limitedRadio = card.querySelector('[data-limit-mode][value="limited"]');
+                  var isLimited = limitedRadio && limitedRadio.checked;
+                  var limitInput = card.querySelector('[data-limit-input]');
+                  var limitVal = isLimited && limitInput ? parseInt(limitInput.value, 10) : null;
+                  if (uid > 0 && ctx) {
+                    roster.push({ user_id: uid, role_context: ctx, assignment_limit: isLimited && limitVal > 0 ? limitVal : null });
+                  }
+                });
+                var saveRes = await axios.put('/api/tenant-contact-affiliates/' + id + '/assignment-config', { assignment_mode: mode, roster: roster });
+                if (saveRes.data && saveRes.data.success) {
+                  if (msgEl) { msgEl.textContent = 'تم حفظ الإعدادات.'; msgEl.className = 'text-xs text-center text-green-700'; }
+                } else {
+                  if (msgEl) { msgEl.textContent = (saveRes.data && saveRes.data.error) || 'فشل الحفظ.'; msgEl.className = 'text-xs text-center text-red-600'; }
+                }
+              } catch (err) {
+                if (msgEl) { msgEl.textContent = 'فشل الحفظ.'; msgEl.className = 'text-xs text-center text-red-600'; }
+              } finally {
+                saveBtn.disabled = false;
+              }
+            });
+          }
+
+          // Reset unassigned button
+          var resetBtn = document.getElementById('resetUnassignedBtn_' + id);
+          if (resetBtn) {
+            resetBtn.addEventListener('click', async function() {
+              if (!confirm('إعادة ضبط عداد العملاء غير المُعيَّنين؟')) return;
+              try {
+                await axios.post('/api/tenant-contact-affiliates/' + id + '/reset-unassigned-count');
+                if (banner) banner.classList.add('hidden');
+                if (countEl) countEl.textContent = '0';
+              } catch (_) {}
+            });
+          }
+
+          // View unassigned popup
+          var viewBtn = document.getElementById('viewUnassignedBtn_' + id);
+          if (viewBtn) {
+            viewBtn.addEventListener('click', function() { openUnassignedModal(id); });
+          }
+        }
+
         function wireDesignPanel(id, row) {
           var panel = document.querySelector('[data-aff-panel="' + id + '"]');
           var blackBtn = document.querySelector('[data-aff-text-black="' + id + '"]');
@@ -36366,6 +36987,231 @@ app.get('/admin/contact-affiliates', async (c) => {
               }
             });
           }
+
+          wireAssignmentPanel(id);
+        }
+
+        var MAIN_LINK_PANEL_WIRED = false;
+
+        function wireMainLinkPanel(design) {
+          var id = 'company';
+          var panel = document.getElementById('mainLinkPanelWrap');
+          var blackBtn = document.querySelector('[data-aff-text-black="' + id + '"]');
+          var whiteBtn = document.querySelector('[data-aff-text-white="' + id + '"]');
+          var saveBtn = document.querySelector('[data-aff-save-design="' + id + '"]');
+          var msgEl = document.querySelector('[data-aff-design-msg="' + id + '"]');
+          var addBtn = document.getElementById('addFieldBtn_' + id);
+          var list = document.getElementById('fieldsList_' + id);
+          var presetsStrip = document.getElementById('presetsStrip_' + id);
+
+          // hide copy-from-company and logo upload (not applicable for the main link)
+          var copyBtn = document.querySelector('[data-aff-copy-company="' + id + '"]');
+          if (copyBtn) copyBtn.style.display = 'none';
+          var logoSection = document.getElementById('affLogoUrl_' + id);
+          if (logoSection && logoSection.parentElement) {
+            var logoWrap = logoSection.closest('.border-t');
+            if (logoWrap) logoWrap.style.display = 'none';
+          }
+
+          wireColorPair('affBg_' + id, '#0f766e', id);
+          wireColorPair('affForm_' + id, '#ffffff', id);
+          wireColorPair('affAccent_' + id, '#d97706', id);
+
+          if (presetsStrip) {
+            presetsStrip.innerHTML = PRESETS.map(function (p, i) {
+              return '<button type="button" title="' + escapeHtml(p.name) + '" data-preset-idx="' + i + '" style="background:' + p.bg + ';" class="h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-gray-200 cursor-pointer hover:scale-110 transition-transform"></button>';
+            }).join('');
+            presetsStrip.querySelectorAll('[data-preset-idx]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var idx = parseInt(btn.getAttribute('data-preset-idx'), 10);
+                if (PRESETS[idx]) applyPreset(id, PRESETS[idx]);
+              });
+            });
+          }
+
+          if (blackBtn) blackBtn.addEventListener('click', function () { setAffTextToggle(id, 'black'); updatePreview(id); });
+          if (whiteBtn) whiteBtn.addEventListener('click', function () { setAffTextToggle(id, 'white'); updatePreview(id); });
+
+          if (panel) {
+            panel.addEventListener('input', function () { updatePreview(id); });
+            panel.addEventListener('change', function () { updatePreview(id); });
+          }
+
+          if (list) {
+            list.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-field-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-field-item]');
+              if (li) li.remove();
+              updateAddFieldBtn(id);
+              updatePreview(id);
+            });
+          }
+          if (addBtn) {
+            addBtn.addEventListener('click', function () {
+              var l = document.getElementById('fieldsList_' + id);
+              if (!l) return;
+              if (l.querySelectorAll('[data-field-item]').length >= 3) return;
+              l.insertAdjacentHTML('beforeend', fieldItemHtml({ label: '', required: false, type: 'text' }));
+              updateAddFieldBtn(id);
+              updatePreview(id);
+            });
+          }
+
+          var formBadgesList = document.getElementById('formBadgesList_' + id);
+          var addFormBadgeBtn = document.getElementById('addFormBadgeBtn_' + id);
+          if (formBadgesList) {
+            formBadgesList.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-form-badge-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-form-badge-item]');
+              if (li) li.remove();
+              updateAddFormBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+          if (addFormBadgeBtn) {
+            addFormBadgeBtn.addEventListener('click', function () {
+              var bl = document.getElementById('formBadgesList_' + id);
+              if (!bl || bl.querySelectorAll('[data-form-badge-item]').length >= 3) return;
+              bl.insertAdjacentHTML('beforeend', formBadgeItemHtml(''));
+              updateAddFormBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+
+          var badgesList = document.getElementById('badgesList_' + id);
+          var addBadgeBtn = document.getElementById('addBadgeBtn_' + id);
+          if (badgesList) {
+            badgesList.addEventListener('click', function (e) {
+              var rm = e.target && e.target.closest ? e.target.closest('[data-badge-remove]') : null;
+              if (!rm) return;
+              var li = rm.closest('[data-badge-item]');
+              if (li) li.remove();
+              updateAddBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+          if (addBadgeBtn) {
+            addBadgeBtn.addEventListener('click', function () {
+              var bl = document.getElementById('badgesList_' + id);
+              if (!bl || bl.querySelectorAll('[data-badge-item]').length >= 4) return;
+              bl.insertAdjacentHTML('beforeend', badgeItemHtml(''));
+              updateAddBadgeBtn(id);
+              updatePreview(id);
+            });
+          }
+
+          fillDesignPanel(id, design);
+          initFieldsSortable(id);
+          updatePreview(id);
+
+          // bg image upload → /api/my-tenant/contact-bg-image-upload
+          var bgImageFile = document.getElementById('affBgImageFile_' + id);
+          var bgImageUploadBtn = document.getElementById('affBgImageUploadBtn_' + id);
+          var bgImageClear = document.getElementById('affBgImageClear_' + id);
+          var bgImageMsg = document.getElementById('affBgImageMsg_' + id);
+          if (bgImageUploadBtn && bgImageFile) {
+            bgImageUploadBtn.addEventListener('click', function () { bgImageFile.click(); });
+            bgImageFile.addEventListener('change', async function () {
+              var file = bgImageFile.files && bgImageFile.files[0];
+              if (!file) return;
+              var fd = new FormData();
+              fd.append('file', file);
+              bgImageUploadBtn.disabled = true;
+              if (bgImageMsg) { bgImageMsg.textContent = 'جاري الرفع...'; }
+              try {
+                var res = await axios.post('/api/my-tenant/contact-bg-image-upload', fd);
+                if (res.data && res.data.success) {
+                  setAffBgImagePreview(id, res.data.url);
+                  updatePreview(id);
+                  if (bgImageMsg) { bgImageMsg.textContent = 'تم رفع الصورة.'; }
+                } else {
+                  if (bgImageMsg) { bgImageMsg.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الرفع.'; }
+                }
+              } catch (err) {
+                if (bgImageMsg) { bgImageMsg.textContent = 'فشل رفع الصورة.'; }
+              } finally {
+                bgImageUploadBtn.disabled = false;
+                bgImageFile.value = '';
+              }
+            });
+          }
+          if (bgImageClear) {
+            bgImageClear.addEventListener('click', async function () {
+              if (!confirm('إزالة صورة الخلفية؟')) return;
+              bgImageClear.disabled = true;
+              try {
+                var res = await axios.patch('/api/my-tenant', { contact_bg_image_url: null });
+                if (res.data && res.data.success) {
+                  setAffBgImagePreview(id, '');
+                  updatePreview(id);
+                } else {
+                  alert((res.data && res.data.error) ? res.data.error : 'فشل الإزالة.');
+                }
+              } catch (err) {
+                alert('فشل الإزالة.');
+              } finally {
+                bgImageClear.disabled = false;
+              }
+            });
+          }
+
+          // save → PATCH /api/my-tenant
+          if (saveBtn) {
+            saveBtn.addEventListener('click', async function () {
+              saveBtn.disabled = true;
+              if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-sm'; }
+              try {
+                var payload = collectDesignPayload(id);
+                var bgHidden = document.getElementById('affBgImageUrl_' + id);
+                if (bgHidden) payload.contact_bg_image_url = bgHidden.value || null;
+                var res = await axios.patch('/api/my-tenant', payload);
+                if (res.data && res.data.success) {
+                  if (msgEl) { msgEl.textContent = 'تم حفظ تصميم الرابط الرئيسي.'; msgEl.className = 'text-sm text-green-700'; }
+                } else {
+                  if (msgEl) { msgEl.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الحفظ.'; msgEl.className = 'text-sm text-red-600'; }
+                }
+              } catch (err) {
+                var em = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : 'فشل الحفظ.';
+                if (msgEl) { msgEl.textContent = em; msgEl.className = 'text-sm text-red-600'; }
+              } finally {
+                saveBtn.disabled = false;
+              }
+            });
+          }
+        }
+
+        function renderMainLink(slug, locSlugForUrl) {
+          if (IS_SUPERADMIN) return;
+          var wrap = document.getElementById('mainLinkWrap');
+          var urlEl = document.getElementById('mainLinkUrl');
+          var panelWrap = document.getElementById('mainLinkPanelWrap');
+          if (!wrap) return;
+          if (slug) {
+            var origin = window.location.origin;
+            var url = locSlugForUrl
+              ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(locSlugForUrl)
+              : origin + '/' + encodeURIComponent(slug);
+            if (urlEl) urlEl.textContent = url;
+          }
+          wrap.classList.remove('hidden');
+          if (!MAIN_LINK_PANEL_WIRED) {
+            if (panelWrap) panelWrap.innerHTML = designPanelHtml('company');
+            wireMainLinkPanel(TENANT_DESIGN || {});
+            MAIN_LINK_PANEL_WIRED = true;
+            var toggleBtn = document.getElementById('mainLinkToggleBtn');
+            var panelEl = document.getElementById('mainLinkPanelWrap');
+            if (toggleBtn && panelEl) {
+              toggleBtn.addEventListener('click', function () {
+                panelEl.classList.toggle('hidden');
+                if (!panelEl.classList.contains('hidden')) updatePreview('company');
+              });
+            }
+          } else {
+            fillDesignPanel('company', TENANT_DESIGN || {});
+            updatePreview('company');
+          }
         }
 
         async function loadList() {
@@ -36405,6 +37251,7 @@ app.get('/admin/contact-affiliates', async (c) => {
               pick.classList.add('hidden');
             }
             var locSlugForUrl = locSel && locSel.value ? locSel.value : '';
+            renderMainLink(slug, locSlugForUrl);
             if (!rows.length) {
               body.innerHTML = '<p class="text-gray-500">لا توجد روابط بعد.</p>';
               return;
@@ -36423,7 +37270,11 @@ app.get('/admin/contact-affiliates', async (c) => {
                     '<li class="py-3" data-aff-row="' + id + '">' +
                     '<div class="flex flex-wrap items-center justify-between gap-2">' +
                     '<div class="min-w-0">' +
-                    '<div class="font-medium text-gray-900">' + escapeHtml(r.label) + '</div>' +
+                    '<div class="flex items-center gap-2">' +
+                    '<span class="font-medium text-gray-900">' + escapeHtml(r.label) + '</span>' +
+                    (r.assignment_mode === 'custom' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-100 text-teal-700 rounded text-xs font-bold">مخصص</span>' : '') +
+                    (r.unassigned_limit_count > 0 ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold"><i class="fas fa-exclamation-triangle text-xs"></i>' + r.unassigned_limit_count + ' غير مُعيَّنين</span>' : '') +
+                    '</div>' +
                     '<div class="text-xs text-gray-500 mt-1 break-all" dir="ltr">' +
                     escapeHtml(full || '/' + slug + '/' + r.path_segment) +
                     '</div>' +
@@ -36511,6 +37362,12 @@ app.get('/admin/contact-affiliates', async (c) => {
         (async function init() {
           await loadTenantsIfSuper();
           await loadList();
+          var closeUnassignedModalBtn = document.getElementById('closeUnassignedModal');
+          if (closeUnassignedModalBtn) {
+            closeUnassignedModalBtn.addEventListener('click', function() {
+              document.getElementById('unassignedModal').classList.add('hidden');
+            });
+          }
         })();
       </script>
     </body>
@@ -36609,183 +37466,6 @@ app.get('/admin/follow-ups', async (c) => {
         <p id="autoAssignHint" class="${showAutoAssignBtn ? 'text-xs text-gray-500 mb-4 -mt-2 max-w-3xl' : 'hidden'}">
           يعيّن المهام غير المعيّنة فقط لموظفي الشركة بالتناوب: بعد أن يحصل موظف على مهمة بالتعيين التلقائي، يُعاد الدور للبقية قبل أن يُعاد إليه. التعيين اليدوي لا يؤثر على هذا التوزيع.
         </p>
-
-        <!-- Contact Page Customization Panel -->
-        <div class="bg-white rounded-2xl shadow border border-amber-100 mb-6" dir="rtl">
-          <button type="button" id="contactCustomToggle"
-            class="w-full flex items-center justify-between px-5 py-4 text-right focus:outline-none">
-            <span class="flex items-center gap-2 font-bold text-gray-800 text-sm">
-              <i class="fas fa-palette text-amber-500"></i>
-              تخصيص صفحة التواصل
-            </span>
-            <i id="contactCustomChevron" class="fas fa-chevron-down text-gray-400 transition-transform duration-200"></i>
-          </button>
-          <div id="contactCustomBody" class="hidden border-t border-gray-100">
-            <div class="flex flex-col lg:flex-row">
-              <!-- ── Controls column ── -->
-              <div class="w-full lg:w-[420px] shrink-0 p-5 space-y-3 border-l border-gray-100">
-
-                <!-- Content -->
-                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                    <i class="fas fa-pen-nib text-amber-500 text-xs"></i>
-                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">المحتوى</span>
-                  </div>
-                  <div class="p-4 space-y-3">
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-500 mb-1">السطر الرئيسي</label>
-                      <input type="text" id="cc_hero_title" maxlength="80" placeholder="أرسل بياناتك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-500 mb-1">السطر الثانوي <span class="font-normal text-gray-400">(بلون التمييز)</span></label>
-                      <input type="text" id="cc_hero_subtitle" maxlength="80" placeholder="وسيتم التواصل معك" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-right focus:ring-2 focus:ring-amber-400 focus:border-transparent" />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-500 mb-1">شارات النموذج <span class="font-normal text-gray-400">(داخل النموذج، فوق الخط — حد أقصى 3)</span></label>
-                      <ul id="cc_formBadgesList" class="space-y-1.5 mb-2"></ul>
-                      <button type="button" id="cc_addFormBadgeBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>
-                    </div>
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-500 mb-1">شارات الثقة <span class="font-normal text-gray-400">(تحت الخط — حد أقصى 4)</span></label>
-                      <ul id="cc_badgesList" class="space-y-1.5 mb-2"></ul>
-                      <button type="button" id="cc_addBadgeBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة شارة</button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Images -->
-                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                    <i class="fas fa-images text-amber-500 text-xs"></i>
-                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">الصور</span>
-                  </div>
-                  <div class="p-4 space-y-4">
-                    <!-- Bg image -->
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-500 mb-2">صورة الخلفية <span class="font-normal text-gray-400">(تملأ الخلفية بالكامل)</span></label>
-                      <input type="hidden" id="cc_bg_image_url" value="" />
-                      <div id="cc_bg_image_preview" class="mb-2 rounded-lg border border-gray-200 hidden" style="height:64px;background:center/cover no-repeat;"></div>
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-amber-400 transition-colors">
-                          <i class="fas fa-folder-open text-amber-400 text-xs"></i> اختر ملفاً
-                          <input type="file" accept="image/*" id="cc_bg_image_file" class="hidden" />
-                        </label>
-                        <button type="button" id="cc_bg_image_upload_btn" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-colors">
-                          <i class="fas fa-upload text-xs"></i> رفع
-                        </button>
-                        <button type="button" id="cc_bg_image_clear_btn" class="hidden inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition-colors">
-                          <i class="fas fa-times-circle"></i> إزالة
-                        </button>
-                        <span id="cc_bg_image_msg" class="text-xs text-gray-400"></span>
-                      </div>
-                    </div>
-                    <div class="border-t border-gray-100 pt-4">
-                      <label class="block text-xs font-semibold text-gray-500 mb-2">شعار الصفحة</label>
-                      <div id="cc_logo_preview" class="mb-2 flex justify-center items-center rounded-lg border border-gray-100 bg-gray-50 p-2" style="min-height:52px;">
-                        <img id="cc_logo_img" src="" alt="" style="max-height:44px;max-width:110px;object-fit:contain;display:none;" />
-                        <span id="cc_logo_placeholder" class="text-xs text-gray-400 italic">لا يوجد شعار</span>
-                      </div>
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <label class="inline-flex items-center gap-1.5 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-amber-400 transition-colors">
-                          <i class="fas fa-folder-open text-amber-400 text-xs"></i> اختر ملفاً
-                          <input type="file" accept="image/*" id="cc_logo_file" class="hidden" />
-                        </label>
-                        <button type="button" id="cc_logo_upload_btn" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-colors">
-                          <i class="fas fa-upload text-xs"></i> رفع
-                        </button>
-                        <span id="cc_logo_msg" class="text-xs text-gray-400"></span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Colors -->
-                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                    <i class="fas fa-palette text-amber-500 text-xs"></i>
-                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">الألوان</span>
-                  </div>
-                  <div class="p-4">
-                    <div class="mb-4">
-                      <p class="text-xs font-semibold text-gray-500 mb-2">ثيمات جاهزة</p>
-                      <div class="flex flex-wrap gap-1.5" id="cc_presetsStrip"></div>
-                    </div>
-                    <!-- Color rows -->
-                    <div class="space-y-3">
-                      <div>
-                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون الخلفية</label>
-                        <div class="flex items-center gap-2">
-                          <div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200">
-                            <span id="cc_bg_swatch" class="absolute inset-0" style="background:#0f766e;"></span>
-                            <input type="color" id="cc_bg" value="#0f766e" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                          </div>
-                          <input type="text" id="cc_bg_text" maxlength="9" dir="ltr" placeholder="#0f766e" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />
-                          <button type="button" id="cc_bg_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button>
-                        </div>
-                      </div>
-                      <div>
-                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون بطاقة النموذج</label>
-                        <div class="flex items-center gap-2">
-                          <div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200">
-                            <span id="cc_form_swatch" class="absolute inset-0" style="background:#ffffff;"></span>
-                            <input type="color" id="cc_form" value="#ffffff" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                          </div>
-                          <input type="text" id="cc_form_text" maxlength="9" dir="ltr" placeholder="#ffffff" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />
-                          <button type="button" id="cc_form_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button>
-                        </div>
-                      </div>
-                      <div>
-                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون التمييز <span class="font-normal text-gray-400">(الخطوط + العنوان الفرعي)</span></label>
-                        <div class="flex items-center gap-2">
-                          <div class="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-sm ring-1 ring-gray-200">
-                            <span id="cc_accent_swatch" class="absolute inset-0" style="background:#d97706;"></span>
-                            <input type="color" id="cc_accent" value="#d97706" class="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                          </div>
-                          <input type="text" id="cc_accent_text" maxlength="9" dir="ltr" placeholder="#d97706" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-left focus:ring-2 focus:ring-amber-400 focus:border-transparent focus:bg-white transition-colors" />
-                          <button type="button" id="cc_accent_clear" class="text-gray-300 hover:text-red-400 transition-colors text-sm"><i class="fas fa-times-circle"></i></button>
-                        </div>
-                      </div>
-                      <div>
-                        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">لون نص النموذج</label>
-                        <div class="flex gap-2">
-                          <button type="button" id="cc_text_black" class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white transition-colors">داكن</button>
-                          <button type="button" id="cc_text_white" class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-600 transition-colors">فاتح</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Custom fields -->
-                <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                  <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                    <i class="fas fa-list-ul text-amber-500 text-xs"></i>
-                    <span class="text-xs font-bold text-gray-600 uppercase tracking-wide">حقول إضافية <span class="normal-case font-normal text-gray-400">(حد أقصى 3)</span></span>
-                  </div>
-                  <div class="p-4">
-                    <ul id="cc_fieldsList" class="mb-2 space-y-2"></ul>
-                    <button type="button" id="cc_addFieldBtn" class="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-semibold"><i class="fas fa-plus-circle"></i> إضافة حقل</button>
-                  </div>
-                </div>
-
-                <!-- Save -->
-                <div class="flex items-center gap-3 pt-1">
-                  <button type="button" id="cc_save_btn" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm hover:shadow transition-all"><i class="fas fa-save"></i>حفظ الإعدادات</button>
-                  <span id="cc_msg" class="text-sm"></span>
-                </div>
-              </div>
-
-              <!-- ── Preview column ── -->
-              <div class="flex-1 min-w-0 flex flex-col items-center justify-start p-5 bg-gray-50 border-t lg:border-t-0">
-                <p class="text-xs text-gray-400 uppercase tracking-widest mb-4 font-bold">معاينة مباشرة</p>
-                <div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">
-                  <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>
-                  <div id="cc_previewScreen" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </div>
@@ -37661,660 +38341,8 @@ app.get('/admin/follow-ups', async (c) => {
           }
         });
 
-        // ── Contact page customization panel ──────────────────────────────────
-        (function () {
-          var CC_PRESETS = [
-            { name: 'افتراضي', bg: '#0f766e', form: '#ffffff', text: 'black' },
-            { name: 'ليلي', bg: '#0f172a', form: '#1e293b', text: 'white' },
-            { name: 'بنفسجي', bg: '#4f46e5', form: '#eef2ff', text: 'black' },
-            { name: 'ذهبي', bg: '#92400e', form: '#fffbeb', text: 'black' },
-            { name: 'وردي', bg: '#be185d', form: '#fff1f2', text: 'black' },
-            { name: 'رمادي', bg: '#374151', form: '#f9fafb', text: 'black' },
-            { name: 'سماوي', bg: '#0369a1', form: '#f0f9ff', text: 'black' },
-            { name: 'أخضر', bg: '#166534', form: '#f0fdf4', text: 'black' }
-          ];
-          var ccCompanyName = 'اسم الشركة';
-          var ccLogoUrl = '';
-          var ccBgImageUrl = '';
-          var selectedTextColor = 'black';
-          // PREVIEW_PRIMARY_COLOR exists on /admin/contact-affiliates only — do not reference it here
-          var ccPrimaryColor = '#0f766e';
-
-          var toggle = document.getElementById('contactCustomToggle');
-          var body = document.getElementById('contactCustomBody');
-          var chevron = document.getElementById('contactCustomChevron');
-          var bgPicker = document.getElementById('cc_bg');
-          var bgSwatch = document.getElementById('cc_bg_swatch');
-          var bgText = document.getElementById('cc_bg_text');
-          var bgClear = document.getElementById('cc_bg_clear');
-          var formPicker = document.getElementById('cc_form');
-          var formSwatch = document.getElementById('cc_form_swatch');
-          var formText = document.getElementById('cc_form_text');
-          var formClear = document.getElementById('cc_form_clear');
-          var textBlackBtn = document.getElementById('cc_text_black');
-          var textWhiteBtn = document.getElementById('cc_text_white');
-          var accentPicker = document.getElementById('cc_accent');
-          var accentSwatch = document.getElementById('cc_accent_swatch');
-          var accentText = document.getElementById('cc_accent_text');
-          var accentClear = document.getElementById('cc_accent_clear');
-          var saveBtn = document.getElementById('cc_save_btn');
-          var msgEl = document.getElementById('cc_msg');
-          var fieldsList = document.getElementById('cc_fieldsList');
-          var addFieldBtn = document.getElementById('cc_addFieldBtn');
-          var presetsStrip = document.getElementById('cc_presetsStrip');
-
-          function ccEscape(v) {
-            return String(v ?? '')
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#39;');
-          }
-
-          function setColorPair(picker, swatch, text, hex, fallback) {
-            var v = (hex || '').trim();
-            if (text) text.value = v;
-            var paint = /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
-            if (picker) picker.value = paint;
-            if (swatch) swatch.style.background = /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : fallback;
-          }
-
-          function setTextColorToggle(val) {
-            selectedTextColor = val === 'white' ? 'white' : 'black';
-            textBlackBtn.className = selectedTextColor === 'black'
-              ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
-              : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
-            textWhiteBtn.className = selectedTextColor === 'white'
-              ? 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-800 bg-gray-800 text-white'
-              : 'flex-1 py-2 rounded-lg border-2 text-xs font-bold border-gray-200 bg-white text-gray-700';
-          }
-
-          function ccFieldItemHtml(field) {
-            var f = field || {};
-            var t = f.type || 'text';
-            return (
-              '<li data-field-item class="flex items-center gap-2 p-2.5 rounded-lg border border-gray-200 bg-white mb-2" style="touch-action:none;">' +
-              '<span data-field-handle class="flex items-center justify-center w-7 h-8 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 shrink-0 cursor-grab active:cursor-grabbing" title="سحب لإعادة الترتيب">' +
-              '<i class="fas fa-grip-vertical text-sm pointer-events-none"></i></span>' +
-              '<select class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white" data-field-type>' +
-              '<option value="text"' + (t === 'text' ? ' selected' : '') + '>نص</option>' +
-              '<option value="number"' + (t === 'number' ? ' selected' : '') + '>رقم</option>' +
-              '<option value="select"' + (t === 'select' ? ' selected' : '') + '>قائمة</option>' +
-              '<option value="checkbox"' + (t === 'checkbox' ? ' selected' : '') + '>موافقة</option>' +
-              '</select>' +
-              '<input type="text" maxlength="100" placeholder="اسم الحقل" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-field-label value="' + ccEscape(f.label || '') + '" />' +
-              '<label class="flex items-center gap-1 text-xs text-gray-500 shrink-0 select-none cursor-pointer">' +
-              '<input type="checkbox" class="rounded text-amber-500" data-field-required' + (f.required ? ' checked' : '') + ' /> مطلوب</label>' +
-              '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-field-remove><i class="fas fa-times"></i></button>' +
-              '</li>'
-            );
-          }
-
-          function updateAddFieldBtn() {
-            if (!fieldsList || !addFieldBtn) return;
-            addFieldBtn.style.display = fieldsList.querySelectorAll('[data-field-item]').length >= 3 ? 'none' : '';
-          }
-
-          function getCcFields(includeEmpty) {
-            if (!fieldsList) return [];
-            var result = [];
-            fieldsList.querySelectorAll('[data-field-item]').forEach(function (li) {
-              var label = li.querySelector('[data-field-label]');
-              var required = li.querySelector('[data-field-required]');
-              var type = li.querySelector('[data-field-type]');
-              var labelVal = label ? label.value.trim() : '';
-              if (labelVal || includeEmpty) {
-                result.push({
-                  label: labelVal || 'اسم الحقل',
-                  required: !!(required && required.checked),
-                  type: (type && type.value) || 'text',
-                  draft: !labelVal
-                });
-              }
-            });
-            return result;
-          }
-
-          function previewInputBar(inputBg, inputBorder, hint, hintColor, iconClass, iconBg, iconColor) {
-            var iconHtml = iconClass
-              ? '<span style="width:16px;height:100%;display:inline-flex;align-items:center;justify-content:center;background:' + (iconBg || 'rgba(0,0,0,0.04)') + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="' + iconClass + '" style="font-size:5px;color:' + (iconColor || '#9ca3af') + ';"></i></span>'
-              : '';
-            return '<div style="background:' + inputBg + ';border-radius:5px;height:18px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;overflow:hidden;">'
-              + iconHtml
-              + '<span style="font-size:7px;color:' + hintColor + ';opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;padding:0 5px;">' + ccEscape(hint || '') + '</span></div>';
-          }
-
-          function setCcLogoPreview(logoUrl) {
-            ccLogoUrl = logoUrl || '';
-            var img = document.getElementById('cc_logo_img');
-            var placeholder = document.getElementById('cc_logo_placeholder');
-            if (logoUrl) {
-              if (img) { img.src = logoUrl; img.style.display = ''; }
-              if (placeholder) placeholder.style.display = 'none';
-            } else {
-              if (img) { img.src = ''; img.style.display = 'none'; }
-              if (placeholder) placeholder.style.display = '';
-            }
-            updateCcPreview();
-          }
-
-          var CC_BADGE_ICONS = [
-            { value: 'fas fa-shield-alt', label: '🛡 أمان' },
-            { value: 'fas fa-bolt', label: '⚡ سرعة' },
-            { value: 'fas fa-check-circle', label: '✓ تأكيد' },
-            { value: 'fas fa-star', label: '⭐ تميّز' },
-            { value: 'fas fa-lock', label: '🔒 خصوصية' },
-            { value: 'fas fa-handshake', label: '🤝 ثقة' },
-            { value: 'fas fa-gem', label: '💎 جودة' },
-            { value: 'fas fa-award', label: '🏆 احترافية' },
-            { value: 'fas fa-phone', label: '📞 تواصل' },
-            { value: 'fas fa-clock', label: '🕐 توقيت' },
-          ];
-
-          function ccBadgeIconOptions(selected) {
-            var noIconSel = (!selected || selected === '') ? ' selected' : '';
-            var opts = '<option value=""' + noIconSel + '>بدون أيقونة</option>';
-            opts += CC_BADGE_ICONS.map(function(o) {
-              return '<option value="' + o.value + '"' + (o.value === selected ? ' selected' : '') + '>' + o.label + '</option>';
-            }).join('');
-            return opts;
-          }
-
-          function ccBadgeItemHtml(badge) {
-            var text = typeof badge === 'string' ? badge : (badge && badge.text || '');
-            var icon = typeof badge === 'string' ? '' : (badge && badge.icon != null ? badge.icon : '');
-            return '<li data-badge-item class="flex items-center gap-2">' +
-              '<select class="border border-gray-200 rounded-lg px-1 py-1.5 text-xs bg-white shrink-0" data-badge-icon style="min-width:0;">' + ccBadgeIconOptions(icon) + '</select>' +
-              '<input type="text" maxlength="100" placeholder="نص الشارة" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-right" data-badge-label value="' + ccEscape(text) + '" />' +
-              '<button type="button" class="text-gray-300 hover:text-red-500 transition-colors shrink-0" data-badge-remove><i class="fas fa-times"></i></button>' +
-              '</li>';
-          }
-
-          function updateCcAddBadgeBtn() {
-            var bl = document.getElementById('cc_badgesList');
-            var btn = document.getElementById('cc_addBadgeBtn');
-            if (!bl || !btn) return;
-            btn.style.display = bl.querySelectorAll('[data-badge-item]').length >= 4 ? 'none' : '';
-          }
-
-          function updateCcAddFormBadgeBtn() {
-            var bl = document.getElementById('cc_formBadgesList');
-            var btn = document.getElementById('cc_addFormBadgeBtn');
-            if (!bl || !btn) return;
-            btn.style.display = bl.querySelectorAll('[data-badge-item]').length >= 3 ? 'none' : '';
-          }
-
-          function fillCcBadges(raw) {
-            var bl = document.getElementById('cc_badgesList');
-            if (!bl) return;
-            var badges = [];
-            if (Array.isArray(raw)) badges = raw;
-            else if (typeof raw === 'string') {
-              try { var p = JSON.parse(raw); if (Array.isArray(p)) badges = p; } catch (_) {}
-            } else {
-              badges = [
-                { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
-                { icon: 'fas fa-bolt', text: 'رد سريع' },
-                { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
-              ];
-            }
-            bl.innerHTML = badges.slice(0, 4).map(ccBadgeItemHtml).join('');
-            updateCcAddBadgeBtn();
-          }
-
-          function fillCcFormBadges(raw) {
-            var bl = document.getElementById('cc_formBadgesList');
-            if (!bl) return;
-            var badges = [];
-            if (Array.isArray(raw)) badges = raw;
-            else if (typeof raw === 'string') {
-              try { var p = JSON.parse(raw); if (Array.isArray(p)) badges = p; } catch (_) {}
-            }
-            bl.innerHTML = badges.slice(0, 3).map(ccBadgeItemHtml).join('');
-            updateCcAddFormBadgeBtn();
-          }
-
-          function getCcBadges() {
-            var bl = document.getElementById('cc_badgesList');
-            if (!bl) return [];
-            var result = [];
-            bl.querySelectorAll('[data-badge-item]').forEach(function(li) {
-              var inp = li.querySelector('[data-badge-label]');
-              var iconEl = li.querySelector('[data-badge-icon]');
-              var v = inp ? inp.value.trim() : '';
-              if (v) result.push({ icon: iconEl ? (iconEl.value || null) : null, text: v });
-            });
-            return result;
-          }
-
-          function getCcFormBadges() {
-            var bl = document.getElementById('cc_formBadgesList');
-            if (!bl) return [];
-            var result = [];
-            bl.querySelectorAll('[data-badge-item]').forEach(function(li) {
-              var inp = li.querySelector('[data-badge-label]');
-              var iconEl = li.querySelector('[data-badge-icon]');
-              var v = inp ? inp.value.trim() : '';
-              if (v) result.push({ icon: iconEl ? (iconEl.value || null) : null, text: v });
-            });
-            return result;
-          }
-
-          function setCcBgImagePreview(imageUrl) {
-            ccBgImageUrl = imageUrl || '';
-            var preview = document.getElementById('cc_bg_image_preview');
-            var clearBtn = document.getElementById('cc_bg_image_clear_btn');
-            if (imageUrl) {
-              if (preview) { preview.style.backgroundImage = 'url(' + imageUrl + ')'; preview.classList.remove('hidden'); }
-              if (clearBtn) clearBtn.classList.remove('hidden');
-            } else {
-              if (preview) { preview.style.backgroundImage = ''; preview.classList.add('hidden'); }
-              if (clearBtn) clearBtn.classList.add('hidden');
-            }
-            updateCcPreview();
-          }
-
-          function updateCcPreview() {
-            var screen = document.getElementById('cc_previewScreen');
-            if (!screen) return;
-            var bgRaw = (bgText && bgText.value || '').trim();
-            var formRaw = (formText && formText.value || '').trim();
-            var bgCss = ccBgImageUrl
-              ? 'url(' + ccBgImageUrl + ') center/cover no-repeat'
-              : /^#[0-9a-fA-F]{3,8}$/.test(bgRaw) ? bgRaw : 'linear-gradient(135deg,#0f766e,#14b8a6)';
-            var formBg = /^#[0-9a-fA-F]{3,8}$/.test(formRaw) ? formRaw : '#ffffff';
-            var accentRaw = (accentText && accentText.value || '').trim();
-            var ccAccentColor = /^#[0-9a-fA-F]{3,8}$/.test(accentRaw) ? accentRaw : '#d97706';
-            var isWhiteText = selectedTextColor === 'white';
-            var textClass = isWhiteText ? 'color:rgba(255,255,255,0.88)' : 'color:#111827';
-            var hintColor = isWhiteText ? 'rgba(255,255,255,0.45)' : '#9ca3af';
-            var inputBg = isWhiteText ? 'rgba(255,255,255,0.1)' : '#f3f4f6';
-            var inputBorder = isWhiteText ? 'rgba(255,255,255,0.2)' : '#d1d5db';
-            var iconBg = isWhiteText ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
-            var iconColor = isWhiteText ? 'rgba(255,255,255,0.5)' : '#9ca3af';
-            var fields = getCcFields(true);
-            var company = ccEscape(ccCompanyName || 'اسم الشركة');
-            var brandHtml = ccLogoUrl
-              ? '<div style="display:flex;justify-content:center;margin-bottom:6px;"><img src="' + ccEscape(ccLogoUrl) + '" alt="" style="max-height:36px;max-width:120px;object-fit:contain;border-radius:6px;background:#fff;padding:3px;" /></div>'
-              : '<div style="width:32px;height:32px;border-radius:50%;background:#0f766e;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-comments" style="color:#fff;font-size:12px;"></i></div>';
-
-            var fieldsHtml = fields.map(function (f) {
-              if (f.type === 'checkbox') {
-                return '<div style="margin-bottom:5px;display:flex;align-items:center;gap:4px;">'
-                  + '<div style="width:10px;height:10px;border-radius:2px;border:1px solid ' + inputBorder + ';background:' + inputBg + ';flex-shrink:0;"></div>'
-                  + '<div style="font-size:7px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
-                  + '</div>';
-              }
-              return '<div style="margin-bottom:5px;">'
-                + '<div style="font-size:7px;margin-bottom:2px;' + textClass + (f.draft ? ';opacity:0.55;font-style:italic' : '') + '">' + ccEscape(f.label) + (f.required ? ' *' : '') + '</div>'
-                + previewInputBar(inputBg, inputBorder, f.label, hintColor) + '</div>';
-            }).join('');
-
-            var overlayHtml = ccBgImageUrl ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.42);border-radius:26px;pointer-events:none;"></div>' : '';
-            var headerTextCss = 'color:rgba(255,255,255,0.95);text-shadow:0 1px 6px rgba(0,0,0,0.35);';
-            var accentCss = 'color:#d97706;';
-            screen.innerHTML =
-              '<div style="height:100%;overflow-y:auto;position:relative;background:' + bgCss + ';border-radius:26px;">'
-              + overlayHtml
-              + '<div style="position:relative;z-index:1;padding:14px 10px 28px;box-sizing:border-box;">'
-              + '<div style="text-align:center;margin-bottom:10px;">'
-              + brandHtml
-              + '<div style="font-size:10px;font-weight:800;' + headerTextCss + '">' + company + '</div>'
-              + (function() {
-                  var htEl = document.getElementById('cc_hero_title');
-                  var hsEl = document.getElementById('cc_hero_subtitle');
-                  var ht = htEl && htEl.value.trim() ? ccEscape(htEl.value.trim()) : 'أرسل بياناتك';
-                  var hs = hsEl && hsEl.value.trim() ? ccEscape(hsEl.value.trim()) : 'وسيتم التواصل معك';
-                  return '<div style="font-size:8px;font-weight:700;margin-top:3px;' + headerTextCss + '">' + ht + '</div>'
-                    + '<div style="font-size:7.5px;font-weight:600;margin-top:1px;color:' + ccAccentColor + ';">' + hs + '</div>';
-                })()
-              + '</div>'
-              + '<div style="background:' + formBg + ';border-radius:10px;padding:10px 10px 14px;width:100%;box-sizing:border-box;box-shadow:0 6px 20px rgba(0,0,0,0.2);overflow:visible;">'
-              + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;">'
-              + '<div style="flex:1;height:1px;background:linear-gradient(to left,' + ccAccentColor + ',transparent);"></div>'
-              + '<span style="font-size:7.5px;font-weight:700;color:#111827;white-space:nowrap;">بيانات التواصل</span>'
-              + '<div style="flex:1;height:1px;background:linear-gradient(to right,' + ccAccentColor + ',transparent);"></div>'
-              + '</div>'
-              + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">الاسم *</div>'
-              + previewInputBar(inputBg, inputBorder, 'اكتب اسمك الكامل', hintColor, 'fas fa-user', iconBg, iconColor) + '</div>'
-              + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رقم الجوال *</div>'
-              + '<div style="background:' + inputBg + ';border-radius:4px;height:16px;border:1px solid ' + inputBorder + ';display:flex;align-items:center;overflow:hidden;">'
-              + '<span style="font-size:6px;padding:0 4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';color:' + (isWhiteText ? 'rgba(255,255,255,0.7)' : '#374151') + ';font-weight:600;flex-shrink:0;align-self:stretch;display:flex;align-items:center;" dir="ltr">+966</span>'
-              + '<span style="font-size:6px;color:' + hintColor + ';padding:0 4px;opacity:.75;flex:1;">5xxxxxxxx</span>'
-              + '</div></div>'
-              + fieldsHtml
-              + '<div style="margin-bottom:5px;"><div style="font-size:7px;margin-bottom:2px;' + textClass + '">رسالتك *</div>'
-              + '<div style="background:' + inputBg + ';border-radius:4px;height:28px;border:1px solid ' + inputBorder + ';display:flex;align-items:flex-start;overflow:hidden;">'
-              + '<span style="width:16px;min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;background:' + iconBg + ';border-left:1px solid ' + inputBorder + ';flex-shrink:0;"><i class="fas fa-comment-dots" style="font-size:5px;color:' + iconColor + ';"></i></span>'
-              + '<span style="font-size:6px;color:' + hintColor + ';padding:3px 4px;flex:1;">اكتب رسالتك هنا...</span></div></div>'
-              + '<div style="background:' + ccAccentColor + ';border-radius:6px;height:20px;display:flex;align-items:center;justify-content:center;margin-top:6px;">'
-              + '<span style="color:#fff;font-size:8px;font-weight:700;">احصل على استشارة مجانية</span></div>'
-              + (function() {
-                  var badges = getCcBadges();
-                  if (!badges.length) badges = [
-                    { icon: 'fas fa-shield-alt', text: 'سرية تامة' },
-                    { icon: 'fas fa-bolt', text: 'رد سريع' },
-                    { icon: 'fas fa-check-circle', text: 'استشارة مجانية' },
-                  ];
-                  if (!badges.length) return '';
-                  return '<div style="display:flex;justify-content:center;align-items:center;gap:5px 8px;flex-wrap:wrap;margin-top:8px;padding:7px 2px 4px;border-top:1px solid rgba(0,0,0,0.06);overflow:visible;">'
-                    + badges.map(function(b) {
-                        var icon = b && b.icon ? String(b.icon).trim() : '';
-                        return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:6.5px;line-height:1.35;color:#9ca3af;flex:0 1 auto;max-width:100%;min-width:0;overflow:visible;white-space:normal;text-align:center;">'
-                          + (icon ? '<i class="' + ccEscape(icon) + '" style="font-size:7px;line-height:1;flex-shrink:0;"></i>' : '')
-                          + '<span style="overflow:visible;">' + ccEscape(b.text) + '</span></span>';
-                      }).join('')
-                    + '</div>';
-                })()
-              + '</div>'
-              + '</div>'
-              + '</div>';
-          }
-
-          function applyCcPreset(preset) {
-            setColorPair(bgPicker, bgSwatch, bgText, preset.bg, '#0f766e');
-            setColorPair(formPicker, formSwatch, formText, preset.form, '#ffffff');
-            setTextColorToggle(preset.text || 'black');
-            fillCcFormBadges(null);
-            updateCcPreview();
-          }
-
-          function initCcSortable() {
-            if (!fieldsList) return;
-            if (fieldsList._sortableInstance && typeof fieldsList._sortableInstance.destroy === 'function') {
-              try { fieldsList._sortableInstance.destroy(); } catch (_) {}
-            }
-            if (typeof Sortable === 'undefined') return;
-            fieldsList._sortableInstance = Sortable.create(fieldsList, {
-              animation: 150,
-              handle: '[data-field-handle]',
-              draggable: '[data-field-item]',
-              ghostClass: 'opacity-40',
-              forceFallback: true,
-              fallbackOnBody: true,
-              fallbackTolerance: 3,
-              onEnd: function () { updateCcPreview(); }
-            });
-          }
-
-          function fillCcFields(raw) {
-            var fields = [];
-            if (Array.isArray(raw)) fields = raw;
-            else if (typeof raw === 'string') {
-              try { var parsed = JSON.parse(raw); if (Array.isArray(parsed)) fields = parsed; } catch (_) {}
-            }
-            if (fieldsList) {
-              fieldsList.innerHTML = fields.slice(0, 3).map(function (f) { return ccFieldItemHtml(f); }).join('');
-            }
-            updateAddFieldBtn();
-            initCcSortable();
-          }
-
-          if (presetsStrip) {
-            presetsStrip.innerHTML = CC_PRESETS.map(function (p, i) {
-              return '<button type="button" title="' + ccEscape(p.name) + '" data-cc-preset="' + i + '" style="background:' + p.bg + ';" class="h-7 w-7 rounded-full border-2 border-white shadow ring-1 ring-gray-200 cursor-pointer hover:scale-110 transition-transform"></button>';
-            }).join('');
-            presetsStrip.querySelectorAll('[data-cc-preset]').forEach(function (btn) {
-              btn.addEventListener('click', function () {
-                var idx = parseInt(btn.getAttribute('data-cc-preset'), 10);
-                if (CC_PRESETS[idx]) applyCcPreset(CC_PRESETS[idx]);
-              });
-            });
-          }
-
-          function wireColorPair(picker, swatch, text, clearBtn, fallback) {
-            if (picker && text && swatch) {
-              picker.addEventListener('input', function () {
-                text.value = this.value;
-                swatch.style.background = this.value;
-                updateCcPreview();
-              });
-              text.addEventListener('input', function () {
-                var v = this.value.trim();
-                if (/^#[0-9a-fA-F]{6}$/.test(v)) {
-                  picker.value = v;
-                  swatch.style.background = v;
-                }
-                updateCcPreview();
-              });
-            }
-            if (clearBtn) {
-              clearBtn.addEventListener('click', function () {
-                text.value = '';
-                picker.value = fallback;
-                swatch.style.background = fallback;
-                updateCcPreview();
-              });
-            }
-          }
-
-          wireColorPair(bgPicker, bgSwatch, bgText, bgClear, '#0f766e');
-          wireColorPair(formPicker, formSwatch, formText, formClear, '#ffffff');
-          wireColorPair(accentPicker, accentSwatch, accentText, accentClear, '#d97706');
-
-          // Bg image upload for company contact page
-          (function () {
-            var fileInput = document.getElementById('cc_bg_image_file');
-            var uploadBtn = document.getElementById('cc_bg_image_upload_btn');
-            var clearBtn = document.getElementById('cc_bg_image_clear_btn');
-            var msgEl2 = document.getElementById('cc_bg_image_msg');
-            if (uploadBtn && fileInput) {
-              uploadBtn.addEventListener('click', async function () {
-                var file = fileInput.files && fileInput.files[0];
-                if (!file) { if (msgEl2) { msgEl2.textContent = 'اختر صورة أولاً'; msgEl2.style.color = '#dc2626'; } return; }
-                uploadBtn.disabled = true;
-                if (msgEl2) { msgEl2.textContent = 'جارٍ الرفع...'; msgEl2.style.color = '#6b7280'; }
-                try {
-                  var fd = new FormData(); fd.append('file', file);
-                  var res = await axios.post('/api/my-tenant/contact-bg-image-upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                  if (res.data && res.data.success && res.data.url) {
-                    setCcBgImagePreview(res.data.url);
-                    if (msgEl2) { msgEl2.textContent = 'تم رفع الصورة'; msgEl2.style.color = '#16a34a'; }
-                    fileInput.value = '';
-                  } else {
-                    if (msgEl2) { msgEl2.textContent = (res.data && res.data.error) || 'فشل الرفع'; msgEl2.style.color = '#dc2626'; }
-                  }
-                } catch (err) {
-                  if (msgEl2) { msgEl2.textContent = (err.response && err.response.data && err.response.data.error) || 'فشل الرفع'; msgEl2.style.color = '#dc2626'; }
-                } finally { uploadBtn.disabled = false; }
-              });
-            }
-            if (clearBtn) {
-              clearBtn.addEventListener('click', async function () {
-                clearBtn.disabled = true;
-                try {
-                  await axios.patch('/api/my-tenant', { contact_bg_image_url: null });
-                  setCcBgImagePreview('');
-                  if (msgEl2) { msgEl2.textContent = 'تمت الإزالة'; msgEl2.style.color = '#16a34a'; }
-                } catch (_) {
-                  if (msgEl2) { msgEl2.textContent = 'فشلت الإزالة'; msgEl2.style.color = '#dc2626'; }
-                } finally { clearBtn.disabled = false; }
-              });
-            }
-          })();
-
-          // Logo upload for company contact page
-          (function () {
-            var fileInput = document.getElementById('cc_logo_file');
-            var uploadBtn = document.getElementById('cc_logo_upload_btn');
-            var msgEl3 = document.getElementById('cc_logo_msg');
-            if (uploadBtn && fileInput) {
-              uploadBtn.addEventListener('click', async function () {
-                var file = fileInput.files && fileInput.files[0];
-                if (!file) { if (msgEl3) { msgEl3.textContent = 'اختر صورة أولاً'; msgEl3.style.color = '#dc2626'; } return; }
-                uploadBtn.disabled = true;
-                if (msgEl3) { msgEl3.textContent = 'جارٍ الرفع...'; msgEl3.style.color = '#6b7280'; }
-                try {
-                  var fd = new FormData(); fd.append('file', file);
-                  var res = await axios.post('/api/my-tenant/logo-upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                  if (res.data && res.data.success && res.data.logo_url) {
-                    setCcLogoPreview(res.data.logo_url);
-                    if (msgEl3) { msgEl3.textContent = 'تم رفع الشعار'; msgEl3.style.color = '#16a34a'; }
-                    fileInput.value = '';
-                  } else {
-                    if (msgEl3) { msgEl3.textContent = (res.data && res.data.error) || 'فشل الرفع'; msgEl3.style.color = '#dc2626'; }
-                  }
-                } catch (err) {
-                  if (msgEl3) { msgEl3.textContent = (err.response && err.response.data && err.response.data.error) || 'فشل الرفع'; msgEl3.style.color = '#dc2626'; }
-                } finally { uploadBtn.disabled = false; }
-              });
-            }
-          })();
-
-          // Form badges wiring (inside form, above divider)
-          (function () {
-            var fbl = document.getElementById('cc_formBadgesList');
-            var fAddBtn = document.getElementById('cc_addFormBadgeBtn');
-            fillCcFormBadges(null);
-            if (fbl) {
-              fbl.addEventListener('click', function (e) {
-                var rm = e.target && e.target.closest ? e.target.closest('[data-badge-remove]') : null;
-                if (!rm) return;
-                var li = rm.closest('[data-badge-item]');
-                if (li) li.remove();
-                updateCcAddFormBadgeBtn();
-                updateCcPreview();
-              });
-              fbl.addEventListener('input', function () { updateCcPreview(); });
-            }
-            if (fAddBtn) {
-              fAddBtn.addEventListener('click', function () {
-                var list = document.getElementById('cc_formBadgesList');
-                if (!list || list.querySelectorAll('[data-badge-item]').length >= 3) return;
-                list.insertAdjacentHTML('beforeend', ccBadgeItemHtml(''));
-                updateCcAddFormBadgeBtn();
-                updateCcPreview();
-              });
-            }
-          })();
-
-          // Trust badges wiring
-          (function () {
-            var bl = document.getElementById('cc_badgesList');
-            var addBtn = document.getElementById('cc_addBadgeBtn');
-            fillCcBadges(null);
-            if (bl) {
-              bl.addEventListener('click', function (e) {
-                var rm = e.target && e.target.closest ? e.target.closest('[data-badge-remove]') : null;
-                if (!rm) return;
-                var li = rm.closest('[data-badge-item]');
-                if (li) li.remove();
-                updateCcAddBadgeBtn();
-                updateCcPreview();
-              });
-              bl.addEventListener('input', function () { updateCcPreview(); });
-            }
-            if (addBtn) {
-              addBtn.addEventListener('click', function () {
-                var list = document.getElementById('cc_badgesList');
-                if (!list || list.querySelectorAll('[data-badge-item]').length >= 4) return;
-                list.insertAdjacentHTML('beforeend', ccBadgeItemHtml(''));
-                updateCcAddBadgeBtn();
-                updateCcPreview();
-              });
-            }
-          })();
-
-          textBlackBtn.addEventListener('click', function () { setTextColorToggle('black'); updateCcPreview(); });
-          textWhiteBtn.addEventListener('click', function () { setTextColorToggle('white'); updateCcPreview(); });
-
-          if (body) {
-            body.addEventListener('input', function () { updateCcPreview(); });
-            body.addEventListener('change', function () { updateCcPreview(); });
-          }
-
-          if (fieldsList) {
-            fieldsList.addEventListener('click', function (e) {
-              var rm = e.target && e.target.closest ? e.target.closest('[data-field-remove]') : null;
-              if (!rm) return;
-              var li = rm.closest('[data-field-item]');
-              if (li) li.remove();
-              updateAddFieldBtn();
-              updateCcPreview();
-            });
-          }
-
-          if (addFieldBtn) {
-            addFieldBtn.addEventListener('click', function () {
-              if (!fieldsList) return;
-              if (fieldsList.querySelectorAll('[data-field-item]').length >= 3) return;
-              fieldsList.insertAdjacentHTML('beforeend', ccFieldItemHtml({ label: '', required: false, type: 'text' }));
-              updateAddFieldBtn();
-              updateCcPreview();
-            });
-          }
-
-          toggle.addEventListener('click', function () {
-            var hidden = body.classList.toggle('hidden');
-            chevron.style.transform = hidden ? '' : 'rotate(180deg)';
-            if (!hidden) updateCcPreview();
-          });
-
-          async function loadContactCustom() {
-            try {
-              var res = await axios.get('/api/my-tenant');
-              if (!res.data || res.data.success !== true || !res.data.data) return;
-              var d = res.data.data;
-              ccCompanyName = d.company_name || d.slug || 'اسم الشركة';
-              ccPrimaryColor = d.primary_color || '#0f766e';
-              setCcLogoPreview(d.logo_url || '');
-              setColorPair(bgPicker, bgSwatch, bgText, d.contact_bg_color || '', '#0f766e');
-              setColorPair(formPicker, formSwatch, formText, d.contact_form_color || '', '#ffffff');
-              setColorPair(accentPicker, accentSwatch, accentText, d.contact_accent_color || '#d97706', '#d97706');
-              setTextColorToggle(d.contact_text_color || 'black');
-              fillCcFields(d.contact_custom_fields);
-              fillCcBadges(d.contact_trust_badges);
-              fillCcFormBadges(d.contact_form_badges);
-              var htEl2 = document.getElementById('cc_hero_title');
-              var hsEl2 = document.getElementById('cc_hero_subtitle');
-              if (htEl2) htEl2.value = d.contact_hero_title || '';
-              if (hsEl2) hsEl2.value = d.contact_hero_subtitle || '';
-              setCcBgImagePreview(d.contact_bg_image_url || '');
-            } catch (_) {}
-          }
-
-          saveBtn.addEventListener('click', async function () {
-            saveBtn.disabled = true;
-            msgEl.textContent = '';
-            msgEl.className = 'text-sm';
-            var bg = (bgText.value || '').trim();
-            var fc = (formText.value || '').trim();
-            var customFields = getCcFields(false).map(function (f) {
-              return { label: f.label, required: f.required, type: f.type };
-            });
-            try {
-              var res = await axios.patch('/api/my-tenant', {
-                contact_bg_color: bg === '' ? null : bg,
-                contact_form_color: fc === '' ? null : fc,
-                contact_text_color: selectedTextColor,
-                contact_custom_fields: customFields,
-                contact_trust_badges: getCcBadges(),
-                contact_form_badges: getCcFormBadges(),
-                contact_hero_title: (document.getElementById('cc_hero_title') || {}).value || null,
-                contact_hero_subtitle: (document.getElementById('cc_hero_subtitle') || {}).value || null,
-                contact_accent_color: (accentText && accentText.value.trim()) ? accentText.value.trim() : null,
-              });
-              if (res.data && res.data.success) {
-                msgEl.textContent = 'تم الحفظ بنجاح.';
-                msgEl.className = 'text-sm text-green-700';
-              } else {
-                msgEl.textContent = (res.data && res.data.error) ? res.data.error : 'فشل الحفظ.';
-                msgEl.className = 'text-sm text-red-600';
-              }
-            } catch (err) {
-              var em = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : 'فشل الحفظ.';
-              msgEl.textContent = em;
-              msgEl.className = 'text-sm text-red-600';
-            } finally {
-              saveBtn.disabled = false;
-            }
-          });
-
-          loadContactCustom();
-        })();
-
         loadFollowUps();
+
       </script>
     </body>
     </html>
