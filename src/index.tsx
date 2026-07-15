@@ -1541,6 +1541,7 @@ type ContactPageDesignFields = {
 }
 
 type AffiliateContactLinkRow = {
+  id: number
   path_segment: string
   label: string
 } & ContactPageDesignFields
@@ -1565,6 +1566,28 @@ function withAffiliateContactDesign(
     contact_accent_color: affiliate.contact_accent_color ?? tenant.contact_accent_color ?? null,
     logo_url: affiliate.contact_logo_url ?? tenant.logo_url,
   }
+}
+
+/** Records every public contact-page render; raw opens (including refreshes) are intentional. */
+async function recordContactLinkVisit(
+  db: D1Database,
+  tenantId: number,
+  affiliateLinkId: number | null
+): Promise<void> {
+  try {
+    await db.prepare(`
+      INSERT INTO contact_link_visits (tenant_id, affiliate_link_id, visit_date, visit_count)
+      VALUES (?, ?, date('now'), 1)
+      ON CONFLICT(tenant_id, affiliate_link_id, visit_date)
+      DO UPDATE SET visit_count = visit_count + 1
+    `).bind(tenantId, affiliateLinkId ?? 0).run()
+  } catch (_) {
+    // Do not make the public contact page unavailable while a migration is being deployed.
+  }
+}
+
+function isAnonymousPublicContactView(c: any): boolean {
+  return !c.req.header('Authorization') && !String(c.req.header('Cookie') ?? '').includes('authToken=')
 }
 
 /**
@@ -2041,10 +2064,14 @@ function buildPublicContactPageHtml(
             statusEl.textContent = data.message || 'تم الإرسال بنجاح';
             statusEl.className = 'text-sm text-green-700';
             form.reset();
+            form.setAttribute('aria-disabled', 'true');
+            form.querySelectorAll('input, textarea, select, button').forEach((field) => {
+              field.disabled = true;
+            });
+            submitBtn.innerHTML = '<i class="fas fa-check"></i>تم إرسال طلبك';
           } catch (err) {
             statusEl.textContent = err?.message || 'حدث خطأ أثناء الإرسال';
             statusEl.className = 'text-sm text-red-700';
-          } finally {
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i>احصل على استشارة مجانية';
           }
@@ -3076,6 +3103,70 @@ function employeeFilterTenantBinds(tenantId: number): [number, number, number] {
   return [tid, tid, tid]
 }
 
+/** Staff eligible for contact/follow-up task assignment (normalized roles 4/5/6 + bank-scoped agents). */
+const FOLLOWUP_STAFF_SQL = `
+  SELECT u.id, u.full_name, u.role_id
+  FROM users u
+  WHERE u.is_active = 1
+    AND (
+      (u.role_id IN (4, 6, 14) AND u.tenant_id = ?)
+      OR (
+        u.role_id IN (5, 15, 6)
+        AND (
+          u.tenant_id = ?
+          OR EXISTS (
+            SELECT 1 FROM banks b
+            WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?
+          )
+        )
+      )
+    )
+  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC
+`
+
+function followupStaffTenantBinds(tenantId: number): [number, number, number] {
+  const tid = Number(tenantId)
+  return [tid, tid, tid]
+}
+
+function isFollowupAssignableRole(roleId: unknown): boolean {
+  const r = normalizeRoleId(roleId)
+  return r === 4 || r === 5 || r === 6
+}
+
+async function listFollowupAssignableStaff(
+  db: D1Database,
+  tenantId: number
+): Promise<{ id: number; full_name: string; role_id: number }[]> {
+  const { results } = await db
+    .prepare(FOLLOWUP_STAFF_SQL)
+    .bind(...followupStaffTenantBinds(tenantId))
+    .all<{ id: number; full_name: string; role_id: number }>()
+  const seen = new Set<number>()
+  const out: { id: number; full_name: string; role_id: number }[] = []
+  for (const row of (results || []) as { id: number; full_name: string; role_id: number }[]) {
+    if (seen.has(row.id)) continue
+    const normalized = normalizeRoleId(row.role_id)
+    if (!isFollowupAssignableRole(normalized)) continue
+    seen.add(row.id)
+    out.push({ id: row.id, full_name: row.full_name, role_id: normalized as number })
+  }
+  return out
+}
+
+/** Open follow-up tasks used for custom-roster assignment limits. */
+const FOLLOWUP_OPEN_TASK_COUNT_SQL = `
+  SELECT COUNT(*)
+  FROM company_contact_followup_tasks t
+  WHERE t.assigned_user_id = a.user_id
+    AND t.tenant_id = ?
+    AND (
+      t.status IS NULL
+      OR TRIM(t.status) = ''
+      OR LOWER(TRIM(t.status)) NOT IN ('completed', 'cancelled')
+    )
+`
+
 /** Auto-assign employee column on new customer (role 4 / dual agent 6). */
 async function assignNewCustomerToEmployee(
   db: D1Database,
@@ -3180,7 +3271,7 @@ const BANK_AGENT_DROPDOWN_SQL = `
 
 /** Employee-column staff for customer/request filter dropdowns (includes dual agent role 6). */
 const EMPLOYEE_FILTER_DROPDOWN_SQL = `
-  SELECT u.id, u.full_name, u.username
+  SELECT u.id, u.full_name, u.username, u.role_id
   FROM users u
   WHERE u.is_active = 1
     AND (
@@ -3495,6 +3586,8 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/hr',
     '/admin/contracts',
     '/admin/follow-ups',
+    '/admin/contact-affiliates',
+    '/admin/link-stats',
     '/admin/chat',
   ],
   '2': [
@@ -3512,6 +3605,8 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/hr',
     '/admin/contracts',
     '/admin/follow-ups',
+    '/admin/contact-affiliates',
+    '/admin/link-stats',
     '/admin/notifications',
     '/calculator',
     '/',
@@ -3884,25 +3979,20 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>الإعلانات</a>
     <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
     <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>التسويق</a>
-    <div class="gps-collapsible gps-open" data-followups-collapsible>
+    <div class="gps-collapsible" data-followups-collapsible>
       <div class="gps-collapsible-row">
-        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=all" class="gps-collapsible-main">
+        <a href="/admin/follow-ups" class="gps-collapsible-main">
         <i class="fas fa-bullhorn"></i>
         <span>التسويق</span>
         </a>
-        <button type="button" class="gps-collapsible-arrow" data-followups-toggle aria-label="توسيع أو طي قائمة فلاتر متابعة التواصل">
+        <button type="button" class="gps-collapsible-arrow" data-followups-toggle aria-label="توسيع أو طي قائمة التسويق">
           <i class="fas fa-chevron-down gps-chevron"></i>
         </button>
       </div>
       <div class="gps-submenu">
-        <div class="gps-segment-label">مصدر رابط التواصل</div>
-        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=all" data-followups-link-filter="all"><i class="fas fa-list"></i>الكل</a>
-        <a href="/admin/follow-ups?followupLinkFilter=company&followupPriorityFilter=all" data-followups-link-filter="company"><i class="fas fa-building"></i>رابط الشركة</a>
-        <a href="/admin/follow-ups?followupLinkFilter=affiliate&followupPriorityFilter=all" data-followups-link-filter="affiliate"><i class="fas fa-tag"></i>روابط الأفلييت</a>
-        <hr class="gps-subdivider">
-        <div class="gps-segment-label">الأولوية</div>
-        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=important" data-followups-priority-filter="important"><i class="fas fa-exclamation-circle"></i>مهم</a>
-        <a href="/admin/follow-ups?followupLinkFilter=all&followupPriorityFilter=regular" data-followups-priority-filter="regular"><i class="fas fa-minus-circle"></i>عادي</a>
+        <a href="/admin/follow-ups"><i class="fas fa-list-check"></i>المتابعات</a>
+        <a href="/admin/contact-affiliates"><i class="fas fa-link"></i>روابط التواصل</a>
+        <a href="/admin/link-stats"><i class="fas fa-chart-line"></i>إحصائيات الروابط</a>
       </div>
     </div>
     <a href="/admin/rates"><i class="fas fa-percentage"></i>نسب التمويل</a>
@@ -33206,11 +33296,11 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     const customerPhone = phoneNorm.normalized
 
     const tenant = await c.env.DB.prepare(`
-      SELECT id
+      SELECT id, contact_assignment_mode
       FROM tenants
       WHERE slug = ? AND status = 'active'
       LIMIT 1
-    `).bind(slug).first()
+    `).bind(slug).first<{ id: number; contact_assignment_mode: string | null }>()
 
     if (!tenant?.id) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
@@ -33220,6 +33310,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     let affiliateLabel: string | null = null
     let affiliateLinkId: number | null = null
     let affiliateLinkAssignmentMode: string = 'auto'
+    const companyLinkAssignmentMode = tenant.contact_assignment_mode ?? 'auto'
     if (affiliatePathRaw) {
       if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
         return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
@@ -33287,7 +33378,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       )
       .run()
 
-    // Automatically create + assign a follow-up task to a company employee (role 4/14 only; not bank staff).
+    // Automatically create + assign one follow-up task (roles 4/5/6).
     // Fair queue among eligible staff. If none, the task is created unassigned.
     const createdFollowupIdRaw =
       (insertFollowupResult as any)?.meta?.last_row_id ??
@@ -33297,33 +33388,84 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     const createdFollowupId = Number(createdFollowupIdRaw)
 
     let assignedUserId: number | null = null
+    let usedCustomRoster = false
     try {
-      if (affiliateLinkId && affiliateLinkAssignmentMode === 'custom') {
-        // Custom mode: use per-link roster
+      const useCustomRoster =
+        (affiliateLinkId != null && affiliateLinkAssignmentMode === 'custom') ||
+        (affiliateLinkId == null && companyLinkAssignmentMode === 'custom')
+      usedCustomRoster = useCustomRoster
+      if (useCustomRoster) {
+        // Affiliate links use their own roster; the company link uses the tenant default roster.
+        const assignmentTable = affiliateLinkId != null
+          ? 'affiliate_link_employee_assignments'
+          : 'tenant_contact_employee_assignments'
+        const scopeColumn = affiliateLinkId != null ? 'affiliate_link_id' : 'tenant_id'
+        const assignmentScopeId = affiliateLinkId ?? tenant.id
         const { results: rosterRows } = await c.env.DB.prepare(`
-          SELECT a.id, a.user_id, a.assignment_limit, a.assigned_count
-          FROM affiliate_link_employee_assignments a
+          SELECT a.id, a.user_id, a.assignment_limit,
+            (${FOLLOWUP_OPEN_TASK_COUNT_SQL}) AS open_task_count
+          FROM ${assignmentTable} a
           INNER JOIN users u ON u.id = a.user_id
-          WHERE a.affiliate_link_id = ? AND u.is_active = 1
-            AND (a.assignment_limit IS NULL OR a.assigned_count < a.assignment_limit)
+          WHERE a.${scopeColumn} = ? AND u.is_active = 1
           ORDER BY a.id ASC
-        `).bind(affiliateLinkId).all<{ id: number; user_id: number; assignment_limit: number | null; assigned_count: number }>()
+        `).bind(tenant.id, assignmentScopeId).all<{
+          id: number
+          user_id: number
+          assignment_limit: number | null
+          open_task_count: number
+        }>()
 
-        const eligible = (rosterRows || []) as { id: number; user_id: number; assignment_limit: number | null; assigned_count: number }[]
+        // One slot per user_id (dual agents must never occupy two rotation slots).
+        const byUser = new Map<number, { id: number; user_id: number; assignment_limit: number | null; open_task_count: number }>()
+        for (const row of (rosterRows || []) as {
+          id: number; user_id: number; assignment_limit: number | null; open_task_count: number
+        }[]) {
+          const existing = byUser.get(row.user_id)
+          if (!existing) {
+            byUser.set(row.user_id, row)
+            continue
+          }
+          // Prefer the earlier row; keep the tighter limit if both define one.
+          const nextLimit =
+            existing.assignment_limit == null
+              ? row.assignment_limit
+              : row.assignment_limit == null
+                ? existing.assignment_limit
+                : Math.min(existing.assignment_limit, row.assignment_limit)
+          byUser.set(row.user_id, { ...existing, assignment_limit: nextLimit })
+        }
+
+        const eligible = Array.from(byUser.values()).filter((row) =>
+          row.assignment_limit == null || Number(row.open_task_count || 0) < row.assignment_limit
+        )
 
         if (!eligible.length) {
-          await c.env.DB.prepare(`
-            UPDATE tenant_contact_affiliate_links
-            SET unassigned_limit_count = unassigned_limit_count + 1
-            WHERE id = ?
-          `).bind(affiliateLinkId).run()
+          if (affiliateLinkId != null) {
+            await c.env.DB.prepare(`
+              UPDATE tenant_contact_affiliate_links
+              SET unassigned_limit_count = unassigned_limit_count + 1
+              WHERE id = ?
+            `).bind(affiliateLinkId).run()
+          } else {
+            await c.env.DB.prepare(`
+              UPDATE tenants
+              SET contact_unassigned_limit_count = contact_unassigned_limit_count + 1
+              WHERE id = ?
+            `).bind(tenant.id).run()
+          }
           assignedUserId = null
         } else {
-          const linkRow = await c.env.DB.prepare(`
-            SELECT last_picked_roster_id FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
-          `).bind(affiliateLinkId).first<{ last_picked_roster_id: number | null }>()
+          const cursorRow = affiliateLinkId != null
+            ? await c.env.DB.prepare(`
+                SELECT last_picked_roster_id AS last_picked_roster_id
+                FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
+              `).bind(affiliateLinkId).first<{ last_picked_roster_id: number | null }>()
+            : await c.env.DB.prepare(`
+                SELECT contact_last_picked_roster_id AS last_picked_roster_id
+                FROM tenants WHERE id = ? LIMIT 1
+              `).bind(tenant.id).first<{ last_picked_roster_id: number | null }>()
 
-          const lastRosterId = linkRow?.last_picked_roster_id ?? null
+          const lastRosterId = cursorRow?.last_picked_roster_id ?? null
           let picked = eligible[0]
           if (lastRosterId != null) {
             const afterIdx = eligible.findIndex((r) => r.id > lastRosterId)
@@ -33331,22 +33473,19 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
           }
 
           assignedUserId = picked.user_id
-          await c.env.DB.prepare(`
-            UPDATE affiliate_link_employee_assignments SET assigned_count = assigned_count + 1 WHERE id = ?
-          `).bind(picked.id).run()
-          await c.env.DB.prepare(`
-            UPDATE tenant_contact_affiliate_links SET last_picked_roster_id = ? WHERE id = ?
-          `).bind(picked.id, affiliateLinkId).run()
+          if (affiliateLinkId != null) {
+            await c.env.DB.prepare(`
+              UPDATE tenant_contact_affiliate_links SET last_picked_roster_id = ? WHERE id = ?
+            `).bind(picked.id, affiliateLinkId).run()
+          } else {
+            await c.env.DB.prepare(`
+              UPDATE tenants SET contact_last_picked_roster_id = ? WHERE id = ?
+            `).bind(picked.id, tenant.id).run()
+          }
         }
       } else {
-        // Auto mode: existing tenant-wide round-robin
-        const { results: staffRows } = await c.env.DB.prepare(`
-          SELECT id FROM users
-          WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
-          ORDER BY id ASC
-        `).bind(tenant.id).all<{ id: number }>()
-
-        const staff = (staffRows || []) as { id: number }[]
+        // Auto mode: round-robin among roles 4/5/6 (tenant + bank-scoped).
+        const staff = await listFollowupAssignableStaff(c.env.DB, tenant.id)
         if (staff.length) {
           const stateRow = await c.env.DB.prepare(`
             SELECT last_auto_assigned_user_id
@@ -33390,7 +33529,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         null
       ).run()
 
-      if (assignedUserId != null && !(affiliateLinkId && affiliateLinkAssignmentMode === 'custom')) {
+      if (assignedUserId != null && !usedCustomRoster) {
         await c.env.DB.prepare(`
           INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
           VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -33533,15 +33672,15 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
       return c.json({ success: false, error: 'العنوان مطلوب (حتى 120 حرفاً)' }, 400)
     }
 
-    // Snapshot company path design so the new link starts identical, then stays isolated.
+    // Snapshot the company-link design and task-distribution configuration at creation time.
     const companyDesign = await c.env.DB.prepare(`
-      SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+      SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_assignment_mode
       FROM tenants WHERE id = ? LIMIT 1
     `)
       .bind(tenantId)
-      .first<ContactPageDesignFields>()
+      .first<ContactPageDesignFields & { contact_assignment_mode: string | null }>()
 
-    await c.env.DB.prepare(`
+    const insertResult = await c.env.DB.prepare(`
       INSERT INTO tenant_contact_affiliate_links (
         tenant_id, path_segment, label,
         contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
@@ -33558,6 +33697,25 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
         companyDesign?.contact_custom_fields ?? null
       )
       .run()
+
+    const affiliateLinkId = Number(
+      (insertResult as any)?.meta?.last_row_id ??
+      (insertResult as any)?.meta?.lastRowId ??
+      (insertResult as any)?.meta?.last_insert_rowid
+    )
+    if (Number.isFinite(affiliateLinkId) && affiliateLinkId > 0 && companyDesign?.contact_assignment_mode === 'custom') {
+      await c.env.DB.prepare(`
+        UPDATE tenant_contact_affiliate_links SET assignment_mode = 'custom' WHERE id = ?
+      `).bind(affiliateLinkId).run()
+      // Snapshot one roster entry per user (follow-up owner roles 4/5/6).
+      await c.env.DB.prepare(`
+        INSERT INTO affiliate_link_employee_assignments (affiliate_link_id, user_id, role_context, assignment_limit)
+        SELECT ?, user_id, 'employee', MIN(assignment_limit)
+        FROM tenant_contact_employee_assignments
+        WHERE tenant_id = ?
+        GROUP BY user_id
+      `).bind(affiliateLinkId, tenantId).run()
+    }
 
     return c.json({ success: true, message: 'تم إنشاء رابط الإحالة' })
   } catch (error: any) {
@@ -33786,32 +33944,64 @@ app.get('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
 
     const tenantId = link.tenant_id
 
-    const { results: roster } = await c.env.DB.prepare(`
-      SELECT a.id, a.user_id, a.role_context, a.assignment_limit, a.assigned_count,
+    const { results: rosterRaw } = await c.env.DB.prepare(`
+      SELECT a.id, a.user_id, a.role_context, a.assignment_limit,
+             (${FOLLOWUP_OPEN_TASK_COUNT_SQL}) AS active_task_count,
              u.full_name, u.role_id
       FROM affiliate_link_employee_assignments a
       INNER JOIN users u ON u.id = a.user_id
       WHERE a.affiliate_link_id = ?
       ORDER BY a.id ASC
-    `).bind(linkId).all<{ id: number; user_id: number; role_context: string; assignment_limit: number | null; assigned_count: number; full_name: string; role_id: number }>()
+    `).bind(tenantId, linkId).all<{
+      id: number
+      user_id: number
+      role_context: string
+      assignment_limit: number | null
+      active_task_count: number
+      full_name: string
+      role_id: number
+    }>()
 
-    const { results: allStaff } = await c.env.DB.prepare(`
-      SELECT id, full_name, role_id FROM users
-      WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
-      ORDER BY full_name ASC
-    `).bind(tenantId).all<{ id: number; full_name: string; role_id: number }>()
+    const roster: {
+      id: number
+      user_id: number
+      role_context: string
+      assignment_limit: number | null
+      active_task_count: number
+      full_name: string
+      role_id: number
+    }[] = []
+    const seenUsers = new Set<number>()
+    for (const row of (rosterRaw || []) as {
+      id: number
+      user_id: number
+      role_context: string
+      assignment_limit: number | null
+      active_task_count: number
+      full_name: string
+      role_id: number
+    }[]) {
+      if (seenUsers.has(row.user_id)) continue
+      seenUsers.add(row.user_id)
+      roster.push({
+        id: row.id,
+        user_id: row.user_id,
+        role_context: 'employee',
+        assignment_limit: row.assignment_limit,
+        active_task_count: Number(row.active_task_count || 0),
+        full_name: row.full_name,
+        role_id: normalizeRoleId(row.role_id) ?? row.role_id,
+      })
+    }
 
-    const staff = (allStaff || []) as { id: number; full_name: string; role_id: number }[]
-    const availableEmployees = staff.filter((u) => u.role_id === 4 || u.role_id === 6)
-    const availableBankAgents = staff.filter((u) => u.role_id === 14 || u.role_id === 6)
+    const availableStaff = await listFollowupAssignableStaff(c.env.DB, tenantId)
 
     return c.json({
       success: true,
       assignment_mode: link.assignment_mode ?? 'auto',
       unassigned_limit_count: link.unassigned_limit_count ?? 0,
-      roster: roster || [],
-      available_employees: availableEmployees,
-      available_bank_agents: availableBankAgents,
+      roster,
+      available_staff: availableStaff,
     })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -33843,36 +34033,34 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
       UPDATE tenant_contact_affiliate_links SET assignment_mode = ? WHERE id = ?
     `).bind(mode, linkId).run()
 
-    if (mode === 'custom' && rosterInput.length > 0) {
-      const { results: validUsers } = await c.env.DB.prepare(`
-        SELECT id, role_id FROM users
-        WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
-      `).bind(tenantId).all<{ id: number; role_id: number }>()
-
-      const userRoleMap = new Map<number, number>((validUsers || []).map((u) => [u.id, u.role_id]))
+    if (mode === 'custom') {
+      const validUsers = await listFollowupAssignableStaff(c.env.DB, tenantId)
+      const userRoleMap = new Map<number, number>(validUsers.map((u) => [u.id, u.role_id]))
 
       const validatedRoster: { user_id: number; role_context: string; assignment_limit: number | null }[] = []
+      const seen = new Set<number>()
       for (const item of rosterInput) {
         const uid = parseInt(String((item as any)?.user_id ?? ''), 10)
-        const ctx = String((item as any)?.role_context ?? '')
-        if (!Number.isFinite(uid) || uid <= 0) continue
-        if (ctx !== 'employee' && ctx !== 'bank_agent') continue
+        if (!Number.isFinite(uid) || uid <= 0 || seen.has(uid)) continue
         const roleId = userRoleMap.get(uid)
-        if (!roleId) continue
-        if (ctx === 'employee' && roleId !== 4 && roleId !== 6) continue
-        if (ctx === 'bank_agent' && roleId !== 14 && roleId !== 6) continue
+        if (!roleId || !isFollowupAssignableRole(roleId)) continue
+        seen.add(uid)
         const rawLimit = (item as any)?.assignment_limit
         const limit = rawLimit == null || rawLimit === '' ? null : parseInt(String(rawLimit), 10)
-        validatedRoster.push({ user_id: uid, role_context: ctx, assignment_limit: Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null })
+        validatedRoster.push({
+          user_id: uid,
+          role_context: 'employee',
+          assignment_limit: Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null,
+        })
       }
 
-      const incomingKeys = new Set(validatedRoster.map((r) => `${r.user_id}:${r.role_context}`))
+      const incomingUsers = new Set(validatedRoster.map((r) => r.user_id))
       const { results: existingRows } = await c.env.DB.prepare(`
         SELECT id, user_id, role_context FROM affiliate_link_employee_assignments WHERE affiliate_link_id = ?
       `).bind(linkId).all<{ id: number; user_id: number; role_context: string }>()
 
       for (const ex of (existingRows || [])) {
-        if (!incomingKeys.has(`${ex.user_id}:${ex.role_context}`)) {
+        if (!incomingUsers.has(ex.user_id) || ex.role_context !== 'employee') {
           await c.env.DB.prepare(`DELETE FROM affiliate_link_employee_assignments WHERE id = ?`).bind(ex.id).run()
         }
       }
@@ -33891,6 +34079,196 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
     }
 
     return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/tenant-contact-main-assignment-config', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const requestedTenantId = parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+    const tenantId = userInfo.roleId === 1 ? requestedTenantId : userInfo.tenantId
+    if (!Number.isFinite(tenantId) || !tenantId || tenantId <= 0) return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
+
+    const tenant = await c.env.DB.prepare(`
+      SELECT id, contact_assignment_mode, contact_unassigned_limit_count
+      FROM tenants WHERE id = ? LIMIT 1
+    `).bind(tenantId).first<{ id: number; contact_assignment_mode: string | null; contact_unassigned_limit_count: number }>()
+    if (!tenant) return c.json({ success: false, error: 'Not found' }, 404)
+
+    const { results: rosterRaw } = await c.env.DB.prepare(`
+      SELECT a.id, a.user_id, a.role_context, a.assignment_limit,
+             (${FOLLOWUP_OPEN_TASK_COUNT_SQL}) AS active_task_count,
+             u.full_name, u.role_id
+      FROM tenant_contact_employee_assignments a
+      INNER JOIN users u ON u.id = a.user_id
+      WHERE a.tenant_id = ?
+      ORDER BY a.id ASC
+    `).bind(tenantId, tenantId).all<{
+      id: number
+      user_id: number
+      role_context: string
+      assignment_limit: number | null
+      active_task_count: number
+      full_name: string
+      role_id: number
+    }>()
+
+    const roster: {
+      id: number
+      user_id: number
+      role_context: string
+      assignment_limit: number | null
+      active_task_count: number
+      full_name: string
+      role_id: number
+    }[] = []
+    const seenUsers = new Set<number>()
+    for (const row of (rosterRaw || []) as {
+      id: number
+      user_id: number
+      role_context: string
+      assignment_limit: number | null
+      active_task_count: number
+      full_name: string
+      role_id: number
+    }[]) {
+      if (seenUsers.has(row.user_id)) continue
+      seenUsers.add(row.user_id)
+      roster.push({
+        id: row.id,
+        user_id: row.user_id,
+        role_context: 'employee',
+        assignment_limit: row.assignment_limit,
+        active_task_count: Number(row.active_task_count || 0),
+        full_name: row.full_name,
+        role_id: normalizeRoleId(row.role_id) ?? row.role_id,
+      })
+    }
+
+    const availableStaff = await listFollowupAssignableStaff(c.env.DB, tenantId)
+
+    return c.json({
+      success: true,
+      assignment_mode: tenant.contact_assignment_mode ?? 'auto',
+      unassigned_limit_count: tenant.contact_unassigned_limit_count ?? 0,
+      roster,
+      available_staff: availableStaff,
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.put('/api/tenant-contact-main-assignment-config', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
+    const requestedTenantId = parseInt(String(body.tenant_id ?? ''), 10)
+    const tenantId = userInfo.roleId === 1 ? requestedTenantId : userInfo.tenantId
+    if (!Number.isFinite(tenantId) || !tenantId || tenantId <= 0) return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
+
+    const tenant = await c.env.DB.prepare(`SELECT id FROM tenants WHERE id = ? LIMIT 1`).bind(tenantId).first<{ id: number }>()
+    if (!tenant) return c.json({ success: false, error: 'Not found' }, 404)
+
+    const mode = String(body.assignment_mode ?? 'auto') === 'custom' ? 'custom' : 'auto'
+    const rosterInput = Array.isArray(body.roster) ? body.roster : []
+    await c.env.DB.prepare(`UPDATE tenants SET contact_assignment_mode = ? WHERE id = ?`).bind(mode, tenantId).run()
+
+    if (mode === 'custom') {
+      const validUsers = await listFollowupAssignableStaff(c.env.DB, tenantId)
+      const userRoleMap = new Map<number, number>(validUsers.map((u) => [u.id, u.role_id]))
+      const validatedRoster: { user_id: number; role_context: string; assignment_limit: number | null }[] = []
+      const seen = new Set<number>()
+      for (const item of rosterInput) {
+        const userId = parseInt(String((item as any)?.user_id ?? ''), 10)
+        if (!Number.isFinite(userId) || userId <= 0 || seen.has(userId)) continue
+        const roleId = userRoleMap.get(userId)
+        if (!roleId || !isFollowupAssignableRole(roleId)) continue
+        seen.add(userId)
+        const rawLimit = (item as any)?.assignment_limit
+        const limit = rawLimit == null || rawLimit === '' ? null : parseInt(String(rawLimit), 10)
+        validatedRoster.push({
+          user_id: userId,
+          role_context: 'employee',
+          assignment_limit: Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null,
+        })
+      }
+
+      const incomingUsers = new Set(validatedRoster.map((r) => r.user_id))
+      const { results: existingRows } = await c.env.DB.prepare(`
+        SELECT id, user_id, role_context FROM tenant_contact_employee_assignments WHERE tenant_id = ?
+      `).bind(tenantId).all<{ id: number; user_id: number; role_context: string }>()
+      for (const row of (existingRows || [])) {
+        if (!incomingUsers.has(row.user_id) || row.role_context !== 'employee') {
+          await c.env.DB.prepare(`DELETE FROM tenant_contact_employee_assignments WHERE id = ?`).bind(row.id).run()
+        }
+      }
+      for (const row of validatedRoster) {
+        await c.env.DB.prepare(`
+          INSERT INTO tenant_contact_employee_assignments (tenant_id, user_id, role_context, assignment_limit)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(tenant_id, user_id, role_context) DO UPDATE SET assignment_limit = excluded.assignment_limit
+        `).bind(tenantId, row.user_id, row.role_context, row.assignment_limit).run()
+      }
+    } else {
+      await c.env.DB.prepare(`DELETE FROM tenant_contact_employee_assignments WHERE tenant_id = ?`).bind(tenantId).run()
+    }
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/tenant-contact-main-assignment-config/reset-unassigned-count', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const requestedTenantId = parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+    const tenantId = userInfo.roleId === 1 ? requestedTenantId : userInfo.tenantId
+    if (!Number.isFinite(tenantId) || !tenantId || tenantId <= 0) return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
+    await c.env.DB.prepare(`
+      UPDATE tenants SET contact_unassigned_limit_count = 0 WHERE id = ?
+    `).bind(tenantId).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/tenant-contact-main-assignment-config/unassigned-customers', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const requestedTenantId = parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+    const tenantId = userInfo.roleId === 1 ? requestedTenantId : userInfo.tenantId
+    if (!Number.isFinite(tenantId) || !tenantId || tenantId <= 0) return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT f.id, f.customer_name, f.customer_phone, f.customer_message, f.created_at, t.id AS task_id
+      FROM company_contact_followups f
+      LEFT JOIN company_contact_followup_tasks t
+        ON t.followup_id = f.id AND t.assigned_user_id IS NULL
+      WHERE f.tenant_id = ?
+        AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '')
+        AND EXISTS (
+          SELECT 1 FROM company_contact_followup_tasks t2
+          WHERE t2.followup_id = f.id AND t2.assigned_user_id IS NULL
+        )
+      ORDER BY f.created_at DESC
+      LIMIT 200
+    `).bind(tenantId).all()
+    const staffRows = await listFollowupAssignableStaff(c.env.DB, tenantId)
+    return c.json({ success: true, data: results || [], staff: staffRows })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -33954,13 +34332,9 @@ app.get('/api/tenant-contact-affiliates/:id/unassigned-customers', async (c) => 
       LIMIT 200
     `).bind(link.tenant_id, link.path_segment).all()
 
-    const { results: staffRows } = await c.env.DB.prepare(`
-      SELECT id, full_name, role_id FROM users
-      WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 6, 14)
-      ORDER BY full_name ASC
-    `).bind(link.tenant_id).all<{ id: number; full_name: string; role_id: number }>()
+    const staffRows = await listFollowupAssignableStaff(c.env.DB, link.tenant_id)
 
-    return c.json({ success: true, data: results || [], staff: staffRows || [] })
+    return c.json({ success: true, data: results || [], staff: staffRows })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -34209,14 +34583,9 @@ app.get('/api/follow-ups/:id/staff', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
 
-    const { results } = await c.env.DB.prepare(`
-      SELECT id, full_name FROM users
-      WHERE tenant_id = ? AND is_active = 1
-        AND role_id IN (4, 5, 6, 14, 15)
-      ORDER BY full_name
-    `).bind(followup.tenant_id).all()
+    const staff = await listFollowupAssignableStaff(c.env.DB, Number(followup.tenant_id))
 
-    return c.json({ success: true, data: results || [] })
+    return c.json({ success: true, data: staff })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -34306,12 +34675,10 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
       if (!Number.isFinite(uid) || uid <= 0) {
         return c.json({ success: false, error: 'معرّف الموظف غير صالح' }, 400)
       }
-      const staffUser = await c.env.DB.prepare(`
-        SELECT id FROM users
-        WHERE id = ? AND tenant_id = ? AND role_id IN (4, 5, 6, 14, 15)
-        LIMIT 1
-      `).bind(uid, followup.tenant_id).first()
-      if (!staffUser?.id) return c.json({ success: false, error: 'الموظف غير موجود في هذه الشركة' }, 400)
+      const staff = await listFollowupAssignableStaff(c.env.DB, Number(followup.tenant_id))
+      if (!staff.some((u) => u.id === uid)) {
+        return c.json({ success: false, error: 'الموظف غير موجود في هذه الشركة' }, 400)
+      }
       assignedUserId = uid
     }
 
@@ -34361,7 +34728,7 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
   }
 })
 
-/** Company admin (role 2): assign unassigned pending follow-up tasks round-robin among company employees (roles 4/14 only; not bank staff). */
+/** Company admin (role 2): assign unassigned pending follow-up tasks round-robin among roles 4/5/6. */
 app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -34373,15 +34740,9 @@ app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
 
     const tenantId = userInfo.tenantId
 
-    const { results: staffRows } = await c.env.DB.prepare(`
-      SELECT id FROM users
-      WHERE tenant_id = ? AND is_active = 1 AND role_id IN (4, 14)
-      ORDER BY id ASC
-    `).bind(tenantId).all<{ id: number }>()
-
-    const staff = (staffRows || []) as { id: number }[]
+    const staff = await listFollowupAssignableStaff(c.env.DB, tenantId)
     if (!staff.length) {
-      return c.json({ success: false, error: 'لا يوجد موظفون نشطون بدور الموظف في شركتك' }, 400)
+      return c.json({ success: false, error: 'لا يوجد موظفون مؤهلون لتعيين مهام المتابعة' }, 400)
     }
 
     const stateRow = await c.env.DB.prepare(`
@@ -34640,14 +35001,11 @@ app.get('/api/my-tenant-followup-staff', async (c) => {
     if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
-    const { results } = await c.env.DB.prepare(`
-      SELECT id, full_name FROM users
-      WHERE tenant_id = ? AND is_active = 1 AND id != ?
-        AND role_id IN (4, 5, 6, 14, 15)
-      ORDER BY full_name
-    `).bind(userInfo.tenantId, userInfo.userId).all()
-
-    return c.json({ success: true, data: results || [] })
+    const staff = await listFollowupAssignableStaff(c.env.DB, userInfo.tenantId)
+    return c.json({
+      success: true,
+      data: staff.filter((u) => u.id !== userInfo.userId).map((u) => ({ id: u.id, full_name: u.full_name })),
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -34675,13 +35033,10 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
       return c.json({ success: false, error: 'لا يمكن التمرير إلى نفسك' }, 400)
     }
 
-    const target = await c.env.DB.prepare(`
-      SELECT id FROM users
-      WHERE id = ? AND tenant_id = ? AND is_active = 1
-        AND role_id IN (4, 5, 6, 14, 15)
-      LIMIT 1
-    `).bind(toUserId, userInfo.tenantId).first<{ id: number }>()
-    if (!target?.id) return c.json({ success: false, error: 'الموظف غير موجود في شركتك' }, 400)
+    const staff = await listFollowupAssignableStaff(c.env.DB, userInfo.tenantId)
+    if (!staff.some((u) => u.id === toUserId)) {
+      return c.json({ success: false, error: 'الموظف غير موجود في شركتك' }, 400)
+    }
 
     const task = await c.env.DB.prepare(`
       SELECT id, tenant_id, assigned_user_id, status
@@ -35584,6 +35939,303 @@ app.get('/admin/my-tasks', async (c) => {
   `)
 })
 
+app.get('/api/link-stats', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const requestedTenantId = parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+    const tenantId = userInfo.roleId === 1 ? requestedTenantId : userInfo.tenantId
+    if (!tenantId || !Number.isFinite(tenantId)) return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
+
+    const link = String(c.req.query('link') ?? 'all')
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(String(c.req.query('from') ?? '')) ? String(c.req.query('from')) : null
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(String(c.req.query('to') ?? '')) ? String(c.req.query('to')) : null
+    const dateClause = `${from ? ` AND date(f.created_at) >= ?` : ''}${to ? ` AND date(f.created_at) <= ?` : ''}`
+    const dateParams = [from, to].filter(Boolean) as string[]
+
+    const tenantAssignment = await c.env.DB.prepare(`
+      SELECT contact_unassigned_limit_count FROM tenants WHERE id = ? LIMIT 1
+    `).bind(tenantId).first<{ contact_unassigned_limit_count: number }>().catch(() => null)
+    const linksResult = await c.env.DB.prepare(`
+      SELECT id, path_segment, label, unassigned_limit_count
+      FROM tenant_contact_affiliate_links WHERE tenant_id = ? ORDER BY label COLLATE NOCASE
+    `).bind(tenantId).all<{ id: number; path_segment: string; label: string; unassigned_limit_count: number }>()
+    const links = [
+      { id: 0, path_segment: '', label: CONTACT_COMPANY_LINK_SOURCE_LABEL, unassigned_limit_count: Number(tenantAssignment?.contact_unassigned_limit_count || 0) },
+      ...((linksResult.results || []) as { id: number; path_segment: string; label: string; unassigned_limit_count: number }[]),
+    ]
+
+    const buildLinkStats = async (target: typeof links[number], includeRows: boolean) => {
+      const isCompany = target.id === 0
+      const sourceClause = isCompany
+        ? `(f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '')`
+        : `f.affiliate_path_segment = ?`
+      const sourceParams = isCompany ? [] : [target.path_segment]
+      const visitParams: any[] = [tenantId, target.id]
+      let visitDateClause = ''
+      if (from) { visitDateClause += ' AND visit_date >= ?'; visitParams.push(from) }
+      if (to) { visitDateClause += ' AND visit_date <= ?'; visitParams.push(to) }
+
+      const visits = await c.env.DB.prepare(`
+        SELECT COALESCE(SUM(visit_count), 0) AS total FROM contact_link_visits
+        WHERE tenant_id = ? AND affiliate_link_id = ?${visitDateClause}
+      `).bind(...visitParams).first<{ total: number }>().catch(() => ({ total: 0 }))
+      const visitDays = await c.env.DB.prepare(`
+        SELECT visit_date AS date, visit_count AS count FROM contact_link_visits
+        WHERE tenant_id = ? AND affiliate_link_id = ?${visitDateClause} ORDER BY visit_date ASC
+      `).bind(...visitParams).all().catch(() => ({ results: [] as any[] }))
+      const submissions = await c.env.DB.prepare(`
+        SELECT COUNT(*) AS total,
+          SUM(CASE WHEN EXISTS (
+            SELECT 1 FROM customers customer
+            WHERE customer.tenant_id = f.tenant_id AND customer.phone = f.customer_phone
+          ) THEN 1 ELSE 0 END) AS enrolled
+        FROM company_contact_followups f
+        WHERE f.tenant_id = ? AND ${sourceClause}${dateClause}
+      `).bind(tenantId, ...sourceParams, ...dateParams).first<{ total: number; enrolled: number }>()
+      const total = Number(submissions?.total || 0)
+      const enrolled = Number(submissions?.enrolled || 0)
+      const submissionDays = await c.env.DB.prepare(`
+        SELECT date(f.created_at) AS date, COUNT(*) AS count
+        FROM company_contact_followups f
+        WHERE f.tenant_id = ? AND ${sourceClause}${dateClause}
+        GROUP BY date(f.created_at) ORDER BY date(f.created_at)
+      `).bind(tenantId, ...sourceParams, ...dateParams).all()
+
+      if (!includeRows) {
+        return {
+          id: target.id, label: target.label, visits: Number(visits?.total || 0), submissions: total,
+          enrolled, not_enrolled: total - enrolled,
+          conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
+          unassigned: Number(target.unassigned_limit_count || 0),
+        }
+      }
+
+      const followupRows = await c.env.DB.prepare(`
+        SELECT f.id, f.customer_name, f.customer_phone, f.created_at,
+          MAX(t.id) AS task_id,
+          MAX(t.assigned_user_id) AS assigned_user_id,
+          MAX(u.full_name) AS assigned_user_name,
+          MAX(t.task_title) AS task_title,
+          MAX(t.scheduled_at_gregorian) AS scheduled_at_gregorian,
+          MAX(t.scheduled_at_hijri) AS scheduled_at_hijri,
+          MAX(t.priority) AS priority,
+          CASE WHEN EXISTS (
+            SELECT 1 FROM customers customer
+            WHERE customer.tenant_id = f.tenant_id AND customer.phone = f.customer_phone
+          ) THEN 1 ELSE 0 END AS is_enrolled
+        FROM company_contact_followups f
+        LEFT JOIN company_contact_followup_tasks t ON t.followup_id = f.id
+        LEFT JOIN users u ON u.id = t.assigned_user_id
+        WHERE f.tenant_id = ? AND ${sourceClause}${dateClause}
+        GROUP BY f.id
+        ORDER BY f.created_at DESC LIMIT 500
+      `).bind(tenantId, ...sourceParams, ...dateParams).all()
+
+      const perUser = await c.env.DB.prepare(`
+        SELECT u.id, u.full_name, u.role_id, COUNT(DISTINCT f.id) AS tasks_received,
+          SUM(CASE WHEN EXISTS (
+            SELECT 1 FROM customers customer
+            WHERE customer.tenant_id = f.tenant_id AND customer.phone = f.customer_phone
+          ) THEN 1 ELSE 0 END) AS enrolled_count,
+          (
+            SELECT COUNT(*)
+            FROM company_contact_followup_tasks open_task
+            WHERE open_task.assigned_user_id = u.id
+              AND open_task.tenant_id = ?
+              AND (
+                open_task.status IS NULL
+                OR TRIM(open_task.status) = ''
+                OR LOWER(TRIM(open_task.status)) NOT IN ('completed', 'cancelled')
+              )
+          ) AS open_tasks
+        FROM company_contact_followups f
+        INNER JOIN company_contact_followup_tasks t ON t.followup_id = f.id
+        INNER JOIN users u ON u.id = t.assigned_user_id
+        WHERE f.tenant_id = ? AND ${sourceClause}${dateClause}
+        GROUP BY u.id, u.full_name, u.role_id
+        ORDER BY tasks_received DESC, u.full_name
+      `).bind(tenantId, tenantId, ...sourceParams, ...dateParams).all()
+
+      const followupStaff = await listFollowupAssignableStaff(c.env.DB, tenantId)
+
+      return {
+        id: target.id, label: target.label, visits: Number(visits?.total || 0), submissions: total, enrolled,
+        not_enrolled: total - enrolled, conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
+        visit_to_submission: Number(visits?.total || 0) ? Math.round((total / Number(visits?.total || 0)) * 1000) / 10 : 0,
+        unassigned: Number(target.unassigned_limit_count || 0), visit_days: visitDays.results || [],
+        submission_days: submissionDays.results || [], users: perUser.results || [], customers: followupRows.results || [],
+        followup_staff: followupStaff,
+      }
+    }
+
+    if (link === 'all') {
+      const overview = []
+      for (const item of links) overview.push(await buildLinkStats(item, false))
+      return c.json({ success: true, links, overview })
+    }
+    const linkId = link === 'company' ? 0 : parseInt(link, 10)
+    const target = links.find((item) => item.id === linkId)
+    if (!target) return c.json({ success: false, error: 'الرابط غير موجود' }, 404)
+    return c.json({ success: true, links, stats: await buildLinkStats(target, true) })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/admin/link-stats', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.redirect('/admin/panel')
+  const isSuper = userInfo.roleId === 1
+  return c.html(`<!doctype html>
+  <html lang="ar" dir="rtl"><head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>إحصائيات الروابط</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+      body { background: #f5f7fb; } .stat-card { background: linear-gradient(145deg,#fff,#f8fafc); }
+      .metric-glow { box-shadow: 0 16px 38px -22px rgba(15,23,42,.42); }
+      .tab-active { background:#0f766e!important;color:white!important;border-color:#0f766e!important; }
+      #detail table thead { color: #475569; }
+      #detail table tbody { color: #1e293b; }
+      #detail table tbody .text-slate-400 { color: #475569 !important; }
+      #detail table tbody .text-slate-500 { color: #334155 !important; }
+    </style>
+  </head><body class="min-h-screen text-slate-800">
+    <div class="bg-slate-950 text-white overflow-hidden"><div class="max-w-7xl mx-auto px-5 py-7 relative">
+      <div class="absolute -top-20 -left-16 w-64 h-64 rounded-full bg-teal-500/20 blur-3xl"></div>
+      <a id="statsBack" href="/admin/contact-affiliates" class="relative text-sm text-slate-300 hover:text-white"><i class="fas fa-arrow-right ml-1"></i><span>روابط التواصل</span></a>
+      <div class="relative mt-5 flex flex-col lg:flex-row gap-5 lg:items-end lg:justify-between">
+        <div><p class="text-teal-300 text-sm font-bold tracking-wide">ANALYTICS CENTER</p><h1 class="text-3xl font-black mt-1">إحصائيات الروابط</h1><p class="text-slate-300 mt-2 text-sm">من الزيارة الأولى إلى العميل المسجّل — في لوحة واحدة.</p></div>
+        <div class="flex flex-wrap gap-2"><button data-range="7" class="range-btn px-3 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20">7 أيام</button><button data-range="30" class="range-btn tab-active px-3 py-2 rounded-lg text-sm">30 يوم</button><button data-range="90" class="range-btn px-3 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20">90 يوم</button><button data-range="all" class="range-btn px-3 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20">الكل</button></div>
+      </div>
+    </div></div>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-7">
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 metric-glow flex flex-col md:flex-row gap-3 md:items-center">
+        <div class="${isSuper ? '' : 'hidden'} flex-1"><label class="text-xs font-bold text-slate-500">الشركة</label><select id="tenant" class="mt-1 w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5"></select></div>
+        <div class="flex-[2]"><label class="text-xs font-bold text-slate-500">الرابط</label><select id="link" class="mt-1 w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5"><option value="all">كل الروابط</option></select></div>
+        <div class="pt-5"><button id="share" class="w-full bg-slate-100 hover:bg-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fas fa-link ml-1"></i>نسخ الرابط</button></div>
+      </div>
+      <div id="loading" class="py-20 text-center text-slate-400"><i class="fas fa-circle-notch fa-spin text-3xl text-teal-500"></i><p class="mt-3">جاري تجهيز الصورة الكاملة...</p></div>
+      <div id="content" class="hidden">
+        <section id="kpis" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mt-6"></section>
+        <section id="detail" class="hidden">
+          <div class="grid lg:grid-cols-5 gap-5 mt-6">
+            <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-5 metric-glow"><div class="flex justify-between items-center mb-4"><div><h2 class="font-black">حركة الرابط</h2><p class="text-xs text-slate-500 mt-1">الزيارات مقابل الطلبات المستلمة</p></div><span id="linkBadge" class="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full"></span></div><div class="h-72"><canvas id="trend"></canvas></div></div>
+            <div class="lg:col-span-2 rounded-2xl p-6 bg-gradient-to-br from-teal-700 via-teal-700 to-cyan-800 text-white metric-glow"><p class="text-teal-100 text-sm">قمع التحويل</p><div class="mt-6 space-y-5" id="funnel"></div><p class="text-xs text-teal-100/80 mt-6">العملاء المسجّلون يُطابقون حسب رقم الجوال.</p></div>
+          </div>
+          <div class="grid lg:grid-cols-5 gap-5 mt-6">
+            <section class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">توزيع الفريق</h2><p class="text-xs text-slate-500 mt-1">مهام المتابعة لكل مستخدم</p></div><div id="users" class="divide-y divide-slate-100"></div></section>
+            <section class="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة العملاء</h2><p class="text-xs text-slate-500 mt-1">طلبات الرابط خلال الفترة المحددة</p></div><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div><div class="px-5 pt-4 flex gap-2"><button data-tab="enrolled" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">مسجّلون <span id="enrolledCount"></span></button><button data-tab="pending" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير مسجّلين <span id="pendingCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div></section>
+          </div>
+        </section>
+        <section id="overview" class="hidden mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">مقارنة أداء الروابط</h2><p class="text-xs text-slate-500 mt-1">اختر أي صف للانتقال إلى تفاصيل الرابط.</p></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-4 text-right">الرابط</th><th class="p-4">الزيارات</th><th class="p-4">الطلبات</th><th class="p-4">المسجّلون</th><th class="p-4">التحويل</th><th class="p-4">غير معيّن</th><th></th></tr></thead><tbody id="overviewRows"></tbody></table></div></section>
+      </div>
+    </main>
+    <script>
+      const IS_SUPER=${isSuper ? 'true' : 'false'}; let range=30, chart, data, customerTab='enrolled';
+      const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+      function dateRange(){ if(range==='all')return {}; const to=new Date(), from=new Date();from.setDate(to.getDate()-Number(range)+1); return {from:from.toISOString().slice(0,10),to:to.toISOString().slice(0,10)}}
+      function kpi(label,value,icon,color,sub=''){return '<div class="stat-card border border-slate-200 rounded-2xl p-4 metric-glow"><div class="flex justify-between"><span class="w-10 h-10 rounded-xl flex items-center justify-center '+color+'"><i class="fas '+icon+'"></i></span><span class="text-xs text-slate-400">'+sub+'</span></div><div class="mt-5 text-2xl font-black">'+value+'</div><div class="text-xs font-bold text-slate-500 mt-1">'+label+'</div></div>'}
+      function renderCustomers(){
+        if(!data?.stats)return;
+        const term=($('search').value||'').toLowerCase();
+        const rows=data.stats.customers.filter(x=>(customerTab==='enrolled')===Boolean(x.is_enrolled)).filter(x=>(x.customer_name+' '+x.customer_phone).toLowerCase().includes(term));
+        const staff=data.stats.followup_staff||[];
+        function selectOptions(items,current){return '<option value="">غير معيّن</option>'+items.map(u=>'<option value="'+u.id+'" '+(Number(current)===Number(u.id)?'selected':'')+'>'+esc(u.full_name)+(Number(u.role_id)===6?' (مزدوج)':Number(u.role_id)===5?' (وكيل)':'')+'</option>').join('')}
+        $('customers').innerHTML=rows.length?rows.map(x=>{
+          return '<tr class="border-b last:border-0 '+(x.is_enrolled?'':'bg-amber-50/50')+'"><td class="py-3 font-bold">'+esc(x.customer_name)+'</td><td class="py-3 text-right" dir="rtl">'+esc(x.customer_phone)+'</td><td class="py-3"><select data-followup-assignment data-followup-id="'+x.id+'" data-task-title="'+esc(x.task_title||'')+'" data-task-schedule="'+esc(x.scheduled_at_gregorian||'')+'" data-task-hijri="'+esc(x.scheduled_at_hijri||'')+'" data-task-priority="'+esc(x.priority||'regular')+'" class="min-w-[9rem] rounded-lg border-slate-200 text-xs px-2 py-1.5 bg-white">'+selectOptions(staff,x.assigned_user_id)+'</select></td><td class="py-3 text-slate-400">'+new Date(x.created_at).toLocaleDateString('ar-SA')+'</td></tr>'
+        }).join(''):'<tr><td colspan="4" class="py-10 text-center text-slate-400">لا توجد نتائج</td></tr>';
+        document.querySelectorAll('[data-followup-assignment]').forEach(el=>el.onchange=async function(){
+          const previous=el.dataset.previousValue||'';
+          el.disabled=true;
+          try{
+            const r=await axios.post('/api/follow-ups/'+encodeURIComponent(el.dataset.followupId)+'/tasks',{
+              task_title:el.dataset.taskTitle||('متابعة طلب تواصل'),
+              scheduled_at_gregorian:el.dataset.taskSchedule||new Date().toISOString(),
+              scheduled_at_hijri:el.dataset.taskHijri||null,
+              assigned_user_id:el.value?Number(el.value):null,
+              priority:el.dataset.taskPriority||'regular'
+            });
+            if(!r.data.success)throw new Error(r.data.error);
+            el.dataset.previousValue=el.value;
+            const row=data.stats.customers.find(c=>Number(c.id)===Number(el.dataset.followupId));
+            if(row){
+              row.assigned_user_id=el.value?Number(el.value):null;
+              const staffUser=staff.find(u=>Number(u.id)===Number(el.value));
+              row.assigned_user_name=staffUser?staffUser.full_name:null;
+            }
+          }catch(e){
+            el.value=previous;
+            alert((e.response&&e.response.data&&e.response.data.error)||e.message||'تعذر حفظ التعيين');
+          }finally{el.disabled=false}
+        });
+        document.querySelectorAll('[data-followup-assignment]').forEach(el=>{el.dataset.previousValue=el.value});
+      }
+      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','مطابقة الجوال')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const enrolled=s.customers.filter(x=>x.is_enrolled).length;$('enrolledCount').textContent='('+enrolled+')';$('pendingCount').textContent='('+ (s.customers.length-enrolled)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
+      async function load(){
+        const tenant=IS_SUPER?$('tenant').value:'';
+        if(IS_SUPER&&!tenant)return;
+        $('loading').classList.remove('hidden');$('content').classList.add('hidden');
+        $('loading').innerHTML='<i class="fas fa-circle-notch fa-spin text-3xl text-teal-500"></i><p class="mt-3">جاري تجهيز الصورة الكاملة...</p>';
+        const q=new URLSearchParams({link:$('link').value||'all',...dateRange()});if(tenant)q.set('tenant_id',tenant);
+        try {
+          const res=await axios.get('/api/link-stats?'+q);
+          data=res.data;
+          if(!data.success)throw new Error(data.error||'تعذر تحميل الإحصائيات');
+          const rawPrev=$('link').value||new URLSearchParams(location.search).get('link')||'all';
+          const prev=rawPrev==='0'?'company':rawPrev;
+          $('link').innerHTML='<option value="all">كل الروابط</option>'+data.links.map(x=>'<option value="'+(x.id===0?'company':x.id)+'">'+esc(x.label)+'</option>').join('');
+          $('link').value=prev;
+          const back=$('statsBack');
+          if(back){
+            const backUrl=new URL('/admin/link-stats',location.origin);
+            if(tenant)backUrl.searchParams.set('tenant_id',tenant);
+            Object.entries(dateRange()).forEach(([key,value])=>backUrl.searchParams.set(key,value));
+            if(prev!=='all'){back.href=backUrl.pathname+(backUrl.search||'');back.querySelector('span').textContent='كل الروابط'}
+            else {back.href='/admin/contact-affiliates';back.querySelector('span').textContent='روابط التواصل'}
+          }
+          render();history.replaceState(null,'','?'+q);
+        } catch (error) {
+          const message=(error.response&&error.response.data&&error.response.data.error)||error.message||'تعذر الاتصال بالخادم';
+          $('loading').innerHTML='<div class="inline-flex flex-col items-center gap-3"><i class="fas fa-triangle-exclamation text-3xl text-rose-500"></i><p class="text-rose-600 font-bold">'+esc(message)+'</p><button id="retryStats" class="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm">إعادة المحاولة</button></div>';
+          const retry=$('retryStats');if(retry)retry.onclick=load;
+        }
+      }
+      const initialStatsParams=new URLSearchParams(location.search);
+      if(initialStatsParams.get('link')==='0'){
+        initialStatsParams.set('link','company');
+        history.replaceState(history.state,'',location.pathname+'?'+initialStatsParams);
+      }
+      const requestedInitialLink=initialStatsParams.get('link');
+      if(requestedInitialLink&&!Array.from($('link').options).some(option=>option.value===requestedInitialLink)){
+        $('link').append(new Option('',requestedInitialLink));
+      }
+      if(initialStatsParams.get('link')&&initialStatsParams.get('link')!=='all'&&!history.state?.linkStatsDetail){
+        const selectedUrl=location.href;
+        const overviewUrl=new URL(location.href);
+        overviewUrl.searchParams.delete('link');
+        history.replaceState({linkStatsOverview:true},'',overviewUrl.pathname+(overviewUrl.search||''));
+        history.pushState({linkStatsDetail:true},'',selectedUrl);
+      }
+      document.addEventListener('click',function(event){
+        const row=event.target.closest('[data-link="0"]');
+        if(!row)return;
+        event.preventDefault();event.stopImmediatePropagation();
+        $('link').value='company';
+        const q=new URLSearchParams(location.search);q.set('link','company');
+        history.pushState({linkStatsDetail:true},'', '?'+q);load();
+      },true);
+      document.querySelectorAll('.range-btn').forEach(b=>b.onclick=()=>{range=b.dataset.range;document.querySelectorAll('.range-btn').forEach(x=>x.classList.toggle('tab-active',x===b));load()});$('link').onchange=load;$('tenant').onchange=load;document.querySelectorAll('.customer-tab').forEach(b=>b.onclick=()=>{customerTab=b.dataset.tab;document.querySelectorAll('.customer-tab').forEach(x=>x.classList.toggle('tab-active',x===b));renderCustomers()});$('search').oninput=renderCustomers;$('share').onclick=async()=>{await navigator.clipboard.writeText(location.href);$('share').innerHTML='<i class="fas fa-check ml-1"></i>تم النسخ';setTimeout(()=>$('share').innerHTML='<i class="fas fa-link ml-1"></i>نسخ الرابط',1500)};document.addEventListener('click',function(event){const row=event.target.closest('[data-link]');if(!row)return;event.preventDefault();event.stopImmediatePropagation();$('link').value=row.dataset.link;const q=new URLSearchParams(location.search);q.set('link',row.dataset.link);history.pushState(null,'','?'+q);load()},true);window.addEventListener('popstate',function(){const q=new URLSearchParams(location.search);$('link').value=q.get('link')||'all';if(IS_SUPER&&q.get('tenant_id'))$('tenant').value=q.get('tenant_id');load()});(async()=>{const link=new URLSearchParams(location.search).get('link');if(link)$('link').value=link;if(IS_SUPER){const r=await axios.get('/api/tenants');$('tenant').innerHTML='<option value="">اختر الشركة</option>'+(r.data.data||[]).map(t=>'<option value="'+t.id+'">'+esc(t.company_name||t.slug)+'</option>').join('');const tenantId=new URLSearchParams(location.search).get('tenant_id');if(tenantId){$('tenant').value=tenantId;await load()}}else await load()})();
+    </script></body></html>`)
+})
+
 app.get('/admin/contact-affiliates', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId) return c.redirect('/login')
@@ -35617,54 +36269,70 @@ app.get('/admin/contact-affiliates', async (c) => {
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js'"></script>
+      <style>
+        body { background: #f5f7fb; }
+        .affiliate-hero { background: linear-gradient(125deg,#0f172a 0%,#162c42 54%,#0f766e 145%); }
+        .affiliate-hero::before { content:''; position:absolute; width:21rem; height:21rem; border-radius:9999px; background:rgba(45,212,191,.17); filter:blur(42px); left:-7rem; top:-10rem; }
+        .affiliate-shell-card { box-shadow:0 16px 38px -24px rgba(15,23,42,.36); }
+        #listBody > ul { display:grid; gap:12px; }
+        #listBody > ul > li { padding:18px; border:1px solid #e2e8f0; border-radius:16px; background:linear-gradient(145deg,#fff,#f8fafc); box-shadow:0 12px 26px -24px rgba(15,23,42,.5); transition:transform .18s ease, box-shadow .18s ease; }
+        #listBody > ul > li:hover { transform:translateY(-2px); box-shadow:0 18px 30px -24px rgba(15,23,42,.55); }
+        #listBody > ul > li + li { border-top-width:1px; }
+        #listBody [data-aff-toggle] { border:1px solid #fde68a; background:#fffbeb; padding:7px 10px; border-radius:9px; }
+        #listBody [data-del] { border:1px solid #fecaca; background:#fff1f2; padding:7px 10px; border-radius:9px; }
+      </style>
     </head>
-    <body class="bg-gray-50 min-h-screen">
-      <div class="border-b border-slate-200/90 bg-slate-50/90">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
-          <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    <body class="min-h-screen">
+      <div class="affiliate-hero relative overflow-hidden text-white">
+        <div class="max-w-6xl mx-auto px-5 sm:px-6 py-7 relative">
+          <a href="/admin/panel" class="text-sm font-medium text-slate-300 hover:text-white"><i class="fas fa-arrow-right ml-1"></i>العودة للوحة الرئيسية</a>
+          <div class="mt-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
+          <div>
+            <p class="text-teal-300 text-xs font-bold tracking-[.16em]">MARKETING LINKS</p>
+            <h1 class="text-3xl md:text-4xl font-black mt-2">
+              <i class="fas fa-link ml-2 text-amber-300"></i>روابط التواصل التسويقية
+            </h1>
+            <p class="text-slate-300 mt-3 text-sm max-w-2xl">أنشئ روابط حملاتك، خصص تجربتها، ووزّع الطلبات على فريقك — كل رابط يبدأ من تصميم الشركة ثم يصبح مستقلاً.</p>
+          </div>
+          <a href="/admin/link-stats" class="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-slate-900 hover:bg-teal-50 px-5 py-3 text-sm font-black shadow-lg shrink-0">
+            <i class="fas fa-chart-line text-teal-600"></i>إحصائيات الروابط
+          </a>
+        </div>
         </div>
       </div>
-      <div class="max-w-6xl mx-auto p-6">
-        <div class="mb-6">
-          <div>
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">
-              <i class="fas fa-link ml-2 text-amber-600"></i>روابط التواصل التسويقية
-            </h1>
-            <p class="text-gray-600 mt-2 text-sm">أضف مساراً بعد رابط صفحة التواصل. مع الفروع، التنسيق الكامل: <span dir="ltr" class="font-mono text-xs bg-gray-100 px-1 rounded">/{شركة}/{فرع}/{مسار}</span>. كل رابط يحفظ تصميمه الخاص (يبدأ بنفس تصميم رابط الشركة).</p>
-          </div>
-        </div>
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-7">
 
-        <div id="affiliateLocPick" class="mb-4 bg-amber-50/90 rounded-xl border border-amber-100 p-4 hidden">
+        <div id="affiliateLocPick" class="mb-5 bg-white rounded-2xl border border-slate-200 p-5 affiliate-shell-card hidden">
           <label class="block text-sm font-medium text-gray-800 mb-2">عرض الرابط الكامل حسب الفرع</label>
           <select id="affiliateLocSelect" class="w-full border rounded-lg px-3 py-2 bg-white"></select>
           <p class="text-xs text-gray-600 mt-2">اختر فرعاً لنسخ رابط التسويق والإحالة الصحيح.</p>
         </div>
 
-        <div id="superTenantWrap" class="${isSuper ? '' : 'hidden'} mb-6 bg-white rounded-xl border p-4">
+        <div id="superTenantWrap" class="${isSuper ? '' : 'hidden'} mb-5 bg-white rounded-2xl border border-slate-200 p-5 affiliate-shell-card">
           <label class="block text-sm font-medium text-gray-700 mb-2">الشركة</label>
           <select id="superTenantSelect" class="w-full border rounded-lg px-3 py-2"></select>
         </div>
 
-        <div class="bg-white rounded-xl border p-5 mb-6">
-          <h2 class="text-lg font-bold text-gray-900 mb-4">إضافة رابط</h2>
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-6 affiliate-shell-card">
+          <div class="flex items-center gap-3 mb-5"><span class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fas fa-plus"></i></span><div><h2 class="text-lg font-black text-slate-900">إنشاء رابط حملة</h2><p class="text-xs text-slate-500 mt-0.5">يبدأ بتصميم وإعدادات الرابط الرئيسي.</p></div></div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
             <div>
               <label class="block text-xs text-gray-600 mb-1">المسار (بالإنجليزية، بدون شرطة مائلة)</label>
-              <input id="pathInput" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="facebook" dir="ltr" />
+              <input id="pathInput" class="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400" placeholder="facebook" dir="ltr" />
             </div>
             <div>
               <label class="block text-xs text-gray-600 mb-1">التسمية (تظهر في بطاقة المتابعة)</label>
-              <input id="labelInput" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="إعلان فيسبوك" />
+              <input id="labelInput" class="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400" placeholder="إعلان فيسبوك" />
             </div>
           </div>
-          <button id="saveBtn" type="button" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-lg text-sm font-medium">
+          <button id="saveBtn" type="button" class="bg-teal-700 hover:bg-teal-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm">
             <i class="fas fa-plus ml-2"></i>حفظ
           </button>
           <p id="formMsg" class="text-sm mt-2"></p>
         </div>
 
-        <div id="mainLinkWrap" class="bg-white rounded-xl border border-blue-200 mb-6 hidden">
-          <div class="px-4 py-3 border-b border-blue-100 flex items-center justify-between flex-wrap gap-2">
+        <div id="mainLinkWrap" class="bg-white rounded-2xl border border-sky-200 mb-6 affiliate-shell-card hidden overflow-hidden">
+          <div class="px-5 py-4 border-b border-sky-100 bg-gradient-to-l from-sky-50 to-white flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center gap-3 min-w-0">
               <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold shrink-0">
                 <i class="fas fa-building"></i>الرابط الرئيسي
@@ -35674,16 +36342,16 @@ app.get('/admin/contact-affiliates', async (c) => {
                 <div class="text-xs text-gray-500 mt-0.5 break-all" id="mainLinkUrl" dir="ltr"></div>
               </div>
             </div>
-            <button type="button" id="mainLinkToggleBtn" class="text-blue-700 text-sm hover:underline font-medium shrink-0">
-              <i class="fas fa-palette ml-1"></i>تخصيص الصفحة
+            <button type="button" id="mainLinkToggleBtn" class="text-sky-700 bg-white border border-sky-200 px-3 py-2 rounded-xl text-sm font-bold hover:bg-sky-50 shrink-0">
+              <i class="fas fa-palette ml-1"></i>تخصيص الرابط
             </button>
           </div>
           <div class="hidden p-4" id="mainLinkPanelWrap"></div>
         </div>
 
-        <div id="listWrap" class="bg-white rounded-xl border">
-          <div class="px-4 py-3 border-b font-semibold text-gray-800">روابط الأفلييت</div>
-          <div id="listBody" class="p-4 text-sm text-gray-500">جاري التحميل...</div>
+        <div id="listWrap" class="bg-white rounded-2xl border border-slate-200 affiliate-shell-card overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between"><div><h2 class="font-black text-slate-900">روابط الأفلييت</h2><p class="text-xs text-slate-500 mt-0.5">تصاميم مستقلة ووجهات مخصصة لكل حملة.</p></div><span class="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><i class="fas fa-sparkles"></i></span></div>
+          <div id="listBody" class="p-5 text-sm text-gray-500">جاري التحميل...</div>
         </div>
       </div>
 
@@ -35723,7 +36391,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           modal.classList.remove('hidden');
           modalBody.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">جاري التحميل...</p>';
           try {
-            var res = await axios.get('/api/tenant-contact-affiliates/' + linkId + '/unassigned-customers');
+            var res = await axios.get(assignmentActionUrl(linkId, '/unassigned-customers'));
             if (!res.data || !res.data.success) throw new Error(res.data && res.data.error || 'خطأ');
             var items = res.data.data || [];
             var staff = res.data.staff || [];
@@ -35951,7 +36619,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '</div>' +
 
             // Assignment control panel — same width as config column, below phone preview
-            (String(id) !== 'company' ? (
+            (
             '<div id="assignPanel_' + id + '" class="mt-5 w-full" style="max-width:420px;">' +
             '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">' +
             '<div class="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">' +
@@ -35975,29 +36643,17 @@ app.get('/admin/contact-affiliates', async (c) => {
             // Custom section (hidden by default, revealed when custom selected)
             '<div id="assignCustomSection_' + id + '" class="hidden space-y-4">' +
 
-            // Employees + Bank agents side by side on wide screens
-            '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-
-            // Employees subsection
+            // Single follow-up owner roster (roles 4/5/6)
             '<div class="rounded-lg border border-gray-200 p-3 space-y-2">' +
-            '<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">موظفون</div>' +
-            '<select id="addEmployeeSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة موظف</option></select>' +
-            '<div id="employeeRoster_' + id + '" class="space-y-2"></div>' +
+            '<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">الموظف المسؤول</div>' +
+            '<select id="addStaffSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة مستخدم</option></select>' +
+            '<div id="staffRoster_' + id + '" class="space-y-2"></div>' +
             '</div>' +
-
-            // Bank agents subsection
-            '<div class="rounded-lg border border-gray-200 p-3 space-y-2">' +
-            '<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">وكلاء البنك</div>' +
-            '<select id="addBankAgentSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة وكيل</option></select>' +
-            '<div id="bankAgentRoster_' + id + '" class="space-y-2"></div>' +
-            '</div>' +
-
-            '</div>' + // end grid
 
             // Unassigned banner
             '<div id="unassignedBanner_' + id + '" class="hidden rounded-lg bg-red-50 border border-red-200 p-3">' +
             '<div class="flex items-center justify-between gap-2 flex-wrap">' +
-            '<span class="text-sm text-red-700 font-medium"><i class="fas fa-exclamation-triangle ml-1"></i><span id="unassignedCountEl_' + id + '">0</span> عملاء بدون تعيين (حد مكتمل)</span>' +
+            '<span class="text-sm text-red-700 font-medium"><i class="fas fa-exclamation-triangle ml-1"></i><span id="unassignedCountEl_' + id + '">0</span> طلبات بدون تعيين (حد مكتمل)</span>' +
             '<div class="flex gap-3">' +
             '<button type="button" id="viewUnassignedBtn_' + id + '" class="text-sm text-blue-600 hover:underline font-medium">عرض</button>' +
             '<span class="text-gray-300">|</span>' +
@@ -36017,7 +36673,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '</div>' + // end p-4
             '</div>' + // end rounded-xl
             '</div>'   // end assignPanel
-            ) : '') +
+            ) +
 
             '</div>' + // closes preview column
             '</div>' + // closes flex row
@@ -36506,33 +37162,48 @@ app.get('/admin/contact-affiliates', async (c) => {
           }
         }
 
-        function rosterCardHtml(userId, roleId, roleContext, name, assignedCount, limitVal, panelId) {
-          var isDual = roleId === 6;
+        function rosterCardHtml(userId, roleId, name, activeTaskCount, limitVal, panelId) {
+          var isDual = Number(roleId) === 6;
+          var isAgent = Number(roleId) === 5;
           var badge = isDual
             ? '<span class="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-bold mr-1">مزدوج</span>'
+            : isAgent
+              ? '<span class="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold mr-1">وكيل</span>'
             : '';
           var isLimited = limitVal != null;
           var limitedInput = '<input type="number" min="1" value="' + (isLimited ? limitVal : '') + '" data-limit-input class="w-16 px-1.5 py-0.5 border rounded text-sm ' + (isLimited ? '' : 'hidden') + '" placeholder="10" />';
           return (
-            '<div class="p-2.5 bg-gray-50 rounded-lg border border-gray-100" data-roster-item data-user-id="' + userId + '" data-role-context="' + roleContext + '">' +
+            '<div class="p-2.5 bg-gray-50 rounded-lg border border-gray-100" data-roster-item data-user-id="' + userId + '" data-role-context="employee">' +
             '<div class="flex items-center justify-between mb-1.5">' +
             '<span class="text-sm font-semibold text-gray-800">' + badge + escapeHtml(name) + '</span>' +
             '<button type="button" data-roster-remove class="text-gray-300 hover:text-red-500 text-sm leading-none"><i class="fas fa-times"></i></button>' +
             '</div>' +
             '<div class="flex items-center gap-3 flex-wrap">' +
             '<label class="flex items-center gap-1.5 cursor-pointer">' +
-            '<input type="radio" name="lm_' + panelId + '_' + userId + '_' + roleContext + '" value="unlimited" ' + (!isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
+            '<input type="radio" name="lm_' + panelId + '_' + userId + '" value="unlimited" ' + (!isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
             '<span class="text-sm text-gray-600">غير محدود</span>' +
             '</label>' +
             '<label class="flex items-center gap-1.5 cursor-pointer">' +
-            '<input type="radio" name="lm_' + panelId + '_' + userId + '_' + roleContext + '" value="limited" ' + (isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
+            '<input type="radio" name="lm_' + panelId + '_' + userId + '" value="limited" ' + (isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
             '<span class="text-sm text-gray-600">محدود:</span>' +
             limitedInput +
             '</label>' +
             '</div>' +
-            '<div class="text-xs text-gray-400 mt-1.5">مُعيَّن عبر هذا الرابط: <span class="font-medium text-gray-600">' + assignedCount + (isLimited ? ' / ' + limitVal : '') + '</span></div>' +
+            '<div class="text-xs text-gray-400 mt-1.5">المهام المفتوحة: <span class="font-medium text-gray-600">' + activeTaskCount + (isLimited ? ' / ' + limitVal : '') + '</span></div>' +
             '</div>'
           );
+        }
+
+        function assignmentConfigUrl(id) {
+          if (String(id) !== 'company') return '/api/tenant-contact-affiliates/' + id + '/assignment-config';
+          var tenantId = IS_SUPERADMIN ? currentTenantId() : null;
+          return '/api/tenant-contact-main-assignment-config' + (tenantId ? '?tenant_id=' + tenantId : '');
+        }
+
+        function assignmentActionUrl(id, suffix) {
+          if (String(id) !== 'company') return '/api/tenant-contact-affiliates/' + id + suffix;
+          var tenantId = IS_SUPERADMIN ? currentTenantId() : null;
+          return '/api/tenant-contact-main-assignment-config' + suffix + (tenantId ? '?tenant_id=' + tenantId : '');
         }
 
         async function wireAssignmentPanel(id) {
@@ -36542,7 +37213,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           // Fetch config
           var cfg = null;
           try {
-            var res = await axios.get('/api/tenant-contact-affiliates/' + id + '/assignment-config');
+            var res = await axios.get(assignmentConfigUrl(id));
             if (res.data && res.data.success) cfg = res.data;
           } catch (_) {}
           if (!cfg) return;
@@ -36566,34 +37237,31 @@ app.get('/admin/contact-affiliates', async (c) => {
             banner.classList.remove('hidden');
           }
 
-          // Populate pickers
-          var empSel = document.getElementById('addEmployeeSelect_' + id);
-          var agentSel = document.getElementById('addBankAgentSelect_' + id);
-          if (empSel && Array.isArray(cfg.available_employees)) {
-            empSel.innerHTML = '<option value="">+ إضافة موظف</option>' +
-              cfg.available_employees.map(function(u) {
-                return '<option value="' + u.id + '" data-role-id="' + u.role_id + '" data-name="' + escapeHtml(u.full_name) + '">' + escapeHtml(u.full_name) + (u.role_id === 6 ? ' (مزدوج)' : '') + '</option>';
-              }).join('');
-          }
-          if (agentSel && Array.isArray(cfg.available_bank_agents)) {
-            agentSel.innerHTML = '<option value="">+ إضافة وكيل</option>' +
-              cfg.available_bank_agents.map(function(u) {
-                return '<option value="' + u.id + '" data-role-id="' + u.role_id + '" data-name="' + escapeHtml(u.full_name) + '">' + escapeHtml(u.full_name) + (u.role_id === 6 ? ' (مزدوج)' : '') + '</option>';
+          // Populate picker (roles 4/5/6)
+          var staffSel = document.getElementById('addStaffSelect_' + id);
+          var availableStaff = Array.isArray(cfg.available_staff) ? cfg.available_staff
+            : [].concat(cfg.available_employees || [], cfg.available_bank_agents || []);
+          if (staffSel) {
+            staffSel.innerHTML = '<option value="">+ إضافة مستخدم</option>' +
+              availableStaff.map(function(u) {
+                var roleTag = Number(u.role_id) === 6 ? ' (مزدوج)' : Number(u.role_id) === 5 ? ' (وكيل)' : '';
+                return '<option value="' + u.id + '" data-role-id="' + u.role_id + '" data-name="' + escapeHtml(u.full_name) + '">' + escapeHtml(u.full_name) + roleTag + '</option>';
               }).join('');
           }
 
-          // Render existing roster
-          var empRoster = document.getElementById('employeeRoster_' + id);
-          var agentRoster = document.getElementById('bankAgentRoster_' + id);
-          if (Array.isArray(cfg.roster)) {
+          // Render existing roster (deduped by user)
+          var staffRoster = document.getElementById('staffRoster_' + id);
+          if (Array.isArray(cfg.roster) && staffRoster) {
+            var seen = {};
             cfg.roster.forEach(function(r) {
-              var html = rosterCardHtml(r.user_id, r.role_id, r.role_context, r.full_name, r.assigned_count, r.assignment_limit, id);
-              if (r.role_context === 'employee' && empRoster) empRoster.insertAdjacentHTML('beforeend', html);
-              if (r.role_context === 'bank_agent' && agentRoster) agentRoster.insertAdjacentHTML('beforeend', html);
+              if (seen[r.user_id]) return;
+              seen[r.user_id] = true;
+              var count = r.active_task_count != null ? r.active_task_count : (r.active_customer_count || 0);
+              staffRoster.insertAdjacentHTML('beforeend', rosterCardHtml(r.user_id, r.role_id, r.full_name, count, r.assignment_limit, id));
             });
           }
 
-          // Wire limit-mode radios and limit input (event delegation on roster containers)
+          // Wire limit-mode radios and limit input (event delegation on roster container)
           function wireRosterContainer(container) {
             if (!container) return;
             container.addEventListener('change', function(e) {
@@ -36615,30 +37283,23 @@ app.get('/admin/contact-affiliates', async (c) => {
               if (card) card.remove();
             });
           }
-          wireRosterContainer(empRoster);
-          wireRosterContainer(agentRoster);
+          wireRosterContainer(staffRoster);
 
-          // Helper to add a roster card from picker
-          function addFromPicker(sel, ctx, targetRoster) {
-            if (!sel) return;
-            sel.addEventListener('change', function() {
-              var opt = sel.options[sel.selectedIndex];
-              var uid = sel.value;
+          if (staffSel) {
+            staffSel.addEventListener('change', function() {
+              var opt = staffSel.options[staffSel.selectedIndex];
+              var uid = staffSel.value;
               if (!uid) return;
               var roleId = parseInt(opt.getAttribute('data-role-id') || '0', 10);
               var name = opt.getAttribute('data-name') || opt.text;
-              // Check if already in roster
-              if (targetRoster && targetRoster.querySelector('[data-user-id="' + uid + '"][data-role-context="' + ctx + '"]')) {
-                sel.value = '';
+              if (staffRoster && staffRoster.querySelector('[data-user-id="' + uid + '"]')) {
+                staffSel.value = '';
                 return;
               }
-              var html = rosterCardHtml(uid, roleId, ctx, name, 0, null, id);
-              if (targetRoster) targetRoster.insertAdjacentHTML('beforeend', html);
-              sel.value = '';
+              if (staffRoster) staffRoster.insertAdjacentHTML('beforeend', rosterCardHtml(uid, roleId, name, 0, null, id));
+              staffSel.value = '';
             });
           }
-          addFromPicker(empSel, 'employee', empRoster);
-          addFromPicker(agentSel, 'bank_agent', agentRoster);
 
           // Mode toggle
           [autoRadio, customRadio].forEach(function(radio) {
@@ -36661,19 +37322,21 @@ app.get('/admin/contact-affiliates', async (c) => {
               try {
                 var mode = customRadio && customRadio.checked ? 'custom' : 'auto';
                 var roster = [];
+                var seenSave = {};
                 var allCards = panelEl.querySelectorAll('[data-roster-item]');
                 allCards.forEach(function(card) {
                   var uid = parseInt(card.getAttribute('data-user-id') || '0', 10);
-                  var ctx = card.getAttribute('data-role-context') || '';
+                  if (uid <= 0 || seenSave[uid]) return;
+                  seenSave[uid] = true;
                   var limitedRadio = card.querySelector('[data-limit-mode][value="limited"]');
                   var isLimited = limitedRadio && limitedRadio.checked;
                   var limitInput = card.querySelector('[data-limit-input]');
                   var limitVal = isLimited && limitInput ? parseInt(limitInput.value, 10) : null;
-                  if (uid > 0 && ctx) {
-                    roster.push({ user_id: uid, role_context: ctx, assignment_limit: isLimited && limitVal > 0 ? limitVal : null });
-                  }
+                  roster.push({ user_id: uid, role_context: 'employee', assignment_limit: isLimited && limitVal > 0 ? limitVal : null });
                 });
-                var saveRes = await axios.put('/api/tenant-contact-affiliates/' + id + '/assignment-config', { assignment_mode: mode, roster: roster });
+                var payload = { assignment_mode: mode, roster: roster };
+                if (String(id) === 'company' && IS_SUPERADMIN) payload.tenant_id = currentTenantId();
+                var saveRes = await axios.put(assignmentConfigUrl(id), payload);
                 if (saveRes.data && saveRes.data.success) {
                   if (msgEl) { msgEl.textContent = 'تم حفظ الإعدادات.'; msgEl.className = 'text-xs text-center text-green-700'; }
                 } else {
@@ -36691,9 +37354,9 @@ app.get('/admin/contact-affiliates', async (c) => {
           var resetBtn = document.getElementById('resetUnassignedBtn_' + id);
           if (resetBtn) {
             resetBtn.addEventListener('click', async function() {
-              if (!confirm('إعادة ضبط عداد العملاء غير المُعيَّنين؟')) return;
+              if (!confirm('إعادة ضبط عداد الطلبات غير المُعيَّنة؟')) return;
               try {
-                await axios.post('/api/tenant-contact-affiliates/' + id + '/reset-unassigned-count');
+                await axios.post(assignmentActionUrl(id, '/reset-unassigned-count'));
                 if (banner) banner.classList.add('hidden');
                 if (countEl) countEl.textContent = '0';
               } catch (_) {}
@@ -37105,6 +37768,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           fillDesignPanel(id, design);
           initFieldsSortable(id);
           updatePreview(id);
+          wireAssignmentPanel(id);
 
           // bg image upload → /api/my-tenant/contact-bg-image-upload
           var bgImageFile = document.getElementById('affBgImageFile_' + id);
@@ -38403,7 +39067,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
   }
 
   const affiliate = await c.env.DB.prepare(`
-    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+    SELECT id, path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
            contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
@@ -38416,6 +39080,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
     return c.notFound()
   }
 
+  if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, affiliate.id)
   const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
   const merged = mergePublicContactForLocation(tenant, location, primary)
   return c.html(
@@ -38447,7 +39112,7 @@ app.get('/:slug/:secondSegment', async (c) => {
   }
 
   const affiliate = await c.env.DB.prepare(`
-    SELECT path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+    SELECT id, path_segment, label, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
            contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenant_contact_affiliate_links
     WHERE tenant_id = ? AND path_segment = ?
@@ -38457,6 +39122,7 @@ app.get('/:slug/:secondSegment', async (c) => {
     .first<AffiliateContactLinkRow>()
 
   if (affiliate) {
+    if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, affiliate.id)
     return c.html(buildPublicContactPageHtml(withAffiliateContactDesign(tenant, affiliate), affiliate))
   }
 
@@ -38484,6 +39150,7 @@ app.get('/:slug/:secondSegment', async (c) => {
 
   const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
   const merged = mergePublicContactForLocation(tenant, location, primary)
+  if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, null)
   return c.html(buildPublicContactPageHtml(merged, null, { locationSlug: location.slug }))
 })
 
@@ -38495,7 +39162,7 @@ app.get('/:slug', async (c) => {
   }
 
   const tenant = await c.env.DB.prepare(`
-    SELECT company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
+    SELECT id, company_name, slug, contact_email, contact_phone, primary_color, secondary_color, logo_url, contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_bg_image_url, contact_trust_badges, contact_form_badges, contact_hero_title, contact_hero_subtitle, contact_accent_color
     FROM tenants
     WHERE slug = ? AND status = 'active'
     LIMIT 1
@@ -38505,6 +39172,7 @@ app.get('/:slug', async (c) => {
     return c.notFound()
   }
 
+  if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, null)
   return c.html(buildPublicContactPageHtml(tenant, null))
 })
 
