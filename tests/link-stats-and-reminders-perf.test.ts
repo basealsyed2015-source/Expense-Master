@@ -4,13 +4,16 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 describe('link-stats overview batching', () => {
-  it('avoids sequential per-link overview awaits', () => {
+  it('avoids sequential per-link overview awaits as the primary path', () => {
     const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
     const idx = src.indexOf("app.get('/api/link-stats'")
     assert.ok(idx > 0)
-    const slice = src.slice(idx, idx + 30_000)
+    const slice = src.slice(idx, idx + 40_000)
     assert.match(slice, /Batched overview/)
-    assert.doesNotMatch(slice, /for \(const item of links\) overview\.push\(await buildLinkStats/)
+    assert.match(slice, /GROUP BY \$\{pathKeyExpr\}|GROUP BY path_key|GROUP BY \$\{pathKeyExpr\}/)
+    // Primary path must not loop with await buildLinkStats; catch fallback may.
+    const primary = slice.slice(0, slice.indexOf('} catch {'))
+    assert.doesNotMatch(primary, /for \(const item of links\) overview\.push\(await buildLinkStats/)
   })
 })
 

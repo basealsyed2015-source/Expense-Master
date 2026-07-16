@@ -22,4 +22,15 @@ describe('customers list performance patterns', () => {
     assert.match(headSlice, /href="\/tailwind\.css"/)
     assert.doesNotMatch(headSlice, /cdn\.tailwindcss\.com/)
   })
+
+  it('does not navigate via filterTable on customers page init', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    const marker = 'Restore URL filters; pagination is server-side'
+    const idx = src.indexOf(marker)
+    assert.ok(idx > 0, 'expected customers init comment')
+    const slice = src.slice(idx, idx + 500)
+    assert.match(slice, /applyCustomersPagination\(\)/)
+    assert.doesNotMatch(slice, /^\s*filterTable\(\);/m)
+    assert.match(src, /searchParams\.toString\(\) === cur\.searchParams\.toString\(\)/)
+  })
 })

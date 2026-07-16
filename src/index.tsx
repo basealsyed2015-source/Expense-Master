@@ -11618,6 +11618,20 @@ app.post('/api/calculator/save-customer', async (c) => {
       ).bind(customer_id).first<{ ok: number }>()
 
       if (!existingAssignment?.ok) {
+        // If the customer is pinned to a branch, only role-4/6 staff assigned to
+        // the same branch are eligible. Manual assignment paths ignore this.
+        const customerBranchRow = await c.env.DB.prepare(
+          `SELECT location_id FROM customers WHERE id = ? LIMIT 1`
+        ).bind(customer_id).first<{ location_id: number | null }>()
+        const customerBranchId =
+          customerBranchRow?.location_id != null && Number.isFinite(Number(customerBranchRow.location_id))
+            ? Number(customerBranchRow.location_id)
+            : null
+
+        const branchFilterSql = customerBranchId != null ? `AND assigned_location_id = ?` : ''
+        const staffBinds: (number | null)[] = [tenant_id, tenant_id]
+        if (customerBranchId != null) staffBinds.push(customerBranchId)
+
         const { results: staffRows } = await c.env.DB.prepare(`
           SELECT id, customer_limit FROM users
           WHERE role_id IN (4, 6) AND is_active = 1
@@ -11628,8 +11642,9 @@ app.post('/api/calculator/save-customer', async (c) => {
                 WHERE b.id = users.assigned_bank_id AND b.tenant_id = ?
               ))
             )
+            ${branchFilterSql}
           ORDER BY id ASC
-        `).bind(tenant_id, tenant_id).all<{ id: number; customer_limit: number | null }>()
+        `).bind(...staffBinds).all<{ id: number; customer_limit: number | null }>()
 
         const staff = (staffRows || []) as { id: number; customer_limit: number | null }[]
         if (staff.length) {
@@ -18449,12 +18464,14 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     }
 
     const { results: staffRows } = await c.env.DB.prepare(`
-      SELECT id, customer_limit FROM users
+      SELECT id, customer_limit, assigned_location_id FROM users
       WHERE role_id = 4 AND tenant_id = ? AND is_active = 1
       ORDER BY id ASC
-    `).bind(tenantId).all<{ id: number; customer_limit: number | null }>()
+    `).bind(tenantId).all<{ id: number; customer_limit: number | null; assigned_location_id: number | null }>()
 
-    const staff = (staffRows || []) as { id: number; customer_limit: number | null }[]
+    const staff = (staffRows || []) as { id: number; customer_limit: number | null; assigned_location_id: number | null }[]
+    const staffBranch = new Map<number, number | null>()
+    for (const s of staff) staffBranch.set(s.id, s.assigned_location_id ?? null)
     if (!staff.length) {
       return c.json({ success: false, error: 'لا يوجد موظفون نشطون بدور الموظف في هذه الشركة' }, 400)
     }
@@ -18505,7 +18522,7 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     let lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
 
     const { results: customerRows } = await c.env.DB.prepare(`
-      SELECT c.id
+      SELECT c.id, c.location_id
       FROM customers c
       LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
       WHERE c.tenant_id = ?
@@ -18513,9 +18530,9 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
         AND (c.is_archived = 0 OR c.is_archived IS NULL)
       ORDER BY c.id ASC
       LIMIT 500
-    `).bind(tenantId).all<{ id: number }>()
+    `).bind(tenantId).all<{ id: number; location_id: number | null }>()
 
-    const customers = (customerRows || []) as { id: number }[]
+    const customers = (customerRows || []) as { id: number; location_id: number | null }[]
     if (!customers.length) {
       return c.json({
         success: true,
@@ -18544,7 +18561,19 @@ app.post('/api/customer-assignment/auto-distribute', async (c) => {
     for (const row of customers) {
       if (!eligibleIds.length) break
 
-      const employeeId = pickNextUserId(lastId, eligibleIds)
+      // If the customer is pinned to a branch, restrict candidates to staff on
+      // that same branch. Unpinned customers can go to any eligible staff.
+      const customerBranchId =
+        row.location_id != null && Number.isFinite(Number(row.location_id))
+          ? Number(row.location_id)
+          : null
+      const perCustomerEligible =
+        customerBranchId == null
+          ? eligibleIds
+          : eligibleIds.filter((id) => staffBranch.get(id) === customerBranchId)
+      if (!perCustomerEligible.length) continue
+
+      const employeeId = pickNextUserId(lastId, perCustomerEligible)
       if (employeeId === null) break
 
       const ins = await c.env.DB.prepare(`
@@ -30492,6 +30521,16 @@ app.get('/admin/users/:id/edit', async (c) => {
       tenants = await c.env.DB.prepare('SELECT id, company_name FROM tenants WHERE status = "active" ORDER BY company_name').all()
     }
 
+    // Branches (locations) for the user's tenant — used to pin the user to a single branch.
+    let locations: { results: { id: number; name: string }[] } = { results: [] }
+    const userTenantId = (user as any).tenant_id
+    if (userTenantId) {
+      locations = await c.env.DB
+        .prepare('SELECT id, name FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY name')
+        .bind(userTenantId)
+        .all<{ id: number; name: string }>() as any
+    }
+
     const showBankRow = false
     
     return c.html(`
@@ -30605,6 +30644,23 @@ app.get('/admin/users/:id/edit', async (c) => {
                   </select>
                 </div>
 
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    الفرع
+                  </label>
+                  <select name="assigned_location_id"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          ${locations.results?.length ? '' : 'disabled'}>
+                    <option value="">— بدون فرع (كل الفروع) —</option>
+                    ${(locations.results || []).map((loc: any) => `
+                      <option value="${loc.id}" ${Number((user as any).assigned_location_id) === Number(loc.id) ? 'selected' : ''}>
+                        ${loc.name}
+                      </option>
+                    `).join('')}
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">إذا تم تحديد فرع، سيتم توزيع العملاء التلقائي المرتبطين بهذا الفرع فقط على هذا الموظف.</p>
+                </div>
+
                 <div id="customerLimitSection" style="display:${[4,14].includes(normalizeRoleId(user.role_id) ?? 0) ? 'block' : 'none'};">
                   <label class="block text-sm font-bold text-gray-700 mb-2">
                     الحد الأقصى للعملاء (التوزيع التلقائي)
@@ -30672,6 +30728,11 @@ app.post('/admin/users/:id', async (c) => {
       customerLimitRaw === '' || customerLimitRaw == null
         ? null
         : parseInt(String(customerLimitRaw), 10) || null
+    const assignedLocationRaw = formData.get('assigned_location_id')
+    const assigned_location_id =
+      assignedLocationRaw === '' || assignedLocationRaw == null
+        ? null
+        : parseInt(String(assignedLocationRaw), 10) || null
 
     const requestedRoleId = Number.parseInt(String(role_id || ''), 10)
     if (Number.isNaN(requestedRoleId)) {
@@ -30736,18 +30797,20 @@ app.post('/admin/users/:id', async (c) => {
     let query = `
       UPDATE users
       SET username = ?, full_name = ?, email = ?, phone = ?,
-          role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?
+          role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?,
+          assigned_location_id = ?
     `
-    let params = [username, full_name, email, phone, requestedRoleId, finalTenantId, is_active, assigned_bank_id, customer_limit]
+    let params = [username, full_name, email, phone, requestedRoleId, finalTenantId, is_active, assigned_bank_id, customer_limit, assigned_location_id]
 
     // Only update password if provided
     if (password && password.toString().trim() !== '') {
       query = `
         UPDATE users
         SET username = ?, full_name = ?, email = ?, phone = ?,
-            password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?
+            password = ?, role_id = ?, tenant_id = ?, is_active = ?, assigned_bank_id = ?, customer_limit = ?,
+            assigned_location_id = ?
       `
-      params = [username, full_name, email, phone, password, requestedRoleId, finalTenantId, is_active, assigned_bank_id, customer_limit]
+      params = [username, full_name, email, phone, password, requestedRoleId, finalTenantId, is_active, assigned_bank_id, customer_limit, assigned_location_id]
     }
 
     query += ` WHERE id = ?`
@@ -31814,7 +31877,7 @@ app.get('/api/my-profile', async (c) => {
 
     const employee = await c.env.DB.prepare(
       `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
-              id_type, iqama_number, iqama_expiry, department, job_title, hire_date, status
+              id_type, iqama_number, iqama_expiry, id_document_url, department, job_title, hire_date, status
        FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
     ).bind(user.email, userInfo.tenantId || 1).first() as any;
 
@@ -31840,16 +31903,16 @@ app.patch('/api/my-profile', async (c) => {
 
     if (!employee) return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
 
-    const { id_type, national_id, national_id_expiry, iqama_number, iqama_expiry } = await c.req.json();
+    const { id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url } = await c.req.json();
 
     if (id_type === 'national') {
       await c.env.DB.prepare(
-        `UPDATE hr_employees SET id_type = 'national', national_id = ?, national_id_expiry = ?, iqama_number = NULL, iqama_expiry = NULL, updated_at = datetime('now') WHERE id = ?`
-      ).bind(national_id || null, national_id_expiry || null, employee.id).run();
+        `UPDATE hr_employees SET id_type = 'national', national_id = ?, national_id_expiry = ?, iqama_number = NULL, iqama_expiry = NULL, id_document_url = ?, updated_at = datetime('now') WHERE id = ?`
+      ).bind(national_id || null, national_id_expiry || null, id_document_url || null, employee.id).run();
     } else {
       await c.env.DB.prepare(
-        `UPDATE hr_employees SET id_type = 'iqama', iqama_number = ?, iqama_expiry = ?, national_id = NULL, national_id_expiry = NULL, updated_at = datetime('now') WHERE id = ?`
-      ).bind(iqama_number || null, iqama_expiry || null, employee.id).run();
+        `UPDATE hr_employees SET id_type = 'iqama', iqama_number = ?, iqama_expiry = ?, national_id = NULL, national_id_expiry = NULL, id_document_url = ?, updated_at = datetime('now') WHERE id = ?`
+      ).bind(iqama_number || null, iqama_expiry || null, id_document_url || null, employee.id).run();
     }
 
     return c.json({ success: true });
@@ -32981,37 +33044,59 @@ app.get('/admin/my-profile', (c) => {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f8fafc; color: #1e293b; direction: rtl; }
-    .page-wrapper { max-width: 700px; margin: 40px auto; padding: 0 16px 80px; }
+    .page-wrapper { max-width: 680px; margin: 40px auto; padding: 0 16px 80px; }
     h1 { font-size: 1.5rem; font-weight: 700; color: #1e40af; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
     .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(15,23,42,0.08); padding: 24px; margin-bottom: 24px; }
     .card h2 { font-size: 1.05rem; font-weight: 600; color: #334155; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
     .info-row { display: flex; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; }
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #64748b; font-weight: 600; min-width: 130px; }
-    .toggle-wrap { display: flex; background: #f1f5f9; border-radius: 8px; padding: 4px; gap: 4px; margin-bottom: 20px; }
-    .toggle-btn { flex: 1; padding: 9px; border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; background: transparent; color: #64748b; transition: all 0.2s; }
-    .toggle-btn.active { background: #fff; color: #1e40af; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    /* type picker */
+    .type-hint { font-size: 0.82rem; color: #64748b; margin-bottom: 14px; }
+    .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 6px; }
+    .type-card { border: 2px solid #e2e8f0; border-radius: 10px; padding: 18px 12px; text-align: center; cursor: pointer; transition: all 0.15s; background: #f8fafc; user-select: none; }
+    .type-card:hover { border-color: #93c5fd; background: #eff6ff; }
+    .type-card i { font-size: 1.8rem; display: block; margin-bottom: 8px; color: #94a3b8; }
+    .type-card .tc-label { font-size: 0.95rem; font-weight: 700; color: #334155; }
+    /* selected type header */
+    .selected-type-bar { display: flex; align-items: center; gap: 10px; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; margin-bottom: 20px; }
+    .selected-type-bar .stb-icon { font-size: 1.2rem; color: #1e40af; }
+    .selected-type-bar .stb-label { font-weight: 700; color: #1e40af; flex: 1; }
+    .stb-change { font-size: 0.8rem; color: #64748b; text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; }
+    .stb-change:hover { color: #1e40af; }
+    /* form */
     .form-group { margin-bottom: 16px; }
     label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
-    input { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: #f8fafc; color: #1e293b; transition: border 0.2s; }
-    input:focus { outline: none; border-color: #3b82f6; background: #fff; }
+    .req { color: #ef4444; }
+    input[type=text], input[type=date], input[type=file] { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: #f8fafc; color: #1e293b; transition: border 0.2s; }
+    input[type=text]:focus, input[type=date]:focus { outline: none; border-color: #3b82f6; background: #fff; }
+    input[type=file] { padding: 6px 10px; cursor: pointer; }
+    .expiry-warn { display: none; color: #b45309; font-size: 0.8rem; margin-top: 5px; background: #fef3c7; border-radius: 5px; padding: 5px 10px; }
+    .upload-progress { display: none; font-size: 0.82rem; color: #64748b; margin-top: 4px; }
     .btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 22px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; }
     .btn-primary { background: #1e40af; color: #fff; }
     .btn-primary:hover { background: #1d4ed8; }
     .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-ghost { background: none; border: 1.5px solid #e2e8f0; color: #475569; }
+    .btn-ghost:hover { border-color: #94a3b8; background: #f1f5f9; }
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
     .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
     .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-    .expiry-warning { color: #b45309; font-size: 0.8rem; margin-top: 4px; }
-    #nationalFields, #iqamaFields { display: none; }
-    #nationalFields.show, #iqamaFields.show { display: block; }
+    /* read view */
+    .read-row { display: flex; gap: 8px; padding: 11px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; }
+    .read-row:last-child { border-bottom: none; }
+    .read-label { color: #64748b; font-weight: 600; min-width: 140px; }
+    .badge-expired { display: inline-block; background: #fee2e2; color: #991b1b; border-radius: 4px; padding: 1px 7px; font-size: 0.75rem; font-weight: 700; margin-right: 6px; }
+    .badge-warn { display: inline-block; background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 7px; font-size: 0.75rem; font-weight: 700; margin-right: 6px; }
+    .doc-img-thumb { max-width: 120px; max-height: 80px; border-radius: 6px; border: 1px solid #e2e8f0; object-fit: cover; margin-top: 4px; cursor: pointer; }
+    /* sections visibility */
+    #section-pick, #section-form, #section-read { display: none; }
   </style>
 </head>
 <body>
 <div class="page-wrapper">
   <h1><i class="fas fa-id-card"></i> ملفي الشخصي</h1>
-
   <div id="pageAlert"></div>
 
   <div class="card" id="infoCard" style="display:none">
@@ -33020,107 +33105,244 @@ app.get('/admin/my-profile', (c) => {
   </div>
 
   <div class="card" id="idCard" style="display:none">
-    <h2><i class="fas fa-fingerprint" style="color:#1e40af"></i> الهوية والإقامة</h2>
+    <h2><i class="fas fa-fingerprint" style="color:#1e40af"></i> بيانات الهوية</h2>
     <div id="formAlert"></div>
 
-    <div class="toggle-wrap">
-      <button class="toggle-btn active" id="btnNational" onclick="switchIdType('national')">
-        <i class="fas fa-id-card"></i> هوية وطنية
-      </button>
-      <button class="toggle-btn" id="btnIqama" onclick="switchIdType('iqama')">
-        <i class="fas fa-passport"></i> إقامة
-      </button>
+    <!-- STATE: pick type -->
+    <div id="section-pick">
+      <p class="type-hint">اختر نوع الهوية التي تمتلكها</p>
+      <div class="type-grid">
+        <div class="type-card" onclick="chooseType('national')">
+          <i class="fas fa-id-card"></i>
+          <div class="tc-label">هوية وطنية</div>
+        </div>
+        <div class="type-card" onclick="chooseType('iqama')">
+          <i class="fas fa-passport"></i>
+          <div class="tc-label">إقامة</div>
+        </div>
+      </div>
     </div>
 
-    <form id="idForm">
-      <div id="nationalFields" class="show">
-        <div class="form-group">
-          <label>رقم الهوية الوطنية</label>
-          <input type="text" id="nationalId" placeholder="10 أرقام" maxlength="10">
+    <!-- STATE: edit form -->
+    <div id="section-form">
+      <div class="selected-type-bar">
+        <i class="fas fa-id-card stb-icon" id="stbIcon"></i>
+        <span class="stb-label" id="stbLabel"></span>
+        <button class="stb-change" onclick="goToPick()">تغيير النوع</button>
+      </div>
+      <form id="idForm" onsubmit="submitForm(event)">
+        <div class="form-group" id="fg-national-id" style="display:none">
+          <label>رقم الهوية الوطنية <span class="req">*</span></label>
+          <input type="text" id="nationalId" maxlength="10" inputmode="numeric" placeholder="10 أرقام">
         </div>
-        <div class="form-group">
-          <label>تاريخ انتهاء الهوية</label>
+        <div class="form-group" id="fg-iqama-num" style="display:none">
+          <label>رقم الإقامة <span class="req">*</span></label>
+          <input type="text" id="iqamaNumber" inputmode="numeric">
+        </div>
+        <div class="form-group" id="fg-national-expiry" style="display:none">
+          <label>تاريخ انتهاء الهوية <span class="req">*</span></label>
           <input type="date" id="nationalIdExpiry">
-          <div class="expiry-warning" id="nationalExpiryWarn" style="display:none"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
+          <div class="expiry-warn" id="warnNational"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
         </div>
-      </div>
-      <div id="iqamaFields">
-        <div class="form-group">
-          <label>رقم الإقامة</label>
-          <input type="text" id="iqamaNumber" placeholder="رقم الإقامة">
-        </div>
-        <div class="form-group">
-          <label>تاريخ انتهاء الإقامة</label>
+        <div class="form-group" id="fg-iqama-expiry" style="display:none">
+          <label>تاريخ انتهاء الإقامة <span class="req">*</span></label>
           <input type="date" id="iqamaExpiry">
-          <div class="expiry-warning" id="iqamaExpiryWarn" style="display:none"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
+          <div class="expiry-warn" id="warnIqama"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
         </div>
+        <div class="form-group">
+          <label>صورة الهوية</label>
+          <input type="file" id="idImage" accept="image/*,.pdf">
+          <div class="upload-progress" id="uploadProgress"><i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...</div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:8px">
+          <button type="submit" class="btn btn-primary" id="saveBtn"><i class="fas fa-save"></i> حفظ</button>
+          <button type="button" class="btn btn-ghost" onclick="goToRead()" id="cancelBtn" style="display:none">إلغاء</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- STATE: read-only view -->
+    <div id="section-read">
+      <div id="readRows"></div>
+      <div style="margin-top:16px">
+        <button class="btn btn-ghost" onclick="goToEdit()"><i class="fas fa-pen"></i> تعديل</button>
       </div>
-      <div style="margin-top:8px">
-        <button type="submit" class="btn btn-primary" id="saveBtn">
-          <i class="fas fa-save"></i> حفظ
-        </button>
-      </div>
-    </form>
+    </div>
   </div>
 </div>
 <script>
 (async function() {
-  const auth = { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') } };
-  let currentIdType = 'national';
+  const authH = () => ({ 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') });
+  let emp = null;
+  let currentType = null;
 
   function setAlert(el, type, msg) {
-    el.innerHTML = '<div class="alert alert-' + type + '"><i class="fas fa-' + (type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle') + '"></i>' + msg + '</div>';
+    const icon = { success: 'check-circle', error: 'exclamation-circle', info: 'info-circle' }[type] || 'info-circle';
+    el.innerHTML = '<div class="alert alert-' + type + '"><i class="fas fa-' + icon + '"></i> ' + msg + '</div>';
   }
 
-  function checkExpiry(dateVal, warnEl) {
-    if (!dateVal) { warnEl.style.display = 'none'; return; }
-    const diff = Math.floor((new Date(dateVal) - new Date()) / (1000 * 60 * 60 * 24));
-    if (diff < 0) {
-      warnEl.style.display = 'block';
-      warnEl.querySelector('span').textContent = 'منتهية الصلاحية';
-    } else if (diff <= 90) {
-      warnEl.style.display = 'block';
-      warnEl.querySelector('span').textContent = 'تنتهي خلال ' + diff + ' يوم';
+  function daysUntil(d) {
+    if (!d) return null;
+    return Math.floor((new Date(d) - new Date()) / 86400000);
+  }
+
+  function checkExpiry(val, warnEl) {
+    const d = daysUntil(val);
+    if (d === null) { warnEl.style.display = 'none'; return; }
+    if (d < 0) { warnEl.style.display = 'block'; warnEl.querySelector('span').textContent = 'منتهية الصلاحية'; }
+    else if (d <= 90) { warnEl.style.display = 'block'; warnEl.querySelector('span').textContent = 'تنتهي خلال ' + d + ' يوم'; }
+    else { warnEl.style.display = 'none'; }
+  }
+
+  document.getElementById('nationalIdExpiry').addEventListener('change', function() { checkExpiry(this.value, document.getElementById('warnNational')); });
+  document.getElementById('iqamaExpiry').addEventListener('change', function() { checkExpiry(this.value, document.getElementById('warnIqama')); });
+
+  function show(id) {
+    ['section-pick','section-form','section-read'].forEach(function(s) {
+      document.getElementById(s).style.display = s === id ? 'block' : 'none';
+    });
+  }
+
+  window.chooseType = function(type) {
+    currentType = type;
+    document.getElementById('stbIcon').className = (type === 'national' ? 'fas fa-id-card' : 'fas fa-passport') + ' stb-icon';
+    document.getElementById('stbLabel').textContent = type === 'national' ? 'هوية وطنية' : 'إقامة';
+    ['fg-national-id','fg-iqama-num','fg-national-expiry','fg-iqama-expiry'].forEach(function(id) {
+      document.getElementById(id).style.display = 'none';
+    });
+    if (type === 'national') {
+      document.getElementById('fg-national-id').style.display = 'block';
+      document.getElementById('fg-national-expiry').style.display = 'block';
     } else {
-      warnEl.style.display = 'none';
+      document.getElementById('fg-iqama-num').style.display = 'block';
+      document.getElementById('fg-iqama-expiry').style.display = 'block';
     }
-  }
-
-  document.getElementById('nationalIdExpiry').addEventListener('change', function() {
-    checkExpiry(this.value, document.getElementById('nationalExpiryWarn'));
-  });
-  document.getElementById('iqamaExpiry').addEventListener('change', function() {
-    checkExpiry(this.value, document.getElementById('iqamaExpiryWarn'));
-  });
-
-  window.switchIdType = function(type) {
-    currentIdType = type;
-    document.getElementById('nationalFields').className = type === 'national' ? 'show' : '';
-    document.getElementById('iqamaFields').className = type === 'iqama' ? 'show' : '';
-    document.getElementById('btnNational').className = 'toggle-btn' + (type === 'national' ? ' active' : '');
-    document.getElementById('btnIqama').className = 'toggle-btn' + (type === 'iqama' ? ' active' : '');
+    document.getElementById('cancelBtn').style.display = emp && (emp.national_id || emp.iqama_number) ? 'inline-flex' : 'none';
+    document.getElementById('idForm').reset();
+    document.getElementById('formAlert').innerHTML = '';
+    show('section-form');
   };
 
-  const res = await fetch('/api/my-profile', auth);
+  window.goToPick = function() { show('section-pick'); document.getElementById('formAlert').innerHTML = ''; };
+  window.goToRead = function() { renderRead(); show('section-read'); document.getElementById('formAlert').innerHTML = ''; };
+  window.goToEdit = function() {
+    chooseType(currentType);
+    if (!emp) return;
+    if (currentType === 'national') {
+      if (emp.national_id) document.getElementById('nationalId').value = emp.national_id;
+      if (emp.national_id_expiry) { document.getElementById('nationalIdExpiry').value = emp.national_id_expiry; checkExpiry(emp.national_id_expiry, document.getElementById('warnNational')); }
+    } else {
+      if (emp.iqama_number) document.getElementById('iqamaNumber').value = emp.iqama_number;
+      if (emp.iqama_expiry) { document.getElementById('iqamaExpiry').value = emp.iqama_expiry; checkExpiry(emp.iqama_expiry, document.getElementById('warnIqama')); }
+    }
+  };
+
+  function renderRead() {
+    if (!emp) return;
+    const isNational = currentType === 'national';
+    const num = isNational ? emp.national_id : emp.iqama_number;
+    const expiry = isNational ? emp.national_id_expiry : emp.iqama_expiry;
+    const d = daysUntil(expiry);
+    let expiryHtml = expiry || '-';
+    if (d !== null && d < 0) expiryHtml += ' <span class="badge-expired">منتهية</span>';
+    else if (d !== null && d <= 90) expiryHtml += ' <span class="badge-warn">تنتهي خلال ' + d + ' يوم</span>';
+
+    let imgHtml = '-';
+    if (emp.id_document_url) {
+      imgHtml = '<a href="' + emp.id_document_url + '" target="_blank"><img src="' + emp.id_document_url + '" class="doc-img-thumb" onerror="this.style.display=\\'none\\';this.nextSibling.style.display=\\'inline\\'"><span style="display:none;font-size:0.85rem;color:#1e40af">عرض المستند</span></a>';
+    }
+
+    const rows = [
+      ['نوع الهوية', isNational ? 'هوية وطنية' : 'إقامة'],
+      ['الرقم', num || '-'],
+      ['تاريخ الانتهاء', expiryHtml],
+      ['صورة الهوية', imgHtml],
+    ];
+    document.getElementById('readRows').innerHTML = rows.map(function(r) {
+      return '<div class="read-row"><span class="read-label">' + r[0] + '</span><span>' + r[1] + '</span></div>';
+    }).join('');
+  }
+
+  window.submitForm = async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('saveBtn');
+    const formAlert = document.getElementById('formAlert');
+    btn.disabled = true;
+    formAlert.innerHTML = '';
+
+    const idNum = currentType === 'national'
+      ? document.getElementById('nationalId').value.trim()
+      : document.getElementById('iqamaNumber').value.trim();
+    const expiry = currentType === 'national'
+      ? document.getElementById('nationalIdExpiry').value
+      : document.getElementById('iqamaExpiry').value;
+
+    if (!idNum) { setAlert(formAlert, 'error', 'يرجى إدخال رقم الهوية'); btn.disabled = false; return; }
+    if (!expiry) { setAlert(formAlert, 'error', 'يرجى إدخال تاريخ الانتهاء'); btn.disabled = false; return; }
+
+    // Upload image if selected
+    let docUrl = emp ? emp.id_document_url : null;
+    const fileInput = document.getElementById('idImage');
+    if (fileInput.files && fileInput.files[0]) {
+      document.getElementById('uploadProgress').style.display = 'block';
+      try {
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        fd.append('attachment_id', 'hr_id_doc');
+        const ur = await fetch('/api/attachments/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') }, body: fd });
+        const ud = await ur.json();
+        if (!ud.success) throw new Error(ud.error || 'فشل رفع الصورة');
+        docUrl = ud.url;
+      } catch(err) {
+        setAlert(formAlert, 'error', err.message || 'فشل رفع الصورة');
+        document.getElementById('uploadProgress').style.display = 'none';
+        btn.disabled = false;
+        return;
+      }
+      document.getElementById('uploadProgress').style.display = 'none';
+    }
+
+    const body = { id_type: currentType, id_document_url: docUrl };
+    if (currentType === 'national') { body.national_id = idNum; body.national_id_expiry = expiry; }
+    else { body.iqama_number = idNum; body.iqama_expiry = expiry; }
+
+    try {
+      const r = await fetch('/api/my-profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') }, body: JSON.stringify(body) });
+      const d = await r.json();
+      if (d.success) {
+        if (currentType === 'national') { emp.national_id = idNum; emp.national_id_expiry = expiry; emp.id_type = 'national'; emp.iqama_number = null; emp.iqama_expiry = null; }
+        else { emp.iqama_number = idNum; emp.iqama_expiry = expiry; emp.id_type = 'iqama'; emp.national_id = null; emp.national_id_expiry = null; }
+        emp.id_document_url = docUrl;
+        renderRead();
+        show('section-read');
+        const pa = document.getElementById('pageAlert');
+        setAlert(pa, 'success', 'تم حفظ بيانات الهوية بنجاح ✓');
+        setTimeout(function() { pa.innerHTML = ''; }, 4000);
+      } else {
+        setAlert(formAlert, 'error', d.error || 'حدث خطأ');
+      }
+    } catch(err) {
+      setAlert(formAlert, 'error', 'فشل الاتصال بالخادم');
+    }
+    btn.disabled = false;
+  };
+
+  // ── Bootstrap ──
+  const res = await fetch('/api/my-profile', { headers: authH() });
   const data = await res.json();
   const pageAlert = document.getElementById('pageAlert');
 
-  if (!data.success) {
-    setAlert(pageAlert, 'error', data.error || 'حدث خطأ');
-    return;
-  }
-
+  if (!data.success) { setAlert(pageAlert, 'error', data.error || 'حدث خطأ'); return; }
   if (!data.employeeFound) {
     setAlert(pageAlert, 'info', 'لم يتم ربط حسابك بسجل موظف بعد. يرجى التواصل مع مدير الموارد البشرية.');
     return;
   }
 
-  const emp = data.data;
-
-  // Info card
+  emp = data.data;
   document.getElementById('infoCard').style.display = 'block';
   document.getElementById('idCard').style.display = 'block';
-  const rows = [
+
+  const infoRows = [
     ['الاسم', emp.full_name || emp.full_name_ar || '-'],
     ['البريد الإلكتروني', emp.email || '-'],
     ['الجوال', emp.phone || '-'],
@@ -33129,58 +33351,63 @@ app.get('/admin/my-profile', (c) => {
     ['تاريخ التعيين', emp.hire_date || '-'],
     ['الحالة', emp.status === 'active' ? 'نشط' : (emp.status || '-')],
   ];
-  document.getElementById('infoRows').innerHTML = rows.map(function(r) {
+  document.getElementById('infoRows').innerHTML = infoRows.map(function(r) {
     return '<div class="info-row"><span class="info-label">' + r[0] + '</span><span>' + r[1] + '</span></div>';
   }).join('');
 
-  // Prefill ID form
-  const idType = emp.id_type || (emp.iqama_number ? 'iqama' : 'national');
-  switchIdType(idType);
-  if (idType === 'national') {
-    document.getElementById('nationalId').value = emp.national_id || '';
-    document.getElementById('nationalIdExpiry').value = emp.national_id_expiry || '';
-    checkExpiry(emp.national_id_expiry, document.getElementById('nationalExpiryWarn'));
+  // Determine initial state
+  const hasData = emp.national_id || emp.iqama_number;
+  currentType = emp.id_type || (emp.iqama_number ? 'iqama' : (emp.national_id ? 'national' : null));
+
+  if (hasData && currentType) {
+    renderRead();
+    show('section-read');
   } else {
-    document.getElementById('iqamaNumber').value = emp.iqama_number || '';
-    document.getElementById('iqamaExpiry').value = emp.iqama_expiry || '';
-    checkExpiry(emp.iqama_expiry, document.getElementById('iqamaExpiryWarn'));
+    show('section-pick');
   }
-
-  document.getElementById('idForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const btn = document.getElementById('saveBtn');
-    btn.disabled = true;
-    const formAlert = document.getElementById('formAlert');
-    formAlert.innerHTML = '';
-
-    const body = { id_type: currentIdType };
-    if (currentIdType === 'national') {
-      body.national_id = document.getElementById('nationalId').value.trim();
-      body.national_id_expiry = document.getElementById('nationalIdExpiry').value || null;
-    } else {
-      body.iqama_number = document.getElementById('iqamaNumber').value.trim();
-      body.iqama_expiry = document.getElementById('iqamaExpiry').value || null;
-    }
-
-    try {
-      const r = await fetch('/api/my-profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') }, body: JSON.stringify(body) });
-      const d = await r.json();
-      if (d.success) {
-        setAlert(formAlert, 'success', 'تم الحفظ بنجاح');
-      } else {
-        setAlert(formAlert, 'error', d.error || 'حدث خطأ');
-      }
-    } catch(err) {
-      setAlert(formAlert, 'error', 'فشل الاتصال بالخادم');
-    }
-    btn.disabled = false;
-  });
 })();
 </script>
 </body>
 </html>`;
   return c.html(html);
 })
+
+// Employee ID / Iqama status for admin documents page
+app.get('/api/hr/employee-ids', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId;
+    const where = tenantId ? `WHERE (tenant_id = ${tenantId} OR tenant_id IS NULL)` : '';
+    // Try full query with new columns first; fall back to base columns if migration not yet applied
+    let results: any[];
+    try {
+      const r = await c.env.DB.prepare(`
+        SELECT id, full_name, full_name_ar, department, job_title, status,
+               id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url
+        FROM hr_employees ${where}
+        ORDER BY COALESCE(full_name, full_name_ar)
+      `).all();
+      results = r.results || [];
+    } catch {
+      // New columns not yet in DB — return base data without them
+      const r = await c.env.DB.prepare(`
+        SELECT id, full_name, full_name_ar, department, job_title, status,
+               national_id, iqama_number, iqama_expiry
+        FROM hr_employees ${where}
+        ORDER BY COALESCE(full_name, full_name_ar)
+      `).all();
+      results = (r.results || []).map((row: any) => ({
+        ...row,
+        id_type: row.iqama_number ? 'iqama' : (row.national_id ? 'national' : null),
+        national_id_expiry: null,
+        id_document_url: null,
+      }));
+    }
+    return c.json({ success: true, data: results });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
 
 // HR Dashboard Statistics API
 app.get('/api/hr/dashboard/stats', async (c) => {
@@ -33795,11 +34022,11 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     const customerPhone = phoneNorm.normalized
 
     const tenant = await c.env.DB.prepare(`
-      SELECT id, contact_assignment_mode
+      SELECT id, contact_assignment_mode, contact_assignment_branch_id
       FROM tenants
       WHERE slug = ? AND status = 'active'
       LIMIT 1
-    `).bind(slug).first<{ id: number; contact_assignment_mode: string | null }>()
+    `).bind(slug).first<{ id: number; contact_assignment_mode: string | null; contact_assignment_branch_id: number | null }>()
 
     if (!tenant?.id) {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
@@ -33809,19 +34036,21 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     let affiliateLabel: string | null = null
     let affiliateLinkId: number | null = null
     let affiliateLinkAssignmentMode: string = 'auto'
+    let affiliateLinkAssignmentBranchId: number | null = null
     const companyLinkAssignmentMode = tenant.contact_assignment_mode ?? 'auto'
+    const companyLinkAssignmentBranchId = tenant.contact_assignment_branch_id ?? null
     if (affiliatePathRaw) {
       if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
         return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
       }
       const affRow = await c.env.DB.prepare(`
-        SELECT id, path_segment, label, assignment_mode
+        SELECT id, path_segment, label, assignment_mode, assignment_branch_id
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
         LIMIT 1
       `)
         .bind(tenant.id, affiliatePathRaw)
-        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null }>()
+        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null; assignment_branch_id: number | null }>()
       if (!affRow) {
         return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
       }
@@ -33829,6 +34058,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       affiliateLabel = affRow.label
       affiliateLinkId = affRow.id
       affiliateLinkAssignmentMode = affRow.assignment_mode ?? 'auto'
+      affiliateLinkAssignmentBranchId = affRow.assignment_branch_id ?? null
     } else {
       affiliateLabel = CONTACT_COMPANY_LINK_SOURCE_LABEL
     }
@@ -33979,8 +34209,26 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
           }
         }
       } else {
-        // Auto mode: round-robin among roles 4/5/6 (tenant + bank-scoped).
-        const staff = await listFollowupAssignableStaff(c.env.DB, tenant.id)
+        // Auto/branch mode: round-robin among roles 4/5/6 (tenant + bank-scoped).
+        // For branch mode, filter to employees whose assigned_location_id matches
+        // the configured branch (link-specific overrides tenant-wide).
+        const useBranchMode =
+          (affiliateLinkId != null && affiliateLinkAssignmentMode === 'branch') ||
+          (affiliateLinkId == null && companyLinkAssignmentMode === 'branch')
+        const branchIdForFilter = useBranchMode
+          ? (affiliateLinkId != null ? affiliateLinkAssignmentBranchId : companyLinkAssignmentBranchId)
+          : null
+
+        let staff = await listFollowupAssignableStaff(c.env.DB, tenant.id)
+        if (useBranchMode && branchIdForFilter != null && staff.length) {
+          const placeholders = staff.map(() => '?').join(',')
+          const { results: branchStaff } = await c.env.DB.prepare(
+            `SELECT id FROM users WHERE id IN (${placeholders}) AND assigned_location_id = ?`
+          ).bind(...staff.map((u) => u.id), branchIdForFilter).all<{ id: number }>()
+          const allowed = new Set((branchStaff || []).map((r) => r.id))
+          staff = staff.filter((u) => allowed.has(u.id))
+        }
+
         if (staff.length) {
           const stateRow = await c.env.DB.prepare(`
             SELECT last_auto_assigned_user_id
@@ -34430,14 +34678,17 @@ app.get('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
     if (!Number.isFinite(linkId) || linkId <= 0) return c.json({ success: false, error: 'Invalid id' }, 400)
 
     const link = await c.env.DB.prepare(`
-      SELECT id, tenant_id, assignment_mode, unassigned_limit_count
+      SELECT id, tenant_id, assignment_mode, unassigned_limit_count, assignment_branch_id
       FROM tenant_contact_affiliate_links WHERE id = ? LIMIT 1
-    `).bind(linkId).first<{ id: number; tenant_id: number; assignment_mode: string | null; unassigned_limit_count: number }>()
+    `).bind(linkId).first<{ id: number; tenant_id: number; assignment_mode: string | null; unassigned_limit_count: number; assignment_branch_id: number | null }>()
 
     if (!link) return c.json({ success: false, error: 'Not found' }, 404)
     if (userInfo.roleId === 2 && userInfo.tenantId !== link.tenant_id) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const tenantId = link.tenant_id
+    const { results: branchRows } = await c.env.DB.prepare(
+      `SELECT id, name FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY name`
+    ).bind(tenantId).all<{ id: number; name: string }>()
 
     const { results: rosterRaw } = await c.env.DB.prepare(`
       SELECT a.id, a.user_id, a.role_context, a.assignment_limit,
@@ -34495,8 +34746,10 @@ app.get('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
       success: true,
       assignment_mode: link.assignment_mode ?? 'auto',
       unassigned_limit_count: link.unassigned_limit_count ?? 0,
+      assignment_branch_id: link.assignment_branch_id ?? null,
       roster,
       available_staff: availableStaff,
+      branches: branchRows || [],
     })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -34521,12 +34774,26 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
 
     const tenantId = link.tenant_id
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
-    const mode = String(body.assignment_mode ?? 'auto') === 'custom' ? 'custom' : 'auto'
+    const rawMode = String(body.assignment_mode ?? 'auto')
+    const mode = rawMode === 'custom' ? 'custom' : rawMode === 'branch' ? 'branch' : 'auto'
     const rosterInput = Array.isArray(body.roster) ? body.roster : []
 
+    let branchId: number | null = null
+    if (mode === 'branch') {
+      const raw = parseInt(String(body.assignment_branch_id ?? ''), 10)
+      if (!Number.isFinite(raw) || raw <= 0) {
+        return c.json({ success: false, error: 'يجب اختيار فرع' }, 400)
+      }
+      const branch = await c.env.DB.prepare(
+        `SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1`
+      ).bind(raw, tenantId).first<{ id: number }>()
+      if (!branch) return c.json({ success: false, error: 'الفرع غير معروف' }, 400)
+      branchId = branch.id
+    }
+
     await c.env.DB.prepare(`
-      UPDATE tenant_contact_affiliate_links SET assignment_mode = ? WHERE id = ?
-    `).bind(mode, linkId).run()
+      UPDATE tenant_contact_affiliate_links SET assignment_mode = ?, assignment_branch_id = ? WHERE id = ?
+    `).bind(mode, branchId, linkId).run()
 
     if (mode === 'custom') {
       const validUsers = await listFollowupAssignableStaff(c.env.DB, tenantId)
@@ -34568,8 +34835,8 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
             assignment_limit = excluded.assignment_limit
         `).bind(linkId, r.user_id, r.role_context, r.assignment_limit).run()
       }
-    } else if (mode === 'auto') {
-      // When switching back to auto, remove roster entries
+    } else {
+      // auto or branch — no per-link roster is used, so clear any legacy entries.
       await c.env.DB.prepare(`DELETE FROM affiliate_link_employee_assignments WHERE affiliate_link_id = ?`).bind(linkId).run()
     }
 
@@ -34590,10 +34857,14 @@ app.get('/api/tenant-contact-main-assignment-config', async (c) => {
     if (!Number.isFinite(tenantId) || !tenantId || tenantId <= 0) return c.json({ success: false, error: 'tenant_id مطلوب' }, 400)
 
     const tenant = await c.env.DB.prepare(`
-      SELECT id, contact_assignment_mode, contact_unassigned_limit_count
+      SELECT id, contact_assignment_mode, contact_unassigned_limit_count, contact_assignment_branch_id
       FROM tenants WHERE id = ? LIMIT 1
-    `).bind(tenantId).first<{ id: number; contact_assignment_mode: string | null; contact_unassigned_limit_count: number }>()
+    `).bind(tenantId).first<{ id: number; contact_assignment_mode: string | null; contact_unassigned_limit_count: number; contact_assignment_branch_id: number | null }>()
     if (!tenant) return c.json({ success: false, error: 'Not found' }, 404)
+
+    const { results: branchRows } = await c.env.DB.prepare(
+      `SELECT id, name FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY name`
+    ).bind(tenantId).all<{ id: number; name: string }>()
 
     const { results: rosterRaw } = await c.env.DB.prepare(`
       SELECT a.id, a.user_id, a.role_context, a.assignment_limit,
@@ -34651,8 +34922,10 @@ app.get('/api/tenant-contact-main-assignment-config', async (c) => {
       success: true,
       assignment_mode: tenant.contact_assignment_mode ?? 'auto',
       unassigned_limit_count: tenant.contact_unassigned_limit_count ?? 0,
+      assignment_branch_id: tenant.contact_assignment_branch_id ?? null,
       roster,
       available_staff: availableStaff,
+      branches: branchRows || [],
     })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -34673,9 +34946,26 @@ app.put('/api/tenant-contact-main-assignment-config', async (c) => {
     const tenant = await c.env.DB.prepare(`SELECT id FROM tenants WHERE id = ? LIMIT 1`).bind(tenantId).first<{ id: number }>()
     if (!tenant) return c.json({ success: false, error: 'Not found' }, 404)
 
-    const mode = String(body.assignment_mode ?? 'auto') === 'custom' ? 'custom' : 'auto'
+    const rawMode = String(body.assignment_mode ?? 'auto')
+    const mode = rawMode === 'custom' ? 'custom' : rawMode === 'branch' ? 'branch' : 'auto'
     const rosterInput = Array.isArray(body.roster) ? body.roster : []
-    await c.env.DB.prepare(`UPDATE tenants SET contact_assignment_mode = ? WHERE id = ?`).bind(mode, tenantId).run()
+
+    let branchId: number | null = null
+    if (mode === 'branch') {
+      const raw = parseInt(String(body.assignment_branch_id ?? ''), 10)
+      if (!Number.isFinite(raw) || raw <= 0) {
+        return c.json({ success: false, error: 'يجب اختيار فرع' }, 400)
+      }
+      const branch = await c.env.DB.prepare(
+        `SELECT id FROM tenant_locations WHERE id = ? AND tenant_id = ? AND is_active = 1 LIMIT 1`
+      ).bind(raw, tenantId).first<{ id: number }>()
+      if (!branch) return c.json({ success: false, error: 'الفرع غير معروف' }, 400)
+      branchId = branch.id
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE tenants SET contact_assignment_mode = ?, contact_assignment_branch_id = ? WHERE id = ?`
+    ).bind(mode, branchId, tenantId).run()
 
     if (mode === 'custom') {
       const validUsers = await listFollowupAssignableStaff(c.env.DB, tenantId)
@@ -34714,6 +35004,7 @@ app.put('/api/tenant-contact-main-assignment-config', async (c) => {
         `).bind(tenantId, row.user_id, row.role_context, row.assignment_limit).run()
       }
     } else {
+      // auto or branch — no tenant-wide roster is used, so clear any legacy entries.
       await c.env.DB.prepare(`DELETE FROM tenant_contact_employee_assignments WHERE tenant_id = ?`).bind(tenantId).run()
     }
     return c.json({ success: true })
@@ -37220,7 +37511,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<div class="p-4 space-y-4">' +
 
             // Mode toggle
-            '<div class="flex gap-6">' +
+            '<div class="flex flex-wrap gap-4">' +
             '<label class="flex items-center gap-2 cursor-pointer">' +
             '<input type="radio" name="assignMode_' + id + '" value="auto" id="assignModeAuto_' + id + '" checked class="accent-amber-500" />' +
             '<span class="text-sm font-medium text-gray-700">تلقائي (الافتراضي)</span>' +
@@ -37229,6 +37520,19 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<input type="radio" name="assignMode_' + id + '" value="custom" id="assignModeCustom_' + id + '" class="accent-amber-500" />' +
             '<span class="text-sm font-medium text-gray-700">مخصص</span>' +
             '</label>' +
+            '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="radio" name="assignMode_' + id + '" value="branch" id="assignModeBranch_' + id + '" class="accent-amber-500" />' +
+            '<span class="text-sm font-medium text-gray-700">حسب الفرع</span>' +
+            '</label>' +
+            '</div>' +
+
+            // Branch section (hidden by default, revealed when branch selected)
+            '<div id="assignBranchSection_' + id + '" class="hidden space-y-2">' +
+            '<label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">الفرع</label>' +
+            '<select id="assignBranchSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50">' +
+            '<option value="">— اختر الفرع —</option>' +
+            '</select>' +
+            '<p class="text-xs text-gray-500">سيتم توزيع طلبات هذا الرابط تلقائياً على الموظفين المنتمين إلى الفرع المحدد فقط.</p>' +
             '</div>' +
 
             // Custom section (hidden by default, revealed when custom selected)
@@ -37812,10 +38116,26 @@ app.get('/admin/contact-affiliates', async (c) => {
           // Set mode
           var autoRadio = document.getElementById('assignModeAuto_' + id);
           var customRadio = document.getElementById('assignModeCustom_' + id);
+          var branchRadio = document.getElementById('assignModeBranch_' + id);
           var customSection = document.getElementById('assignCustomSection_' + id);
+          var branchSection = document.getElementById('assignBranchSection_' + id);
+          var branchSelect = document.getElementById('assignBranchSelect_' + id);
+
+          if (branchSelect) {
+            var branches = Array.isArray(cfg.branches) ? cfg.branches : [];
+            branchSelect.innerHTML = '<option value="">— اختر الفرع —</option>' +
+              branches.map(function(b) {
+                return '<option value="' + b.id + '">' + escapeHtml(b.name) + '</option>';
+              }).join('');
+            if (cfg.assignment_branch_id) branchSelect.value = String(cfg.assignment_branch_id);
+          }
+
           if (cfg.assignment_mode === 'custom') {
             if (customRadio) customRadio.checked = true;
             if (customSection) customSection.classList.remove('hidden');
+          } else if (cfg.assignment_mode === 'branch') {
+            if (branchRadio) branchRadio.checked = true;
+            if (branchSection) branchSection.classList.remove('hidden');
           } else {
             if (autoRadio) autoRadio.checked = true;
           }
@@ -37893,12 +38213,16 @@ app.get('/admin/contact-affiliates', async (c) => {
           }
 
           // Mode toggle
-          [autoRadio, customRadio].forEach(function(radio) {
+          [autoRadio, customRadio, branchRadio].forEach(function(radio) {
             if (!radio) return;
             radio.addEventListener('change', function() {
               if (customSection) {
                 if (customRadio && customRadio.checked) customSection.classList.remove('hidden');
                 else customSection.classList.add('hidden');
+              }
+              if (branchSection) {
+                if (branchRadio && branchRadio.checked) branchSection.classList.remove('hidden');
+                else branchSection.classList.add('hidden');
               }
             });
           });
@@ -37911,7 +38235,14 @@ app.get('/admin/contact-affiliates', async (c) => {
               saveBtn.disabled = true;
               if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-xs text-center'; }
               try {
-                var mode = customRadio && customRadio.checked ? 'custom' : 'auto';
+                var mode = customRadio && customRadio.checked ? 'custom'
+                  : branchRadio && branchRadio.checked ? 'branch'
+                  : 'auto';
+                if (mode === 'branch' && (!branchSelect || !branchSelect.value)) {
+                  if (msgEl) { msgEl.textContent = 'يجب اختيار فرع.'; msgEl.className = 'text-xs text-center text-red-600'; }
+                  saveBtn.disabled = false;
+                  return;
+                }
                 var roster = [];
                 var seenSave = {};
                 var allCards = panelEl.querySelectorAll('[data-roster-item]');
@@ -37926,6 +38257,7 @@ app.get('/admin/contact-affiliates', async (c) => {
                   roster.push({ user_id: uid, role_context: 'employee', assignment_limit: isLimited && limitVal > 0 ? limitVal : null });
                 });
                 var payload = { assignment_mode: mode, roster: roster };
+                if (mode === 'branch') payload.assignment_branch_id = parseInt(branchSelect.value, 10);
                 if (String(id) === 'company' && IS_SUPERADMIN) payload.tenant_id = currentTenantId();
                 var saveRes = await axios.put(assignmentConfigUrl(id), payload);
                 if (saveRes.data && saveRes.data.success) {

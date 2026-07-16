@@ -1432,12 +1432,27 @@ export const hrDocumentsPage = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>المستندات - نظام الموارد البشرية</title>
+    <title>مستندات الموظفين - نظام الموارد البشرية</title>
     <link rel="stylesheet" href="/tailwind.css">
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    <style>
+      #lightboxOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; }
+      #lightboxOverlay.open { display:flex; }
+      #lightboxImg { max-width:90vw; max-height:88vh; border-radius:8px; box-shadow:0 8px 40px rgba(0,0,0,0.6); }
+    </style>
 </head>
 <body class="bg-gray-100">
+
+  <!-- Lightbox -->
+  <div id="lightboxOverlay" onclick="closeLightbox()">
+    <div onclick="event.stopPropagation()" class="relative">
+      <button onclick="closeLightbox()" class="absolute -top-10 left-0 text-white text-2xl hover:text-gray-300"><i class="fas fa-times"></i></button>
+      <img id="lightboxImg" src="" alt="مستند الهوية">
+      <a id="lightboxDownload" href="" download target="_blank" class="absolute -top-10 right-0 text-white text-sm hover:text-gray-300"><i class="fas fa-download ml-1"></i>تنزيل</a>
+    </div>
+  </div>
+
   <div class="border-b border-slate-200/90 bg-white">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
       <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
@@ -1445,7 +1460,6 @@ export const hrDocumentsPage = `
   </div>
 
   <div class="min-h-screen">
-    <!-- رأس الصفحة -->
     <div class="bg-white shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-wrap items-center gap-4 py-4">
@@ -1454,69 +1468,41 @@ export const hrDocumentsPage = `
               <i class="fas fa-arrow-right ml-1"></i> العودة لإدارة HR
             </a>
             <h1 class="text-3xl font-bold text-gray-800">
-              <i class="fas fa-file-alt ml-2"></i>
-              إدارة المستندات
+              <i class="fas fa-folder-open ml-2"></i>
+              مستندات الموظفين
             </h1>
-            <p class="text-gray-600 mt-1">تتبع مستندات الموظفين وتنبيهات انتهاء الصلاحيات</p>
-          </div>
-          <div class="ms-auto shrink-0">
-            <button onclick="openAddDocumentModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-              <i class="fas fa-plus ml-2"></i>
-              إضافة مستند
-            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- تنبيهات انتهاء الصلاحيات -->
+    <!-- تنبيهات انتهاء الصلاحية (فقط عند وجود تنبيهات) -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div id="expiryAlerts" class="space-y-3">
-        <!-- سيتم ملؤها ديناميكياً -->
-      </div>
+      <div id="expiryAlerts" class="space-y-3"></div>
     </div>
 
     <!-- الإحصائيات -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">إجمالي المستندات</p>
-              <p class="text-2xl font-bold text-gray-800" id="totalDocuments">0</p>
-            </div>
-            <i class="fas fa-file-alt text-blue-500 text-3xl"></i>
-          </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
+          <i class="fas fa-users text-blue-500 text-xl"></i>
+          <div><p class="text-gray-500 text-xs">إجمالي الموظفين</p><p class="text-2xl font-bold text-gray-800" id="statTotal">0</p></div>
         </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">منتهية الصلاحية</p>
-              <p class="text-2xl font-bold text-red-600" id="expiredDocuments">0</p>
-            </div>
-            <i class="fas fa-exclamation-circle text-red-500 text-3xl"></i>
-          </div>
+        <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
+          <i class="fas fa-file-image text-indigo-500 text-xl"></i>
+          <div><p class="text-gray-500 text-xs">رُفعت صورة</p><p class="text-2xl font-bold text-indigo-600" id="statHasDoc">0</p></div>
         </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">تنتهي خلال 30 يوم</p>
-              <p class="text-2xl font-bold text-yellow-600" id="expiringDocuments">0</p>
-            </div>
-            <i class="fas fa-clock text-yellow-500 text-3xl"></i>
-          </div>
+        <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
+          <i class="fas fa-exclamation-circle text-red-500 text-xl"></i>
+          <div><p class="text-gray-500 text-xs">منتهية</p><p class="text-2xl font-bold text-red-600" id="statExpired">0</p></div>
         </div>
-        
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-500 text-sm">سارية</p>
-              <p class="text-2xl font-bold text-green-600" id="validDocuments">0</p>
-            </div>
-            <i class="fas fa-check-circle text-green-500 text-3xl"></i>
-          </div>
+        <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
+          <i class="fas fa-clock text-yellow-500 text-xl"></i>
+          <div><p class="text-gray-500 text-xs">تنتهي خلال 90 يوم</p><p class="text-2xl font-bold text-yellow-600" id="statExpiring">0</p></div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
+          <i class="fas fa-question-circle text-gray-400 text-xl"></i>
+          <div><p class="text-gray-500 text-xs">لم يُرفع بعد</p><p class="text-2xl font-bold text-gray-400" id="statNoDoc">0</p></div>
         </div>
       </div>
     </div>
@@ -1524,49 +1510,42 @@ export const hrDocumentsPage = `
     <!-- جدول المستندات -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-8">
       <div class="bg-white rounded-lg shadow">
-        <div class="p-6 border-b">
-          <h2 class="text-xl font-bold text-gray-800">قائمة المستندات</h2>
-          
-          <!-- الفلاتر -->
-          <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input type="text" id="searchInput" placeholder="بحث بالموظف أو المستند..." class="border rounded-lg px-4 py-2">
-            
-            <select id="typeFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
-              <option value="">جميع الأنواع</option>
-              <option value="passport">جواز السفر</option>
-              <option value="id_card">بطاقة الهوية</option>
-              <option value="license">رخصة القيادة</option>
-              <option value="contract">عقد العمل</option>
-              <option value="insurance">التأمين</option>
-              <option value="other">أخرى</option>
-            </select>
-            
-            <select id="statusFilter" onchange="loadDocuments()" class="border rounded-lg px-4 py-2">
-              <option value="">جميع الحالات</option>
-              <option value="valid">سارية</option>
-              <option value="expiring">تنتهي قريباً</option>
-              <option value="expired">منتهية</option>
-            </select>
-          </div>
+        <div class="p-5 border-b flex flex-wrap items-center gap-3">
+          <h2 class="text-lg font-bold text-gray-800 flex-1">سجلات الهوية والمستندات</h2>
+          <input type="text" id="searchInput" placeholder="بحث بالاسم أو الرقم..." class="border rounded-lg px-3 py-2 text-sm w-52" oninput="renderTable()">
+          <select id="typeFilter" onchange="renderTable()" class="border rounded-lg px-3 py-2 text-sm">
+            <option value="">جميع الأنواع</option>
+            <option value="national">هوية وطنية</option>
+            <option value="iqama">إقامة</option>
+            <option value="missing">غير محدد</option>
+          </select>
+          <select id="docFilter" onchange="renderTable()" class="border rounded-lg px-3 py-2 text-sm">
+            <option value="">جميع المستندات</option>
+            <option value="has">رُفعت صورة</option>
+            <option value="none">لم يُرفع</option>
+          </select>
+          <select id="statusFilter" onchange="renderTable()" class="border rounded-lg px-3 py-2 text-sm">
+            <option value="">جميع الحالات</option>
+            <option value="expired">منتهية</option>
+            <option value="expiring">تنتهي قريباً</option>
+            <option value="valid">سارية</option>
+          </select>
         </div>
-        
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">م</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع المستند</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">رقم المستند</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الإصدار</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الانتهاء</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الأيام المتبقية</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">إجراءات</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الموظف</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">القسم</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع الهوية</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الرقم</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الانتهاء</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">المستند</th>
               </tr>
             </thead>
-            <tbody id="documentsTableBody" class="bg-white divide-y divide-gray-200">
-              <!-- سيتم ملؤها ديناميكياً -->
+            <tbody id="idTableBody" class="bg-white divide-y divide-gray-200">
+              <tr><td colspan="7" class="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1574,349 +1553,148 @@ export const hrDocumentsPage = `
     </div>
   </div>
 
-  <!-- Modal إضافة مستند -->
-  <div id="addDocumentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">إضافة مستند جديد</h2>
-      
-      <form id="addDocumentForm" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">الموظف *</label>
-            <select id="employee_id" required class="w-full border rounded-lg px-4 py-2">
-              <option value="">اختر الموظف</option>
-            </select>
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">نوع المستند *</label>
-            <select id="document_type" required class="w-full border rounded-lg px-4 py-2">
-              <option value="">اختر النوع</option>
-              <option value="passport">جواز السفر</option>
-              <option value="id_card">بطاقة الهوية</option>
-              <option value="license">رخصة القيادة</option>
-              <option value="contract">عقد العمل</option>
-              <option value="insurance">التأمين</option>
-              <option value="other">أخرى</option>
-            </select>
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">رقم المستند *</label>
-            <input type="text" id="document_number" required class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">جهة الإصدار</label>
-            <input type="text" id="issuing_authority" class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">تاريخ الإصدار *</label>
-            <input type="date" id="issue_date" required class="w-full border rounded-lg px-4 py-2">
-          </div>
-          
-          <div>
-            <label class="block text-gray-700 font-bold mb-2">تاريخ الانتهاء *</label>
-            <input type="date" id="expiry_date" required class="w-full border rounded-lg px-4 py-2">
-          </div>
-        </div>
-        
-        <div>
-          <label class="block text-gray-700 font-bold mb-2">ملاحظات</label>
-          <textarea id="notes" rows="3" class="w-full border rounded-lg px-4 py-2"></textarea>
-        </div>
-        
-        <div class="flex gap-3 mt-6">
-          <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold">
-            <i class="fas fa-save ml-2"></i>
-            حفظ
-          </button>
-          <button type="button" onclick="closeAddDocumentModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold">
-            <i class="fas fa-times ml-2"></i>
-            إلغاء
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <script>
-    // تحميل قائمة المستندات
-    async function loadDocuments() {
-      try {
-        const searchTerm = document.getElementById('searchInput').value;
-        const typeFilter = document.getElementById('typeFilter').value;
-        const statusFilter = document.getElementById('statusFilter').value;
-        
-        const params = new URLSearchParams();
-        if (searchTerm) params.append('search', searchTerm);
-        if (typeFilter) params.append('type', typeFilter);
-        if (statusFilter) params.append('status', statusFilter);
-        
-        const response = await axios.get('/api/hr/documents?' + params.toString());
-        const documents = response.data.data || [];
-        
-        const tbody = document.getElementById('documentsTableBody');
-        
-        if (documents.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد مستندات</td></tr>';
-          return;
-        }
-        
-        tbody.innerHTML = documents.map((doc, index) => {
-          const daysRemaining = calculateDaysRemaining(doc.expiry_date);
-          const statusBadge = getDocumentStatusBadge(daysRemaining);
-          const documentTypeName = getDocumentTypeName(doc.document_type);
-          
-          const daysClass = daysRemaining < 0 ? 'text-red-600' : daysRemaining < 30 ? 'text-yellow-600' : 'text-green-600';
-          const daysText = daysRemaining < 0 ? 'منتهي' : daysRemaining === 0 ? 'اليوم' : daysRemaining + ' يوم';
-          
-          return \`
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm text-gray-900">\${index + 1}</td>
-              <td class="px-6 py-4">
-                <div class="text-sm font-medium text-gray-900">\${doc.employee_name || 'غير محدد'}</div>
-                <div class="text-sm text-gray-500">\${doc.employee_number || '-'}</div>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-900">\${documentTypeName}</td>
-              <td class="px-6 py-4 text-sm text-gray-900">\${doc.document_number || '-'}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">\${doc.issue_date || '-'}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">\${doc.expiry_date || '-'}</td>
-              <td class="px-6 py-4 text-sm \${daysClass}">
-                \${daysText}
-              </td>
-              <td class="px-6 py-4">\${statusBadge}</td>
-              <td class="px-6 py-4 text-sm">
-                <button onclick="deleteDocument(\${doc.id})" class="text-red-600 hover:text-red-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          \`;
-        }).join('');
-        
-        updateStats(documents);
-        updateExpiryAlerts(documents);
-        
-      } catch (error) {
-        console.error('Error loading documents:', error);
-        alert('حدث خطأ في تحميل المستندات');
-      }
+    let allEmployees = [];
+
+    function openLightbox(url) {
+      document.getElementById('lightboxImg').src = url;
+      document.getElementById('lightboxDownload').href = url;
+      document.getElementById('lightboxOverlay').classList.add('open');
     }
-    
-    // حساب الأيام المتبقية
-    function calculateDaysRemaining(expiryDate) {
-      if (!expiryDate) return 999;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const expiry = new Date(expiryDate);
-      expiry.setHours(0, 0, 0, 0);
-      const diffTime = expiry - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
+    function closeLightbox() {
+      document.getElementById('lightboxOverlay').classList.remove('open');
+      document.getElementById('lightboxImg').src = '';
     }
-    
-    // الحصول على badge الحالة
-    function getDocumentStatusBadge(daysRemaining) {
-      if (daysRemaining < 0) {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">منتهية</span>';
-      } else if (daysRemaining <= 30) {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">تنتهي قريباً</span>';
-      } else {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">سارية</span>';
-      }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+    function daysUntil(dateStr) {
+      if (!dateStr) return null;
+      const today = new Date(); today.setHours(0,0,0,0);
+      const d = new Date(dateStr); d.setHours(0,0,0,0);
+      return Math.ceil((d - today) / 86400000);
     }
-    
-    // الحصول على اسم نوع المستند
-    function getDocumentTypeName(type) {
-      const types = {
-        'passport': 'جواز السفر',
-        'id_card': 'بطاقة الهوية',
-        'license': 'رخصة القيادة',
-        'contract': 'عقد العمل',
-        'insurance': 'التأمين',
-        'other': 'أخرى'
-      };
-      return types[type] || type;
+
+    function idStatus(emp) {
+      const num = emp.id_type === 'iqama' ? emp.iqama_number : emp.national_id;
+      if (!num) return 'missing';
+      const expiry = emp.id_type === 'iqama' ? emp.iqama_expiry : emp.national_id_expiry;
+      if (!expiry) return 'valid';
+      const d = daysUntil(expiry);
+      if (d < 0) return 'expired';
+      if (d <= 90) return 'expiring';
+      return 'valid';
     }
-    
-    // تحديث الإحصائيات
-    function updateStats(documents) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const stats = {
-        total: documents.length,
-        expired: 0,
-        expiring: 0,
-        valid: 0
-      };
-      
-      documents.forEach(doc => {
-        const daysRemaining = calculateDaysRemaining(doc.expiry_date);
-        if (daysRemaining < 0) {
-          stats.expired++;
-        } else if (daysRemaining <= 30) {
-          stats.expiring++;
-        } else {
-          stats.valid++;
-        }
+
+    function statusBadge(status) {
+      if (status === 'expired') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">منتهية</span>';
+      if (status === 'expiring') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">تنتهي قريباً</span>';
+      if (status === 'missing') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">غير مُدخل</span>';
+      return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">سارية</span>';
+    }
+
+    function renderTable() {
+      const search = document.getElementById('searchInput').value.trim().toLowerCase();
+      const typeF = document.getElementById('typeFilter').value;
+      const docF = document.getElementById('docFilter').value;
+      const statusF = document.getElementById('statusFilter').value;
+
+      const rows = allEmployees.filter(emp => {
+        const name = (emp.full_name || emp.full_name_ar || '').toLowerCase();
+        const num = (emp.id_type === 'iqama' ? emp.iqama_number : emp.national_id) || '';
+        if (search && !name.includes(search) && !num.includes(search)) return false;
+        const empType = emp.id_type || (emp.iqama_number ? 'iqama' : (emp.national_id ? 'national' : 'missing'));
+        if (typeF === 'missing') { if (empType !== 'missing' && emp.national_id && emp.iqama_number) return false; if (empType !== 'missing') return false; }
+        else if (typeF && empType !== typeF) return false;
+        if (docF === 'has' && !emp.id_document_url) return false;
+        if (docF === 'none' && emp.id_document_url) return false;
+        if (statusF && idStatus(emp) !== statusF) return false;
+        return true;
       });
-      
-      document.getElementById('totalDocuments').textContent = stats.total;
-      document.getElementById('expiredDocuments').textContent = stats.expired;
-      document.getElementById('expiringDocuments').textContent = stats.expiring;
-      document.getElementById('validDocuments').textContent = stats.valid;
+
+      const tbody = document.getElementById('idTableBody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">لا توجد نتائج</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(emp => {
+        const idType = emp.id_type || (emp.iqama_number ? 'iqama' : (emp.national_id ? 'national' : null));
+        const idLabel = idType === 'iqama' ? 'إقامة' : (idType === 'national' ? 'هوية وطنية' : '<span class="text-gray-400">—</span>');
+        const idNum = idType === 'iqama' ? (emp.iqama_number || '—') : (idType === 'national' ? (emp.national_id || '—') : '—');
+        const expiry = idType === 'iqama' ? emp.iqama_expiry : emp.national_id_expiry;
+        const days = expiry ? daysUntil(expiry) : null;
+        const expiryCell = expiry
+          ? (() => {
+              const cls = days < 0 ? 'text-red-600 font-bold' : days <= 90 ? 'text-yellow-600 font-bold' : 'text-gray-700';
+              const label = days < 0 ? \`(\${Math.abs(days)} يوم مضى)\` : days === 0 ? '(اليوم)' : \`(\${days} يوم)\`;
+              return \`<span class="\${cls}">\${expiry} <span class="text-xs">\${label}</span></span>\`;
+            })()
+          : '<span class="text-gray-400">—</span>';
+        const st = idStatus(emp);
+        const docCell = emp.id_document_url
+          ? \`<button onclick="openLightbox('\${emp.id_document_url.replace(/'/g,'&#39;')}')" class="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"><i class="fas fa-eye"></i> عرض</button>\`
+          : '<span class="text-gray-400 text-sm">—</span>';
+        return \`<tr class="hover:bg-gray-50">
+          <td class="px-4 py-3 text-sm font-medium text-gray-900">\${emp.full_name || emp.full_name_ar || '—'}</td>
+          <td class="px-4 py-3 text-sm text-gray-600">\${emp.department || '—'}</td>
+          <td class="px-4 py-3 text-sm">\${idLabel}</td>
+          <td class="px-4 py-3 text-sm font-mono text-gray-800">\${idNum}</td>
+          <td class="px-4 py-3 text-sm">\${expiryCell}</td>
+          <td class="px-4 py-3">\${statusBadge(st)}</td>
+          <td class="px-4 py-3">\${docCell}</td>
+        </tr>\`;
+      }).join('');
     }
-    
-    // تحديث تنبيهات انتهاء الصلاحيات
-    function updateExpiryAlerts(documents) {
-      const alertsContainer = document.getElementById('expiryAlerts');
-      const expiredDocs = documents.filter(doc => calculateDaysRemaining(doc.expiry_date) < 0);
-      const expiringDocs = documents.filter(doc => {
-        const days = calculateDaysRemaining(doc.expiry_date);
-        return days >= 0 && days <= 30;
-      });
-      
-      let alertsHTML = '';
-      
-      if (expiredDocs.length > 0) {
-        const expiredList = expiredDocs.slice(0, 5).map(doc => 
-          \`<li class="text-red-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (\${doc.document_number})</li>\`
-        ).join('');
-        const moreExpired = expiredDocs.length > 5 ? \`<li class="text-red-600">• و \${expiredDocs.length - 5} مستندات أخرى...</li>\` : '';
-        
-        alertsHTML += \`
-          <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
-            <div class="flex items-center">
-              <i class="fas fa-exclamation-circle text-red-500 text-2xl ml-3"></i>
-              <div class="flex-1">
-                <h3 class="text-lg font-bold text-red-800">مستندات منتهية الصلاحية (\${expiredDocs.length})</h3>
-                <p class="text-red-700 mt-1">يرجى تجديد المستندات التالية:</p>
-                <ul class="mt-2 space-y-1">
-                  \${expiredList}
-                  \${moreExpired}
-                </ul>
-              </div>
-            </div>
-          </div>
-        \`;
+
+    function renderAlerts() {
+      const expired = allEmployees.filter(e => idStatus(e) === 'expired');
+      const expiring = allEmployees.filter(e => idStatus(e) === 'expiring');
+      let html = '';
+      if (expired.length) {
+        html += \`<div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
+          <div class="flex items-start gap-3"><i class="fas fa-exclamation-circle text-red-500 text-xl mt-0.5"></i>
+          <div><h3 class="font-bold text-red-800">هويات منتهية الصلاحية (\${expired.length})</h3>
+          <ul class="mt-1 space-y-0.5">\${expired.slice(0,8).map(e => \`<li class="text-red-700 text-sm">• \${e.full_name || e.full_name_ar} — \${e.id_type === 'iqama' ? 'إقامة' : 'هوية وطنية'}</li>\`).join('')}
+          \${expired.length > 8 ? \`<li class="text-red-500 text-sm">و \${expired.length - 8} آخرين...</li>\` : ''}</ul></div></div></div>\`;
       }
-      
-      if (expiringDocs.length > 0) {
-        const expiringList = expiringDocs.slice(0, 5).map(doc => {
-          const days = calculateDaysRemaining(doc.expiry_date);
-          return \`<li class="text-yellow-600">• \${doc.employee_name} - \${getDocumentTypeName(doc.document_type)} (بعد \${days} يوم)</li>\`;
-        }).join('');
-        const moreExpiring = expiringDocs.length > 5 ? \`<li class="text-yellow-600">• و \${expiringDocs.length - 5} مستندات أخرى...</li>\` : '';
-        
-        alertsHTML += \`
-          <div class="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg p-4">
-            <div class="flex items-center">
-              <i class="fas fa-clock text-yellow-500 text-2xl ml-3"></i>
-              <div class="flex-1">
-                <h3 class="text-lg font-bold text-yellow-800">مستندات تنتهي خلال 30 يوم (\${expiringDocs.length})</h3>
-                <p class="text-yellow-700 mt-1">يرجى التجهيز لتجديد المستندات التالية:</p>
-                <ul class="mt-2 space-y-1">
-                  \${expiringList}
-                  \${moreExpiring}
-                </ul>
-              </div>
-            </div>
-          </div>
-        \`;
+      if (expiring.length) {
+        html += \`<div class="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4">
+          <div class="flex items-start gap-3"><i class="fas fa-clock text-yellow-500 text-xl mt-0.5"></i>
+          <div><h3 class="font-bold text-yellow-800">هويات تنتهي خلال 90 يوم (\${expiring.length})</h3>
+          <ul class="mt-1 space-y-0.5">\${expiring.slice(0,8).map(e => { const exp = e.id_type==='iqama'?e.iqama_expiry:e.national_id_expiry; const d = daysUntil(exp); return \`<li class="text-yellow-700 text-sm">• \${e.full_name||e.full_name_ar} — \${e.id_type==='iqama'?'إقامة':'هوية وطنية'} (تنتهي \${exp}\${d!==null?' · '+d+' يوم':''}) </li>\`; }).join('')}
+          \${expiring.length > 8 ? \`<li class="text-yellow-600 text-sm">و \${expiring.length - 8} آخرين...</li>\` : ''}</ul></div></div></div>\`;
       }
-      
-      if (alertsHTML === '') {
-        alertsHTML = \`
-          <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4">
-            <div class="flex items-center">
-              <i class="fas fa-check-circle text-green-500 text-2xl ml-3"></i>
-              <div>
-                <h3 class="text-lg font-bold text-green-800">جميع المستندات سارية</h3>
-                <p class="text-green-700 mt-1">لا توجد مستندات منتهية أو تحتاج لتجديد قريب</p>
-              </div>
-            </div>
-          </div>
-        \`;
-      }
-      
-      alertsContainer.innerHTML = alertsHTML;
+      document.getElementById('expiryAlerts').innerHTML = html;
     }
-    
-    // فتح modal إضافة مستند
-    async function openAddDocumentModal() {
-      // تحميل قائمة الموظفين
+
+    function renderStats() {
+      const hasDoc = allEmployees.filter(e => e.id_document_url).length;
+      const noDoc = allEmployees.filter(e => !e.id_document_url).length;
+      const expired = allEmployees.filter(e => idStatus(e) === 'expired').length;
+      const expiring = allEmployees.filter(e => idStatus(e) === 'expiring').length;
+      document.getElementById('statTotal').textContent = allEmployees.length;
+      document.getElementById('statHasDoc').textContent = hasDoc;
+      document.getElementById('statExpired').textContent = expired;
+      document.getElementById('statExpiring').textContent = expiring;
+      document.getElementById('statNoDoc').textContent = noDoc;
+    }
+
+    async function load() {
       try {
-        const response = await axios.get('/api/hr/employees');
-        const employees = response.data.data || [];
-        
-        const select = document.getElementById('employee_id');
-        const employeeOptions = employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name} (\${emp.employee_number})</option>\`).join('');
-        select.innerHTML = '<option value="">اختر الموظف</option>' + employeeOptions;
-        
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
-      
-      document.getElementById('addDocumentModal').classList.remove('hidden');
-      document.getElementById('addDocumentModal').classList.add('flex');
-    }
-    
-    // إغلاق modal
-    function closeAddDocumentModal() {
-      document.getElementById('addDocumentModal').classList.add('hidden');
-      document.getElementById('addDocumentModal').classList.remove('flex');
-      document.getElementById('addDocumentForm').reset();
-    }
-    
-    // إضافة مستند
-    document.getElementById('addDocumentForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const formData = {
-        employee_id: parseInt(document.getElementById('employee_id').value),
-        document_type: document.getElementById('document_type').value,
-        document_number: document.getElementById('document_number').value,
-        issuing_authority: document.getElementById('issuing_authority').value,
-        issue_date: document.getElementById('issue_date').value,
-        expiry_date: document.getElementById('expiry_date').value,
-        notes: document.getElementById('notes').value
-      };
-      
-      try {
-        await axios.post('/api/hr/documents', formData);
-        alert('تم إضافة المستند بنجاح');
-        closeAddDocumentModal();
-        loadDocuments();
-      } catch (error) {
-        console.error('Error adding document:', error);
-        alert('حدث خطأ في إضافة المستند');
-      }
-    });
-    
-    // حذف مستند
-    async function deleteDocument(id) {
-      if (!confirm('هل أنت متأكد من حذف هذا المستند؟')) return;
-      
-      try {
-        await axios.delete(\`/api/hr/documents/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadDocuments();
-      } catch (error) {
-        console.error('Error deleting document:', error);
-        alert('حدث خطأ في الحذف');
+        const res = await axios.get('/api/hr/employee-ids');
+        allEmployees = res.data.data || [];
+        renderStats();
+        renderAlerts();
+        renderTable();
+      } catch(e) {
+        document.getElementById('idTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-500">حدث خطأ في تحميل البيانات</td></tr>';
       }
     }
-    
-    // البحث التلقائي
-    document.getElementById('searchInput').addEventListener('input', () => {
-      setTimeout(loadDocuments, 300);
-    });
-    
-    // تحميل البيانات عند فتح الصفحة
-    window.addEventListener('load', loadDocuments);
+
+    window.addEventListener('load', load);
+    window.openLightbox = openLightbox;
+    window.closeLightbox = closeLightbox;
+    window.renderTable = renderTable;
   </script>
 </body>
 </html>

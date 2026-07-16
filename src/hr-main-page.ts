@@ -178,10 +178,10 @@ export const hrMainPage = `<!DOCTYPE html>
                 <a href="/admin/hr/documents" class="group bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-500 hover:to-amber-600 rounded-xl p-6 transition-all transform hover:scale-105 hover:shadow-xl">
                     <div class="text-center">
                         <div class="bg-amber-500 group-hover:bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 transition-all">
-                            <i class="fas fa-file-alt text-white group-hover:text-amber-500 text-2xl transition-all"></i>
+                            <i class="fas fa-folder-open text-white group-hover:text-amber-500 text-2xl transition-all"></i>
                         </div>
-                        <h3 class="text-lg font-bold text-gray-800 group-hover:text-white transition-all">تنبيهات المستندات</h3>
-                        <p class="text-sm text-gray-600 group-hover:text-amber-100 mt-2 transition-all">انتهاء صلاحيات المستندات</p>
+                        <h3 class="text-lg font-bold text-gray-800 group-hover:text-white transition-all">مستندات الموظفين</h3>
+                        <p class="text-sm text-gray-600 group-hover:text-amber-100 mt-2 transition-all">عرض الهويات والمستندات المرفوعة</p>
                     </div>
                 </a>
 
