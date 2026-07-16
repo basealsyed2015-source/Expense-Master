@@ -107,7 +107,7 @@ import { registerContractsModuleApi } from './contracts-module-api'
 import { registerContractsStaticRoutes } from './contracts-module-static-routes'
 import { registerChatModuleApi, ChatConversationRoom, UserNotificationRoom } from './chat-module-api'
 import { chatPage } from './chat-page'
-import { renderChatWidget } from './chat-widget'
+import { renderChatWidgetLazyStub } from './chat-widget'
 
 // Temporary kill-switch for the chat UI. Backend + DO + tests stay intact so
 // flipping this back to `true` re-enables the launcher, /admin/chat page, and
@@ -115,6 +115,16 @@ import { renderChatWidget } from './chat-widget'
 const CHAT_UI_ENABLED = true
 import { sendPasswordResetCodeEmail } from './resend-email'
 import tailwindCss from '../public/tailwind.css?raw'
+import {
+  EMPTY_USER_INFO,
+  authDebugEnabled,
+  clampPage,
+  inlineTailwindEnabled,
+  parsePageParams,
+  perfLog,
+  withPerfTiming,
+  type UserInfo,
+} from './perf-helpers'
 
 type Bindings = {
   DB: D1Database;
@@ -123,11 +133,18 @@ type Bindings = {
   RESEND_API_KEY?: string;
   /** Verified sender, e.g. `Tamweel <noreply@yourdomain.com>` (Worker var or secret) */
   EMAIL_FROM?: string;
+  /** When "1"/"true", enable verbose auth logs */
+  DEBUG_AUTH?: string;
+  /** When "1"/"true", emit [perf] timing logs */
+  PERF_DEBUG?: string;
+  /** When "1"/"true", inline Tailwind CSS into HTML (legacy fallback) */
+  INLINE_TAILWIND?: string;
 }
 
 type Variables = {
   tenant: any;
   tenantId: number | null;
+  userInfo?: UserInfo;
 }
 
 function normalizeCustomerSolutionsJson(raw: string | null | undefined): string | null {
@@ -1568,7 +1585,6 @@ function withAffiliateContactDesign(
   }
 }
 
-/** Records every public contact-page render; raw opens (including refreshes) are intentional. */
 async function recordContactLinkVisit(
   db: D1Database,
   tenantId: number,
@@ -1588,6 +1604,29 @@ async function recordContactLinkVisit(
 
 function isAnonymousPublicContactView(c: any): boolean {
   return !c.req.header('Authorization') && !String(c.req.header('Cookie') ?? '').includes('authToken=')
+}
+
+function hasCookie(cookieHeader: string, name: string): boolean {
+  for (const part of cookieHeader.split(';')) {
+    const trimmed = part.trimStart()
+    if (trimmed.startsWith(name + '=') || trimmed === name) return true
+  }
+  return false
+}
+
+/** Records a unique visit (per browser, per day) using a short-lived cookie to deduplicate refreshes. */
+async function recordContactLinkVisitWithDedup(
+  c: any,
+  db: D1Database,
+  tenantId: number,
+  affiliateLinkId: number | null
+): Promise<void> {
+  if (!isAnonymousPublicContactView(c)) return
+  const cookieName = `vlv_${affiliateLinkId ?? 0}`
+  const cookieHeader = String(c.req.header('Cookie') ?? '')
+  if (hasCookie(cookieHeader, cookieName)) return
+  await recordContactLinkVisit(db, tenantId, affiliateLinkId)
+  c.header('Set-Cookie', `${cookieName}=1; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax`)
 }
 
 /**
@@ -2061,14 +2100,22 @@ function buildPublicContactPageHtml(
               throw new Error(data.error || 'تعذر إرسال الطلب');
             }
 
-            statusEl.textContent = data.message || 'تم الإرسال بنجاح';
-            statusEl.className = 'text-sm text-green-700';
             form.reset();
             form.setAttribute('aria-disabled', 'true');
             form.querySelectorAll('input, textarea, select, button').forEach((field) => {
               field.disabled = true;
             });
-            submitBtn.innerHTML = '<i class="fas fa-check"></i>تم إرسال طلبك';
+            form.querySelectorAll('.field-icon-wrap').forEach((el) => {
+              el.style.opacity = '0.4';
+              el.style.pointerEvents = 'none';
+            });
+            form.querySelectorAll('label').forEach((el) => {
+              el.style.opacity = '0.4';
+            });
+            submitBtn.style.display = 'none';
+            statusEl.style.cssText = 'margin:0;text-align:center;font-size:1rem;font-weight:700;padding:1rem 0 .25rem;';
+            statusEl.textContent = data.message || 'تم الإرسال بنجاح';
+            statusEl.className = 'text-green-700';
           } catch (err) {
             statusEl.textContent = err?.message || 'حدث خطأ أثناء الإرسال';
             statusEl.className = 'text-sm text-red-700';
@@ -2241,8 +2288,12 @@ async function bulkSyncUsersToHrEmployees(
   return { synced, skipped, errors }
 }
 
-/** Replace `<link href="/tailwind.css">` with an inline `<style>` so UI stays styled if the stylesheet request fails (Pages routing, static-only hosts, or dev proxies). */
-async function maybeInlineTailwindIntoHtmlResponse(c: { res?: Response }): Promise<void> {
+/**
+ * Legacy fallback: replace `<link href="/tailwind.css">` with an inline `<style>`.
+ * Disabled by default — prefer the cacheable `/tailwind.css` asset. Enable with INLINE_TAILWIND=1.
+ */
+async function maybeInlineTailwindIntoHtmlResponse(c: { res?: Response; env?: Bindings }): Promise<void> {
+  if (!inlineTailwindEnabled(c.env as any)) return
   const res = c.res
   if (!res?.body) return
   const ct = res.headers.get('content-type') || ''
@@ -2271,10 +2322,16 @@ async function maybeInlineTailwindIntoHtmlResponse(c: { res?: Response }): Promi
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
-// Outermost wrapper: after the full handler chain, inline Tailwind into HTML when the page still references it.
+// Outermost wrapper: optional Tailwind inlining (off by default for performance).
 app.use('*', async (c, next) => {
+  const t0 = Date.now()
   await next()
   await maybeInlineTailwindIntoHtmlResponse(c)
+  if ((c.env?.PERF_DEBUG === '1' || c.env?.PERF_DEBUG === 'true') && c.req.path.startsWith('/admin/')) {
+    perfLog(c.env as any, `request ${c.req.method} ${c.req.path}`, Date.now() - t0, {
+      status: c.res?.status,
+    })
+  }
 })
 
 // When `_routes.json` omits `/tailwind.css`, Pages sends this URL to the Worker and static
@@ -2284,7 +2341,7 @@ app.use('*', async (c, next) => {
 app.get('/tailwind.css', (c) =>
   c.newResponse(tailwindCss, 200, {
     'Content-Type': 'text/css; charset=utf-8',
-    'Cache-Control': 'public, max-age=86400',
+    'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
   })
 )
 
@@ -2525,10 +2582,9 @@ const getMobileResponsiveCSS = () => `
 // Enable CORS
 app.use('*', cors())
 
-// Middleware: Log binding availability for debugging
+// Middleware: Log binding availability only when PERF_DEBUG / DEBUG_AUTH is on
 app.use('*', async (c, next) => {
-  // Log binding status for API routes (helps debug production issues)
-  if (c.req.path.startsWith('/api/')) {
+  if (c.req.path.startsWith('/api/') && (authDebugEnabled(c.env as any) || c.env?.PERF_DEBUG === '1' || c.env?.PERF_DEBUG === 'true')) {
     console.log(`🔍 [${c.req.method}] ${c.req.path} - DB binding: ${!!c.env?.DB}`)
   }
   await next()
@@ -2674,6 +2730,11 @@ app.use('/api/*', async (c, next) => {
   }
   // Own leave history/submit (scoped in handler by user → hr_employees email)
   if (p === '/api/my-leaves' && (method === 'GET' || method === 'POST')) {
+    await next()
+    return
+  }
+  // Own employee profile (scoped in handler by user → hr_employees email)
+  if (p === '/api/my-profile' && (method === 'GET' || method === 'PATCH')) {
     await next()
     return
   }
@@ -2917,26 +2978,37 @@ function canManageCustomerAssignments(roleId: number | null): boolean {
   return roleId === 1 || roleId === 2
 }
 
-// Get tenant_id for current user (for multi-tenancy filtering)
-async function getUserInfo(
-  c: any
-): Promise<{
-  userId: number | null
-  tenantId: number | null
-  roleId: number | null
-  tokenRoleId: number | null
-  assignedBankId: number | null
-}> {
+function cacheUserInfo(c: any, info: UserInfo): UserInfo {
   try {
-    console.log('🔍 [getUserInfo] Starting user info retrieval...')
+    if (typeof c?.set === 'function') c.set('userInfo', info)
+  } catch {
+    /* context may be unavailable outside request handlers */
+  }
+  return info
+}
+
+// Get tenant_id for current user (for multi-tenancy filtering)
+async function getUserInfo(c: any): Promise<UserInfo> {
+  try {
+    try {
+      const cached = typeof c?.get === 'function' ? (c.get('userInfo') as UserInfo | undefined) : undefined
+      if (cached) return cached
+    } catch {
+      /* ignore */
+    }
+
+    const dbg = authDebugEnabled(c.env)
+    const log = (...args: unknown[]) => { if (dbg) console.log(...args) }
+
+    log('🔍 [getUserInfo] Starting user info retrieval...')
     // Try to get token from Authorization Header (for API calls)
     let token = c.req.header('Authorization')?.replace('Bearer ', '')
-    console.log('🔍 [getUserInfo] Token from header:', token ? 'Found' : 'Not found')
+    log('🔍 [getUserInfo] Token from header:', token ? 'Found' : 'Not found')
     
     // If not in header, try to get from cookie (for HTML pages)
     if (!token) {
       const cookieHeader = c.req.header('Cookie')
-      console.log('🔍 [getUserInfo] Cookie header:', cookieHeader ? 'Present' : 'Missing')
+      log('🔍 [getUserInfo] Cookie header:', cookieHeader ? 'Present' : 'Missing')
       if (cookieHeader) {
         const cookies = cookieHeader.split(';').map((cookie: string) => cookie.trim())
         const authCookie = cookies.find((cookie: string) => cookie.startsWith('authToken='))
@@ -2945,79 +3017,66 @@ async function getUserInfo(
           token = authCookie.startsWith('authToken=')
             ? authCookie.slice('authToken='.length)
             : ''
-          console.log('✅ [getUserInfo] Token found in cookie')
+          log('✅ [getUserInfo] Token found in cookie')
         } else {
-          console.log('❌ [getUserInfo] No authToken cookie found')
+          log('❌ [getUserInfo] No authToken cookie found')
         }
       }
     }
     
     if (!token) {
-      console.log('❌ [getUserInfo] No token found in header or cookie')
+      log('❌ [getUserInfo] No token found in header or cookie')
       const queryTenantId = c.req.query('tenant_id')
-      return {
+      return cacheUserInfo(c, {
         userId: null,
         tenantId: queryTenantId ? parseInt(queryTenantId) : null,
         roleId: null,
         tokenRoleId: null,
         assignedBankId: null
-      }
+      })
     }
-    
-    console.log('🔍 [getUserInfo] Token found:', token.substring(0, 20) + '...')
 
-    console.log('🔍 [getUserInfo] Normalizing token...')
     const normalizedToken = normalizeAuthToken(token)
     if (!normalizedToken) {
-      console.log('❌ [getUserInfo] Invalid token format after normalization')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+      return cacheUserInfo(c, EMPTY_USER_INFO)
     }
 
-    console.log('🔍 [getUserInfo] Decoding token...')
     const decoded = atob(normalizedToken)
-    console.log('🔍 [getUserInfo] Decoded token:', decoded.substring(0, 50) + '...')
     const parts = decoded.split(':')
-    console.log('🔍 [getUserInfo] Token parts:', parts.length, 'parts')
     const userId = parseOptionalInt(parts[0])
     if (!userId) {
-      console.log('❌ [getUserInfo] Invalid token payload - no userId')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+      return cacheUserInfo(c, EMPTY_USER_INFO)
     }
 
     const tenantIdFromToken = parseOptionalInt(parts[1])
     const tokenRoleId = normalizeRoleId(parseOptionalInt(parts[2]))
     const tokenIssuedAtMs = parseOptionalInt(parts[3])
     if (!tokenIssuedAtMs) {
-      console.log('❌ [getUserInfo] Invalid token payload - missing issue timestamp')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+      return cacheUserInfo(c, EMPTY_USER_INFO)
     }
-    console.log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId, tokenIssuedAtMs })
+    log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId, tokenIssuedAtMs })
     
     // Safety check for DB binding
     if (!c.env?.DB) {
       console.error('❌ [getUserInfo] DB binding not available')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: tokenRoleId ?? null, assignedBankId: null }
+      return cacheUserInfo(c, { ...EMPTY_USER_INFO, tokenRoleId: tokenRoleId ?? null })
     }
     
-    console.log('🔍 [getUserInfo] Querying database for user:', userId)
     const user = await c.env.DB.prepare(`
       SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
     `).bind(userId).first()
     
     if (!user) {
-      console.log('❌ [getUserInfo] User not found in database')
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId, assignedBankId: null }
+      return cacheUserInfo(c, { ...EMPTY_USER_INFO, tokenRoleId })
     }
-    
-    console.log('✅ [getUserInfo] User found:', { id: user.id, tenant_id: user.tenant_id, role_id: user.role_id })
 
     const userLastLoginMs = parseLoginTimestampToMs((user as { last_login?: string | null }).last_login ?? null)
     if (userLastLoginMs && tokenIssuedAtMs < userLastLoginMs) {
-      console.log('❌ [getUserInfo] Token invalidated by a newer login', {
+      log('❌ [getUserInfo] Token invalidated by a newer login', {
         tokenIssuedAtMs,
         userLastLoginMs
       })
-      return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+      return cacheUserInfo(c, EMPTY_USER_INFO)
     }
     
     // Super Admin (role_id = 1) can see all data
@@ -3030,9 +3089,13 @@ async function getUserInfo(
 
     if (normalizedRoleId === 1) {
       const queryTenantId = c.req.query('tenant_id')
-      const result = { userId: user.id, tenantId: queryTenantId ? parseInt(queryTenantId) : null, roleId: 1, tokenRoleId, assignedBankId: null }
-      console.log('✅ [getUserInfo] Returning super admin info:', result)
-      return result
+      return cacheUserInfo(c, {
+        userId: user.id,
+        tenantId: queryTenantId ? parseInt(queryTenantId) : null,
+        roleId: 1,
+        tokenRoleId,
+        assignedBankId: null
+      })
     }
     
     // For other roles: DB is source of truth for which company (tenant) this user belongs to.
@@ -3061,33 +3124,18 @@ async function getUserInfo(
       }
     }
 
-    const result = {
+    return cacheUserInfo(c, {
       userId: user.id,
       tenantId: tenantIdResolved,
       roleId: normalizedRoleId,
       tokenRoleId,
       assignedBankId: normalizedRoleId === 5 || normalizedRoleId === 6 ? assignedBankId : null
-    }
-    console.log('✅ [getUserInfo] Returning user info:', result)
-    return result
+    })
   } catch (error: any) {
-    // Aggressive debug dump for getUserInfo errors
-    const errorDump = {
-      message: error?.message || 'Unknown error',
-      name: error?.name || 'Error',
-      stack: error?.stack || 'No stack trace',
-      error_stringified: (() => {
-        try {
-          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-        } catch (e) {
-          return `Failed to stringify: ${e}`
-        }
-      })()
+    if (authDebugEnabled(c?.env)) {
+      console.error('❌ [getUserInfo] ERROR:', error?.message || error)
     }
-    
-    console.error('❌ [getUserInfo] ERROR DUMP:', errorDump)
-    // Don't throw - return null values so request can continue
-    return { userId: null, tenantId: null, roleId: null, tokenRoleId: null, assignedBankId: null }
+    return cacheUserInfo(c, EMPTY_USER_INFO)
   }
 }
 
@@ -3627,6 +3675,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts/list',
     '/admin/follow-ups',
     '/admin/my-leaves',
+    '/admin/my-profile',
     '/calculator',
     '/',
     '/admin/chat',
@@ -3644,6 +3693,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
+    '/admin/my-profile',
     '/calculator',
     '/',
     '/admin/chat',
@@ -3663,6 +3713,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
+    '/admin/my-profile',
     '/calculator',
     '/',
     '/admin/chat',
@@ -3684,6 +3735,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
+    '/admin/my-profile',
     '/calculator',
     '/',
     '/admin/chat',
@@ -4004,6 +4056,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <a href="/admin/settings" data-superadmin-only="true"><i class="fas fa-cog"></i>إعدادات النظام</a>
     <a href="/admin/hr"><i class="fas fa-users-cog"></i>الموارد البشرية</a>
     <a href="/admin/my-leaves"><i class="fas fa-calendar-alt"></i>طلبات إجازتي</a>
+    <a href="/admin/my-profile"><i class="fas fa-id-card"></i>ملفي الشخصي</a>
     <a href="/admin/contracts"><i class="fas fa-file-contract"></i>إدارة العقود</a>
     <hr class="gps-divider">
     <a href="/admin/users"><i class="fas fa-user-shield"></i>المستخدمين</a>
@@ -4469,7 +4522,10 @@ ${isAdminPanelRail ? `
 
   const bodyClose = '</body>'
   const bodyIdx = out.lastIndexOf(bodyClose)
-  const chatWidget = CHAT_UI_ENABLED && pathname !== '/admin/chat' ? renderChatWidget(opts?.userId ?? null, opts?.roleId ?? null) : ''
+  // Lazy-load full chat widget on first click (avoids ~1k lines of JS/CSS on every admin page).
+  const chatWidget = CHAT_UI_ENABLED && pathname !== '/admin/chat'
+    ? renderChatWidgetLazyStub(opts?.userId ?? null, opts?.roleId ?? null)
+    : ''
   if (bodyIdx !== -1) out = out.slice(0, bodyIdx) + sidebar + chatWidget + out.slice(bodyIdx)
   else out = out + sidebar + chatWidget
   return out
@@ -4477,18 +4533,10 @@ ${isAdminPanelRail ? `
 
 app.use('/admin/*', async (c, next) => {
   try {
-    console.log('🔒 [RBAC] Checking access for:', c.req.path)
     const info = await getUserInfo(c)
-    console.log('🔒 [RBAC] User info:', {
-      userId: info.userId,
-      roleId: info.roleId,
-      tenantId: info.tenantId,
-      tokenRoleId: info.tokenRoleId
-    })
 
     // Basic auth gate for all admin pages
     if (!info.userId) {
-      console.log('🔒 [RBAC] No userId, redirecting to login')
       return c.redirect('/login')
     }
 
@@ -4531,6 +4579,7 @@ app.use('/admin/*', async (c, next) => {
       pathname === '/admin/my-tasks' ||
       pathname === '/my-tasks' ||
       pathname === '/admin/my-leaves' ||
+      pathname === '/admin/my-profile' ||
       pathname.startsWith('/admin/contracts') ||
       pathname === '/admin/contact-affiliates' ||
       pathname === '/admin/chat' ||
@@ -4546,83 +4595,48 @@ app.use('/admin/*', async (c, next) => {
     // Post-process HTML responses to keep admin UI consistent across modules
     if (c.res) {
       try {
-        console.log('🔒 [RBAC] Post-processing admin HTML response')
         const res = c.res
         // Skip if response is a redirect or error
         if (res.status >= 300 && res.status < 400) {
-          console.log('🔒 [RBAC] Skipping HTML processing - redirect response')
           return // Redirect responses don't have HTML body
         }
         if (res.status >= 400) {
-          console.log('🔒 [RBAC] Skipping HTML processing - error response')
           return // Error responses, don't modify
         }
         
         const contentType = res.headers.get('content-type') || ''
-        console.log('🔒 [RBAC] Content-Type:', contentType)
         if (contentType.includes('text/html') && res.body) {
-          console.log('🔒 [RBAC] Processing HTML response...')
+          // Contracts pages ship their own sidebar/chrome and inject USER_ROLE_ID in the route.
+          // Skip full-body clone/rewrite here — these HTML payloads are large.
+          if (pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) {
+            return
+          }
           // Clone the response to avoid consuming the original
           const clonedRes = res.clone()
           const html = await clonedRes.text()
-          console.log('🔒 [RBAC] HTML length:', html.length)
           let updated = html
           if (!isSuperAdmin) {
             updated = stripSuperAdminLinksFromHtml(updated)
           }
           const effectiveSidebarRole = normalizeRoleId(info.roleId) ?? 4
           updated = injectPersistentAdminSidebar(pathname, updated, { roleId: effectiveSidebarRole, userId: info.userId })
-          // Contracts module pages skip GPS injection but still need the role for client-side approval logic.
-          if ((pathname === '/admin/contracts' || pathname.startsWith('/admin/contracts/')) && updated.includes('</head>')) {
-            updated = updated.replace('</head>', `<script>window.USER_ROLE_ID=${effectiveSidebarRole};</script></head>`)
-          }
-          console.log('🔒 [RBAC] HTML processed, updated length:', updated.length)
           const headers = new Headers(res.headers)
           headers.set('content-type', 'text/html; charset=UTF-8')
           c.res = new Response(updated, { status: res.status, statusText: res.statusText, headers })
-          console.log('🔒 [RBAC] HTML processing complete')
-        } else {
-          console.log('🔒 [RBAC] Not HTML response or no body, skipping')
         }
       } catch (error: any) {
-        // If HTML processing fails, log but don't break the response
-        const errorDump = {
-          message: error?.message || 'Unknown error',
-          name: error?.name || 'Error',
-          stack: error?.stack || 'No stack trace',
-          error_stringified: (() => {
-            try {
-              return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-            } catch (e) {
-              return `Failed to stringify: ${e}`
-            }
-          })()
+        if (authDebugEnabled(c.env as any)) {
+          console.error('❌ [RBAC] Error processing HTML:', error?.message || error)
         }
-        console.error('❌ [RBAC] Error processing HTML DUMP:', errorDump)
         // Continue with original response - don't throw
       }
     }
   } catch (error: any) {
-    // Aggressive debug dump for critical RBAC errors
-    const errorDump = {
-      message: error?.message || 'Unknown error',
-      name: error?.name || 'Error',
-      stack: error?.stack || 'No stack trace',
-      path: c.req.path,
-      error_stringified: (() => {
-        try {
-          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-        } catch (e) {
-          return `Failed to stringify: ${e}`
-        }
-      })()
-    }
-    console.error('❌ [RBAC] CRITICAL ERROR DUMP:', errorDump)
-    // Return error response with dump instead of throwing
+    console.error('❌ [RBAC] CRITICAL ERROR:', error?.message || error)
     return c.json({
       success: false,
       error: 'RBAC Middleware Error',
-      dd: errorDump
+      message: error?.message || 'Unknown error',
     }, 500)
   }
 })
@@ -8084,9 +8098,28 @@ app.get('/api/customers', async (c) => {
     query += `${whereSql}
       ORDER BY c.created_at DESC`
 
+    const { page, pageSize, offset } = parsePageParams({
+      page: c.req.query('page'),
+      pageSize: c.req.query('pageSize'),
+    })
+
+    let total = 0
+    try {
+      const countSql = `SELECT COUNT(*) AS total FROM customers c LEFT JOIN tenant_locations tl ON c.location_id = tl.id${whereSql}`
+      const countRow = whereParams.length
+        ? await c.env.DB.prepare(countSql).bind(...whereParams).first<{ total: number }>()
+        : await c.env.DB.prepare(countSql).first<{ total: number }>()
+      total = Number(countRow?.total || 0)
+    } catch {
+      total = 0
+    }
+
+    const pagedQuery = `${query} LIMIT ? OFFSET ?`
+    const pagedParams = [...whereParams, pageSize, offset]
+
     let results: any[] = []
     try {
-      const r = whereParams.length ? await c.env.DB.prepare(query).bind(...whereParams).all() : await c.env.DB.prepare(query).all()
+      const r = await c.env.DB.prepare(pagedQuery).bind(...pagedParams).all()
       results = (r.results || []) as any[]
     } catch (e: any) {
       // Backwards-compatible fallback: if created_by or assigned_bank_agent_id column is missing.
@@ -8115,16 +8148,16 @@ app.get('/api/customers', async (c) => {
                 OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
               )
           )`
-          const fallbackQuery = legacySelect.replace(whereSql, fallbackWhereSql)
-          const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId).all()
+          const fallbackQuery = legacySelect.replace(whereSql, fallbackWhereSql) + ' LIMIT ? OFFSET ?'
+          const fr = await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId, pageSize, offset).all()
           results = (fr.results || []) as any[]
         } else {
           const legacyParams = isMissingCreatedBy ? whereParams.slice(0, -1) : whereParams
           const legacyWhere = isMissingCreatedBy
             ? whereSql.replace(/\s*c\.created_by = \?\s*OR\s*/g, '').replace(/\s*OR\s*c\.assigned_bank_agent_id = \?/g, '')
             : whereSql.replace(/\s*OR\s*c\.assigned_bank_agent_id = \?/g, '')
-          const fallbackQuery = legacySelect.replace(whereSql, legacyWhere)
-          const r2 = legacyParams.length ? await c.env.DB.prepare(fallbackQuery).bind(...legacyParams).all() : await c.env.DB.prepare(fallbackQuery).all()
+          const fallbackQuery = legacySelect.replace(whereSql, legacyWhere) + ' LIMIT ? OFFSET ?'
+          const r2 = await c.env.DB.prepare(fallbackQuery).bind(...legacyParams, pageSize, offset).all()
           results = (r2.results || []) as any[]
         }
       } else {
@@ -8149,7 +8182,7 @@ app.get('/api/customers', async (c) => {
         }
       } catch (_) { /* table may be missing in legacy DBs */ }
     }
-    return c.json({ success: true, data: results })
+    return c.json({ success: true, data: results, total, page, pageSize })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -8166,6 +8199,169 @@ app.get('/api/customers/sample-csv', async (c) => {
     ]
     const xml = buildSpreadsheetML([header, ...rows], 'العملاء')
     return spreadsheetMLAttachmentResponse(xml, 'customers_sample.xls')
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Export customers matching current list filters (server-side; avoids embedding CSV in HTML).
+app.get('/api/customers/export-csv', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+
+    const searchQ = String(c.req.query('q') ?? '').trim()
+    const filterField = String(c.req.query('filterField') ?? 'all')
+    const dateRangeFilter = String(c.req.query('dateRange') ?? 'all')
+    const requestsFilterQ = String(c.req.query('requestsFilter') ?? 'all')
+    const ratingFilterQ = String(c.req.query('ratingFilter') ?? 'all')
+    const employeeFilterQ = String(c.req.query('employeeFilter') ?? 'all')
+    const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
+
+    let query = `
+      SELECT customers.id, customers.full_name, customers.phone, customers.email,
+        customers.enrollment_source, customers.enrollment_source_label, customers.national_id, customers.created_at,
+        u.full_name AS assigned_employee_name,
+        tl.name AS enrollment_location_name,
+        COALESCE(
+          NULLIF(customers.assigned_bank_agent_id, 0),
+          latest_fr_agent.resolved_bank_agent_id
+        ) AS resolved_bank_agent_id,
+        COALESCE(
+          NULLIF(TRIM(ub_direct.full_name), ''),
+          ub_direct.username,
+          NULLIF(TRIM(ub_fr.full_name), ''),
+          ub_fr.username
+        ) AS assigned_bank_agent_name
+      FROM customers
+      LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
+      LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 6, 14)
+      LEFT JOIN tenant_locations tl ON customers.location_id = tl.id
+      LEFT JOIN users ub_direct ON ub_direct.id = NULLIF(customers.assigned_bank_agent_id, 0)
+      LEFT JOIN (
+        SELECT frx.customer_id AS customer_id,
+          CASE
+            WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0 THEN frx.assigned_bank_agent_id
+            WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6) THEN frx.created_by
+            ELSE NULL
+          END AS resolved_bank_agent_id
+        FROM financing_requests frx
+        LEFT JOIN users ucx ON ucx.id = frx.created_by
+        INNER JOIN (
+          SELECT customer_id, MAX(id) AS max_id FROM financing_requests GROUP BY customer_id
+        ) fr_latest ON fr_latest.max_id = frx.id
+      ) latest_fr_agent ON latest_fr_agent.customer_id = customers.id
+      LEFT JOIN users ub_fr ON ub_fr.id = latest_fr_agent.resolved_bank_agent_id
+      WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)
+        AND (customers.is_completed IS NULL OR customers.is_completed = 0)`
+    const queryParams: any[] = []
+    const role = normalizeRoleId(userInfo.roleId)
+    if (role === 1) {
+      /* all */
+    } else if (role === 2 || role === 3) {
+      if (userInfo.tenantId) { query += ' AND customers.tenant_id = ?'; queryParams.push(userInfo.tenantId) }
+      else query += ' AND 1 = 0'
+    } else if (role === 4) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND EXISTS (
+          SELECT 1 FROM customer_assignments ca2 WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else if (role === 6) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND (
+          EXISTS (SELECT 1 FROM customer_assignments ca2 WHERE ca2.customer_id = customers.id AND ca2.employee_id = ?)
+          OR customers.assigned_bank_agent_id = ?
+          OR EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?)
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else if (role === 5) {
+      if (userInfo.tenantId && userInfo.userId) {
+        query += ` AND customers.tenant_id = ? AND (
+          customers.created_by = ? OR customers.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = customers.id AND (
+              fr.assigned_bank_agent_id = ? OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+            )
+          )
+        )`
+        queryParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId)
+      } else query += ' AND 1 = 0'
+    } else {
+      query += ' AND 1 = 0'
+    }
+
+    if (searchQ) {
+      const like = `%${searchQ}%`
+      if (filterField === 'name') { query += ' AND customers.full_name LIKE ?'; queryParams.push(like) }
+      else if (filterField === 'phone') { query += ' AND customers.phone LIKE ?'; queryParams.push(like) }
+      else if (filterField === 'email') { query += ' AND customers.email LIKE ?'; queryParams.push(like) }
+      else {
+        query += ` AND (customers.full_name LIKE ? OR customers.phone LIKE ? OR customers.email LIKE ?
+          OR IFNULL(customers.enrollment_source_label, '') LIKE ? OR IFNULL(u.full_name, '') LIKE ?)`
+        queryParams.push(like, like, like, like, like)
+      }
+    }
+    if (dateRangeFilter !== 'all') {
+      const days = Number.parseInt(dateRangeFilter, 10)
+      if (Number.isFinite(days) && days > 0) {
+        query += ` AND datetime(customers.created_at) >= datetime('now', ?)`
+        queryParams.push(`-${days} days`)
+      }
+    }
+    if (requestsFilterQ === '0') query += ` AND NOT EXISTS (SELECT 1 FROM financing_requests fr_rf WHERE fr_rf.customer_id = customers.id)`
+    else if (requestsFilterQ === '1') query += ` AND EXISTS (SELECT 1 FROM financing_requests fr_rf WHERE fr_rf.customer_id = customers.id)`
+    if (ratingFilterQ !== 'all' && /^\d+$/.test(ratingFilterQ)) {
+      query += ` AND EXISTS (
+        SELECT 1 FROM customer_reviews cr WHERE cr.customer_id = customers.id AND cr.rating = ?
+        AND cr.id = (SELECT id FROM customer_reviews WHERE customer_id = customers.id ORDER BY created_at DESC LIMIT 1)
+      )`
+      queryParams.push(Number(ratingFilterQ))
+    }
+    if (employeeFilterQ === 'غير مخصص') query += ` AND (ca.employee_id IS NULL OR IFNULL(TRIM(u.full_name), '') = '')`
+    else if (employeeFilterQ !== 'all') { query += ' AND IFNULL(u.full_name, "") = ?'; queryParams.push(employeeFilterQ) }
+    if (bankAgentFilterQ === 'غير معيّن' || bankAgentFilterQ === 'غير معين') {
+      query += ` AND COALESCE(NULLIF(customers.assigned_bank_agent_id, 0), latest_fr_agent.resolved_bank_agent_id) IS NULL`
+    } else if (bankAgentFilterQ !== 'all') {
+      query += ` AND (
+        (IFNULL(NULLIF(TRIM(ub_direct.full_name), ''), ub_direct.username) || ' #' || CAST(ub_direct.id AS TEXT)) = ?
+        OR (IFNULL(NULLIF(TRIM(ub_fr.full_name), ''), ub_fr.username) || ' #' || CAST(ub_fr.id AS TEXT)) = ?
+        OR IFNULL(NULLIF(TRIM(ub_direct.full_name), ''), ub_direct.username) = ?
+        OR IFNULL(NULLIF(TRIM(ub_fr.full_name), ''), ub_fr.username) = ?
+      )`
+      queryParams.push(bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ)
+    }
+
+    query += ' ORDER BY customers.created_at DESC LIMIT 10000'
+    const rows = await c.env.DB.prepare(query).bind(...queryParams).all()
+    const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'الرقم الوطني', 'تاريخ التسجيل']
+    const dataRows = ((rows.results || []) as any[]).map((customer) => {
+      const custAgentId = customer.resolved_bank_agent_id != null ? Number(customer.resolved_bank_agent_id) : null
+      const custAgentName = customer.assigned_bank_agent_name ? String(customer.assigned_bank_agent_name) : ''
+      const bankCol = !custAgentId || Number.isNaN(custAgentId) ? 'غير معيّن' : custAgentName || '—'
+      const src =
+        customer.enrollment_source === 'calculator' ? 'الحاسبة'
+          : customer.enrollment_source === 'affiliate' ? (customer.enrollment_source_label || 'affiliate')
+            : customer.enrollment_source === 'manual' ? String(customer.enrollment_source_label || '').trim() || 'يدوي'
+              : String(customer.enrollment_source_label || '').trim()
+      return [
+        String(customer.id ?? ''),
+        String(customer.full_name || '-'),
+        String(customer.phone || '-'),
+        String(customer.email || '-'),
+        String(src || ''),
+        String(customer.enrollment_location_name || '—'),
+        String(customer.assigned_employee_name || 'غير مخصص'),
+        String(bankCol || '—'),
+        String(customer.national_id || '-'),
+        new Date(customer.created_at).toLocaleDateString('ar-SA'),
+      ]
+    })
+    const xml = buildSpreadsheetML([header, ...dataRows], 'العملاء')
+    return spreadsheetMLAttachmentResponse(xml, `customers_export_${new Date().toISOString().slice(0, 10)}.xls`)
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -12142,6 +12338,7 @@ app.get('/api/attachments/view/:path{.+}', async (c) => {
     const headers = new Headers()
     object.writeHttpMetadata(headers)
     headers.set('etag', object.httpEtag)
+    headers.set('Cache-Control', 'private, max-age=3600')
     
     return new Response(object.body, { headers })
   } catch (error: any) {
@@ -12353,18 +12550,6 @@ app.put('/api/requests/:id/complete', async (c) => {
     if (_rid !== 5 && _rid !== 6 && _rid !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const id = c.req.param('id')
-
-    // Add columns if they don't yet exist (idempotent; errors ignored)
-    for (const stmt of [
-      `ALTER TABLE financing_requests ADD COLUMN is_completed INTEGER DEFAULT 0`,
-      `ALTER TABLE financing_requests ADD COLUMN completed_at TEXT`,
-      `ALTER TABLE financing_requests ADD COLUMN completed_by INTEGER`,
-      `ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`,
-      `ALTER TABLE customers ADD COLUMN completed_at TEXT`,
-      `ALTER TABLE customers ADD COLUMN completed_by INTEGER`,
-    ]) {
-      try { await c.env.DB.prepare(stmt).run() } catch (_) {}
-    }
 
     const req = await c.env.DB.prepare(`SELECT customer_id FROM financing_requests WHERE id = ?`).bind(id).first()
     if (!req) return c.json({ success: false, error: 'Request not found' }, 404)
@@ -13570,7 +13755,7 @@ app.get('/api/reports/requests-followup', async (c) => {
       query += ' WHERE 1 = 0'
     }
 
-    query += ' ORDER BY fr.created_at DESC'
+    query += ' ORDER BY fr.created_at DESC LIMIT 2000'
 
     const row =
       queryParams.length > 0
@@ -14111,7 +14296,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>تقرير متابعة طلبات التمويل</title>
-        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="/tailwind.css">
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <style>
@@ -16102,13 +16287,6 @@ app.get('/admin/customers/completed', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
-
-    // Ensure columns exist
-    for (const stmt of [
-      `ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`,
-      `ALTER TABLE customers ADD COLUMN completed_at TEXT`,
-      `ALTER TABLE customers ADD COLUMN completed_by INTEGER`,
-    ]) { try { await c.env.DB.prepare(stmt).run() } catch (_) {} }
 
     let query = `SELECT customers.*, u.full_name AS completed_by_name
       FROM customers
@@ -19625,76 +19803,78 @@ app.get('/admin/customers', async (c) => {
       const qs = params.toString()
       return c.redirect('/admin/customers' + (qs ? '?' + qs : ''))
     }
-    
-    // Ensure is_completed column exists (safe no-op if already present)
-    try { await c.env.DB.prepare(`ALTER TABLE customers ADD COLUMN is_completed INTEGER DEFAULT 0`).run() } catch (_) {}
+
+    const { page: customersPage, pageSize: customersPageSize, offset: customersOffset } = parsePageParams({
+      page: c.req.query('page'),
+      pageSize: c.req.query('pageSize'),
+    })
+    const searchQ = String(c.req.query('q') ?? '').trim()
+    const filterField = String(c.req.query('filterField') ?? 'all')
+    const dateRangeFilter = String(c.req.query('dateRange') ?? 'all')
+    const requestsFilterQ = String(c.req.query('requestsFilter') ?? 'all')
+    const ratingFilterQ = String(c.req.query('ratingFilter') ?? 'all')
+    const employeeFilterQ = String(c.req.query('employeeFilter') ?? 'all')
+    const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
 
     // Build query based on role — always exclude archived and completed customers
     let query = `
       SELECT customers.*, u.full_name AS assigned_employee_name,
         ca.employee_id AS assigned_employee_id,
         tl.name AS enrollment_location_name,
-        COALESCE(
-          (
-            SELECT co.status
-            FROM contracts co
-            JOIN financing_requests fr2 ON fr2.id = co.financing_request_id
-            WHERE co.customer_id = customers.id
-              AND co.tenant_id = customers.tenant_id
-              AND COALESCE(co.is_archived, 0) = 0
-            ORDER BY fr2.id DESC, co.id DESC
-            LIMIT 1
-          ),
-          (
-            SELECT status FROM contracts
-            WHERE customer_id = customers.id
-              AND tenant_id = customers.tenant_id
-              AND COALESCE(is_archived, 0) = 0
-            ORDER BY id DESC LIMIT 1
-          )
-        ) AS contract_status,
+        COALESCE(latest_contract.status, latest_orphan_contract.status) AS contract_status,
         COALESCE(
           NULLIF(customers.assigned_bank_agent_id, 0),
-          (
-            SELECT CASE
-              WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
-                THEN frx.assigned_bank_agent_id
-              WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
-                THEN frx.created_by
-              ELSE NULL
-            END
-            FROM financing_requests frx
-            LEFT JOIN users ucx ON ucx.id = frx.created_by
-            WHERE frx.customer_id = customers.id
-            ORDER BY frx.created_at DESC
-            LIMIT 1
-          )
+          latest_fr_agent.resolved_bank_agent_id
         ) AS resolved_bank_agent_id,
-        (
-          SELECT COALESCE(NULLIF(TRIM(ub.full_name),''), ub.username) FROM users ub
-          WHERE ub.id = COALESCE(
-            NULLIF(customers.assigned_bank_agent_id, 0),
-            (
-              SELECT CASE
-                WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
-                  THEN frx.assigned_bank_agent_id
-                WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
-                  THEN frx.created_by
-                ELSE NULL
-              END
-              FROM financing_requests frx
-              LEFT JOIN users ucx ON ucx.id = frx.created_by
-              WHERE frx.customer_id = customers.id
-              ORDER BY frx.created_at DESC
-              LIMIT 1
-            )
-          )
-          LIMIT 1
+        COALESCE(
+          NULLIF(TRIM(ub_direct.full_name), ''),
+          ub_direct.username,
+          NULLIF(TRIM(ub_fr.full_name), ''),
+          ub_fr.username
         ) AS assigned_bank_agent_name
       FROM customers
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 6, 14)
       LEFT JOIN tenant_locations tl ON customers.location_id = tl.id
+      LEFT JOIN users ub_direct ON ub_direct.id = NULLIF(customers.assigned_bank_agent_id, 0)
+      LEFT JOIN (
+        SELECT frx.customer_id AS customer_id,
+          CASE
+            WHEN frx.assigned_bank_agent_id IS NOT NULL AND frx.assigned_bank_agent_id != 0
+              THEN frx.assigned_bank_agent_id
+            WHEN frx.created_by IS NOT NULL AND ucx.role_id IN (5, 15, 6)
+              THEN frx.created_by
+            ELSE NULL
+          END AS resolved_bank_agent_id
+        FROM financing_requests frx
+        LEFT JOIN users ucx ON ucx.id = frx.created_by
+        INNER JOIN (
+          SELECT customer_id, MAX(id) AS max_id
+          FROM financing_requests
+          GROUP BY customer_id
+        ) fr_latest ON fr_latest.max_id = frx.id
+      ) latest_fr_agent ON latest_fr_agent.customer_id = customers.id
+      LEFT JOIN users ub_fr ON ub_fr.id = latest_fr_agent.resolved_bank_agent_id
+      LEFT JOIN (
+        SELECT co.customer_id AS customer_id, co.status AS status
+        FROM contracts co
+        INNER JOIN (
+          SELECT customer_id, MAX(id) AS max_id
+          FROM contracts
+          WHERE COALESCE(is_archived, 0) = 0 AND financing_request_id IS NOT NULL
+          GROUP BY customer_id
+        ) cx ON cx.max_id = co.id
+      ) latest_contract ON latest_contract.customer_id = customers.id
+      LEFT JOIN (
+        SELECT co.customer_id AS customer_id, co.status AS status
+        FROM contracts co
+        INNER JOIN (
+          SELECT customer_id, MAX(id) AS max_id
+          FROM contracts
+          WHERE COALESCE(is_archived, 0) = 0 AND financing_request_id IS NULL
+          GROUP BY customer_id
+        ) cx ON cx.max_id = co.id
+      ) latest_orphan_contract ON latest_orphan_contract.customer_id = customers.id
       WHERE (customers.is_archived = 0 OR customers.is_archived IS NULL)
         AND (customers.is_completed IS NULL OR customers.is_completed = 0)`;
     let queryParams: any[] = [];
@@ -19761,14 +19941,90 @@ app.get('/admin/customers', async (c) => {
     } else {
       query += ' AND 1 = 0';
     }
+
+    if (searchQ) {
+      const like = `%${searchQ}%`
+      if (filterField === 'name') {
+        query += ' AND customers.full_name LIKE ?'
+        queryParams.push(like)
+      } else if (filterField === 'phone') {
+        query += ' AND customers.phone LIKE ?'
+        queryParams.push(like)
+      } else if (filterField === 'email') {
+        query += ' AND customers.email LIKE ?'
+        queryParams.push(like)
+      } else {
+        query += ` AND (
+          customers.full_name LIKE ? OR customers.phone LIKE ? OR customers.email LIKE ?
+          OR IFNULL(customers.enrollment_source_label, '') LIKE ?
+          OR IFNULL(u.full_name, '') LIKE ?
+        )`
+        queryParams.push(like, like, like, like, like)
+      }
+    }
+    if (dateRangeFilter !== 'all') {
+      const days = Number.parseInt(dateRangeFilter, 10)
+      if (Number.isFinite(days) && days > 0) {
+        query += ` AND datetime(customers.created_at) >= datetime('now', ?)`
+        queryParams.push(`-${days} days`)
+      }
+    }
+    if (requestsFilterQ === '0') {
+      query += ` AND NOT EXISTS (SELECT 1 FROM financing_requests fr_rf WHERE fr_rf.customer_id = customers.id)`
+    } else if (requestsFilterQ === '1') {
+      query += ` AND EXISTS (SELECT 1 FROM financing_requests fr_rf WHERE fr_rf.customer_id = customers.id)`
+    }
+    if (ratingFilterQ !== 'all' && /^\d+$/.test(ratingFilterQ)) {
+      query += ` AND EXISTS (
+        SELECT 1 FROM customer_reviews cr
+        WHERE cr.customer_id = customers.id AND cr.rating = ?
+        AND cr.id = (SELECT id FROM customer_reviews WHERE customer_id = customers.id ORDER BY created_at DESC LIMIT 1)
+      )`
+      queryParams.push(Number(ratingFilterQ))
+    }
+    if (employeeFilterQ === 'غير مخصص') {
+      query += ` AND (ca.employee_id IS NULL OR IFNULL(TRIM(u.full_name), '') = '')`
+    } else if (employeeFilterQ !== 'all') {
+      query += ' AND IFNULL(u.full_name, "") = ?'
+      queryParams.push(employeeFilterQ)
+    }
+    if (bankAgentFilterQ !== 'all') {
+      if (bankAgentFilterQ === 'غير معيّن' || bankAgentFilterQ === 'غير معين') {
+        query += ` AND COALESCE(NULLIF(customers.assigned_bank_agent_id, 0), latest_fr_agent.resolved_bank_agent_id) IS NULL`
+      } else {
+        query += ` AND (
+          (IFNULL(NULLIF(TRIM(ub_direct.full_name), ''), ub_direct.username) || ' #' || CAST(ub_direct.id AS TEXT)) = ?
+          OR (IFNULL(NULLIF(TRIM(ub_fr.full_name), ''), ub_fr.username) || ' #' || CAST(ub_fr.id AS TEXT)) = ?
+          OR IFNULL(NULLIF(TRIM(ub_direct.full_name), ''), ub_direct.username) = ?
+          OR IFNULL(NULLIF(TRIM(ub_fr.full_name), ''), ub_fr.username) = ?
+        )`
+        queryParams.push(bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ)
+      }
+    }
+
+    // Count before ORDER/LIMIT for server-side pagination
+    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS _customers_page`
+    let customersTotal = 0
+    try {
+      const countRow = queryParams.length > 0
+        ? await c.env.DB.prepare(countQuery).bind(...queryParams).first<{ total: number }>()
+        : await c.env.DB.prepare(countQuery).first<{ total: number }>()
+      customersTotal = Number(countRow?.total || 0)
+    } catch (_) {
+      customersTotal = 0
+    }
+    const customersTotalPages = Math.max(1, Math.ceil(customersTotal / customersPageSize))
+    const customersPageClamped = clampPage(customersPage, customersTotalPages)
+    const customersOffsetClamped = (customersPageClamped - 1) * customersPageSize
     
-    query += ' ORDER BY customers.created_at DESC';
+    query += ' ORDER BY customers.created_at DESC LIMIT ? OFFSET ?'
+    queryParams.push(customersPageSize, customersOffsetClamped)
     
     let customers: { results: any[] } = { results: [] };
     try {
-      customers = queryParams.length > 0
-        ? (await c.env.DB.prepare(query).bind(...queryParams).all()) as { results: any[] }
-        : (await c.env.DB.prepare(query).all()) as { results: any[] };
+      customers = await withPerfTiming(c.env as any, 'admin/customers.query', async () =>
+        (await c.env.DB.prepare(query).bind(...queryParams).all()) as { results: any[] }
+      )
     } catch (e: any) {
       const msg = String(e?.message || e || '')
       const isMissingCreatedBy = /no such column:\s*customers\.created_by|no such column:\s*created_by/i.test(msg)
@@ -19789,7 +20045,7 @@ app.get('/admin/customers', async (c) => {
           )
         )`
         )
-        customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId).all()) as { results: any[] }
+        customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, customersPageSize, customersOffsetClamped).all()) as { results: any[] }
       } else {
         throw e
       }
@@ -19837,39 +20093,22 @@ app.get('/admin/customers', async (c) => {
     const customerIdsWithRequests = new Set((reqRows.results as any[]).map((r: any) => r.customer_id))
     const customerLatestRequestMap = new Map<number, number>((reqRows.results as any[]).map((r: any) => [r.customer_id, r.latest_request_id]))
 
-    const customersCsvRowsJson = JSON.stringify(
-      customers.results.map((customer: any) => {
-        const custAgentId =
-          customer.resolved_bank_agent_id != null && customer.resolved_bank_agent_id !== ''
-            ? Number(customer.resolved_bank_agent_id)
-            : customer.assigned_bank_agent_id != null && customer.assigned_bank_agent_id !== ''
-              ? Number(customer.assigned_bank_agent_id)
-              : null
-        const custAgentName = customer.assigned_bank_agent_name ? String(customer.assigned_bank_agent_name) : ''
-        const bankCol =
-          !custAgentId || Number.isNaN(custAgentId) ? 'غير معيّن' : custAgentName || '—'
-        const src =
-          customer.enrollment_source === 'calculator'
-            ? 'الحاسبة'
-            : customer.enrollment_source === 'affiliate'
-              ? (customer.enrollment_source_label || 'affiliate')
-              : customer.enrollment_source === 'manual'
-                ? String(customer.enrollment_source_label || '').trim() || 'يدوي'
-                : String(customer.enrollment_source_label || '').trim()
-        return [
-          String(customer.id ?? ''),
-          String(customer.full_name || '-'),
-          String(customer.phone || '-'),
-          String(customer.email || '-'),
-          String(src || ''),
-          String(customer.enrollment_location_name || '—'),
-          String(customer.assigned_employee_name || 'غير مخصص'),
-          String(bankCol || '—'),
-          String(customer.national_id || '-'),
-          new Date(customer.created_at).toLocaleDateString('ar-SA')
-        ]
-      })
-    ).replace(/</g, '\\u003c')
+    // CSV export moved to GET /api/customers/export-csv (avoids embedding every row in HTML).
+    const customersCsvRowsJson = '[]'
+    const customersListTotal = customersTotal
+    const customersServerPage = customersPageClamped
+    const customersServerPageSize = customersPageSize
+    const customersFilterStateJson = JSON.stringify({
+      q: searchQ,
+      filterField,
+      dateRange: dateRangeFilter,
+      requestsFilter: requestsFilterQ,
+      ratingFilter: ratingFilterQ,
+      employeeFilter: employeeFilterQ,
+      bankAgentFilter: bankAgentFilterQ,
+      page: customersServerPage,
+      pageSize: customersServerPageSize,
+    }).replace(/</g, '\\u003c')
     
     // Determine if user can edit/delete (not for Role 3 - Supervisor)
     const canEdit = userInfo.roleId !== 3;
@@ -19926,8 +20165,8 @@ app.get('/admin/customers', async (c) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>العملاء</title>
-        <script src="https://cdn.tailwindcss.com"></script>
+            <title>العملاء</title>
+        <link rel="stylesheet" href="/tailwind.css">
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
           /* Horizontal scroll only; never clip rows vertically */
@@ -19980,7 +20219,7 @@ app.get('/admin/customers', async (c) => {
             <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-users text-green-600 ml-2"></i>
-                العملاء (<span id="totalCount">${customers.results.length}</span>)
+                العملاء (<span id="totalCount">${customersListTotal}</span>)
               </h1>
               <div class="flex gap-3 flex-wrap">
                 <a href="/admin/customers/completed"
@@ -20019,7 +20258,7 @@ app.get('/admin/customers', async (c) => {
                     <i class="fas fa-chevron-down text-xs"></i>
                   </button>
                   <div id="customersCsvDropdownMenu" class="hidden absolute left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1">
-                    <button onclick="exportToCSV(); toggleCustomersCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 text-right">
+                    <button onclick="exportCustomersCsv(); toggleCustomersCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 text-right">
                       <i class="fas fa-file-export w-4"></i> تصدير CSV
                     </button>
                     ${canEdit ? `
@@ -20050,7 +20289,8 @@ app.get('/admin/customers', async (c) => {
                     <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
                     <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
                       class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
-                      onkeyup="filterTable()">
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();filterTable();}"
+                      onkeyup="debounceCustomersFilter()">
                   </div>
                   <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white" onchange="filterTable()">
                     <option value="all">الكل</option>
@@ -20694,7 +20934,8 @@ app.get('/admin/customers', async (c) => {
               const data = await resp.json();
               if (data.success && data.data) {
                 data.data.forEach(function(r) { applyRowRating(r.customer_id, r.rating); });
-                if (presetRatingFilter) filterTable();
+                // Rating filter is applied server-side via ?ratingFilter= — do not call filterTable()
+                // here (that navigates and caused perpetual reloads).
               }
             } catch(e) {}
           }
@@ -20762,7 +21003,7 @@ app.get('/admin/customers', async (c) => {
                 closeReviewModal();
                 const row = document.querySelector('#tableBody tr[data-customer-id="' + reviewCustomerId + '"]');
                 if (row) row.remove();
-                filterTable();
+                applyCustomersPagination();
                 showToast('تم أرشفة العميل بنجاح', 'success');
               } else {
                 showToast('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
@@ -20943,8 +21184,14 @@ app.get('/admin/customers', async (c) => {
             window.open(url, '_blank', 'noopener,noreferrer');
           }
 
-          // Pagination + edge-scroll (Customers list page)
-          const customersPaging = { page: 1, pageSize: 15, lastSig: '' }
+          // Server-side pagination + filters (Customers list page)
+          const CUSTOMERS_FILTER_STATE = ${customersFilterStateJson};
+          const customersPaging = {
+            page: Number(CUSTOMERS_FILTER_STATE.page) || 1,
+            pageSize: Number(CUSTOMERS_FILTER_STATE.pageSize) || 15,
+            lastSig: '',
+            total: ${customersListTotal},
+          }
           function getPageSizeOptions(total) {
             const base = [15, 30, 50, 100]
             const totalNum = Number(total) || 0
@@ -20968,6 +21215,47 @@ app.get('/admin/customers', async (c) => {
             return options
           }
           function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
+
+          function buildCustomersListUrl(overrides) {
+            const params = new URLSearchParams(window.location.search)
+            const next = Object.assign({}, CUSTOMERS_FILTER_STATE, overrides || {})
+            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','page','pageSize']
+            keys.forEach((k) => {
+              const v = next[k]
+              if (v == null || v === '' || v === 'all' || (k === 'page' && Number(v) === 1) || (k === 'pageSize' && Number(v) === 15)) {
+                if (k === 'requestsFilter' && String(v) === '0') { params.set(k, '0'); return }
+                if (k === 'q' && v) { params.set(k, String(v)); return }
+                params.delete(k)
+                return
+              }
+              params.set(k, String(v))
+            })
+            // Always keep explicit requestsFilter=0 for role-default pages
+            if (String(next.requestsFilter) === '0') params.set('requestsFilter', '0')
+            if (next.q) params.set('q', String(next.q))
+            if (next.filterField && next.filterField !== 'all') params.set('filterField', String(next.filterField))
+            if (next.dateRange && next.dateRange !== 'all') params.set('dateRange', String(next.dateRange))
+            if (next.ratingFilter && next.ratingFilter !== 'all') params.set('ratingFilter', String(next.ratingFilter))
+            if (next.employeeFilter && next.employeeFilter !== 'all') params.set('employeeFilter', String(next.employeeFilter))
+            if (next.bankAgentFilter && next.bankAgentFilter !== 'all') params.set('bankAgentFilter', String(next.bankAgentFilter))
+            if (Number(next.page) > 1) params.set('page', String(next.page)); else params.delete('page')
+            if (Number(next.pageSize) && Number(next.pageSize) !== 15) params.set('pageSize', String(next.pageSize)); else params.delete('pageSize')
+            const qs = params.toString()
+            return '/admin/customers' + (qs ? '?' + qs : '')
+          }
+
+          function navigateCustomersList(overrides) {
+            const nextUrl = buildCustomersListUrl(overrides)
+            try {
+              const next = new URL(nextUrl, window.location.origin)
+              const cur = new URL(window.location.href)
+              if (next.pathname === cur.pathname && next.searchParams.toString() === cur.searchParams.toString()) {
+                applyCustomersPagination()
+                return
+              }
+            } catch (_) { /* fall through */ }
+            window.location.href = nextUrl
+          }
 
           window.edgeScrollStep = function(scrollElId, visualDirection) {
             const el = document.getElementById(scrollElId)
@@ -21144,34 +21432,24 @@ app.get('/admin/customers', async (c) => {
 
           window.setCustomersPageSize = function(value) {
             const parsed = Number(value)
-            customersPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
-            customersPaging.page = 1
-            filterTable()
+            navigateCustomersList({ pageSize: Number.isFinite(parsed) && parsed > 0 ? parsed : 15, page: 1 })
           }
           window.setCustomersPage = function(directionOrPage) {
-            if (directionOrPage === 'prev') customersPaging.page -= 1
-            else if (directionOrPage === 'next') customersPaging.page += 1
+            let page = customersPaging.page
+            if (directionOrPage === 'prev') page -= 1
+            else if (directionOrPage === 'next') page += 1
             else {
               const parsed = Number(directionOrPage)
-              if (Number.isFinite(parsed)) customersPaging.page = parsed
+              if (Number.isFinite(parsed)) page = parsed
             }
-            filterTable()
+            navigateCustomersList({ page })
           }
 
           function applyCustomersPagination() {
+            renderCustomersPaginationUI(customersPaging.total)
             const tableBody = document.getElementById('tableBody')
             if (!tableBody) return
-            const rows = Array.from(tableBody.getElementsByTagName('tr'))
-            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
-            renderCustomersPaginationUI(visibleRows.length)
-            const totalPages = Math.max(1, Math.ceil(visibleRows.length / customersPaging.pageSize))
-            customersPaging.page = clampPage(customersPaging.page, totalPages)
-            const startIdx = (customersPaging.page - 1) * customersPaging.pageSize
-            const endIdx = startIdx + customersPaging.pageSize
-            visibleRows.forEach((row, idx) => {
-              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
-            })
-            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
+            Array.from(tableBody.getElementsByTagName('tr')).forEach((row) => { row.style.display = '' })
             setupEdgeScrollOnce('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
             updateEdgeScrollControls('customersTableScroll', 'customersEdgeLeft', 'customersEdgeRight')
           }
@@ -21197,108 +21475,78 @@ app.get('/admin/customers', async (c) => {
               if (emp) empNames.add(emp);
               if (agent) agentNames.add(agent);
             });
-            const currentEmp = empEl.value;
-            const currentAgent = agentEl.value;
+            const currentEmp = CUSTOMERS_FILTER_STATE.employeeFilter || 'all';
+            const currentAgent = CUSTOMERS_FILTER_STATE.bankAgentFilter || 'all';
             empEl.innerHTML = '<option value="all">الموظف: الكل</option>' +
               Array.from(empNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('');
             agentEl.innerHTML = '<option value="all">موظف البنك: الكل</option>' +
               Array.from(agentNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('');
+            if (currentEmp && currentEmp !== 'all' && !empNames.has(currentEmp)) {
+              empEl.innerHTML += '<option value="' + String(currentEmp).replace(/"/g, '&quot;') + '">' + currentEmp + '</option>';
+            }
+            if (currentAgent && currentAgent !== 'all' && !agentNames.has(currentAgent)) {
+              agentEl.innerHTML += '<option value="' + String(currentAgent).replace(/"/g, '&quot;') + '">' + currentAgent + '</option>';
+            }
             empEl.value = currentEmp;
             agentEl.value = currentAgent;
           }
 
           function filterTable() {
             closeAllDropdowns();
-            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim();
+            const searchInput = document.getElementById('searchInput').value.trim();
             const filterField = document.getElementById('filterField').value;
             const dateRangeFilter = document.getElementById('dateRangeFilter').value;
             const requestsFilter = document.getElementById('requestsFilter').value;
             const ratingFilter = document.getElementById('ratingFilter').value;
             const employeeFilter = (document.getElementById('employeeFilter') || {value: 'all'}).value;
             const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value;
-            const rows = document.getElementById('tableBody').getElementsByTagName('tr');
-            let visibleCount = 0;
-            const sig = JSON.stringify({ searchInput, filterField, dateRangeFilter, requestsFilter, ratingFilter, employeeFilter, bankAgentFilter });
-            if (sig !== customersPaging.lastSig) { customersPaging.lastSig = sig; customersPaging.page = 1; }
-            for (let i = 0; i < rows.length; i++) {
-              const row = rows[i];
-              const name = row.getAttribute('data-name') || '';
-              const phone = row.getAttribute('data-phone') || '';
-              const email = row.getAttribute('data-email') || '';
-              const source = row.getAttribute('data-source') || '';
-              const assigned = row.getAttribute('data-assigned') || '';
-              const bankAgent = row.getAttribute('data-bank-agent') || '';
-              const createdAt = row.getAttribute('data-created-at') || '';
-              const hasRequest = row.getAttribute('data-has-request') || '0';
-              const rating = row.getAttribute('data-rating') || '0';
+            navigateCustomersList({
+              q: searchInput,
+              filterField,
+              dateRange: dateRangeFilter,
+              requestsFilter,
+              ratingFilter,
+              employeeFilter,
+              bankAgentFilter,
+              page: 1,
+              pageSize: customersPaging.pageSize,
+            });
+          }
 
-              let matchesSearch = searchInput === '' ? true : (filterField==='name'?name.toLowerCase().includes(searchInput):filterField==='phone'?phone.toLowerCase().includes(searchInput):filterField==='email'?email.toLowerCase().includes(searchInput):name.toLowerCase().includes(searchInput)||phone.toLowerCase().includes(searchInput)||email.toLowerCase().includes(searchInput)||source.toLowerCase().includes(searchInput)||assigned.toLowerCase().includes(searchInput)||bankAgent.toLowerCase().includes(searchInput));
+          var _customersFilterDebounce = null;
+          function debounceCustomersFilter() {
+            clearTimeout(_customersFilterDebounce);
+            _customersFilterDebounce = setTimeout(function() { filterTable(); }, 450);
+          }
 
-              let matchesDateRange = true;
-              if (dateRangeFilter !== 'all') {
-                const days = parseInt(dateRangeFilter, 10);
-                const createdDate = new Date(createdAt);
-                const cutoffDate = new Date();
-                cutoffDate.setDate(cutoffDate.getDate() - days);
-                matchesDateRange = !isNaN(createdDate.getTime()) && createdDate >= cutoffDate;
-              }
-
-              const matchesRequests = requestsFilter === 'all' || hasRequest === requestsFilter;
-              const matchesRating = ratingFilter === 'all' || rating === ratingFilter;
-              const matchesEmployee = employeeFilter === 'all' || assigned === employeeFilter;
-              const matchesBankAgent = bankAgentFilter === 'all' || bankAgent === bankAgentFilter;
-
-              const visible = matchesSearch && matchesDateRange && matchesRequests && matchesRating && matchesEmployee && matchesBankAgent;
-              row.classList.toggle('filter-hidden', !visible);
-              if (visible) visibleCount++;
-            }
-            document.getElementById('totalCount').textContent = visibleCount;
-            applyCustomersPagination();
-            setCustomersFiltersInUrl();
+          function hydrateCustomersFiltersFromState() {
+            const s = CUSTOMERS_FILTER_STATE || {};
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+            setVal('searchInput', s.q || '');
+            setVal('filterField', s.filterField || 'all');
+            setVal('dateRangeFilter', s.dateRange || 'all');
+            setVal('requestsFilter', s.requestsFilter || 'all');
+            setVal('ratingFilter', s.ratingFilter || 'all');
           }
 
           function applyPresetFiltersFromUrl() {
-            // Return links go to bare /admin/customers (no query). Prefer session filters in that case.
-            if (!urlHasExplicitCustomersFilters()) {
-              const saved = loadCustomersFiltersFromSession();
-              if (saved) {
-                applyCustomersFiltersObject(saved);
-                return;
-              }
-            }
-
-            const params = new URLSearchParams(window.location.search);
-            applyCustomersFiltersObject({
-              search: params.get('search'),
-              filterField: params.get('filterField'),
-              dateRangeFilter: params.get('dateRangeFilter'),
-              ratingFilter: params.get('ratingFilter') || presetRatingFilter,
-              requestsFilter: params.get('requestsFilter') || presetRequestsFilter,
-              employeeFilter: params.get('employeeFilter'),
-              bankAgentFilter: params.get('bankAgentFilter')
-            });
-
-            // Preserve prior sidebar behavior when rating is present without requestsFilter
-            const requestsFilterEl = document.getElementById('requestsFilter');
-            const ratingFilter = params.get('ratingFilter') || presetRatingFilter;
-            const requestsFilter = params.get('requestsFilter') || presetRequestsFilter;
-            if (requestsFilterEl && ratingFilter && !requestsFilter) {
-              requestsFilterEl.value = DEFAULT_REQUESTS_FILTER;
-            }
+            // Server already applied URL filters; hydrate controls and skip client re-filter.
+            hydrateCustomersFiltersFromState();
           }
 
           function resetFilters() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('filterField').value = 'all';
-            document.getElementById('dateRangeFilter').value = 'all';
-            document.getElementById('requestsFilter').value = DEFAULT_REQUESTS_FILTER;
-            document.getElementById('ratingFilter').value = 'all';
-            const empEl = document.getElementById('employeeFilter');
-            const agentEl = document.getElementById('bankAgentFilter');
-            if (empEl) empEl.value = 'all';
-            if (agentEl) agentEl.value = 'all';
             clearCustomersFiltersSession();
-            filterTable();
+            navigateCustomersList({
+              q: '',
+              filterField: 'all',
+              dateRange: 'all',
+              requestsFilter: DEFAULT_REQUESTS_FILTER,
+              ratingFilter: 'all',
+              employeeFilter: 'all',
+              bankAgentFilter: 'all',
+              page: 1,
+              pageSize: customersPaging.pageSize,
+            });
           }
 
           function toggleCustomersCsvDropdown() {
@@ -21313,14 +21561,11 @@ app.get('/admin/customers', async (c) => {
           });
 
           ${HTML_CSV_UTF16_DOWNLOAD_SCRIPT}
-          function exportToCSV() {
-            const header = ['#', 'الاسم', 'الهاتف', 'البريد الإلكتروني', 'المصدر', 'الموقع', 'الموظف المخصص', 'موظف البنك', 'الرقم الوطني', 'تاريخ التسجيل'];
-            const rows = ${customersCsvRowsJson};
-            const data = [header, ...rows];
-            let csv = ${HTML_CSV_PREFIX};
-            data.forEach(row => { csv += row.join('\\t') + '\\r\\n'; });
-            downloadUtf16Csv(csv, 'العملاء_' + new Date().toISOString().split('T')[0] + '.csv');
+          function exportCustomersCsv() {
+            const qs = window.location.search || '';
+            window.location.href = '/api/customers/export-csv' + qs;
           }
+          function exportToCSV() { exportCustomersCsv(); }
 
           window.downloadCustomersSampleCSV = function() {
             window.location.href = '/api/customers/sample-csv'
@@ -21495,10 +21740,11 @@ app.get('/admin/customers', async (c) => {
           ` : ''}
 
           refreshUnreadDot();
-          // Restore URL filters before first filter pass so Back from actions keeps the view
+          // Restore URL filters; pagination is server-side — do NOT call filterTable() on load
+          // (filterTable navigates and was causing perpetual reloads).
           hydrateCustomersRoleFilters();
           applyPresetFiltersFromUrl();
-          filterTable();
+          applyCustomersPagination();
           loadCustomerRatings();
         </script>
         ${role2InlineAssign ? `
@@ -21675,8 +21921,9 @@ app.get('/admin/customers', async (c) => {
             };
 
             function init() {
-              window.paintCustomerAlarmDots();          // paint immediately from inline data-unread-alarms
-              window.refreshCustomerAlarmsMap();        // then hydrate client-side map and repaint
+              // Paint from SSR data-unread-alarms only — avoid an extra /api/customer-alarms
+              // round-trip on every list page load. Popup + mark-read still refresh the map.
+              window.paintCustomerAlarmDots();
             }
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
             else init();
@@ -22412,13 +22659,6 @@ app.get('/admin/requests/completed', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId || !userInfo.roleId) return c.redirect('/login')
-
-    // Ensure columns exist
-    for (const stmt of [
-      `ALTER TABLE financing_requests ADD COLUMN is_completed INTEGER DEFAULT 0`,
-      `ALTER TABLE financing_requests ADD COLUMN completed_at TEXT`,
-      `ALTER TABLE financing_requests ADD COLUMN completed_by INTEGER`,
-    ]) { try { await c.env.DB.prepare(stmt).run() } catch (_) {} }
 
     let query = `
       SELECT fr.*, c.full_name as customer_name,
@@ -23303,6 +23543,11 @@ app.get('/admin/requests', async (c) => {
   try {
     // Get user info (userId, tenantId, roleId)
     const userInfo = await getUserInfo(c);
+    const { page: requestsPage, pageSize: requestsPageSize, offset: requestsOffset } = parsePageParams({
+      page: c.req.query('page'),
+      pageSize: c.req.query('pageSize'),
+    })
+    const requestsSearchQ = String(c.req.query('q') ?? '').trim()
 
     // Build query with role-based filtering
     let query = `
@@ -23329,23 +23574,7 @@ app.get('/admin/requests', async (c) => {
         ws.stage_color as workflow_stage_color,
         COALESCE(NULLIF(TRIM(bagent.full_name), ''), NULLIF(TRIM(bagent.username), '')) as assigned_bank_agent_name,
         COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) as assigned_employee_name,
-        COALESCE(
-          (
-            SELECT status FROM contracts
-            WHERE financing_request_id = fr.id
-              AND tenant_id = COALESCE(fr.tenant_id, c.tenant_id)
-              AND COALESCE(is_archived, 0) = 0
-            ORDER BY id DESC LIMIT 1
-          ),
-          (
-            SELECT status FROM contracts
-            WHERE customer_id = fr.customer_id
-              AND financing_request_id IS NULL
-              AND tenant_id = COALESCE(fr.tenant_id, c.tenant_id)
-              AND COALESCE(is_archived, 0) = 0
-            ORDER BY id DESC LIMIT 1
-          )
-        ) AS contract_status
+        COALESCE(fr_contract.status, orphan_contract.status) AS contract_status
       FROM financing_requests fr
       LEFT JOIN customers c ON fr.customer_id = c.id
       LEFT JOIN tenant_locations tl ON tl.id = COALESCE(fr.location_id, c.location_id)
@@ -23354,6 +23583,22 @@ app.get('/admin/requests', async (c) => {
       LEFT JOIN banks b ON fr.selected_bank_id = b.id
       LEFT JOIN workflow_stages ws ON fr.current_stage_id = ws.id
       LEFT JOIN users bagent ON bagent.id = c.assigned_bank_agent_id
+      LEFT JOIN (
+        SELECT financing_request_id, status FROM contracts co
+        INNER JOIN (
+          SELECT financing_request_id AS fr_id, MAX(id) AS max_id FROM contracts
+          WHERE financing_request_id IS NOT NULL AND COALESCE(is_archived, 0) = 0
+          GROUP BY financing_request_id
+        ) x ON x.max_id = co.id
+      ) fr_contract ON fr_contract.financing_request_id = fr.id
+      LEFT JOIN (
+        SELECT customer_id, status FROM contracts co
+        INNER JOIN (
+          SELECT customer_id AS cid, MAX(id) AS max_id FROM contracts
+          WHERE financing_request_id IS NULL AND COALESCE(is_archived, 0) = 0
+          GROUP BY customer_id
+        ) x ON x.max_id = co.id
+      ) orphan_contract ON orphan_contract.customer_id = fr.customer_id
     `;
     
     let queryParams: any[] = [];
@@ -23413,11 +23658,40 @@ app.get('/admin/requests', async (c) => {
     query += query.toLowerCase().includes('where')
       ? " AND (fr.status IS NULL OR fr.status != 'completed')"
       : " WHERE (fr.status IS NULL OR fr.status != 'completed')"
-    query += ' ORDER BY fr.created_at DESC';
+    if (requestsSearchQ) {
+      const like = `%${requestsSearchQ}%`
+      query += ` AND (IFNULL(c.full_name,'') LIKE ? OR IFNULL(c.phone,'') LIKE ? OR IFNULL(b.bank_name,'') LIKE ? OR CAST(fr.id AS TEXT) LIKE ?)`
+      queryParams.push(like, like, like, like)
+    }
 
-    const requests = queryParams.length > 0
-      ? await c.env.DB.prepare(query).bind(...queryParams).all()
-      : await c.env.DB.prepare(query).all();
+    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS _requests_page`
+    let requestsTotal = 0
+    try {
+      const countRow = queryParams.length > 0
+        ? await c.env.DB.prepare(countQuery).bind(...queryParams).first<{ total: number }>()
+        : await c.env.DB.prepare(countQuery).first<{ total: number }>()
+      requestsTotal = Number(countRow?.total || 0)
+    } catch {
+      requestsTotal = 0
+    }
+    const requestsTotalPages = Math.max(1, Math.ceil(requestsTotal / requestsPageSize))
+    const requestsPageClamped = clampPage(requestsPage, requestsTotalPages)
+    const requestsOffsetClamped = (requestsPageClamped - 1) * requestsPageSize
+
+    query += ' ORDER BY fr.created_at DESC LIMIT ? OFFSET ?'
+    queryParams.push(requestsPageSize, requestsOffsetClamped)
+
+    const requests = await withPerfTiming(c.env as any, 'admin/requests.query', async () =>
+      await c.env.DB.prepare(query).bind(...queryParams).all()
+    )
+    const requestsListTotal = requestsTotal
+    const requestsServerPage = requestsPageClamped
+    const requestsServerPageSize = requestsPageSize
+    const requestsFilterStateJson = JSON.stringify({
+      q: requestsSearchQ,
+      page: requestsServerPage,
+      pageSize: requestsServerPageSize,
+    }).replace(/</g, '\\u003c')
 
     // === CUSTOMER ALARM GLOW (requests table) — attach per-customer unread count for THIS user ===
     // The row template below emits data-unread-alarms="${req.unread_alarm_count || 0}" and the inline
@@ -23548,7 +23822,7 @@ app.get('/admin/requests', async (c) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>طلبات التمويل</title>
-        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="/tailwind.css">
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
           /* Custom Scrollbar - Enhanced */
@@ -23654,7 +23928,7 @@ app.get('/admin/requests', async (c) => {
             <div class="flex justify-between items-center mb-4">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-file-invoice text-purple-600 ml-2"></i>
-                طلبات التمويل (<span id="totalCount">${requests.results.length}</span>)
+                طلبات التمويل (<span id="totalCount">${requestsListTotal}</span>)
               </h1>
               
               <div class="flex gap-3">
@@ -23709,7 +23983,8 @@ app.get('/admin/requests', async (c) => {
                     <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
                     <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
                       class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-                      onkeyup="filterTable()">
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();navigateRequestsList({q:document.getElementById('searchInput').value.trim(),page:1});}"
+                      onkeyup="debounceRequestsSearch()">
                   </div>
                   <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white" onchange="filterTable()">
                     <option value="all">الكل</option>
@@ -23991,7 +24266,38 @@ app.get('/admin/requests', async (c) => {
           }
           window.openCustomerWhatsApp = openCustomerWhatsApp;
           // Pagination + edge-scroll (Requests list page)
-          const requestsPaging = { page: 1, pageSize: 15, lastSig: '' }
+          const REQUESTS_FILTER_STATE = ${requestsFilterStateJson};
+          const requestsPaging = {
+            page: Number(REQUESTS_FILTER_STATE.page) || 1,
+            pageSize: Number(REQUESTS_FILTER_STATE.pageSize) || 15,
+            lastSig: '',
+            total: ${requestsListTotal},
+          }
+          function buildRequestsListUrl(overrides) {
+            const params = new URLSearchParams(window.location.search)
+            const next = Object.assign({}, REQUESTS_FILTER_STATE, overrides || {})
+            if (next.q) params.set('q', String(next.q)); else params.delete('q')
+            if (Number(next.page) > 1) params.set('page', String(next.page)); else params.delete('page')
+            if (Number(next.pageSize) && Number(next.pageSize) !== 15) params.set('pageSize', String(next.pageSize)); else params.delete('pageSize')
+            const qs = params.toString()
+            return '/admin/requests' + (qs ? '?' + qs : '')
+          }
+          function navigateRequestsList(overrides) {
+            window.location.href = buildRequestsListUrl(overrides)
+          }
+          var _requestsSearchDebounce = null
+          function debounceRequestsSearch() {
+            clearTimeout(_requestsSearchDebounce)
+            _requestsSearchDebounce = setTimeout(function() {
+              var q = (document.getElementById('searchInput') || { value: '' }).value.trim()
+              if (q === String(REQUESTS_FILTER_STATE.q || '')) return
+              navigateRequestsList({ q: q, page: 1 })
+            }, 450)
+          }
+          if (REQUESTS_FILTER_STATE && REQUESTS_FILTER_STATE.q) {
+            var _rsi = document.getElementById('searchInput')
+            if (_rsi) _rsi.value = REQUESTS_FILTER_STATE.q
+          }
           const TENANT_EMPLOYEE_FILTER_NAMES = ${requestsFilterEmployeeNamesJson};
           const TENANT_BANK_AGENT_FILTER_LABELS = ${requestsFilterBankAgentLabelsJson};
           function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
@@ -24172,34 +24478,26 @@ app.get('/admin/requests', async (c) => {
 
           window.setRequestsPageSize = function(value) {
             const parsed = Number(value)
-            requestsPaging.pageSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 15
-            requestsPaging.page = 1
-            filterTable()
+            navigateRequestsList({ pageSize: Number.isFinite(parsed) && parsed > 0 ? parsed : 15, page: 1 })
           }
           window.setRequestsPage = function(directionOrPage) {
-            if (directionOrPage === 'prev') requestsPaging.page -= 1
-            else if (directionOrPage === 'next') requestsPaging.page += 1
+            let page = requestsPaging.page
+            if (directionOrPage === 'prev') page -= 1
+            else if (directionOrPage === 'next') page += 1
             else {
               const parsed = Number(directionOrPage)
-              if (Number.isFinite(parsed)) requestsPaging.page = parsed
+              if (Number.isFinite(parsed)) page = parsed
             }
-            filterTable()
+            navigateRequestsList({ page })
           }
 
           function applyRequestsPagination() {
+            renderRequestsPaginationUI(requestsPaging.total)
             const tableBody = document.getElementById('tableBody')
             if (!tableBody) return
-            const rows = Array.from(tableBody.getElementsByTagName('tr'))
-            const visibleRows = rows.filter((r) => !r.classList.contains('filter-hidden'))
-            renderRequestsPaginationUI(visibleRows.length)
-            const totalPages = Math.max(1, Math.ceil(visibleRows.length / requestsPaging.pageSize))
-            requestsPaging.page = clampPage(requestsPaging.page, totalPages)
-            const startIdx = (requestsPaging.page - 1) * requestsPaging.pageSize
-            const endIdx = startIdx + requestsPaging.pageSize
-            visibleRows.forEach((row, idx) => {
-              row.style.display = (idx >= startIdx && idx < endIdx) ? '' : 'none'
+            Array.from(tableBody.getElementsByTagName('tr')).forEach((row) => {
+              if (!row.classList.contains('filter-hidden')) row.style.display = ''
             })
-            rows.filter((r) => r.classList.contains('filter-hidden')).forEach((r) => { r.style.display = 'none' })
             setupEdgeScrollOnce('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
             updateEdgeScrollControls('requestsTableScroll', 'requestsEdgeLeft', 'requestsEdgeRight')
           }
@@ -24887,8 +25185,9 @@ app.get('/admin/requests', async (c) => {
                 });
             };
             function init() {
+              // Paint from SSR data-unread-alarms only — avoid an extra /api/customer-alarms
+              // round-trip on every list page load. Popup + mark-read still refresh the map.
               window.paintCustomerAlarmDots();
-              window.refreshCustomerAlarmsMap();
             }
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
             else init();
@@ -27538,7 +27837,6 @@ async function ensureCustomerWorkflowTables(db: any) {
     completed_by INTEGER,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`).run()
-  try { await db.prepare(`ALTER TABLE customers ADD COLUMN current_workflow_stage_id INTEGER`).run() } catch (_) {}
   await ensureWorkflowPhaseNotesTables(db)
   await ensurePreWorkflowStage(db)
 }
@@ -31502,6 +31800,66 @@ app.post('/api/my-leaves', async (c) => {
 });
 
 // ===============================================
+// MY PROFILE APIs (for all roles — employee self-service)
+// ===============================================
+
+// Get logged-in user's own hr_employee record
+app.get('/api/my-profile', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    const user = await c.env.DB.prepare('SELECT email, full_name FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+
+    const employee = await c.env.DB.prepare(
+      `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
+              id_type, iqama_number, iqama_expiry, department, job_title, hire_date, status
+       FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
+    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+
+    return c.json({ success: true, employeeFound: !!employee, data: employee || null, userName: user.full_name });
+  } catch (error: any) {
+    console.error('Error fetching my profile:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Update logged-in user's own ID details
+app.patch('/api/my-profile', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+
+    const employee = await c.env.DB.prepare(
+      'SELECT id FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+
+    if (!employee) return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+
+    const { id_type, national_id, national_id_expiry, iqama_number, iqama_expiry } = await c.req.json();
+
+    if (id_type === 'national') {
+      await c.env.DB.prepare(
+        `UPDATE hr_employees SET id_type = 'national', national_id = ?, national_id_expiry = ?, iqama_number = NULL, iqama_expiry = NULL, updated_at = datetime('now') WHERE id = ?`
+      ).bind(national_id || null, national_id_expiry || null, employee.id).run();
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE hr_employees SET id_type = 'iqama', iqama_number = ?, iqama_expiry = ?, national_id = NULL, national_id_expiry = NULL, updated_at = datetime('now') WHERE id = ?`
+      ).bind(iqama_number || null, iqama_expiry || null, employee.id).run();
+    }
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating my profile:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
 // HR SALARIES APIs
 // ===============================================
 
@@ -32232,10 +32590,18 @@ async function ensureContractsModuleAccess(
   return null
 }
 
+function withContractsUserRoleHtml(html: string, roleId: number | null | undefined): string {
+  const rid = normalizeRoleId(roleId) ?? 4
+  if (!html.includes('</head>')) return html
+  if (html.includes('window.USER_ROLE_ID=')) return html
+  return html.replace('</head>', `<script>window.USER_ROLE_ID=${rid};</script></head>`)
+}
+
 app.get('/admin/contracts', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
-  return c.html(contractsDashboardPage)
+  const userInfo = await getUserInfo(c)
+  return c.html(withContractsUserRoleHtml(contractsDashboardPage, userInfo.roleId))
 })
 app.get('/admin/contracts/list', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
@@ -32244,7 +32610,7 @@ app.get('/admin/contracts/list', async (c) => {
   let page = contractsListPage
   if (userInfo.roleId === 3) page = markContractsHtmlRole3Restricted(page)
   else if (userInfo.roleId === 5) page = markContractsHtmlRole5HideNewContract(page)
-  return c.html(page)
+  return c.html(withContractsUserRoleHtml(page, userInfo.roleId))
 })
 app.get('/admin/contracts/new', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true, blockRole5Panel: true })
@@ -32349,7 +32715,7 @@ app.get('/admin/contracts/new', async (c) => {
   if (userInfo.roleId === 3) {
     html = markContractsHtmlRole3Restricted(html)
   }
-  return c.html(html)
+  return c.html(withContractsUserRoleHtml(html, userInfo.roleId))
 })
 app.get('/admin/contracts/view', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
@@ -32357,22 +32723,25 @@ app.get('/admin/contracts/view', async (c) => {
   const userInfo = await getUserInfo(c)
   const html =
     userInfo.roleId === 5 ? markContractsHtmlRole5HideNewContract(contractsViewPage) : contractsViewPage
-  return c.html(html)
+  return c.html(withContractsUserRoleHtml(html, userInfo.roleId))
 })
 app.get('/admin/contracts/templates', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'all', { allowRole4: true, blockRole5Panel: true })
   if (denied) return denied
-  return c.html(contractsTemplatesPage)
+  const userInfo = await getUserInfo(c)
+  return c.html(withContractsUserRoleHtml(contractsTemplatesPage, userInfo.roleId))
 })
 app.get('/admin/contracts/notes', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
-  return c.html(contractsNotesPage)
+  const userInfo = await getUserInfo(c)
+  return c.html(withContractsUserRoleHtml(contractsNotesPage, userInfo.roleId))
 })
 app.get('/admin/contracts/archive', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
-  return c.html(contractsArchivePage)
+  const userInfo = await getUserInfo(c)
+  return c.html(withContractsUserRoleHtml(contractsArchivePage, userInfo.roleId))
 })
 app.get('/admin/contracts/settings', async (c) => {
   const userInfo = await getUserInfo(c)
@@ -32599,6 +32968,218 @@ app.get('/admin/my-leaves', (c) => {
 </body>
 </html>`
   return c.html(html)
+})
+
+app.get('/admin/my-profile', (c) => {
+  const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ملفي الشخصي</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f8fafc; color: #1e293b; direction: rtl; }
+    .page-wrapper { max-width: 700px; margin: 40px auto; padding: 0 16px 80px; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #1e40af; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(15,23,42,0.08); padding: 24px; margin-bottom: 24px; }
+    .card h2 { font-size: 1.05rem; font-weight: 600; color: #334155; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+    .info-row { display: flex; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.92rem; }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #64748b; font-weight: 600; min-width: 130px; }
+    .toggle-wrap { display: flex; background: #f1f5f9; border-radius: 8px; padding: 4px; gap: 4px; margin-bottom: 20px; }
+    .toggle-btn { flex: 1; padding: 9px; border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; background: transparent; color: #64748b; transition: all 0.2s; }
+    .toggle-btn.active { background: #fff; color: #1e40af; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+    input { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: #f8fafc; color: #1e293b; transition: border 0.2s; }
+    input:focus { outline: none; border-color: #3b82f6; background: #fff; }
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 22px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: #1e40af; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .expiry-warning { color: #b45309; font-size: 0.8rem; margin-top: 4px; }
+    #nationalFields, #iqamaFields { display: none; }
+    #nationalFields.show, #iqamaFields.show { display: block; }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+  <h1><i class="fas fa-id-card"></i> ملفي الشخصي</h1>
+
+  <div id="pageAlert"></div>
+
+  <div class="card" id="infoCard" style="display:none">
+    <h2><i class="fas fa-user" style="color:#1e40af"></i> بياناتي الوظيفية</h2>
+    <div id="infoRows"></div>
+  </div>
+
+  <div class="card" id="idCard" style="display:none">
+    <h2><i class="fas fa-fingerprint" style="color:#1e40af"></i> الهوية والإقامة</h2>
+    <div id="formAlert"></div>
+
+    <div class="toggle-wrap">
+      <button class="toggle-btn active" id="btnNational" onclick="switchIdType('national')">
+        <i class="fas fa-id-card"></i> هوية وطنية
+      </button>
+      <button class="toggle-btn" id="btnIqama" onclick="switchIdType('iqama')">
+        <i class="fas fa-passport"></i> إقامة
+      </button>
+    </div>
+
+    <form id="idForm">
+      <div id="nationalFields" class="show">
+        <div class="form-group">
+          <label>رقم الهوية الوطنية</label>
+          <input type="text" id="nationalId" placeholder="10 أرقام" maxlength="10">
+        </div>
+        <div class="form-group">
+          <label>تاريخ انتهاء الهوية</label>
+          <input type="date" id="nationalIdExpiry">
+          <div class="expiry-warning" id="nationalExpiryWarn" style="display:none"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
+        </div>
+      </div>
+      <div id="iqamaFields">
+        <div class="form-group">
+          <label>رقم الإقامة</label>
+          <input type="text" id="iqamaNumber" placeholder="رقم الإقامة">
+        </div>
+        <div class="form-group">
+          <label>تاريخ انتهاء الإقامة</label>
+          <input type="date" id="iqamaExpiry">
+          <div class="expiry-warning" id="iqamaExpiryWarn" style="display:none"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <button type="submit" class="btn btn-primary" id="saveBtn">
+          <i class="fas fa-save"></i> حفظ
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(async function() {
+  const auth = { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') } };
+  let currentIdType = 'national';
+
+  function setAlert(el, type, msg) {
+    el.innerHTML = '<div class="alert alert-' + type + '"><i class="fas fa-' + (type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle') + '"></i>' + msg + '</div>';
+  }
+
+  function checkExpiry(dateVal, warnEl) {
+    if (!dateVal) { warnEl.style.display = 'none'; return; }
+    const diff = Math.floor((new Date(dateVal) - new Date()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) {
+      warnEl.style.display = 'block';
+      warnEl.querySelector('span').textContent = 'منتهية الصلاحية';
+    } else if (diff <= 90) {
+      warnEl.style.display = 'block';
+      warnEl.querySelector('span').textContent = 'تنتهي خلال ' + diff + ' يوم';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+
+  document.getElementById('nationalIdExpiry').addEventListener('change', function() {
+    checkExpiry(this.value, document.getElementById('nationalExpiryWarn'));
+  });
+  document.getElementById('iqamaExpiry').addEventListener('change', function() {
+    checkExpiry(this.value, document.getElementById('iqamaExpiryWarn'));
+  });
+
+  window.switchIdType = function(type) {
+    currentIdType = type;
+    document.getElementById('nationalFields').className = type === 'national' ? 'show' : '';
+    document.getElementById('iqamaFields').className = type === 'iqama' ? 'show' : '';
+    document.getElementById('btnNational').className = 'toggle-btn' + (type === 'national' ? ' active' : '');
+    document.getElementById('btnIqama').className = 'toggle-btn' + (type === 'iqama' ? ' active' : '');
+  };
+
+  const res = await fetch('/api/my-profile', auth);
+  const data = await res.json();
+  const pageAlert = document.getElementById('pageAlert');
+
+  if (!data.success) {
+    setAlert(pageAlert, 'error', data.error || 'حدث خطأ');
+    return;
+  }
+
+  if (!data.employeeFound) {
+    setAlert(pageAlert, 'info', 'لم يتم ربط حسابك بسجل موظف بعد. يرجى التواصل مع مدير الموارد البشرية.');
+    return;
+  }
+
+  const emp = data.data;
+
+  // Info card
+  document.getElementById('infoCard').style.display = 'block';
+  document.getElementById('idCard').style.display = 'block';
+  const rows = [
+    ['الاسم', emp.full_name || emp.full_name_ar || '-'],
+    ['البريد الإلكتروني', emp.email || '-'],
+    ['الجوال', emp.phone || '-'],
+    ['القسم', emp.department || '-'],
+    ['المسمى الوظيفي', emp.job_title || '-'],
+    ['تاريخ التعيين', emp.hire_date || '-'],
+    ['الحالة', emp.status === 'active' ? 'نشط' : (emp.status || '-')],
+  ];
+  document.getElementById('infoRows').innerHTML = rows.map(function(r) {
+    return '<div class="info-row"><span class="info-label">' + r[0] + '</span><span>' + r[1] + '</span></div>';
+  }).join('');
+
+  // Prefill ID form
+  const idType = emp.id_type || (emp.iqama_number ? 'iqama' : 'national');
+  switchIdType(idType);
+  if (idType === 'national') {
+    document.getElementById('nationalId').value = emp.national_id || '';
+    document.getElementById('nationalIdExpiry').value = emp.national_id_expiry || '';
+    checkExpiry(emp.national_id_expiry, document.getElementById('nationalExpiryWarn'));
+  } else {
+    document.getElementById('iqamaNumber').value = emp.iqama_number || '';
+    document.getElementById('iqamaExpiry').value = emp.iqama_expiry || '';
+    checkExpiry(emp.iqama_expiry, document.getElementById('iqamaExpiryWarn'));
+  }
+
+  document.getElementById('idForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    const formAlert = document.getElementById('formAlert');
+    formAlert.innerHTML = '';
+
+    const body = { id_type: currentIdType };
+    if (currentIdType === 'national') {
+      body.national_id = document.getElementById('nationalId').value.trim();
+      body.national_id_expiry = document.getElementById('nationalIdExpiry').value || null;
+    } else {
+      body.iqama_number = document.getElementById('iqamaNumber').value.trim();
+      body.iqama_expiry = document.getElementById('iqamaExpiry').value || null;
+    }
+
+    try {
+      const r = await fetch('/api/my-profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') }, body: JSON.stringify(body) });
+      const d = await r.json();
+      if (d.success) {
+        setAlert(formAlert, 'success', 'تم الحفظ بنجاح');
+      } else {
+        setAlert(formAlert, 'error', d.error || 'حدث خطأ');
+      }
+    } catch(err) {
+      setAlert(formAlert, 'error', 'فشل الاتصال بالخادم');
+    }
+    btn.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>`;
+  return c.html(html);
 })
 
 // HR Dashboard Statistics API
@@ -33123,88 +33704,6 @@ app.put('/api/hr/attendance/:id', async (c) => {
   }
 })
 
-// Get All Leaves
-app.get('/api/hr/leaves', async (c) => {
-  try {
-    const userInfo = await getUserInfo(c)
-    const tenantId = userInfo.tenantId
-    
-    const query = tenantId
-      ? `SELECT l.*, e.full_name, e.employee_number, lt.type_name 
-         FROM hr_leaves l 
-         LEFT JOIN hr_employees e ON l.employee_id = e.id 
-         LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
-         WHERE l.tenant_id = ${tenantId} ORDER BY l.request_date DESC`
-      : `SELECT l.*, e.full_name, e.employee_number, lt.type_name 
-         FROM hr_leaves l 
-         LEFT JOIN hr_employees e ON l.employee_id = e.id 
-         LEFT JOIN hr_leave_types lt ON l.leave_type_id = lt.id
-         ORDER BY l.request_date DESC`
-    
-    const { results } = await c.env.DB.prepare(query).all()
-    return c.json({ success: true, data: results })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Add Leave Request
-app.post('/api/hr/leaves', async (c) => {
-  try {
-    const data = await c.req.json()
-    const userInfo = await getUserInfo(c)
-    const tenantId = userInfo.tenantId
-    
-    const result = await c.env.DB.prepare(`
-      INSERT INTO hr_leaves (
-        employee_id, leave_type_id, start_date, end_date, days_count,
-        reason, status, tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      data.employee_id, data.leave_type_id, data.start_date, data.end_date,
-      data.days_count, data.reason, data.status || 'pending', tenantId
-    ).run()
-    
-    return c.json({ success: true, id: result.meta.last_row_id, message: 'تم إضافة طلب الإجازة بنجاح' })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Update Leave Status
-app.put('/api/hr/leaves/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    const { status, rejection_reason, approved_by } = await c.req.json()
-    
-    await c.env.DB.prepare(`
-      UPDATE hr_leaves SET status = ?, rejection_reason = ?, approved_by = ?, approval_date = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(status, rejection_reason, approved_by, id).run()
-    
-    return c.json({ success: true, message: 'تم تحديث حالة الإجازة بنجاح' })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Update Salary Payment Status (alternative endpoint)
-app.put('/api/hr/salaries/:id/pay', async (c) => {
-  try {
-    const id = c.req.param('id')
-    
-    await c.env.DB.prepare(`
-      UPDATE hr_salaries SET payment_status = 'paid', payment_date = date('now')
-      WHERE id = ?
-    `).bind(id).run()
-    
-    return c.json({ success: true, message: 'تم تحديث حالة الدفع بنجاح' })
-  } catch (error: any) {
-    console.error('Error updating salary payment:', error)
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
 // Test login endpoint (simplified)
 app.post('/api/test/login', async (c) => {
   try {
@@ -33352,11 +33851,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       locationIdForFollowup = locRow.id
     }
 
-    // Ensure new columns exist (safe no-op if already present)
-    for (const stmt of [
-      `ALTER TABLE company_contact_followups ADD COLUMN location_id INTEGER`,
-      `ALTER TABLE company_contact_followups ADD COLUMN custom_fields_data TEXT`,
-    ]) { try { await c.env.DB.prepare(stmt).run() } catch (_) {} }
+    // Columns location_id / custom_fields_data are applied via migrations (not runtime ALTER).
 
     let insertFollowupResult: any
     insertFollowupResult = await c.env.DB.prepare(`
@@ -34661,8 +35156,8 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
     const scheduledAtHijri = String(payload?.scheduled_at_hijri ?? '').trim() || null
 
     const followup = await c.env.DB.prepare(`
-      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
-    `).bind(followupId).first()
+      SELECT id, tenant_id, customer_name FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(followupId).first<{ id: number; tenant_id: number; customer_name?: string | null }>()
 
     if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
     if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
@@ -34709,6 +35204,14 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
         followup.tenant_id
       ).run()
 
+      if (assignedUserId != null) {
+        const notifMsg = followup.customer_name ? `متابعة: ${followup.customer_name}` : taskTitle
+        await c.env.DB.prepare(
+          `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, is_read)
+           VALUES (?, ?, ?, ?, 'info', 'followup_task', 0)`
+        ).bind(assignedUserId, followup.tenant_id, 'مهمة متابعة جديدة', notifMsg).run()
+      }
+
       return c.json({ success: true, message: 'تم حفظ تغييرات المهمة' })
     }
 
@@ -34721,6 +35224,14 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
       followupId, followup.tenant_id, taskTitle, scheduledAt,
       scheduledAtHijri, assignedUserId, priority, userInfo.userId
     ).run()
+
+    if (assignedUserId != null) {
+      const notifMsg = followup.customer_name ? `متابعة: ${followup.customer_name}` : taskTitle
+      await c.env.DB.prepare(
+        `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, is_read)
+         VALUES (?, ?, ?, ?, 'info', 'followup_task', 0)`
+      ).bind(assignedUserId, followup.tenant_id, 'مهمة متابعة جديدة', notifMsg).run()
+    }
 
     return c.json({ success: true, message: 'تم إنشاء المهمة' })
   } catch (error: any) {
@@ -35372,7 +35883,11 @@ app.get('/admin/my-tasks', async (c) => {
         function formatDate(value) {
           const d = new Date(value);
           if (Number.isNaN(d.getTime())) return '-';
-          return d.toLocaleString('ar-SA');
+          return d.toLocaleString('ar-SA', {
+            timeZone: 'Asia/Riyadh',
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+          });
         }
 
         function isCompleted(task) {
@@ -36072,9 +36587,85 @@ app.get('/api/link-stats', async (c) => {
     }
 
     if (link === 'all') {
-      const overview = []
-      for (const item of links) overview.push(await buildLinkStats(item, false))
-      return c.json({ success: true, links, overview })
+      // Batched overview: avoid N× sequential D1 round-trips per affiliate link.
+      // Fall back to per-link stats if the aggregate query fails (D1/SQLite quirks).
+      try {
+        let visitDateClause = ''
+        const visitParams: any[] = [tenantId]
+        if (from) { visitDateClause += ' AND visit_date >= ?'; visitParams.push(from) }
+        if (to) { visitDateClause += ' AND visit_date <= ?'; visitParams.push(to) }
+
+        const pathKeyExpr = `CASE
+            WHEN f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '' THEN ''
+            ELSE TRIM(f.affiliate_path_segment)
+          END`
+
+        const [visitAgg, subAgg] = await Promise.all([
+          c.env.DB.prepare(`
+            SELECT affiliate_link_id AS id, COALESCE(SUM(visit_count), 0) AS visits
+            FROM contact_link_visits
+            WHERE tenant_id = ?${visitDateClause}
+            GROUP BY affiliate_link_id
+          `).bind(...visitParams).all<{ id: number; visits: number }>().catch(() => ({ results: [] as any[] })),
+          c.env.DB.prepare(`
+            SELECT
+              ${pathKeyExpr} AS path_key,
+              COUNT(*) AS submissions,
+              SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM customers customer
+                WHERE customer.tenant_id = f.tenant_id AND customer.phone = f.customer_phone
+              ) THEN 1 ELSE 0 END) AS enrolled
+            FROM company_contact_followups f
+            WHERE f.tenant_id = ?${dateClause}
+            GROUP BY ${pathKeyExpr}
+          `).bind(tenantId, ...dateParams).all<{ path_key: string; submissions: number; enrolled: number }>(),
+        ])
+
+        const visitsById = new Map<number, number>()
+        for (const row of visitAgg.results || []) visitsById.set(Number(row.id), Number(row.visits) || 0)
+
+        const pathToLinkId = new Map<string, number>()
+        for (const item of links) {
+          if (item.id === 0) pathToLinkId.set('', 0)
+          else pathToLinkId.set(String(item.path_segment || '').trim(), item.id)
+        }
+
+        const subsById = new Map<number, { submissions: number; enrolled: number }>()
+        for (const row of subAgg.results || []) {
+          const key = String(row.path_key || '').trim()
+          const id = pathToLinkId.has(key) ? pathToLinkId.get(key)! : -1
+          if (id < 0) continue
+          const prev = subsById.get(id) || { submissions: 0, enrolled: 0 }
+          subsById.set(id, {
+            submissions: prev.submissions + (Number(row.submissions) || 0),
+            enrolled: prev.enrolled + (Number(row.enrolled) || 0),
+          })
+        }
+
+        const overview = links.map((item) => {
+          const visits = visitsById.get(item.id) || 0
+          const subs = subsById.get(item.id) || { submissions: 0, enrolled: 0 }
+          const total = subs.submissions
+          const enrolled = subs.enrolled
+          return {
+            id: item.id,
+            label: item.label,
+            visits,
+            submissions: total,
+            enrolled,
+            not_enrolled: total - enrolled,
+            conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
+            unassigned: Number(item.unassigned_limit_count || 0),
+          }
+        })
+        return c.json({ success: true, links, overview })
+      } catch {
+        const overview = []
+        for (const item of links) {
+          overview.push(await buildLinkStats(item, false))
+        }
+        return c.json({ success: true, links, overview })
+      }
     }
     const linkId = link === 'company' ? 0 : parseInt(link, 10)
     const target = links.find((item) => item.id === linkId)
@@ -36093,7 +36684,7 @@ app.get('/admin/link-stats', async (c) => {
   return c.html(`<!doctype html>
   <html lang="ar" dir="rtl"><head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>إحصائيات الروابط</title>
+        <title>إحصائيات الروابط</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
@@ -36128,29 +36719,29 @@ app.get('/admin/link-stats', async (c) => {
         <section id="detail" class="hidden">
           <div class="grid lg:grid-cols-5 gap-5 mt-6">
             <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-5 metric-glow"><div class="flex justify-between items-center mb-4"><div><h2 class="font-black">حركة الرابط</h2><p class="text-xs text-slate-500 mt-1">الزيارات مقابل الطلبات المستلمة</p></div><span id="linkBadge" class="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full"></span></div><div class="h-72"><canvas id="trend"></canvas></div></div>
-            <div class="lg:col-span-2 rounded-2xl p-6 bg-gradient-to-br from-teal-700 via-teal-700 to-cyan-800 text-white metric-glow"><p class="text-teal-100 text-sm">قمع التحويل</p><div class="mt-6 space-y-5" id="funnel"></div><p class="text-xs text-teal-100/80 mt-6">العملاء المسجّلون يُطابقون حسب رقم الجوال.</p></div>
+            <div class="lg:col-span-2 rounded-2xl p-6 bg-gradient-to-br from-teal-700 via-teal-700 to-cyan-800 text-white metric-glow"><p class="text-teal-100 text-sm">قمع التحويل</p><div class="mt-6 space-y-5" id="funnel"></div><p class="text-xs text-teal-100/80 mt-6">طلب ← عميل: الطلب أصبح عميلاً مسجّلاً في جدول العملاء (مطابقة برقم الجوال).</p></div>
           </div>
           <div class="grid lg:grid-cols-5 gap-5 mt-6">
             <section class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">توزيع الفريق</h2><p class="text-xs text-slate-500 mt-1">مهام المتابعة لكل مستخدم</p></div><div id="users" class="divide-y divide-slate-100"></div></section>
-            <section class="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة العملاء</h2><p class="text-xs text-slate-500 mt-1">طلبات الرابط خلال الفترة المحددة</p></div><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div><div class="px-5 pt-4 flex gap-2"><button data-tab="enrolled" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">مسجّلون <span id="enrolledCount"></span></button><button data-tab="pending" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير مسجّلين <span id="pendingCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div></section>
+            <section class="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة الطلبات</h2><p class="text-xs text-slate-500 mt-1">طلبات الرابط خلال الفترة المحددة</p></div><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div><div class="px-5 pt-4 flex gap-2"><button data-tab="assigned" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">معيّن <span id="assignedCount"></span></button><button data-tab="unassigned" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير معيّن <span id="unassignedCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div></section>
           </div>
         </section>
         <section id="overview" class="hidden mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">مقارنة أداء الروابط</h2><p class="text-xs text-slate-500 mt-1">اختر أي صف للانتقال إلى تفاصيل الرابط.</p></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-4 text-right">الرابط</th><th class="p-4">الزيارات</th><th class="p-4">الطلبات</th><th class="p-4">المسجّلون</th><th class="p-4">التحويل</th><th class="p-4">غير معيّن</th><th></th></tr></thead><tbody id="overviewRows"></tbody></table></div></section>
       </div>
     </main>
     <script>
-      const IS_SUPER=${isSuper ? 'true' : 'false'}; let range=30, chart, data, customerTab='enrolled';
+      const IS_SUPER=${isSuper ? 'true' : 'false'}; let range=30, chart, data, customerTab='assigned';
       const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
       function dateRange(){ if(range==='all')return {}; const to=new Date(), from=new Date();from.setDate(to.getDate()-Number(range)+1); return {from:from.toISOString().slice(0,10),to:to.toISOString().slice(0,10)}}
       function kpi(label,value,icon,color,sub=''){return '<div class="stat-card border border-slate-200 rounded-2xl p-4 metric-glow"><div class="flex justify-between"><span class="w-10 h-10 rounded-xl flex items-center justify-center '+color+'"><i class="fas '+icon+'"></i></span><span class="text-xs text-slate-400">'+sub+'</span></div><div class="mt-5 text-2xl font-black">'+value+'</div><div class="text-xs font-bold text-slate-500 mt-1">'+label+'</div></div>'}
       function renderCustomers(){
         if(!data?.stats)return;
         const term=($('search').value||'').toLowerCase();
-        const rows=data.stats.customers.filter(x=>(customerTab==='enrolled')===Boolean(x.is_enrolled)).filter(x=>(x.customer_name+' '+x.customer_phone).toLowerCase().includes(term));
+        const rows=data.stats.customers.filter(x=>(customerTab==='assigned')===Boolean(x.assigned_user_id)).filter(x=>(x.customer_name+' '+x.customer_phone).toLowerCase().includes(term));
         const staff=data.stats.followup_staff||[];
         function selectOptions(items,current){return '<option value="">غير معيّن</option>'+items.map(u=>'<option value="'+u.id+'" '+(Number(current)===Number(u.id)?'selected':'')+'>'+esc(u.full_name)+(Number(u.role_id)===6?' (مزدوج)':Number(u.role_id)===5?' (وكيل)':'')+'</option>').join('')}
         $('customers').innerHTML=rows.length?rows.map(x=>{
-          return '<tr class="border-b last:border-0 '+(x.is_enrolled?'':'bg-amber-50/50')+'"><td class="py-3 font-bold">'+esc(x.customer_name)+'</td><td class="py-3 text-right" dir="rtl">'+esc(x.customer_phone)+'</td><td class="py-3"><select data-followup-assignment data-followup-id="'+x.id+'" data-task-title="'+esc(x.task_title||'')+'" data-task-schedule="'+esc(x.scheduled_at_gregorian||'')+'" data-task-hijri="'+esc(x.scheduled_at_hijri||'')+'" data-task-priority="'+esc(x.priority||'regular')+'" class="min-w-[9rem] rounded-lg border-slate-200 text-xs px-2 py-1.5 bg-white">'+selectOptions(staff,x.assigned_user_id)+'</select></td><td class="py-3 text-slate-400">'+new Date(x.created_at).toLocaleDateString('ar-SA')+'</td></tr>'
+          return '<tr class="border-b last:border-0 '+(x.assigned_user_id?'':'bg-amber-50/50')+'"><td class="py-3 font-bold">'+esc(x.customer_name)+(x.is_enrolled?' <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">عميل</span>':'')+'</td><td class="py-3 text-right" dir="rtl">'+esc(x.customer_phone)+'</td><td class="py-3"><select data-followup-assignment data-followup-id="'+x.id+'" data-task-title="'+esc(x.task_title||'')+'" data-task-schedule="'+esc(x.scheduled_at_gregorian||'')+'" data-task-hijri="'+esc(x.scheduled_at_hijri||'')+'" data-task-priority="'+esc(x.priority||'regular')+'" class="min-w-[9rem] rounded-lg border-slate-200 text-xs px-2 py-1.5 bg-white">'+selectOptions(staff,x.assigned_user_id)+'</select></td><td class="py-3 text-slate-400">'+new Date(x.created_at).toLocaleDateString('ar-SA')+'</td></tr>'
         }).join(''):'<tr><td colspan="4" class="py-10 text-center text-slate-400">لا توجد نتائج</td></tr>';
         document.querySelectorAll('[data-followup-assignment]').forEach(el=>el.onchange=async function(){
           const previous=el.dataset.previousValue||'';
@@ -36178,7 +36769,7 @@ app.get('/admin/link-stats', async (c) => {
         });
         document.querySelectorAll('[data-followup-assignment]').forEach(el=>{el.dataset.previousValue=el.value});
       }
-      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','مطابقة الجوال')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const enrolled=s.customers.filter(x=>x.is_enrolled).length;$('enrolledCount').textContent='('+enrolled+')';$('pendingCount').textContent='('+ (s.customers.length-enrolled)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
+      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const assigned=s.customers.filter(x=>x.assigned_user_id).length;$('assignedCount').textContent='('+assigned+')';$('unassignedCount').textContent='('+ (s.customers.length-assigned)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
       async function load(){
         const tenant=IS_SUPER?$('tenant').value:'';
         if(IS_SUPER&&!tenant)return;
@@ -38301,7 +38892,11 @@ app.get('/admin/follow-ups', async (c) => {
         function formatDate(value) {
           const d = new Date(value);
           if (Number.isNaN(d.getTime())) return '-';
-          return d.toLocaleString('ar-SA');
+          return d.toLocaleString('ar-SA', {
+            timeZone: 'Asia/Riyadh',
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+          });
         }
 
         function formatGregorianDateTime(date) {
@@ -39080,7 +39675,7 @@ app.get('/:slug/:locationSlug/:affiliatePath', async (c) => {
     return c.notFound()
   }
 
-  if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, affiliate.id)
+  await recordContactLinkVisitWithDedup(c, c.env.DB, tenant.id, affiliate.id)
   const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
   const merged = mergePublicContactForLocation(tenant, location, primary)
   return c.html(
@@ -39122,7 +39717,7 @@ app.get('/:slug/:secondSegment', async (c) => {
     .first<AffiliateContactLinkRow>()
 
   if (affiliate) {
-    if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, affiliate.id)
+    await recordContactLinkVisitWithDedup(c, c.env.DB, tenant.id, affiliate.id)
     return c.html(buildPublicContactPageHtml(withAffiliateContactDesign(tenant, affiliate), affiliate))
   }
 
@@ -39150,7 +39745,7 @@ app.get('/:slug/:secondSegment', async (c) => {
 
   const primary = await fetchPrimaryTenantLocation(c.env.DB, tenant.id)
   const merged = mergePublicContactForLocation(tenant, location, primary)
-  if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, null)
+  await recordContactLinkVisitWithDedup(c, c.env.DB, tenant.id, null)
   return c.html(buildPublicContactPageHtml(merged, null, { locationSlug: location.slug }))
 })
 
@@ -39172,7 +39767,7 @@ app.get('/:slug', async (c) => {
     return c.notFound()
   }
 
-  if (isAnonymousPublicContactView(c)) await recordContactLinkVisit(c.env.DB, tenant.id, null)
+  await recordContactLinkVisitWithDedup(c, c.env.DB, tenant.id, null)
   return c.html(buildPublicContactPageHtml(tenant, null))
 })
 
@@ -39199,10 +39794,6 @@ const RATING_REMINDER_LABELS: Record<number, string> = {
 }
 
 async function processCustomerReminders(db: D1Database): Promise<{ created: number; skipped: number }> {
-  // Ensure the columns exist (same lazy-migrate pattern as insertWorkflowCrossPartyAlarms).
-  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
-  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
-
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
 
@@ -39260,56 +39851,113 @@ async function processCustomerReminders(db: D1Database): Promise<{ created: numb
   const todayMidnight = new Date(today)
   todayMidnight.setHours(0, 0, 0, 0)
 
+  const candidates: Array<{
+    customer_id: number
+    customer_name: string
+    user_id: number
+    tenant_id: number
+    rating: number
+    cycleStartStr: string
+    note: string
+  }> = []
+
   for (const row of customers as any[]) {
     const interval = RATING_REMINDER_INTERVALS[row.rating as number]
     if (!interval) { skipped++; continue }
 
-    // Anchor the cycle to the rating date, not to the last reminder.
-    // Cycle N fires at: rating_date + N * interval days.
     const ratingDate = new Date(String(row.rating_date))
     ratingDate.setHours(0, 0, 0, 0)
     const daysSinceRating = Math.floor(
       (todayMidnight.getTime() - ratingDate.getTime()) / 86_400_000
     )
 
-    // Too early — first reminder not due yet.
     if (daysSinceRating < interval) { skipped++; continue }
 
-    // Which cycle are we in? When did this cycle start?
     const cycleNumber = Math.floor(daysSinceRating / interval)
     const cycleStart = new Date(ratingDate)
     cycleStart.setDate(cycleStart.getDate() + cycleNumber * interval)
     const cycleStartStr = cycleStart.toISOString().split('T')[0]
 
-    // Don't send another alarm if one was already created within this cycle window.
-    const existing = await db.prepare(`
-      SELECT id FROM customer_alarms
-      WHERE customer_id = ?
-        AND user_id = ?
-        AND note LIKE ?
-        AND alarm_date_gregorian >= ?
-      LIMIT 1
-    `).bind(row.customer_id, row.user_id, `${REMINDER_NOTE_PREFIX}%`, cycleStartStr).first()
-
-    if (existing) { skipped++; continue }
-
     const label = RATING_REMINDER_LABELS[row.rating as number]
     const note = `${REMINDER_NOTE_PREFIX} راجع العميل: ${row.customer_name} - التقييم: ${label} (كل ${interval} أيام)`
-
-    await db.prepare(`
-      INSERT INTO customer_alarms
-        (customer_id, customer_name, alarm_date_gregorian, note, user_id, tenant_id, alarm_type, is_read)
-      VALUES (?, ?, ?, ?, ?, ?, 'reminder', 0)
-    `).bind(
-      row.customer_id,
-      row.customer_name,
-      todayStr,
+    candidates.push({
+      customer_id: row.customer_id,
+      customer_name: row.customer_name,
+      user_id: row.user_id,
+      tenant_id: row.tenant_id,
+      rating: row.rating,
+      cycleStartStr,
       note,
-      row.user_id,
-      row.tenant_id,
-    ).run()
+    })
+  }
 
-    created++
+  if (candidates.length === 0) return { created, skipped }
+
+  // Batch-load existing reminder alarms for candidate pairs to avoid N+1 SELECTs.
+  const minCycleStart = candidates.reduce((min, c) => (c.cycleStartStr < min ? c.cycleStartStr : min), candidates[0].cycleStartStr)
+  const existing = await db.prepare(`
+    SELECT customer_id, user_id, alarm_date_gregorian, note
+    FROM customer_alarms
+    WHERE note LIKE ?
+      AND alarm_date_gregorian >= ?
+  `).bind(`${REMINDER_NOTE_PREFIX}%`, minCycleStart).all<{
+    customer_id: number
+    user_id: number
+    alarm_date_gregorian: string
+    note: string
+  }>()
+
+  const existingKeys = new Set<string>()
+  for (const row of existing.results || []) {
+    existingKeys.add(`${row.customer_id}:${row.user_id}:${row.alarm_date_gregorian}`)
+    // Also key by cycle window: any alarm for pair on/after cycle start
+    existingKeys.add(`${row.customer_id}:${row.user_id}:since:${row.alarm_date_gregorian}`)
+  }
+
+  const toInsert: typeof candidates = []
+  for (const cand of candidates) {
+    let hasExisting = false
+    for (const key of existingKeys) {
+      if (!key.startsWith(`${cand.customer_id}:${cand.user_id}:`)) continue
+      if (key === `${cand.customer_id}:${cand.user_id}:${todayStr}`) { hasExisting = true; break }
+      const sinceMatch = key.match(new RegExp(`^${cand.customer_id}:${cand.user_id}:since:(.+)$`))
+      if (sinceMatch && sinceMatch[1] >= cand.cycleStartStr) { hasExisting = true; break }
+    }
+    // More precise: scan existing.results for this pair with date >= cycleStart
+    if (!hasExisting) {
+      for (const row of existing.results || []) {
+        if (Number(row.customer_id) === Number(cand.customer_id)
+          && Number(row.user_id) === Number(cand.user_id)
+          && String(row.alarm_date_gregorian) >= cand.cycleStartStr) {
+          hasExisting = true
+          break
+        }
+      }
+    }
+    if (hasExisting) { skipped++; continue }
+    toInsert.push(cand)
+  }
+
+  const insertStmt = db.prepare(`
+    INSERT INTO customer_alarms
+      (customer_id, customer_name, alarm_date_gregorian, note, user_id, tenant_id, alarm_type, is_read)
+    VALUES (?, ?, ?, ?, ?, ?, 'reminder', 0)
+  `)
+  for (let i = 0; i < toInsert.length; i += 25) {
+    const chunk = toInsert.slice(i, i + 25)
+    await db.batch(
+      chunk.map((row) =>
+        insertStmt.bind(
+          row.customer_id,
+          row.customer_name,
+          todayStr,
+          row.note,
+          row.user_id,
+          row.tenant_id,
+        )
+      )
+    )
+    created += chunk.length
   }
 
   return { created, skipped }
@@ -39322,10 +39970,8 @@ app.post('/api/customer-reminders/trigger', async (c) => {
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
 
     // Only role 1 (super admin) or role 2 (tenant admin) may trigger this.
-    const user = await c.env.DB.prepare(
-      `SELECT role FROM users WHERE id = ?`
-    ).bind(userInfo.userId).first<{ role: number }>()
-    if (!user || (user.role !== 1 && user.role !== 2)) {
+    const role = normalizeRoleId(userInfo.roleId)
+    if (role !== 1 && role !== 2) {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
 

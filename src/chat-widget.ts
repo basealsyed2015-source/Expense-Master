@@ -1203,3 +1203,69 @@ export function renderChatWidget(userId: number | null = null, roleId: number | 
 </script>
 `
 }
+
+/**
+ * Lightweight launcher only. Full widget HTML is fetched on first open so
+ * every admin page does not pay the full chat payload + background timers.
+ */
+export function renderChatWidgetLazyStub(userId: number | null = null, roleId: number | null = null): string {
+  return `
+<style>
+  #cc-chat-lazy-launcher {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1200;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: #1e40af;
+    color: #fff;
+    font-size: 24px;
+    box-shadow: 0 6px 22px rgba(15,23,42,0.25);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #cc-chat-lazy-launcher:disabled { opacity: 0.7; cursor: wait; }
+</style>
+<button type="button" id="cc-chat-lazy-launcher" title="الدردشة" aria-label="فتح الدردشة">💬</button>
+<script>
+(function(){
+  window.CC_USER_ID = ${userId ? Number(userId) : 'null'};
+  window.CC_ROLE_ID = ${roleId ? Number(roleId) : 'null'};
+  var loading = false;
+  var btn = document.getElementById('cc-chat-lazy-launcher');
+  if (!btn) return;
+  btn.addEventListener('click', async function() {
+    if (loading) return;
+    if (document.getElementById('cc-chat-window') || document.getElementById('cc-chat-launcher')) {
+      var existing = document.getElementById('cc-chat-launcher');
+      if (existing) existing.click();
+      return;
+    }
+    loading = true;
+    btn.disabled = true;
+    try {
+      var res = await fetch('/api/chat/widget-html', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('widget load failed');
+      var html = await res.text();
+      btn.remove();
+      document.body.insertAdjacentHTML('beforeend', html);
+      requestAnimationFrame(function() {
+        var real = document.getElementById('cc-chat-launcher');
+        if (real) real.click();
+      });
+    } catch (e) {
+      console.warn('[chat] lazy widget load failed', e);
+      btn.disabled = false;
+      loading = false;
+      alert('تعذر تحميل الدردشة');
+    }
+  });
+})();
+</script>
+`
+}

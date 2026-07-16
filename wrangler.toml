@@ -18,6 +18,10 @@ bucket_name = "tamweel-calc-r2"
 
 # Company chat DO: deployed via wrangler.chat-do.toml; Pages binds in wrangler.jsonc (script_name).
 # Do not add durable_objects here — wrangler pages deploy uses wrangler.jsonc, not this file.
+#
+# NOTE: Cloudflare Pages does NOT run [triggers].crons below. The scheduled handler in
+# src/index.tsx only runs for Worker deploys. For Pages, use POST /api/customer-reminders/trigger
+# (roles 1/2) or an external cron hitting that endpoint.
 
 # Forgot-password emails use Resend (https://resend.com).
 # This repo deploys as Cloudflare Pages — use Pages secrets, not Workers secrets:

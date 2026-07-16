@@ -548,6 +548,16 @@ async function searchChatCustomersForUser(
 }
 
 export function registerChatModuleApi(app: Hono<any>, getUserInfo: GetUserInfo) {
+  /** Full chat widget HTML fragment — loaded on first click of the lazy launcher. */
+  app.get('/api/chat/widget-html', async (c) => {
+    const info = await getUserInfo(c)
+    if (!info.userId) return c.text('unauthorized', 401)
+    const { renderChatWidget } = await import('./chat-widget')
+    return c.html(renderChatWidget(info.userId, info.roleId ?? null), 200, {
+      'Cache-Control': 'private, no-store',
+    })
+  })
+
   /**
    * Typeahead search for the @-mention picker. Server-side, returns a small
    * result set the user is allowed to tag (canUserAccessCustomer).

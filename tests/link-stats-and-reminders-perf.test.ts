@@ -1,0 +1,26 @@
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+describe('link-stats overview batching', () => {
+  it('avoids sequential per-link overview awaits', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    const idx = src.indexOf("app.get('/api/link-stats'")
+    assert.ok(idx > 0)
+    const slice = src.slice(idx, idx + 30_000)
+    assert.match(slice, /Batched overview/)
+    assert.doesNotMatch(slice, /for \(const item of links\) overview\.push\(await buildLinkStats/)
+  })
+})
+
+describe('customer reminders batching', () => {
+  it('batches reminder inserts instead of per-row SELECT+INSERT', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    const idx = src.indexOf('async function processCustomerReminders')
+    assert.ok(idx > 0)
+    const slice = src.slice(idx, idx + 12_000)
+    assert.match(slice, /db\.batch\(/)
+    assert.doesNotMatch(slice, /ALTER TABLE customer_alarms/)
+  })
+})

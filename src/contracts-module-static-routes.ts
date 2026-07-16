@@ -23,7 +23,8 @@ export function registerContractsStaticRoutes(app: any, getUserInfo: GetUserInfo
     if (!userInfo.userId) return c.newResponse('Unauthorized', 401)
     return c.newResponse(contractsAppJs, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'no-store, must-revalidate'
+      // Version query (?v=) busts cache on deploy; private so shared CDN caches stay empty.
+      'Cache-Control': 'private, max-age=300, stale-while-revalidate=3600',
     })
   })
   app.get('/contracts-module/js/dashboard.js', async (c) => {
@@ -31,7 +32,7 @@ export function registerContractsStaticRoutes(app: any, getUserInfo: GetUserInfo
     if (!userInfo.userId) return c.newResponse('Unauthorized', 401)
     return c.newResponse(contractsDashboardJs, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'no-store, must-revalidate'
+      'Cache-Control': 'private, max-age=300, stale-while-revalidate=3600',
     })
   })
 }

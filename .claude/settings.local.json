@@ -59,7 +59,8 @@
       "Bash(awk 'NR>=21810 && NR<=22230 && /requests\\\\.results|const requests|requests = await|\\\\.all\\\\\\(\\\\\\)/{print NR\": \"substr\\($0,1,180\\)}' src/index.tsx)",
       "Bash(awk 'NR>=21830 && NR<=23120 && /<\\\\/body>/{print NR\": \"$0}' src/index.tsx)",
       "Bash(awk 'NR>=19550 && NR<=19650{print NR\": \"$0}' src/index.tsx)",
-      "Bash(awk 'NR>=19500 && NR<=19556{print NR\": \"$0}' src/index.tsx)"
+      "Bash(awk 'NR>=19500 && NR<=19556{print NR\": \"$0}' src/index.tsx)",
+      "Bash(awk -F: '$1 > 32940 && $1 < 32970')"
     ]
   }
 }

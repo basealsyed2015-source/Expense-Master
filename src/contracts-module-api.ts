@@ -356,8 +356,13 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       rowScopeSql = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBinds = [info.userId, info.userId, info.tenantId]
     }
+    // List cards never need full template HTML bodies (can be hundreds of KB each).
+    const selectCols =
+      table === 'contract_templates'
+        ? 'id, tenant_id, template_name, template_type, variables_list, is_active, court_city, render_mode, stamp_url, created_at'
+        : '*'
     const { results } = await c.env.DB.prepare(
-      `SELECT * FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
+      `SELECT ${selectCols} FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
     )
       .bind(...tbinds, ...rowScopeBinds, limit)
       .all()

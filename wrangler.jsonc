@@ -4,6 +4,17 @@
   "compatibility_date": "2024-12-14",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],
+  // Pages Functions do not run Worker [triggers].crons from wrangler.toml.
+  // The `scheduled` export in src/index.tsx is kept for Worker-compatible deploys;
+  // for Pages, trigger reminders via POST /api/customer-reminders/trigger (admin)
+  // or an external scheduler hitting that endpoint.
+  //
+  // Perf flags: leave OFF in production (defaults below). Set to "1" only when debugging.
+  "vars": {
+    "INLINE_TAILWIND": "0",
+    "DEBUG_AUTH": "0",
+    "PERF_DEBUG": "0"
+  },
   "d1_databases": [
     {
       "binding": "DB",

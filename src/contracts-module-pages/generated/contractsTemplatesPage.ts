@@ -987,7 +987,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
     .template-editor-actions .spacer { flex: 1; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/tinymce@7.6.1/tinymce.min.js" referrerpolicy="origin"></script>
+  <!-- TinyMCE is loaded on demand when the editor opens (keeps list view fast). -->
 </head>
 <body>
 
@@ -1185,7 +1185,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260713"></script>
+  <script src="/contracts-module/js/app.js?v=20260716"></script>
   <script>
     let editingId = null;
     let tplBodyEditorReady = null;
@@ -1322,10 +1322,38 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
-    function ensureTplBodyEditor() {
-      if (typeof tinymce === 'undefined') return Promise.resolve(null);
+    let tinymceScriptReady = null;
+    function loadTinyMceScript() {
+      if (typeof tinymce !== 'undefined') return Promise.resolve();
+      if (tinymceScriptReady) return tinymceScriptReady;
+      tinymceScriptReady = new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-tinymce-loader="1"]');
+        if (existing) {
+          existing.addEventListener('load', () => resolve());
+          existing.addEventListener('error', () => reject(new Error('TinyMCE load failed')));
+          return;
+        }
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/tinymce@7.6.1/tinymce.min.js';
+        s.referrerPolicy = 'origin';
+        s.dataset.tinymceLoader = '1';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('TinyMCE load failed'));
+        document.head.appendChild(s);
+      });
+      return tinymceScriptReady;
+    }
+
+    async function ensureTplBodyEditor() {
+      try {
+        await loadTinyMceScript();
+      } catch (e) {
+        console.warn(e);
+        return null;
+      }
+      if (typeof tinymce === 'undefined') return null;
       const existing = tinymce.get('tpl_body');
-      if (existing) return Promise.resolve(existing);
+      if (existing) return existing;
       if (tplBodyEditorReady) return tplBodyEditorReady;
       tplBodyEditorReady = new Promise((resolve) => {
         tinymce.init({

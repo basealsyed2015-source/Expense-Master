@@ -1048,8 +1048,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/contracts-module/js/app.js?v=20260713"></script>
-  <script src="/contracts-module/js/dashboard.js?v=20260713"></script>
+  <script src="/contracts-module/js/app.js?v=20260716"></script>
+  <script src="/contracts-module/js/dashboard.js?v=20260716"></script>
 </body>
 </html>
 `
