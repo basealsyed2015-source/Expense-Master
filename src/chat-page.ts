@@ -1026,12 +1026,23 @@ window.CC_USER_ID = ${userId};
 
   attInput.addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
-    if (!file || !currentConv) return;
+    if (!file) return;
+    if (!currentConv) { alert('افتح محادثة أولاً لإرسال مرفق'); attInput.value = ''; return; }
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch('/api/chat/conversations/' + currentConv + '/attachments', { method:'POST', credentials:'same-origin', body: fd });
-    const d = await res.json().catch(()=>({}));
-    if (d.success){ appendIfNew(d.message); }
+    try {
+      const res = await fetch('/api/chat/conversations/' + currentConv + '/attachments', { method:'POST', credentials:'same-origin', body: fd });
+      const d = await res.json().catch(()=>({}));
+      if (d.success && d.message){ appendIfNew(d.message); }
+      else {
+        const err = d.error || ('HTTP ' + res.status);
+        alert(err === 'too large' ? 'الملف أكبر من 10 ميجابايت' : err === 'mime not allowed' ? 'نوع الملف غير مدعوم' : 'تعذر رفع المرفق');
+        console.warn('[chat] attachment upload failed', err);
+      }
+    } catch (err) {
+      console.warn('[chat] attachment upload error', err);
+      alert('تعذر رفع المرفق');
+    }
     attInput.value = '';
   });
 

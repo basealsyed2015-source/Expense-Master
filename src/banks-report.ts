@@ -1,4 +1,5 @@
 import { HTML_CSV_PREFIX, HTML_CSV_UTF16_DOWNLOAD_SCRIPT } from './csv-export'
+import { REPORT_PRINT_CSS, reportPdfButtonHtml } from './reports-module'
 
 export const banksReportPage = `
 <!DOCTYPE html>
@@ -11,10 +12,7 @@ export const banksReportPage = `
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        @media print {
-            .no-print { display: none !important; }
-            body { background: white !important; }
-        }
+        ${REPORT_PRINT_CSS}
         .stat-card {
             transition: all 0.3s ease;
         }
@@ -37,11 +35,8 @@ export const banksReportPage = `
                     تقرير البنوك الشامل
                 </h1>
             </div>
-            <div class="space-x-2 space-x-reverse">
-                <button onclick="window.print()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                    <i class="fas fa-print ml-2"></i>
-                    طباعة
-                </button>
+            <div class="flex items-center gap-2 flex-wrap">
+                ${reportPdfButtonHtml('bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition-all flex items-center gap-2')}
                 <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                     <i class="fas fa-file-excel ml-2"></i>
                     تصدير Excel

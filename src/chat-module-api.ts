@@ -41,6 +41,23 @@ function isAllowedMime(mime: string): boolean {
   return ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p))
 }
 
+/** Browsers sometimes send an empty Content-Type; infer from extension. */
+function inferMime(file: File): string {
+  if (file.type) return file.type
+  const name = (file.name || '').toLowerCase()
+  if (/\.(jpe?g)$/.test(name)) return 'image/jpeg'
+  if (/\.png$/.test(name)) return 'image/png'
+  if (/\.gif$/.test(name)) return 'image/gif'
+  if (/\.webp$/.test(name)) return 'image/webp'
+  if (/\.heic$/.test(name)) return 'image/heic'
+  if (/\.heif$/.test(name)) return 'image/heif'
+  if (/\.pdf$/.test(name)) return 'application/pdf'
+  if (/\.txt$/.test(name)) return 'text/plain'
+  if (/\.docx$/.test(name)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (/\.doc$/.test(name)) return 'application/msword'
+  return 'application/octet-stream'
+}
+
 async function ensureConversationAccess(
   db: D1Database,
   conversationId: number,
@@ -889,10 +906,13 @@ export function registerChatModuleApi(app: Hono<any>, getUserInfo: GetUserInfo) 
 
     const form = await c.req.formData().catch(() => null)
     if (!form) return c.json({ success: false, error: 'invalid form' }, 400)
-    const file = form.get('file') as File | null
-    if (!file) return c.json({ success: false, error: 'no file' }, 400)
-    if (file.size > MAX_ATTACHMENT_BYTES) return c.json({ success: false, error: 'too large' }, 400)
-    const mime = file.type || 'application/octet-stream'
+    const file = form.get('file')
+    if (!file || typeof file === 'string' || typeof (file as File).arrayBuffer !== 'function') {
+      return c.json({ success: false, error: 'no file' }, 400)
+    }
+    const upload = file as File
+    if (upload.size > MAX_ATTACHMENT_BYTES) return c.json({ success: false, error: 'too large' }, 400)
+    const mime = inferMime(upload)
     if (!isAllowedMime(mime)) return c.json({ success: false, error: 'mime not allowed' }, 400)
 
     const now = new Date().toISOString()
@@ -903,14 +923,26 @@ export function registerChatModuleApi(app: Hono<any>, getUserInfo: GetUserInfo) 
       .bind(conversationId, info.tenantId, info.userId, null, '{}', now)
       .run()
     const messageId = Number((ins as any).meta?.last_row_id || 0)
+    if (!messageId) return c.json({ success: false, error: 'insert failed' }, 500)
 
-    const safeName = (file.name || 'file').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120)
+    const safeName = (upload.name || 'file').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120)
     const key = `chat/${info.tenantId}/${conversationId}/${messageId}/${safeName}`
-    await env.ATTACHMENTS.put(key, file.stream(), {
-      httpMetadata: { contentType: mime },
-    })
+    try {
+      // file.stream() fails on Workers R2 ("stream must have a known length");
+      // arrayBuffer matches /api/attachments/upload and other R2 puts in this app.
+      const bytes = await upload.arrayBuffer()
+      await env.ATTACHMENTS.put(key, bytes, {
+        httpMetadata: { contentType: mime },
+      })
+    } catch (err) {
+      console.error('[chat] attachment R2 put failed', err)
+      try {
+        await env.DB.prepare(`DELETE FROM chat_messages WHERE id = ?`).bind(messageId).run()
+      } catch {}
+      return c.json({ success: false, error: 'upload failed' }, 500)
+    }
 
-    const attachment = { key, name: safeName, mime, size: file.size }
+    const attachment = { key, name: safeName, mime, size: upload.size }
     await env.DB.prepare(`UPDATE chat_messages SET attachment_json = ? WHERE id = ?`)
       .bind(JSON.stringify(attachment), messageId)
       .run()
@@ -1371,7 +1403,8 @@ export function registerChatModuleApi(app: Hono<any>, getUserInfo: GetUserInfo) 
             try {
               const obj = await env.ATTACHMENTS.get(parsedMeta.key)
               if (obj) {
-                await env.ATTACHMENTS.put(newKey, obj.body as any, {
+                const bytes = await obj.arrayBuffer()
+                await env.ATTACHMENTS.put(newKey, bytes, {
                   httpMetadata: { contentType: parsedMeta.mime },
                 })
               }

@@ -80,11 +80,20 @@ import {
 } from './bank-tenant-uniqueness'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
-import { clicksReportPage, workflowReportPage, employeePerformanceReportPage } from './reports-pages'
+import { workflowReportPage, employeePerformanceReportPage } from './reports-pages'
+import {
+  hrReportPage,
+  contractsReportPage,
+  tenantsReportPage,
+  REPORT_FLATPICKR_HEAD as _rfFlatpickrHead,
+  reportFilterBarHtml as _rfFilterBar,
+  REPORT_FILTER_BASE_JS as _rfBaseJs,
+} from './reports-module'
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrEmployeeViewPage, hrEmployeeEditPage, hrAttendancePage } from './hr-complete-system'
 import {
   hrLeavesPage,
+  hrTicketsPage,
   hrSalariesPage,
   hrPerformancePage,
   hrPromotionsPage,
@@ -1629,6 +1638,38 @@ async function recordContactLinkVisitWithDedup(
   c.header('Set-Cookie', `${cookieName}=1; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax`)
 }
 
+async function recordContactLinkFormInitiation(
+  db: D1Database,
+  tenantId: number,
+  affiliateLinkId: number | null
+): Promise<void> {
+  try {
+    await db.prepare(`
+      INSERT INTO contact_link_form_initiations (tenant_id, affiliate_link_id, initiation_date, initiation_count)
+      VALUES (?, ?, date('now'), 1)
+      ON CONFLICT(tenant_id, affiliate_link_id, initiation_date)
+      DO UPDATE SET initiation_count = initiation_count + 1
+    `).bind(tenantId, affiliateLinkId ?? 0).run()
+  } catch (_) {
+    // Do not block the public contact form while a migration is being deployed.
+  }
+}
+
+/** Records a unique form initiation (per browser, per day) when the visitor first types in a field. */
+async function recordContactLinkFormInitiationWithDedup(
+  c: any,
+  db: D1Database,
+  tenantId: number,
+  affiliateLinkId: number | null
+): Promise<void> {
+  if (!isAnonymousPublicContactView(c)) return
+  const cookieName = `vfi_${affiliateLinkId ?? 0}`
+  const cookieHeader = String(c.req.header('Cookie') ?? '')
+  if (hasCookie(cookieHeader, cookieName)) return
+  await recordContactLinkFormInitiation(db, tenantId, affiliateLinkId)
+  c.header('Set-Cookie', `${cookieName}=1; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax`)
+}
+
 /**
  * Parse contact page design fields from a PATCH/POST body.
  * Only keys present on `body` are included in `updates`.
@@ -2061,6 +2102,17 @@ function buildPublicContactPageHtml(
         const form = document.getElementById('contactForm');
         const statusEl = document.getElementById('formStatus');
         const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('input', () => {
+          const payload = {};
+          if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
+          fetch('/api/public/${tenant.slug}/contact-form-initiations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            keepalive: true,
+          }).catch(() => {});
+        }, { once: true });
 
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -2730,6 +2782,11 @@ app.use('/api/*', async (c, next) => {
   }
   // Own leave history/submit (scoped in handler by user → hr_employees email)
   if (p === '/api/my-leaves' && (method === 'GET' || method === 'POST')) {
+    await next()
+    return
+  }
+  // Own tickets history/submit (scoped in handler by user → hr_employees email)
+  if (p === '/api/my-tickets' && (method === 'GET' || method === 'POST')) {
     await next()
     return
   }
@@ -3675,6 +3732,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts/list',
     '/admin/follow-ups',
     '/admin/my-leaves',
+    '/admin/my-hr',
     '/admin/my-profile',
     '/calculator',
     '/',
@@ -3693,6 +3751,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
+    '/admin/my-hr',
     '/admin/my-profile',
     '/calculator',
     '/',
@@ -3713,6 +3772,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
+    '/admin/my-hr',
     '/admin/my-profile',
     '/calculator',
     '/',
@@ -3735,6 +3795,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-tasks',
     '/my-tasks',
     '/admin/my-leaves',
+    '/admin/my-hr',
     '/admin/my-profile',
     '/calculator',
     '/',
@@ -4029,7 +4090,29 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
       </div>
     </div>
     <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>الإعلانات</a>
-    <a href="/admin/reports"><i class="fas fa-chart-line"></i>التقارير</a>
+    <div class="gps-collapsible" data-reports-collapsible>
+      <div class="gps-collapsible-row">
+        <a href="/admin/reports" class="gps-collapsible-main">
+          <i class="fas fa-chart-line"></i>
+          <span>التقارير</span>
+        </a>
+        <button type="button" class="gps-collapsible-arrow" data-reports-toggle aria-label="توسيع أو طي قائمة التقارير">
+          <i class="fas fa-chevron-down gps-chevron"></i>
+        </button>
+      </div>
+      <div class="gps-submenu">
+        <a href="/admin/reports/customers"><i class="fas fa-users"></i>تقرير العملاء</a>
+        <a href="/admin/reports/requests"><i class="fas fa-file-alt"></i>تقرير الطلبات</a>
+        <a href="/admin/reports/financial"><i class="fas fa-coins"></i>تقرير مالي</a>
+        <a href="/admin/reports/banks"><i class="fas fa-university"></i>تقرير البنوك</a>
+        <a href="/admin/reports/performance"><i class="fas fa-chart-bar"></i>تقرير الأداء</a>
+        <a href="/admin/reports/employee-performance"><i class="fas fa-user-tie"></i>أداء الموظفين</a>
+        <a href="/admin/reports/hr"><i class="fas fa-users-cog"></i>تقرير الموارد البشرية</a>
+        <a href="/admin/reports/contracts"><i class="fas fa-file-signature"></i>تقرير العقود</a>
+        <a href="/admin/reports/workflow" data-superadmin-only="true"><i class="fas fa-project-diagram"></i>تقرير سير العمل</a>
+        <a href="/admin/reports/tenants" data-superadmin-only="true"><i class="fas fa-globe"></i>تقرير الشركات</a>
+      </div>
+    </div>
     <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>التسويق</a>
     <div class="gps-collapsible" data-followups-collapsible>
       <div class="gps-collapsible-row">
@@ -4055,7 +4138,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <a href="/admin/tenants" data-superadmin-only="true"><i class="fas fa-building"></i>إدارة الشركات</a>
     <a href="/admin/settings" data-superadmin-only="true"><i class="fas fa-cog"></i>إعدادات النظام</a>
     <a href="/admin/hr"><i class="fas fa-users-cog"></i>الموارد البشرية</a>
-    <a href="/admin/my-leaves"><i class="fas fa-calendar-alt"></i>طلبات إجازتي</a>
+    <a href="/admin/my-hr"><i class="fas fa-id-badge"></i>خدمات الموظف</a>
     <a href="/admin/my-profile"><i class="fas fa-id-card"></i>ملفي الشخصي</a>
     <a href="/admin/contracts"><i class="fas fa-file-contract"></i>إدارة العقود</a>
     <hr class="gps-divider">
@@ -4432,11 +4515,15 @@ ${isAdminPanelRail ? `
       if (!toggle) {
         toggle = event.target.closest('#global-persistent-sidebar [data-followups-collapsible] [data-followups-toggle]');
       }
+      if (!toggle) {
+        toggle = event.target.closest('#global-persistent-sidebar [data-reports-collapsible] [data-reports-toggle]');
+      }
       if (!toggle) return;
       var wrapper =
         toggle.closest('[data-customers-collapsible]') ||
         toggle.closest('[data-requests-collapsible]') ||
-        toggle.closest('[data-followups-collapsible]');
+        toggle.closest('[data-followups-collapsible]') ||
+        toggle.closest('[data-reports-collapsible]');
       if (!wrapper) return;
       event.preventDefault();
       event.stopPropagation();
@@ -4579,6 +4666,7 @@ app.use('/admin/*', async (c, next) => {
       pathname === '/admin/my-tasks' ||
       pathname === '/my-tasks' ||
       pathname === '/admin/my-leaves' ||
+      pathname === '/admin/my-hr' ||
       pathname === '/admin/my-profile' ||
       pathname.startsWith('/admin/contracts') ||
       pathname === '/admin/contact-affiliates' ||
@@ -13753,6 +13841,8 @@ app.get('/api/reports/requests-followup', async (c) => {
       LEFT JOIN tenants t ON t.id = c.tenant_id
     `
 
+    const rfStartDate = c.req.query('start_date')
+    const rfEndDate   = c.req.query('end_date')
     const queryParams: unknown[] = []
     if (listRoleEffective === 1) {
       if (tenant_id) {
@@ -13770,6 +13860,8 @@ app.get('/api/reports/requests-followup', async (c) => {
       query += ' WHERE 1 = 0'
     }
 
+    if (rfStartDate) { query += (query.includes('WHERE') ? ' AND' : ' WHERE') + ' fr.created_at >= ?'; queryParams.push(rfStartDate) }
+    if (rfEndDate)   { query += ' AND fr.created_at <= ?'; queryParams.push(rfEndDate + ' 23:59:59') }
     query += ' ORDER BY fr.created_at DESC LIMIT 2000'
 
     const row =
@@ -14131,6 +14223,419 @@ app.get('/api/reports/workflow', async (c) => {
   }
 });
 
+// ============================================================
+// Extended Reports Module APIs (HR, Contracts, Chat, Tenants)
+// ============================================================
+
+async function _reportsTenantScope(c: any) {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId || !userInfo.roleId) {
+    return { ok: false as const, status: 401, error: 'غير مصرح بالوصول' }
+  }
+  const role = normalizeRoleId(userInfo.roleId)
+  // Role 1 = super admin, sees all. Everyone else scoped to their tenant.
+  const tenantId = role === 1 ? null : userInfo.tenantId
+  return { ok: true as const, role, tenantId, userInfo }
+}
+
+// --- Requests report (with date filtering) ---
+app.get('/api/reports/requests', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    const { tenantId, isSuper } = _reportsTenantScope(userInfo)
+    const startDate = c.req.query('start_date')
+    const endDate   = c.req.query('end_date')
+
+    const conditions: string[] = []
+    const params: unknown[] = []
+    if (!isSuper && tenantId) { conditions.push('fr.tenant_id = ?'); params.push(tenantId) }
+    if (startDate) { conditions.push('fr.created_at >= ?'); params.push(startDate) }
+    if (endDate)   { conditions.push('fr.created_at <= ?'); params.push(endDate + ' 23:59:59') }
+    const w = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''
+
+    const [summary, rows] = await Promise.all([
+      c.env.DB.prepare(`
+        SELECT COUNT(*) as total,
+          SUM(CASE WHEN fr.status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN fr.status IN ('approved','approved_internal','approved_external') THEN 1 ELSE 0 END) as approved,
+          SUM(CASE WHEN fr.status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+          COALESCE(SUM(fr.requested_amount), 0) as total_amount,
+          COALESCE(SUM(CASE WHEN fr.status IN ('approved','approved_internal','approved_external') THEN fr.requested_amount ELSE 0 END), 0) as approved_amount
+        FROM financing_requests fr ${w}`).bind(...params).first(),
+      c.env.DB.prepare(`
+        SELECT fr.id, fr.status, fr.requested_amount, fr.created_at,
+               c.full_name as customer_name, b.bank_name
+        FROM financing_requests fr
+        LEFT JOIN customers c ON fr.customer_id = c.id
+        LEFT JOIN banks b ON fr.selected_bank_id = b.id
+        ${w} ORDER BY fr.created_at DESC LIMIT 500`).bind(...params).all()
+    ])
+
+    return c.json({ success: true, summary, data: rows.results || [] })
+  } catch (e: any) {
+    return c.json({ success: false, error: e.message }, 500)
+  }
+})
+
+// --- HR report ---
+app.get('/api/reports/hr', async (c) => {
+  try {
+    const scope = await _reportsTenantScope(c)
+    if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status)
+
+    const startDate = c.req.query('start_date')
+    const endDate = c.req.query('end_date')
+    const where: string[] = ['1=1']
+    const params: any[] = []
+    if (scope.tenantId != null) { where.push('tenant_id = ?'); params.push(scope.tenantId) }
+    const tenantWhere = where.join(' AND ')
+
+    const withDate = (cols: string[], baseWhere = where, baseParams = params) => {
+      const w = [...baseWhere]
+      const p = [...baseParams]
+      if (startDate) { w.push(`DATE(${cols[0]}) >= DATE(?)`); p.push(startDate) }
+      if (endDate) { w.push(`DATE(${cols[1] || cols[0]}) <= DATE(?)`); p.push(endDate) }
+      return { clause: w.join(' AND '), params: p }
+    }
+
+    const leaveRange = withDate(['start_date'])
+    const salaryRange = withDate(['salary_month'])
+    const hireRange = withDate(['hire_date'])
+    const termRange = withDate(['termination_date'])
+    const ticketRange = withDate(['created_at'])
+
+    const summary = await c.env.DB.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM hr_employees WHERE ${tenantWhere} AND (status IS NULL OR status = 'active')) as total_employees,
+        (SELECT COUNT(*) FROM hr_leaves WHERE ${tenantWhere} AND status = 'pending') as pending_leaves,
+        (SELECT COUNT(*) FROM hr_tickets WHERE ${tenantWhere} AND status = 'open') as open_tickets,
+        (SELECT COUNT(*) FROM hr_leaves WHERE ${leaveRange.clause}) as leaves_in_range,
+        (SELECT COALESCE(SUM(COALESCE(total_days, days_count, 0)), 0) FROM hr_leaves
+           WHERE ${leaveRange.clause} AND status = 'approved') as approved_leave_days,
+        (SELECT AVG((julianday(approved_at) - julianday(created_at)) * 24) FROM hr_leaves
+           WHERE ${leaveRange.clause} AND status = 'approved' AND approved_at IS NOT NULL) as avg_approval_hours,
+        (SELECT COALESCE(SUM(gross_salary), 0) FROM hr_salaries WHERE ${salaryRange.clause}) as payroll_gross,
+        (SELECT COALESCE(SUM(net_salary), 0) FROM hr_salaries WHERE ${salaryRange.clause}) as payroll_net,
+        (SELECT COALESCE(SUM(net_salary), 0) FROM hr_salaries WHERE ${salaryRange.clause} AND payment_status = 'paid') as payroll_paid,
+        (SELECT COALESCE(SUM(net_salary), 0) FROM hr_salaries WHERE ${salaryRange.clause} AND payment_status IN ('pending','approved')) as payroll_pending,
+        (SELECT COUNT(*) FROM hr_employees WHERE ${hireRange.clause} AND hire_date IS NOT NULL) as hires_in_range,
+        (SELECT COUNT(*) FROM hr_employees WHERE ${termRange.clause} AND termination_date IS NOT NULL) as terminations_in_range
+    `).bind(
+      ...params, ...params, ...params,
+      ...leaveRange.params, ...leaveRange.params, ...leaveRange.params,
+      ...salaryRange.params, ...salaryRange.params, ...salaryRange.params, ...salaryRange.params,
+      ...hireRange.params, ...termRange.params
+    ).first()
+
+    const { results: departments } = await c.env.DB.prepare(`
+      SELECT
+        COALESCE(NULLIF(department, ''), 'غير محدد') as department,
+        COUNT(*) as employee_count,
+        COALESCE(SUM(COALESCE(basic_salary,0) + COALESCE(allowances,0) + COALESCE(housing_allowance,0) + COALESCE(transport_allowance,0)), 0) as total_salary,
+        COALESCE(AVG(COALESCE(basic_salary,0) + COALESCE(allowances,0) + COALESCE(housing_allowance,0) + COALESCE(transport_allowance,0)), 0) as avg_salary
+      FROM hr_employees
+      WHERE ${tenantWhere} AND (status IS NULL OR status = 'active')
+      GROUP BY COALESCE(NULLIF(department, ''), 'غير محدد')
+      ORDER BY employee_count DESC
+      LIMIT 15
+    `).bind(...params).all()
+
+    // --- Leaves ---
+    const { results: leaves_by_type } = await c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(leave_type, ''), 'other') as leave_type,
+             COUNT(*) as count,
+             COALESCE(SUM(COALESCE(total_days, days_count, 0)), 0) as total_days
+      FROM hr_leaves WHERE ${leaveRange.clause}
+      GROUP BY COALESCE(NULLIF(leave_type, ''), 'other')
+      ORDER BY count DESC
+    `).bind(...leaveRange.params).all()
+
+    const { results: leaves_by_status } = await c.env.DB.prepare(`
+      SELECT COALESCE(status, 'غير محدد') as status, COUNT(*) as count
+      FROM hr_leaves WHERE ${leaveRange.clause}
+      GROUP BY status ORDER BY count DESC
+    `).bind(...leaveRange.params).all()
+
+    const leaveJoinWhere: string[] = ['1=1']
+    const leaveJoinParams: any[] = []
+    if (scope.tenantId != null) { leaveJoinWhere.push('l.tenant_id = ?'); leaveJoinParams.push(scope.tenantId) }
+    if (startDate) { leaveJoinWhere.push('DATE(l.start_date) >= DATE(?)'); leaveJoinParams.push(startDate) }
+    if (endDate) { leaveJoinWhere.push('DATE(l.start_date) <= DATE(?)'); leaveJoinParams.push(endDate) }
+    const leaveJoinClause = leaveJoinWhere.join(' AND ')
+
+    const { results: leaves_by_dept } = await c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(e.department, ''), 'غير محدد') as department,
+             COUNT(*) as count,
+             COALESCE(SUM(COALESCE(l.total_days, l.days_count, 0)), 0) as total_days
+      FROM hr_leaves l
+      LEFT JOIN hr_employees e ON e.id = l.employee_id
+      WHERE ${leaveJoinClause}
+      GROUP BY COALESCE(NULLIF(e.department, ''), 'غير محدد')
+      ORDER BY count DESC
+      LIMIT 15
+    `).bind(...leaveJoinParams).all()
+
+    // Utilization only from tenant's saved hr_leave_policy (سياسة الإجازات) — no invented defaults
+    const activeCount = Number((summary as any)?.total_employees || 0)
+    let policyRows: any[] = []
+    if (scope.tenantId != null) {
+      const pr = await c.env.DB.prepare(
+        'SELECT leave_type, leave_name_ar, allocated_days FROM hr_leave_policy WHERE tenant_id = ?'
+      ).bind(scope.tenantId).all()
+      policyRows = pr.results || []
+    } else {
+      const pr = await c.env.DB.prepare(`
+        SELECT leave_type, MAX(leave_name_ar) as leave_name_ar,
+               CAST(ROUND(AVG(allocated_days)) AS INTEGER) as allocated_days
+        FROM hr_leave_policy GROUP BY leave_type
+      `).all()
+      policyRows = pr.results || []
+    }
+
+    const policyNameByType: Record<string, string> = {}
+    policyRows.forEach((r: any) => {
+      if (r.leave_type) policyNameByType[r.leave_type] = r.leave_name_ar || r.leave_type
+    })
+
+    const usedByType: Record<string, number> = {}
+    const { results: approvedByType } = await c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(leave_type, ''), 'other') as leave_type,
+             COALESCE(SUM(COALESCE(total_days, days_count, 0)), 0) as used_days
+      FROM hr_leaves WHERE ${leaveRange.clause} AND status = 'approved'
+      GROUP BY COALESCE(NULLIF(leave_type, ''), 'other')
+    `).bind(...leaveRange.params).all()
+    ;(approvedByType || []).forEach((r: any) => { usedByType[r.leave_type] = Number(r.used_days || 0) })
+
+    const leave_utilization = (policyRows || []).map((r: any) => {
+      const allocated = Number(r.allocated_days || 0)
+      const capacity = allocated * Math.max(activeCount, 1)
+      const used_days = usedByType[r.leave_type] || 0
+      return {
+        leave_type: r.leave_type,
+        leave_name_ar: r.leave_name_ar || r.leave_type,
+        allocated_days: allocated,
+        capacity_days: capacity,
+        used_days,
+        remaining_days: Math.max(0, capacity - used_days),
+        utilization_pct: capacity > 0 ? Math.round((used_days / capacity) * 1000) / 10 : 0,
+      }
+    })
+
+    const leaveTypeLabels = (leaves_by_type || []).map((r: any) => ({
+      ...r,
+      leave_name_ar: policyNameByType[r.leave_type] || r.leave_type,
+    }))
+
+    // --- Payroll (hr_salaries) ---
+    const { results: payroll_by_status } = await c.env.DB.prepare(`
+      SELECT COALESCE(payment_status, 'pending') as payment_status,
+             COUNT(*) as count,
+             COALESCE(SUM(gross_salary), 0) as gross,
+             COALESCE(SUM(net_salary), 0) as net
+      FROM hr_salaries WHERE ${salaryRange.clause}
+      GROUP BY payment_status ORDER BY count DESC
+    `).bind(...salaryRange.params).all()
+
+    const { results: payroll_monthly } = await c.env.DB.prepare(`
+      SELECT strftime('%Y-%m', salary_month) as month,
+             COUNT(*) as count,
+             COALESCE(SUM(gross_salary), 0) as gross,
+             COALESCE(SUM(net_salary), 0) as net
+      FROM hr_salaries WHERE ${salaryRange.clause}
+      GROUP BY strftime('%Y-%m', salary_month)
+      ORDER BY month ASC
+      LIMIT 24
+    `).bind(...salaryRange.params).all()
+
+    // --- Workforce ---
+    const { results: employment_types } = await c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(employment_type, ''), 'غير محدد') as employment_type, COUNT(*) as count
+      FROM hr_employees
+      WHERE ${tenantWhere} AND (status IS NULL OR status = 'active')
+      GROUP BY COALESCE(NULLIF(employment_type, ''), 'غير محدد')
+      ORDER BY count DESC
+    `).bind(...params).all()
+
+    const { results: tenure_buckets } = await c.env.DB.prepare(`
+      SELECT bucket, COUNT(*) as count FROM (
+        SELECT CASE
+          WHEN hire_date IS NULL THEN 'غير محدد'
+          WHEN julianday('now') - julianday(hire_date) < 365 THEN 'أقل من سنة'
+          WHEN julianday('now') - julianday(hire_date) < 365 * 3 THEN '1–3 سنوات'
+          WHEN julianday('now') - julianday(hire_date) < 365 * 5 THEN '3–5 سنوات'
+          ELSE 'أكثر من 5 سنوات'
+        END as bucket
+        FROM hr_employees
+        WHERE ${tenantWhere} AND (status IS NULL OR status = 'active')
+      ) AS tenure_src GROUP BY bucket
+    `).bind(...params).all()
+
+    const { results: recent_hires } = await c.env.DB.prepare(`
+      SELECT id, COALESCE(full_name_ar, full_name, full_name_en) as full_name,
+             department, job_title, employment_type, hire_date
+      FROM hr_employees
+      WHERE ${hireRange.clause} AND hire_date IS NOT NULL
+      ORDER BY hire_date DESC
+      LIMIT 20
+    `).bind(...hireRange.params).all()
+
+    const { results: recent_terminations } = await c.env.DB.prepare(`
+      SELECT id, COALESCE(full_name_ar, full_name, full_name_en) as full_name,
+             department, job_title, termination_date, termination_reason
+      FROM hr_employees
+      WHERE ${termRange.clause} AND termination_date IS NOT NULL
+      ORDER BY termination_date DESC
+      LIMIT 20
+    `).bind(...termRange.params).all()
+
+    const { results: ticket_types } = await c.env.DB.prepare(`
+      SELECT COALESCE(ticket_type, 'غير محدد') as ticket_type, COUNT(*) as count
+      FROM hr_tickets WHERE ${ticketRange.clause} GROUP BY ticket_type ORDER BY count DESC LIMIT 10
+    `).bind(...ticketRange.params).all()
+
+    const { results: recent_tickets } = await c.env.DB.prepare(`
+      SELECT id, subject, ticket_type, priority, status, created_at
+      FROM hr_tickets WHERE ${ticketRange.clause} ORDER BY created_at DESC LIMIT 20
+    `).bind(...ticketRange.params).all()
+
+    return c.json({
+      success: true,
+      data: {
+        summary,
+        departments,
+        leaves_by_type: leaveTypeLabels,
+        leaves_by_status,
+        leaves_by_dept,
+        leave_utilization,
+        payroll_by_status,
+        payroll_monthly,
+        employment_types,
+        tenure_buckets,
+        recent_hires,
+        recent_terminations,
+        ticket_types,
+        recent_tickets,
+      },
+    })
+  } catch (error: any) {
+    console.error('HR report error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// --- Contracts report ---
+app.get('/api/reports/contracts', async (c) => {
+  try {
+    const scope = await _reportsTenantScope(c)
+    if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status)
+
+    const startDate = c.req.query('start_date')
+    const endDate = c.req.query('end_date')
+    const where: string[] = ['1=1']
+    const params: any[] = []
+    if (scope.tenantId != null) { where.push('tenant_id = ?'); params.push(scope.tenantId) }
+    if (startDate) { where.push('DATE(created_at) >= DATE(?)'); params.push(startDate) }
+    if (endDate) { where.push('DATE(created_at) <= DATE(?)'); params.push(endDate) }
+    const w = where.join(' AND ')
+
+    // Tenant-only filter for promissory_notes (date is on due_date, not created_at)
+    const noteWhere: string[] = ['1=1']
+    const noteParams: any[] = []
+    if (scope.tenantId != null) { noteWhere.push('tenant_id = ?'); noteParams.push(scope.tenantId) }
+    const nw = noteWhere.join(' AND ')
+
+    const [totalContracts, totalFinance, totalCommission, dueNotes] = await Promise.all([
+      c.env.DB.prepare(`SELECT COUNT(*) as v FROM contracts WHERE ${w}`).bind(...params).first(),
+      c.env.DB.prepare(`SELECT COALESCE(SUM(finance_amount), 0) as v FROM contracts WHERE ${w}`).bind(...params).first(),
+      c.env.DB.prepare(`SELECT COALESCE(SUM(commission_amount), 0) as v FROM contracts WHERE ${w}`).bind(...params).first(),
+      c.env.DB.prepare(`SELECT COUNT(*) as v FROM promissory_notes WHERE ${nw} AND (status IS NULL OR status != 'paid')`).bind(...noteParams).first(),
+    ])
+    const summary = {
+      total_contracts: (totalContracts as any)?.v ?? 0,
+      total_finance: (totalFinance as any)?.v ?? 0,
+      total_commission: (totalCommission as any)?.v ?? 0,
+      due_notes: (dueNotes as any)?.v ?? 0,
+    }
+
+    const { results: by_status } = await c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(status, ''), 'غير محدد') as status, COUNT(*) as count
+      FROM contracts WHERE ${w} GROUP BY status ORDER BY count DESC
+    `).bind(...params).all()
+
+    const { results: by_bank } = await c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(bank_name, ''), 'غير محدد') as bank_name, COUNT(*) as count
+      FROM contracts WHERE ${w} GROUP BY bank_name ORDER BY count DESC LIMIT 12
+    `).bind(...params).all()
+
+    const { results: recent } = await c.env.DB.prepare(`
+      SELECT id, contract_number, party_two_name, finance_type, finance_amount,
+             commission_amount, status, created_at
+      FROM contracts WHERE ${w} ORDER BY created_at DESC LIMIT 25
+    `).bind(...params).all()
+
+    return c.json({ success: true, data: { summary, by_status, by_bank, recent } })
+  } catch (error: any) {
+    console.error('Contracts report error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// --- Tenants / SaaS report (super admin only) ---
+app.get('/api/reports/tenants', async (c) => {
+  try {
+    const scope = await _reportsTenantScope(c)
+    if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status)
+    if (scope.role !== 1) return c.json({ success: false, error: 'غير مصرح بالوصول' }, 403)
+
+    const summary = await c.env.DB.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM tenants) as total_tenants,
+        (SELECT COUNT(*) FROM tenants WHERE status = 'active') as active_tenants,
+        (SELECT COUNT(*) FROM subscriptions WHERE status = 'active') as active_subscriptions,
+        (SELECT COALESCE(SUM(CASE WHEN COALESCE(p.duration_months, 0) > 0 THEN p.price / p.duration_months ELSE 0 END), 0)
+           FROM subscriptions s
+           JOIN packages p ON s.package_id = p.id
+           WHERE s.status = 'active') as mrr
+    `).first()
+
+    const { results: by_package } = await c.env.DB.prepare(`
+      SELECT COALESCE(p.package_name, 'بدون باقة') as package_name, COUNT(s.id) as count
+      FROM subscriptions s
+      LEFT JOIN packages p ON s.package_id = p.id
+      WHERE s.status = 'active'
+      GROUP BY p.package_name ORDER BY count DESC
+    `).all()
+
+    const { results: monthly_growth } = await c.env.DB.prepare(`
+      SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as new_tenants
+      FROM tenants
+      WHERE created_at IS NOT NULL
+      GROUP BY strftime('%Y-%m', created_at)
+      ORDER BY month DESC LIMIT 12
+    `).all()
+
+    const { results: tenants } = await c.env.DB.prepare(`
+      SELECT
+        t.id, t.company_name as name, t.slug, t.status, t.created_at,
+        (SELECT p.package_name FROM subscriptions s LEFT JOIN packages p ON s.package_id = p.id
+           WHERE s.tenant_id = t.id AND s.status = 'active' ORDER BY s.id DESC LIMIT 1) as package_name,
+        (SELECT COUNT(*) FROM users WHERE tenant_id = t.id) as user_count,
+        (SELECT COUNT(*) FROM customers WHERE tenant_id = t.id) as customer_count
+      FROM tenants t
+      ORDER BY t.created_at DESC LIMIT 100
+    `).all()
+
+    return c.json({
+      success: true,
+      data: { summary, by_package, monthly_growth: (monthly_growth || []).reverse(), tenants }
+    })
+  } catch (error: any) {
+    console.error('Tenants report error:', error)
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 app.get('/admin/panel', async (c) => {
   try {
     // Check authentication
@@ -14342,6 +14847,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
           .no-hscrollbar::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
           ${getMobileResponsiveCSS()}
         </style>
+        ${_rfFlatpickrHead}
       </head>
       <body class="bg-gray-50">
         <script>
@@ -14363,21 +14869,40 @@ app.get('/admin/reports/requests-followup', async (c) => {
             }
           })();
         </script>
-        
-        <div class="max-w-7xl mx-auto p-6">
-          <div class="mb-6">
-            <a href="/admin/panel" class="text-blue-600 hover:text-blue-800">
-              <i class="fas fa-arrow-right ml-2"></i>
-              العودة للوحة التحكم
-            </a>
+
+        <div style="background:#2563EB;" class="text-white py-6 px-6">
+          <div class="max-w-7xl mx-auto">
+            <a href="/admin/reports" class="text-blue-200 hover:text-white text-sm mb-1 inline-block no-print">← منظومة التقارير</a>
+            <h1 class="text-3xl font-bold mt-1"><i class="fas fa-file-alt ml-3"></i>تقرير متابعة الطلبات</h1>
           </div>
-          
+        </div>
+        <div class="max-w-7xl mx-auto p-6">
+          ${_rfFilterBar('#2563EB')}
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+              <p class="text-sm text-gray-500 mb-1">إجمالي الطلبات</p>
+              <p class="text-3xl font-bold text-gray-800" id="rfTotal">—</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+              <p class="text-sm text-gray-500 mb-1">قيد المراجعة</p>
+              <p class="text-3xl font-bold text-yellow-500" id="rfPending">—</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+              <p class="text-sm text-gray-500 mb-1">مقبول</p>
+              <p class="text-3xl font-bold text-green-600" id="rfApproved">—</p>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4 text-center">
+              <p class="text-sm text-gray-500 mb-1">مرفوض</p>
+              <p class="text-3xl font-bold text-red-600" id="rfRejected">—</p>
+            </div>
+          </div>
+
           <div class="bg-white rounded-xl shadow-lg p-6">
             <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
-              <h1 class="text-3xl font-bold text-gray-800">
-                <i class="fas fa-file-alt text-blue-600 ml-2"></i>
-                تقرير متابعة طلبات التمويل
-              </h1>
+              <h2 class="text-2xl font-bold text-gray-800">
+                <i class="fas fa-table text-blue-600 ml-2"></i>
+                تفاصيل الطلبات
+              </h2>
               <div class="flex items-center gap-3">
                 <div class="relative">
                   <input 
@@ -14389,7 +14914,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
                   />
                   <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
                 </div>
-                <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md whitespace-nowrap">
+                <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-md whitespace-nowrap no-print">
                   <i class="fas fa-file-excel ml-2"></i>
                   تصدير Excel
                 </button>
@@ -14462,6 +14987,7 @@ app.get('/admin/reports/requests-followup', async (c) => {
         </div>
         
         <script>
+          ${_rfBaseJs}
           let reportData = [];
           const followupPaging = { page: 1, pageSize: 15, lastSig: '' }
           function getPageSizeOptions(total) {
@@ -14563,16 +15089,32 @@ app.get('/admin/reports/requests-followup', async (c) => {
               }
               
               const authToken = localStorage.getItem('authToken');
+              const dateParams = {};
+              if (_startDate) dateParams.start_date = _startDate;
+              if (_endDate)   dateParams.end_date   = _endDate;
               const response = await axios.get('/api/reports/requests-followup', {
-                params: isCompanyRole ? {} : { tenant_id: tenantId },
+                params: Object.assign(isCompanyRole ? {} : { tenant_id: tenantId }, dateParams),
                 headers: {
                   'Authorization': 'Bearer ' + authToken
                 }
               });
-              
+
               if (response.data.success) {
                 reportData = Array.isArray(response.data.data) ? response.data.data : [];
                 displayReport(reportData);
+                const rows = reportData;
+                const rfTotalEl    = document.getElementById('rfTotal');
+                const rfPendingEl  = document.getElementById('rfPending');
+                const rfApprovedEl = document.getElementById('rfApproved');
+                const rfRejectedEl = document.getElementById('rfRejected');
+                const rfTotal    = rows.length;
+                const rfApproved = rows.filter(r => r.status === 'approved').length;
+                const rfRejected = rows.filter(r => r.status === 'rejected').length;
+                const rfPending  = rfTotal - rfApproved - rfRejected;
+                if (rfTotalEl)    rfTotalEl.textContent    = rfTotal.toLocaleString('ar-SA');
+                if (rfPendingEl)  rfPendingEl.textContent  = rfPending.toLocaleString('ar-SA');
+                if (rfApprovedEl) rfApprovedEl.textContent = rfApproved.toLocaleString('ar-SA');
+                if (rfRejectedEl) rfRejectedEl.textContent = rfRejected.toLocaleString('ar-SA');
               } else {
                 alert('خطأ: ' + (response.data.error || 'فشل تحميل التقرير'));
               }
@@ -14971,7 +15513,13 @@ app.get('/admin/reports/requests-followup', async (c) => {
             }
           }
 
-          loadReport();
+          window.addEventListener('load', () => {
+            const d = getPeriodDates('year');
+            _startDate = d.s; _endDate = d.e;
+            setBadge(d.label, d.range);
+            initDatePicker();
+            loadReport();
+          });
         </script>
       </body>
       </html>
@@ -15689,7 +16237,6 @@ app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
 app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
 app.get('/admin/reports/banks', (c) => c.html(banksReportPage))
 app.get('/admin/reports/performance', (c) => c.html(performanceReportPage))
-app.get('/admin/reports/clicks', (c) => c.html(clicksReportPage))
 app.get('/admin/reports/workflow', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) {
@@ -15701,6 +16248,18 @@ app.get('/admin/reports/workflow', async (c) => {
   return c.html(workflowReportPage)
 })
 app.get('/admin/reports/employee-performance', (c) => c.html(employeePerformanceReportPage))
+app.get('/admin/reports/hr', (c) => c.html(hrReportPage))
+app.get('/admin/reports/contracts', (c) => c.html(contractsReportPage))
+app.get('/admin/reports/tenants', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId || !userInfo.roleId) {
+    return c.html('<h1>غير مصرح بالوصول</h1>', 401)
+  }
+  if (normalizeRoleId(userInfo.roleId) !== 1) {
+    return c.html('<h1>غير مصرح بالوصول</h1>', 403)
+  }
+  return c.html(tenantsReportPage)
+})
 app.get('/admin/payments', (c) => c.html(paymentsPage))
 app.get('/admin/banks', (c) => c.html(banksManagementPage))
 
@@ -23577,6 +24136,26 @@ app.get('/admin/requests', async (c) => {
       pageSize: c.req.query('pageSize'),
     })
     const requestsSearchQ = String(c.req.query('q') ?? '').trim()
+    const requestsFilterField = String(c.req.query('filterField') ?? 'all')
+    const requestsStatusFilterQ = String(
+      c.req.query('statusFilter') ?? c.req.query('requestStatusFilter') ?? 'all'
+    ).trim() || 'all'
+    const requestsEmployeeFilterQ = String(c.req.query('employeeFilter') ?? 'all')
+    const requestsBankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
+    const requestsStatusLabelExpr = `COALESCE(
+      NULLIF(TRIM(ws.stage_name_ar), ''),
+      CASE fr.status
+        WHEN 'pending' THEN 'قيد الانتظار'
+        WHEN 'under_review' THEN 'قيد المراجعة'
+        WHEN 'approved' THEN 'مقبول'
+        WHEN 'rejected' THEN 'مرفوض'
+        WHEN 'processing' THEN 'قيد المعالجة'
+        WHEN 'completed' THEN 'مكتمل'
+        WHEN 'cancelled' THEN 'ملغي'
+        ELSE fr.status
+      END,
+      'غير محدد'
+    )`
 
     // Build query with role-based filtering
     let query = `
@@ -23687,10 +24266,43 @@ app.get('/admin/requests', async (c) => {
     query += query.toLowerCase().includes('where')
       ? " AND (fr.status IS NULL OR fr.status != 'completed')"
       : " WHERE (fr.status IS NULL OR fr.status != 'completed')"
+    if (requestsStatusFilterQ && requestsStatusFilterQ !== 'all') {
+      query += ` AND (${requestsStatusLabelExpr}) = ?`
+      queryParams.push(requestsStatusFilterQ)
+    }
+    if (requestsEmployeeFilterQ === 'غير مخصص') {
+      query += ` AND (emp.id IS NULL OR COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), ''), '') = '')`
+    } else if (requestsEmployeeFilterQ && requestsEmployeeFilterQ !== 'all') {
+      query += ` AND COALESCE(NULLIF(TRIM(emp.full_name), ''), NULLIF(TRIM(emp.username), '')) = ?`
+      queryParams.push(requestsEmployeeFilterQ)
+    }
+    if (requestsBankAgentFilterQ === 'غير معيّن' || requestsBankAgentFilterQ === 'غير معين') {
+      query += ` AND bagent.id IS NULL`
+    } else if (requestsBankAgentFilterQ && requestsBankAgentFilterQ !== 'all') {
+      query += ` AND (
+        (COALESCE(NULLIF(TRIM(bagent.full_name), ''), NULLIF(TRIM(bagent.username), ''), '') || ' #' || CAST(bagent.id AS TEXT)) = ?
+        OR COALESCE(NULLIF(TRIM(bagent.full_name), ''), bagent.username) = ?
+      )`
+      queryParams.push(requestsBankAgentFilterQ, requestsBankAgentFilterQ)
+    }
     if (requestsSearchQ) {
       const like = `%${requestsSearchQ}%`
-      query += ` AND (IFNULL(c.full_name,'') LIKE ? OR IFNULL(c.phone,'') LIKE ? OR IFNULL(b.bank_name,'') LIKE ? OR CAST(fr.id AS TEXT) LIKE ?)`
-      queryParams.push(like, like, like, like)
+      if (requestsFilterField === 'customer') {
+        query += ` AND IFNULL(c.full_name,'') LIKE ?`
+        queryParams.push(like)
+      } else if (requestsFilterField === 'phone') {
+        query += ` AND IFNULL(c.phone,'') LIKE ?`
+        queryParams.push(like)
+      } else if (requestsFilterField === 'bank') {
+        query += ` AND IFNULL(b.bank_name,'') LIKE ?`
+        queryParams.push(like)
+      } else if (requestsFilterField === 'status') {
+        query += ` AND (${requestsStatusLabelExpr}) LIKE ?`
+        queryParams.push(like)
+      } else {
+        query += ` AND (IFNULL(c.full_name,'') LIKE ? OR IFNULL(c.phone,'') LIKE ? OR IFNULL(b.bank_name,'') LIKE ? OR CAST(fr.id AS TEXT) LIKE ? OR (${requestsStatusLabelExpr}) LIKE ? OR IFNULL(COALESCE(NULLIF(TRIM(emp.full_name), ''), emp.username), '') LIKE ? OR IFNULL(COALESCE(NULLIF(TRIM(bagent.full_name), ''), bagent.username), '') LIKE ?)`
+        queryParams.push(like, like, like, like, like, like, like)
+      }
     }
 
     const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS _requests_page`
@@ -23718,6 +24330,10 @@ app.get('/admin/requests', async (c) => {
     const requestsServerPageSize = requestsPageSize
     const requestsFilterStateJson = JSON.stringify({
       q: requestsSearchQ,
+      filterField: requestsFilterField,
+      statusFilter: requestsStatusFilterQ,
+      employeeFilter: requestsEmployeeFilterQ,
+      bankAgentFilter: requestsBankAgentFilterQ,
       page: requestsServerPage,
       pageSize: requestsServerPageSize,
     }).replace(/</g, '\\u003c')
@@ -24012,7 +24628,7 @@ app.get('/admin/requests', async (c) => {
                     <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
                     <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
                       class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-                      onkeydown="if(event.key==='Enter'){event.preventDefault();navigateRequestsList({q:document.getElementById('searchInput').value.trim(),page:1});}"
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();filterTable();}"
                       onkeyup="debounceRequestsSearch()">
                   </div>
                   <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white" onchange="filterTable()">
@@ -24305,9 +24921,21 @@ app.get('/admin/requests', async (c) => {
           function buildRequestsListUrl(overrides) {
             const params = new URLSearchParams(window.location.search)
             const next = Object.assign({}, REQUESTS_FILTER_STATE, overrides || {})
-            if (next.q) params.set('q', String(next.q)); else params.delete('q')
-            if (Number(next.page) > 1) params.set('page', String(next.page)); else params.delete('page')
-            if (Number(next.pageSize) && Number(next.pageSize) !== 15) params.set('pageSize', String(next.pageSize)); else params.delete('pageSize')
+            const keys = ['q', 'filterField', 'statusFilter', 'employeeFilter', 'bankAgentFilter', 'page', 'pageSize']
+            keys.forEach(function(k) {
+              const v = next[k]
+              if (v == null || v === '' || v === 'all' || (k === 'page' && Number(v) === 1) || (k === 'pageSize' && Number(v) === 15)) {
+                params.delete(k)
+                return
+              }
+              params.set(k, String(v))
+            })
+            if (next.statusFilter && next.statusFilter !== 'all') {
+              params.set('requestStatusFilter', String(next.statusFilter))
+            } else {
+              params.delete('requestStatusFilter')
+            }
+            params.delete('search')
             const qs = params.toString()
             return '/admin/requests' + (qs ? '?' + qs : '')
           }
@@ -24320,12 +24948,15 @@ app.get('/admin/requests', async (c) => {
             _requestsSearchDebounce = setTimeout(function() {
               var q = (document.getElementById('searchInput') || { value: '' }).value.trim()
               if (q === String(REQUESTS_FILTER_STATE.q || '')) return
-              navigateRequestsList({ q: q, page: 1 })
+              navigateRequestsList({
+                q: q,
+                filterField: (document.getElementById('filterField') || { value: 'all' }).value,
+                statusFilter: (document.getElementById('statusFilter') || { value: 'all' }).value,
+                employeeFilter: (document.getElementById('employeeFilter') || { value: 'all' }).value,
+                bankAgentFilter: (document.getElementById('bankAgentFilter') || { value: 'all' }).value,
+                page: 1,
+              })
             }, 450)
-          }
-          if (REQUESTS_FILTER_STATE && REQUESTS_FILTER_STATE.q) {
-            var _rsi = document.getElementById('searchInput')
-            if (_rsi) _rsi.value = REQUESTS_FILTER_STATE.q
           }
           const TENANT_EMPLOYEE_FILTER_NAMES = ${requestsFilterEmployeeNamesJson};
           const TENANT_BANK_AGENT_FILTER_LABELS = ${requestsFilterBankAgentLabelsJson};
@@ -24553,78 +25184,33 @@ app.get('/admin/requests', async (c) => {
               if (emp) empNames.add(emp)
               if (agent) agentNames.add(agent)
             })
-            const currentEmp = empEl.value
-            const currentAgent = agentEl.value
+            const currentEmp = REQUESTS_FILTER_STATE.employeeFilter || 'all'
+            const currentAgent = REQUESTS_FILTER_STATE.bankAgentFilter || 'all'
             empEl.innerHTML = '<option value="all">الموظف: الكل</option>' +
               Array.from(empNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('')
             agentEl.innerHTML = '<option value="all">موظف البنك: الكل</option>' +
               Array.from(agentNames).sort((a, b) => a.localeCompare(b, 'ar')).map((n) => '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>').join('')
+            if (currentEmp && currentEmp !== 'all' && !empNames.has(currentEmp)) {
+              empEl.innerHTML += '<option value="' + String(currentEmp).replace(/"/g, '&quot;') + '">' + currentEmp + '</option>'
+            }
+            if (currentAgent && currentAgent !== 'all' && !agentNames.has(currentAgent)) {
+              agentEl.innerHTML += '<option value="' + String(currentAgent).replace(/"/g, '&quot;') + '">' + currentAgent + '</option>'
+            }
             empEl.value = currentEmp
             agentEl.value = currentAgent
           }
 
           function filterTable() {
             closeAllDropdowns();
-            const searchInput = document.getElementById('searchInput').value.toLowerCase().trim()
-            const filterField = document.getElementById('filterField').value
-            const statusFilter = document.getElementById('statusFilter').value
-            const employeeFilter = (document.getElementById('employeeFilter') || {value: 'all'}).value
-            const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value
-            const tableBody = document.getElementById('tableBody')
-            const rows = tableBody.getElementsByTagName('tr')
-            let visibleCount = 0
-            const sig = JSON.stringify({ searchInput, filterField, statusFilter, employeeFilter, bankAgentFilter })
-            if (sig !== requestsPaging.lastSig) { requestsPaging.lastSig = sig; requestsPaging.page = 1 }
-
-            for (let i = 0; i < rows.length; i++) {
-              const row = rows[i]
-              const customer = row.getAttribute('data-customer') || ''
-              const phone = row.getAttribute('data-phone') || ''
-              const employee = row.getAttribute('data-employee') || ''
-              const bankAgent = row.getAttribute('data-bank-agent') || ''
-              const bank = row.getAttribute('data-bank') || ''
-              const status = row.getAttribute('data-status') || ''
-
-              let shouldShow = false
-
-              if (searchInput === '') {
-                shouldShow = true
-              } else {
-                switch(filterField) {
-                  case 'customer':
-                    shouldShow = customer.toLowerCase().includes(searchInput)
-                    break
-                  case 'phone':
-                    shouldShow = phone.toLowerCase().includes(searchInput)
-                    break
-                  case 'bank':
-                    shouldShow = bank.toLowerCase().includes(searchInput)
-                    break
-                  case 'status':
-                    shouldShow = status.toLowerCase().includes(searchInput)
-                    break
-                  default: // 'all'
-                    shouldShow = customer.toLowerCase().includes(searchInput) ||
-                                phone.toLowerCase().includes(searchInput) ||
-                                employee.toLowerCase().includes(searchInput) ||
-                                bank.toLowerCase().includes(searchInput) ||
-                                bankAgent.toLowerCase().includes(searchInput) ||
-                                status.toLowerCase().includes(searchInput)
-                }
-              }
-
-              const statusMatches = statusFilter === 'all' || status === statusFilter
-              const employeeMatches = employeeFilter === 'all' || employee === employeeFilter
-              const bankAgentMatches = bankAgentFilter === 'all' || bankAgent === bankAgentFilter
-              const visible = shouldShow && statusMatches && employeeMatches && bankAgentMatches
-
-              row.classList.toggle('filter-hidden', !visible)
-              if (visible) visibleCount++
-            }
-
-            document.getElementById('totalCount').textContent = visibleCount
-            applyRequestsPagination()
-            setRequestsFiltersInUrl()
+            navigateRequestsList({
+              q: (document.getElementById('searchInput') || { value: '' }).value.trim(),
+              filterField: (document.getElementById('filterField') || { value: 'all' }).value,
+              statusFilter: (document.getElementById('statusFilter') || { value: 'all' }).value,
+              employeeFilter: (document.getElementById('employeeFilter') || { value: 'all' }).value,
+              bankAgentFilter: (document.getElementById('bankAgentFilter') || { value: 'all' }).value,
+              page: 1,
+              pageSize: requestsPaging.pageSize,
+            });
           }
 
           function setUrlParamOrDelete(params, key, value, emptyValue) {
@@ -24720,68 +25306,39 @@ app.get('/admin/requests', async (c) => {
               const state = (row.getAttribute('data-status') || '').trim()
               if (state) states.add(state)
             })
+            const currentStatus = REQUESTS_FILTER_STATE.statusFilter || 'all'
+            if (currentStatus && currentStatus !== 'all') states.add(currentStatus)
             const sortedStates = Array.from(states).sort((a, b) => a.localeCompare(b, 'ar'))
             statusFilter.innerHTML = [
               '<option value="all">تصفية الحالة: الكل</option>',
               ...sortedStates.map((state) => '<option value="' + state.replace(/"/g, '&quot;') + '">' + state + '</option>')
             ].join('')
+            statusFilter.value = currentStatus
           }
 
           function applyRequestStatusFilterFromUrl() {
-            if (!urlHasExplicitRequestsFilters()) {
-              const saved = loadRequestsFiltersFromSession()
-              if (saved) {
-                applyRequestsFiltersObject(saved)
-                return
-              }
-            }
-
-            const params = new URLSearchParams(window.location.search)
-            const search = params.get('search')
-            const filterField = params.get('filterField')
-            const statusFilter = params.get('statusFilter')
-            const requestStatusFilter = (params.get('requestStatusFilter') || '').trim()
-            const employeeFilter = params.get('employeeFilter')
-            const bankAgentFilter = params.get('bankAgentFilter')
-
-            if (statusFilter && statusFilter !== 'all') {
-              applyRequestsFiltersObject({
-                search,
-                filterField,
-                statusFilter,
-                employeeFilter,
-                bankAgentFilter
-              })
-            } else if (requestStatusFilter && requestStatusFilter !== 'all') {
-              // Legacy sidebar-only param
-              applyRequestsFiltersObject({
-                search: search !== null ? search : requestStatusFilter,
-                filterField: filterField || 'status',
-                statusFilter: requestStatusFilter,
-                employeeFilter,
-                bankAgentFilter
-              })
-            } else {
-              applyRequestsFiltersObject({
-                search,
-                filterField,
-                statusFilter,
-                employeeFilter,
-                bankAgentFilter
-              })
-            }
+            // Server already applied status/search filters from the URL.
+            // Hydrate controls from REQUESTS_FILTER_STATE; do not re-filter client-side.
+            const s = REQUESTS_FILTER_STATE || {}
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v }
+            setVal('searchInput', s.q || '')
+            setVal('filterField', s.filterField || 'all')
+            setVal('statusFilter', s.statusFilter || 'all')
+            setVal('employeeFilter', s.employeeFilter || 'all')
+            setVal('bankAgentFilter', s.bankAgentFilter || 'all')
           }
 
           function resetFilters() {
-            document.getElementById('searchInput').value = ''
-            document.getElementById('filterField').value = 'all'
-            document.getElementById('statusFilter').value = 'all'
-            const empEl = document.getElementById('employeeFilter')
-            const agentEl = document.getElementById('bankAgentFilter')
-            if (empEl) empEl.value = 'all'
-            if (agentEl) agentEl.value = 'all'
             clearRequestsFiltersSession()
-            filterTable()
+            navigateRequestsList({
+              q: '',
+              filterField: 'all',
+              statusFilter: 'all',
+              employeeFilter: 'all',
+              bankAgentFilter: 'all',
+              page: 1,
+              pageSize: requestsPaging.pageSize,
+            })
           }
 
           function hydrateRequestsSidebarStatuses() {
@@ -24866,8 +25423,10 @@ app.get('/admin/requests', async (c) => {
           hydrateStatusFilterOptions()
           hydrateRequestsRoleFilters()
           hydrateRequestsSidebarStatuses()
+          // Restore URL filters; pagination is server-side — do NOT call filterTable() on load
+          // (filterTable navigates and would cause perpetual reloads / reset page to 1).
           applyRequestStatusFilterFromUrl()
-          filterTable()
+          applyRequestsPagination()
           
           function normalizeCsvHeaderCell(v) {
             return String(v || '')
@@ -31791,6 +32350,141 @@ app.delete('/api/hr/leaves/:id', async (c) => {
 });
 
 // ===============================================
+// LEAVE POLICY & BALANCES APIs
+// ===============================================
+
+const LEAVE_TYPE_DEFAULTS: Record<string, { name_ar: string; default_days: number; is_paid: number }> = {
+  annual:    { name_ar: 'إجازة سنوية',      default_days: 21, is_paid: 1 },
+  sick:      { name_ar: 'إجازة مرضية',      default_days: 14, is_paid: 1 },
+  emergency: { name_ar: 'إجازة طارئة',      default_days: 3,  is_paid: 1 },
+  maternity: { name_ar: 'إجازة أمومة',      default_days: 60, is_paid: 1 },
+  paternity: { name_ar: 'إجازة أبوة',       default_days: 3,  is_paid: 1 },
+  hajj:      { name_ar: 'إجازة حج',         default_days: 20, is_paid: 1 },
+  unpaid:    { name_ar: 'إجازة بدون راتب',  default_days: 0,  is_paid: 0 },
+  other:     { name_ar: 'أخرى',             default_days: 0,  is_paid: 1 },
+};
+
+app.get('/api/hr/leave-policy', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId || 1;
+    const rows = await c.env.DB.prepare('SELECT * FROM hr_leave_policy WHERE tenant_id = ?').bind(tenantId).all();
+    const policyMap: Record<string, any> = {};
+    (rows.results || []).forEach((r: any) => { policyMap[r.leave_type] = r; });
+    const policy = Object.entries(LEAVE_TYPE_DEFAULTS).map(([type, def]) => ({
+      leave_type: type,
+      leave_name_ar: policyMap[type]?.leave_name_ar || def.name_ar,
+      allocated_days: policyMap[type] !== undefined ? policyMap[type].allocated_days : def.default_days,
+      is_paid: policyMap[type]?.is_paid ?? def.is_paid,
+      id: policyMap[type]?.id || null,
+    }));
+    return c.json({ success: true, data: policy });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.put('/api/hr/leave-policy', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403);
+    const tenantId = userInfo.tenantId || 1;
+    const { leave_type, allocated_days, leave_name_ar, is_paid } = await c.req.json();
+    if (!leave_type) return c.json({ success: false, error: 'leave_type required' }, 400);
+    await c.env.DB.prepare(`
+      INSERT INTO hr_leave_policy (tenant_id, leave_type, leave_name_ar, allocated_days, is_paid)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(tenant_id, leave_type) DO UPDATE SET
+        allocated_days = excluded.allocated_days,
+        leave_name_ar = excluded.leave_name_ar,
+        is_paid = excluded.is_paid
+    `).bind(tenantId, leave_type, leave_name_ar || LEAVE_TYPE_DEFAULTS[leave_type]?.name_ar || leave_type, allocated_days ?? 0, is_paid ?? 1).run();
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/api/hr/leave-balances', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    const tenantId = userInfo.tenantId || 1;
+    const year = parseInt(c.req.query('year') || new Date().getFullYear().toString());
+    const policyRows = await c.env.DB.prepare('SELECT * FROM hr_leave_policy WHERE tenant_id = ?').bind(tenantId).all();
+    const policyMap: Record<string, number> = {};
+    (policyRows.results || []).forEach((r: any) => { policyMap[r.leave_type] = r.allocated_days; });
+    Object.entries(LEAVE_TYPE_DEFAULTS).forEach(([type, def]) => { if (!(type in policyMap)) policyMap[type] = def.default_days; });
+    const employees = await c.env.DB.prepare(
+      `SELECT id, full_name_ar, department, job_title FROM hr_employees WHERE (tenant_id = ? OR tenant_id IS NULL) AND status = 'active' ORDER BY full_name_ar`
+    ).bind(tenantId).all();
+    const approvedLeaves = await c.env.DB.prepare(`
+      SELECT employee_id, leave_type, SUM(total_days) as used_days
+      FROM hr_leaves
+      WHERE status = 'approved' AND strftime('%Y', start_date) = ? AND (tenant_id = ? OR tenant_id IS NULL)
+      GROUP BY employee_id, leave_type
+    `).bind(year.toString(), tenantId).all();
+    const usedMap: Record<string, Record<string, number>> = {};
+    (approvedLeaves.results || []).forEach((r: any) => {
+      if (!usedMap[r.employee_id]) usedMap[r.employee_id] = {};
+      usedMap[r.employee_id][r.leave_type] = r.used_days;
+    });
+    const balances = (employees.results || []).map((emp: any) => {
+      const types = Object.entries(policyMap)
+        .filter(([, days]) => days > 0)
+        .map(([type, allocated]) => ({
+          leave_type: type,
+          leave_name_ar: LEAVE_TYPE_DEFAULTS[type]?.name_ar || type,
+          allocated_days: allocated,
+          used_days: usedMap[emp.id]?.[type] || 0,
+          remaining_days: Math.max(0, allocated - (usedMap[emp.id]?.[type] || 0)),
+        }));
+      return { ...emp, balances: types };
+    });
+    return c.json({ success: true, data: balances, year });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/api/my-leave-balances', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+    const tenantId = userInfo.tenantId || 1;
+    const year = new Date().getFullYear();
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: true, data: [], employeeFound: false });
+    const employee = await c.env.DB.prepare(
+      'SELECT id, full_name_ar FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+    ).bind(user.email, tenantId).first() as any;
+    if (!employee) return c.json({ success: true, data: [], employeeFound: false });
+    const policyRows = await c.env.DB.prepare('SELECT * FROM hr_leave_policy WHERE tenant_id = ?').bind(tenantId).all();
+    const policyMap: Record<string, number> = {};
+    (policyRows.results || []).forEach((r: any) => { policyMap[r.leave_type] = r.allocated_days; });
+    Object.entries(LEAVE_TYPE_DEFAULTS).forEach(([type, def]) => { if (!(type in policyMap)) policyMap[type] = def.default_days; });
+    const approvedLeaves = await c.env.DB.prepare(`
+      SELECT leave_type, SUM(total_days) as used_days
+      FROM hr_leaves WHERE status = 'approved' AND employee_id = ? AND strftime('%Y', start_date) = ?
+      GROUP BY leave_type
+    `).bind(employee.id, year.toString()).all();
+    const usedMap: Record<string, number> = {};
+    (approvedLeaves.results || []).forEach((r: any) => { usedMap[r.leave_type] = r.used_days; });
+    const data = Object.entries(policyMap)
+      .filter(([, days]) => days > 0)
+      .map(([type, allocated]) => ({
+        leave_type: type,
+        leave_name_ar: LEAVE_TYPE_DEFAULTS[type]?.name_ar || type,
+        allocated_days: allocated,
+        used_days: usedMap[type] || 0,
+        remaining_days: Math.max(0, allocated - (usedMap[type] || 0)),
+      }));
+    return c.json({ success: true, data, employeeFound: true, year });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
 // MY LEAVES APIs (for roles 3, 4, 5)
 // ===============================================
 
@@ -31858,6 +32552,134 @@ app.post('/api/my-leaves', async (c) => {
     return c.json({ success: true, id: result.meta.last_row_id });
   } catch (error: any) {
     console.error('Error submitting my leave:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// MY TICKETS APIs (for roles 3, 4, 5, 6 — employee self-service)
+// ===============================================
+
+app.get('/api/my-tickets', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: true, data: [], employeeFound: false });
+
+    const employee = await c.env.DB.prepare(
+      'SELECT id, full_name_ar FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+
+    if (!employee) return c.json({ success: true, data: [], employeeFound: false });
+
+    const tickets = await c.env.DB.prepare(
+      'SELECT * FROM hr_tickets WHERE employee_id = ? ORDER BY created_at DESC'
+    ).bind(employee.id).all();
+
+    return c.json({ success: true, data: tickets.results || [], employeeFound: true });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.post('/api/my-tickets', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
+    if (!user?.email) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+
+    const employee = await c.env.DB.prepare(
+      'SELECT id FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+
+    if (!employee) return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+
+    const { ticket_type, priority, subject, description } = await c.req.json();
+    if (!ticket_type || !subject?.trim()) {
+      return c.json({ success: false, error: 'يرجى إدخال نوع الطلب والموضوع' }, 400);
+    }
+
+    const result = await c.env.DB.prepare(
+      `INSERT INTO hr_tickets (tenant_id, employee_id, ticket_type, priority, subject, description, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'open')`
+    ).bind(userInfo.tenantId || 1, employee.id, ticket_type, priority || 'normal', subject.trim(), description?.trim() || null).run();
+
+    return c.json({ success: true, id: result.meta.last_row_id });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ===============================================
+// HR TICKETS APIs (admin — roles 1, 2)
+// ===============================================
+
+app.get('/api/hr/tickets', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+
+    const status = c.req.query('status') || '';
+    const type = c.req.query('type') || '';
+    const priority = c.req.query('priority') || '';
+
+    let sql = `SELECT t.*, e.full_name_ar as employee_name
+               FROM hr_tickets t
+               LEFT JOIN hr_employees e ON t.employee_id = e.id
+               WHERE (t.tenant_id = ? OR t.tenant_id IS NULL)`;
+    const params: any[] = [userInfo.tenantId || 1];
+    if (status) { sql += ' AND t.status = ?'; params.push(status); }
+    if (type) { sql += ' AND t.ticket_type = ?'; params.push(type); }
+    if (priority) { sql += ' AND t.priority = ?'; params.push(priority); }
+    sql += ' ORDER BY t.created_at DESC';
+
+    const tickets = await c.env.DB.prepare(sql).bind(...params).all();
+    return c.json({ success: true, data: tickets.results || [] });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.put('/api/hr/tickets/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403);
+
+    const id = c.req.param('id');
+    const { status, resolution_notes } = await c.req.json();
+    if (!status) return c.json({ success: false, error: 'الحالة مطلوبة' }, 400);
+
+    const resolvedAt = (status === 'resolved' || status === 'closed') ? new Date().toISOString() : null;
+
+    await c.env.DB.prepare(
+      `UPDATE hr_tickets SET status = ?, resolution_notes = ?, resolved_at = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)`
+    ).bind(status, resolution_notes?.trim() || null, resolvedAt, id, userInfo.tenantId || 1).run();
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.delete('/api/hr/tickets/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c);
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
+    if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403);
+
+    const id = c.req.param('id');
+    await c.env.DB.prepare(
+      'DELETE FROM hr_tickets WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)'
+    ).bind(id, userInfo.tenantId || 1).run();
+
+    return c.json({ success: true });
+  } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }
 });
@@ -32870,22 +33692,34 @@ app.get('/admin/hr/reports', (c) => {
   return c.html(hrReportsPage)
 })
 
-// My Leaves Page (for roles 3, 4, 5)
-app.get('/admin/my-leaves', (c) => {
+// HR Tickets Page (admin)
+app.get('/admin/hr/tickets', (c) => {
+  return c.html(hrTicketsPage)
+})
+
+// My HR Page — combined leaves + tickets for employees (roles 3, 4, 5, 6)
+app.get('/admin/my-hr', (c) => {
   const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>طلبات إجازتي</title>
+  <title>خدمات الموظف</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f8fafc; color: #1e293b; direction: rtl; }
-    .page-wrapper { max-width: 900px; margin: 40px auto; padding: 0 16px 80px; }
-    h1 { font-size: 1.5rem; font-weight: 700; color: #1e40af; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+    .page-wrapper { max-width: 960px; margin: 40px auto; padding: 0 16px 80px; }
+    h1 { font-size: 1.6rem; font-weight: 700; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+    .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 28px; }
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 28px; }
+    .tab-btn { padding: 10px 22px; border: none; background: transparent; font-size: 0.95rem; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; border-radius: 6px 6px 0 0; display: flex; align-items: center; gap: 7px; }
+    .tab-btn.active { color: #1e40af; border-bottom-color: #1e40af; background: #eff6ff; }
+    .tab-btn:hover:not(.active) { color: #334155; background: #f1f5f9; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
     .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(15,23,42,0.08); padding: 24px; margin-bottom: 24px; }
-    .card h2 { font-size: 1.1rem; font-weight: 600; color: #334155; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .card h2 { font-size: 1.05rem; font-weight: 600; color: #334155; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     .form-group.full { grid-column: 1 / -1; }
@@ -32897,6 +33731,9 @@ app.get('/admin/my-leaves', (c) => {
     .btn-primary { background: #1e40af; color: #fff; }
     .btn-primary:hover { background: #1d4ed8; }
     .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-purple { background: #7c3aed; color: #fff; }
+    .btn-purple:hover { background: #6d28d9; }
+    .btn-purple:disabled { background: #c4b5fd; cursor: not-allowed; }
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
     .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
@@ -32909,93 +33746,195 @@ app.get('/admin/my-leaves', (c) => {
     .badge-pending { background: #fef9c3; color: #854d0e; }
     .badge-approved { background: #dcfce7; color: #166534; }
     .badge-rejected { background: #fee2e2; color: #991b1b; }
+    .badge-open { background: #dbeafe; color: #1e40af; }
+    .badge-in_progress { background: #fef9c3; color: #854d0e; }
+    .badge-resolved { background: #dcfce7; color: #166534; }
+    .badge-closed { background: #f1f5f9; color: #64748b; }
     .no-employee { text-align: center; padding: 40px; color: #64748b; }
     .no-employee i { font-size: 3rem; color: #cbd5e1; margin-bottom: 12px; display: block; }
     .loading { text-align: center; padding: 30px; color: #94a3b8; }
-    @media(max-width:600px) { .form-grid { grid-template-columns: 1fr; } }
+    @media(max-width:600px) { .form-grid { grid-template-columns: 1fr; } .tabs { flex-wrap: wrap; } }
   </style>
 </head>
 <body>
 <div class="page-wrapper">
-  <h1><i class="fas fa-calendar-alt"></i> طلبات إجازتي</h1>
+  <h1><i class="fas fa-id-badge"></i> خدمات الموظف</h1>
+  <p class="subtitle">إدارة إجازاتك ورفع التذاكر والطلبات</p>
 
   <div id="employeeAlert"></div>
 
-  <div class="card" id="submitCard">
-    <h2><i class="fas fa-plus-circle" style="color:#1e40af"></i> تقديم طلب إجازة جديد</h2>
-    <div id="formAlert"></div>
-    <form id="leaveForm">
-      <div class="form-grid">
-        <div class="form-group">
-          <label>نوع الإجازة <span style="color:red">*</span></label>
-          <select name="leave_type" required>
-            <option value="">-- اختر نوع الإجازة --</option>
-            <option value="annual">إجازة سنوية</option>
-            <option value="sick">إجازة مرضية</option>
-            <option value="emergency">إجازة طارئة</option>
-            <option value="maternity">إجازة أمومة</option>
-            <option value="paternity">إجازة أبوة</option>
-            <option value="hajj">إجازة حج</option>
-            <option value="unpaid">إجازة بدون راتب</option>
-            <option value="other">أخرى</option>
-          </select>
-        </div>
-        <div class="form-group"></div>
-        <div class="form-group">
-          <label>تاريخ البداية <span style="color:red">*</span></label>
-          <input type="date" name="start_date" required>
-        </div>
-        <div class="form-group">
-          <label>تاريخ النهاية <span style="color:red">*</span></label>
-          <input type="date" name="end_date" required>
-        </div>
-        <div class="form-group full">
-          <label>سبب الإجازة</label>
-          <textarea name="reason" placeholder="اكتب سبب الإجازة (اختياري)"></textarea>
-        </div>
-      </div>
-      <div style="margin-top:18px">
-        <button type="submit" class="btn btn-primary" id="submitBtn">
-          <i class="fas fa-paper-plane"></i> تقديم الطلب
-        </button>
-      </div>
-    </form>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('leaves', this)">
+      <i class="fas fa-calendar-alt"></i> طلبات الإجازة
+    </button>
+    <button class="tab-btn" onclick="switchTab('tickets', this)">
+      <i class="fas fa-ticket-alt"></i> التذاكر والطلبات
+    </button>
   </div>
 
-  <div class="card">
-    <h2><i class="fas fa-list-alt" style="color:#1e40af"></i> طلباتي السابقة</h2>
-    <div id="leavesContainer"><div class="loading"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div></div>
+  <!-- Leaves Tab -->
+  <div id="tab-leaves" class="tab-panel active">
+    <div class="card" id="balanceCard" style="display:none">
+      <h2><i class="fas fa-chart-pie" style="color:#1e40af"></i> رصيد الإجازات لعام <span id="balanceYear"></span></h2>
+      <div id="balanceGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:12px"></div>
+    </div>
+    <div class="card" id="leaveSubmitCard">
+      <h2><i class="fas fa-plus-circle" style="color:#1e40af"></i> تقديم طلب إجازة جديد</h2>
+      <div id="leaveFormAlert"></div>
+      <form id="leaveForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>نوع الإجازة <span style="color:red">*</span></label>
+            <select name="leave_type" required>
+              <option value="">-- اختر نوع الإجازة --</option>
+              <option value="annual">إجازة سنوية</option>
+              <option value="sick">إجازة مرضية</option>
+              <option value="emergency">إجازة طارئة</option>
+              <option value="maternity">إجازة أمومة</option>
+              <option value="paternity">إجازة أبوة</option>
+              <option value="hajj">إجازة حج</option>
+              <option value="unpaid">إجازة بدون راتب</option>
+              <option value="other">أخرى</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>تاريخ الإجازة <span style="color:red">*</span></label>
+            <input type="hidden" name="start_date" id="leaveDateStart">
+            <input type="hidden" name="end_date" id="leaveDateEnd">
+            <div id="leaveDatePicker" style="border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff;user-select:none;margin-top:4px">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+                <button type="button" onclick="dpPrev()" style="border:none;background:#e2e8f0;border-radius:6px;width:30px;height:30px;cursor:pointer;font-size:1.1rem;display:inline-flex;align-items:center;justify-content:center">&#8249;</button>
+                <span id="dpTitle" style="font-weight:700;font-size:0.9rem;color:#1e293b"></span>
+                <button type="button" onclick="dpNext()" style="border:none;background:#e2e8f0;border-radius:6px;width:30px;height:30px;cursor:pointer;font-size:1.1rem;display:inline-flex;align-items:center;justify-content:center">&#8250;</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);padding:8px 10px 4px;border-bottom:1px solid #f1f5f9">
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">ح</div>
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">أث</div>
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">ث</div>
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">ر</div>
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">خ</div>
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">ج</div>
+                <div style="text-align:center;font-size:0.72rem;font-weight:700;color:#94a3b8">س</div>
+              </div>
+              <div id="dpGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:6px 10px 10px"></div>
+            </div>
+            <div id="dpSummary" style="margin-top:8px;font-size:0.85rem;color:#64748b;padding:8px 12px;background:#f8fafc;border-radius:8px;display:none"></div>
+          </div>
+          <div class="form-group full">
+            <label>سبب الإجازة</label>
+            <textarea name="reason" placeholder="اكتب سبب الإجازة (اختياري)"></textarea>
+          </div>
+        </div>
+        <div style="margin-top:18px">
+          <button type="submit" class="btn btn-primary" id="leaveSubmitBtn">
+            <i class="fas fa-paper-plane"></i> تقديم الطلب
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 style="display:flex;align-items:center;justify-content:space-between">
+        <span><i class="fas fa-calendar" style="color:#1e40af"></i> تقويم إجازاتي</span>
+        <span style="display:flex;gap:6px;align-items:center">
+          <button onclick="myCalPrev()" style="border:none;background:#f1f5f9;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:1rem">&#8249;</button>
+          <span id="myCalLabel" style="font-size:0.9rem;color:#334155;min-width:120px;text-align:center"></span>
+          <button onclick="myCalNext()" style="border:none;background:#f1f5f9;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:1rem">&#8250;</button>
+        </span>
+      </h2>
+      <div id="myCalendar" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <h2><i class="fas fa-list-alt" style="color:#1e40af"></i> طلبات الإجازة السابقة</h2>
+      <div id="leavesContainer"><div class="loading"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div></div>
+    </div>
+  </div>
+
+  <!-- Tickets Tab -->
+  <div id="tab-tickets" class="tab-panel">
+    <div class="card" id="ticketSubmitCard">
+      <h2><i class="fas fa-plus-circle" style="color:#7c3aed"></i> رفع تذكرة جديدة</h2>
+      <div id="ticketFormAlert"></div>
+      <form id="ticketForm">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>نوع الطلب <span style="color:red">*</span></label>
+            <select name="ticket_type" required>
+              <option value="">-- اختر نوع الطلب --</option>
+              <option value="hr_employee_services">الموارد البشرية وخدمات الموظف — شهادات، تعديل بيانات، استفسارات الإجازات</option>
+              <option value="payroll_benefits">الرواتب والمزايا — استفسار عن الراتب أو مشاكل الدفع</option>
+              <option value="it_facilities">الدعم التقني والمرافق — أجهزة، برامج، شكاوى IT، معدات المكتب</option>
+              <option value="workplace_concerns">الشكاوى وبيئة العمل — شكاوى إدارية، مشاكل الحضور، النزاعات</option>
+              <option value="other">أخرى / استفسار عام</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>موضوع الطلب <span style="color:red">*</span></label>
+            <input type="text" name="subject" required placeholder="اكتب موضوع الطلب بإيجاز">
+          </div>
+          <div class="form-group full">
+            <label>التفاصيل</label>
+            <textarea name="description" placeholder="اشرح طلبك أو مشكلتك بالتفصيل (اختياري)" style="min-height:100px"></textarea>
+          </div>
+        </div>
+        <div style="margin-top:18px">
+          <button type="submit" class="btn btn-purple" id="ticketSubmitBtn">
+            <i class="fas fa-paper-plane"></i> رفع التذكرة
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2><i class="fas fa-list-alt" style="color:#7c3aed"></i> تذاكري السابقة</h2>
+      <div id="ticketsContainer"><div class="loading"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div></div>
+    </div>
   </div>
 </div>
+
 <script>
 (async function() {
+  const AUTH = { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') };
+  var today = new Date();
+
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+  window.switchTab = switchTab;
+
+  // ---- LEAVES ----
   const leaveTypeLabels = {
     annual: 'سنوية', sick: 'مرضية', emergency: 'طارئة',
     maternity: 'أمومة', paternity: 'أبوة', hajj: 'حج',
     unpaid: 'بدون راتب', other: 'أخرى'
   };
-  const statusLabels = { pending: 'قيد الانتظار', approved: 'مقبولة', rejected: 'مرفوضة' };
-  const statusClass = { pending: 'badge-pending', approved: 'badge-approved', rejected: 'badge-rejected' };
+  const leaveStatusLabels = { pending: 'قيد الانتظار', approved: 'مقبولة', rejected: 'مرفوضة' };
+  const leaveStatusClass = { pending: 'badge-pending', approved: 'badge-approved', rejected: 'badge-rejected' };
 
   async function loadLeaves() {
     const container = document.getElementById('leavesContainer');
     const alertEl = document.getElementById('employeeAlert');
     try {
-      const res = await fetch('/api/my-leaves', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') } });
+      const res = await fetch('/api/my-leaves', { headers: AUTH });
       const data = await res.json();
       if (!data.success) { container.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>' + (data.error || 'حدث خطأ') + '</div>'; return; }
       if (!data.employeeFound) {
-        document.getElementById('submitCard').style.display = 'none';
-        alertEl.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> لم يتم ربط حسابك بسجل موظف. يرجى التواصل مع مدير الموارد البشرية لربط حسابك.</div>';
+        document.getElementById('leaveSubmitCard').style.display = 'none';
+        document.getElementById('ticketSubmitCard').style.display = 'none';
+        alertEl.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> لم يتم ربط حسابك بسجل موظف. يرجى التواصل مع مدير الموارد البشرية.</div>';
         container.innerHTML = '<div class="no-employee"><i class="fas fa-user-slash"></i><p>لا يوجد سجل موظف مرتبط بحسابك</p></div>';
+        document.getElementById('ticketsContainer').innerHTML = '<div class="no-employee"><i class="fas fa-user-slash"></i><p>لا يوجد سجل موظف مرتبط بحسابك</p></div>';
         return;
       }
       const leaves = data.data;
       if (!leaves.length) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:10px"></i>لا توجد طلبات إجازة سابقة</div>'; return; }
       let rows = leaves.map(function(l) {
         const type = leaveTypeLabels[l.leave_type] || l.leave_type || '-';
-        const status = statusLabels[l.status] || l.status;
-        const cls = statusClass[l.status] || '';
+        const status = leaveStatusLabels[l.status] || l.status;
+        const cls = leaveStatusClass[l.status] || '';
         const rejection = l.rejection_reason ? '<br><small style="color:#ef4444">سبب الرفض: ' + l.rejection_reason + '</small>' : '';
         return '<tr><td>' + (l.start_date || '-') + '</td><td>' + (l.end_date || '-') + '</td><td>' + type + '</td><td>' + (l.total_days || '-') + ' يوم</td><td><span class="badge ' + cls + '">' + status + '</span>' + rejection + '</td><td>' + (l.reason || '-') + '</td></tr>';
       }).join('');
@@ -33005,18 +33944,23 @@ app.get('/admin/my-leaves', (c) => {
 
   document.getElementById('leaveForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const btn = document.getElementById('submitBtn');
-    const alertEl = document.getElementById('formAlert');
-    btn.disabled = true;
+    const btn = document.getElementById('leaveSubmitBtn');
+    const alertEl = document.getElementById('leaveFormAlert');
     const fd = new FormData(this);
+    if (!fd.get('start_date') || !fd.get('end_date')) {
+      alertEl.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> يرجى تحديد تاريخ البداية والنهاية من التقويم</div>';
+      return;
+    }
+    btn.disabled = true;
     const body = { leave_type: fd.get('leave_type'), start_date: fd.get('start_date'), end_date: fd.get('end_date'), reason: fd.get('reason') };
     alertEl.innerHTML = '';
     try {
-      const res = await fetch('/api/my-leaves', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') }, body: JSON.stringify(body) });
+      const res = await fetch('/api/my-leaves', { method: 'POST', headers: { 'Content-Type': 'application/json', ...AUTH }, body: JSON.stringify(body) });
       const data = await res.json();
       if (data.success) {
         alertEl.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> تم تقديم طلب الإجازة بنجاح وهو الآن قيد مراجعة المدير</div>';
         this.reset();
+        dpReset();
         loadLeaves();
       } else {
         alertEl.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>' + (data.error || 'حدث خطأ') + '</div>';
@@ -33025,13 +33969,262 @@ app.get('/admin/my-leaves', (c) => {
     btn.disabled = false;
   });
 
+  // ---- TICKETS ----
+  // ---- TICKETS ----
+  const ticketTypeLabels = {
+    hr_employee_services: 'الموارد البشرية وخدمات الموظف',
+    payroll_benefits: 'الرواتب والمزايا',
+    it_facilities: 'الدعم التقني والمرافق',
+    workplace_concerns: 'الشكاوى وبيئة العمل',
+    other: 'أخرى / استفسار عام'
+  };
+  const ticketStatusLabels = { open: 'مفتوحة', in_progress: 'قيد المعالجة', resolved: 'محلولة', closed: 'مغلقة' };
+  const ticketStatusClass = { open: 'badge-open', in_progress: 'badge-in_progress', resolved: 'badge-resolved', closed: 'badge-closed' };
+
+  async function loadTickets() {
+    const container = document.getElementById('ticketsContainer');
+    try {
+      const res = await fetch('/api/my-tickets', { headers: AUTH });
+      const data = await res.json();
+      if (!data.success) { container.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>' + (data.error || 'حدث خطأ') + '</div>'; return; }
+      if (!data.employeeFound) {
+        container.innerHTML = '<div class="no-employee"><i class="fas fa-user-slash"></i><p>لا يوجد سجل موظف مرتبط بحسابك</p></div>';
+        return;
+      }
+      const tickets = data.data;
+      if (!tickets.length) { container.innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:10px"></i>لا توجد تذاكر سابقة</div>'; return; }
+      let rows = tickets.map(function(t) {
+        const type = ticketTypeLabels[t.ticket_type] || t.ticket_type || '-';
+        const status = ticketStatusLabels[t.status] || t.status;
+        const cls = ticketStatusClass[t.status] || '';
+        const date = (t.created_at || '').substring(0, 10);
+        const notes = t.resolution_notes ? '<br><small style="color:#16a34a">رد الإدارة: ' + t.resolution_notes + '</small>' : '';
+        return '<tr><td>' + date + '</td><td>' + type + '</td><td style="max-width:200px;word-break:break-word">' + (t.subject || '-') + '</td><td><span class="badge ' + cls + '">' + status + '</span>' + notes + '</td></tr>';
+      }).join('');
+      container.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الموضوع</th><th>الحالة</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    } catch(e) { container.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>فشل تحميل البيانات</div>'; }
+  }
+
+  document.getElementById('ticketForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('ticketSubmitBtn');
+    const alertEl = document.getElementById('ticketFormAlert');
+    btn.disabled = true;
+    const fd = new FormData(this);
+    const body = { ticket_type: fd.get('ticket_type'), subject: fd.get('subject'), description: fd.get('description') };
+    alertEl.innerHTML = '';
+    try {
+      const res = await fetch('/api/my-tickets', { method: 'POST', headers: { 'Content-Type': 'application/json', ...AUTH }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.success) {
+        alertEl.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> تم رفع التذكرة بنجاح وسيتم الرد عليك في أقرب وقت</div>';
+        this.reset();
+        loadTickets();
+      } else {
+        alertEl.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>' + (data.error || 'حدث خطأ') + '</div>';
+      }
+    } catch(e) { alertEl.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i>فشل في الإرسال</div>'; }
+    btn.disabled = false;
+  });
+
+  // ---- DATE RANGE PICKER ----
+  var dpYear = today.getFullYear(), dpMonth = today.getMonth();
+  var dpStart = null, dpEnd = null, dpHoverDate = null;
+
+  function dpPad(n) { return String(n).padStart(2, '0'); }
+
+  function dpRender() {
+    var months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    var titleEl = document.getElementById('dpTitle');
+    if (titleEl) titleEl.textContent = months[dpMonth] + ' ' + dpYear;
+    var grid = document.getElementById('dpGrid');
+    if (!grid) return;
+    var firstDay = new Date(dpYear, dpMonth, 1).getDay();
+    var daysInMonth = new Date(dpYear, dpMonth + 1, 0).getDate();
+    var todayStr = today.getFullYear() + '-' + dpPad(today.getMonth()+1) + '-' + dpPad(today.getDate());
+    var cells = '';
+    for (var i = 0; i < firstDay; i++) cells += '<div style="height:36px"></div>';
+    for (var d = 1; d <= daysInMonth; d++) {
+      var ds = dpYear + '-' + dpPad(dpMonth+1) + '-' + dpPad(d);
+      var isStart = ds === dpStart, isEnd = ds === dpEnd;
+      var inRange = dpStart && dpEnd && ds > dpStart && ds < dpEnd;
+      var inHover = dpStart && !dpEnd && dpHoverDate && ds > dpStart && ds <= dpHoverDate;
+      var bg, color, border, fontW;
+      if (isStart || isEnd) {
+        bg = '#1e40af'; color = '#fff'; border = 'none'; fontW = '700';
+      } else if (inRange || inHover) {
+        bg = '#dbeafe'; color = '#1e40af'; border = '1px solid #bfdbfe'; fontW = '400';
+      } else if (ds === todayStr) {
+        bg = '#f8fafc'; color = '#1e40af'; border = '2px solid #3b82f6'; fontW = '700';
+      } else {
+        bg = '#f8fafc'; color = '#374151'; border = '1px solid transparent'; fontW = '400';
+      }
+      cells += '<div data-date="' + ds + '" style="height:36px;border-radius:8px;background:' + bg + ';border:' + border + ';display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:' + fontW + ';color:' + color + ';font-size:0.82rem">' + d + '</div>';
+    }
+    grid.innerHTML = cells;
+    document.getElementById('leaveDateStart').value = dpStart || '';
+    document.getElementById('leaveDateEnd').value = dpEnd || '';
+    var summaryEl = document.getElementById('dpSummary');
+    if (dpStart && dpEnd) {
+      var days = Math.ceil((new Date(dpEnd) - new Date(dpStart)) / 86400000) + 1;
+      summaryEl.style.display = '';
+      summaryEl.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a;margin-left:4px"></i> من <strong>' + dpStart + '</strong> إلى <strong>' + dpEnd + '</strong> — <strong style="color:#1e40af">' + days + ' يوم</strong>';
+    } else if (dpStart) {
+      summaryEl.style.display = '';
+      summaryEl.innerHTML = '<i class="fas fa-calendar-day" style="color:#3b82f6;margin-left:4px"></i> تاريخ البداية: <strong>' + dpStart + '</strong> — اختر تاريخ النهاية';
+    } else {
+      summaryEl.style.display = 'none';
+    }
+  }
+
+  var dpGridEl = document.getElementById('dpGrid');
+  if (dpGridEl) {
+    dpGridEl.addEventListener('click', function(e) {
+      var cell = e.target.closest('[data-date]');
+      if (!cell) return;
+      var ds = cell.getAttribute('data-date');
+      if (!dpStart || (dpStart && dpEnd)) { dpStart = ds; dpEnd = null; }
+      else if (ds < dpStart) { dpStart = ds; dpEnd = null; }
+      else { dpEnd = ds; }
+      dpHoverDate = null;
+      dpRender();
+    });
+    dpGridEl.addEventListener('mouseover', function(e) {
+      var cell = e.target.closest('[data-date]');
+      var ds = cell ? cell.getAttribute('data-date') : null;
+      if (ds === dpHoverDate) return;
+      dpHoverDate = ds;
+      if (dpStart && !dpEnd) dpRender();
+    });
+    dpGridEl.addEventListener('mouseleave', function() {
+      dpHoverDate = null;
+      if (dpStart && !dpEnd) dpRender();
+    });
+  }
+
+  function dpPrev() { dpMonth--; if (dpMonth < 0) { dpMonth = 11; dpYear--; } dpRender(); }
+  function dpNext() { dpMonth++; if (dpMonth > 11) { dpMonth = 0; dpYear++; } dpRender(); }
+  function dpReset() { dpStart = null; dpEnd = null; dpHoverDate = null; dpYear = today.getFullYear(); dpMonth = today.getMonth(); dpRender(); }
+
+  window.dpPrev = dpPrev; window.dpNext = dpNext;
+
+  dpRender();
+
+  // ---- LEAVE BALANCES ----
+  const MY_LEAVE_COLORS = {
+    annual: '#16a34a', sick: '#ca8a04', emergency: '#dc2626',
+    maternity: '#db2777', paternity: '#2563eb', hajj: '#7c3aed',
+    unpaid: '#64748b', other: '#ea580c'
+  };
+
+  async function loadBalances() {
+    try {
+      const res = await fetch('/api/my-leave-balances', { headers: AUTH });
+      const data = await res.json();
+      if (!data.success || !data.employeeFound || !data.data || !data.data.length) return;
+      const card = document.getElementById('balanceCard');
+      const grid = document.getElementById('balanceGrid');
+      const yearEl = document.getElementById('balanceYear');
+      if (card) card.style.display = '';
+      if (yearEl) yearEl.textContent = data.year || new Date().getFullYear();
+      if (grid) {
+        grid.innerHTML = data.data.map(function(item) {
+          const color = MY_LEAVE_COLORS[item.leave_type] || '#64748b';
+          const pct = item.allocated_days > 0 ? Math.min(100, Math.round(item.used_days / item.allocated_days * 100)) : 0;
+          return '<div style="background:#f8fafc;border-radius:10px;padding:12px">' +
+            '<div style="font-weight:600;font-size:0.85rem;color:#334155;margin-bottom:6px">' + item.leave_name_ar + '</div>' +
+            '<div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;margin-bottom:6px">' +
+            '<div style="height:100%;background:' + color + ';width:' + pct + '%;transition:width 0.4s"></div></div>' +
+            '<div style="font-size:0.78rem;color:#64748b">' + item.used_days + ' من ' + item.allocated_days + ' يوم — متبقي: ' + item.remaining_days + '</div>' +
+            '</div>';
+        }).join('');
+      }
+    } catch(e) { console.error('loadBalances error', e); }
+  }
+
+  // ---- MINI CALENDAR ----
+  var myCalYear = today.getFullYear();
+  var myCalMonth = today.getMonth();
+  var myCachedLeaves = [];
+
+  function renderMyCalendar(leaves) {
+    myCachedLeaves = leaves || myCachedLeaves;
+    var monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    var labelEl = document.getElementById('myCalLabel');
+    if (labelEl) labelEl.textContent = monthNames[myCalMonth] + ' ' + myCalYear;
+
+    var calEl = document.getElementById('myCalendar');
+    if (!calEl) return;
+
+    var firstDay = new Date(myCalYear, myCalMonth, 1).getDay();
+    var daysInMonth = new Date(myCalYear, myCalMonth + 1, 0).getDate();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+    var gridStyle = 'display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:0.78rem;';
+    var headerCells = ['ح','أث','ث','ر','خ','ج','س'].map(function(d) {
+      return '<div style="text-align:center;font-weight:700;color:#64748b;padding:4px 0;">' + d + '</div>';
+    }).join('');
+
+    var cells = '';
+    for (var i = 0; i < firstDay; i++) {
+      cells += '<div style="height:40px"></div>';
+    }
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = myCalYear + '-' + String(myCalMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      var isToday = dateStr === todayStr;
+      var dayLeave = myCachedLeaves.find(function(l) { return l.start_date <= dateStr && l.end_date >= dateStr; });
+      var bg = 'background:#f8fafc;';
+      var border = 'border:1px solid #e2e8f0;';
+      if (dayLeave) {
+        var lcolor = MY_LEAVE_COLORS[dayLeave.leave_type] || '#64748b';
+        bg = 'background:' + lcolor + '33;';
+        if (dayLeave.status === 'pending') border = 'border:1.5px dashed ' + lcolor + ';';
+        else border = 'border:1px solid ' + lcolor + '66;';
+      }
+      if (isToday) border = 'border:2px solid #3b82f6;';
+      cells += '<div style="height:40px;border-radius:6px;' + bg + border + 'display:flex;align-items:center;justify-content:center;font-weight:' + (isToday ? '700' : '400') + ';color:' + (isToday ? '#1e40af' : '#374151') + '">' + d + '</div>';
+    }
+
+    var total = firstDay + daysInMonth;
+    var rem = total % 7;
+    if (rem !== 0) {
+      for (var j = 0; j < 7 - rem; j++) cells += '<div style="height:40px"></div>';
+    }
+
+    calEl.innerHTML = '<div style="' + gridStyle + '">' + headerCells + cells + '</div>';
+  }
+
+  function myCalPrev() { myCalMonth--; if (myCalMonth < 0) { myCalMonth = 11; myCalYear--; } renderMyCalendar(); }
+  function myCalNext() { myCalMonth++; if (myCalMonth > 11) { myCalMonth = 0; myCalYear++; } renderMyCalendar(); }
+  window.myCalPrev = myCalPrev;
+  window.myCalNext = myCalNext;
+
   loadLeaves();
+  loadTickets();
+  // Also load calendar and balances
+  (async function() {
+    try {
+      var res2 = await fetch('/api/my-leaves', { headers: AUTH });
+      var data2 = await res2.json();
+      if (data2.success && data2.employeeFound) {
+        renderMyCalendar(data2.data || []);
+        await loadBalances();
+      }
+    } catch(e) {}
+  })();
 })();
 </script>
 </body>
 </html>`
   return c.html(html)
 })
+
+// Redirect legacy /admin/my-leaves to /admin/my-hr
+app.get('/admin/my-leaves', (c) => {
+  return c.redirect('/admin/my-hr', 301)
+})
+
 
 app.get('/admin/my-profile', (c) => {
   const html = `<!DOCTYPE html>
@@ -33987,6 +35180,48 @@ app.get('/api/test/bindings', async (c) => {
   return c.json(result)
 })
 
+// Public contact form initiation (first typing into a field)
+app.post('/api/public/:slug/contact-form-initiations', async (c) => {
+  try {
+    const slug = normalizeTenantSlug(c.req.param('slug'))
+    if (!slug || isReservedRootSlug(slug)) {
+      return c.json({ success: false, error: 'Invalid slug' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
+
+    const tenant = await c.env.DB.prepare(`
+      SELECT id FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1
+    `).bind(slug).first<{ id: number }>()
+
+    if (!tenant?.id) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    let affiliateLinkId: number | null = null
+    if (affiliatePathRaw) {
+      if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
+        return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
+      }
+      const affRow = await c.env.DB.prepare(`
+        SELECT id FROM tenant_contact_affiliate_links
+        WHERE tenant_id = ? AND path_segment = ?
+        LIMIT 1
+      `).bind(tenant.id, affiliatePathRaw).first<{ id: number }>()
+      if (!affRow) {
+        return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
+      }
+      affiliateLinkId = affRow.id
+    }
+
+    await recordContactLinkFormInitiationWithDedup(c, c.env.DB, tenant.id, affiliateLinkId)
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 // Public contact form submit (tenant slug at root path)
 app.post('/api/public/:slug/contact-submissions', async (c) => {
   try {
@@ -34415,6 +35650,14 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
       return c.json({ success: false, error: 'العنوان مطلوب (حتى 120 حرفاً)' }, 400)
     }
 
+    const rawForkFrom = payload?.fork_from
+    const forkFrom = rawForkFrom == null || rawForkFrom === ''
+      ? null
+      : parseInt(String(rawForkFrom), 10)
+    if (forkFrom !== null && (!Number.isFinite(forkFrom) || forkFrom <= 0)) {
+      return c.json({ success: false, error: 'رابط المصدر غير صالح' }, 400)
+    }
+
     // Snapshot the company-link design and task-distribution configuration at creation time.
     const companyDesign = await c.env.DB.prepare(`
       SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_assignment_mode
@@ -34423,21 +35666,47 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
       .bind(tenantId)
       .first<ContactPageDesignFields & { contact_assignment_mode: string | null }>()
 
+    let sourceDesign: ContactPageDesignFields | null = null
+    if (forkFrom != null) {
+      sourceDesign = await c.env.DB.prepare(`
+        SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+               contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges,
+               contact_hero_title, contact_hero_subtitle, contact_accent_color
+        FROM tenant_contact_affiliate_links
+        WHERE id = ? AND tenant_id = ? LIMIT 1
+      `)
+        .bind(forkFrom, tenantId)
+        .first<ContactPageDesignFields>()
+      if (!sourceDesign) {
+        return c.json({ success: false, error: 'رابط المصدر غير موجود' }, 404)
+      }
+    }
+
+    const designToCopy = sourceDesign ?? companyDesign
     const insertResult = await c.env.DB.prepare(`
       INSERT INTO tenant_contact_affiliate_links (
         tenant_id, path_segment, label,
-        contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields
+        contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+        contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges,
+        contact_hero_title, contact_hero_subtitle, contact_accent_color
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
       .bind(
         tenantId,
         pathSegment,
         label,
-        companyDesign?.contact_bg_color ?? null,
-        companyDesign?.contact_form_color ?? null,
-        companyDesign?.contact_text_color ?? null,
-        companyDesign?.contact_custom_fields ?? null
+        designToCopy?.contact_bg_color ?? null,
+        designToCopy?.contact_form_color ?? null,
+        designToCopy?.contact_text_color ?? null,
+        designToCopy?.contact_custom_fields ?? null,
+        designToCopy?.contact_bg_image_url ?? null,
+        designToCopy?.contact_logo_url ?? null,
+        designToCopy?.contact_trust_badges ?? null,
+        designToCopy?.contact_form_badges ?? null,
+        designToCopy?.contact_hero_title ?? null,
+        designToCopy?.contact_hero_subtitle ?? null,
+        designToCopy?.contact_accent_color ?? null
       )
       .run()
 
@@ -34446,7 +35715,12 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
       (insertResult as any)?.meta?.lastRowId ??
       (insertResult as any)?.meta?.last_insert_rowid
     )
-    if (Number.isFinite(affiliateLinkId) && affiliateLinkId > 0 && companyDesign?.contact_assignment_mode === 'custom') {
+    if (
+      forkFrom == null &&
+      Number.isFinite(affiliateLinkId) &&
+      affiliateLinkId > 0 &&
+      companyDesign?.contact_assignment_mode === 'custom'
+    ) {
       await c.env.DB.prepare(`
         UPDATE tenant_contact_affiliate_links SET assignment_mode = 'custom' WHERE id = ?
       `).bind(affiliateLinkId).run()
@@ -36781,8 +38055,17 @@ app.get('/api/link-stats', async (c) => {
       const sourceParams = isCompany ? [] : [target.path_segment]
       const visitParams: any[] = [tenantId, target.id]
       let visitDateClause = ''
-      if (from) { visitDateClause += ' AND visit_date >= ?'; visitParams.push(from) }
-      if (to) { visitDateClause += ' AND visit_date <= ?'; visitParams.push(to) }
+      let initDateClause = ''
+      if (from) {
+        visitDateClause += ' AND visit_date >= ?'
+        initDateClause += ' AND initiation_date >= ?'
+        visitParams.push(from)
+      }
+      if (to) {
+        visitDateClause += ' AND visit_date <= ?'
+        initDateClause += ' AND initiation_date <= ?'
+        visitParams.push(to)
+      }
 
       const visits = await c.env.DB.prepare(`
         SELECT COALESCE(SUM(visit_count), 0) AS total FROM contact_link_visits
@@ -36791,6 +38074,14 @@ app.get('/api/link-stats', async (c) => {
       const visitDays = await c.env.DB.prepare(`
         SELECT visit_date AS date, visit_count AS count FROM contact_link_visits
         WHERE tenant_id = ? AND affiliate_link_id = ?${visitDateClause} ORDER BY visit_date ASC
+      `).bind(...visitParams).all().catch(() => ({ results: [] as any[] }))
+      const initiations = await c.env.DB.prepare(`
+        SELECT COALESCE(SUM(initiation_count), 0) AS total FROM contact_link_form_initiations
+        WHERE tenant_id = ? AND affiliate_link_id = ?${initDateClause}
+      `).bind(...visitParams).first<{ total: number }>().catch(() => ({ total: 0 }))
+      const initiationDays = await c.env.DB.prepare(`
+        SELECT initiation_date AS date, initiation_count AS count FROM contact_link_form_initiations
+        WHERE tenant_id = ? AND affiliate_link_id = ?${initDateClause} ORDER BY initiation_date ASC
       `).bind(...visitParams).all().catch(() => ({ results: [] as any[] }))
       const submissions = await c.env.DB.prepare(`
         SELECT COUNT(*) AS total,
@@ -36803,6 +38094,8 @@ app.get('/api/link-stats', async (c) => {
       `).bind(tenantId, ...sourceParams, ...dateParams).first<{ total: number; enrolled: number }>()
       const total = Number(submissions?.total || 0)
       const enrolled = Number(submissions?.enrolled || 0)
+      const visitTotal = Number(visits?.total || 0)
+      const initiationTotal = Number(initiations?.total || 0)
       const submissionDays = await c.env.DB.prepare(`
         SELECT date(f.created_at) AS date, COUNT(*) AS count
         FROM company_contact_followups f
@@ -36812,7 +38105,7 @@ app.get('/api/link-stats', async (c) => {
 
       if (!includeRows) {
         return {
-          id: target.id, label: target.label, visits: Number(visits?.total || 0), submissions: total,
+          id: target.id, label: target.label, visits: visitTotal, initiations: initiationTotal, submissions: total,
           enrolled, not_enrolled: total - enrolled,
           conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
           unassigned: Number(target.unassigned_limit_count || 0),
@@ -36868,10 +38161,13 @@ app.get('/api/link-stats', async (c) => {
       const followupStaff = await listFollowupAssignableStaff(c.env.DB, tenantId)
 
       return {
-        id: target.id, label: target.label, visits: Number(visits?.total || 0), submissions: total, enrolled,
+        id: target.id, label: target.label, visits: visitTotal, initiations: initiationTotal, submissions: total, enrolled,
         not_enrolled: total - enrolled, conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
-        visit_to_submission: Number(visits?.total || 0) ? Math.round((total / Number(visits?.total || 0)) * 1000) / 10 : 0,
+        visit_to_initiation: visitTotal ? Math.round((initiationTotal / visitTotal) * 1000) / 10 : 0,
+        visit_to_submission: visitTotal ? Math.round((total / visitTotal) * 1000) / 10 : 0,
+        initiation_to_submission: initiationTotal ? Math.round((total / initiationTotal) * 1000) / 10 : 0,
         unassigned: Number(target.unassigned_limit_count || 0), visit_days: visitDays.results || [],
+        initiation_days: initiationDays.results || [],
         submission_days: submissionDays.results || [], users: perUser.results || [], customers: followupRows.results || [],
         followup_staff: followupStaff,
       }
@@ -36885,19 +38181,29 @@ app.get('/api/link-stats', async (c) => {
         const visitParams: any[] = [tenantId]
         if (from) { visitDateClause += ' AND visit_date >= ?'; visitParams.push(from) }
         if (to) { visitDateClause += ' AND visit_date <= ?'; visitParams.push(to) }
+        let initDateClause = ''
+        const initParams: any[] = [tenantId]
+        if (from) { initDateClause += ' AND initiation_date >= ?'; initParams.push(from) }
+        if (to) { initDateClause += ' AND initiation_date <= ?'; initParams.push(to) }
 
         const pathKeyExpr = `CASE
             WHEN f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '' THEN ''
             ELSE TRIM(f.affiliate_path_segment)
           END`
 
-        const [visitAgg, subAgg] = await Promise.all([
+        const [visitAgg, initAgg, subAgg] = await Promise.all([
           c.env.DB.prepare(`
             SELECT affiliate_link_id AS id, COALESCE(SUM(visit_count), 0) AS visits
             FROM contact_link_visits
             WHERE tenant_id = ?${visitDateClause}
             GROUP BY affiliate_link_id
           `).bind(...visitParams).all<{ id: number; visits: number }>().catch(() => ({ results: [] as any[] })),
+          c.env.DB.prepare(`
+            SELECT affiliate_link_id AS id, COALESCE(SUM(initiation_count), 0) AS initiations
+            FROM contact_link_form_initiations
+            WHERE tenant_id = ?${initDateClause}
+            GROUP BY affiliate_link_id
+          `).bind(...initParams).all<{ id: number; initiations: number }>().catch(() => ({ results: [] as any[] })),
           c.env.DB.prepare(`
             SELECT
               ${pathKeyExpr} AS path_key,
@@ -36914,6 +38220,9 @@ app.get('/api/link-stats', async (c) => {
 
         const visitsById = new Map<number, number>()
         for (const row of visitAgg.results || []) visitsById.set(Number(row.id), Number(row.visits) || 0)
+
+        const initiationsById = new Map<number, number>()
+        for (const row of initAgg.results || []) initiationsById.set(Number(row.id), Number(row.initiations) || 0)
 
         const pathToLinkId = new Map<string, number>()
         for (const item of links) {
@@ -36935,6 +38244,7 @@ app.get('/api/link-stats', async (c) => {
 
         const overview = links.map((item) => {
           const visits = visitsById.get(item.id) || 0
+          const initiations = initiationsById.get(item.id) || 0
           const subs = subsById.get(item.id) || { submissions: 0, enrolled: 0 }
           const total = subs.submissions
           const enrolled = subs.enrolled
@@ -36942,6 +38252,7 @@ app.get('/api/link-stats', async (c) => {
             id: item.id,
             label: item.label,
             visits,
+            initiations,
             submissions: total,
             enrolled,
             not_enrolled: total - enrolled,
@@ -37006,10 +38317,10 @@ app.get('/admin/link-stats', async (c) => {
       </div>
       <div id="loading" class="py-20 text-center text-slate-400"><i class="fas fa-circle-notch fa-spin text-3xl text-teal-500"></i><p class="mt-3">جاري تجهيز الصورة الكاملة...</p></div>
       <div id="content" class="hidden">
-        <section id="kpis" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mt-6"></section>
+        <section id="kpis" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 mt-6"></section>
         <section id="detail" class="hidden">
           <div class="grid lg:grid-cols-5 gap-5 mt-6">
-            <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-5 metric-glow"><div class="flex justify-between items-center mb-4"><div><h2 class="font-black">حركة الرابط</h2><p class="text-xs text-slate-500 mt-1">الزيارات مقابل الطلبات المستلمة</p></div><span id="linkBadge" class="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full"></span></div><div class="h-72"><canvas id="trend"></canvas></div></div>
+            <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-5 metric-glow"><div class="flex justify-between items-center mb-4"><div><h2 class="font-black">حركة الرابط</h2><p class="text-xs text-slate-500 mt-1">الزيارات وبدء التعبئة والطلبات</p></div><span id="linkBadge" class="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full"></span></div><div class="h-72"><canvas id="trend"></canvas></div></div>
             <div class="lg:col-span-2 rounded-2xl p-6 bg-gradient-to-br from-teal-700 via-teal-700 to-cyan-800 text-white metric-glow"><p class="text-teal-100 text-sm">قمع التحويل</p><div class="mt-6 space-y-5" id="funnel"></div><p class="text-xs text-teal-100/80 mt-6">طلب ← عميل: الطلب أصبح عميلاً مسجّلاً في جدول العملاء (مطابقة برقم الجوال).</p></div>
           </div>
           <div class="grid lg:grid-cols-5 gap-5 mt-6">
@@ -37017,7 +38328,7 @@ app.get('/admin/link-stats', async (c) => {
             <section class="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة الطلبات</h2><p class="text-xs text-slate-500 mt-1">طلبات الرابط خلال الفترة المحددة</p></div><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div><div class="px-5 pt-4 flex gap-2"><button data-tab="assigned" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">معيّن <span id="assignedCount"></span></button><button data-tab="unassigned" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير معيّن <span id="unassignedCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div></section>
           </div>
         </section>
-        <section id="overview" class="hidden mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">مقارنة أداء الروابط</h2><p class="text-xs text-slate-500 mt-1">اختر أي صف للانتقال إلى تفاصيل الرابط.</p></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-4 text-right">الرابط</th><th class="p-4">الزيارات</th><th class="p-4">الطلبات</th><th class="p-4">المسجّلون</th><th class="p-4">التحويل</th><th class="p-4">غير معيّن</th><th></th></tr></thead><tbody id="overviewRows"></tbody></table></div></section>
+        <section id="overview" class="hidden mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">مقارنة أداء الروابط</h2><p class="text-xs text-slate-500 mt-1">اختر أي صف للانتقال إلى تفاصيل الرابط.</p></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-4 text-right">الرابط</th><th class="p-4">الزيارات</th><th class="p-4">بدء التعبئة</th><th class="p-4">الطلبات</th><th class="p-4">المسجّلون</th><th class="p-4">التحويل</th><th class="p-4">غير معيّن</th><th></th></tr></thead><tbody id="overviewRows"></tbody></table></div></section>
       </div>
     </main>
     <script>
@@ -37060,7 +38371,7 @@ app.get('/admin/link-stats', async (c) => {
         });
         document.querySelectorAll('[data-followup-assignment]').forEach(el=>{el.dataset.previousValue=el.value});
       }
-      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const assigned=s.customers.filter(x=>x.assigned_user_id).length;$('assignedCount').textContent='('+assigned+')';$('unassignedCount').textContent='('+ (s.customers.length-assigned)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
+      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+(r.initiations||0)+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('بدء التعبئة',s.initiations||0,'fa-keyboard','bg-amber-50 text-amber-600','كتابة في حقل')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['بدء التعبئة',s.initiations||0],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const assigned=s.customers.filter(x=>x.assigned_user_id).length;$('assignedCount').textContent='('+assigned+')';$('unassignedCount').textContent='('+ (s.customers.length-assigned)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.initiation_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),init=new Map((s.initiation_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'بدء التعبئة',data:dates.map(d=>init.get(d)||0),borderColor:'#d97706',backgroundColor:'#d97706',tension:.35,pointRadius:3},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
       async function load(){
         const tenant=IS_SUPER?$('tenant').value:'';
         if(IS_SUPER&&!tenant)return;
@@ -37161,6 +38472,7 @@ app.get('/admin/contact-affiliates', async (c) => {
         #listBody > ul > li:hover { transform:translateY(-2px); box-shadow:0 18px 30px -24px rgba(15,23,42,.55); }
         #listBody > ul > li + li { border-top-width:1px; }
         #listBody [data-aff-toggle] { border:1px solid #fde68a; background:#fffbeb; padding:7px 10px; border-radius:9px; }
+        #listBody [data-aff-copy-url] { border:1px solid #bae6fd; background:#f0f9ff; padding:7px 10px; border-radius:9px; }
         #listBody [data-del] { border:1px solid #fecaca; background:#fff1f2; padding:7px 10px; border-radius:9px; }
       </style>
     </head>
@@ -37487,6 +38799,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<div class="flex flex-wrap items-center gap-2 pt-1">' +
             '<button type="button" data-aff-save-design="' + id + '" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm hover:shadow transition-all"><i class="fas fa-save"></i>حفظ التصميم</button>' +
             '<button type="button" data-aff-copy-company="' + id + '" class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-2.5 rounded-xl text-sm transition-colors"><i class="fas fa-copy text-gray-400"></i>نسخ من الشركة</button>' +
+            '<button type="button" data-aff-fork="' + id + '" class="inline-flex items-center gap-2 bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 px-3 py-2.5 rounded-xl text-sm transition-colors"><i class="fas fa-code-branch text-sky-500"></i>تفرع</button>' +
             '<span data-aff-design-msg="' + id + '" class="text-sm"></span>' +
             '</div>' +
 
@@ -38299,6 +39612,7 @@ app.get('/admin/contact-affiliates', async (c) => {
           var whiteBtn = document.querySelector('[data-aff-text-white="' + id + '"]');
           var saveBtn = document.querySelector('[data-aff-save-design="' + id + '"]');
           var copyBtn = document.querySelector('[data-aff-copy-company="' + id + '"]');
+          var forkBtn = document.querySelector('[data-aff-fork="' + id + '"]');
           var msgEl = document.querySelector('[data-aff-design-msg="' + id + '"]');
           var addBtn = document.getElementById('addFieldBtn_' + id);
           var list = document.getElementById('fieldsList_' + id);
@@ -38574,6 +39888,59 @@ app.get('/admin/contact-affiliates', async (c) => {
             });
           }
 
+          if (forkBtn) {
+            forkBtn.addEventListener('click', async function () {
+              var source = AFFILIATE_ROWS.find(function (r) { return Number(r.id) === Number(id); });
+              if (!source) return;
+
+              var path = prompt('أدخل مسار الرابط الجديد (بالإنجليزية، بدون شرطة مائلة):', '');
+              if (path == null) return;
+              path = path.trim().toLowerCase().replace(/^\\/+/, '');
+              var label = prompt('أدخل تسمية الرابط الجديد:', source.label + ' - نسخة');
+              if (label == null) return;
+              label = label.trim();
+              if (!path || !label) {
+                if (msgEl) {
+                  msgEl.textContent = 'أدخل المسار والتسمية';
+                  msgEl.className = 'text-sm text-red-600';
+                }
+                return;
+              }
+
+              forkBtn.disabled = true;
+              if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-sm'; }
+              try {
+                var payload = { path_segment: path, label: label, fork_from: Number(id) };
+                if (IS_SUPERADMIN) {
+                  var tid = currentTenantId();
+                  if (!tid) {
+                    if (msgEl) {
+                      msgEl.textContent = 'اختر شركة أولاً';
+                      msgEl.className = 'text-sm text-red-600';
+                    }
+                    return;
+                  }
+                  payload.tenant_id = tid;
+                }
+                var forkRes = await axios.post('/api/tenant-contact-affiliates', payload);
+                if (forkRes.data && forkRes.data.success) {
+                  await loadList();
+                  alert('تم إنشاء الرابط من التصميم الحالي.');
+                } else {
+                  if (msgEl) {
+                    msgEl.textContent = (forkRes.data && forkRes.data.error) ? forkRes.data.error : 'تعذر إنشاء الرابط';
+                    msgEl.className = 'text-sm text-red-600';
+                  }
+                }
+              } catch (err) {
+                var em3 = (err.response && err.response.data && err.response.data.error) ? err.response.data.error : (err.message || 'تعذر إنشاء الرابط');
+                if (msgEl) { msgEl.textContent = em3; msgEl.className = 'text-sm text-red-600'; }
+              } finally {
+                forkBtn.disabled = false;
+              }
+            });
+          }
+
           wireAssignmentPanel(id);
         }
 
@@ -38590,9 +39957,11 @@ app.get('/admin/contact-affiliates', async (c) => {
           var list = document.getElementById('fieldsList_' + id);
           var presetsStrip = document.getElementById('presetsStrip_' + id);
 
-          // hide copy-from-company and logo upload (not applicable for the main link)
+          // hide copy-from-company, fork, and logo upload (not applicable for the main link)
           var copyBtn = document.querySelector('[data-aff-copy-company="' + id + '"]');
           if (copyBtn) copyBtn.style.display = 'none';
+          var forkBtn = document.querySelector('[data-aff-fork="' + id + '"]');
+          if (forkBtn) forkBtn.style.display = 'none';
           var logoSection = document.getElementById('affLogoUrl_' + id);
           if (logoSection && logoSection.parentElement) {
             var logoWrap = logoSection.closest('.border-t');
@@ -38867,6 +40236,8 @@ app.get('/admin/contact-affiliates', async (c) => {
                     '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-3 shrink-0">' +
+                    '<button type="button" class="text-sky-700 text-sm hover:underline font-medium" data-aff-copy-url="' + escapeHtml(full || '') + '">' +
+                    '<i class="fas fa-link ml-1"></i>نسخ الرابط</button>' +
                     '<button type="button" class="text-amber-700 text-sm hover:underline font-medium" data-aff-toggle="' + id + '">' +
                     '<i class="fas fa-palette ml-1"></i>تخصيص الصفحة</button>' +
                     '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' + id + '">حذف</button>' +
@@ -38880,6 +40251,33 @@ app.get('/admin/contact-affiliates', async (c) => {
                 })
                 .join('') +
               '</ul>';
+
+            body.querySelectorAll('[data-aff-copy-url]').forEach(function (btn) {
+              btn.addEventListener('click', async function () {
+                var url = btn.getAttribute('data-aff-copy-url') || '';
+                if (!url) {
+                  alert('لا يوجد رابط للنسخ');
+                  return;
+                }
+                try {
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(url);
+                  } else {
+                    var ta = document.createElement('textarea');
+                    ta.value = url;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                  }
+                  var prev = btn.innerHTML;
+                  btn.innerHTML = '<i class="fas fa-check ml-1"></i>تم النسخ';
+                  setTimeout(function () { btn.innerHTML = prev; }, 1500);
+                } catch (err) {
+                  alert('فشل نسخ الرابط');
+                }
+              });
+            });
 
             body.querySelectorAll('[data-aff-toggle]').forEach(function (btn) {
               btn.addEventListener('click', function () {

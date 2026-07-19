@@ -1,4 +1,5 @@
 // Advanced Reports - Customer, Requests, Performance, Financial, Banks Reports
+import { REPORT_FLATPICKR_HEAD, reportFilterBarHtml, REPORT_FILTER_BASE_JS, REPORT_PRINT_CSS, reportPdfButtonHtml } from './reports-module'
 
 // Helper: Mobile-Responsive CSS Styles
 const getMobileResponsiveCSS = () => `
@@ -114,10 +115,11 @@ export const customersReportPage = `<!DOCTYPE html>
         }
         
         ${getMobileResponsiveCSS()}
+        ${REPORT_PRINT_CSS}
     </style>
 </head>
 <body class="bg-gray-50">
-    <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="border-b border-slate-200/90 bg-white/90 no-print">
         <div class="max-w-7xl mx-auto px-6 py-1.5">
             <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
@@ -134,7 +136,7 @@ export const customersReportPage = `<!DOCTYPE html>
                     <h2 class="text-xl font-bold">إجمالي العملاء: <span id="totalCustomers" class="text-blue-600">0</span></h2>
                     <p class="text-gray-600 text-sm">تاريخ التقرير: <span id="reportDate"></span></p>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 no-print">
                     <div class="relative">
                         <input 
                             type="text" 
@@ -145,6 +147,7 @@ export const customersReportPage = `<!DOCTYPE html>
                         />
                         <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
                     </div>
+                    ${reportPdfButtonHtml('bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold whitespace-nowrap flex items-center gap-2')}
                     <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold whitespace-nowrap">
                         <i class="fas fa-file-excel ml-2"></i>
                         تصدير Excel
@@ -262,261 +265,171 @@ export const requestsReportPage = `<!DOCTYPE html>
     <title>تقرير طلبات التمويل</title>
     <link rel="stylesheet" href="/tailwind.css">
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+${REPORT_FLATPICKR_HEAD}
     <style>
-        /* Custom Scrollbar - Enhanced */
-        .overflow-x-auto {
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
-            scrollbar-color: #22c55e #f7fafc;
-        }
-        
-        .overflow-x-auto::-webkit-scrollbar {
-            height: 12px;
-            width: 12px;
-        }
-        
-        .overflow-x-auto::-webkit-scrollbar-track {
-            background: #e5e7eb;
-            border-radius: 10px;
-            margin: 0 10px;
-        }
-        
-        .overflow-x-auto::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
-        }
-        
-        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
-            border-color: #d1d5db;
-        }
-        
-        /* Force scrollbar to always show */
-        .overflow-x-auto {
-            overflow-x: scroll !important; /* Always show scrollbar */
-        }
-        
-        .overflow-x-auto table {
-            min-width: 1200px; /* Force table to be wide enough for scrollbar */
-            width: max-content;
-        }
-        
+        .overflow-x-auto { overflow-x: auto !important; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #16A34A #f7fafc; }
+        .overflow-x-auto::-webkit-scrollbar { height: 10px; }
+        .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 6px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb { background: #16A34A; border-radius: 6px; }
         ${getMobileResponsiveCSS()}
     </style>
 </head>
 <body class="bg-gray-50">
-    <div class="border-b border-slate-200/90 bg-white/90">
-        <div class="max-w-7xl mx-auto px-6 py-1.5">
-            <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
+    <div class="border-b border-gray-200 bg-white">
+        <div class="max-w-7xl mx-auto px-4 py-1.5 flex items-center justify-between">
+            <a href="/admin/reports" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">← منظومة التقارير</a>
+            <a href="/admin/panel" class="text-sm font-medium text-gray-500 hover:text-gray-800">لوحة التحكم</a>
         </div>
     </div>
-    <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">
-                <i class="fas fa-file-invoice text-green-600 ml-2"></i>
-                تقرير طلبات التمويل
+
+    <div style="background:#16A34A" class="text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <h1 class="text-3xl font-bold flex items-center">
+                <i class="fas fa-file-invoice ml-3"></i>تقرير طلبات التمويل
             </h1>
+            <p class="mt-1 text-sm opacity-80">إجمالي الطلبات والحالات والمبالغ حسب الفترة</p>
+        </div>
+    </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <div class="text-gray-600 text-sm">إجمالي الطلبات</div>
-                <div class="text-3xl font-bold text-blue-600" id="totalRequests">0</div>
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        ${reportFilterBarHtml('#16A34A')}
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl shadow-md p-5">
+                <p class="text-gray-500 text-xs font-medium mb-1">إجمالي الطلبات</p>
+                <p class="text-3xl font-bold text-blue-600" id="cTotal">—</p>
+                <p class="text-xs text-gray-400 mt-1" id="cTotalAmt"></p>
             </div>
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <div class="text-gray-600 text-sm">قيد المراجعة</div>
-                <div class="text-3xl font-bold text-yellow-600" id="pendingRequests">0</div>
+            <div class="bg-white rounded-xl shadow-md p-5">
+                <p class="text-gray-500 text-xs font-medium mb-1">قيد المراجعة</p>
+                <p class="text-3xl font-bold text-yellow-500" id="cPending">—</p>
             </div>
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <div class="text-gray-600 text-sm">مقبول</div>
-                <div class="text-3xl font-bold text-green-600" id="approvedRequests">0</div>
+            <div class="bg-white rounded-xl shadow-md p-5">
+                <p class="text-gray-500 text-xs font-medium mb-1">مقبول</p>
+                <p class="text-3xl font-bold text-green-600" id="cApproved">—</p>
+                <p class="text-xs text-gray-400 mt-1" id="cApprovedAmt"></p>
             </div>
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <div class="text-gray-600 text-sm">مرفوض</div>
-                <div class="text-3xl font-bold text-red-600" id="rejectedRequests">0</div>
+            <div class="bg-white rounded-xl shadow-md p-5">
+                <p class="text-gray-500 text-xs font-medium mb-1">مرفوض</p>
+                <p class="text-3xl font-bold text-red-500" id="cRejected">—</p>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <canvas id="requestsChart" height="100"></canvas>
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <canvas id="requestsChart" height="80"></canvas>
         </div>
 
-        <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
-                <h2 class="text-xl font-bold">تفاصيل الطلبات</h2>
-                <div class="flex items-center gap-3">
+        <div class="bg-white rounded-xl shadow-md p-6">
+            <div class="flex justify-between items-center mb-4 gap-4 flex-wrap">
+                <h2 class="text-lg font-bold text-gray-800">تفاصيل الطلبات</h2>
+                <div class="flex items-center gap-3 no-print">
                     <div class="relative">
-                        <input 
-                            type="text" 
-                            id="searchInputRequests" 
-                            placeholder="بحث في الطلبات..." 
-                            class="px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            onkeyup="searchRequestsTable()"
-                        />
-                        <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                        <input type="text" id="searchInputRequests" placeholder="بحث..." onkeyup="searchTable()"
+                            class="px-4 py-2 pr-9 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500">
+                        <i class="fas fa-search absolute right-3 top-2.5 text-gray-400 text-sm"></i>
                     </div>
-                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold whitespace-nowrap">
-                        <i class="fas fa-file-excel ml-2"></i>
-                        تصدير Excel
+                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                        <i class="fas fa-file-excel ml-1"></i>Excel
                     </button>
                 </div>
             </div>
-
-            <div id="loading" class="text-center py-12">
-                <i class="fas fa-spinner fa-spin text-4xl text-green-600 mb-4"></i>
-                <p class="text-gray-600">جاري تحميل البيانات...</p>
-            </div>
-
+            <div id="tableLoading" class="text-center py-8 text-gray-400">جارٍ تحميل البيانات...</div>
             <div id="tableContainer" class="hidden overflow-x-auto">
                 <table class="w-full">
-                    <thead class="bg-gradient-to-r from-green-600 to-green-700 text-white">
+                    <thead class="bg-green-600 text-white">
                         <tr>
-                            <th class="px-4 py-3 text-right">رقم الطلب</th>
-                            <th class="px-4 py-3 text-right">اسم العميل</th>
-                            <th class="px-4 py-3 text-right">البنك</th>
-                            <th class="px-4 py-3 text-right">المبلغ المطلوب</th>
-                            <th class="px-4 py-3 text-right">الحالة</th>
-                            <th class="px-4 py-3 text-right">التاريخ</th>
+                            <th class="px-4 py-3 text-right text-sm">#</th>
+                            <th class="px-4 py-3 text-right text-sm">العميل</th>
+                            <th class="px-4 py-3 text-right text-sm">البنك</th>
+                            <th class="px-4 py-3 text-right text-sm">المبلغ</th>
+                            <th class="px-4 py-3 text-right text-sm">الحالة</th>
+                            <th class="px-4 py-3 text-right text-sm">التاريخ</th>
                         </tr>
                     </thead>
-                    <tbody id="reportTable" class="divide-y divide-gray-200"></tbody>
+                    <tbody id="reportTable"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
-        let reportData = [];
         const authToken = localStorage.getItem('authToken');
-        
+        let _reportData = [], _chart = null;
+        ${REPORT_FILTER_BASE_JS}
+
         async function loadReport() {
+            const params = new URLSearchParams();
+            if (_startDate) params.set('start_date', _startDate);
+            if (_endDate)   params.set('end_date',   _endDate);
+            document.getElementById('tableLoading').style.display = '';
+            document.getElementById('tableContainer').classList.add('hidden');
             try {
-                const response = await axios.get('/api/financing-requests', {
-                    headers: { 'Authorization': 'Bearer ' + authToken }
-                });
-                
-                if (response.data.success) {
-                    reportData = response.data.data || [];
-                    displayReport();
-                    displayChart();
-                }
-            } catch (error) {
-                console.error('Error loading report:', error);
-                alert('حدث خطأ في تحميل التقرير');
+                const res = await fetch('/api/reports/requests?' + params, { headers: { 'Authorization': 'Bearer ' + authToken } });
+                const d = await res.json();
+                if (!d.success) throw new Error(d.error);
+                const s = d.summary || {};
+                document.getElementById('cTotal').textContent       = n(s.total);
+                document.getElementById('cPending').textContent     = n(s.pending);
+                document.getElementById('cApproved').textContent    = n(s.approved);
+                document.getElementById('cRejected').textContent    = n(s.rejected);
+                document.getElementById('cTotalAmt').textContent    = s.total_amount    ? money(s.total_amount)    : '';
+                document.getElementById('cApprovedAmt').textContent = s.approved_amount ? money(s.approved_amount) : '';
+                _reportData = d.data || [];
+                renderTable(_reportData);
+                renderChart(s);
+            } catch (e) {
+                document.getElementById('tableLoading').textContent = 'فشل تحميل البيانات: ' + e.message;
+                document.getElementById('tableLoading').style.display = '';
             } finally {
-                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('tableLoading').style.display = 'none';
+                document.getElementById('tableContainer').classList.remove('hidden');
             }
         }
-        
-        function displayReport() {
-            const stats = {
-                total: reportData.length,
-                pending: reportData.filter(r => r.status === 'pending').length,
-                approved: reportData.filter(r => r.status === 'approved' || r.status === 'approved_internal' || r.status === 'approved_external').length,
-                rejected: reportData.filter(r => r.status === 'rejected').length
-            };
-            
-            document.getElementById('totalRequests').textContent = stats.total;
-            document.getElementById('pendingRequests').textContent = stats.pending;
-            document.getElementById('approvedRequests').textContent = stats.approved;
-            document.getElementById('rejectedRequests').textContent = stats.rejected;
-            document.getElementById('tableContainer').classList.remove('hidden');
-            
-            const tbody = document.getElementById('reportTable');
-            tbody.innerHTML = reportData.map(req => {
-                const statusColors = {
-                    'pending': 'bg-yellow-100 text-yellow-800',
-                    'approved': 'bg-green-100 text-green-800',
-                    'approved_internal': 'bg-green-100 text-green-800',
-                    'approved_external': 'bg-green-100 text-green-800',
-                    'rejected': 'bg-red-100 text-red-800'
-                };
-                const statusText = {
-                    'pending': 'قيد المراجعة',
-                    'approved': 'مقبول',
-                    'approved_internal': 'مقبول (داخلي)',
-                    'approved_external': 'مقبول (خارجي)',
-                    'rejected': 'مرفوض'
-                };
-                
-                return \`
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3">#\${req.id}</td>
-                        <td class="px-4 py-3 font-medium">\${req.customer_name || '-'}</td>
-                        <td class="px-4 py-3">\${req.bank_name || '-'}</td>
-                        <td class="px-4 py-3">\${(req.requested_amount || 0).toLocaleString('ar-SA')} ريال</td>
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-1 text-xs rounded-full \${statusColors[req.status] || 'bg-gray-100 text-gray-800'}">
-                                \${statusText[req.status] || req.status}
-                            </span>
-                        </td>
-                        <td class="px-4 py-3">\${new Date(req.created_at).toLocaleDateString('ar-SA')}</td>
-                    </tr>
-                \`;
-            }).join('');
+
+        function renderTable(data) {
+            const STATUS = { pending:'قيد المراجعة', approved:'مقبول', approved_internal:'مقبول (داخلي)', approved_external:'مقبول (خارجي)', rejected:'مرفوض' };
+            const COLOR  = { pending:'bg-yellow-100 text-yellow-800', approved:'bg-green-100 text-green-800', approved_internal:'bg-green-100 text-green-800', approved_external:'bg-green-100 text-green-800', rejected:'bg-red-100 text-red-800' };
+            document.getElementById('reportTable').innerHTML = data.map(r => \`
+                <tr class="hover:bg-gray-50 border-b">
+                    <td class="px-4 py-3 text-sm text-gray-500">#\${r.id}</td>
+                    <td class="px-4 py-3 font-medium text-sm">\${r.customer_name||'—'}</td>
+                    <td class="px-4 py-3 text-sm">\${r.bank_name||'—'}</td>
+                    <td class="px-4 py-3 text-sm">\${(r.requested_amount||0).toLocaleString('ar-SA')} ريال</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full \${COLOR[r.status]||'bg-gray-100 text-gray-800'}">\${STATUS[r.status]||r.status}</span></td>
+                    <td class="px-4 py-3 text-sm">\${new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
+                </tr>\`).join('');
         }
-        
-        function displayChart() {
-            const stats = {
-                pending: reportData.filter(r => r.status === 'pending').length,
-                approved: reportData.filter(r => r.status === 'approved' || r.status === 'approved_internal' || r.status === 'approved_external').length,
-                rejected: reportData.filter(r => r.status === 'rejected').length
-            };
-            
-            const ctx = document.getElementById('requestsChart').getContext('2d');
-            new Chart(ctx, {
+
+        function renderChart(s) {
+            const ctx = document.getElementById('requestsChart');
+            if (_chart) _chart.destroy();
+            _chart = new Chart(ctx, {
                 type: 'bar',
-                data: {
-                    labels: ['قيد المراجعة', 'مقبول', 'مرفوض'],
-                    datasets: [{
-                        label: 'عدد الطلبات',
-                        data: [stats.pending, stats.approved, stats.rejected],
-                        backgroundColor: ['#eab308', '#22c55e', '#ef4444']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
+                data: { labels: ['قيد المراجعة','مقبول','مرفوض'], datasets: [{ data: [s.pending||0, s.approved||0, s.rejected||0], backgroundColor: ['#EAB308','#22C55E','#EF4444'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
         }
-        
-        function searchRequestsTable() {
-            const searchValue = document.getElementById('searchInputRequests').value.toLowerCase();
-            const tbody = document.getElementById('reportTable');
-            const rows = tbody.querySelectorAll('tr');
-            
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                if (text.includes(searchValue)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+
+        function searchTable() {
+            const q = document.getElementById('searchInputRequests').value.toLowerCase();
+            document.querySelectorAll('#reportTable tr').forEach(row => { row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none'; });
         }
-        
+
         window.exportToExcel = function() {
-            const ws = XLSX.utils.json_to_sheet(reportData.map(r => ({
-                'رقم الطلب': r.id,
-                'العميل': r.customer_name,
-                'البنك': r.bank_name,
-                'المبلغ': r.requested_amount,
-                'الحالة': r.status,
-                'التاريخ': r.created_at
-            })));
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'الطلبات');
+            const ws = XLSX.utils.json_to_sheet(_reportData.map(r => ({ '#': r.id, 'العميل': r.customer_name, 'البنك': r.bank_name, 'المبلغ': r.requested_amount, 'الحالة': r.status, 'التاريخ': r.created_at })));
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'الطلبات');
             XLSX.writeFile(wb, 'تقرير_الطلبات_' + new Date().toISOString().split('T')[0] + '.xlsx');
         }
-        
-        document.addEventListener('DOMContentLoaded', loadReport);
+
+        window.addEventListener('load', () => {
+            const d = getPeriodDates('year');
+            _startDate = d.s; _endDate = d.e;
+            setBadge(d.label, d.range);
+            initDatePicker();
+            loadReport();
+        });
     </script>
 </body>
 </html>`;
@@ -531,18 +444,22 @@ export const financialReportPage = `<!DOCTYPE html>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>${REPORT_PRINT_CSS}</style>
 </head>
 <body class="bg-gray-50">
-    <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="border-b border-slate-200/90 bg-white/90 no-print">
         <div class="max-w-7xl mx-auto px-6 py-1.5">
             <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 pt-4 pb-6">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">
+        <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
+            <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-dollar-sign text-yellow-600 ml-2"></i>
                 التقرير المالي
             </h1>
+            ${reportPdfButtonHtml('bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2')}
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg p-6">

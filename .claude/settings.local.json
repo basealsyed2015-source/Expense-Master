@@ -60,7 +60,9 @@
       "Bash(awk 'NR>=21830 && NR<=23120 && /<\\\\/body>/{print NR\": \"$0}' src/index.tsx)",
       "Bash(awk 'NR>=19550 && NR<=19650{print NR\": \"$0}' src/index.tsx)",
       "Bash(awk 'NR>=19500 && NR<=19556{print NR\": \"$0}' src/index.tsx)",
-      "Bash(awk -F: '$1 > 32940 && $1 < 32970')"
+      "Bash(awk -F: '$1 > 32940 && $1 < 32970')",
+      "Bash(sed -i '341,422d' src/reports-module.ts)",
+      "Bash(sed -n '338,345p' src/reports-module.ts)"
     ]
   }
 }

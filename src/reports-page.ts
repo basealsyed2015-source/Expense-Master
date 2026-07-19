@@ -160,22 +160,7 @@ export const reportsPage = `<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- Clicks Report -->
-            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
-                <div class="bg-gradient-to-r from-pink-500 to-pink-600 text-white p-6">
-                    <i class="fas fa-mouse-pointer text-3xl mb-2"></i>
-                    <h3 class="text-xl font-bold">تقرير النقرات</h3>
-                    <p class="text-sm text-pink-100 mt-2">تتبع النقرات على روابط الحاسبات والمنصات</p>
-                </div>
-                <div class="p-6">
-                    <a href="/admin/reports/clicks" class="w-full bg-pink-600 hover:bg-pink-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
-                        <i class="fas fa-file-alt ml-2"></i>
-                        عرض التقرير
-                    </a>
-                </div>
-            </div>
-
-            <!-- Workflow Report (super admin only) -->
+<!-- Workflow Report (super admin only) -->
             <div id="workflowReportCard" class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
                 <div class="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white p-6">
                     <i class="fas fa-project-diagram text-3xl mb-2"></i>
@@ -199,6 +184,52 @@ export const reportsPage = `<!DOCTYPE html>
                 </div>
                 <div class="p-6">
                     <a href="/admin/reports/employee-performance" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
+
+            <!-- HR Report -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-green-500 to-green-600 text-white p-6">
+                    <i class="fas fa-users-cog text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير الموارد البشرية</h3>
+                    <p class="text-sm text-green-100 mt-2">الموظفون والإجازات والتذاكر والرواتب</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/hr" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
+
+            <!-- Contracts Report -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6">
+                    <i class="fas fa-file-signature text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير العقود</h3>
+                    <p class="text-sm text-blue-100 mt-2">العقود والسندات لأمر والقيم المالية</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/contracts" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
+
+
+<!-- Tenants / SaaS Report (Super Admin) -->
+            <div id="tenantsReportCard" class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6">
+                    <i class="fas fa-globe text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">تقرير الشركات والاشتراكات</h3>
+                    <p class="text-sm text-purple-100 mt-2">الشركات والباقات والإيرادات (مدير عام)</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/tenants" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
                         <i class="fas fa-file-alt ml-2"></i>
                         عرض التقرير
                     </a>
@@ -278,6 +309,10 @@ export const reportsPage = `<!DOCTYPE html>
             const workflowCard = document.getElementById('workflowReportCard');
             if (workflowCard && !isSuperAdmin) {
                 workflowCard.style.display = 'none';
+            }
+            const tenantsCard = document.getElementById('tenantsReportCard');
+            if (tenantsCard && !isSuperAdmin) {
+                tenantsCard.style.display = 'none';
             }
             const followupCard = document.getElementById('requestsFollowupReport');
             if (followupCard && !canAccessRequestsFollowup(roleId)) {

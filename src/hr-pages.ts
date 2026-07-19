@@ -14,6 +14,21 @@ export const hrLeavesPage = `
   <link rel="stylesheet" href="/tailwind.css">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+  <style>
+    .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); border-top: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; }
+    .cal-cell { border-left: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; min-height: 80px; padding: 4px; position: relative; }
+    .cal-day-num { font-size: 0.78rem; font-weight: 700; color: #374151; margin-bottom: 2px; }
+    .cal-today { background: #eff6ff; }
+    .cal-empty { background: #f9fafb; }
+    .leave-pill { font-size: 0.68rem; border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; cursor: default; display: block; }
+    .leave-pill.pending { opacity: 0.65; font-style: italic; border: 1.5px dashed rgba(0,0,0,0.25); cursor: pointer; }
+    .pill-popup { position: fixed; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); padding: 14px; z-index: 9999; min-width: 200px; }
+    .tab-nav-btn { padding: 10px 20px; border: none; background: transparent; border-bottom: 3px solid transparent; font-size: 0.95rem; font-weight: 600; color: #6b7280; cursor: pointer; transition: all 0.2s; }
+    .tab-nav-btn.active { color: #2563eb; border-bottom-color: #2563eb; background: #eff6ff; border-radius: 6px 6px 0 0; }
+    .bal-bar-wrap { background: #e2e8f0; border-radius: 4px; height: 8px; overflow: hidden; margin: 4px 0; }
+    .bal-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+    .policy-input { width: 80px; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; font-size: 0.9rem; text-align: center; }
+  </style>
 </head>
 <body class="bg-gray-50">
   <div class="border-b border-slate-200/90 bg-white/90">
@@ -42,8 +57,8 @@ export const hrLeavesPage = `
     </div>
 
     <!-- Statistics Cards -->
-    <div class="p-8">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="p-8 pb-0">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <div class="bg-white rounded-xl shadow-md p-6">
           <div class="flex items-center justify-between">
             <div>
@@ -55,7 +70,6 @@ export const hrLeavesPage = `
             </div>
           </div>
         </div>
-
         <div class="bg-white rounded-xl shadow-md p-6">
           <div class="flex items-center justify-between">
             <div>
@@ -67,7 +81,6 @@ export const hrLeavesPage = `
             </div>
           </div>
         </div>
-
         <div class="bg-white rounded-xl shadow-md p-6">
           <div class="flex items-center justify-between">
             <div>
@@ -79,7 +92,6 @@ export const hrLeavesPage = `
             </div>
           </div>
         </div>
-
         <div class="bg-white rounded-xl shadow-md p-6">
           <div class="flex items-center justify-between">
             <div>
@@ -93,59 +105,108 @@ export const hrLeavesPage = `
         </div>
       </div>
 
-      <!-- Filters -->
-      <div class="bg-white rounded-xl shadow-md p-6 mb-8">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <select id="statusFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="loadLeaves()">
-            <option value="">جميع الحالات</option>
-            <option value="pending">قيد الانتظار</option>
-            <option value="approved">مقبولة</option>
-            <option value="rejected">مرفوضة</option>
-          </select>
+      <!-- Tab Navigation -->
+      <div class="bg-white rounded-t-xl shadow-md px-4 pt-2 flex gap-1 border-b border-gray-200">
+        <button class="tab-nav-btn active" onclick="switchMainTab('calendar', this)"><i class="fas fa-calendar ml-1"></i> التقويم</button>
+        <button class="tab-nav-btn" onclick="switchMainTab('table', this)"><i class="fas fa-list ml-1"></i> قائمة الطلبات</button>
+        <button class="tab-nav-btn" onclick="switchMainTab('balances', this); loadBalances()"><i class="fas fa-chart-pie ml-1"></i> رصيد الإجازات</button>
+        <button class="tab-nav-btn" onclick="switchMainTab('policy', this); loadPolicy()"><i class="fas fa-cog ml-1"></i> سياسة الإجازات</button>
+      </div>
+    </div>
 
-          <select id="typeFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="loadLeaves()">
-            <option value="">جميع الأنواع</option>
-            <option value="annual">إجازة سنوية</option>
-            <option value="sick">إجازة مرضية</option>
-            <option value="emergency">إجازة طارئة</option>
-            <option value="unpaid">إجازة بدون راتب</option>
-          </select>
+    <div class="px-8 pb-8">
 
-          <select id="employeeFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="loadLeaves()">
-            <option value="">جميع الموظفين</option>
-          </select>
+      <!-- TAB: Calendar -->
+      <div id="main-tab-calendar" class="bg-white rounded-b-xl shadow-md p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <button onclick="calPrev()" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-xl font-bold transition">&#8249;</button>
+          <h2 class="text-lg font-bold text-gray-800" id="calTitle"></h2>
+          <button onclick="calNext()" class="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-xl font-bold transition">&#8250;</button>
+        </div>
+        <div class="cal-grid mb-1">
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">ح</div>
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">أث</div>
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">ث</div>
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">ر</div>
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">خ</div>
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">ج</div>
+          <div class="text-center text-xs font-bold text-gray-500 py-2 border-l border-b border-gray-200">س</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
 
-          <button onclick="loadLeaves()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-            <i class="fas fa-search ml-2"></i>
-            بحث
-          </button>
+      <!-- TAB: Table -->
+      <div id="main-tab-table" class="hidden">
+        <!-- Filters -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-4">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <select id="statusFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="renderTable()">
+              <option value="">جميع الحالات</option>
+              <option value="pending">قيد الانتظار</option>
+              <option value="approved">مقبولة</option>
+              <option value="rejected">مرفوضة</option>
+            </select>
+            <select id="typeFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="renderTable()">
+              <option value="">جميع الأنواع</option>
+              <option value="annual">إجازة سنوية</option>
+              <option value="sick">إجازة مرضية</option>
+              <option value="emergency">إجازة طارئة</option>
+              <option value="maternity">إجازة أمومة</option>
+              <option value="paternity">إجازة أبوة</option>
+              <option value="hajj">إجازة حج</option>
+              <option value="unpaid">إجازة بدون راتب</option>
+              <option value="other">أخرى</option>
+            </select>
+            <select id="employeeFilter" class="border border-gray-300 rounded-lg px-4 py-2" onchange="renderTable()">
+              <option value="">جميع الموظفين</option>
+            </select>
+            <button onclick="renderTable()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+              <i class="fas fa-search ml-2"></i> بحث
+            </button>
+          </div>
+        </div>
+        <!-- Leaves Table -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الموظف</th>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نوع الإجازة</th>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">من</th>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">إلى</th>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">المدة</th>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحالة</th>
+                <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="leavesTableBody">
+              <tr>
+                <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                  <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                  <p>جاري تحميل البيانات...</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Leaves Table -->
-      <div class="bg-white rounded-xl shadow-md overflow-hidden">
-        <table class="w-full">
-          <thead class="bg-gray-100">
-            <tr>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الموظف</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">نوع الإجازة</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">من</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">إلى</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">المدة</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الحالة</th>
-              <th class="px-6 py-4 text-right text-sm font-bold text-gray-700">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="leavesTableBody">
-            <tr>
-              <td colspan="7" class="px-6 py-8 text-center text-gray-500">
-                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                <p>جاري تحميل البيانات...</p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- TAB: Balances -->
+      <div id="main-tab-balances" class="hidden bg-white rounded-b-xl shadow-md p-6">
+        <div class="flex items-center gap-4 mb-6">
+          <label class="font-bold text-gray-700">السنة:</label>
+          <select id="balanceYearSel" class="border border-gray-300 rounded-lg px-3 py-2" onchange="loadBalances()">
+          </select>
+        </div>
+        <div id="balancesContainer"><div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div></div>
       </div>
+
+      <!-- TAB: Policy -->
+      <div id="main-tab-policy" class="hidden bg-white rounded-b-xl shadow-md p-6">
+        <p class="text-gray-600 mb-6">حدد عدد الأيام المخصصة لكل نوع إجازة لجميع الموظفين في المؤسسة</p>
+        <div id="policyContainer"><div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div></div>
+      </div>
+
     </div>
   </div>
 
@@ -158,7 +219,6 @@ export const hrLeavesPage = `
           <i class="fas fa-times text-xl"></i>
         </button>
       </div>
-
       <form id="leaveForm" onsubmit="submitLeave(event)">
         <div class="space-y-4">
           <div>
@@ -167,17 +227,19 @@ export const hrLeavesPage = `
               <option value="">اختر الموظف</option>
             </select>
           </div>
-
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">نوع الإجازة *</label>
             <select name="leave_type" required class="w-full border border-gray-300 rounded-lg px-4 py-2">
               <option value="annual">إجازة سنوية</option>
               <option value="sick">إجازة مرضية</option>
               <option value="emergency">إجازة طارئة</option>
+              <option value="maternity">إجازة أمومة</option>
+              <option value="paternity">إجازة أبوة</option>
+              <option value="hajj">إجازة حج</option>
               <option value="unpaid">إجازة بدون راتب</option>
+              <option value="other">أخرى</option>
             </select>
           </div>
-
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-2">من تاريخ *</label>
@@ -188,16 +250,13 @@ export const hrLeavesPage = `
               <input type="date" name="end_date" required class="w-full border border-gray-300 rounded-lg px-4 py-2">
             </div>
           </div>
-
           <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">السبب *</label>
-            <textarea name="reason" required rows="3" class="w-full border border-gray-300 rounded-lg px-4 py-2"></textarea>
+            <label class="block text-sm font-bold text-gray-700 mb-2">السبب</label>
+            <textarea name="reason" rows="3" class="w-full border border-gray-300 rounded-lg px-4 py-2"></textarea>
           </div>
-
           <div class="flex gap-4 pt-4">
             <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
-              <i class="fas fa-check ml-2"></i>
-              تقديم الطلب
+              <i class="fas fa-check ml-2"></i> تقديم الطلب
             </button>
             <button type="button" onclick="closeAddLeaveModal()" class="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-400 transition">
               إلغاء
@@ -208,94 +267,190 @@ export const hrLeavesPage = `
     </div>
   </div>
 
-  <script>
-    let leaves = [];
-    let employees = [];
+  <!-- Pill Popup -->
+  <div id="pillPopup" class="pill-popup hidden">
+    <div style="font-size:0.9rem;font-weight:700;margin-bottom:8px" id="pillPopupName"></div>
+    <div style="font-size:0.8rem;color:#64748b;margin-bottom:10px" id="pillPopupDates"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="popupApprove()" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:0.85rem;font-weight:600">قبول</button>
+      <button onclick="popupReject()" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:0.85rem;font-weight:600">رفض</button>
+      <button onclick="closePillPopup()" style="flex:1;background:#e2e8f0;color:#334155;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:0.85rem">إغلاق</button>
+    </div>
+  </div>
 
+  <script>
+    const LEAVE_COLORS = {
+      annual: '#16a34a', sick: '#ca8a04', emergency: '#dc2626',
+      maternity: '#db2777', paternity: '#2563eb', hajj: '#7c3aed',
+      unpaid: '#64748b', other: '#ea580c'
+    };
+    const LEAVE_NAMES = {
+      annual: 'إجازة سنوية', sick: 'إجازة مرضية', emergency: 'إجازة طارئة',
+      maternity: 'إجازة أمومة', paternity: 'إجازة أبوة', hajj: 'إجازة حج',
+      unpaid: 'إجازة بدون راتب', other: 'أخرى'
+    };
+
+    let allLeaves = [];
+    let employees = [];
+    let calYear, calMonth;
+    let popupLeaveId = null;
+
+    const today = new Date();
+    calYear = today.getFullYear();
+    calMonth = today.getMonth();
+
+    // ---- Tab switching ----
+    function switchMainTab(name, btn) {
+      ['calendar','table','balances','policy'].forEach(t => {
+        const el = document.getElementById('main-tab-' + t);
+        if (el) el.classList.add('hidden');
+      });
+      document.querySelectorAll('.tab-nav-btn').forEach(b => b.classList.remove('active'));
+      const target = document.getElementById('main-tab-' + name);
+      if (target) target.classList.remove('hidden');
+      btn.classList.add('active');
+    }
+
+    // ---- Statistics ----
+    function updateStatistics() {
+      document.getElementById('totalLeaves').textContent = allLeaves.length;
+      document.getElementById('pendingLeaves').textContent = allLeaves.filter(l => l.status === 'pending').length;
+      document.getElementById('approvedLeaves').textContent = allLeaves.filter(l => l.status === 'approved').length;
+      document.getElementById('rejectedLeaves').textContent = allLeaves.filter(l => l.status === 'rejected').length;
+    }
+
+    // ---- Load Leaves ----
     async function loadLeaves() {
       try {
-        const statusFilter = document.getElementById('statusFilter').value;
-        const typeFilter = document.getElementById('typeFilter').value;
-        const employeeFilter = document.getElementById('employeeFilter').value;
-
-        const params = new URLSearchParams();
-        if (statusFilter) params.append('status', statusFilter);
-        if (typeFilter) params.append('type', typeFilter);
-        if (employeeFilter) params.append('employee_id', employeeFilter);
-
-        const response = await axios.get('/api/hr/leaves?' + params.toString());
-        leaves = response.data.data || [];
-
+        const response = await axios.get('/api/hr/leaves');
+        allLeaves = response.data.data || [];
         updateStatistics();
-        renderLeavesTable();
+        renderCalendar();
+        renderTable();
       } catch (error) {
         console.error('Error loading leaves:', error);
-        alert('حدث خطأ في تحميل البيانات');
       }
     }
 
-    function updateStatistics() {
-      document.getElementById('totalLeaves').textContent = leaves.length;
-      document.getElementById('pendingLeaves').textContent = leaves.filter(l => l.status === 'pending').length;
-      document.getElementById('approvedLeaves').textContent = leaves.filter(l => l.status === 'approved').length;
-      document.getElementById('rejectedLeaves').textContent = leaves.filter(l => l.status === 'rejected').length;
+    // ---- Calendar ----
+    function renderCalendar() {
+      const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+      document.getElementById('calTitle').textContent = monthNames[calMonth] + ' ' + calYear;
+
+      const grid = document.getElementById('calGrid');
+      const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+      let cells = '';
+      // Empty cells before first day
+      for (let i = 0; i < firstDay; i++) {
+        cells += '<div class="cal-cell cal-empty"></div>';
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+        const isToday = dateStr === todayStr;
+        // Find leaves active on this day
+        const dayLeaves = allLeaves.filter(l => l.start_date <= dateStr && l.end_date >= dateStr);
+        let pills = dayLeaves.map(l => {
+          const color = LEAVE_COLORS[l.leave_type] || '#64748b';
+          const isPending = l.status === 'pending';
+          const cls = 'leave-pill' + (isPending ? ' pending' : '');
+          const style = 'background:' + color + ';' + (isPending ? 'border:1.5px dashed rgba(0,0,0,0.25);' : '');
+          const name = (l.employee_name || '').split(' ').slice(0,2).join(' ');
+          if (isPending) {
+            return \`<span class="\${cls}" style="\${style}" onclick="openPillPopup(event, \${l.id})">\${name}</span>\`;
+          }
+          return \`<span class="\${cls}" style="\${style}">\${name}</span>\`;
+        }).join('');
+        cells += \`<div class="cal-cell\${isToday ? ' cal-today' : ''}"><div class="cal-day-num">\${d}</div>\${pills}</div>\`;
+      }
+
+      // Fill remaining cells
+      const totalCells = firstDay + daysInMonth;
+      const remainder = totalCells % 7;
+      if (remainder !== 0) {
+        for (let i = 0; i < 7 - remainder; i++) {
+          cells += '<div class="cal-cell cal-empty"></div>';
+        }
+      }
+
+      grid.innerHTML = cells;
     }
 
-    function renderLeavesTable() {
+    function calPrev() { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
+    function calNext() { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); }
+
+    // ---- Pill Popup ----
+    function openPillPopup(e, id) {
+      e.stopPropagation();
+      popupLeaveId = id;
+      const leave = allLeaves.find(l => l.id === id);
+      if (!leave) return;
+      const popup = document.getElementById('pillPopup');
+      document.getElementById('pillPopupName').textContent = (leave.employee_name || '') + ' — ' + (LEAVE_NAMES[leave.leave_type] || leave.leave_type);
+      document.getElementById('pillPopupDates').textContent = leave.start_date + ' → ' + leave.end_date;
+      popup.style.top = (e.clientY + 10) + 'px';
+      popup.style.left = (e.clientX - 100) + 'px';
+      popup.classList.remove('hidden');
+    }
+    function closePillPopup() { document.getElementById('pillPopup').classList.add('hidden'); popupLeaveId = null; }
+    document.addEventListener('click', function(e) { if (!e.target.closest('#pillPopup') && !e.target.closest('.leave-pill.pending')) closePillPopup(); });
+
+    async function popupApprove() {
+      if (!popupLeaveId) return;
+      try { await axios.put('/api/hr/leaves/' + popupLeaveId + '/approve'); closePillPopup(); loadLeaves(); } catch(e) { console.error(e); }
+    }
+    async function popupReject() {
+      if (!popupLeaveId) return;
+      const reason = prompt('سبب الرفض:');
+      if (!reason) return;
+      try { await axios.put('/api/hr/leaves/' + popupLeaveId + '/reject', { reason }); closePillPopup(); loadLeaves(); } catch(e) { console.error(e); }
+    }
+
+    // ---- Table ----
+    function renderTable() {
       const tbody = document.getElementById('leavesTableBody');
-      
-      if (leaves.length === 0) {
+      const statusFilter = (document.getElementById('statusFilter') || {}).value || '';
+      const typeFilter = (document.getElementById('typeFilter') || {}).value || '';
+      const employeeFilter = (document.getElementById('employeeFilter') || {}).value || '';
+
+      let filtered = allLeaves.filter(l =>
+        (!statusFilter || l.status === statusFilter) &&
+        (!typeFilter || l.leave_type === typeFilter) &&
+        (!employeeFilter || String(l.employee_id) === String(employeeFilter))
+      );
+
+      if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">لا توجد بيانات</td></tr>';
         return;
       }
 
-      const typeMap = {
-        'annual': 'إجازة سنوية',
-        'sick': 'إجازة مرضية',
-        'emergency': 'إجازة طارئة',
-        'unpaid': 'إجازة بدون راتب'
-      };
+      const statusColors = { pending: 'bg-yellow-100 text-yellow-800', approved: 'bg-green-100 text-green-800', rejected: 'bg-red-100 text-red-800' };
+      const statusLabels = { pending: 'قيد الانتظار', approved: 'مقبولة', rejected: 'مرفوضة' };
 
-      tbody.innerHTML = leaves.map(leave => {
-        const statusColors = {
-          'pending': 'bg-yellow-100 text-yellow-800',
-          'approved': 'bg-green-100 text-green-800',
-          'rejected': 'bg-red-100 text-red-800'
-        };
-
-        const statusLabels = {
-          'pending': 'قيد الانتظار',
-          'approved': 'مقبولة',
-          'rejected': 'مرفوضة'
-        };
-
-        const days = Math.ceil((new Date(leave.end_date) - new Date(leave.start_date)) / (1000 * 60 * 60 * 24)) + 1;
-
+      tbody.innerHTML = filtered.map(leave => {
+        const days = leave.total_days || (Math.ceil((new Date(leave.end_date) - new Date(leave.start_date)) / (1000*60*60*24)) + 1);
         return \`
           <tr class="border-t hover:bg-gray-50">
             <td class="px-6 py-4">\${leave.employee_name || 'غير محدد'}</td>
-            <td class="px-6 py-4">\${typeMap[leave.leave_type] || leave.leave_type}</td>
-            <td class="px-6 py-4">\${new Date(leave.start_date).toLocaleDateString('ar-SA')}</td>
-            <td class="px-6 py-4">\${new Date(leave.end_date).toLocaleDateString('ar-SA')}</td>
+            <td class="px-6 py-4">\${LEAVE_NAMES[leave.leave_type] || leave.leave_type}</td>
+            <td class="px-6 py-4">\${leave.start_date || ''}</td>
+            <td class="px-6 py-4">\${leave.end_date || ''}</td>
             <td class="px-6 py-4">\${days} يوم</td>
             <td class="px-6 py-4">
-              <span class="px-3 py-1 rounded-full text-xs font-bold \${statusColors[leave.status]}">
-                \${statusLabels[leave.status]}
+              <span class="px-3 py-1 rounded-full text-xs font-bold \${statusColors[leave.status] || ''}">
+                \${statusLabels[leave.status] || leave.status}
               </span>
             </td>
             <td class="px-6 py-4">
               <div class="flex gap-2">
                 \${leave.status === 'pending' ? \`
-                  <button onclick="approveLeave(\${leave.id})" class="text-green-600 hover:text-green-800" title="قبول">
-                    <i class="fas fa-check-circle"></i>
-                  </button>
-                  <button onclick="rejectLeave(\${leave.id})" class="text-red-600 hover:text-red-800" title="رفض">
-                    <i class="fas fa-times-circle"></i>
-                  </button>
+                  <button onclick="approveLeave(\${leave.id})" class="text-green-600 hover:text-green-800" title="قبول"><i class="fas fa-check-circle"></i></button>
+                  <button onclick="rejectLeave(\${leave.id})" class="text-red-600 hover:text-red-800" title="رفض"><i class="fas fa-times-circle"></i></button>
                 \` : ''}
-                <button onclick="deleteLeave(\${leave.id})" class="text-gray-600 hover:text-gray-800" title="حذف">
-                  <i class="fas fa-trash"></i>
-                </button>
+                <button onclick="deleteLeave(\${leave.id})" class="text-gray-600 hover:text-gray-800" title="حذف"><i class="fas fa-trash"></i></button>
               </div>
             </td>
           </tr>
@@ -303,92 +458,138 @@ export const hrLeavesPage = `
       }).join('');
     }
 
+    // ---- Balances ----
+    async function loadBalances() {
+      const yearSel = document.getElementById('balanceYearSel');
+      const year = yearSel ? yearSel.value : new Date().getFullYear();
+      const container = document.getElementById('balancesContainer');
+      container.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+      try {
+        const res = await axios.get('/api/hr/leave-balances?year=' + year);
+        const data = res.data.data || [];
+        if (!data.length) { container.innerHTML = '<p class="text-gray-500 text-center py-8">لا يوجد موظفون نشطون</p>'; return; }
+        container.innerHTML = data.map(emp => {
+          const barsHtml = (emp.balances || []).map(b => {
+            const color = LEAVE_COLORS[b.leave_type] || '#64748b';
+            const pct = b.allocated_days > 0 ? Math.min(100, Math.round(b.used_days / b.allocated_days * 100)) : 0;
+            return \`<div style="margin-bottom:8px">
+              <div style="font-size:0.78rem;color:#374151;font-weight:600;margin-bottom:2px">\${b.leave_name_ar}: <span style="color:\${color}">\${b.used_days}</span> من \${b.allocated_days} يوم | متبقي: \${b.remaining_days}</div>
+              <div class="bal-bar-wrap"><div class="bal-bar-fill" style="width:\${pct}%;background:\${color}"></div></div>
+            </div>\`;
+          }).join('');
+          return \`<div class="bg-white border border-gray-100 rounded-xl shadow-sm p-5 mb-4">
+            <div class="font-bold text-gray-800 mb-1">\${emp.full_name_ar || ''}</div>
+            <div class="text-xs text-gray-500 mb-3">\${emp.department || ''}\${emp.job_title ? ' · ' + emp.job_title : ''}</div>
+            \${barsHtml}
+          </div>\`;
+        }).join('');
+      } catch(e) { container.innerHTML = '<p class="text-red-500 text-center py-8">حدث خطأ في تحميل البيانات</p>'; }
+    }
+
+    // ---- Policy ----
+    async function loadPolicy() {
+      const container = document.getElementById('policyContainer');
+      container.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+      try {
+        const res = await axios.get('/api/hr/leave-policy');
+        const data = res.data.data || [];
+        let rows = data.map(p => \`
+          <tr class="border-t hover:bg-gray-50">
+            <td class="px-6 py-3 font-medium text-gray-800">\${p.leave_name_ar}</td>
+            <td class="px-6 py-3"><input type="number" class="policy-input" id="days_\${p.leave_type}" value="\${p.allocated_days}" min="0"></td>
+            <td class="px-6 py-3"><input type="checkbox" id="paid_\${p.leave_type}" \${p.is_paid ? 'checked' : ''}></td>
+            <td class="px-6 py-3">
+              <button onclick="savePolicy('\${p.leave_type}', '\${p.leave_name_ar}')" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition">حفظ</button>
+            </td>
+          </tr>
+        \`).join('');
+        container.innerHTML = \`
+          <table class="w-full">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="px-6 py-3 text-right text-sm font-bold text-gray-700">نوع الإجازة</th>
+                <th class="px-6 py-3 text-right text-sm font-bold text-gray-700">الأيام المخصصة</th>
+                <th class="px-6 py-3 text-right text-sm font-bold text-gray-700">مدفوعة</th>
+                <th class="px-6 py-3 text-right text-sm font-bold text-gray-700">إجراء</th>
+              </tr>
+            </thead>
+            <tbody>\${rows}</tbody>
+          </table>
+        \`;
+      } catch(e) { container.innerHTML = '<p class="text-red-500 text-center py-8">حدث خطأ في تحميل السياسة</p>'; }
+    }
+
+    async function savePolicy(leave_type, leave_name_ar) {
+      const days = parseInt(document.getElementById('days_' + leave_type).value) || 0;
+      const is_paid = document.getElementById('paid_' + leave_type).checked ? 1 : 0;
+      try {
+        await axios.put('/api/hr/leave-policy', { leave_type, leave_name_ar, allocated_days: days, is_paid });
+        // Flash success
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = '✓ تم الحفظ';
+        btn.style.background = '#16a34a';
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
+      } catch(e) { alert('حدث خطأ في الحفظ'); }
+    }
+
+    // ---- Employees ----
     async function loadEmployees() {
       try {
         const response = await axios.get('/api/hr/employees');
         employees = response.data.data || [];
-
-        // Fill employee filter
         const employeeFilter = document.getElementById('employeeFilter');
         employeeFilter.innerHTML = '<option value="">جميع الموظفين</option>' +
-          employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name}</option>\`).join('');
-
-        // Fill employee select in form
+          employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name_ar || emp.full_name || ''}</option>\`).join('');
         const employeeSelect = document.querySelector('select[name="employee_id"]');
         employeeSelect.innerHTML = '<option value="">اختر الموظف</option>' +
-          employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name}</option>\`).join('');
-      } catch (error) {
-        console.error('Error loading employees:', error);
-      }
+          employees.map(emp => \`<option value="\${emp.id}">\${emp.full_name_ar || emp.full_name || ''}</option>\`).join('');
+      } catch (error) { console.error('Error loading employees:', error); }
     }
 
-    function showAddLeaveModal() {
-      document.getElementById('addLeaveModal').classList.remove('hidden');
-    }
-
-    function closeAddLeaveModal() {
-      document.getElementById('addLeaveModal').classList.add('hidden');
-      document.getElementById('leaveForm').reset();
-    }
+    // ---- Modal ----
+    function showAddLeaveModal() { document.getElementById('addLeaveModal').classList.remove('hidden'); }
+    function closeAddLeaveModal() { document.getElementById('addLeaveModal').classList.add('hidden'); document.getElementById('leaveForm').reset(); }
 
     async function submitLeave(event) {
       event.preventDefault();
       const formData = new FormData(event.target);
       const data = Object.fromEntries(formData);
-
       try {
         await axios.post('/api/hr/leaves', data);
         alert('تم تقديم الطلب بنجاح');
         closeAddLeaveModal();
         loadLeaves();
-      } catch (error) {
-        console.error('Error submitting leave:', error);
-        alert('حدث خطأ في تقديم الطلب');
-      }
+      } catch (error) { alert('حدث خطأ في تقديم الطلب'); }
     }
 
     async function approveLeave(id) {
       if (!confirm('هل أنت متأكد من قبول هذا الطلب؟')) return;
-
-      try {
-        await axios.put(\`/api/hr/leaves/\${id}/approve\`);
-        alert('تم قبول الطلب بنجاح');
-        loadLeaves();
-      } catch (error) {
-        console.error('Error approving leave:', error);
-        alert('حدث خطأ في قبول الطلب');
-      }
+      try { await axios.put('/api/hr/leaves/' + id + '/approve'); loadLeaves(); } catch(e) { alert('حدث خطأ في قبول الطلب'); }
     }
 
     async function rejectLeave(id) {
       const reason = prompt('سبب الرفض:');
       if (!reason) return;
-
-      try {
-        await axios.put(\`/api/hr/leaves/\${id}/reject\`, { reason });
-        alert('تم رفض الطلب');
-        loadLeaves();
-      } catch (error) {
-        console.error('Error rejecting leave:', error);
-        alert('حدث خطأ في رفض الطلب');
-      }
+      try { await axios.put('/api/hr/leaves/' + id + '/reject', { reason }); loadLeaves(); } catch(e) { alert('حدث خطأ في رفض الطلب'); }
     }
 
     async function deleteLeave(id) {
       if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
-
-      try {
-        await axios.delete(\`/api/hr/leaves/\${id}\`);
-        alert('تم الحذف بنجاح');
-        loadLeaves();
-      } catch (error) {
-        console.error('Error deleting leave:', error);
-        alert('حدث خطأ في الحذف');
-      }
+      try { await axios.delete('/api/hr/leaves/' + id); loadLeaves(); } catch(e) { alert('حدث خطأ في الحذف'); }
     }
 
-    // Load data on page load
+    // ---- Init ----
     window.addEventListener('load', () => {
+      // Populate year selector
+      const yearSel = document.getElementById('balanceYearSel');
+      const curYear = new Date().getFullYear();
+      for (let y = curYear - 2; y <= curYear + 2; y++) {
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        if (y === curYear) opt.selected = true;
+        yearSel.appendChild(opt);
+      }
       loadEmployees();
       loadLeaves();
     });
@@ -2084,6 +2285,307 @@ export const hrReportsPage = `
     window.addEventListener('load', () => {
       setDefaultDates();
       loadReport();
+    });
+  </script>
+</body>
+</html>
+`;
+
+// صفحة التذاكر - Admin Tickets Management Page
+export const hrTicketsPage = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة التذاكر - نظام الموارد البشرية</title>
+  <link rel="stylesheet" href="/tailwind.css">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="max-w-7xl mx-auto px-6 sm:px-8 py-1.5">
+      <a href="/admin/hr" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للموارد البشرية</a>
+    </div>
+  </div>
+  <div class="min-h-screen">
+    <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-6 px-8 shadow-lg">
+      <div class="flex items-center gap-4 w-full flex-wrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold">إدارة التذاكر</h1>
+          <p class="text-purple-100 text-sm">متابعة وإدارة طلبات الموظفين</p>
+        </div>
+        <a href="/admin/hr" class="text-white hover:bg-white/20 p-2 rounded-lg transition shrink-0" aria-label="العودة">
+          <i class="fas fa-arrow-right text-xl"></i>
+        </a>
+      </div>
+    </div>
+
+    <div class="p-8">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-md p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">إجمالي التذاكر</p>
+              <p class="text-3xl font-bold text-gray-800" id="totalTickets">0</p>
+            </div>
+            <div class="bg-purple-100 p-4 rounded-full"><i class="fas fa-ticket-alt text-purple-600 text-2xl"></i></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-md p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">مفتوحة</p>
+              <p class="text-3xl font-bold text-blue-600" id="openTickets">0</p>
+            </div>
+            <div class="bg-blue-100 p-4 rounded-full"><i class="fas fa-door-open text-blue-600 text-2xl"></i></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-md p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">قيد المعالجة</p>
+              <p class="text-3xl font-bold text-yellow-600" id="inProgressTickets">0</p>
+            </div>
+            <div class="bg-yellow-100 p-4 rounded-full"><i class="fas fa-spinner text-yellow-600 text-2xl"></i></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-md p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-gray-500 text-sm">محلولة</p>
+              <p class="text-3xl font-bold text-green-600" id="resolvedTickets">0</p>
+            </div>
+            <div class="bg-green-100 p-4 rounded-full"><i class="fas fa-check-circle text-green-600 text-2xl"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
+            <select id="filterStatus" onchange="loadTickets()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+              <option value="">كل الحالات</option>
+              <option value="open">مفتوحة</option>
+              <option value="in_progress">قيد المعالجة</option>
+              <option value="resolved">محلولة</option>
+              <option value="closed">مغلقة</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">النوع</label>
+            <select id="filterType" onchange="loadTickets()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+              <option value="">كل الأنواع</option>
+              <option value="hr_employee_services">الموارد البشرية وخدمات الموظف</option>
+              <option value="payroll_benefits">الرواتب والمزايا</option>
+              <option value="it_facilities">الدعم التقني والمرافق</option>
+              <option value="workplace_concerns">الشكاوى وبيئة العمل</option>
+              <option value="other">أخرى / استفسار عام</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">الأولوية</label>
+            <select id="filterPriority" onchange="loadTickets()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+              <option value="">كل الأولويات</option>
+              <option value="low">منخفضة</option>
+              <option value="normal">عادية</option>
+              <option value="high">عالية</option>
+              <option value="urgent">عاجلة</option>
+            </select>
+          </div>
+          <button onclick="loadTickets()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition">
+            <i class="fas fa-sync-alt ml-1"></i> تحديث
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div id="ticketsTableContainer">
+          <div class="text-center py-12 text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-3 block text-purple-400"></i>جاري التحميل...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="updateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+      <h3 class="text-lg font-bold text-gray-800 mb-4">تحديث حالة التذكرة</h3>
+      <input type="hidden" id="modalTicketId">
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">الحالة الجديدة</label>
+        <select id="modalStatus" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+          <option value="open">مفتوحة</option>
+          <option value="in_progress">قيد المعالجة</option>
+          <option value="resolved">محلولة</option>
+          <option value="closed">مغلقة</option>
+        </select>
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">ملاحظات الحل / الرد</label>
+        <textarea id="modalNotes" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none" placeholder="أضف ملاحظة أو رداً للموظف (اختياري)"></textarea>
+      </div>
+      <div class="flex gap-3 justify-end">
+        <button onclick="closeModal()" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition text-sm font-medium">إلغاء</button>
+        <button onclick="submitUpdate()" class="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition text-sm font-medium">حفظ التغييرات</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="detailModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-lg font-bold text-gray-800">تفاصيل التذكرة</h3>
+        <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <div id="detailContent"></div>
+    </div>
+  </div>
+
+  <script>
+    let allTickets = [];
+
+    const TYPE_LABELS = {
+      hr_employee_services: 'الموارد البشرية وخدمات الموظف',
+      payroll_benefits: 'الرواتب والمزايا',
+      it_facilities: 'الدعم التقني والمرافق',
+      workplace_concerns: 'الشكاوى وبيئة العمل',
+      other: 'أخرى / استفسار عام'
+    };
+    const STATUS_LABELS = { open: 'مفتوحة', in_progress: 'قيد المعالجة', resolved: 'محلولة', closed: 'مغلقة' };
+    const STATUS_CLASSES = {
+      open: 'bg-blue-100 text-blue-800',
+      in_progress: 'bg-yellow-100 text-yellow-800',
+      resolved: 'bg-green-100 text-green-800',
+      closed: 'bg-gray-100 text-gray-600'
+    };
+
+    async function loadTickets() {
+      const container = document.getElementById('ticketsTableContainer');
+      try {
+        const statusFilter = document.getElementById('filterStatus').value;
+        const typeFilter = document.getElementById('filterType').value;
+        const priorityFilter = document.getElementById('filterPriority').value;
+
+        const params = new URLSearchParams();
+        if (statusFilter) params.append('status', statusFilter);
+        if (typeFilter) params.append('type', typeFilter);
+        if (priorityFilter) params.append('priority', priorityFilter);
+
+        const response = await axios.get('/api/hr/tickets?' + params.toString());
+        allTickets = response.data.data || [];
+
+        document.getElementById('totalTickets').textContent = allTickets.length;
+        document.getElementById('openTickets').textContent = allTickets.filter(t => t.status === 'open').length;
+        document.getElementById('inProgressTickets').textContent = allTickets.filter(t => t.status === 'in_progress').length;
+        document.getElementById('resolvedTickets').textContent = allTickets.filter(t => t.status === 'resolved').length;
+
+        if (!allTickets.length) {
+          container.innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fas fa-inbox text-4xl block mb-3"></i><p>لا توجد تذاكر</p></div>';
+          return;
+        }
+
+        const rows = allTickets.map(function(t) {
+          var typeLabel = TYPE_LABELS[t.ticket_type] || t.ticket_type || '-';
+          var statusLabel = STATUS_LABELS[t.status] || t.status;
+          var statusCls = STATUS_CLASSES[t.status] || 'bg-gray-100 text-gray-600';
+          var date = (t.created_at || '').substring(0, 10);
+          var subj = String(t.subject || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var emp = String(t.employee_name || '-').replace(/</g, '&lt;');
+          return '<tr class="hover:bg-gray-50 border-b border-gray-100">' +
+            '<td class="px-4 py-3 text-sm font-mono text-gray-400">#' + t.id + '</td>' +
+            '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + emp + '</td>' +
+            '<td class="px-4 py-3 text-sm text-gray-700">' + typeLabel + '</td>' +
+            '<td class="px-4 py-3 text-sm text-gray-700 max-w-xs truncate">' + subj + '</td>' +
+            '<td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ' + statusCls + '">' + statusLabel + '</span></td>' +
+            '<td class="px-4 py-3 text-sm text-gray-500">' + date + '</td>' +
+            '<td class="px-4 py-3 flex gap-2">' +
+              '<button onclick="openUpdateModal(' + t.id + ')" class="text-purple-600 hover:text-purple-800 text-sm font-medium" title="تحديث الحالة"><i class="fas fa-edit"></i></button>' +
+              '<button onclick="showDetail(' + t.id + ')" class="text-blue-400 hover:text-blue-600 text-sm" title="تفاصيل"><i class="fas fa-eye"></i></button>' +
+              '<button onclick="deleteTicket(' + t.id + ')" class="text-red-400 hover:text-red-600 text-sm" title="حذف"><i class="fas fa-trash"></i></button>' +
+            '</td></tr>';
+        }).join('');
+
+        container.innerHTML = '<div class="overflow-x-auto"><table class="w-full">' +
+          '<thead><tr class="bg-gray-50 border-b border-gray-200">' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">#</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الموظف</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">النوع</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الموضوع</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">التاريخ</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">إجراء</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+      } catch (error) {
+        console.error('Error loading tickets:', error);
+        if (container) container.innerHTML = '<div class="text-center py-8 text-red-500"><i class="fas fa-exclamation-circle mr-2"></i>فشل تحميل التذاكر. حاول مرة أخرى.</div>';
+      }
+    }
+
+    function showDetail(id) {
+      var t = allTickets.find(function(x) { return x.id === id; });
+      if (!t) return;
+      var typeLabel = TYPE_LABELS[t.ticket_type] || t.ticket_type;
+      var statusLabel = STATUS_LABELS[t.status] || t.status;
+      var statusCls = STATUS_CLASSES[t.status] || '';
+      var content = '<div class="space-y-3 text-sm">' +
+        '<div class="flex justify-between"><span class="text-gray-500">الموظف:</span><span class="font-medium">' + (t.employee_name || '-') + '</span></div>' +
+        '<div class="flex justify-between"><span class="text-gray-500">النوع:</span><span>' + typeLabel + '</span></div>' +
+        '<div class="flex justify-between items-center"><span class="text-gray-500">الحالة:</span><span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ' + statusCls + '">' + statusLabel + '</span></div>' +
+        '<div><span class="text-gray-500 block mb-1">الموضوع:</span><p class="bg-gray-50 rounded p-2">' + (t.subject || '-') + '</p></div>' +
+        (t.description ? '<div><span class="text-gray-500 block mb-1">التفاصيل:</span><p class="bg-gray-50 rounded p-2 whitespace-pre-wrap">' + t.description + '</p></div>' : '') +
+        (t.resolution_notes ? '<div><span class="text-gray-500 block mb-1">ملاحظات الحل:</span><p class="bg-green-50 rounded p-2 whitespace-pre-wrap">' + t.resolution_notes + '</p></div>' : '') +
+        '<div class="flex justify-between text-gray-400"><span>تاريخ الرفع:</span><span>' + (t.created_at || '').substring(0, 10) + '</span></div>' +
+        '</div>' +
+        '<div class="mt-4 flex justify-end">' +
+        '<button onclick="openUpdateModal(' + t.id + ')" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition">تحديث الحالة</button>' +
+        '</div>';
+      document.getElementById('detailContent').innerHTML = content;
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    function openUpdateModal(id) {
+      var t = allTickets.find(function(x) { return x.id === id; });
+      document.getElementById('modalTicketId').value = id;
+      document.getElementById('modalStatus').value = t ? t.status : 'open';
+      document.getElementById('modalNotes').value = '';
+      closeDetailModal();
+      document.getElementById('updateModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('updateModal').classList.add('hidden');
+    }
+
+    async function submitUpdate() {
+      var id = document.getElementById('modalTicketId').value;
+      var status = document.getElementById('modalStatus').value;
+      var notes = document.getElementById('modalNotes').value.trim();
+      try {
+        var response = await axios.put('/api/hr/tickets/' + id, { status: status, resolution_notes: notes });
+        if (response.data.success) { closeModal(); loadTickets(); }
+        else alert(response.data.error || 'حدث خطأ');
+      } catch (e) { alert('فشل في الحفظ'); }
+    }
+
+    async function deleteTicket(id) {
+      if (!confirm('هل أنت متأكد من حذف هذه التذكرة؟')) return;
+      try {
+        var response = await axios.delete('/api/hr/tickets/' + id);
+        if (response.data.success) loadTickets();
+        else alert(response.data.error || 'حدث خطأ');
+      } catch (e) { alert('فشل في الحذف'); }
+    }
+
+    window.addEventListener('load', function() {
+      document.getElementById('updateModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+      document.getElementById('detailModal').addEventListener('click', function(e) { if (e.target === this) closeDetailModal(); });
+      loadTickets();
     });
   </script>
 </body>

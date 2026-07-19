@@ -2,6 +2,8 @@
 // تقارير النظام - 3 تقارير احترافية
 // ==========================================
 
+import { REPORT_PRINT_CSS, reportPdfButtonHtml } from './reports-module'
+
 // 1️⃣ تقرير النقرات على روابط الحاسبات
 export const clicksReportPage = `
 <!DOCTYPE html>
@@ -459,16 +461,17 @@ export const workflowReportPage = `
     <link rel="stylesheet" href="/tailwind.css">
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>${REPORT_PRINT_CSS}</style>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-green-50 to-blue-50">
-    <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="border-b border-slate-200/90 bg-white/90 no-print">
         <div class="max-w-7xl mx-auto px-4 py-1.5">
             <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-xl">
-        <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between gap-4 flex-wrap">
             <div>
                 <h1 class="text-3xl font-bold flex items-center">
                     <i class="fas fa-route ml-3"></i>
@@ -476,12 +479,13 @@ export const workflowReportPage = `
                 </h1>
                 <p class="text-green-100 mt-2">تتبع رحلة العملاء من التسجيل حتى اكتمال الطلب</p>
             </div>
+            ${reportPdfButtonHtml('bg-white/20 hover:bg-white/30 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2')}
         </div>
     </div>
 
     <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Filters -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6 no-print">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-2">رقم العميل (اختياري)</label>
@@ -687,16 +691,17 @@ export const employeePerformanceReportPage = `
     <link rel="stylesheet" href="/tailwind.css">
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>${REPORT_PRINT_CSS}</style>
 </head>
 <body class="bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50">
-    <div class="border-b border-slate-200/90 bg-white/90">
+    <div class="border-b border-slate-200/90 bg-white/90 no-print">
         <div class="max-w-7xl mx-auto px-4 py-1.5">
             <a href="/admin/panel" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة للوحة الرئيسية</a>
         </div>
     </div>
     <!-- Header -->
     <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-xl">
-        <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between gap-4 flex-wrap">
             <div>
                 <h1 class="text-3xl font-bold flex items-center">
                     <i class="fas fa-chart-line ml-3"></i>
@@ -704,12 +709,13 @@ export const employeePerformanceReportPage = `
                 </h1>
                 <p class="text-purple-100 mt-2">تحليل شامل لأداء الموظفين والعملاء والطلبات والعمولات</p>
             </div>
+            ${reportPdfButtonHtml('bg-white/20 hover:bg-white/30 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2')}
         </div>
     </div>
 
     <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Filters -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6 no-print">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ البداية</label>
@@ -758,24 +764,22 @@ export const employeePerformanceReportPage = `
         <!-- Details Table -->
         <div class="bg-white rounded-xl shadow-lg p-6">
             <h3 class="text-xl font-bold text-gray-800 mb-4">مقارنة تفصيلية بين الموظفين</h3>
+            <div id="tableError" class="hidden text-red-600 text-sm mb-3"></div>
             <div class="overflow-x-auto">
                 <table class="w-full">
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">الموظف</th>
                             <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجمالي العملاء</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">تحول إلى طلب</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">معدل التحويل</th>
+                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجمالي الطلبات</th>
                             <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">طلبات مقبولة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">طلبات مرفوضة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">طلبات قيد المعالجة</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">معدل القبول</th>
-                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجمالي العمولات</th>
+                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">معدل النجاح</th>
+                            <th class="px-4 py-3 text-right text-sm font-bold text-gray-700">إجمالي التمويل</th>
                         </tr>
                     </thead>
                     <tbody id="performanceTable">
                         <tr>
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-500">اضغط على "عرض التقرير" لتحميل البيانات</td>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">جارٍ تحميل البيانات...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -784,133 +788,111 @@ export const employeePerformanceReportPage = `
     </div>
 
     <script>
-        // Set default dates
-        const today = new Date();
-        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        document.getElementById('startDate').value = monthAgo.toISOString().split('T')[0];
-        document.getElementById('endDate').value = today.toISOString().split('T')[0];
-
         let charts = {};
 
-        function loadPerformanceReport() {
-            const data = {
-                employees: [
-                    { name: 'أحمد محمد', totalCustomers: 50, converted: 35, conversionRate: 70, approved: 28, rejected: 5, pending: 2, approvalRate: 80, commission: 15000 },
-                    { name: 'فاطمة علي', totalCustomers: 45, converted: 32, conversionRate: 71, approved: 25, rejected: 4, pending: 3, approvalRate: 78, commission: 13500 },
-                    { name: 'خالد سعيد', totalCustomers: 40, converted: 28, conversionRate: 70, approved: 22, rejected: 3, pending: 3, approvalRate: 79, commission: 12000 }
-                ]
-            };
+        async function loadPerformanceReport() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const token = localStorage.getItem('authToken');
 
-            drawConversionChart(data.employees);
-            drawApprovalChart(data.employees);
-            drawCommissionsChart(data.employees);
-            updatePerformanceTable(data.employees);
+            document.getElementById('performanceTable').innerHTML =
+                '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">جارٍ تحميل البيانات...</td></tr>';
+
+            try {
+                const params = new URLSearchParams();
+                if (startDate) params.set('start_date', startDate);
+                if (endDate) params.set('end_date', endDate);
+
+                const res = await fetch('/api/reports/performance?' + params.toString(), {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'فشل تحميل البيانات');
+                }
+
+                const performers = data.top_performers || [];
+
+                if (!performers.length) {
+                    document.getElementById('performanceTable').innerHTML =
+                        '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">لا توجد بيانات في هذه الفترة</td></tr>';
+                    return;
+                }
+
+                drawConversionChart(performers);
+                drawApprovalChart(performers);
+                drawAmountsChart(performers);
+                updatePerformanceTable(performers);
+            } catch (err) {
+                document.getElementById('performanceTable').innerHTML =
+                    \`<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">\${err.message}</td></tr>\`;
+            }
         }
 
         function drawConversionChart(data) {
             const ctx = document.getElementById('conversionChart');
             if (charts.conversion) charts.conversion.destroy();
-            
             charts.conversion = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'معدل التحويل %',
-                        data: data.map(d => d.conversionRate),
-                        backgroundColor: '#3B82F6'
-                    }]
+                    datasets: [{ label: 'إجمالي الطلبات', data: data.map(d => d.requests_count || 0), backgroundColor: '#3B82F6' }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, max: 100 } }
-                }
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
             });
         }
 
         function drawApprovalChart(data) {
             const ctx = document.getElementById('approvalChart');
             if (charts.approval) charts.approval.destroy();
-            
             charts.approval = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'معدل القبول %',
-                        data: data.map(d => d.approvalRate),
-                        backgroundColor: '#10B981'
-                    }]
+                    datasets: [{ label: 'معدل النجاح %', data: data.map(d => parseFloat(d.success_rate) || 0), backgroundColor: '#10B981' }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, max: 100 } }
-                }
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }
             });
         }
 
-        function drawCommissionsChart(data) {
+        function drawAmountsChart(data) {
             const ctx = document.getElementById('commissionsChart');
             if (charts.commissions) charts.commissions.destroy();
-            
             charts.commissions = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: data.map(d => d.name),
-                    datasets: [{
-                        label: 'العمولات (ريال)',
-                        data: data.map(d => d.commission),
-                        backgroundColor: '#8B5CF6'
-                    }]
+                    datasets: [{ label: 'إجمالي التمويل (ريال)', data: data.map(d => parseFloat(d.total_amount) || 0), backgroundColor: '#8B5CF6' }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { legend: { display: false } }
-                }
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
             });
         }
 
         function updatePerformanceTable(data) {
-            const html = data.map(d => \`
+            const html = data.map(d => {
+                const successRate = parseFloat(d.success_rate) || 0;
+                const badgeColor = successRate >= 70 ? 'bg-green-100 text-green-800' : successRate >= 40 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800';
+                return \`
                 <tr class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3 font-bold">\${d.name}</td>
-                    <td class="px-4 py-3 text-center">\${d.totalCustomers}</td>
-                    <td class="px-4 py-3 text-center font-bold text-blue-600">\${d.converted}</td>
+                    <td class="px-4 py-3 font-bold">\${d.name || '—'}</td>
+                    <td class="px-4 py-3 text-center">\${d.customers_count || 0}</td>
+                    <td class="px-4 py-3 text-center font-bold text-blue-600">\${d.requests_count || 0}</td>
+                    <td class="px-4 py-3 text-center font-bold text-green-600">\${d.approved_count || 0}</td>
                     <td class="px-4 py-3 text-center">
-                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-bold">
-                            \${d.conversionRate}%
-                        </span>
+                        <span class="px-3 py-1 \${badgeColor} rounded-full text-sm font-bold">\${successRate.toFixed(1)}%</span>
                     </td>
-                    <td class="px-4 py-3 text-center font-bold text-green-600">\${d.approved}</td>
-                    <td class="px-4 py-3 text-center font-bold text-red-600">\${d.rejected}</td>
-                    <td class="px-4 py-3 text-center font-bold text-yellow-600">\${d.pending}</td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-bold">
-                            \${d.approvalRate}%
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 font-bold text-purple-600">\${d.commission.toLocaleString('ar-SA')} ريال</td>
-                </tr>
-            \`).join('');
+                    <td class="px-4 py-3 font-bold text-purple-600">\${(parseFloat(d.total_amount) || 0).toLocaleString('ar-SA')} ريال</td>
+                </tr>\`;
+            }).join('');
             document.getElementById('performanceTable').innerHTML = html;
         }
-        
-        // Load report on page load
+
         window.addEventListener('load', () => {
-            // Set default dates (last 30 days)
             const today = new Date();
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            
+            const yearStart = new Date(today.getFullYear(), 0, 1);
             document.getElementById('endDate').value = today.toISOString().split('T')[0];
-            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-            
-            // Load report automatically
+            document.getElementById('startDate').value = yearStart.toISOString().split('T')[0];
             loadPerformanceReport();
         });
     </script>

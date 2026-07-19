@@ -15,6 +15,17 @@ describe('link-stats overview batching', () => {
     const primary = slice.slice(0, slice.indexOf('} catch {'))
     assert.doesNotMatch(primary, /for \(const item of links\) overview\.push\(await buildLinkStats/)
   })
+
+  it('includes form initiations in overview and detail stats', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    const idx = src.indexOf("app.get('/api/link-stats'")
+    assert.ok(idx > 0)
+    const slice = src.slice(idx, idx + 50_000)
+    assert.match(slice, /contact_link_form_initiations/)
+    assert.match(slice, /initiations/)
+    assert.match(src, /contact-form-initiations/)
+    assert.match(src, /recordContactLinkFormInitiationWithDedup/)
+  })
 })
 
 describe('customer reminders batching', () => {

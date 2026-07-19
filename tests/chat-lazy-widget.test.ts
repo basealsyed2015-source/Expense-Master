@@ -14,4 +14,14 @@ describe('chat lazy load', () => {
     const api = readFileSync(join(process.cwd(), 'src', 'chat-module-api.ts'), 'utf8')
     assert.match(api, /\/api\/chat\/widget-html/)
   })
+
+  it('recreates script tags so injected widget JS actually runs', () => {
+    const widget = readFileSync(join(process.cwd(), 'src', 'chat-widget.ts'), 'utf8')
+    assert.match(widget, /appendHtmlWithScripts/)
+    assert.match(widget, /createElement\('script'\)/)
+    assert.doesNotMatch(
+      widget,
+      /insertAdjacentHTML\('beforeend',\s*html\)/,
+    )
+  })
 })

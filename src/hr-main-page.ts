@@ -195,6 +195,17 @@ export const hrMainPage = `<!DOCTYPE html>
                         <p class="text-sm text-gray-600 group-hover:text-teal-100 mt-2 transition-all">تقارير شاملة ومفصلة</p>
                     </div>
                 </a>
+
+                <!-- Tickets -->
+                <a href="/admin/hr/tickets" class="group bg-gradient-to-br from-purple-50 to-indigo-100 hover:from-purple-500 hover:to-indigo-600 rounded-xl p-6 transition-all transform hover:scale-105 hover:shadow-xl">
+                    <div class="text-center">
+                        <div class="bg-purple-500 group-hover:bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 transition-all">
+                            <i class="fas fa-ticket-alt text-white group-hover:text-purple-500 text-2xl transition-all"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800 group-hover:text-white transition-all">تذاكر الموظفين</h3>
+                        <p class="text-sm text-gray-600 group-hover:text-purple-100 mt-2 transition-all">متابعة الطلبات والشكاوى</p>
+                    </div>
+                </a>
             </div>
         </div>
 

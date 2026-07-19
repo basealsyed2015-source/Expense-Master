@@ -1139,13 +1139,23 @@ export function renderChatWidget(userId: number | null = null, roleId: number | 
 
   attInput.addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
-    if (!file || !currentConv) return;
+    if (!file) return;
+    if (!currentConv) { alert('افتح محادثة أولاً لإرسال مرفق'); attInput.value = ''; return; }
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch('/api/chat/conversations/' + currentConv + '/attachments', { method:'POST', credentials:'same-origin', body: fd });
-    const data = await res.json().catch(()=>({}));
-    if (data.success && data.message){
-      appendIfNew(data.message);
+    try {
+      const res = await fetch('/api/chat/conversations/' + currentConv + '/attachments', { method:'POST', credentials:'same-origin', body: fd });
+      const data = await res.json().catch(()=>({}));
+      if (data.success && data.message){
+        appendIfNew(data.message);
+      } else {
+        const err = data.error || ('HTTP ' + res.status);
+        alert(err === 'too large' ? 'الملف أكبر من 10 ميجابايت' : err === 'mime not allowed' ? 'نوع الملف غير مدعوم' : 'تعذر رفع المرفق');
+        console.warn('[chat] attachment upload failed', err);
+      }
+    } catch (err) {
+      console.warn('[chat] attachment upload error', err);
+      alert('تعذر رفع المرفق');
     }
     attInput.value = '';
   });
@@ -1239,6 +1249,24 @@ export function renderChatWidgetLazyStub(userId: number | null = null, roleId: n
   var loading = false;
   var btn = document.getElementById('cc-chat-lazy-launcher');
   if (!btn) return;
+
+  /** insertAdjacentHTML / innerHTML do not run <script>; recreate so the widget boots. */
+  function appendHtmlWithScripts(html) {
+    var wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    var oldScripts = Array.prototype.slice.call(wrap.querySelectorAll('script'));
+    oldScripts.forEach(function(old) {
+      var s = document.createElement('script');
+      for (var i = 0; i < old.attributes.length; i++) {
+        var a = old.attributes[i];
+        s.setAttribute(a.name, a.value);
+      }
+      s.textContent = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+    while (wrap.firstChild) document.body.appendChild(wrap.firstChild);
+  }
+
   btn.addEventListener('click', async function() {
     if (loading) return;
     if (document.getElementById('cc-chat-window') || document.getElementById('cc-chat-launcher')) {
@@ -1253,7 +1281,7 @@ export function renderChatWidgetLazyStub(userId: number | null = null, roleId: n
       if (!res.ok) throw new Error('widget load failed');
       var html = await res.text();
       btn.remove();
-      document.body.insertAdjacentHTML('beforeend', html);
+      appendHtmlWithScripts(html);
       requestAnimationFrame(function() {
         var real = document.getElementById('cc-chat-launcher');
         if (real) real.click();
