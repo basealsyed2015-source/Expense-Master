@@ -626,8 +626,12 @@ export function generateCustomerWorkflowPage(opts: {
             طباعة
           </button>
           <a href="/admin/customers/${customerId}" class="bg-white/20 text-white px-4 py-2 rounded-lg hover:bg-white/30 transition-colors">
-            <i class="fas fa-arrow-right ml-2"></i>
+            <i class="fas fa-user ml-2"></i>
             ملف العميل
+          </a>
+          <a href="/admin/customers" class="bg-white/20 text-white px-4 py-2 rounded-lg hover:bg-white/30 transition-colors">
+            <i class="fas fa-arrow-right ml-2"></i>
+            العملاء
           </a>
         </div>
       </div>
@@ -1213,8 +1217,12 @@ export function generateWorkflowTimelinePage(
             طباعة
           </button>
           <a href="/admin/requests/${requestId}/report" class="bg-white/20 text-white px-4 py-2 rounded-lg hover:bg-white/30 transition-colors">
-            <i class="fas fa-arrow-right ml-2"></i>
+            <i class="fas fa-file-alt ml-2"></i>
             العودة للتقرير
+          </a>
+          <a href="/admin/requests" class="bg-white/20 text-white px-4 py-2 rounded-lg hover:bg-white/30 transition-colors">
+            <i class="fas fa-arrow-right ml-2"></i>
+            الطلبات
           </a>
         </div>
       </div>

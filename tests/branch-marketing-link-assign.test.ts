@@ -1,7 +1,8 @@
 /**
  * Branch mode for marketing link (contact-followup) assignment.
  *
- * Adds a third `branch` mode alongside `auto` and `custom` for both:
+ * Also covers exclusion modes, which use the automatic round-robin pool after
+ * removing a saved roster of excluded staff.
  *   - per-affiliate links (tenant_contact_affiliate_links.assignment_mode/branch_id)
  *   - the tenant-wide company link (tenants.contact_assignment_mode/branch_id)
  *
@@ -71,7 +72,7 @@ function seed(): Database.Database {
 function pickFollowupStaff(
   db: Database.Database,
   tenantId: number,
-  opts: { useBranchMode: boolean; branchId: number | null }
+  opts: { useBranchMode: boolean; branchId: number | null; excludedUserIds?: number[] }
 ): number[] {
   const rows = db
     .prepare(
@@ -92,7 +93,8 @@ function pickFollowupStaff(
     const allowed = new Set(branchStaff.map((r) => r.id))
     staff = staff.filter((id) => allowed.has(id))
   }
-  return staff
+  const excluded = new Set(opts.excludedUserIds || [])
+  return staff.filter((id) => !excluded.has(id))
 }
 
 describe('marketing link branch assignment mode', () => {
@@ -146,6 +148,36 @@ describe('marketing link branch assignment mode', () => {
     assert.deepEqual(staff, [])
   })
 
+  it('custom exclusion mode assigns all global staff except the selected roster', () => {
+    const db = seed()
+    const staff = pickFollowupStaff(db, TENANT, {
+      useBranchMode: false,
+      branchId: null,
+      excludedUserIds: [22, 24],
+    })
+    assert.deepEqual(staff, [21, 23])
+  })
+
+  it('branch exclusion mode filters to its branch before excluding selected staff', () => {
+    const db = seed()
+    const staff = pickFollowupStaff(db, TENANT, {
+      useBranchMode: true,
+      branchId: BRANCH_A,
+      excludedUserIds: [22, 23],
+    })
+    assert.deepEqual(staff, [21], 'other-branch exclusions have no effect')
+  })
+
+  it('exclusion mode returns no assignee when every eligible employee is excluded', () => {
+    const db = seed()
+    const staff = pickFollowupStaff(db, TENANT, {
+      useBranchMode: false,
+      branchId: null,
+      excludedUserIds: [21, 22, 23, 24],
+    })
+    assert.deepEqual(staff, [])
+  })
+
   it('per-link branch overrides tenant-wide branch (when a followup arrives on an affiliate link)', () => {
     const db = seed()
     // Tenant-wide → branch A; per-link → branch B. The link wins.
@@ -165,13 +197,15 @@ describe('marketing link branch assignment mode', () => {
     assert.deepEqual(staff, [23])
   })
 
-  it('persisted assignment_mode accepts auto | custom | branch (rejects unknown values in normalization)', () => {
-    const modes = ['auto', 'custom', 'branch', 'garbage']
+  it('persisted assignment_mode accepts all inclusion and exclusion modes', () => {
+    const modes = ['auto', 'custom', 'custom_excl', 'branch', 'branch_excl', 'garbage']
     const normalize = (raw: string) =>
-      raw === 'custom' ? 'custom' : raw === 'branch' ? 'branch' : 'auto'
+      ['custom', 'custom_excl', 'branch', 'branch_excl'].includes(raw) ? raw : 'auto'
     assert.equal(normalize(modes[0]), 'auto')
     assert.equal(normalize(modes[1]), 'custom')
-    assert.equal(normalize(modes[2]), 'branch')
-    assert.equal(normalize(modes[3]), 'auto', 'unknown modes collapse to auto')
+    assert.equal(normalize(modes[2]), 'custom_excl')
+    assert.equal(normalize(modes[3]), 'branch')
+    assert.equal(normalize(modes[4]), 'branch_excl')
+    assert.equal(normalize(modes[5]), 'auto', 'unknown modes collapse to auto')
   })
 })

@@ -436,7 +436,7 @@ export const usersManagementPage = () => `
         
         return \`
           <tr class="border-b hover:bg-blue-50 transition-colors">
-            <td class="px-6 py-4 font-medium">\${index + 1}</td>
+            <td class="px-6 py-4 font-medium">\${user.tenant_user_number != null ? user.tenant_user_number : '—'}</td>
             <td class="px-6 py-4">
               <div class="flex items-center gap-3">
                 <div class="bg-blue-100 w-10 h-10 rounded-full flex items-center justify-center">

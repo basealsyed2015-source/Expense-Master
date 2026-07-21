@@ -26,6 +26,28 @@ describe('link-stats overview batching', () => {
     assert.match(src, /contact-form-initiations/)
     assert.match(src, /recordContactLinkFormInitiationWithDedup/)
   })
+
+  it('includes abandon field fills in detail stats (form order)', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    assert.match(src, /contact-form-abandons/)
+    assert.match(src, /recordContactLinkFormAbandonWithDedup/)
+    assert.match(src, /contact_link_form_field_fills/)
+    assert.match(src, /contact_link_form_abandons/)
+    assert.match(src, /buildContactFormFieldOrder/)
+    assert.match(src, /abandon_fields/)
+    assert.match(src, /الحقول قبل المغادرة/)
+    assert.match(src, /sendAbandonBeacon/)
+    assert.match(src, /linkStatsFilterBarHtml|_linkStatsFilterBar/)
+  })
+
+  it('enrolls contact leads with phone only', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    const idx = src.indexOf("var enrollHref = '/admin/customers/add?")
+    assert.ok(idx > 0)
+    const slice = src.slice(idx, idx + 450)
+    // Phone must be present for enrollment deep-link; full_name is optional prefill.
+    assert.match(slice, /phone=/)
+  })
 })
 
 describe('customer reminders batching', () => {

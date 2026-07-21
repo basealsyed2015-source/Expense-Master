@@ -904,6 +904,211 @@ export function reportFilterBarHtml(hex: string): string {
   return buildFilterBar(hex, new Date().getFullYear())
 }
 
+/** Date filter for /admin/link-stats — same flatpickr UX as reports, uses from/to query params. */
+export function linkStatsFilterBarHtml(hex = '#0f766e'): string {
+  const year = new Date().getFullYear()
+  return `
+  <style>
+    .flatpickr-calendar { direction: rtl !important; font-family: inherit; }
+    .flatpickr-months { direction: rtl; }
+    .flatpickr-current-month { direction: rtl; display: flex; align-items: center; justify-content: center; gap: 4px; }
+    .flatpickr-current-month .flatpickr-monthDropdown-months { direction: rtl; }
+    #reportFilterCard { transition: box-shadow .15s; }
+    #periodSelect { direction: rtl; }
+    .fp-range-pill { background: ${hex}18; border: 1.5px solid ${hex}55; color: #1e293b; }
+  </style>
+  <div id="reportFilterCard" class="bg-white border border-slate-200 rounded-2xl metric-glow overflow-hidden mt-4">
+    <div style="height:3px;background:linear-gradient(to left,${hex}99,${hex})"></div>
+    <div class="px-5 pt-4 pb-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg" style="background:${hex}18">
+            <i class="fas fa-calendar-alt text-sm" style="color:${hex}"></i>
+          </span>
+          <span class="text-sm font-bold text-slate-700">الفترة الزمنية</span>
+        </div>
+        <span id="periodBadge" class="text-xs font-semibold px-3 py-1 rounded-full text-white" style="background:${hex};display:none"></span>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="relative">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color:${hex}">
+            <i class="fas fa-chevron-down text-xs"></i>
+          </span>
+          <select id="periodSelect" onchange="onPeriodChange()"
+            style="padding-right:2rem;border-color:#e2e8f0;min-width:220px;appearance:none;-webkit-appearance:none"
+            class="pl-4 py-2.5 border-2 rounded-xl text-slate-800 font-semibold bg-slate-50 cursor-pointer focus:outline-none text-sm">
+            <option value="last7">آخر 7 أيام</option>
+            <option value="last30" selected>آخر 30 يوم</option>
+            <option value="last90">آخر 90 يوم</option>
+            <option value="all">كل الفترات</option>
+            <option value="year">السنة الحالية ${year}</option>
+            <option value="month">الشهر الحالي</option>
+            <option value="week">الأسبوع الحالي</option>
+            <option value="q1">الربع الأول ${year} · يناير – مارس</option>
+            <option value="q2">الربع الثاني ${year} · أبريل – يونيو</option>
+            <option value="q3">الربع الثالث ${year} · يوليو – سبتمبر</option>
+            <option value="q4">الربع الرابع ${year} · أكتوبر – ديسمبر</option>
+            <option value="custom">تاريخ مخصص…</option>
+          </select>
+        </div>
+        <div id="dateDisplay" class="fp-range-pill flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium">
+          <i class="fas fa-calendar-week text-xs opacity-60"></i>
+          <span id="dateRangeLabel" class="text-slate-700">—</span>
+        </div>
+        <div id="customWrap" style="display:none">
+          <input id="dateRangePicker" type="text" readonly placeholder="انقر لاختيار فترة مخصصة"
+            class="px-4 py-2.5 rounded-xl text-sm text-slate-700 cursor-pointer w-72 bg-slate-50"
+            style="border:2px dashed #cbd5e1">
+        </div>
+        <div id="applyWrap" style="display:none">
+          <button type="button" onclick="load()"
+            class="px-5 py-2.5 text-white text-sm font-bold rounded-xl transition-opacity hover:opacity-90 flex items-center gap-2"
+            style="background:${hex}">
+            <i class="fas fa-check text-xs"></i>تطبيق
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`
+}
+
+export const LINK_STATS_DATE_FILTER_JS = `
+  let _startDate = '', _endDate = '', _fp = null;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmt(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+
+  function getPeriodDates(period) {
+    const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+    const lastDay = (yr, mo) => new Date(yr, mo + 1, 0).getDate();
+    const rolling = (days, label) => {
+      const to = new Date(), from = new Date();
+      from.setDate(to.getDate() - days + 1);
+      const range = fmt(from) + ' – ' + fmt(to);
+      return { s: fmt(from), e: fmt(to), label, range };
+    };
+    switch (period) {
+      case 'last7': return rolling(7, 'آخر 7 أيام');
+      case 'last30': return rolling(30, 'آخر 30 يوم');
+      case 'last90': return rolling(90, 'آخر 90 يوم');
+      case 'all': return { s: '', e: '', label: 'كل الفترات', range: 'منذ البداية' };
+      case 'year': return { s: y+'-01-01', e: y+'-12-31', label: 'السنة الحالية '+y, range: '1 يناير '+y+' – 31 ديسمبر '+y };
+      case 'month': {
+        const ld = lastDay(y, m), mn = now.toLocaleString('ar-SA', { month: 'long' });
+        return { s: y+'-'+pad(m+1)+'-01', e: y+'-'+pad(m+1)+'-'+pad(ld), label: mn+' '+y, range: '1 '+mn+' – '+ld+' '+mn+' '+y };
+      }
+      case 'week': {
+        const day = now.getDay(), mon = new Date(now); mon.setDate(now.getDate() - ((day + 6) % 7));
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        return { s: fmt(mon), e: fmt(sun), label: 'الأسبوع الحالي', range: fmt(mon)+' – '+fmt(sun) };
+      }
+      case 'q1': return { s: y+'-01-01', e: y+'-03-31', label: 'الربع الأول '+y, range: 'يناير – مارس '+y };
+      case 'q2': return { s: y+'-04-01', e: y+'-06-30', label: 'الربع الثاني '+y, range: 'أبريل – يونيو '+y };
+      case 'q3': return { s: y+'-07-01', e: y+'-09-30', label: 'الربع الثالث '+y, range: 'يوليو – سبتمبر '+y };
+      case 'q4': return { s: y+'-10-01', e: y+'-12-31', label: 'الربع الرابع '+y, range: 'أكتوبر – ديسمبر '+y };
+      default: return null;
+    }
+  }
+
+  function dateRange() {
+    const out = {};
+    if (_startDate) out.from = _startDate;
+    if (_endDate) out.to = _endDate;
+    return out;
+  }
+
+  function setBadge(label, range) {
+    const badge = document.getElementById('periodBadge');
+    const rangeEl = document.getElementById('dateRangeLabel');
+    if (badge) {
+      if (label) { badge.textContent = label; badge.style.display = ''; }
+      else { badge.style.display = 'none'; }
+    }
+    if (rangeEl) rangeEl.textContent = range || '—';
+  }
+
+  function onPeriodChange() {
+    const period = document.getElementById('periodSelect').value;
+    const customWrap = document.getElementById('customWrap');
+    const applyWrap = document.getElementById('applyWrap');
+    const dateDisplay = document.getElementById('dateDisplay');
+    if (period === 'custom') {
+      customWrap.style.display = '';
+      applyWrap.style.display = '';
+      dateDisplay.style.display = 'none';
+      setBadge('', '');
+      if (_fp) _fp.clear();
+      _startDate = '';
+      _endDate = '';
+    } else {
+      customWrap.style.display = 'none';
+      applyWrap.style.display = 'none';
+      dateDisplay.style.display = '';
+      const d = getPeriodDates(period);
+      _startDate = d.s;
+      _endDate = d.e;
+      setBadge(d.label, d.range);
+      load();
+    }
+  }
+
+  function initDatePicker() {
+    if (typeof flatpickr === 'undefined') return;
+    _fp = flatpickr('#dateRangePicker', {
+      mode: 'range',
+      dateFormat: 'Y-m-d',
+      locale: 'ar',
+      allowInput: false,
+      onReady(_, __, fp) { fp.calendarContainer.setAttribute('dir', 'rtl'); },
+      onClose(dates) {
+        if (dates.length === 2) {
+          _startDate = fmt(dates[0]);
+          _endDate = fmt(dates[1]);
+          const r = _startDate + ' – ' + _endDate;
+          document.getElementById('dateRangePicker').value = r;
+          setBadge('مخصص', r);
+        }
+      }
+    });
+  }
+
+  function initDateRangeFromUrl() {
+    const q = new URLSearchParams(location.search);
+    const from = q.get('from'), to = q.get('to');
+    const select = document.getElementById('periodSelect');
+    if (from && to && /^\\d{4}-\\d{2}-\\d{2}$/.test(from) && /^\\d{4}-\\d{2}-\\d{2}$/.test(to)) {
+      select.value = 'custom';
+      document.getElementById('customWrap').style.display = '';
+      document.getElementById('applyWrap').style.display = '';
+      document.getElementById('dateDisplay').style.display = 'none';
+      _startDate = from;
+      _endDate = to;
+      const r = from + ' – ' + to;
+      const picker = document.getElementById('dateRangePicker');
+      if (picker) picker.value = r;
+      setBadge('مخصص', r);
+      if (_fp) _fp.setDate([from, to], false);
+      return;
+    }
+    if (!from && !to) {
+      const allExplicit = q.get('period') === 'all';
+      if (allExplicit) {
+        select.value = 'all';
+        const d = getPeriodDates('all');
+        _startDate = d.s;
+        _endDate = d.e;
+        setBadge(d.label, d.range);
+        return;
+      }
+    }
+    select.value = 'last30';
+    const d = getPeriodDates('last30');
+    _startDate = d.s;
+    _endDate = d.e;
+    setBadge(d.label, d.range);
+  }
+`
+
 export const REPORT_FILTER_BASE_JS = `
   let _startDate = '', _endDate = '', _fp = null;
 

@@ -55,6 +55,8 @@ import {
   spreadsheetMLAttachmentResponse,
 } from './csv-export'
 import { generateCustomerWorkflowPage, generateWorkflowTimelinePage } from './workflow-page'
+import { distributeCustomersToEmployees, distributeCustomersToBankAgents } from './csv-import-assign'
+import { allocateTenantUserNumber, allocateTenantCustomerNumber } from './tenant-local-numbers'
 import {
   normalizeRoleId,
   canAddWorkflowNote,
@@ -88,6 +90,8 @@ import {
   REPORT_FLATPICKR_HEAD as _rfFlatpickrHead,
   reportFilterBarHtml as _rfFilterBar,
   REPORT_FILTER_BASE_JS as _rfBaseJs,
+  linkStatsFilterBarHtml as _linkStatsFilterBar,
+  LINK_STATS_DATE_FILTER_JS as _linkStatsDateFilterJs,
 } from './reports-module'
 import { hrMainPage } from './hr-main-page'
 import { hrEmployeesPage, hrEmployeeViewPage, hrEmployeeEditPage, hrAttendancePage } from './hr-complete-system'
@@ -1670,6 +1674,97 @@ async function recordContactLinkFormInitiationWithDedup(
   c.header('Set-Cookie', `${cookieName}=1; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax`)
 }
 
+const CONTACT_FORM_BUILTIN_FIELD_KEYS = new Set(['name', 'phone', 'message'])
+
+/** Sanitize field keys from abandon beacons (keys only — never values). */
+function normalizeContactFormAbandonFieldKeys(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (out.length >= 12) break
+    const key = String(item ?? '').trim().slice(0, 80)
+    if (!key || seen.has(key)) continue
+    if (CONTACT_FORM_BUILTIN_FIELD_KEYS.has(key) || key.startsWith('cf:')) {
+      seen.add(key)
+      out.push(key)
+    }
+  }
+  return out
+}
+
+function parseContactCustomFieldLabels(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((f: any) => f && typeof f === 'object' && String(f.label || '').trim())
+      .slice(0, 3)
+      .map((f: any) => String(f.label).trim())
+  } catch {
+    return []
+  }
+}
+
+/** Form-order field list for abandon stats (built-ins + current custom labels). */
+function buildContactFormFieldOrder(customLabels: string[]): { key: string; label: string }[] {
+  return [
+    { key: 'name', label: 'الاسم' },
+    { key: 'phone', label: 'رقم الجوال' },
+    ...customLabels.map((label) => ({ key: `cf:${label}`, label })),
+    { key: 'message', label: 'رسالتك' },
+  ]
+}
+
+async function recordContactLinkFormAbandon(
+  db: D1Database,
+  tenantId: number,
+  affiliateLinkId: number | null,
+  fieldKeys: string[]
+): Promise<void> {
+  const linkId = affiliateLinkId ?? 0
+  try {
+    const stmts = [
+      db.prepare(`
+        INSERT INTO contact_link_form_abandons (tenant_id, affiliate_link_id, abandon_date, abandon_count)
+        VALUES (?, ?, date('now'), 1)
+        ON CONFLICT(tenant_id, affiliate_link_id, abandon_date)
+        DO UPDATE SET abandon_count = abandon_count + 1
+      `).bind(tenantId, linkId),
+    ]
+    for (const fieldKey of fieldKeys) {
+      stmts.push(
+        db.prepare(`
+          INSERT INTO contact_link_form_field_fills (tenant_id, affiliate_link_id, field_key, fill_date, fill_count)
+          VALUES (?, ?, ?, date('now'), 1)
+          ON CONFLICT(tenant_id, affiliate_link_id, field_key, fill_date)
+          DO UPDATE SET fill_count = fill_count + 1
+        `).bind(tenantId, linkId, fieldKey)
+      )
+    }
+    await db.batch(stmts)
+  } catch (_) {
+    // Do not block the public contact form while a migration is being deployed.
+  }
+}
+
+/** Records a unique abandon (per browser, per day) with which fields were filled — submitters are never counted. */
+async function recordContactLinkFormAbandonWithDedup(
+  c: any,
+  db: D1Database,
+  tenantId: number,
+  affiliateLinkId: number | null,
+  fieldKeys: string[]
+): Promise<void> {
+  if (!isAnonymousPublicContactView(c)) return
+  const cookieName = `vfa_${affiliateLinkId ?? 0}`
+  const cookieHeader = String(c.req.header('Cookie') ?? '')
+  if (hasCookie(cookieHeader, cookieName)) return
+  await recordContactLinkFormAbandon(db, tenantId, affiliateLinkId, fieldKeys)
+  c.header('Set-Cookie', `${cookieName}=1; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax`)
+}
+
 /**
  * Parse contact page design fields from a PATCH/POST body.
  * Only keys present on `body` are included in `updates`.
@@ -2102,8 +2197,55 @@ function buildPublicContactPageHtml(
         const form = document.getElementById('contactForm');
         const statusEl = document.getElementById('formStatus');
         const submitBtn = document.getElementById('submitBtn');
+        const filledFields = new Set();
+        let formStarted = false;
+        let formSubmitted = false;
+        let abandonSent = false;
+
+        function fieldKeyForEl(el) {
+          if (!el || !el.id) return null;
+          if (el.id === 'customer_name') return 'name';
+          if (el.id === 'customer_phone') return 'phone';
+          if (el.id === 'customer_message') return 'message';
+          const m = String(el.id).match(/^custom_field_(\\d+)$/);
+          if (!m) return null;
+          const field = CUSTOM_FIELDS[Number(m[1])];
+          return field && field.label ? ('cf:' + String(field.label).trim().slice(0, 76)) : null;
+        }
+
+        function syncFilledField(el) {
+          const key = fieldKeyForEl(el);
+          if (!key) return;
+          const filled = el.type === 'checkbox'
+            ? !!el.checked
+            : String(el.value || '').trim().length > 0;
+          if (filled) filledFields.add(key);
+          else filledFields.delete(key);
+        }
+
+        function sendAbandonBeacon() {
+          if (formSubmitted || abandonSent || !formStarted) return;
+          abandonSent = true;
+          const payload = { fields: Array.from(filledFields) };
+          if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
+          const body = JSON.stringify(payload);
+          const url = '/api/public/${tenant.slug}/contact-form-abandons';
+          try {
+            if (navigator.sendBeacon) {
+              navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+              return;
+            }
+          } catch (_) {}
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            keepalive: true,
+          }).catch(() => {});
+        }
 
         form.addEventListener('input', () => {
+          formStarted = true;
           const payload = {};
           if (AFFILIATE_PATH) payload.affiliate_path = AFFILIATE_PATH;
           fetch('/api/public/${tenant.slug}/contact-form-initiations', {
@@ -2113,6 +2255,20 @@ function buildPublicContactPageHtml(
             keepalive: true,
           }).catch(() => {});
         }, { once: true });
+
+        form.addEventListener('input', (e) => {
+          formStarted = true;
+          syncFilledField(e.target);
+        });
+        form.addEventListener('change', (e) => {
+          formStarted = true;
+          syncFilledField(e.target);
+        });
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') sendAbandonBeacon();
+        });
+        window.addEventListener('pagehide', sendAbandonBeacon);
 
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -2152,6 +2308,7 @@ function buildPublicContactPageHtml(
               throw new Error(data.error || 'تعذر إرسال الطلب');
             }
 
+            formSubmitted = true;
             form.reset();
             form.setAttribute('aria-disabled', 'true');
             form.querySelectorAll('input, textarea, select, button').forEach((field) => {
@@ -2226,12 +2383,22 @@ async function syncNewUserToHrEmployees(
     department: string | null
   }
 ): Promise<boolean> {
+  // employee_code is globally UNIQUE — keep the USR{globalId} scheme as the
+  // technical key. employee_number is the human-facing serial and gets the
+  // tenant-local number so it stays consistent with every other view.
   const code = `USR${opts.userId}`
   const already = await db
     .prepare('SELECT id FROM hr_employees WHERE employee_code = ? LIMIT 1')
     .bind(code)
     .first()
   if (already) return false
+
+  const linkedUser = await db
+    .prepare('SELECT tenant_user_number FROM users WHERE id = ?')
+    .bind(opts.userId)
+    .first() as { tenant_user_number: number | null } | null
+  const employeeNumber =
+    linkedUser?.tenant_user_number != null ? String(linkedUser.tenant_user_number) : code
 
   let jobTitle = 'موظف'
   if (opts.roleId === 3) jobTitle = 'مشرف المبيعات'
@@ -2259,7 +2426,7 @@ async function syncNewUserToHrEmployees(
     .bind(
       opts.tenantId,
       code,
-      code,
+      employeeNumber,
       displayName,
       displayName,
       opts.email,
@@ -7829,6 +7996,10 @@ app.post('/api/users', async (c) => {
 
     const newUserId = result.meta.last_row_id
 
+    if (typeof tenant_id === 'number' && !Number.isNaN(tenant_id) && newUserId != null && Number(newUserId) > 0) {
+      await allocateTenantUserNumber(c.env.DB, Number(newUserId), tenant_id)
+    }
+
     const needsHrRow =
       (requestedRoleId === 3 || requestedRoleId === 4 || requestedRoleId === 5 || requestedRoleId === 6) &&
       typeof tenant_id === 'number' &&
@@ -8307,7 +8478,7 @@ app.get('/api/customers/export-csv', async (c) => {
     const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
 
     let query = `
-      SELECT customers.id, customers.full_name, customers.phone, customers.email,
+      SELECT customers.id, customers.tenant_customer_number, customers.full_name, customers.phone, customers.email,
         customers.enrollment_source, customers.enrollment_source_label, customers.national_id, customers.created_at,
         u.full_name AS assigned_employee_name,
         tl.name AS enrollment_location_name,
@@ -8436,7 +8607,7 @@ app.get('/api/customers/export-csv', async (c) => {
             : customer.enrollment_source === 'manual' ? String(customer.enrollment_source_label || '').trim() || 'يدوي'
               : String(customer.enrollment_source_label || '').trim()
       return [
-        String(customer.id ?? ''),
+        String(customer.tenant_customer_number ?? ''),
         String(customer.full_name || '-'),
         String(customer.phone || '-'),
         String(customer.email || '-'),
@@ -8471,6 +8642,8 @@ app.post('/api/customers/import-csv', async (c) => {
     if (!Array.isArray(incoming) || incoming.length === 0) {
       return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
     }
+    const autoDistributeEmployees = body?.auto_distribute_employees === true
+    const autoDistributeBankAgents = body?.auto_distribute_bank_agents === true
 
     // Resolve tenant scope
     let tenant_id: number | null = userInfo.tenantId != null ? Number(userInfo.tenantId) : null
@@ -8491,6 +8664,7 @@ app.post('/api/customers/import-csv', async (c) => {
     let created = 0
     let updated = 0
     const errors: string[] = []
+    const newCustomerIds: number[] = []
 
     for (let i = 0; i < incoming.length; i++) {
       const row = incoming[i] || {}
@@ -8510,6 +8684,9 @@ app.post('/api/customers/import-csv', async (c) => {
         const email = row.email != null && String(row.email).trim() ? String(row.email).trim() : null
         const national_id =
           row.national_id != null && String(row.national_id).trim() ? String(row.national_id).trim() : null
+        const monthly_salary = row.monthly_salary != null && String(row.monthly_salary).trim()
+          ? (parseFloat(String(row.monthly_salary).trim()) || null)
+          : null
 
         const existing = await c.env.DB.prepare(
           `SELECT id FROM customers WHERE phone = ? AND tenant_id = ? LIMIT 1`
@@ -8518,31 +8695,41 @@ app.post('/api/customers/import-csv', async (c) => {
         if (existing?.id) {
           await c.env.DB.prepare(
             `UPDATE customers
-             SET full_name = ?, email = ?, national_id = ?, updated_at = CURRENT_TIMESTAMP
+             SET full_name = ?, email = ?, national_id = ?, monthly_salary = COALESCE(?, monthly_salary), updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND tenant_id = ?`
-          ).bind(full_name, email, national_id, existing.id, tenant_id).run()
+          ).bind(full_name, email, national_id, monthly_salary, existing.id, tenant_id).run()
           updated++
         } else {
           const insertRes = await c.env.DB.prepare(
-            `INSERT INTO customers (full_name, phone, email, national_id, tenant_id)
-             VALUES (?, ?, ?, ?, ?)`
-          ).bind(full_name, phone, email, national_id, tenant_id).run() as { meta?: { last_row_id?: number } }
+            `INSERT INTO customers (full_name, phone, email, national_id, monthly_salary, tenant_id)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          ).bind(full_name, phone, email, national_id, monthly_salary, tenant_id).run() as { meta?: { last_row_id?: number } }
 
-          // Best-effort: track creator for role 5 visibility scope.
           const createdCustomerId = Number(insertRes?.meta?.last_row_id || 0)
+          if (createdCustomerId) {
+            await allocateTenantCustomerNumber(c.env.DB, createdCustomerId, tenant_id)
+          }
           if (userInfo.userId && createdCustomerId) {
             try {
               await c.env.DB.prepare(`UPDATE customers SET created_by = ? WHERE id = ?`)
-                .bind(userInfo.userId, createdCustomerId)
-                .run()
-            } catch (_) {
-              /* column may not exist in older DBs */
-            }
+                .bind(userInfo.userId, createdCustomerId).run()
+            } catch (_) { /* column may not exist in older DBs */ }
           }
+          if (createdCustomerId) newCustomerIds.push(createdCustomerId)
           created++
         }
       } catch (e: any) {
         errors.push(`Row ${i + 1}: ${e?.message || String(e)}`)
+      }
+    }
+
+    // Distribute newly created customers using tenant rules
+    if (newCustomerIds.length) {
+      if (autoDistributeEmployees) {
+        await distributeCustomersToEmployees(c.env.DB, tenant_id, newCustomerIds, userInfo.userId ?? 1)
+      }
+      if (autoDistributeBankAgents) {
+        await distributeCustomersToBankAgents(c.env.DB, tenant_id, newCustomerIds)
       }
     }
 
@@ -9081,6 +9268,9 @@ app.post('/api/customers', async (c) => {
 
     // Track creator + (for bank agents / eligible dual agents) self-assign as موظف التمويل.
     const createdCustomerId = Number(result?.meta?.last_row_id || 0)
+    if (createdCustomerId) {
+      await allocateTenantCustomerNumber(c.env.DB, createdCustomerId, tenant_id)
+    }
     const normRoleAfterInsert = normalizeRoleId(userInfo.roleId)
     if (creatorUserId && createdCustomerId) {
       try {
@@ -11432,27 +11622,30 @@ app.post('/api/c/:tenant/calculator/submit-request', async (c) => {
           data.financing_type_id || null,
           'calculator'
         ).run()
-        
+
         customer_id = customerResult.meta.last_row_id
+        await allocateTenantCustomerNumber(c.env.DB, customer_id, tenant_id)
       } catch (insertError: any) {
         if (insertError.message && insertError.message.includes('UNIQUE')) {
           // Try to find existing customer (might be in a different tenant)
           const existingCustomer = await c.env.DB.prepare(`
             SELECT id FROM customers WHERE (national_id = ? OR phone = ?)
           `).bind(data.national_id || '', data.phone || '').first()
-          
+
           if (existingCustomer) {
             // Customer exists, update their info and use their ID
             customer_id = existingCustomer.id
-            
-            // Update customer with new tenant_id and info
+
+            // Update customer with new tenant_id and info. Reset tenant_customer_number
+            // so the allocator below assigns a fresh serial in the new tenant.
             await c.env.DB.prepare(`
-              UPDATE customers 
-              SET full_name = ?, phone = ?, email = ?, 
+              UPDATE customers
+              SET full_name = ?, phone = ?, email = ?,
                   birthdate = ?, monthly_salary = ?,
                   employer_name = ?, job_title = ?,
                   work_start_date = ?, city = ?, tenant_id = ?,
-                  financing_amount = ?, monthly_obligations = ?, financing_type_id = ?
+                  financing_amount = ?, monthly_obligations = ?, financing_type_id = ?,
+                  tenant_customer_number = NULL
               WHERE id = ?
             `).bind(
               data.full_name || '',
@@ -11470,6 +11663,7 @@ app.post('/api/c/:tenant/calculator/submit-request', async (c) => {
               data.financing_type_id || null,
               customer_id
             ).run()
+            await allocateTenantCustomerNumber(c.env.DB, customer_id, tenant_id)
           } else {
             throw insertError
           }
@@ -11696,6 +11890,9 @@ app.post('/api/calculator/save-customer', async (c) => {
       }
 
       customer_id = result.meta.last_row_id
+      if (customer_id) {
+        await allocateTenantCustomerNumber(c.env.DB, customer_id, tenant_id)
+      }
     }
 
     // Auto-assign calculator customers to a role-4 employee using the fair queue,
@@ -11887,6 +12084,12 @@ app.post('/api/calculator/submit-request', async (c) => {
       if (customer.tenant_id) {
         tenant_id = customer.tenant_id
       }
+      // If the customer was tenant-less and just got adopted by this tenant,
+      // allocate its tenant-local serial. allocateTenantCustomerNumber is a no-op
+      // when tenant_customer_number is already set.
+      if (customer_id && tenant_id) {
+        await allocateTenantCustomerNumber(c.env.DB, customer_id, tenant_id)
+      }
     } else {
       // Create new customer - but check one more time to avoid race condition
       try {
@@ -11911,8 +12114,11 @@ app.post('/api/calculator/submit-request', async (c) => {
           tenant_id,
           'calculator'
         ).run()
-        
+
         customer_id = customerResult.meta.last_row_id
+        if (customer_id) {
+          await allocateTenantCustomerNumber(c.env.DB, customer_id, tenant_id)
+        }
       } catch (insertError: any) {
         // If UNIQUE constraint fails, customer was created between check and insert
         // Try to get the customer again
@@ -18492,7 +18698,7 @@ app.get('/admin/customer-assignment', async (c) => {
                       <td class="px-4 py-3">
                         <input type="checkbox" class="customer-checkbox rounded" value="${customer.id}">
                       </td>
-                      <td class="px-4 py-3">#${customer.id}</td>
+                      <td class="px-4 py-3">${customer.tenant_customer_number != null ? `#${customer.tenant_customer_number}` : '—'}</td>
                       <td class="px-4 py-3 font-semibold">${customer.full_name || 'غير محدد'}</td>
                       <td class="px-4 py-3">${customerPhoneInputValue(customer.phone) || 'غير محدد'}</td>
                       <td class="px-4 py-3">${customer.email || 'غير محدد'}</td>
@@ -20975,7 +21181,7 @@ app.get('/admin/customers', async (c) => {
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
-                ${customers.results.map((customer: any) => {
+                ${customers.results.map((customer: any, _customerIdx: number) => {
                   const hasFr = customerIdsWithRequests.has(customer.id)
                   const latestRequestId = customerLatestRequestMap.get(customer.id) ?? null
                   const custAgentId =
@@ -21048,7 +21254,7 @@ app.get('/admin/customers', async (c) => {
                         ` : ''}
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${_customerIdx + 1}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="inline-flex items-center gap-2"><span class="customer-alarm-slot" data-customer-id="${customer.id}"></span><span>${customer.full_name || '-'}</span></span></td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="inline-flex items-center gap-2">
@@ -22203,6 +22409,8 @@ app.get('/admin/customers', async (c) => {
             return rows
           }
 
+          let _csvImportPending = null
+
           window.handleCustomersCSVFile = async function(evt) {
             try {
               const file = evt?.target?.files?.[0]
@@ -22215,11 +22423,11 @@ app.get('/admin/customers', async (c) => {
               }
               const header = rows[0].map(normalizeCsvHeaderCell)
               const idx = (keys) => header.findIndex((h) => keys.indexOf(h) !== -1)
-              // Aligned with customers table/export: ['#','الاسم','الهاتف','البريد الإلكتروني',...,'الرقم الوطني','تاريخ التسجيل']
               const iName = idx(['full_name', 'name', 'الاسم'])
               const iPhone = idx(['phone', 'الهاتف', 'الجوال'])
               const iEmail = idx(['email', 'البريد الإلكتروني', 'البريد'])
               const iNat = idx(['national_id', 'nationalid', 'الرقم الوطني'])
+              const iSalary = idx(['monthly_salary', 'salary', 'الراتب', 'الراتب الشهري'])
 
               const customers = []
               for (let r = 1; r < rows.length; r++) {
@@ -22228,8 +22436,9 @@ app.get('/admin/customers', async (c) => {
                 const phone = iPhone >= 0 ? String(cols[iPhone] || '').trim() : ''
                 const email = iEmail >= 0 ? String(cols[iEmail] || '').trim() : ''
                 const national_id = iNat >= 0 ? String(cols[iNat] || '').trim() : ''
+                const monthly_salary = iSalary >= 0 ? String(cols[iSalary] || '').trim() : ''
                 if (!full_name && !phone) continue
-                customers.push({ full_name, phone, email, national_id })
+                customers.push({ full_name, phone, email, national_id, monthly_salary })
               }
 
               if (customers.length === 0) {
@@ -22237,29 +22446,69 @@ app.get('/admin/customers', async (c) => {
                 return
               }
 
-              const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
-              const headers = { 'Content-Type': 'application/json' }
-              if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
-              const resp = await fetch('/api/customers/import-csv', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers,
-                body: JSON.stringify({ customers })
-              })
-              const data = await resp.json().catch(() => ({}))
-              if (!resp.ok || !data.success) {
-                alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
-                return
-              }
-              const errCount = Array.isArray(data.errors) ? data.errors.length : 0
-              alert((data.message || 'تم الاستيراد') + (errCount ? ('\\nأخطاء: ' + errCount) : ''))
-              window.location.reload()
+              _csvImportPending = customers
+              openCsvImportAssignModal(customers.length)
             } catch (e) {
-              alert('حدث خطأ أثناء الاستيراد')
+              alert('حدث خطأ أثناء قراءة الملف')
               console.error(e)
             } finally {
               const el = document.getElementById('customersCsvInput')
               if (el) el.value = ''
+            }
+          }
+
+          function openCsvImportAssignModal(count) {
+            const modal = document.getElementById('csvImportAssignModal')
+            if (!modal) return
+            document.getElementById('csvImportCount').textContent = count
+            document.getElementById('csvAssignEmployeeCheck').checked = false
+            document.getElementById('csvAssignBankAgentCheck').checked = false
+            document.getElementById('csvImportAssignBtn').disabled = false
+            modal.style.display = 'flex'
+          }
+
+          window.cancelCsvImportAssign = function() {
+            _csvImportPending = null
+            const modal = document.getElementById('csvImportAssignModal')
+            if (modal) modal.style.display = 'none'
+          }
+
+          window.confirmCsvImportAssign = async function() {
+            const customers = _csvImportPending
+            if (!customers || customers.length === 0) return
+            const btn = document.getElementById('csvImportAssignBtn')
+            if (btn) btn.disabled = true
+
+            const doEmployee = document.getElementById('csvAssignEmployeeCheck').checked
+            const doBankAgent = document.getElementById('csvAssignBankAgentCheck').checked
+
+            try {
+              const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+              const headers = { 'Content-Type': 'application/json' }
+              if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+
+              const resp = await fetch('/api/customers/import-csv', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers,
+                body: JSON.stringify({ customers, auto_distribute_employees: doEmployee, auto_distribute_bank_agents: doBankAgent })
+              })
+              const data = await resp.json().catch(() => ({}))
+              if (!resp.ok || !data.success) {
+                alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
+                if (btn) btn.disabled = false
+                return
+              }
+
+              const errCount = Array.isArray(data.errors) ? data.errors.length : 0
+              alert((data.message || 'تم الاستيراد') + (errCount ? ('\\nأخطاء: ' + errCount) : ''))
+              _csvImportPending = null
+              document.getElementById('csvImportAssignModal').style.display = 'none'
+              window.location.reload()
+            } catch (e) {
+              alert('حدث خطأ أثناء الاستيراد')
+              console.error(e)
+              if (btn) btn.disabled = false
             }
           }
 
@@ -22351,6 +22600,42 @@ app.get('/admin/customers', async (c) => {
           </div>
         </div>
         ` : ''}
+
+        <!-- ===== CSV IMPORT AUTO-ASSIGN MODAL ===== -->
+        <div id="csvImportAssignModal" style="display:none;" class="fixed inset-0 z-[9998] flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/50" onclick="cancelCsvImportAssign()"></div>
+          <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4" dir="rtl">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-gray-800">
+                <i class="fas fa-file-import text-indigo-500 ml-2"></i>
+                استيراد <span id="csvImportCount">0</span> عميل
+              </h3>
+              <button onclick="cancelCsvImportAssign()" class="text-gray-400 hover:text-gray-600 p-1"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-3 mb-6">
+              <label class="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                <div>
+                  <span class="font-medium text-gray-800">توزيع تلقائي على الموظفين</span>
+                  <p class="text-xs text-gray-400 mt-0.5">توزيع عادل (round-robin) وفق إعدادات الشركة</p>
+                </div>
+                <input type="checkbox" id="csvAssignEmployeeCheck" class="w-4 h-4 text-indigo-600 rounded">
+              </label>
+              <label class="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                <div>
+                  <span class="font-medium text-gray-800">توزيع تلقائي على موظفي البنك</span>
+                  <p class="text-xs text-gray-400 mt-0.5">توزيع عادل (round-robin) على موظفي التمويل النشطين</p>
+                </div>
+                <input type="checkbox" id="csvAssignBankAgentCheck" class="w-4 h-4 text-indigo-600 rounded">
+              </label>
+            </div>
+            <div class="flex gap-3">
+              <button id="csvImportAssignBtn" onclick="confirmCsvImportAssign()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
+                <i class="fas fa-upload ml-1"></i> استيراد
+              </button>
+              <button onclick="cancelCsvImportAssign()" class="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</button>
+            </div>
+          </div>
+        </div>
 
         <!-- ===== CUSTOMER ALARM GLOW — popup modal + painter script (live on /admin/customers) ===== -->
         <style>
@@ -26672,7 +26957,7 @@ app.get('/admin/customers/:id', async (c) => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="border-r-4 border-blue-500 pr-4">
                 <p class="text-sm text-gray-500 mb-1">رقم العميل</p>
-                <p class="text-xl font-bold text-gray-800">#${(customer as any).id}</p>
+                <p class="text-xl font-bold text-gray-800">${(customer as any).tenant_customer_number != null ? `#${(customer as any).tenant_customer_number}` : '—'}</p>
               </div>
               
               <div class="border-r-4 border-green-500 pr-4">
@@ -27558,7 +27843,7 @@ app.get('/admin/customers/:id/report', async (c) => {
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">رقم العميل</p>
-                  <p class="text-xl font-bold text-gray-800">#${cust.id}</p>
+                  <p class="text-xl font-bold text-gray-800">${(cust as any).tenant_customer_number != null ? `#${(cust as any).tenant_customer_number}` : '—'}</p>
                 </div>
               </div>
               
@@ -30619,7 +30904,7 @@ app.get('/admin/users', async (c) => {
                       </a>
                     </div>
                   </td>
-                  <td class="px-6 py-4 text-sm text-gray-900">\${user.id}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">\${user.tenant_user_number != null ? user.tenant_user_number : '—'}</td>
                   <td class="px-6 py-4">
                     <div class="flex items-center">
                       <i class="fas fa-user text-indigo-600 ml-2"></i>
@@ -30939,7 +31224,7 @@ app.get('/admin/users/:id', async (c) => {
                   <div class="space-y-3">
                     <div>
                       <label class="text-sm text-gray-500">الرقم التعريفي</label>
-                      <p class="font-bold text-gray-800">#${user.id}</p>
+                      <p class="font-bold text-gray-800">${(user as any).tenant_user_number != null ? `#${(user as any).tenant_user_number}` : '—'}</p>
                     </div>
                     
                     <div>
@@ -35222,6 +35507,49 @@ app.post('/api/public/:slug/contact-form-initiations', async (c) => {
   }
 })
 
+// Public contact form abandon (started typing, left without submitting) — field keys only
+app.post('/api/public/:slug/contact-form-abandons', async (c) => {
+  try {
+    const slug = normalizeTenantSlug(c.req.param('slug'))
+    if (!slug || isReservedRootSlug(slug)) {
+      return c.json({ success: false, error: 'Invalid slug' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
+    const fieldKeys = normalizeContactFormAbandonFieldKeys(payload?.fields)
+
+    const tenant = await c.env.DB.prepare(`
+      SELECT id FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1
+    `).bind(slug).first<{ id: number }>()
+
+    if (!tenant?.id) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    let affiliateLinkId: number | null = null
+    if (affiliatePathRaw) {
+      if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
+        return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
+      }
+      const affRow = await c.env.DB.prepare(`
+        SELECT id FROM tenant_contact_affiliate_links
+        WHERE tenant_id = ? AND path_segment = ?
+        LIMIT 1
+      `).bind(tenant.id, affiliatePathRaw).first<{ id: number }>()
+      if (!affRow) {
+        return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
+      }
+      affiliateLinkId = affRow.id
+    }
+
+    await recordContactLinkFormAbandonWithDedup(c, c.env.DB, tenant.id, affiliateLinkId, fieldKeys)
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 // Public contact form submit (tenant slug at root path)
 app.post('/api/public/:slug/contact-submissions', async (c) => {
   try {
@@ -35444,12 +35772,16 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
           }
         }
       } else {
-        // Auto/branch mode: round-robin among roles 4/5/6 (tenant + bank-scoped).
-        // For branch mode, filter to employees whose assigned_location_id matches
-        // the configured branch (link-specific overrides tenant-wide).
+        // Auto, branch, and exclusion modes all round-robin among roles 4/5/6.
+        // Branch modes first restrict the pool to their configured branch; exclusion
+        // modes then remove the saved roster members from that pool.
+        const activeAssignmentMode = affiliateLinkId != null
+          ? affiliateLinkAssignmentMode
+          : companyLinkAssignmentMode
         const useBranchMode =
-          (affiliateLinkId != null && affiliateLinkAssignmentMode === 'branch') ||
-          (affiliateLinkId == null && companyLinkAssignmentMode === 'branch')
+          activeAssignmentMode === 'branch' || activeAssignmentMode === 'branch_excl'
+        const useExclusionRoster =
+          activeAssignmentMode === 'custom_excl' || activeAssignmentMode === 'branch_excl'
         const branchIdForFilter = useBranchMode
           ? (affiliateLinkId != null ? affiliateLinkAssignmentBranchId : companyLinkAssignmentBranchId)
           : null
@@ -35460,8 +35792,20 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
           const { results: branchStaff } = await c.env.DB.prepare(
             `SELECT id FROM users WHERE id IN (${placeholders}) AND assigned_location_id = ?`
           ).bind(...staff.map((u) => u.id), branchIdForFilter).all<{ id: number }>()
-          const allowed = new Set((branchStaff || []).map((r) => r.id))
+          const allowed = new Set(((branchStaff || []) as { id: number }[]).map((r) => r.id))
           staff = staff.filter((u) => allowed.has(u.id))
+        }
+        if (useExclusionRoster && staff.length) {
+          const assignmentTable = affiliateLinkId != null
+            ? 'affiliate_link_employee_assignments'
+            : 'tenant_contact_employee_assignments'
+          const scopeColumn = affiliateLinkId != null ? 'affiliate_link_id' : 'tenant_id'
+          const assignmentScopeId = affiliateLinkId ?? tenant.id
+          const { results: excludedRows } = await c.env.DB.prepare(
+            `SELECT user_id FROM ${assignmentTable} WHERE ${scopeColumn} = ?`
+          ).bind(assignmentScopeId).all<{ user_id: number }>()
+          const excludedUserIds = new Set(((excludedRows || []) as { user_id: number }[]).map((row) => row.user_id))
+          staff = staff.filter((user) => !excludedUserIds.has(user.id))
         }
 
         if (staff.length) {
@@ -35660,11 +36004,12 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
 
     // Snapshot the company-link design and task-distribution configuration at creation time.
     const companyDesign = await c.env.DB.prepare(`
-      SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields, contact_assignment_mode
+      SELECT contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
+             contact_assignment_mode, contact_assignment_branch_id
       FROM tenants WHERE id = ? LIMIT 1
     `)
       .bind(tenantId)
-      .first<ContactPageDesignFields & { contact_assignment_mode: string | null }>()
+      .first<ContactPageDesignFields & { contact_assignment_mode: string | null; contact_assignment_branch_id: number | null }>()
 
     let sourceDesign: ContactPageDesignFields | null = null
     if (forkFrom != null) {
@@ -35719,11 +36064,19 @@ app.post('/api/tenant-contact-affiliates', async (c) => {
       forkFrom == null &&
       Number.isFinite(affiliateLinkId) &&
       affiliateLinkId > 0 &&
-      companyDesign?.contact_assignment_mode === 'custom'
+      ['custom', 'custom_excl', 'branch_excl'].includes(companyDesign?.contact_assignment_mode ?? '')
     ) {
       await c.env.DB.prepare(`
-        UPDATE tenant_contact_affiliate_links SET assignment_mode = 'custom' WHERE id = ?
-      `).bind(affiliateLinkId).run()
+        UPDATE tenant_contact_affiliate_links
+        SET assignment_mode = ?, assignment_branch_id = ?
+        WHERE id = ?
+      `).bind(
+        companyDesign?.contact_assignment_mode,
+        companyDesign?.contact_assignment_mode === 'branch_excl'
+          ? companyDesign?.contact_assignment_branch_id ?? null
+          : null,
+        affiliateLinkId
+      ).run()
       // Snapshot one roster entry per user (follow-up owner roles 4/5/6).
       await c.env.DB.prepare(`
         INSERT INTO affiliate_link_employee_assignments (affiliate_link_id, user_id, role_context, assignment_limit)
@@ -36049,11 +36402,11 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
     const tenantId = link.tenant_id
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
     const rawMode = String(body.assignment_mode ?? 'auto')
-    const mode = rawMode === 'custom' ? 'custom' : rawMode === 'branch' ? 'branch' : 'auto'
+    const mode = ['custom', 'custom_excl', 'branch', 'branch_excl'].includes(rawMode) ? rawMode : 'auto'
     const rosterInput = Array.isArray(body.roster) ? body.roster : []
 
     let branchId: number | null = null
-    if (mode === 'branch') {
+    if (mode === 'branch' || mode === 'branch_excl') {
       const raw = parseInt(String(body.assignment_branch_id ?? ''), 10)
       if (!Number.isFinite(raw) || raw <= 0) {
         return c.json({ success: false, error: 'يجب اختيار فرع' }, 400)
@@ -36069,7 +36422,8 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
       UPDATE tenant_contact_affiliate_links SET assignment_mode = ?, assignment_branch_id = ? WHERE id = ?
     `).bind(mode, branchId, linkId).run()
 
-    if (mode === 'custom') {
+    if (mode === 'custom' || mode === 'custom_excl' || mode === 'branch_excl') {
+      const isExclusionMode = mode === 'custom_excl' || mode === 'branch_excl'
       const validUsers = await listFollowupAssignableStaff(c.env.DB, tenantId)
       const userRoleMap = new Map<number, number>(validUsers.map((u) => [u.id, u.role_id]))
 
@@ -36086,7 +36440,9 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
         validatedRoster.push({
           user_id: uid,
           role_context: 'employee',
-          assignment_limit: Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null,
+          assignment_limit: isExclusionMode
+            ? null
+            : Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null,
         })
       }
 
@@ -36110,7 +36466,7 @@ app.put('/api/tenant-contact-affiliates/:id/assignment-config', async (c) => {
         `).bind(linkId, r.user_id, r.role_context, r.assignment_limit).run()
       }
     } else {
-      // auto or branch — no per-link roster is used, so clear any legacy entries.
+      // Auto and branch do not use a roster, so clear any legacy entries.
       await c.env.DB.prepare(`DELETE FROM affiliate_link_employee_assignments WHERE affiliate_link_id = ?`).bind(linkId).run()
     }
 
@@ -36221,11 +36577,11 @@ app.put('/api/tenant-contact-main-assignment-config', async (c) => {
     if (!tenant) return c.json({ success: false, error: 'Not found' }, 404)
 
     const rawMode = String(body.assignment_mode ?? 'auto')
-    const mode = rawMode === 'custom' ? 'custom' : rawMode === 'branch' ? 'branch' : 'auto'
+    const mode = ['custom', 'custom_excl', 'branch', 'branch_excl'].includes(rawMode) ? rawMode : 'auto'
     const rosterInput = Array.isArray(body.roster) ? body.roster : []
 
     let branchId: number | null = null
-    if (mode === 'branch') {
+    if (mode === 'branch' || mode === 'branch_excl') {
       const raw = parseInt(String(body.assignment_branch_id ?? ''), 10)
       if (!Number.isFinite(raw) || raw <= 0) {
         return c.json({ success: false, error: 'يجب اختيار فرع' }, 400)
@@ -36241,7 +36597,8 @@ app.put('/api/tenant-contact-main-assignment-config', async (c) => {
       `UPDATE tenants SET contact_assignment_mode = ?, contact_assignment_branch_id = ? WHERE id = ?`
     ).bind(mode, branchId, tenantId).run()
 
-    if (mode === 'custom') {
+    if (mode === 'custom' || mode === 'custom_excl' || mode === 'branch_excl') {
+      const isExclusionMode = mode === 'custom_excl' || mode === 'branch_excl'
       const validUsers = await listFollowupAssignableStaff(c.env.DB, tenantId)
       const userRoleMap = new Map<number, number>(validUsers.map((u) => [u.id, u.role_id]))
       const validatedRoster: { user_id: number; role_context: string; assignment_limit: number | null }[] = []
@@ -36257,7 +36614,9 @@ app.put('/api/tenant-contact-main-assignment-config', async (c) => {
         validatedRoster.push({
           user_id: userId,
           role_context: 'employee',
-          assignment_limit: Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null,
+          assignment_limit: isExclusionMode
+            ? null
+            : Number.isFinite(limit as number) && (limit as number) > 0 ? limit : null,
         })
       }
 
@@ -36278,7 +36637,7 @@ app.put('/api/tenant-contact-main-assignment-config', async (c) => {
         `).bind(tenantId, row.user_id, row.role_context, row.assignment_limit).run()
       }
     } else {
-      // auto or branch — no tenant-wide roster is used, so clear any legacy entries.
+      // Auto and branch do not use a roster, so clear any legacy entries.
       await c.env.DB.prepare(`DELETE FROM tenant_contact_employee_assignments WHERE tenant_id = ?`).bind(tenantId).run()
     }
     return c.json({ success: true })
@@ -38056,14 +38415,20 @@ app.get('/api/link-stats', async (c) => {
       const visitParams: any[] = [tenantId, target.id]
       let visitDateClause = ''
       let initDateClause = ''
+      let abandonDateClause = ''
+      let fillDateClause = ''
       if (from) {
         visitDateClause += ' AND visit_date >= ?'
         initDateClause += ' AND initiation_date >= ?'
+        abandonDateClause += ' AND abandon_date >= ?'
+        fillDateClause += ' AND fill_date >= ?'
         visitParams.push(from)
       }
       if (to) {
         visitDateClause += ' AND visit_date <= ?'
         initDateClause += ' AND initiation_date <= ?'
+        abandonDateClause += ' AND abandon_date <= ?'
+        fillDateClause += ' AND fill_date <= ?'
         visitParams.push(to)
       }
 
@@ -38083,6 +38448,10 @@ app.get('/api/link-stats', async (c) => {
         SELECT initiation_date AS date, initiation_count AS count FROM contact_link_form_initiations
         WHERE tenant_id = ? AND affiliate_link_id = ?${initDateClause} ORDER BY initiation_date ASC
       `).bind(...visitParams).all().catch(() => ({ results: [] as any[] }))
+      const abandons = await c.env.DB.prepare(`
+        SELECT COALESCE(SUM(abandon_count), 0) AS total FROM contact_link_form_abandons
+        WHERE tenant_id = ? AND affiliate_link_id = ?${abandonDateClause}
+      `).bind(...visitParams).first<{ total: number }>().catch(() => ({ total: 0 }))
       const submissions = await c.env.DB.prepare(`
         SELECT COUNT(*) AS total,
           SUM(CASE WHEN EXISTS (
@@ -38096,6 +38465,7 @@ app.get('/api/link-stats', async (c) => {
       const enrolled = Number(submissions?.enrolled || 0)
       const visitTotal = Number(visits?.total || 0)
       const initiationTotal = Number(initiations?.total || 0)
+      const abandonTotal = Number(abandons?.total || 0)
       const submissionDays = await c.env.DB.prepare(`
         SELECT date(f.created_at) AS date, COUNT(*) AS count
         FROM company_contact_followups f
@@ -38105,12 +38475,59 @@ app.get('/api/link-stats', async (c) => {
 
       if (!includeRows) {
         return {
-          id: target.id, label: target.label, visits: visitTotal, initiations: initiationTotal, submissions: total,
+          id: target.id, label: target.label, visits: visitTotal, initiations: initiationTotal, abandons: abandonTotal, submissions: total,
           enrolled, not_enrolled: total - enrolled,
           conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
           unassigned: Number(target.unassigned_limit_count || 0),
         }
       }
+
+      const fieldFillRows = await c.env.DB.prepare(`
+        SELECT field_key, COALESCE(SUM(fill_count), 0) AS count
+        FROM contact_link_form_field_fills
+        WHERE tenant_id = ? AND affiliate_link_id = ?${fillDateClause}
+        GROUP BY field_key
+      `).bind(...visitParams).all<{ field_key: string; count: number }>().catch(() => ({ results: [] as any[] }))
+
+      let customLabels: string[] = []
+      if (isCompany) {
+        const tenantDesign = await c.env.DB.prepare(`
+          SELECT contact_custom_fields FROM tenants WHERE id = ? LIMIT 1
+        `).bind(tenantId).first<{ contact_custom_fields: string | null }>().catch(() => null)
+        customLabels = parseContactCustomFieldLabels(tenantDesign?.contact_custom_fields)
+      } else {
+        const affDesign = await c.env.DB.prepare(`
+          SELECT a.contact_custom_fields AS aff_fields, t.contact_custom_fields AS tenant_fields
+          FROM tenant_contact_affiliate_links a
+          INNER JOIN tenants t ON t.id = a.tenant_id
+          WHERE a.tenant_id = ? AND a.id = ?
+          LIMIT 1
+        `).bind(tenantId, target.id).first<{ aff_fields: string | null; tenant_fields: string | null }>().catch(() => null)
+        customLabels = parseContactCustomFieldLabels(affDesign?.aff_fields ?? affDesign?.tenant_fields)
+      }
+
+      const fillCountByKey = new Map<string, number>()
+      for (const row of fieldFillRows.results || []) {
+        fillCountByKey.set(String(row.field_key), Number(row.count) || 0)
+      }
+      const orderedFields = buildContactFormFieldOrder(customLabels)
+      const seenKeys = new Set(orderedFields.map((f) => f.key))
+      const abandon_fields = [
+        ...orderedFields.map((f) => ({
+          key: f.key,
+          label: f.label,
+          count: fillCountByKey.get(f.key) || 0,
+          rate: abandonTotal ? Math.round(((fillCountByKey.get(f.key) || 0) / abandonTotal) * 1000) / 10 : 0,
+        })),
+        ...[...fillCountByKey.entries()]
+          .filter(([key]) => !seenKeys.has(key))
+          .map(([key, count]) => ({
+            key,
+            label: key.startsWith('cf:') ? key.slice(3) : key,
+            count,
+            rate: abandonTotal ? Math.round((count / abandonTotal) * 1000) / 10 : 0,
+          })),
+      ]
 
       const followupRows = await c.env.DB.prepare(`
         SELECT f.id, f.customer_name, f.customer_phone, f.created_at,
@@ -38161,14 +38578,15 @@ app.get('/api/link-stats', async (c) => {
       const followupStaff = await listFollowupAssignableStaff(c.env.DB, tenantId)
 
       return {
-        id: target.id, label: target.label, visits: visitTotal, initiations: initiationTotal, submissions: total, enrolled,
+        id: target.id, label: target.label, visits: visitTotal, initiations: initiationTotal, abandons: abandonTotal, submissions: total, enrolled,
         not_enrolled: total - enrolled, conversion: total ? Math.round((enrolled / total) * 1000) / 10 : 0,
         visit_to_initiation: visitTotal ? Math.round((initiationTotal / visitTotal) * 1000) / 10 : 0,
         visit_to_submission: visitTotal ? Math.round((total / visitTotal) * 1000) / 10 : 0,
         initiation_to_submission: initiationTotal ? Math.round((total / initiationTotal) * 1000) / 10 : 0,
         unassigned: Number(target.unassigned_limit_count || 0), visit_days: visitDays.results || [],
         initiation_days: initiationDays.results || [],
-        submission_days: submissionDays.results || [], users: perUser.results || [], customers: followupRows.results || [],
+        submission_days: submissionDays.results || [], abandon_fields,
+        users: perUser.results || [], customers: followupRows.results || [],
         followup_staff: followupStaff,
       }
     }
@@ -38291,6 +38709,7 @@ app.get('/admin/link-stats', async (c) => {
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    ${_rfFlatpickrHead}
     <style>
       body { background: #f5f7fb; } .stat-card { background: linear-gradient(145deg,#fff,#f8fafc); }
       .metric-glow { box-shadow: 0 16px 38px -22px rgba(15,23,42,.42); }
@@ -38306,7 +38725,6 @@ app.get('/admin/link-stats', async (c) => {
       <a id="statsBack" href="/admin/contact-affiliates" class="relative text-sm text-slate-300 hover:text-white"><i class="fas fa-arrow-right ml-1"></i><span>روابط التواصل</span></a>
       <div class="relative mt-5 flex flex-col lg:flex-row gap-5 lg:items-end lg:justify-between">
         <div><p class="text-teal-300 text-sm font-bold tracking-wide">ANALYTICS CENTER</p><h1 class="text-3xl font-black mt-1">إحصائيات الروابط</h1><p class="text-slate-300 mt-2 text-sm">من الزيارة الأولى إلى العميل المسجّل — في لوحة واحدة.</p></div>
-        <div class="flex flex-wrap gap-2"><button data-range="7" class="range-btn px-3 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20">7 أيام</button><button data-range="30" class="range-btn tab-active px-3 py-2 rounded-lg text-sm">30 يوم</button><button data-range="90" class="range-btn px-3 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20">90 يوم</button><button data-range="all" class="range-btn px-3 py-2 rounded-lg text-sm bg-white/10 hover:bg-white/20">الكل</button></div>
       </div>
     </div></div>
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-7">
@@ -38315,6 +38733,7 @@ app.get('/admin/link-stats', async (c) => {
         <div class="flex-[2]"><label class="text-xs font-bold text-slate-500">الرابط</label><select id="link" class="mt-1 w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5"><option value="all">كل الروابط</option></select></div>
         <div class="pt-5"><button id="share" class="w-full bg-slate-100 hover:bg-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fas fa-link ml-1"></i>نسخ الرابط</button></div>
       </div>
+      ${_linkStatsFilterBar('#0f766e')}
       <div id="loading" class="py-20 text-center text-slate-400"><i class="fas fa-circle-notch fa-spin text-3xl text-teal-500"></i><p class="mt-3">جاري تجهيز الصورة الكاملة...</p></div>
       <div id="content" class="hidden">
         <section id="kpis" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 mt-6"></section>
@@ -38323,6 +38742,16 @@ app.get('/admin/link-stats', async (c) => {
             <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-5 metric-glow"><div class="flex justify-between items-center mb-4"><div><h2 class="font-black">حركة الرابط</h2><p class="text-xs text-slate-500 mt-1">الزيارات وبدء التعبئة والطلبات</p></div><span id="linkBadge" class="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full"></span></div><div class="h-72"><canvas id="trend"></canvas></div></div>
             <div class="lg:col-span-2 rounded-2xl p-6 bg-gradient-to-br from-teal-700 via-teal-700 to-cyan-800 text-white metric-glow"><p class="text-teal-100 text-sm">قمع التحويل</p><div class="mt-6 space-y-5" id="funnel"></div><p class="text-xs text-teal-100/80 mt-6">طلب ← عميل: الطلب أصبح عميلاً مسجّلاً في جدول العملاء (مطابقة برقم الجوال).</p></div>
           </div>
+          <section class="mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow">
+            <div class="p-5 border-b flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <div>
+                <h2 class="font-black">الحقول قبل المغادرة</h2>
+                <p class="text-xs text-slate-500 mt-1">أي الحقول مُلئت عند من بدأ التعبئة ثم غادر دون إرسال — بترتيب النموذج</p>
+              </div>
+              <p id="abandonTotal" class="text-xs font-bold text-slate-500"></p>
+            </div>
+            <div id="fieldFills" class="p-5 space-y-4"></div>
+          </section>
           <div class="grid lg:grid-cols-5 gap-5 mt-6">
             <section class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">توزيع الفريق</h2><p class="text-xs text-slate-500 mt-1">مهام المتابعة لكل مستخدم</p></div><div id="users" class="divide-y divide-slate-100"></div></section>
             <section class="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة الطلبات</h2><p class="text-xs text-slate-500 mt-1">طلبات الرابط خلال الفترة المحددة</p></div><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div><div class="px-5 pt-4 flex gap-2"><button data-tab="assigned" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">معيّن <span id="assignedCount"></span></button><button data-tab="unassigned" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير معيّن <span id="unassignedCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div></section>
@@ -38332,9 +38761,9 @@ app.get('/admin/link-stats', async (c) => {
       </div>
     </main>
     <script>
-      const IS_SUPER=${isSuper ? 'true' : 'false'}; let range=30, chart, data, customerTab='assigned';
+      ${_linkStatsDateFilterJs}
+      const IS_SUPER=${isSuper ? 'true' : 'false'}; let chart, data, customerTab='assigned';
       const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
-      function dateRange(){ if(range==='all')return {}; const to=new Date(), from=new Date();from.setDate(to.getDate()-Number(range)+1); return {from:from.toISOString().slice(0,10),to:to.toISOString().slice(0,10)}}
       function kpi(label,value,icon,color,sub=''){return '<div class="stat-card border border-slate-200 rounded-2xl p-4 metric-glow"><div class="flex justify-between"><span class="w-10 h-10 rounded-xl flex items-center justify-center '+color+'"><i class="fas '+icon+'"></i></span><span class="text-xs text-slate-400">'+sub+'</span></div><div class="mt-5 text-2xl font-black">'+value+'</div><div class="text-xs font-bold text-slate-500 mt-1">'+label+'</div></div>'}
       function renderCustomers(){
         if(!data?.stats)return;
@@ -38371,7 +38800,7 @@ app.get('/admin/link-stats', async (c) => {
         });
         document.querySelectorAll('[data-followup-assignment]').forEach(el=>{el.dataset.previousValue=el.value});
       }
-      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+(r.initiations||0)+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('بدء التعبئة',s.initiations||0,'fa-keyboard','bg-amber-50 text-amber-600','كتابة في حقل')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['بدء التعبئة',s.initiations||0],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const assigned=s.customers.filter(x=>x.assigned_user_id).length;$('assignedCount').textContent='('+assigned+')';$('unassignedCount').textContent='('+ (s.customers.length-assigned)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.initiation_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),init=new Map((s.initiation_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'بدء التعبئة',data:dates.map(d=>init.get(d)||0),borderColor:'#d97706',backgroundColor:'#d97706',tension:.35,pointRadius:3},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
+      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+(r.initiations||0)+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('بدء التعبئة',s.initiations||0,'fa-keyboard','bg-amber-50 text-amber-600','كتابة في حقل')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['بدء التعبئة',s.initiations||0],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');const abandonTotal=Number(s.abandons||0);$('abandonTotal').textContent=abandonTotal?('مغادرات مسجّلة: '+abandonTotal):'';$('fieldFills').innerHTML=(abandonTotal&&s.abandon_fields&&s.abandon_fields.length)?s.abandon_fields.map(f=>{const pct=Number(f.rate||0);const count=Number(f.count||0);return '<div><div class="flex justify-between text-sm gap-3"><span class="font-bold text-slate-800">'+esc(f.label)+'</span><span class="text-slate-500 shrink-0">'+count+' · '+pct+'%</span></div><div class="h-2.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-2.5 rounded-full bg-amber-500" style="width:'+Math.max(count?4:0,Math.min(100,pct))+'%"></div></div></div>'}).join(''):'<p class="text-center text-slate-400 py-6">لا توجد مغادرات مسجّلة في هذه الفترة بعد.</p>';$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const assigned=s.customers.filter(x=>x.assigned_user_id).length;$('assignedCount').textContent='('+assigned+')';$('unassignedCount').textContent='('+ (s.customers.length-assigned)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.initiation_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),init=new Map((s.initiation_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'بدء التعبئة',data:dates.map(d=>init.get(d)||0),borderColor:'#d97706',backgroundColor:'#d97706',tension:.35,pointRadius:3},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
       async function load(){
         const tenant=IS_SUPER?$('tenant').value:'';
         if(IS_SUPER&&!tenant)return;
@@ -38425,7 +38854,7 @@ app.get('/admin/link-stats', async (c) => {
         const q=new URLSearchParams(location.search);q.set('link','company');
         history.pushState({linkStatsDetail:true},'', '?'+q);load();
       },true);
-      document.querySelectorAll('.range-btn').forEach(b=>b.onclick=()=>{range=b.dataset.range;document.querySelectorAll('.range-btn').forEach(x=>x.classList.toggle('tab-active',x===b));load()});$('link').onchange=load;$('tenant').onchange=load;document.querySelectorAll('.customer-tab').forEach(b=>b.onclick=()=>{customerTab=b.dataset.tab;document.querySelectorAll('.customer-tab').forEach(x=>x.classList.toggle('tab-active',x===b));renderCustomers()});$('search').oninput=renderCustomers;$('share').onclick=async()=>{await navigator.clipboard.writeText(location.href);$('share').innerHTML='<i class="fas fa-check ml-1"></i>تم النسخ';setTimeout(()=>$('share').innerHTML='<i class="fas fa-link ml-1"></i>نسخ الرابط',1500)};document.addEventListener('click',function(event){const row=event.target.closest('[data-link]');if(!row)return;event.preventDefault();event.stopImmediatePropagation();$('link').value=row.dataset.link;const q=new URLSearchParams(location.search);q.set('link',row.dataset.link);history.pushState(null,'','?'+q);load()},true);window.addEventListener('popstate',function(){const q=new URLSearchParams(location.search);$('link').value=q.get('link')||'all';if(IS_SUPER&&q.get('tenant_id'))$('tenant').value=q.get('tenant_id');load()});(async()=>{const link=new URLSearchParams(location.search).get('link');if(link)$('link').value=link;if(IS_SUPER){const r=await axios.get('/api/tenants');$('tenant').innerHTML='<option value="">اختر الشركة</option>'+(r.data.data||[]).map(t=>'<option value="'+t.id+'">'+esc(t.company_name||t.slug)+'</option>').join('');const tenantId=new URLSearchParams(location.search).get('tenant_id');if(tenantId){$('tenant').value=tenantId;await load()}}else await load()})();
+      $('link').onchange=load;$('tenant').onchange=load;document.querySelectorAll('.customer-tab').forEach(b=>b.onclick=()=>{customerTab=b.dataset.tab;document.querySelectorAll('.customer-tab').forEach(x=>x.classList.toggle('tab-active',x===b));renderCustomers()});$('search').oninput=renderCustomers;$('share').onclick=async()=>{await navigator.clipboard.writeText(location.href);$('share').innerHTML='<i class="fas fa-check ml-1"></i>تم النسخ';setTimeout(()=>$('share').innerHTML='<i class="fas fa-link ml-1"></i>نسخ الرابط',1500)};document.addEventListener('click',function(event){const row=event.target.closest('[data-link]');if(!row)return;event.preventDefault();event.stopImmediatePropagation();$('link').value=row.dataset.link;const q=new URLSearchParams(location.search);q.set('link',row.dataset.link);history.pushState(null,'','?'+q);load()},true);window.addEventListener('popstate',function(){const q=new URLSearchParams(location.search);$('link').value=q.get('link')||'all';if(IS_SUPER&&q.get('tenant_id'))$('tenant').value=q.get('tenant_id');initDateRangeFromUrl();load()});initDatePicker();initDateRangeFromUrl();(async()=>{const link=new URLSearchParams(location.search).get('link');if(link)$('link').value=link;if(IS_SUPER){const r=await axios.get('/api/tenants');$('tenant').innerHTML='<option value="">اختر الشركة</option>'+(r.data.data||[]).map(t=>'<option value="'+t.id+'">'+esc(t.company_name||t.slug)+'</option>').join('');const tenantId=new URLSearchParams(location.search).get('tenant_id');if(tenantId){$('tenant').value=tenantId;await load()}}else await load()})();
     </script></body></html>`)
 })
 
@@ -38837,6 +39266,14 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<input type="radio" name="assignMode_' + id + '" value="branch" id="assignModeBranch_' + id + '" class="accent-amber-500" />' +
             '<span class="text-sm font-medium text-gray-700">حسب الفرع</span>' +
             '</label>' +
+            '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="radio" name="assignMode_' + id + '" value="custom_excl" id="assignModeCustomExcl_' + id + '" class="accent-amber-500" />' +
+            '<span class="text-sm font-medium text-gray-700">مخصص (استثناء)</span>' +
+            '</label>' +
+            '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="radio" name="assignMode_' + id + '" value="branch_excl" id="assignModeBranchExcl_' + id + '" class="accent-amber-500" />' +
+            '<span class="text-sm font-medium text-gray-700">حسب الفرع (استثناء)</span>' +
+            '</label>' +
             '</div>' +
 
             // Branch section (hidden by default, revealed when branch selected)
@@ -38845,7 +39282,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<select id="assignBranchSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50">' +
             '<option value="">— اختر الفرع —</option>' +
             '</select>' +
-            '<p class="text-xs text-gray-500">سيتم توزيع طلبات هذا الرابط تلقائياً على الموظفين المنتمين إلى الفرع المحدد فقط.</p>' +
+            '<p id="assignBranchHelp_' + id + '" class="text-xs text-gray-500">سيتم توزيع طلبات هذا الرابط تلقائياً على الموظفين المنتمين إلى الفرع المحدد فقط.</p>' +
             '</div>' +
 
             // Custom section (hidden by default, revealed when custom selected)
@@ -38853,7 +39290,8 @@ app.get('/admin/contact-affiliates', async (c) => {
 
             // Single follow-up owner roster (roles 4/5/6)
             '<div class="rounded-lg border border-gray-200 p-3 space-y-2">' +
-            '<div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">الموظف المسؤول</div>' +
+            '<div id="assignRosterTitle_' + id + '" class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">الموظف المسؤول</div>' +
+            '<p id="assignRosterHelp_' + id + '" class="text-xs text-gray-500 mb-2"></p>' +
             '<select id="addStaffSelect_' + id + '" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة مستخدم</option></select>' +
             '<div id="staffRoster_' + id + '" class="space-y-2"></div>' +
             '</div>' +
@@ -39386,7 +39824,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<span class="text-sm font-semibold text-gray-800">' + badge + escapeHtml(name) + '</span>' +
             '<button type="button" data-roster-remove class="text-gray-300 hover:text-red-500 text-sm leading-none"><i class="fas fa-times"></i></button>' +
             '</div>' +
-            '<div class="flex items-center gap-3 flex-wrap">' +
+            '<div data-roster-limit-controls class="flex items-center gap-3 flex-wrap">' +
             '<label class="flex items-center gap-1.5 cursor-pointer">' +
             '<input type="radio" name="lm_' + panelId + '_' + userId + '" value="unlimited" ' + (!isLimited ? 'checked' : '') + ' data-limit-mode class="accent-amber-500" />' +
             '<span class="text-sm text-gray-600">غير محدود</span>' +
@@ -39430,9 +39868,14 @@ app.get('/admin/contact-affiliates', async (c) => {
           var autoRadio = document.getElementById('assignModeAuto_' + id);
           var customRadio = document.getElementById('assignModeCustom_' + id);
           var branchRadio = document.getElementById('assignModeBranch_' + id);
+          var customExclRadio = document.getElementById('assignModeCustomExcl_' + id);
+          var branchExclRadio = document.getElementById('assignModeBranchExcl_' + id);
           var customSection = document.getElementById('assignCustomSection_' + id);
           var branchSection = document.getElementById('assignBranchSection_' + id);
           var branchSelect = document.getElementById('assignBranchSelect_' + id);
+          var rosterTitle = document.getElementById('assignRosterTitle_' + id);
+          var rosterHelp = document.getElementById('assignRosterHelp_' + id);
+          var branchHelp = document.getElementById('assignBranchHelp_' + id);
 
           if (branchSelect) {
             var branches = Array.isArray(cfg.branches) ? cfg.branches : [];
@@ -39443,20 +39886,16 @@ app.get('/admin/contact-affiliates', async (c) => {
             if (cfg.assignment_branch_id) branchSelect.value = String(cfg.assignment_branch_id);
           }
 
-          if (cfg.assignment_mode === 'custom') {
-            if (customRadio) customRadio.checked = true;
-            if (customSection) customSection.classList.remove('hidden');
-          } else if (cfg.assignment_mode === 'branch') {
-            if (branchRadio) branchRadio.checked = true;
-            if (branchSection) branchSection.classList.remove('hidden');
-          } else {
-            if (autoRadio) autoRadio.checked = true;
-          }
+          if (cfg.assignment_mode === 'custom' && customRadio) customRadio.checked = true;
+          else if (cfg.assignment_mode === 'custom_excl' && customExclRadio) customExclRadio.checked = true;
+          else if (cfg.assignment_mode === 'branch' && branchRadio) branchRadio.checked = true;
+          else if (cfg.assignment_mode === 'branch_excl' && branchExclRadio) branchExclRadio.checked = true;
+          else if (autoRadio) autoRadio.checked = true;
 
           // Unassigned counter
           var banner = document.getElementById('unassignedBanner_' + id);
           var countEl = document.getElementById('unassignedCountEl_' + id);
-          if (cfg.unassigned_limit_count > 0 && banner && countEl) {
+          if (cfg.assignment_mode === 'custom' && cfg.unassigned_limit_count > 0 && banner && countEl) {
             countEl.textContent = cfg.unassigned_limit_count;
             banner.classList.remove('hidden');
           }
@@ -39526,17 +39965,34 @@ app.get('/admin/contact-affiliates', async (c) => {
           }
 
           // Mode toggle
-          [autoRadio, customRadio, branchRadio].forEach(function(radio) {
+          function updateAssignmentSections() {
+            var mode = customRadio && customRadio.checked ? 'custom'
+              : customExclRadio && customExclRadio.checked ? 'custom_excl'
+              : branchRadio && branchRadio.checked ? 'branch'
+              : branchExclRadio && branchExclRadio.checked ? 'branch_excl'
+              : 'auto';
+            var isExclusion = mode === 'custom_excl' || mode === 'branch_excl';
+            var usesRoster = mode === 'custom' || isExclusion;
+            var usesBranch = mode === 'branch' || mode === 'branch_excl';
+            if (customSection) customSection.classList.toggle('hidden', !usesRoster);
+            if (branchSection) branchSection.classList.toggle('hidden', !usesBranch);
+            if (rosterTitle) rosterTitle.textContent = isExclusion ? 'الموظفون المستثنون' : 'الموظف المسؤول';
+            if (rosterHelp) rosterHelp.textContent = isExclusion
+              ? 'سيتم التوزيع على جميع الموظفين المؤهلين باستثناء المحددين هنا.'
+              : '';
+            if (branchHelp) branchHelp.textContent = isExclusion
+              ? 'سيتم التوزيع على موظفي الفرع المحدد باستثناء الموظفين المحددين أدناه.'
+              : 'سيتم توزيع طلبات هذا الرابط تلقائياً على الموظفين المنتمين إلى الفرع المحدد فقط.';
+            if (banner) banner.classList.toggle('hidden', mode !== 'custom' || !cfg.unassigned_limit_count);
+            panelEl.querySelectorAll('[data-roster-limit-controls]').forEach(function(el) {
+              el.classList.toggle('hidden', isExclusion);
+            });
+          }
+          updateAssignmentSections();
+          [autoRadio, customRadio, customExclRadio, branchRadio, branchExclRadio].forEach(function(radio) {
             if (!radio) return;
             radio.addEventListener('change', function() {
-              if (customSection) {
-                if (customRadio && customRadio.checked) customSection.classList.remove('hidden');
-                else customSection.classList.add('hidden');
-              }
-              if (branchSection) {
-                if (branchRadio && branchRadio.checked) branchSection.classList.remove('hidden');
-                else branchSection.classList.add('hidden');
-              }
+              updateAssignmentSections();
             });
           });
 
@@ -39549,9 +40005,11 @@ app.get('/admin/contact-affiliates', async (c) => {
               if (msgEl) { msgEl.textContent = ''; msgEl.className = 'text-xs text-center'; }
               try {
                 var mode = customRadio && customRadio.checked ? 'custom'
+                  : customExclRadio && customExclRadio.checked ? 'custom_excl'
                   : branchRadio && branchRadio.checked ? 'branch'
+                  : branchExclRadio && branchExclRadio.checked ? 'branch_excl'
                   : 'auto';
-                if (mode === 'branch' && (!branchSelect || !branchSelect.value)) {
+                if ((mode === 'branch' || mode === 'branch_excl') && (!branchSelect || !branchSelect.value)) {
                   if (msgEl) { msgEl.textContent = 'يجب اختيار فرع.'; msgEl.className = 'text-xs text-center text-red-600'; }
                   saveBtn.disabled = false;
                   return;
@@ -39570,7 +40028,7 @@ app.get('/admin/contact-affiliates', async (c) => {
                   roster.push({ user_id: uid, role_context: 'employee', assignment_limit: isLimited && limitVal > 0 ? limitVal : null });
                 });
                 var payload = { assignment_mode: mode, roster: roster };
-                if (mode === 'branch') payload.assignment_branch_id = parseInt(branchSelect.value, 10);
+                if (mode === 'branch' || mode === 'branch_excl') payload.assignment_branch_id = parseInt(branchSelect.value, 10);
                 if (String(id) === 'company' && IS_SUPERADMIN) payload.tenant_id = currentTenantId();
                 var saveRes = await axios.put(assignmentConfigUrl(id), payload);
                 if (saveRes.data && saveRes.data.success) {
@@ -40228,8 +40686,11 @@ app.get('/admin/contact-affiliates', async (c) => {
                     '<div class="min-w-0">' +
                     '<div class="flex items-center gap-2">' +
                     '<span class="font-medium text-gray-900">' + escapeHtml(r.label) + '</span>' +
-                    (r.assignment_mode === 'custom' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-100 text-teal-700 rounded text-xs font-bold">مخصص</span>' : '') +
-                    (r.unassigned_limit_count > 0 ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold"><i class="fas fa-exclamation-triangle text-xs"></i>' + r.unassigned_limit_count + ' غير مُعيَّنين</span>' : '') +
+                    (r.assignment_mode === 'custom' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-100 text-teal-700 rounded text-xs font-bold">مخصص</span>' :
+                      r.assignment_mode === 'custom_excl' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-bold">مخصص (استثناء)</span>' :
+                      r.assignment_mode === 'branch' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-sky-100 text-sky-700 rounded text-xs font-bold">حسب الفرع</span>' :
+                      r.assignment_mode === 'branch_excl' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-bold">حسب الفرع (استثناء)</span>' : '') +
+                    (r.assignment_mode === 'custom' && r.unassigned_limit_count > 0 ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold"><i class="fas fa-exclamation-triangle text-xs"></i>' + r.unassigned_limit_count + ' غير مُعيَّنين</span>' : '') +
                     '</div>' +
                     '<div class="text-xs text-gray-500 mt-1 break-all" dir="ltr">' +
                     escapeHtml(full || '/' + slug + '/' + r.path_segment) +

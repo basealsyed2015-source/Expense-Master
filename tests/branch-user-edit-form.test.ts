@@ -40,20 +40,22 @@ describe('marketing link assignment — branch mode surfaces in API', () => {
     assert.match(slice, /branches: branchRows/)
   })
 
-  it('PUT config validates the branch mode and requires a branch id', () => {
+  it('PUT config validates branch and branch-exclusion modes and requires a branch id', () => {
     const putIdx = SRC.indexOf("app.put('/api/tenant-contact-affiliates/:id/assignment-config'")
     assert.ok(putIdx > 0)
     const slice = SRC.slice(putIdx, putIdx + 6_000)
-    assert.match(slice, /rawMode === 'branch' \? 'branch'/)
+    assert.match(slice, /\['custom', 'custom_excl', 'branch', 'branch_excl'\]\.includes\(rawMode\)/)
+    assert.match(slice, /mode === 'branch' \|\| mode === 'branch_excl'/)
     assert.match(slice, /يجب اختيار فرع/)
     assert.match(slice, /UPDATE tenant_contact_affiliate_links SET assignment_mode = \?, assignment_branch_id = \?/)
   })
 
-  it('tenant-wide PUT config accepts branch mode too', () => {
+  it('tenant-wide PUT config accepts branch and exclusion modes too', () => {
     const putIdx = SRC.indexOf("app.put('/api/tenant-contact-main-assignment-config'")
     assert.ok(putIdx > 0)
     const slice = SRC.slice(putIdx, putIdx + 6_000)
-    assert.match(slice, /rawMode === 'branch' \? 'branch'/)
+    assert.match(slice, /\['custom', 'custom_excl', 'branch', 'branch_excl'\]\.includes\(rawMode\)/)
+    assert.match(slice, /mode === 'custom' \|\| mode === 'custom_excl' \|\| mode === 'branch_excl'/)
     assert.match(slice, /UPDATE tenants SET contact_assignment_mode = \?, contact_assignment_branch_id = \?/)
   })
 
@@ -63,5 +65,15 @@ describe('marketing link assignment — branch mode surfaces in API', () => {
     assert.ok(idx > 0, 'branch-mode filter block must exist in followup submission')
     const slice = SRC.slice(idx, idx + 2_000)
     assert.match(slice, /assigned_location_id = \?/)
+  })
+
+  it('followup submission removes roster members in exclusion modes', () => {
+    const marker = 'useExclusionRoster'
+    const idx = SRC.indexOf(marker)
+    assert.ok(idx > 0, 'exclusion-mode pool block must exist in followup submission')
+    const slice = SRC.slice(idx, idx + 2_500)
+    assert.match(slice, /activeAssignmentMode === 'custom_excl'/)
+    assert.match(slice, /activeAssignmentMode === 'branch_excl'/)
+    assert.match(slice, /staff = staff\.filter\(\(user\) => !excludedUserIds\.has\(user\.id\)\)/)
   })
 })
